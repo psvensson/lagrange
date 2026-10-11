@@ -1,0 +1,12 @@
+{
+  "utc": "2026-10-11T20:15:25.377204+00:00",
+  "verified": true,
+  "remoteRefs": {
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T201516Z/proof-begin-round4": "d1ea7302fcf51b2c4be21b8d47db6295bef3d555",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T201516Z/tx1-owner-evidence-wip": "f510b5f36140388e7828d43afc569ea1ff236455",
+    "refs/heads/main": "878eb8ac059dab71deae5feb0fa88e0c5c610c93"
+  },
+  "mainUnchanged": true,
+  "callerHeadIndexStatusUnchanged": true,
+  "scope": "Preservation only: BEGIN round4 source/author packet, CDC round8 review and native navigation; no source/main approval"
+}

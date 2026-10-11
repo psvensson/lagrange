@@ -1,0 +1,19 @@
+{
+  "scope": "Independent complete 63-item CDC round12 DESIGN approval only; source/certification/acceptance HOLD",
+  "subject": "b4b0294f4e91f09773f708e5e006c936c9617129e550dcfa2707032d07c76269",
+  "verifiedDiagnosticEntries": 19,
+  "artifacts": {
+    "diagnostic-sha256.txt": {
+      "bytes": 1877,
+      "sha256": "2118fe1d08fa628539a4de3191119c849b1ac33cc16f423f6ce53dbf3f1477ba"
+    },
+    "review-cdc-c17-resource-round12-checkpoint.md": {
+      "bytes": 34760,
+      "sha256": "f68026470d22e3d3762cdf8c884c638553bb2b3943d6030fd02b0d21e8c97c1d"
+    },
+    "diagnostics.tar.gz": {
+      "bytes": 6076300,
+      "sha256": "e511c7e9698d79ac82562fbca868357396706c06a76e3fd7fa9790dc4afef23d"
+    }
+  }
+}

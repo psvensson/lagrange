@@ -1,0 +1,44 @@
+{
+  "utc": "2026-10-11T21:57:17.938636+00:00",
+  "snapshot": {
+    "worktree": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-activation-20261011",
+    "worktreeHead": "c6d71665e98be03de916705f272a9d6340e4a842",
+    "base": "c6d71665e98be03de916705f272a9d6340e4a842",
+    "snapshot": "26dedb0829145c3063dbb2609955307cfdcec842",
+    "tree": "c27657cbb025a1a995256368bebcb60fc16df480"
+  },
+  "verifiedSourceFiles": 64,
+  "artifacts": [
+    {
+      "path": "current-source-manifest-after-ordered-settlement.json",
+      "sha256": "9fed1ce2fbb7bf456c8a9ebe1daa7c91b4f83f725eb433ab7bdcf867b5dd9749",
+      "bytes": 10594
+    },
+    {
+      "path": "terminal-replay-preflight-failure.json",
+      "sha256": "2e289da8a7f4717fda71ba48971ed3daa5bc9a8ca10417dd734bdb249e9e270c",
+      "bytes": 3504
+    },
+    {
+      "path": "terminal-matrix-settlement-stage.log",
+      "sha256": "c480111833e5422d61b462f1451664285158d084b6d96eb11b30ff9d39bb0427",
+      "bytes": 12381
+    },
+    {
+      "path": "terminal-matrix-after-ordered-replay.log",
+      "sha256": "1633101113bbead239795c1184429c68a697253d01a21ac24c314b268a136402",
+      "bytes": 3401
+    },
+    {
+      "path": "focused-ordered-settlement-replay.log",
+      "sha256": "63cb520b3de77ce4e94e02b95de37fdc0f956e267464caa35940a94219e0284d",
+      "bytes": 7253
+    },
+    {
+      "path": "terminal-matrix-driver.mjs.txt",
+      "sha256": "bcdf7d11d8fe45afebeccb2c5da18f680cf31cd13fbeaa14179b98f281c2e456",
+      "bytes": 2844
+    }
+  ],
+  "scope": "ordered terminal replay focused and controlled production matrix; unchanged pgwire oracle running; no source approval"
+}

@@ -6,6 +6,8 @@ import {RAFT_RS_PERSISTENCE_ADMISSION} from
   '../raft/raft-rs-durable-store-constants.js';
 import {PARTITION_COMMITTED_COMMAND_ERROR_CODE} from
   './partition-service-constants.js';
+import {PARTITION_CDC_COMMAND_TYPES} from
+  './partition-cdc-obligation-constants.js';
 import {PARTICIPANT_TRANSACTION_COMMAND_TYPES} from
   './partition-participant-transaction-constants.js';
 import {PARTITION_SETTLED_REPLAY} from
@@ -39,7 +41,10 @@ const PARTITION_WRITE_COMMIT_MODE = Object.freeze({
 // the owner's open decision. RESERVED: the write committed and met a prepared
 // participant transaction's reservation when it applied - consumed without
 // effect and its entry key left unsettled (TX1 design 4), so it is retried
-// and applies once the decision has applied.
+// and applies once the decision has applied. CUTOVER_PAUSED: the participant
+// transaction cutover paused new mutation admission on this partition (TX1
+// design 0.0.15), so the write was not proposed and is retried once the
+// pause lifts.
 const PARTITION_WRITE_LEADERSHIP_REFUSAL = Object.freeze({
   NOT_LEADER: 'partition_write_not_leader',
   CONSENSUS_RECOVERY_REQUIRED: 'partition_write_consensus_recovery_required',
@@ -51,6 +56,7 @@ const PARTITION_WRITE_LEADERSHIP_REFUSAL = Object.freeze({
   SERVICE_SHUTDOWN: 'partition_write_service_shutdown',
   COMMIT_DEADLINE_EXCEEDED: 'partition_write_commit_deadline_exceeded',
   RESERVED: 'partition_write_reserved',
+  CUTOVER_PAUSED: 'partition_write_cutover_paused',
 });
 const REFUSAL = PARTITION_WRITE_LEADERSHIP_REFUSAL;
 
@@ -77,6 +83,7 @@ const RETRYABLE_WRITE_FAILURE_CODES = Object.freeze([
   REFUSAL.SERVICE_SHUTDOWN,
   REFUSAL.COMMIT_DEADLINE_EXCEEDED,
   REFUSAL.RESERVED,
+  REFUSAL.CUTOVER_PAUSED,
 ]);
 
 // Why pending writes are released without an answer from consensus: their
@@ -523,10 +530,15 @@ function buildPartitionWriteFailureResult(error, partitionId, logIndex = null) {
 
 // A participant transaction command has none of a write's side effects: it is
 // not mirrored (TX1 design 8.1), and its decision's CDC events and size update
-// are its own apply's (partition-participant-transaction-apply.js).
+// are its own apply's (partition-participant-transaction-apply.js). Nor has
+// the CDC delivery owner's CDC_DELIVERED: it changes no data. Ordinary writes
+// are mirrored and evaluated for size, but their CDC event is now the durable
+// obligation recorded by committed application; the old volatile emission
+// would create a second retry owner for the same mutation.
 function buildPartitionWriteSideEffectPlan(entry, executionResult) {
   if (executionResult?.success !== true ||
-      PARTICIPANT_TRANSACTION_COMMAND_TYPES.includes(entry?.type)) {
+      PARTICIPANT_TRANSACTION_COMMAND_TYPES.includes(entry?.type) ||
+      PARTITION_CDC_COMMAND_TYPES.includes(entry?.type)) {
     return Object.freeze({
       emitCdcEntry: null,
       splitReplicationEntry: null,
@@ -551,7 +563,7 @@ function buildPartitionWriteSideEffectPlan(entry, executionResult) {
   }
 
   return Object.freeze({
-    emitCdcEntry: executedEntry,
+    emitCdcEntry: null,
     splitReplicationEntry: executedEntry,
     scheduleSizeUpdate: true,
     requestManagedSplitEvaluation: true,

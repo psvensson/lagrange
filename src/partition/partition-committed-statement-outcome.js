@@ -122,6 +122,7 @@ function readCommittedStatementOutcome(service, entryKey) {
     failureMessage: row.failure_message,
     changes: row.changes,
     lastInsertRowid: row.last_insert_rowid,
+    ...(row.owner_result_text === null ? {} : {ownerResultText: row.owner_result_text}),
   });
 }
 
@@ -134,13 +135,14 @@ function readCommittedStatementOutcome(service, entryKey) {
  *   {changes, lastInsertRowid}, committedStatementResult) only for APPLIED.
  */
 function recordCommittedStatementOutcome(service, {entryKey, outcome, index,
-  term, error = null, result = null}) {
+  term, error = null, result = null, ownerResultText = null}) {
   service.db.prepare(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.INSERT).run(
     entryKey, outcome, index, term,
     error === null ? null : failureCodeOf(error),
     error === null ? null : String(error.message),
     result === null ? null : result.changes,
-    result === null ? null : result.lastInsertRowid);
+    result === null ? null : result.lastInsertRowid,
+    ownerResultText);
 }
 
 /**

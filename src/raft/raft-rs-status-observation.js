@@ -92,7 +92,7 @@ function followerProgressSnapshot(group, status) {
 /**
  * The status one observation of the core describes.
  * @param {Object} group - The runtime group.
- * @param {Object} observation - {status, confState, appliedIndex,
+ * @param {Object} observation - {status, confState, appliedIndex, lastIndex,
  *   runtimeHealth, runtimeGeneration} as the runtime owner recorded them.
  * @param {Function} leaderIdentityUnresolved - The owner's outcome when the
  *   leader's identity cannot be resolved.
@@ -122,8 +122,10 @@ function shapeGroupObservation(group, observation, leaderIdentityUnresolved) {
     confChangePending:
       BigInt(status.pendingConfIndex ?? 0) > BigInt(status.applied ?? 0),
     // The runtime's applied index of this same observation (the one its
-    // confState came from).
+    // confState came from), and the persisted last index of the log it
+    // applies from: equal when every entry this replica holds has applied.
     appliedIndex: observation.appliedIndex,
+    lastIndex: Number(observation.lastIndex),
     configurationKey: observation.configurationKey,
     membershipGenerationIndex: observation.membershipGenerationIndex,
     lifecycleIncarnation: observation.lifecycleIncarnation,

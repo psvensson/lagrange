@@ -1,0 +1,11 @@
+{
+  "worktree": "/mnt/data/peter/projects/.worktrees/tx1-cdc-20261011",
+  "worktreeHead": "e7c89f4b5114c0238312d3831b65889a4622f4e9",
+  "base": "e7c89f4b5114c0238312d3831b65889a4622f4e9",
+  "snapshot": "0e9a07604b5e29f0f686db3e567333c7775934df",
+  "tree": "1c585b6eb0c537dc941ee7897ca89eca268db825",
+  "remoteRef": "refs/heads/checkpoint/rs-raft-preservation-20261011T182115Z/cdc-wip",
+  "callerStatePreserved": true,
+  "callerIndexSha256": "1acd788a3d7a443b40191af97ace7c7ed0f8827375cb850b5dded7d12a5bf1e7",
+  "status": "WIP preservation; N1/N2 source scoped approval at2de; transport amendment25f149bd unreviewed; full snapshot not approved"
+}

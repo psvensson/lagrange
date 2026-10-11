@@ -1,0 +1,389 @@
+{
+  "base": "c6d71665e98be03de916705f272a9d6340e4a842",
+  "entries": [
+    {
+      "path": "src/bootstrap/bootstrap-service-replica-registration-methods.js",
+      "status": " M",
+      "sha256": "77662de19a72a43863d61b4039e2c8419d54095286df752161517842d236f161",
+      "bytes": 26221
+    },
+    {
+      "path": "src/bootstrap/bootstrap-service-seed-workflow.js",
+      "status": " M",
+      "sha256": "6940b089c5dda98f8771607b7a025d8988e729dfde559fe65b1cd562a98d369a",
+      "bytes": 26505
+    },
+    {
+      "path": "src/bootstrap/bootstrap-service.js",
+      "status": " M",
+      "sha256": "4759eca3851a1f192642f1a78cbefcde770ebfa5206f8fcbcc17f0cc7cd96ffd",
+      "bytes": 28795
+    },
+    {
+      "path": "src/bootstrap/owners/seed-runtime-bridge-owner.js",
+      "status": " M",
+      "sha256": "3dce1f96d201782065d3b1795b1b36e1f9ee8a1f4c8d684d0fbe88968966564f",
+      "bytes": 7398
+    },
+    {
+      "path": "src/bootstrap/phases/seed-registration-phase.js",
+      "status": " M",
+      "sha256": "191d7905569e2bd5a277d3f4a044a819c8b9bb79572d12c78451708b9689776f",
+      "bytes": 22725
+    },
+    {
+      "path": "src/bootstrap/seed-startup-session-store.js",
+      "status": " M",
+      "sha256": "7cff32913fbe8d8a77980492fce2f06bd8dfab17d6cec7c92483aa34d928ff88",
+      "bytes": 10438
+    },
+    {
+      "path": "src/bootstrap/shared/replica-handler-setup.js",
+      "status": " M",
+      "sha256": "5c2f6492aa85ca54c4691bf15c771d44689ea0f093bdac00bec2f04c6a0317ff",
+      "bytes": 14112
+    },
+    {
+      "path": "src/bootstrap/shared/snapshot-catchup-wiring.js",
+      "status": " M",
+      "sha256": "d6c38f79c0afe7b836d23c289b225b658354a613aa7091917b788b3913a80ebc",
+      "bytes": 10420
+    },
+    {
+      "path": "src/bootstrap/shared/startup-sql-runtime-handoff.js",
+      "status": " M",
+      "sha256": "4bc600247420e5cd9a58921a354e424ac5976dd91fe1aa6e45600235c8a1ab4e",
+      "bytes": 11685
+    },
+    {
+      "path": "src/bootstrap/startup-workflow-store.js",
+      "status": " M",
+      "sha256": "1f92ee4bcb21c1c952836536f39c48f2007a18174e4955b0e4a843f4865cf3da",
+      "bytes": 15656
+    },
+    {
+      "path": "src/lagrange-runtime-startup.js",
+      "status": " M",
+      "sha256": "c9506aaa797dcf8c416c093bb09ac23d52ecb0d1fd7e97ad598b249ea10a9909",
+      "bytes": 28135
+    },
+    {
+      "path": "src/node/replica-create-admission-owner.js",
+      "status": " M",
+      "sha256": "7505603d0c387b28b097f1cb51d44d73ec7a81886fdedb5baab065f7989266f5",
+      "bytes": 28659
+    },
+    {
+      "path": "src/node/replica-handler-class.js",
+      "status": " M",
+      "sha256": "a6112b611965777e7c92797f85d9e27c77d5f2807b2d8b66e806cb5cca967cad",
+      "bytes": 11147
+    },
+    {
+      "path": "src/node/replica-handler-create-methods.js",
+      "status": " M",
+      "sha256": "900d61490ded14c37d7ea2c180fbf15c52f711b2ac3b1d4d83b0f489325b678f",
+      "bytes": 23015
+    },
+    {
+      "path": "src/node/replica-handler-lifecycle-methods.js",
+      "status": " M",
+      "sha256": "8ec7d3a664f8fae3c40b54decd6ebce8a6214ab7b1c8fbfb60ed191ada55e2f3",
+      "bytes": 7083
+    },
+    {
+      "path": "src/node/replica-handler-membership-relay.js",
+      "status": " M",
+      "sha256": "49b9cd3e55a6e8ceb845e0b1b1665cc1bb97763d5489c344688a5803b04d7f17",
+      "bytes": 4043
+    },
+    {
+      "path": "src/node/replica-handler-runtime-methods.js",
+      "status": " M",
+      "sha256": "3a1fdd74c2a6046d82fb8c92e0db2b491bf03308c75edf72604a8ab22c0f3391",
+      "bytes": 28465
+    },
+    {
+      "path": "src/partition/partition-committed-command-admission.js",
+      "status": " M",
+      "sha256": "e29b80f908c21c27a7cc3a6ad48fc5417f24ce69bfa64f83bf1cdba2f2bab24e",
+      "bytes": 9941
+    },
+    {
+      "path": "src/partition/partition-coordinator-settlement.js",
+      "status": " M",
+      "sha256": "6ca226a8aae8b806185a1cb1aefb76d4b1adad73deb2ac08f88f0d5e6f9ce978",
+      "bytes": 5896
+    },
+    {
+      "path": "src/partition/partition-participant-release-contract.js",
+      "status": " M",
+      "sha256": "38fbe6ecbe44efaca3b8a5156cc3caf6840c1df564b5ea27ee6f60d9661d04b7",
+      "bytes": 8872
+    },
+    {
+      "path": "src/partition/partition-participant-transaction-apply.js",
+      "status": " M",
+      "sha256": "6a8a45feb44edddbb48c668eafc47d5527b72f4384ec08d8993d5d9911b5230c",
+      "bytes": 29215
+    },
+    {
+      "path": "src/partition/partition-participant-transaction-bytes.js",
+      "status": " M",
+      "sha256": "5b107a1578e1d1bec8733aad68136ed46b95cef7e2f23d5df7f74642f6af9d60",
+      "bytes": 15060
+    },
+    {
+      "path": "src/partition/partition-participant-transaction-constants.js",
+      "status": " M",
+      "sha256": "d6770882d7c4356c85eb1fda0a6a5731ff3ff9fd22364fb6b226db1ae7cf7635",
+      "bytes": 24182
+    },
+    {
+      "path": "src/partition/partition-participant-transaction-cutover-constants.js",
+      "status": " M",
+      "sha256": "970194d3f6a43d99e9f735b39e533c2bcdbeb804a6867412b279ab93cb35c4cb",
+      "bytes": 2890
+    },
+    {
+      "path": "src/partition/partition-participant-transaction-pause.js",
+      "status": " M",
+      "sha256": "15302af631763e6535685b2e337e84fbf2f73da73e5fc754799af6893a5b9e17",
+      "bytes": 7554
+    },
+    {
+      "path": "src/partition/partition-participant-transaction-request.js",
+      "status": " M",
+      "sha256": "66d3e3fef4729cf75821d3e8245ff6cdf6cea46c4adf67f16f96dfb2d9926ae9",
+      "bytes": 27940
+    },
+    {
+      "path": "src/partition/partition-participant-transaction-store.js",
+      "status": " M",
+      "sha256": "d5f34b7780615d7ebc9c8c119789fc63db37bb9d5a1d24de46a9f568173adda9",
+      "bytes": 15961
+    },
+    {
+      "path": "src/partition/partition-service-constants.js",
+      "status": " M",
+      "sha256": "7882102646145d0990ca777b713419fbde16b3a86743eab251f4ac56ad71e6fb",
+      "bytes": 37401
+    },
+    {
+      "path": "src/partition/partition-service-entry-apply-base.js",
+      "status": " M",
+      "sha256": "47be29c2e6a5def76496b65895a6b0e546809dc5ba989155bb7c72f8e3184fc3",
+      "bytes": 43077
+    },
+    {
+      "path": "src/partition/partition-service-raft-init-base.js",
+      "status": " M",
+      "sha256": "db599c4c18d35ce3ae478a36efbff2161bdf3dbf9c6c4c512ff825a3b4b73fa4",
+      "bytes": 29778
+    },
+    {
+      "path": "src/query/distributed/distributed-transaction-release-settlement.js",
+      "status": " M",
+      "sha256": "72d24dff54230b31e1483f2c8dfc36ad3b551837cc89ddb686e467e26c951d24",
+      "bytes": 15029
+    },
+    {
+      "path": "src/raft/raft-operation-port-request.js",
+      "status": " M",
+      "sha256": "b4e773b049a65e9db77c969bb79e62c20ca18202c0c00eae8421aa4d90344f94",
+      "bytes": 4241
+    },
+    {
+      "path": "src/raft/raft-rs-application-transaction-owner.js",
+      "status": " M",
+      "sha256": "1b6e25641d1784dc1c8dc0b4ba097338a25d609680c948654b55509ddbc838a2",
+      "bytes": 4233
+    },
+    {
+      "path": "src/raft/raft-rs-operation-port.js",
+      "status": " M",
+      "sha256": "cf933b2272fb9b4301fb4393ce0d3ba0e1b90463a69c0b60e889d1e6ca551a3d",
+      "bytes": 18129
+    },
+    {
+      "path": "src/raft/raft-rs-runtime-owner-constants.js",
+      "status": " M",
+      "sha256": "3d044c502e2c32f4097cad484e42c1d7151a13f5abb3ee3e4aab4c65ee372bfa",
+      "bytes": 11465
+    },
+    {
+      "path": "src/raft/raft-rs-runtime-owner.js",
+      "status": " M",
+      "sha256": "383657a2e404b1e4c9864d72a3d3340603486f8949cbb6dd7d84f297a0178e0a",
+      "bytes": 70719
+    },
+    {
+      "path": "src/raft/raft-rs-status-observation.js",
+      "status": " M",
+      "sha256": "ae63020a0e238609324e2f524e39464a3d0dc5b7a6d1e6abc89a5321846b0c56",
+      "bytes": 6633
+    },
+    {
+      "path": "src/raft/snapshot-catchup-constants.js",
+      "status": " M",
+      "sha256": "2d3361882884f7de867bb09e5c606ee7a15d42b287f65a5bea61fa5ed00771fc",
+      "bytes": 3860
+    },
+    {
+      "path": "src/raft/snapshot-catchup.js",
+      "status": " M",
+      "sha256": "bfa7d80c75a4f379fc1b2ddf7033a46af9258a8d90d27403badac8cadf964820",
+      "bytes": 17626
+    },
+    {
+      "path": "src/storage/data-directory-manager.js",
+      "status": " M",
+      "sha256": "2b630c8d04fccd578127f17a8dac4181f93205e265cacbcc6621042b8028d0b5",
+      "bytes": 8007
+    },
+    {
+      "path": "src/storage/data-directory-process-owner.js",
+      "status": " M",
+      "sha256": "2693d493355298510d42758615cd4b9954a3ef2f580e57c2ef12f100cbd4b0f1",
+      "bytes": 8602
+    },
+    {
+      "path": "test/bootstrap/bootstrap-service-ready-signal.test.js",
+      "status": " M",
+      "sha256": "8e9f0617daafa13ae887be8b6304ed9a8ca618456f98271cc7ca1e39e8da9094",
+      "bytes": 12395
+    },
+    {
+      "path": "test/bootstrap/seed-registration-phase.test.js",
+      "status": " M",
+      "sha256": "204dd33be74aa6c3bc3d69610f5278ef0658cd6cb7115e0d12e1151520bae096",
+      "bytes": 12176
+    },
+    {
+      "path": "test/bootstrap/shared/startup-sql-runtime-handoff.test.js",
+      "status": " M",
+      "sha256": "0474ac36be47dfb5b06d42b2bf40e5f6869890eb20b905b8e92ba7e81fe878e9",
+      "bytes": 19095
+    },
+    {
+      "path": "test/partition/partition-coordinator-settlement.test.js",
+      "status": " M",
+      "sha256": "73a5f77e8c4ca19cde09c7acc5684c5474f833c094bedbd2908e9c888d234620",
+      "bytes": 9336
+    },
+    {
+      "path": "test/partition/partition-participant-transaction-apply.test.js",
+      "status": " M",
+      "sha256": "dd8736cb4d0cd4262413d9c83a2bdf86638b982932ad319eedf1eee65b1411ec",
+      "bytes": 45441
+    },
+    {
+      "path": "test/raft/raft-rs-backend/operation-port-lifecycle.test.js",
+      "status": " M",
+      "sha256": "46d624b27ae50c105c9729361d46cd1c61d666c03ea60a8982e7fc9fac25c3a8",
+      "bytes": 13034
+    },
+    {
+      "path": "test/raft/raft-rs-backend/partition-node-cluster.js",
+      "status": " M",
+      "sha256": "a8655f8ba3d2fb38a79184456342940dc2e55b3714be6b10fee49620031917ce",
+      "bytes": 18227
+    },
+    {
+      "path": "test/test-helpers/controllable-consensus-port.js",
+      "status": " M",
+      "sha256": "f53f3fdfa59e069537d5b309d60f89f22cb8c794f43b334544cb77e12cbd01ce",
+      "bytes": 11946
+    },
+    {
+      "path": "test/test-helpers/participant-transaction-fixture.js",
+      "status": " M",
+      "sha256": "985156470367e1c4bb1205009a6435f6a12c278c791629fff2c74f6d4ee2f03c",
+      "bytes": 37632
+    },
+    {
+      "path": "src/node/participant-release-authorization-owner.js",
+      "status": "??",
+      "sha256": "d2845c0d78f30db22488569574d03db038f5a940bee55f3ae0732225e2d34af0",
+      "bytes": 4096
+    },
+    {
+      "path": "src/node/participant-release-client.js",
+      "status": "??",
+      "sha256": "b63239aad31799de2c83ffed8a7742e6d90556a95daa868833a6b42f7af50776",
+      "bytes": 3212
+    },
+    {
+      "path": "src/node/participant-release-lifecycle-retirement.js",
+      "status": "??",
+      "sha256": "e9409e688b7d817a8c8883bfd0e4f1066d96f28600ab5c0bc73ed14664acf64d",
+      "bytes": 2678
+    },
+    {
+      "path": "src/node/replica-handler-participant-cutover.js",
+      "status": "??",
+      "sha256": "74c1d2ba5256cc0692d4a85a87d2ba88ab41e27aba9d3877248e1ae90c3f06f6",
+      "bytes": 35774
+    },
+    {
+      "path": "src/node/replica-handler-participant-release.js",
+      "status": "??",
+      "sha256": "f0a17d775412aa4f1ed1540e9baf0a6973b3b952b17078ac5ba31d4ae5f75ad6",
+      "bytes": 21327
+    },
+    {
+      "path": "src/node/replica-handler-release-recovery.js",
+      "status": "??",
+      "sha256": "4ac695220d1d98a81498394bf42b8c12375c68974dae796b216a9133d6196393",
+      "bytes": 8635
+    },
+    {
+      "path": "src/partition/partition-participant-release-apply.js",
+      "status": "??",
+      "sha256": "b436f98dd01809fad4b83f49bd00ddd839a1331ee40382a298152f388dc3cf5d",
+      "bytes": 29624
+    },
+    {
+      "path": "src/partition/partition-participant-release-command.js",
+      "status": "??",
+      "sha256": "f0d4fab0a9e6534d737fc1ab0536e316fa550ec68bce32dd78065b41db3f5e2f",
+      "bytes": 24795
+    },
+    {
+      "path": "src/partition/partition-participant-release-dispatch-admission.js",
+      "status": "??",
+      "sha256": "adf8a8525d17d59641333a9941284140ee2e0cfe5dbe3b5e8eb463cff2e4854c",
+      "bytes": 3592
+    },
+    {
+      "path": "src/partition/partition-participant-release-identity.js",
+      "status": "??",
+      "sha256": "ad20fb1a3934d135d5b4474625b251ef9ebac66ee9dec6ce1d7d5f902f08130e",
+      "bytes": 1260
+    },
+    {
+      "path": "src/partition/partition-participant-release-local-current.js",
+      "status": "??",
+      "sha256": "eda5d1df90ea480feaaf7bf5f5b1ae203eec024626f09d6ec8a47bceb2bb1a5b",
+      "bytes": 1337
+    },
+    {
+      "path": "src/partition/partition-participant-release-request.js",
+      "status": "??",
+      "sha256": "e0341be36060502f815e3f063df069cf182e168a0500998362fdc848ebaa018f",
+      "bytes": 12514
+    },
+    {
+      "path": "test/partition/participant-release-protocol.test.js",
+      "status": "??",
+      "sha256": "9c3ef4f12690bc353c93a923988c60e088b411a81afb98f712d77de0d970595a",
+      "bytes": 28169
+    },
+    {
+      "path": "test/partition/partition-participant-release-admission.test.js",
+      "status": "??",
+      "sha256": "22cfd2d062ac54c887ebc66f9716a51f00e064225a39141eb29adbc355e6fae3",
+      "bytes": 2717
+    }
+  ]
+}
