@@ -400,6 +400,11 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           });
           await this.waitForVoterReadyActivation(replicaId, partitionId);
         }
+        // CREATE cannot publish an ACTIVE service whose participant runtime
+        // is still default closed. The lifecycle owner performs the same
+        // cohort proof used at startup, including control group first,
+        // before the operation exposes the replica as active.
+        await this.participantReleaseRecovery.releaseFreshCreate(partitionId);
         // Voter readiness is executor evidence, not permission to complete
         // the operation. Publish it before the SERVICES write so formation
         // cannot depend on a round-trip through the control plane being

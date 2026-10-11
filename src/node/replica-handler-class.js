@@ -33,6 +33,7 @@ import {createSystemMetadataGatewayRequiredError} from '../control-plane/system-
 import {LoggingService} from '../logging/logging-service.js';
 import {assertCritical} from '../utils/assert.js';
 import {TrackedServiceRegistry} from './replica-handler-membership-relay.js';
+import {createParticipantReleaseRecovery} from './replica-handler-release-recovery.js';
 import {assignReplicaHandlerMembershipMethods} from
   './replica-handler-membership-methods.js';
 import {assignReplicaHandlerCommittedMembershipMethods} from
@@ -190,6 +191,7 @@ class ReplicaHandler extends EventEmitter {
     });
     this.creationProgressByReplica = new Map();
     this.initialized = false;
+    this.participantReleaseRecovery = createParticipantReleaseRecovery(this);
   }
 }
 

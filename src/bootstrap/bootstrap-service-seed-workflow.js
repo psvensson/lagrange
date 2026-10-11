@@ -11,16 +11,23 @@ import {
 } from './pipeline/startup-pipeline-runner.js';
 import {createSeedStartupPlan} from './pipeline/seed-startup-plan.js';
 import {
+  attachSqlRuntimeToStartupOwner,
   activateSteadyStateRuntimeHandoff,
 } from './shared/startup-sql-runtime-handoff.js';
 import {
   WORK_CLASS,
 } from '../runtime/work-class-scheduler.js';
+import {runtimeBuildProvenance, RUNTIME_BUILD_STATE} from
+  '../diagnostics/runtime-build-provenance.js';
+import {requestParticipantRelease} from '../node/participant-release-client.js';
+import {PARTICIPANT_CUTOVER_BOUND, PARTICIPANT_CUTOVER_OUTCOME,
+  PARTICIPANT_RELEASE_TRIGGER} from
+  '../partition/partition-participant-transaction-cutover-constants.js';
 import {
   NodeState,
 } from '../node/node-lifecycle-state-machine.js';
 import {BOOTSTRAP_SUB_PHASE} from '../node/node-constants.js';
-import {NUM} from '../constants/index.js';
+import {NUM, TABLES} from '../constants/index.js';
 
 const BootstrapPhase = BOOTSTRAP_PHASE;
 const BootstrapEvent = BOOTSTRAP_EVENT;
@@ -196,6 +203,16 @@ function createBootstrapServiceSeedWorkflowMethods() {
         }
         this.phase = BootstrapPhase.COMPLETE;
         this.clearNodeReadyRebalanceState();
+        const sqlQueryEngine =
+          this.seedRuntimeBridgeOwner.acquireSqlQueryEngine();
+        attachSqlRuntimeToStartupOwner({
+          owner: this,
+          sqlQueryEngine,
+          systemTableCache: this.getSystemTableCache(),
+          cacheMutationTarget: this.getSystemTableCache(),
+          messageRouter: this.messageRouter,
+          partitionServicesProvider: () => this.partitionServices,
+        });
         activateSteadyStateRuntimeHandoff({
           owner: this.runtimeHandoffOwner,
           activateControlPlaneBackgroundWriters: true,
@@ -234,6 +251,36 @@ function createBootstrapServiceSeedWorkflowMethods() {
         transport: this.transport,
         messageRouter: this.messageRouter,
       };
+    },
+    async releaseSeedParticipantCohorts() {
+      const build = await runtimeBuildProvenance();
+      if (build.state !== RUNTIME_BUILD_STATE.MEASURED) {
+        throw new Error(`Seed participant release build unavailable: ${build.reason}`);
+      }
+      const services = [...this.partitionServices.values()].sort((left, right) => {
+        const leftControl = left.tableName === TABLES.SQL_TRANSACTIONS ? 0 : 1;
+        const rightControl = right.tableName === TABLES.SQL_TRANSACTIONS ? 0 : 1;
+        return leftControl - rightControl || left.partitionId.localeCompare(right.partitionId);
+      });
+      for (const service of services) {
+        const deadline = Date.now() + PARTICIPANT_CUTOVER_BOUND.DRAIN_DEADLINE_MS;
+        let answer = null;
+        do {
+          answer = await requestParticipantRelease(this.replicaHandler, {
+            partitionId: service.partitionId, targetBuildDigest: build.digest,
+            trigger: PARTICIPANT_RELEASE_TRIGGER.FRESH_SEED,
+          });
+          if (answer.outcome === PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER) break;
+          const retryAfterMs = answer.retryAfterMs;
+          if (!Number.isSafeInteger(retryAfterMs) || retryAfterMs < 0 ||
+              Date.now() + retryAfterMs > deadline) break;
+          await new Promise((resolve) => setTimeout(resolve, retryAfterMs));
+        } while (Date.now() <= deadline);
+        if (answer?.outcome !== PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER) {
+          throw new Error('Seed participant release failed: ' +
+            JSON.stringify({partitionId: service.partitionId, answer}));
+        }
+      }
     },
     buildSeedCheckpointSteps(startupPipelineRunner, seedPlan) {
       const phases = Array.isArray(seedPlan?.phases) ? seedPlan.phases : [];
@@ -292,6 +339,9 @@ function createBootstrapServiceSeedWorkflowMethods() {
                 .ensureBootstrapCdcIntegrationService();
               this.initializeReplicaStateMachine();
             }
+            this.seedRuntimeBridgeOwner.acquireSqlQueryEngine();
+            this.acquireReplicaHandler();
+            await this.releaseSeedParticipantCohorts();
             await startupPipelineRunner.run({
               phases: phases.slice(NUM.THREE, NUM.FOUR),
             });
@@ -323,9 +373,7 @@ function createBootstrapServiceSeedWorkflowMethods() {
             });
 
             const replicaHandlerStartMs = Date.now();
-            if (!this.replicaHandler) {
-              this.initializeReplicaHandler();
-            }
+            this.initializeReplicaHandler();
             this.logger.info(POST_PIPELINE_LOG.REPLICA_HANDLER, {
               nodeId: this.nodeId,
               durationMs: Date.now() - replicaHandlerStartMs,

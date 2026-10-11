@@ -181,6 +181,7 @@ class ReplicaHandlerSetup {
       replicaStateMachine: existingReplicaStateMachine,
       timeSource,
       ownerIncarnation,
+      deferInitialization = false,
     } = options;
 
     // Validate required dependencies
@@ -263,8 +264,13 @@ class ReplicaHandlerSetup {
       ownerIncarnation,
     });
 
-    // Initialize the handler
-    replicaHandler.initialize();
+    // A fresh seed registers the release route before registration writes,
+    // while the authoritative SERVICES read required by create/remove
+    // recovery is not routable until cache hydration. Its caller explicitly
+    // initializes the same handler after hydration; joins initialize here.
+    if (!deferInitialization) {
+      replicaHandler.initialize();
+    }
 
     // Register with message router for receiving replica operation messages
     replicaHandler.registerWithRouter(messageRouter, {
