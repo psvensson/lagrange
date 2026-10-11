@@ -1,4 +1,5 @@
 import {closeMessageGroupConsensus} from './message-group-consensus-port.js';
+import {closeCdcCommitWaits, readCdcCommitWaits} from './message-group-cdc-commit-owner.js';
 
 const MESSAGE_GROUP_SERVICE_CACHE_AND_LIFECYCLE_RUNTIME_LITERAL = {
   CONSTRUCTOR: 'constructor',
@@ -126,6 +127,7 @@ function createMessageGroupServiceCacheAndLifecycleRuntimeMethods(deps = {}) {
         pendingMessages: this.pendingMessages.size,
         acknowledgedMessages: this.acknowledgedMessages.size,
         cdcSubscriptions: this.cdcHandler.getSubscriptions(),
+        pendingCdcCommits: readCdcCommitWaits(this),
         initialized: this.initialized,
       };
     }
@@ -143,6 +145,7 @@ function createMessageGroupServiceCacheAndLifecycleRuntimeMethods(deps = {}) {
      * @return {Promise<void>}
      */
     async shutdown() {
+      closeCdcCommitWaits(this);
       this.logger.info(
         MESSAGE_GROUP_SERVICE_LITERAL.SHUTTING_DOWN_MESSAGE_GROUP_SERVICE,
         {

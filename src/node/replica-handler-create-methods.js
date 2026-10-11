@@ -15,6 +15,8 @@ import {assignReplicaHandlerCreateAdmissionMethods} from
 import {REPLICA_CLEANUP_ERROR_CODE} from
   './replica-cleanup-tombstone-owner.js';
 import * as priorExistence from './replica-prior-existence.js';
+import {CDC_SOURCE_SCOPE_AUTHORITY, buildCdcSourceScopeEvidence} from
+  '../partition/partition-cdc-source-coverage.js';
 import {
   REPLICA_HANDLER_CREATE_DECISION,
   REPLICA_HANDLER_EVENT,
@@ -305,6 +307,11 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         // Provisional sibling service rows alone are not enough; fresh partition
         // bring-up must bootstrap voters until a leader or active voter exists.
         const isJoiningExistingGroup = existingReplicaCount > 0;
+        const sourceScopeEvidence = buildCdcSourceScopeEvidence({
+          authority: CDC_SOURCE_SCOPE_AUTHORITY.REPLICA_CREATE_WORKFLOW,
+          partitionDescriptor: bootstrapPartitionMetadata,
+          tableDescriptor: bootstrapTableMetadata,
+        });
         this.updateReplicaCreationProgress(progress, {
           peerTotal: Array.isArray(replicaIds) ?
             Math.max(0, replicaIds.length - 1) :
@@ -325,6 +332,8 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
         }
         partitionService = await this.createPartitionService({
           partitionId, tableId, tableName, schema, keyRange,
+          ...(sourceScopeEvidence === null ? {} :
+            {sourceScopeProvenance: sourceScopeEvidence}),
           replicaId,
           replicaIds,
           peerAddresses: peerAddresses || [],

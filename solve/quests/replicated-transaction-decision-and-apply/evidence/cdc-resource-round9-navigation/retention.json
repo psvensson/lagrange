@@ -1,0 +1,10 @@
+{
+  "utc": "2026-10-11T20:51:17.799593+00:00",
+  "reportSha256": "aa0e355c25522395bacf9123fe7197815918476b40614318fcc4bfd95a577b64",
+  "verdict": "APPROVE DESIGN ONLY",
+  "sourceVerdict": "HOLD",
+  "files": {
+    "subject-0c44f474.md": "0c44f474493dc001385fe623eb7fb8eeed4d445fb84f075fa498887f2da2a130",
+    "navigation.json": "7324bd963d9aeb80d427993d14ca33b18e58aa5d65efd6dd121b8fb7035b7219"
+  }
+}
