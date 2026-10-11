@@ -1,0 +1,192 @@
+TAP version 13
+# Subtest: one release attempt appends one exact durable PAUSE and retries only observe it
+ok 1 - one release attempt appends one exact durable PAUSE and retries only observe it
+  ---
+  duration_ms: 838.72561
+  type: 'test'
+  ...
+# Subtest: real release route pauses initial writes, applies origin, orders retirement before a controlled successor, and recovers that successor from the same durable origin
+ok 2 - real release route pauses initial writes, applies origin, orders retirement before a controlled successor, and recovers that successor from the same durable origin
+  ---
+  duration_ms: 132.12674
+  type: 'test'
+  ...
+# Subtest: no-origin release without fresh storage or operator authority stays closed
+ok 3 - no-origin release without fresh storage or operator authority stays closed
+  ---
+  duration_ms: 29.741401
+  type: 'test'
+  ...
+# Subtest: dependent release stays closed without a reconstructed current control owner fact
+ok 4 - dependent release stays closed without a reconstructed current control owner fact
+  ---
+  duration_ms: 18.274759
+  type: 'test'
+  ...
+# Subtest: dependent release consumes an exact remotely routed current control owner fact
+ok 5 - dependent release consumes an exact remotely routed current control owner fact
+  ---
+  duration_ms: 82.173651
+  type: 'test'
+  ...
+# Subtest: mixed target build is refused and cannot lower admission
+ok 6 - mixed target build is refused and cannot lower admission
+  ---
+  duration_ms: 28.260591
+  type: 'test'
+  ...
+# Subtest: committed finalization before retirement remains historical and retirement fences future consumption
+ok 7 - committed finalization before retirement remains historical and retirement fences future consumption
+  ---
+  duration_ms: 71.913632
+  type: 'test'
+  ...
+# Subtest: committed retirement before finalization makes the exact authorization stale
+ok 8 - committed retirement before finalization makes the exact authorization stale
+  ---
+  duration_ms: 66.183256
+  type: 'test'
+  ...
+# Subtest: committed target retirement after RESUME and before confirmation keeps the exact receipt retired and refuses confirmation
+ok 9 - committed target retirement after RESUME and before confirmation keeps the exact receipt retired and refuses confirmation
+  ---
+  duration_ms: 75.54406
+  type: 'test'
+  ...
+# Subtest: a retired current claim cannot finalize or be reinstated by reconnecting the same incarnation
+ok 10 - a retired current claim cannot finalize or be reinstated by reconnecting the same incarnation
+  ---
+  duration_ms: 68.622966
+  type: 'test'
+  ...
+# Subtest: known local invalidation at the native dispatch boundary holds the exact finalization without applying it
+ok 11 - known local invalidation at the native dispatch boundary holds the exact finalization without applying it
+  ---
+  duration_ms: 65.780824
+  type: 'test'
+  ...
+# Subtest: control cohort origin installs the fixed coordinator schema atomically and its replay repairs a missing enforcer without changing the durable origin
+ok 12 - control cohort origin installs the fixed coordinator schema atomically and its replay repairs a missing enforcer without changing the durable origin
+  ---
+  duration_ms: 55.223041
+  type: 'test'
+  ...
+# Subtest: control cohort preserves unreconstructible legacy rows and reports exact activation debt
+ok 13 - control cohort preserves unreconstructible legacy rows and reports exact activation debt
+  ---
+  duration_ms: 22.798884
+  type: 'test'
+  ...
+# Subtest: closed ordinary admission permits only fixed freeze/rollback and exact durable replay
+ok 14 - closed ordinary admission permits only fixed freeze/rollback and exact durable replay
+  ---
+  duration_ms: 36.412753
+  type: 'test'
+  ...
+# Subtest: ordinary write origin cannot propose fixed settlement and new COMMIT never enters consensus
+ok 15 - ordinary write origin cannot propose fixed settlement and new COMMIT never enters consensus
+  ---
+  duration_ms: 19.924308
+  type: 'test'
+  ...
+# Subtest: terminal COMMIT completed by the normal owner orders one exact progress replay
+ok 16 - terminal COMMIT completed by the normal owner orders one exact progress replay
+  ---
+  duration_ms: 13.694518
+  type: 'test'
+  ...
+# Subtest: terminal ROLLBACK completed by the normal owner orders one exact progress replay
+ok 17 - terminal ROLLBACK completed by the normal owner orders one exact progress replay
+  ---
+  duration_ms: 13.248719
+  type: 'test'
+  ...
+# Subtest: enlist winning between source and apply is a retained conflict, not lineage rewrite
+ok 18 - enlist winning between source and apply is a retained conflict, not lineage rewrite
+  ---
+  duration_ms: 12.950435
+  type: 'test'
+  ...
+# Subtest: applied-index failure rolls back the fixed CAS and retained result together
+ok 19 - applied-index failure rolls back the fixed CAS and retained result together
+  ---
+  duration_ms: 12.318637
+  type: 'test'
+  ...
+# Wait bound spent {
+#   event: 'wait_bound_spent',
+#   wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+#   awaited: 'participant stage operation success',
+#   boundMs: null,
+#   elapsedMs: 0,
+#   lastObserved: {
+#     stage: 'COMMITTING',
+#     maxRetries: 3,
+#     attempts: 1,
+#     lastError: 'Participant answered without the typed outcome the transaction protocol requires',
+#     lastErrorCode: null
+#   },
+#   scope: {
+#     transactionId: '81647f8623f2483be2c3c51835ed4d97',
+#     partitionId: 'application-p1'
+#   },
+#   repeats: 0
+# }
+# Subtest: release settlement freezes an expired OPEN row, binds rollback and proves actual fanout
+ok 20 - release settlement freezes an expired OPEN row, binds rollback and proves actual fanout
+  ---
+  duration_ms: 6.880118
+  type: 'test'
+  ...
+# Subtest: release settlement follows an existing COMMIT and never creates another decision
+ok 21 - release settlement follows an existing COMMIT and never creates another decision
+  ---
+  duration_ms: 1.160783
+  type: 'test'
+  ...
+# Subtest: release settlement holds an unexpired OPEN row and legacy census
+ok 22 - release settlement holds an unexpired OPEN row and legacy census
+  ---
+  duration_ms: 0.861291
+  type: 'test'
+  ...
+# Subtest: release settlement keeps durable COMMIT pending across invalid bound and foreign evidence, then retries the same decision without another PREPARE
+ok 23 - release settlement keeps durable COMMIT pending across invalid bound and foreign evidence, then retries the same decision without another PREPARE
+  ---
+  duration_ms: 46.625367
+  type: 'test'
+  ...
+# Subtest: release settlement applies the canonical terminal tuple classes for both decisions
+    # Subtest: invalid commit tuple
+    ok 1 - invalid commit tuple
+      ---
+      duration_ms: 1.039898
+      type: 'test'
+      ...
+    # Subtest: invalid rollback tuple
+    ok 2 - invalid rollback tuple
+      ---
+      duration_ms: 0.65997
+      type: 'test'
+      ...
+    # Subtest: durable refused rollback
+    ok 3 - durable refused rollback
+      ---
+      duration_ms: 0.777508
+      type: 'test'
+      ...
+    1..3
+ok 24 - release settlement applies the canonical terminal tuple classes for both decisions
+  ---
+  duration_ms: 2.887703
+  type: 'test'
+  ...
+1..24
+# tests 27
+# suites 0
+# pass 27
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1994.1197

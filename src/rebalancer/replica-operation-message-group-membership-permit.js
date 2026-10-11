@@ -89,25 +89,35 @@ function decodeMembershipIdentity(encoded) {
     deriveRaftRsPeerId(value.targetReplicaId) !== value.targetPeerId) return null;
   return Object.freeze(value);
 }
-function decodeMembershipPermit(encoded) {
-  const value = parseRecord(encoded, PERMIT_KEYS);
-  if (!value || value.version !== PERMIT_VERSION ||
-    !integer(value.permitSequence, 1) ||
-    !Object.values(RAFT_MEMBERSHIP_TRANSITION_STAGE).includes(value.permitStage) ||
-    !Object.values(MEMBERSHIP_PERMIT_STATE).includes(value.permitState)) return null;
+function permitHeaderIsValid(value) {
+  return value && value.version === PERMIT_VERSION && integer(value.permitSequence, 1) &&
+    Object.values(RAFT_MEMBERSHIP_TRANSITION_STAGE).includes(value.permitStage) &&
+    Object.values(MEMBERSHIP_PERMIT_STATE).includes(value.permitState);
+}
+function permitBindingIsValid(value) {
   const strings = ['transitionIdentity', 'workflowOwnerNodeId',
     'workflowOwnerFence', 'proposerNodeId', 'destinationNodeId',
     'replicaLifecycleIncarnation', 'replicaIdentity', 'peerId'];
-  if (!strings.every((key) => text(value[key])) ||
-    !PERMIT_INTEGER_KEYS.every((key) => integer(value[key], 1)) ||
-    !integer(value.runtimeGeneration) ||
-    deriveRaftRsPeerId(value.replicaIdentity) !== value.peerId) return null;
+  return strings.every((key) => text(value[key])) &&
+    PERMIT_INTEGER_KEYS.every((key) => integer(value[key], 1)) &&
+    integer(value.runtimeGeneration) &&
+    deriveRaftRsPeerId(value.replicaIdentity) === value.peerId;
+}
+function permitStampIsValid(value) {
   const stamp = value.leaderConfigurationStamp;
-  if (!exactKeys(stamp, CONFIG_KEYS) || !text(stamp.configurationKey) ||
-    !integer(stamp.membershipGenerationIndex)) return null;
-  if (value.permitState === MEMBERSHIP_PERMIT_STATE.IN_FLIGHT ?
-    value.proposalIndex !== null : !integer(value.proposalIndex, 1)) return null;
-  return Object.freeze({...value, leaderConfigurationStamp: Object.freeze(stamp)});
+  return exactKeys(stamp, CONFIG_KEYS) && text(stamp.configurationKey) &&
+    integer(stamp.membershipGenerationIndex);
+}
+function permitOutcomeIsValid(value) {
+  return value.permitState === MEMBERSHIP_PERMIT_STATE.IN_FLIGHT ?
+    value.proposalIndex === null : integer(value.proposalIndex, 1);
+}
+function decodeMembershipPermit(encoded) {
+  const value = parseRecord(encoded, PERMIT_KEYS);
+  if (!permitHeaderIsValid(value) || !permitBindingIsValid(value) ||
+      !permitStampIsValid(value) || !permitOutcomeIsValid(value)) return null;
+  return Object.freeze({...value,
+    leaderConfigurationStamp: Object.freeze(value.leaderConfigurationStamp)});
 }
 const inKeyOrder = (record, keys) => Object.fromEntries(keys.map((key) => [key, record[key]]));
 /** The canonical encoding of a permit record: compact JSON with the codec's key
