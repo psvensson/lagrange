@@ -20,6 +20,8 @@ import {deriveRaftRsPeerId} from '../../src/raft/raft-rs-peer-identity.js';
 import {raftRsConfStateKey} from '../../src/raft/raft-rs-conf-state-key.js';
 import {committedStampOfAnswer} from '../../src/raft/raft-committed-membership-stamp.js';
 import {COMMITTED_MEMBERSHIP_STAMP_KIND} from '../../src/raft/raft-committed-membership-constants.js';
+import {recordedLearnerFactIsValid} from
+  '../../src/rebalancer/replica-operation-message-group-membership-authorization.js';
 
 const NOW = 1000000;
 const O = 'branch-operation';
@@ -1147,12 +1149,49 @@ test('O1 a non-canonical recorded permit is refused even when the request repeat
   await refusedBeforeBranchCas(f, [{...request(), priorPermit: encoded},
     {...request('abort_learner'), priorPermit: encoded}]);
 });
-test('O1 an initial learner permit whose sequence is not 1 is refused before any branch CAS', async (t) => {
-  const f = await setup(t);
-  const later = JSON.stringify({...prior, permitSequence: 2});
-  seedLearnerRow(f, {message_group_membership_permit: later});
-  const sequenced = (branch) => ({...request(branch, {permitSequence: 3}), priorPermit: later});
-  await refusedBeforeBranchCas(f, [sequenced('promote'), sequenced('abort_learner')]);
+// Supersedes 'O1 an initial learner permit whose sequence is not 1 is refused
+// before any branch CAS' (branch-selection change 3259d3d5f), retained in history.
+// That pin stood for "the learner action" while sequence 1 was its only attempt.
+// The ordered successor (runbook 6.C slice C1, design-successor-c1-2026-10-10.md)
+// issues the next ADD_LEARNER attempt of the same transition only over an exact,
+// definitively noncommitted one, and records the committed attempt with its own
+// sequence. Discovery and selection keep consuming the one shared predicate;
+// selection still requires the next permit to follow the recorded attempt.
+test('O1 (superseded by C1) a recorded ordered-successor learner fact selects either branch ' +
+  'once, only with the next sequence after it; a recorded non-learner stage is refused', async (t) => {
+  const successor = JSON.stringify({...prior, permitSequence: 2});
+  for (const [branch, phase] of [['promote', 'promotion_proposal_in_flight'],
+    ['abort_learner', 'target_removal_proposal_in_flight']]) {
+    await t.test(branch, async (t) => {
+      const f = await setup(t);
+      seedLearnerRow(f, {message_group_membership_permit: successor});
+      await refusedBeforeBranchCas(f, [{...request(branch, {permitSequence: 2}),
+        priorPermit: successor}], 'invalid', 'a next permit not after the recorded attempt');
+      const input = {...request(branch, {permitSequence: 3}), priorPermit: successor};
+      assert.equal((await f.repository.selectMessageGroupMembershipBranch(input)).outcome,
+        'recorded');
+      assert.equal(f.row().message_group_membership_phase, phase);
+      assert.equal(f.row().message_group_membership_permit, input.nextPermit);
+      assert.equal(f.writes, 1);
+    });
+  }
+  await t.test('a recorded promote-stage permit is no learner fact: the shared predicate ' +
+    'refuses it, and a request naming it as prior is refused at its shape', async (t) => {
+    const f = await setup(t);
+    const promoted = JSON.stringify({...prior, permitSequence: 2, permitStage: 'promote'});
+    seedLearnerRow(f, {message_group_membership_permit: promoted});
+    const identity = JSON.parse(ENCODED_IDENTITY);
+    assert.equal(recordedLearnerFactIsValid(f.repository.rowToOperation(f.row()), identity,
+      ENCODED_IDENTITY), false, 'the predecessor stage is part of the shared predicate');
+    seedLearnerRow(f, {message_group_membership_permit: successor});
+    assert.equal(recordedLearnerFactIsValid(f.repository.rowToOperation(f.row()), identity,
+      ENCODED_IDENTITY), true, 'positive control: the learner attempt of sequence 2 is a fact');
+    seedLearnerRow(f, {message_group_membership_permit: promoted});
+    const sequenced = (branch) => ({...request(branch, {permitSequence: 3}),
+      priorPermit: promoted});
+    await refusedBeforeBranchCas(f, [sequenced('promote'), sequenced('abort_learner')], 'invalid',
+      'a non-learner prior at the request shape');
+  });
 });
 test('O1 a recorded voter or removal stamp is refused before any branch CAS', async (t) => {
   for (const column of ['message_group_voter_stamp', 'message_group_removal_stamp']) {

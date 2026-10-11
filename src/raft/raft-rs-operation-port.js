@@ -233,8 +233,8 @@ function createRaftRsOperationPort(request) {
           encodeCommittedLearnerAdmission({groupId, ...position, context}));
       }
     },
-    readCommittedLearnerAdmission: (replicaIdentity) =>
-      registry.committedLearnerAdmission(replicaIdentity),
+    readLearnerOriginEvidence: (replicaIdentity) =>
+      registry.learnerOriginEvidence(replicaIdentity),
     applyTransactionRolledBack:
       request[RAFT_OPERATION_PORT_REQUEST.APPLY_TRANSACTION_ROLLED_BACK],
     // Each committed entry's whole SQLite commit+apply transaction is the

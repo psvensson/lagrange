@@ -8,8 +8,7 @@ import {WORKFLOW_STEP} from '../constants/workflow.js';
 import {ReplicaStatus} from './replica-status.js';
 import {deepFreeze} from '../raft/raft-operation-port.js';
 import {RAFT_MEMBERSHIP_AUTHORIZATION_OUTCOME as OUTCOME,
-  RAFT_MEMBERSHIP_AUTHORIZATION_REASON as REASON,
-  RAFT_MEMBERSHIP_TRANSITION_STAGE as STAGE} from
+  RAFT_MEMBERSHIP_AUTHORIZATION_REASON as REASON} from
   '../raft/raft-operation-port-constants.js';
 import {MEMBERSHIP_PHASE as PHASE, MEMBERSHIP_PERMIT_STATE as STATE,
   MEMBERSHIP_OBLIGATION, decodeMembershipIdentity, decodeMembershipPermit,
@@ -17,6 +16,7 @@ import {MEMBERSHIP_PHASE as PHASE, MEMBERSHIP_PERMIT_STATE as STATE,
 import {observeMembershipOperation, membershipRowIdentityMatches,
   MEMBERSHIP_AUTHORIZATION_READ_OPTIONS as READ} from
   './replica-operation-message-group-membership-owner-claim.js';
+import {learnerActionMatches} from './replica-operation-message-group-membership-authorization.js';
 
 const answer = (outcome, reason, fields = {}) => deepFreeze({outcome, reason, ...fields});
 const refuse = (reason) => answer(OUTCOME.REFUSED, reason);
@@ -24,15 +24,12 @@ const unavailable = () => answer(OUTCOME.UNAVAILABLE, REASON.UNAVAILABLE);
 const positiveInteger = (value) => Number.isSafeInteger(value) && value > 0;
 const nonempty = (value) => typeof value === 'string' && value.length > 0;
 
-// Decode first, then compare the already-decoded identity and issued action.
-// These are subordinate predicates, not additional authorization owners.
-function matchesInitialLearnerRequest(operationId, identity, permit) {
-  return identity.operationId === operationId &&
-    permit.transitionIdentity === identity.transitionIdentity &&
-    permit.permitStage === STAGE.ADD_LEARNER &&
-    permit.permitState === STATE.IN_FLIGHT && permit.permitSequence === 1 &&
-    permit.replicaIdentity === identity.targetReplicaId &&
-    permit.peerId === identity.targetPeerId;
+// Decode first, then compare the already-decoded identity and issued action
+// through the recorder's one learner-action predicate: the initial attempt or
+// an ordered successor, still in flight. The row must carry exactly this permit.
+function matchesIssuedLearnerRequest(operationId, identity, permit) {
+  return identity.operationId === operationId && learnerActionMatches(permit, identity) &&
+    permit.permitState === STATE.IN_FLIGHT;
 }
 function snapshotRequest(request) {
   if (!request || typeof request !== 'object') return null;
@@ -42,7 +39,7 @@ function snapshotRequest(request) {
   const decodedPermit = decodeMembershipPermit(permit);
   const claim = decodeMembershipOwnerClaim(executionClaim);
   if (!decodedIdentity || !decodedPermit || !claim) return null;
-  if (!matchesInitialLearnerRequest(operationId, decodedIdentity, decodedPermit)) return null;
+  if (!matchesIssuedLearnerRequest(operationId, decodedIdentity, decodedPermit)) return null;
   return {operationId, identity, permit, executionClaim, decodedIdentity, decodedPermit, claim};
 }
 function snapshotReceiver(repository, receiver, input) {

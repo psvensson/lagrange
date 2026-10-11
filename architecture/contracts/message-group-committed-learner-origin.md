@@ -16,8 +16,21 @@ an independent approval, a changed sealed acceptance, or route activation.
 | Observed fact | Permitted continuation |
 | --- | --- |
 | The exact original learner action has committed and applied | Recover its historical result through the native owner; no reproposal merely because a reply or former runtime was lost. |
-| Outcome unavailable, or no exact origin is retained | Keep UNKNOWN and the existing membership obligation. Neither current absence nor a missing record proves non-commitment. |
-| A prior attempt is definitively fenced AND non-committed | A successor attempt needs a separately proved, durably ordered existing-owner transition. This increment DOES NOT issue it. |
+| Outcome unavailable, or no exact origin is retained | Keep UNKNOWN and the existing membership obligation. Neither current absence nor a missing record proves non-commitment, with the one exception below. |
+| A prior attempt is definitively fenced AND non-committed | A successor attempt needs a separately proved, durably ordered existing-owner transition. This increment DOES NOT issue it; the ordered successor (runbook 6.C slice C1) does. |
+
+Narrow supersession (6.C slice C1, recorded in its design note, section 8): an
+absence resolves an issued learner action as noncommitted only when one queued
+native observation shows all of: the answering replica leads a term strictly
+newer than the action's leader term, has applied an entry of that term, holds
+no origin for the target, and its peer-identity registry vouches for that
+absence by holding no reservation of the target at all. The premise is that
+every replica whose history contains the action holds the target's
+reservation: applying it reserves and records the origin in one transaction,
+and a stamp or image that folds it names the target while it is configured.
+A reservation without an origin (a migrated schema, a stamp or image bootstrap
+that folded the action, a local proposal or address hint) vouches for nothing:
+the absence stays UNKNOWN. See the registered read contract.
 
 The immutable logical target/operation/transition and a fenced execution attempt
 are different. Do not overwrite the first issued permit with current native
@@ -78,8 +91,10 @@ Increment the UNRELEASED `raft_rs_replica_image` payload version from 1 to 2;
 other payload kinds are unchanged. Version-1 images are explicitly unsupported
 by the new origin-bearing contract, not silently treated as containing proof.
 Old live reservation rows remain readable after the existing owner adds the
-nullable field, but NULL cannot resolve an issued action. No supported upgrade
-claim is made. Native snapshot catch-up completion is a separate existing gap.
+nullable field, but NULL cannot resolve an issued action, including for the
+ordered successor (C1): a reservation whose origin is NULL is UNVOUCHED and
+never fences; only a registry that holds no reservation of the target vouches
+for the absence. No supported upgrade claim is made. Native snapshot catch-up completion is a separate existing gap.
 
 ## Required falsifiers and proof ceiling
 

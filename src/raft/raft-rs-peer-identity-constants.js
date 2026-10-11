@@ -50,6 +50,19 @@ const RAFT_RS_PEER_IDENTITY_RESOLUTION = Object.freeze({
   UNRESERVED: 'unreserved',
 });
 
+// What this registry can vouch about one replica's committed learner origin:
+// RECORDED (an origin is stored), ABSENT (no reservation at all: nothing this
+// registry ever applied, bootstrapped from, installed or proposed named the
+// replica) or UNVOUCHED (a reservation without an origin, which proves
+// nothing: a stamp or image bootstrap folds history it never applied, an older
+// schema migrated its rows to NULL, a local proposal or address hint reserves
+// before any application).
+const RAFT_RS_LEARNER_ORIGIN_COVERAGE = Object.freeze({
+  RECORDED: 'recorded',
+  ABSENT: 'absent',
+  UNVOUCHED: 'unvouched',
+});
+
 const RAFT_RS_PEER_IDENTITY_ERROR_MSG = Object.freeze({
   LEARNER_ADMISSION_CONFLICT: 'committed learner origin conflicts with permanent identity',
   LEARNER_ADMISSION_TRANSACTION: 'committed learner origin requires the application transaction',
@@ -73,6 +86,7 @@ const RAFT_RS_PEER_IDENTITY_ERROR_MSG = Object.freeze({
 
 export {
   RAFT_RS_LEARNER_ADMISSION_COLUMN,
+  RAFT_RS_LEARNER_ORIGIN_COVERAGE,
   RAFT_RS_PEER_IDENTITY_ERROR_MSG,
   RAFT_RS_PEER_IDENTITY_RESOLUTION,
   RAFT_RS_PEER_IDENTITY_SQL,

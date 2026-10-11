@@ -182,6 +182,14 @@ export const SUBSYSTEM_OVERRIDES = Object.freeze({
     subsystem: SUBSYSTEM_STORAGE_RAFT,
     reason: 'proves durable operation authorization before native Raft membership; repository storage and inbox transport supply the cross-owner fixture',
   },
+  'test/integration/message-group-learner-successor-ordering.integration.test.js': {
+    subsystem: SUBSYSTEM_PLACEMENT_REBALANCE,
+    reason: 'proves the operation owner issues an ordered learner successor only over a fenced, registry-vouched noncommitted attempt; real routers, the native group and operation SQL supply the fixture',
+  },
+  'test/integration/message-group-learner-join.integration.test.js': {
+    subsystem: SUBSYSTEM_BOOTSTRAP_MEMBERSHIP,
+    reason: 'proves a recorded learner joins its group through the CREATE admission and install owners; the partition-shaped install path and transport are fixture, not the asserted responsibility',
+  },
   'test/integration/message-group-membership-claim-cache.integration.test.js': {
     subsystem: SUBSYSTEM_CDC_METADATA,
     reason: 'proves repository mutation visibility in SystemTableCache; seed and message group supply the fixture, not the asserted responsibility',

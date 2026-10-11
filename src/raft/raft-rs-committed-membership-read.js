@@ -21,6 +21,7 @@ import {
   COMMITTED_MEMBERSHIP_REFUSAL,
 } from './raft-committed-membership-constants.js';
 import {
+  RAFT_RS_LEARNER_ORIGIN_COVERAGE,
   RAFT_RS_PEER_IDENTITY_RESOLUTION,
 } from './raft-rs-peer-identity-constants.js';
 import {INVALID_COMMITTED_LEARNER_ADMISSION,
@@ -156,6 +157,23 @@ function answerCommittedMembership(group, status, purpose) {
 function learnerActionAnswer(kind, reason, fields = {}) {
   return deepFreeze({kind, reason, ...fields});
 }
+// The queued observation an absent origin was read in: which replica
+// answered, its role and term, whether it leads with an entry of that term
+// applied (currentTermApplied), whether its registry vouches that its origin
+// records are complete for the target (originRegistryComplete: the registry
+// holds no reservation of it at all, so no application of the action is in
+// this replica's history), its applied boundary, and the configuration,
+// lifecycle and runtime fences a proposal through its port is compared with.
+// Facts for the recorder's noncommitment decision; never a proposal grant.
+function absenceObservation(status, evidence) {
+  return {replicaIdentity: status.replicaIdentity, role: status.role, term: status.term,
+    currentTermApplied: status.currentTermApplied === true,
+    originRegistryComplete: evidence.coverage === RAFT_RS_LEARNER_ORIGIN_COVERAGE.ABSENT,
+    appliedIndex: status.appliedIndex, configurationKey: status.configurationKey,
+    membershipGenerationIndex: status.membershipGenerationIndex,
+    lifecycleIncarnation: status.lifecycleIncarnation,
+    runtimeGeneration: status.runtimeGeneration};
+}
 function unavailableLearnerAction() {
   return learnerActionAnswer(ACTION_KIND.REFUSED, ACTION_REASON.UNAVAILABLE);
 }
@@ -186,11 +204,14 @@ function learnerOriginRefusal(origin, query, status) {
 function answerCommittedLearnerAction(group, status, query) {
   if (unavailableMembershipRefusal(status) !== null) return unavailableLearnerAction();
   try {
-    const encoded = group.readCommittedLearnerAdmission(query.action.replicaIdentity);
-    if (encoded === null) {
-      return learnerActionAnswer(ACTION_KIND.UNRESOLVED, ACTION_REASON.NOT_RECORDED);
+    const evidence = group.readLearnerOriginEvidence(query.action.replicaIdentity);
+    if (evidence.coverage !== RAFT_RS_LEARNER_ORIGIN_COVERAGE.RECORDED) {
+      // Absence at this boundary alone proves nothing; the same observation
+      // rides along so the recorder can tell whether it fences the action.
+      return learnerActionAnswer(ACTION_KIND.UNRESOLVED, ACTION_REASON.NOT_RECORDED,
+        {observation: absenceObservation(status, evidence)});
     }
-    const origin = decodeCommittedLearnerAdmission(encoded);
+    const origin = decodeCommittedLearnerAdmission(evidence.encoded);
     if (origin === INVALID_COMMITTED_LEARNER_ADMISSION) {
       return learnerActionAnswer(ACTION_KIND.REFUSED, ACTION_REASON.CORRUPT);
     }

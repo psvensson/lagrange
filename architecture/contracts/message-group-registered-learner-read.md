@@ -85,7 +85,8 @@ message-group services row for a group whose lane holder owes one). Each turn:
    its ordinary status (ordinary failure does not hide debt); the periodic sweep
    reads the replicated cache as a hint, so a cache listing no debt costs no
    round trip. The periodic sweep and both replicated-row wakes share one hint
-   filter: a row owing an initial learner turn (in-flight phase and permit).
+   filter: a row owing a learner turn (in-flight phase and permit of the
+   transition's learner action, at any permit sequence).
    A services row reads its group's lane only when the cache lists such an
    operation on that lane; a recorded, invalid or later-phase row costs no read.
    When the repository has no replicated-operation cache observation boundary,
@@ -93,15 +94,17 @@ message-group services row for a group whose lane holder owes one). Each turn:
    Every candidate is re-read authoritatively before any decision.
 2. Holds the operation lane for one turn (coalesced wakeups do not inherit a
    turn; the debt waits for the next trigger).
-3. Recovers only the initial learner action (ADD_LEARNER, sequence 1, phase
-   in-flight or committed); promotion and removal debt belong to later owners
+3. Recovers only the learner action (ADD_LEARNER of the transition: its initial
+   attempt, sequence 1, or an ordered successor attempt; phase in-flight or
+   committed); promotion and removal debt belong to later owners
    and are reported, not touched. A phase/permit pair other than in-flight/
    in-flight or committed/committed is INVALID_ROW (field: permit) before any
-   claim work. An initial action whose exact outcome is already durable is
+   claim work. A learner action whose exact outcome is already durable is
    settled for this owner: no claim is touched and no witness is asked. The
    recorder owns the one pure validity predicate of that recorded fact (row
-   identity, committed initial permit, no voter/removal stamp, canonical permit
-   and stamp encodings, coherent learner stamp); discovery and the recorder's
+   identity, a committed ADD_LEARNER permit of the transition at any permit
+   sequence, no voter/removal stamp, canonical permit and stamp encodings,
+   coherent learner stamp); discovery and the recorder's
    readback both consume it. It carries no claim, lease or boot gate, so a
    settled fact stays settled after its lease expires. A new promotion or
    pre-promotion abandonment selection consumes the same predicate first (a
@@ -122,25 +125,77 @@ message-group services row for a group whose lane holder owes one). Each turn:
 6. Calls the recorder's inline entry with the lane turn the operation lane
    handed it; the entry refuses a missing turn, a turn for another key, or a
    lane nobody holds. The retained-lane public entry stays for explicit callers.
+7. When the recorder's exact read answers NONCOMMITTED (below), the same turn
+   asks the repository to issue the ordered successor attempt at the same
+   witness, through the same lane turn and transport capability.
 
 RECORDED (new or settled), RETAINED (UNKNOWN/UNAVAILABLE/STALE_OWNER),
-NO_HOSTED_WITNESS, HELD_ELSEWHERE, CLAIM_REFUSED, PHASE_NOT_OWNED, LANE_BUSY,
-NOT_CURRENT, INVALID_ROW, INVALID_INPUT and CONFLICT are named states owned by
-the permit module. Only RECORDED means the exact outcome is durable; INVALID_ROW,
-INVALID_INPUT and CONFLICT are surfaced for owned repair. An INVALID_ROW keeps
+SUCCESSOR_ISSUED, NO_HOSTED_WITNESS, HELD_ELSEWHERE, CLAIM_REFUSED,
+PHASE_NOT_OWNED, LANE_BUSY, NOT_CURRENT, INVALID_ROW, INVALID_INPUT and
+CONFLICT are named states owned by the permit module. Only RECORDED means the
+exact outcome is durable; INVALID_ROW, INVALID_INPUT and CONFLICT are surfaced
+for owned repair. An INVALID_ROW keeps
 its UNKNOWN obligation untouched and is re-diagnosed (warn) by its reentry
 owner, the restart scan's authoritative census in OperationWorkflowOwner;
-no repair is automated here. None of them dispatches
-CREATE, promotion, removal, cleanup, a successor attempt or a lane release.
+no repair is automated here. None of them dispatches CREATE, promotion,
+removal, cleanup or a lane release. SUCCESSOR_ISSUED is a durable permit for
+the next attempt, not a proposal; the debt stays UNKNOWN.
 The membership owner claim is bound to the process's issued boot incarnation,
 the one the router carries and the nodes row publishes.
 
 The full ordinary driver still needs initial learner action execution, followed
 by current CREATE through the existing leader descriptor/generation/sole-worker
 checks. These cannot be replaced by fixture-driven SENDING or a historical ADD
-receipt. No successor attempt is issued: absence of origin does not establish
-definitive predecessor fencing AND noncommitment. J1 forward recovery remains
-unchanged.
+receipt. J1 forward recovery remains unchanged.
+
+## Ordered successor of the learner action (runbook 6.C, slice C1)
+
+Absence of origin alone never establishes noncommitment. The native owner
+attaches to a NOT_RECORDED answer the same queued observation it was read in:
+the answering replica, its role and term, `currentTermApplied` (it leads and
+its core has applied past its pending configuration index, so an entry of its
+own term is committed; a status missing either index answers false),
+`originRegistryComplete` (computed from the peer-identity registry owner: the
+registry holds no reservation of the target at all), its applied boundary and
+its configuration, lifecycle and runtime fences. The recorder classifies it
+with one pure predicate: NONCOMMITTED only when the replica leads a term
+strictly newer than the attempt's leader term, `currentTermApplied` holds and
+`originRegistryComplete` holds. The attempt can only be appended at its own
+term's leader, log terms never decrease and the committed log is one
+sequence, so it could commit only inside that leader's applied prefix. The
+premise is that the target's reservation is present wherever that prefix
+contains the attempt: applying it reserves the target and records the origin
+in one transaction, a stamp or image that folds it names the target while it
+is configured, and reservations are never removed (the transition's own
+branches are the only removers of its fresh target, after its learner fact is
+recorded). A reservation without an origin (a migrated schema, a stamp or
+image bootstrap, a local proposal or address hint) therefore vouches for
+nothing, and the absence stays UNKNOWN: fail closed, the committed fact stays
+recordable at another witness, and the debt waits for a leader whose registry
+vouches. A missing observation, a missing or false vouch, a follower, the
+attempt's own term or an unapplied newer term is UNKNOWN; a malformed
+observation (a vouch that is not a boolean included) is CONFLICT. NONCOMMITTED
+records nothing.
+
+The repository then issues the successor itself: it re-reads the row, repeats
+the exact read and classification at the routed destination replica, reads
+the destination's canonical boot and its own, and applies one exact
+operation-row CAS (the full observed row as basis) changing only the permit
+column. The successor keeps the transition and target, takes the next permit
+sequence, the observation's leader term, configuration stamp, lifecycle and
+runtime fences, the current holder's fences and the destination node. It is
+issued only over an in-flight attempt of an open ordinary operation; an
+ordinarily settled operation keeps its debt for its own settlement owner. A
+lost answer is resolved by exact readback; a concurrent or late duplicate CAS
+matches nothing. The old permit is never refreshed and no sequence is reused.
+
+The native turn proposes the successor only at its leader term and exact
+configuration with no configuration change pending; raft-rs drops any second
+pending change itself. A successor bound to the observation in which the
+predecessor was absent therefore cannot commit beside it. The existing runtime
+consumer proposes it; the next discovery turn records its exact outcome with
+the unchanged three receipt columns. CREATE, promotion, removal, cleanup and
+lane release keep their owners; the shared promotion predicate is not used.
 
 ## Required bounded proof
 

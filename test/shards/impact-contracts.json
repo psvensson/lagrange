@@ -814,7 +814,7 @@
       ]
     },
     "message-group-committed-learner-origin": {
-      "description": "Existing committed application and permanent identity owners retain exact managed learner origin atomically; the queued historical read and versioned checkpoint validate that origin. Missing evidence remains unresolved; no current CREATE or reissue authority.",
+      "description": "Existing committed application and permanent identity owners retain exact managed learner origin atomically; the queued historical read and versioned checkpoint validate that origin. Missing evidence remains unresolved, except that an absence observed at a leader of a strictly newer term with its own term applied, whose registry holds no reservation of the target, is noncommitment for the ordered successor (a NULL-origin reservation never is); no current CREATE authority, and no reissue except that ordered successor.",
       "owners": [
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -848,7 +848,7 @@
       ]
     },
     "message-group-registered-learner-read": {
-      "description": "Actual registered recipient and retained workflow turn bind invoked callback/router, delivery and native lifetime through guarded repository submission; owned discovery (restart scan, periodic sweep, replicated-row wake) recovers membership debt by operation ID through the same recorder with an explicitly hosted witness. Preserve UNKNOWN after submission; no atomic lease/boot revocation or CREATE/successor permission.",
+      "description": "Actual registered recipient and retained workflow turn bind invoked callback/router, delivery and native lifetime through guarded repository submission; owned discovery (restart scan, periodic sweep, replicated-row wake) recovers membership debt by operation ID through the same recorder with an explicitly hosted witness. Preserve UNKNOWN after submission; no atomic lease/boot revocation or CREATE permission; a successor attempt only through the ordered-successor contract after a fenced, registry-vouched noncommitment.",
       "owners": [
         "src/node/message-group-service-handler.js",
         "src/node/message-group-membership-recipient.js",
@@ -907,10 +907,34 @@
         "src/rebalancer/replica-operation-message-group-membership-authorization.js"
       ],
       "tests": [
-        "test/node/message-group-learner-join.test.js",
+        "test/integration/message-group-learner-join.integration.test.js",
         "test/node/message-group-service-handler-membership.test.js",
         "test/node/message-group-create-admission-recovery.test.js",
         "test/message-group/message-group-fresh-learner-snapshot.test.js"
+      ]
+    },
+    "message-group-learner-successor-ordering": {
+      "description": "An in-flight message-group learner attempt gets an ordered successor only when the recorder's exact read proves it can never commit: NOT_RECORDED in one queued native observation of a replica that leads a strictly newer term, has applied an entry of it (currentTermApplied) and whose peer-identity registry vouches for the absence by holding no reservation of the target (originRegistryComplete; a NULL-origin reservation never fences). The repository re-proves that with its own read and issues the next permit sequence of the same transition, bound to that observation's term, configuration, lifecycle and runtime fences and the destination node, through one exact operation-row CAS on an open operation that changes only the permit column; the native single-pending and configuration-generation rules order it against any delayed predecessor. UNKNOWN keeps the debt; a committed predecessor is recorded; the old permit is never refreshed; issuance is not a proposal, CREATE or lane release.",
+      "owners": [
+        "src/raft/raft-rs-status-observation.js",
+        "src/raft/raft-rs-committed-membership-read.js",
+        "src/raft/raft-rs-membership-transition-runtime.js",
+        "src/raft/raft-rs-conf-change-admission.js",
+        "src/raft/raft-rs-operation-port.js",
+        "src/raft/raft-rs-peer-identity-constants.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/rebalancer/replica-operation-message-group-learner-successor.js",
+        "src/rebalancer/replica-operation-message-group-membership-authorization.js",
+        "src/rebalancer/replica-operation-message-group-membership-permit.js",
+        "src/rebalancer/replica-operation-message-group-learner-observation.js",
+        "src/rebalancer/replica-operation-repository-message-group-membership-methods.js",
+        "src/rebalancer/operation-workflow-message-group-membership-recovery.js",
+        "src/rebalancer/operation-workflow-message-group-native-read.js"
+      ],
+      "tests": [
+        "test/integration/message-group-learner-successor-ordering.integration.test.js",
+        "test/rebalancer/message-group-membership-branch-authorization.test.js",
+        "test/integration/message-group-learner-discovery.integration.test.js"
       ]
     }
   },
@@ -1661,7 +1685,7 @@
       ]
     },
     "message-group-committed-learner-origin": {
-      "description": "Existing committed application and permanent identity owners retain exact managed learner origin atomically; the queued historical read and versioned checkpoint validate that origin. Missing evidence remains unresolved; no current CREATE or reissue authority.",
+      "description": "Existing committed application and permanent identity owners retain exact managed learner origin atomically; the queued historical read and versioned checkpoint validate that origin. Missing evidence remains unresolved, except that an absence observed at a leader of a strictly newer term with its own term applied, whose registry holds no reservation of the target, is noncommitment for the ordered successor (a NULL-origin reservation never is); no current CREATE authority, and no reissue except that ordered successor.",
       "endpoints": [
         {
           "id": "native-applied-origin",
@@ -1717,7 +1741,7 @@
       ]
     },
     "message-group-registered-learner-read": {
-      "description": "Actual registered recipient and retained workflow turn bind invoked callback/router, delivery and native lifetime through guarded repository submission; owned discovery (restart scan, periodic sweep, replicated-row wake) recovers membership debt by operation ID through the same recorder with an explicitly hosted witness. Preserve UNKNOWN after submission; no atomic lease/boot revocation or CREATE/successor permission.",
+      "description": "Actual registered recipient and retained workflow turn bind invoked callback/router, delivery and native lifetime through guarded repository submission; owned discovery (restart scan, periodic sweep, replicated-row wake) recovers membership debt by operation ID through the same recorder with an explicitly hosted witness. Preserve UNKNOWN after submission; no atomic lease/boot revocation or CREATE permission; a successor attempt only through the ordered-successor contract after a fenced, registry-vouched noncommitment.",
       "endpoints": [
         {
           "id": "registered-native-recipient",
@@ -1809,10 +1833,45 @@
       ],
       "contract": "message-group-learner-join",
       "witnessTests": [
-        "test/node/message-group-learner-join.test.js",
+        "test/integration/message-group-learner-join.integration.test.js",
         "test/node/message-group-service-handler-membership.test.js",
         "test/node/message-group-create-admission-recovery.test.js",
         "test/message-group/message-group-fresh-learner-snapshot.test.js"
+      ]
+    },
+    "message-group-learner-successor-ordering": {
+      "description": "An in-flight message-group learner attempt gets an ordered successor only when the recorder's exact read proves it can never commit: NOT_RECORDED in one queued native observation of a replica that leads a strictly newer term, has applied an entry of it (currentTermApplied) and whose peer-identity registry vouches for the absence by holding no reservation of the target (originRegistryComplete; a NULL-origin reservation never fences). The repository re-proves that with its own read and issues the next permit sequence of the same transition, bound to that observation's term, configuration, lifecycle and runtime fences and the destination node, through one exact operation-row CAS on an open operation that changes only the permit column; the native single-pending and configuration-generation rules order it against any delayed predecessor. UNKNOWN keeps the debt; a committed predecessor is recorded; the old permit is never refreshed; issuance is not a proposal, CREATE or lane release.",
+      "endpoints": [
+        {
+          "id": "native-absence-fence-and-conf-change-ordering",
+          "owners": [
+            "src/raft/raft-rs-status-observation.js",
+            "src/raft/raft-rs-committed-membership-read.js",
+            "src/raft/raft-rs-membership-transition-runtime.js",
+            "src/raft/raft-rs-conf-change-admission.js",
+            "src/raft/raft-rs-peer-identity.js",
+            "src/raft/raft-rs-peer-identity-constants.js",
+            "src/raft/raft-rs-operation-port.js"
+          ]
+        },
+        {
+          "id": "durable-successor-issuance-and-discovery",
+          "owners": [
+            "src/rebalancer/replica-operation-message-group-learner-successor.js",
+            "src/rebalancer/replica-operation-message-group-membership-authorization.js",
+            "src/rebalancer/replica-operation-message-group-membership-permit.js",
+            "src/rebalancer/replica-operation-message-group-learner-observation.js",
+            "src/rebalancer/replica-operation-repository-message-group-membership-methods.js",
+            "src/rebalancer/operation-workflow-message-group-membership-recovery.js",
+            "src/rebalancer/operation-workflow-message-group-native-read.js"
+          ]
+        }
+      ],
+      "contract": "message-group-learner-successor-ordering",
+      "witnessTests": [
+        "test/integration/message-group-learner-successor-ordering.integration.test.js",
+        "test/rebalancer/message-group-membership-branch-authorization.test.js",
+        "test/integration/message-group-learner-discovery.integration.test.js"
       ]
     }
   }

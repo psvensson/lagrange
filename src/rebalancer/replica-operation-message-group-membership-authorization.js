@@ -10,6 +10,7 @@ import {committedStampOfAnswer, validateBootstrapMembershipStamp} from
   '../raft/raft-committed-membership-stamp.js';
 import {RAFT_MEMBERSHIP_TRANSITION_STAGE} from '../raft/raft-operation-port-constants.js';
 import {deriveRaftRsPeerId} from '../raft/raft-rs-peer-identity.js';
+import {ROLE_LEADER} from '../raft/raft-rs-runtime-owner-constants.js';
 import {COMMITTED_LEARNER_ACTION_KIND as ACTION_KIND,
   COMMITTED_LEARNER_ACTION_REASON as ACTION_REASON,
   COMMITTED_MEMBERSHIP_READ_PURPOSE, COMMITTED_MEMBERSHIP_ANSWER_KIND,
@@ -35,6 +36,7 @@ function noteUncertainMembershipWrite(repository, operationId, error) {
   repository.logger?.debug?.(REBALANCE_COORDINATOR_LOG_MSG.MEMBERSHIP_WRITE_UNCERTAIN,
     {nodeId: repository.nodeId, operationId, error: error?.message || String(error)});
 }
+export {noteUncertainMembershipWrite};
 function priorLearnerStamp(row, identity, prior) {
   try {
     const stamp = committedStampOfAnswer(JSON.parse(row.messageGroupLearnerStamp));
@@ -186,13 +188,19 @@ async function selectMessageGroupMembershipBranch(repository, request) {
 }
 export {selectMessageGroupMembershipBranch};
 
-function initialLearnerActionMatches(permit, identity) {
+/** The learner action of this transition: its ADD_LEARNER attempt for the
+ * exact target, the initial one (sequence 1) or an ordered successor (the
+ * codec admits any sequence from 1; only the successor issuance writes one
+ * above 1, over the exact attempt before it). Pure. */
+function learnerActionMatches(permit, identity) {
   return permit.permitStage === RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER &&
-    permit.permitSequence === 1 && permit.transitionIdentity === identity.transitionIdentity &&
+    permit.transitionIdentity === identity.transitionIdentity &&
     permit.replicaIdentity === identity.targetReplicaId && permit.peerId === identity.targetPeerId;
 }
+export {learnerActionMatches};
+// Initial issuance is always the first attempt; a successor is never issued here.
 function initialLearnerPermitMatches(permit, identity) {
-  return initialLearnerActionMatches(permit, identity) &&
+  return learnerActionMatches(permit, identity) && permit.permitSequence === 1 &&
     permit.permitState === STATE.IN_FLIGHT && permit.proposalIndex === null;
 }
 function membershipPermitMatchesHolder(repository, permit, claim, identity) {
@@ -294,7 +302,7 @@ function learnerRecordingInput(request) {
   const permit = decodeMembershipPermit(encodedPermit);
   const claim = decodeMembershipOwnerClaim(executionClaim);
   if (!identity || identity.operationId !== operationId || !permit || !claim ||
-    !initialLearnerActionMatches(permit, identity)) return null;
+    !learnerActionMatches(permit, identity)) return null;
   // This read/record-only input may already be COMMITTED after a lost answer.
   // Never rewrite it as IN_FLIGHT or pass it to the proposal authorizer.
   return {operationId, encodedIdentity, encodedPermit, identity, permit, executionClaim, claim};
@@ -336,11 +344,63 @@ function originalLearnerOriginMatches(origin, input, query) {
     Number(origin.term) === input.permit.leaderTerm &&
     Number(origin.index) > input.permit.leaderConfigurationStamp.membershipGenerationIndex;
 }
+// The facts the native owner attaches to an absent origin, by type. The registry
+// vouch is the one fact an observation may lack: a native owner that cannot vouch
+// attaches none, and an absent vouch, like a false one, never fences.
+const ABSENCE_TEXT_KEYS = Object.freeze(['replicaIdentity', 'role', 'configurationKey',
+  'lifecycleIncarnation']);
+const ABSENCE_INTEGER_KEYS = Object.freeze(['term', 'appliedIndex',
+  'membershipGenerationIndex', 'runtimeGeneration']);
+const ABSENCE_FLAG_KEYS = Object.freeze(['currentTermApplied']);
+const ABSENCE_VOUCH_KEY = 'originRegistryComplete';
+const absenceFlagKeys = (data) => (Object.hasOwn(data, ABSENCE_VOUCH_KEY) ?
+  [...ABSENCE_FLAG_KEYS, ABSENCE_VOUCH_KEY] : ABSENCE_FLAG_KEYS);
+function canonicalAbsenceObservation(value) {
+  const data = copyStrictOwnDataRecord(value);
+  if (!data) return null;
+  const flags = absenceFlagKeys(data);
+  if (Object.keys(data).length !==
+      ABSENCE_TEXT_KEYS.length + ABSENCE_INTEGER_KEYS.length + flags.length ||
+    !ABSENCE_TEXT_KEYS.every((key) => typeof data[key] === 'string' && data[key].length > 0) ||
+    !ABSENCE_INTEGER_KEYS.every((key) => Number.isSafeInteger(data[key]) && data[key] >= 0) ||
+    !flags.every((key) => typeof data[key] === 'boolean')) return null;
+  return Object.freeze(data);
+}
+// The fence: the observed replica leads a strictly newer term than the action
+// was issued for, has applied an entry of that term, and its registry vouches
+// that its origin records are complete for the target. The action can only
+// ever be appended at its own term's leader (the native turn requires that
+// exact term), raft log terms never decrease along the log, and the committed
+// log is one sequence, so the action could now only commit inside that
+// replica's applied prefix, where its target would hold a reservation with the
+// recorded origin. A registry holding the target's reservation without an
+// origin (stamp or image bootstrap, migrated schema, local proposal) vouches
+// for nothing and never fences.
+function absenceFencesLearnerAction(observation, permit) {
+  return observation.role === ROLE_LEADER && observation.currentTermApplied === true &&
+    observation.originRegistryComplete === true && observation.term > permit.leaderTerm;
+}
+/** The recorder's one classification of a native NOT_RECORDED answer for an
+ * in-flight learner action: NONCOMMITTED (with the observation) only when the
+ * same observation fences the action; UNKNOWN when it does not (an absent or
+ * false registry vouch included), or carries no observation (absence alone proves
+ * nothing); CONFLICT when the attached observation is malformed. Pure: no clock,
+ * claim, boot or row read. */
+function learnerActionAbsence(observed, permit) {
+  if (observed.observation === undefined || permit.permitState !== STATE.IN_FLIGHT) {
+    return Object.freeze({outcome: OUTCOME.UNKNOWN, observation: null});
+  }
+  const observation = canonicalAbsenceObservation(observed.observation);
+  if (observation === null) return Object.freeze({outcome: OUTCOME.CONFLICT, observation});
+  return Object.freeze({outcome: absenceFencesLearnerAction(observation, permit) ?
+    OUTCOME.NONCOMMITTED : OUTCOME.UNKNOWN, observation});
+}
+const notRecorded = (observed) => observed?.kind === ACTION_KIND.UNRESOLVED &&
+  observed.reason === ACTION_REASON.NOT_RECORDED;
 // Preserve the native owner's distinction: unresolved history is not a conflict,
 // and an invalid/mismatched origin is not transient transport unavailability.
-function learnerObservationRefusal(observed) {
-  if (observed?.kind === ACTION_KIND.UNRESOLVED &&
-    observed.reason === ACTION_REASON.NOT_RECORDED) return OUTCOME.UNKNOWN;
+function learnerObservationRefusal(observed, permit) {
+  if (notRecorded(observed)) return learnerActionAbsence(observed, permit).outcome;
   if (observed?.kind === ACTION_KIND.REFUSED &&
     observed.reason === ACTION_REASON.UNAVAILABLE) return OUTCOME.UNAVAILABLE;
   return observed?.kind === ACTION_KIND.COMMITTED && observed.reason === ACTION_REASON.APPLIED ?
@@ -357,7 +417,7 @@ function learnerWitnessUnavailable(membership) {
       .includes(membership.reason);
 }
 function learnerOutcomeEvidence(observed, input, query) {
-  const refusal = learnerObservationRefusal(observed);
+  const refusal = learnerObservationRefusal(observed, input.permit);
   if (refusal !== null) return {refusal};
   try {
     const encodedOrigin = encodeCommittedLearnerAdmission(observed.receipt);
@@ -387,6 +447,22 @@ async function observeLearnerRecording(readCommittedLearner, input) {
     return {refusal: OUTCOME.UNAVAILABLE};
   }
 }
+/** The ordered successor's own exact read of a learner attempt: the same query
+ * and the same classification as the recorder, answering NONCOMMITTED with the
+ * fencing observation, or the outcome that keeps the debt (UNKNOWN,
+ * UNAVAILABLE, CONFLICT; a committed attempt is CONFLICT here, since recording
+ * it is the recorder's). The caller supplies only the read capability. */
+async function observeLearnerActionAbsence(readCommittedLearner, input) {
+  try {
+    const observed = await readCommittedLearner(learnerOutcomeQuery(input));
+    if (notRecorded(observed)) return learnerActionAbsence(observed, input.permit);
+    const refusal = learnerObservationRefusal(observed, input.permit);
+    return Object.freeze({outcome: refusal ?? OUTCOME.CONFLICT, observation: null});
+  } catch {
+    return Object.freeze({outcome: OUTCOME.UNAVAILABLE, observation: null});
+  }
+}
+export {observeLearnerActionAbsence};
 function recordingBasisRefusal(repository, row, input) {
   if (!recordingRowMatches(repository, row, input)) return OUTCOME.CONFLICT;
   if (!membershipClaimIsLocalAndLive(repository, input.claim, input.identity)) {
@@ -495,12 +571,13 @@ async function recoverMessageGroupLearnerOutcome(repository, operationId, readCo
 }
 export {recoverMessageGroupLearnerOutcome};
 
-/** The one validity predicate of a recorded initial learner fact, shared by
+/** The one validity predicate of a recorded learner fact, shared by
  * discovery's settled-row classification, the recorder's replay/readback and
  * new (not already-selected) promotion/abandonment branch selection.
  * It judges only the immutable historical record: the row's identity columns,
- * the committed phase with a COMMITTED initial ADD_LEARNER permit of this
- * transition, no voter or removal stamp (the learner phase allows neither),
+ * the committed phase with a COMMITTED ADD_LEARNER permit of this transition
+ * (its initial attempt or an ordered successor, whose exact origin the
+ * recorder matched), no voter or removal stamp (the learner phase allows neither),
  * canonical permit and stamp encodings, and a learner stamp naming this
  * transition's source voter and target learner at or past the proposal index.
  * Pure: no claim, lease, boot or clock read, so a settled fact stays settled
@@ -511,7 +588,7 @@ function recordedLearnerFactIsValid(row, identity, encodedIdentity) {
   const permit = decodeMembershipPermit(row?.messageGroupMembershipPermit);
   if (permit === null || !membershipRowIdentityMatches(row, identity, encodedIdentity) ||
     row.messageGroupMembershipPhase !== PHASE.LEARNER_COMMITTED ||
-    permit.permitState !== STATE.COMMITTED || !initialLearnerActionMatches(permit, identity) ||
+    permit.permitState !== STATE.COMMITTED || !learnerActionMatches(permit, identity) ||
     row.messageGroupVoterStamp !== null || row.messageGroupRemovalStamp !== null ||
     row.messageGroupMembershipPermit !== JSON.stringify(permit)) return false;
   const stamp = priorLearnerStamp(row, identity, permit);

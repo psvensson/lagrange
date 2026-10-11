@@ -1,8 +1,9 @@
 /** Message-group membership facade of ReplicaOperationRepository.
  * These methods forward to the membership owner-claim and authorization
  * modules; the repository stays the sole decoder/validator and conditional
- * writer of membership phase, permit and stamps. No dispatch, CREATE or
- * successor authority is created here.
+ * writer of membership phase, permit and stamps. No dispatch or CREATE
+ * authority is created here; an ordered successor attempt is issued only by
+ * its own module's proof of predecessor noncommitment.
  */
 import {observeMessageGroupLearnerAuthorization} from
   './replica-operation-message-group-learner-observation.js';
@@ -11,6 +12,8 @@ import {claimMessageGroupMembershipOwner, settleMessageGroupMembershipNonAdmissi
 import {selectMessageGroupMembershipBranch, authorizeMessageGroupLearner,
   recordMessageGroupLearnerOutcome, recoverMessageGroupLearnerOutcome} from
   './replica-operation-message-group-membership-authorization.js';
+import {issueMessageGroupLearnerSuccessor} from
+  './replica-operation-message-group-learner-successor.js';
 import {MEMBERSHIP_OBLIGATION} from './replica-operation-message-group-membership-permit.js';
 import {CONTROL_PLANE_READ_LEADER_MODE} from
   '../control-plane/control-plane-system-table-gateway.js';
@@ -76,6 +79,13 @@ function assignReplicaOperationRepositoryMessageGroupMembershipMethods(
     /** Recover a learner receipt by operation ID using durable inputs, not a saved packet. */
     recoverMessageGroupLearnerOutcome(operationId, readCommittedLearner, isInvocationCurrent) {
       return recoverMessageGroupLearnerOutcome(this, operationId, readCommittedLearner,
+        isInvocationCurrent);
+    }
+
+    /** Issue the ordered successor of a definitively noncommitted learner
+     * attempt through its own exact read; issuance is not a proposal. */
+    issueMessageGroupLearnerSuccessor(request, readCommittedLearner, isInvocationCurrent) {
+      return issueMessageGroupLearnerSuccessor(this, request, readCommittedLearner,
         isInvocationCurrent);
     }
 

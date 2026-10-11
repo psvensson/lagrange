@@ -1,7 +1,8 @@
 /** OperationWorkflowOwner's transport capability for the existing recorder.
  * The route is a hint. Only the selected recipient's native answer supplies
  * membership; the repository validates the original action and writes its CAS.
- * This does not issue a permit, advance ordinary workflow, or admit CREATE.
+ * This does not issue a permit, advance ordinary workflow, or admit CREATE; the
+ * ordered successor entry below only carries the repository's own issuance.
  */
 import {SERVICE_TYPE} from '../constants/service.js';
 import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
@@ -95,14 +96,29 @@ function recoverMessageGroupLearnerFromRecipient(owner, operationId, route) {
  * turn for another key, no turn, or a lane nobody holds is refused as INVALID
  * instead of deadlocking or borrowing someone else's turn.
  */
-function recoverMessageGroupLearnerInline(owner, operationId, route, laneTurn) {
+function inlineRecordingTurn(owner, operationId, route, laneTurn) {
   const turn = selectRecordingRecipient(owner, operationId, route);
-  if (!turn || owner.isOperationOwnerLaneHeld(operationId) !== true ||
-    laneTurn?.ownerKey !== owner.getOperationOwnerSingleFlightKey(operationId)) {
-    return Promise.resolve(invalidAnswer());
-  }
+  return turn && owner.isOperationOwnerLaneHeld(operationId) === true &&
+    laneTurn?.ownerKey === owner.getOperationOwnerSingleFlightKey(operationId) ? turn : null;
+}
+function recoverMessageGroupLearnerInline(owner, operationId, route, laneTurn) {
+  const turn = inlineRecordingTurn(owner, operationId, route, laneTurn);
+  if (!turn) return Promise.resolve(invalidAnswer());
   return recordingTurn(owner, turn, (read, isCurrent) =>
     owner.repository.recoverMessageGroupLearnerOutcome(operationId, read, isCurrent));
 }
+/** The same reconcile turn, after its recorder read answered NONCOMMITTED:
+ * the repository issues the ordered successor through its own exact read at
+ * the same selected recipient, under the same lane-turn and lifetime checks.
+ * The recipient that answers is the successor's destination; issuing it is
+ * not proposing it. */
+function issueMessageGroupLearnerSuccessorInline(owner, operationId, route, laneTurn) {
+  const turn = inlineRecordingTurn(owner, operationId, route, laneTurn);
+  if (!turn) return Promise.resolve(invalidAnswer());
+  return recordingTurn(owner, turn, (read, isCurrent) =>
+    owner.repository.issueMessageGroupLearnerSuccessor({operationId,
+      destinationNodeId: turn.selected.nodeId, destinationReplicaId: turn.selected.replicaId},
+    read, isCurrent));
+}
 export {recordMessageGroupLearnerFromRecipient, recoverMessageGroupLearnerFromRecipient,
-  recoverMessageGroupLearnerInline};
+  recoverMessageGroupLearnerInline, issueMessageGroupLearnerSuccessorInline};

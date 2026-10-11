@@ -1675,7 +1675,7 @@ function createRuntimeDispatcher(request) {
     resolvePeerIdentity: request.resolvePeerIdentity,
     applyCommittedEntry: request.applyCommittedEntry,
     applyCommittedMembershipContext: request.applyCommittedMembershipContext,
-    readCommittedLearnerAdmission: request.readCommittedLearnerAdmission,
+    readLearnerOriginEvidence: request.readLearnerOriginEvidence,
     applyTransactionRolledBack: request.applyTransactionRolledBack,
     runApplySlice: request.runApplySlice,
     admitScheduledEntry: request.admitScheduledEntry,

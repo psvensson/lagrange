@@ -103,7 +103,10 @@ framework is introduced by this transition.
 ## Native refusals retain their meaning
 
 The recorder classifies the native result without treating every refusal as a
-transient outage. Exact UNRESOLVED / NOT_RECORDED stays UNKNOWN. Native UNAVAILABLE
+transient outage. Exact UNRESOLVED / NOT_RECORDED stays UNKNOWN, unless its
+same-turn observation fences the attempt at a leader whose registry vouches
+for the absence (NONCOMMITTED; see the ordered successor in the registered
+read contract), which records nothing. Native UNAVAILABLE
 or a thrown read failure remains UNAVAILABLE. Wrong action, corrupt origin,
 impossible applied boundary, invalid shape and contradictory kind/reason pairs
 return CONFLICT. Within an otherwise exact historical answer, the existing

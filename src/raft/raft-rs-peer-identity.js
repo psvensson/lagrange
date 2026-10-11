@@ -37,6 +37,7 @@ import {createHash} from 'node:crypto';
 
 import {
   RAFT_RS_LEARNER_ADMISSION_COLUMN,
+  RAFT_RS_LEARNER_ORIGIN_COVERAGE,
   RAFT_RS_PEER_IDENTITY_ERROR_MSG,
   RAFT_RS_PEER_IDENTITY_RESOLUTION,
   RAFT_RS_PEER_IDENTITY_SQL,
@@ -50,6 +51,10 @@ const IDENTITY_MASK = (1n << IDENTITY_WIDTH_BITS) - 1n;
 const LOWEST_USABLE_IDENTITY = 1n;
 const EMPTY = 0;
 const TYPE_STRING = 'string';
+const ABSENT_ORIGIN_EVIDENCE = Object.freeze({
+  coverage: RAFT_RS_LEARNER_ORIGIN_COVERAGE.ABSENT, encoded: null});
+const UNVOUCHED_ORIGIN_EVIDENCE = Object.freeze({
+  coverage: RAFT_RS_LEARNER_ORIGIN_COVERAGE.UNVOUCHED, encoded: null});
 
 function validatedRaftRsPeerIdentityReservations(reservations) {
   if (!Array.isArray(reservations)) {
@@ -231,6 +236,24 @@ class RaftRsPeerIdentityRegistry {
   /** Raw stored evidence, decoded only by the native committed-context owner. */
   committedLearnerAdmission(replicaIdentity) {
     return this.reservationFor(replicaIdentity)?.learner_admission ?? null;
+  }
+
+  /**
+   * What this registry vouches about one replica's committed learner origin
+   * (RAFT_RS_LEARNER_ORIGIN_COVERAGE), with the raw stored origin when there
+   * is one. Applying a managed ADD_LEARNER reserves the identity and records
+   * its origin in one transaction, a stamp or image that folds it names the
+   * identity while it is configured, and reservations are never removed, so
+   * ABSENT vouches that no such ADD_LEARNER is in this replica's history. A
+   * reservation without an origin (UNVOUCHED) vouches for nothing.
+   * @param {string} replicaIdentity - The replica.
+   * @return {Object} Frozen {coverage, encoded}; encoded is null unless RECORDED.
+   */
+  learnerOriginEvidence(replicaIdentity) {
+    const row = this.reservationFor(replicaIdentity);
+    if (row === undefined) return ABSENT_ORIGIN_EVIDENCE;
+    return row.learner_admission === null ? UNVOUCHED_ORIGIN_EVIDENCE : Object.freeze({
+      coverage: RAFT_RS_LEARNER_ORIGIN_COVERAGE.RECORDED, encoded: row.learner_admission});
   }
 
   /** All permanent reservations, in deterministic logical-identity order. */

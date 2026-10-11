@@ -13,15 +13,21 @@ const MEMBERSHIP_PHASE = Object.freeze({LEARNER_REQUESTED: 'learner_requested',
   TARGET_REMOVAL_IN_FLIGHT: 'target_removal_proposal_in_flight'});
 const MEMBERSHIP_PERMIT_STATE = Object.freeze({COMMITTED: 'committed',
   IN_FLIGHT: 'in_flight'});
+// NONCOMMITTED: the recorder's exact read proves an in-flight learner action can
+// never commit (its origin is absent where a newer term's leader has applied an
+// entry of that term). It records nothing; only an ordered successor follows.
 const MEMBERSHIP_AUTHORIZATION_OUTCOME = Object.freeze({RECORDED: 'recorded',
   CONFLICT: 'conflict', UNAVAILABLE: 'unavailable', UNKNOWN: 'unknown',
-  INVALID: 'invalid', STALE_OWNER: 'stale_owner'});
+  INVALID: 'invalid', STALE_OWNER: 'stale_owner', NONCOMMITTED: 'noncommitted'});
 const MEMBERSHIP_OBLIGATION = Object.freeze({INTENT_RECORDED: 'intent_recorded',
   UNKNOWN: 'unknown'});
 /** Typed outcomes of one membership-debt reconciliation turn. Only RECORDED
- * means the exact learner outcome is durable; every other state keeps the debt. */
+ * means the exact learner outcome is durable; every other state keeps the debt.
+ * SUCCESSOR_ISSUED: the ordered successor attempt is durably issued; its
+ * native proposal and exact outcome are still owed. */
 const MEMBERSHIP_DEBT_RECOVERY_OUTCOME = Object.freeze({
   RECORDED: 'recorded', RETAINED: 'retained', NO_HOSTED_WITNESS: 'no_hosted_witness',
+  SUCCESSOR_ISSUED: 'successor_issued',
   HELD_ELSEWHERE: 'held_elsewhere', CLAIM_REFUSED: 'claim_refused',
   PHASE_NOT_OWNED: 'phase_not_owned', INVALID_ROW: 'invalid_row', INVALID_INPUT: 'invalid_input',
   CONFLICT: 'conflict', NOT_CURRENT: 'not_current', LANE_BUSY: 'lane_busy'});
@@ -93,6 +99,15 @@ function decodeMembershipPermit(encoded) {
     value.proposalIndex !== null : !integer(value.proposalIndex, 1)) return null;
   return Object.freeze({...value, leaderConfigurationStamp: Object.freeze(stamp)});
 }
+const inKeyOrder = (record, keys) => Object.fromEntries(keys.map((key) => [key, record[key]]));
+/** The canonical encoding of a permit record: compact JSON with the codec's key
+ * order (the stamp's too), accepted only when the codec decodes it; else null. */
+function encodeMembershipPermit(record) {
+  if (!exactKeys(record, PERMIT_KEYS)) return null;
+  const encoded = JSON.stringify(inKeyOrder(record, PERMIT_KEYS), (_key, value) =>
+    exactKeys(value, CONFIG_KEYS) ? inKeyOrder(value, CONFIG_KEYS) : value);
+  return decodeMembershipPermit(encoded) === null ? null : encoded;
+}
 function decodeMembershipOwnerClaim(encoded) {
   const value = parseRecord(encoded, CLAIM_KEYS);
   if (!value || value.version !== 1 ||
@@ -128,5 +143,5 @@ export {MEMBERSHIP_PHASE, MEMBERSHIP_PERMIT_STATE,
   MEMBERSHIP_AUTHORIZATION_OUTCOME, MEMBERSHIP_OBLIGATION,
   decodeMembershipIdentity, decodeMembershipPermit, membershipBranchSpec,
   decodeMembershipOwnerClaim, membershipOwnerClaimFence,
-  messageGroupMembershipLaneKey,
+  messageGroupMembershipLaneKey, encodeMembershipPermit,
   MEMBERSHIP_DEBT_RECOVERY_OUTCOME};

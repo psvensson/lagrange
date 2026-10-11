@@ -411,7 +411,8 @@ and is deliberately not an anchor.
 
 ## 7. Witnesses, red-first and mutation controls
 
-**Witness file.** `test/node/message-group-learner-join.test.js` (B2): 46
+**Witness file.** `test/integration/message-group-learner-join.integration.test.js`
+(B2; moved unchanged from `test/node/` by the C1 review, B3): 46
 node:test entries, which are 27 top-level tests (9 of them with subtests) and 19
 subtests, so 37 leaves. The first attempt reported "25 leaves"; those were 25
 entries (17 top-level, 3 of them parents, plus 8 subtests), so 22 leaves. The
