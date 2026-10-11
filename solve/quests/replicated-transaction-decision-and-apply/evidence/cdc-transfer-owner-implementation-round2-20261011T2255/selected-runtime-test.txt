@@ -1,0 +1,5 @@
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: ok cpu 52C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+ok test/cdc/cdc-coverage-lifecycle-owner.test.js (114 assertions, 721ms)
+# test-files total=1 pass=1 fail=0 assertions=114
