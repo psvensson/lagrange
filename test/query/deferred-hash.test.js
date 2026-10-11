@@ -77,8 +77,16 @@ function createTestRouter() {
   };
 }
 
+// The transaction row is inserted once at BEGIN and updated after it (TX1
+// seam B/S); participant and write-operation rows are upserted.
 function createTestCdc() {
   return {
+    async insertSystemTableRow() {
+      return {success: true};
+    },
+    async updateSystemTableRow() {
+      return {success: true};
+    },
     async upsertSystemTableRow() {
       return {success: true};
     },

@@ -8,9 +8,12 @@ const PARTICIPANT_SET_STATE = Object.freeze({
   FROZEN: 'FROZEN',
 });
 
+// A coordinator-managed transaction prepares before its decision, a single
+// participant included (TX1 prepare-first): NOT_SELECTED until the
+// participant set freezes, then TWO_PHASE_COMMIT. The retired
+// ONE_PHASE_COMMIT fast path has no value here.
 const COMMIT_MODE = Object.freeze({
   NOT_SELECTED: 'NOT_SELECTED',
-  ONE_PHASE_COMMIT: 'ONE_PHASE_COMMIT',
   TWO_PHASE_COMMIT: 'TWO_PHASE_COMMIT',
 });
 

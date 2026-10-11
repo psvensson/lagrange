@@ -877,6 +877,43 @@
         "test/integration/message-group-learner-discovery.integration.test.js",
         "test/rebalancer/coordinator-timeout-check-serialization.test.js"
       ]
+    },
+    "distributed-transaction-coordinator-participant-protocol": {
+      "description": "The distributed transaction coordinator and the participant transaction owner speak one protocol (TX1 design revision 10, sections 2.1-2.4, 4 and 7; agreed seam items A, B/S, C, C', D, E, F, G, U, T/AD): one 128-bit transaction identity minted insert-once and carried, with participantId, commitMode and transactionEpoch, on every BEGIN, session statement, PREPARE, decision and outcome read; prepare-first for every coordinator-managed transaction; each participant's PREPARE evidence (prepared digest, index, term) retained before one insert-once decision recorded before any decision fanout; every decision bound to that record; the participant's typed answers consumed one-to-one (an unknown outcome is never success, a reservation is asked again with the same request, a definitive refusal rolls back, absence or PREPARED is UNKNOWN); after a COMMIT decision no rollback, no FAILED, no re-prepare; recovery drives a recorded decision forward to its own terminal on every participant; a statement-autocommit attempt is retried whole only after a definitive participant conflict whose bound ROLLBACK reached every participant, within its first attempt's deadline (seam V).",
+      "owners": [
+        "src/query/distributed/distributed-transaction-",
+        "src/query/sql-query-engine-participant-wire.js",
+        "src/query/sql-query-engine-transaction-persistence-methods.js",
+        "src/query/query-executor-partition-request-builders.js",
+        "src/query/sql-query-engine-write-execution.js",
+        "src/bootstrap/system-table-workflow-schema-definitions.js",
+        "src/partition/partition-participant-transaction-",
+        "src/query/sql-query-engine-select-execution.js",
+        "src/query/query-executor-base.js",
+        "src/query/query-executor-join-execution.js"
+      ],
+      "tests": [
+        "test/query/partition-transaction-seam-falsifiers.test.js",
+        "test/query/transaction-coordinator-participant-protocol.test.js",
+        "test/integration/transaction-coordinator-restart.integration.test.js",
+        "test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js",
+        "test/partition/partition-transaction-replicated-apply-v3.test.js",
+        "test/query/transaction-recovery-ownership.test.js",
+        "test/query/transaction-session-reads.test.js",
+        "test/partition/participant-decision-canonical-record.test.js"
+      ]
+    },
+    "transaction-workflow-recovery-ownership": {
+      "description": "The workflow registry retains restart obligations by immutable workflow ID, never resurrects known terminal work, and preserves an existing live owner-key binding. The query coordinator serializes request and recovery work on one session FIFO, resumes retained obligations by exact transaction ID and removes only its own owner-key binding on completion.",
+      "owners": [
+        "src/workflow/durable-workflow-coordinator.js",
+        "src/query/distributed/distributed-transaction-"
+      ],
+      "tests": [
+        "test/query/transaction-recovery-ownership.test.js",
+        "test/workflow/durable-workflow-coordinator.test.js",
+        "test/workflow/durable-workflow-recovery-identity.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -1719,6 +1756,65 @@
         "test/integration/message-group-learner-recipient.integration.test.js",
         "test/integration/message-group-learner-discovery.integration.test.js",
         "test/rebalancer/coordinator-timeout-check-serialization.test.js"
+      ]
+    },
+    "distributed-transaction-coordinator-participant-protocol": {
+      "description": "The coordinator records and fans out decisions bound to the PREPARE evidence the participant answered, and the participant applies only bound decisions and answers exact durable outcomes: a change to either side's identity, digest, decision binding or answer vocabulary changes the other's correctness.",
+      "endpoints": [
+        {
+          "id": "coordinator-decision-and-wire",
+          "owners": [
+            "src/query/distributed/distributed-transaction-",
+            "src/query/sql-query-engine-participant-wire.js",
+            "src/query/sql-query-engine-transaction-persistence-methods.js",
+            "src/query/query-executor-partition-request-builders.js",
+            "src/query/sql-query-engine-write-execution.js",
+            "src/bootstrap/system-table-workflow-schema-definitions.js",
+            "src/query/sql-query-engine-select-execution.js",
+            "src/query/query-executor-base.js",
+            "src/query/query-executor-join-execution.js"
+          ]
+        },
+        {
+          "id": "participant-request-and-apply",
+          "owners": [
+            "src/partition/partition-participant-transaction-"
+          ]
+        }
+      ],
+      "contract": "distributed-transaction-coordinator-participant-protocol",
+      "witnessTests": [
+        "test/query/partition-transaction-seam-falsifiers.test.js",
+        "test/query/transaction-coordinator-participant-protocol.test.js",
+        "test/integration/transaction-coordinator-restart.integration.test.js",
+        "test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js",
+        "test/partition/partition-transaction-replicated-apply-v3.test.js",
+        "test/query/transaction-recovery-ownership.test.js",
+        "test/query/transaction-session-reads.test.js",
+        "test/partition/participant-decision-canonical-record.test.js"
+      ]
+    },
+    "transaction-workflow-recovery-ownership": {
+      "description": "The workflow registry retains restart obligations by immutable workflow ID, never resurrects known terminal work, and preserves an existing live owner-key binding. The query coordinator serializes request and recovery work on one session FIFO, resumes retained obligations by exact transaction ID and removes only its own owner-key binding on completion.",
+      "endpoints": [
+        {
+          "id": "workflow-registry",
+          "owners": [
+            "src/workflow/durable-workflow-coordinator.js"
+          ]
+        },
+        {
+          "id": "query-request-and-recovery",
+          "owners": [
+            "src/query/distributed/distributed-transaction-"
+          ]
+        }
+      ],
+      "contract": "transaction-workflow-recovery-ownership",
+      "witnessTests": [
+        "test/query/transaction-recovery-ownership.test.js",
+        "test/workflow/durable-workflow-coordinator.test.js",
+        "test/workflow/durable-workflow-recovery-identity.test.js"
       ]
     }
   }
