@@ -218,6 +218,8 @@ async function promotionWorld(t) {
     realLane: true, timeSource: f.clock});
   const fx = {f, world, created, source, recipient, owner, deliveries: 0,
     physical: () => physical,
+    bindFounder: (replicaId) => services.set(replicaId,
+      {nodeId: SUCCESSOR, replicaId, groupId: GROUP, raft: f.cluster.node(replicaId)}),
     learner: () => world.learners[0],
     observeCatchUp: catchUpRoute(f, world),
     permit: () => JSON.parse(f.row()[PERMIT_COLUMN]),

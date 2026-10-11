@@ -13,9 +13,13 @@ const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 const stringTrim = Function.call.bind(String.prototype.trim);
 
 const RUNTIME_OWNER = 'src/raft/raft-rs-runtime-owner.js';
+const BINDING_OWNER = 'src/raft/raft-rs-binding-owner.js';
 const CORE_LOADER = 'src/raft/raft-rs-core.js';
 const LIFECYCLE_OWNER =
   'src/raft/raft-rs-replica-lifecycle-owner.js';
+const SNAPSHOT_STAGING_OPERATION =
+  'src/raft/raft-rs-snapshot-staging-lifecycle-operation.js';
+const SNAPSHOT_INSTALLER = 'src/raft/snapshot-install.js';
 const LIFECYCLE_ADMIN =
   'src/raft/raft-rs-lifecycle-administration.js';
 const LIFECYCLE_COORDINATOR =
@@ -56,9 +60,11 @@ const AUDIT_SYNTAX = Object.freeze({
 const AUDIT_VIOLATION = Object.freeze({
   DIRECT_BINDING_IMPORT: 'direct-binding-import',
   BINDING_IMPORT_OUTSIDE_OWNER: 'binding-import-outside-owner',
+  BINDING_OWNER_IMPORT_BYPASS: 'binding-owner-import-bypass',
   RUNTIME_OWNER_IMPORT_BYPASS: 'runtime-owner-import-bypass',
   LIFECYCLE_ADMIN_IMPORT_BYPASS: 'lifecycle-admin-import-bypass',
   LIFECYCLE_OWNER_IMPORT_BYPASS: 'lifecycle-owner-import-bypass',
+  SNAPSHOT_STAGING_IMPORT_BYPASS: 'snapshot-staging-import-bypass',
   MEMBERSHIP_ADMIN_IMPORT_BYPASS: 'membership-admin-import-bypass',
   CORE_INVOCATION_OUTSIDE_OWNER: 'core-invocation-outside-owner',
   CORE_ALIAS_INVOCATION_OUTSIDE_OWNER:
@@ -245,8 +251,10 @@ function auditRaftRsOperationBoundary({root}) {
   const sourceRoot = path.join(root, 'src');
   const coreLoader = path.join(root, CORE_LOADER);
   const runtimeOwner = path.join(root, RUNTIME_OWNER);
+  const bindingOwner = path.join(root, BINDING_OWNER);
   const lifecycleAdmin = path.join(root, LIFECYCLE_ADMIN);
   const lifecycleOwner = path.join(root, LIFECYCLE_OWNER);
+  const snapshotStagingOperation = path.join(root, SNAPSHOT_STAGING_OPERATION);
   const membershipAdmin = path.join(root, MEMBERSHIP_ADMIN);
   const runtimePrimitives = primitiveNames(root);
   const violations = [];
@@ -280,7 +288,7 @@ function auditRaftRsOperationBoundary({root}) {
       const specifier = importSource(node, constants);
       if (typeof specifier === 'string' &&
           DIRECT_BINDING_PATTERN.test(specifier) &&
-          fileName !== RUNTIME_OWNER && fileName !== CORE_LOADER) {
+          fileName !== BINDING_OWNER) {
         violations.push(violation(
           fileName, AUDIT_VIOLATION.DIRECT_BINDING_IMPORT,
           specifier));
@@ -297,6 +305,12 @@ function auditRaftRsOperationBoundary({root}) {
           fileName, AUDIT_VIOLATION.RUNTIME_OWNER_IMPORT_BYPASS,
           String(specifier)));
       }
+      if (resolvesTo(file, specifier, bindingOwner) &&
+          fileName !== RUNTIME_OWNER) {
+        violations.push(violation(
+          fileName, AUDIT_VIOLATION.BINDING_OWNER_IMPORT_BYPASS,
+          String(specifier)));
+      }
       if (resolvesTo(file, specifier, lifecycleAdmin) &&
         fileName !== LIFECYCLE_COORDINATOR) {
         violations.push(violation(fileName,
@@ -305,11 +319,28 @@ function auditRaftRsOperationBoundary({root}) {
       }
       if (resolvesTo(file, specifier, lifecycleOwner) &&
         !arrayIncludes(
-          [PORT_CONSTRUCTOR, LIFECYCLE_ADMIN, LIFECYCLE_OWNER],
+          [PORT_CONSTRUCTOR, LIFECYCLE_ADMIN, LIFECYCLE_OWNER,
+            SNAPSHOT_STAGING_OPERATION],
           fileName,
         )) {
         violations.push(violation(fileName,
           AUDIT_VIOLATION.LIFECYCLE_OWNER_IMPORT_BYPASS,
+          String(specifier)));
+      }
+      if (resolvesTo(file, specifier, lifecycleOwner) &&
+          fileName === SNAPSHOT_STAGING_OPERATION &&
+          (node.type !== AUDIT_AST.IMPORT_DECLARATION ||
+          node.specifiers.length !== 1 ||
+          node.specifiers[0].imported?.name !==
+            'initializeSnapshotStagingLifecycleRow')) {
+        violations.push(violation(fileName,
+          AUDIT_VIOLATION.LIFECYCLE_OWNER_IMPORT_BYPASS,
+          'staging-operation-may-import-only-initializer'));
+      }
+      if (resolvesTo(file, specifier, snapshotStagingOperation) &&
+          fileName !== SNAPSHOT_INSTALLER) {
+        violations.push(violation(fileName,
+          AUDIT_VIOLATION.SNAPSHOT_STAGING_IMPORT_BYPASS,
           String(specifier)));
       }
       if (resolvesTo(file, specifier, membershipAdmin) &&
@@ -352,7 +383,7 @@ function auditRaftRsOperationBoundary({root}) {
           stringTrim(value).slice(0, LIFECYCLE_SQL_DETAIL_LIMIT)));
       }
       if (node.type === AUDIT_AST.EXPORT_NAMED_DECLARATION &&
-        fileName !== CORE_LOADER && fileName !== RUNTIME_OWNER) {
+        fileName !== BINDING_OWNER) {
         const names = arrayMap(
           node.specifiers, (entry) => entry.local?.name);
         if (arraySome(names, (name) =>
@@ -371,6 +402,7 @@ function auditRaftRsOperationBoundary({root}) {
 
 export {
   auditRaftRsOperationBoundary,
+  BINDING_OWNER,
   CORE_LOADER,
   LIFECYCLE_ADMIN,
   LIFECYCLE_COORDINATOR,

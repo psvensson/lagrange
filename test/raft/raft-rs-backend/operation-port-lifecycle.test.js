@@ -5,6 +5,8 @@ import {RAFT_OPERATION_PORT_REQUEST} from
   '../../../src/raft/raft-operation-port-request.js';
 import {RaftRsPeerIdentityRegistry} from
   '../../../src/raft/raft-rs-peer-identity.js';
+import {RaftRsDurableStore} from
+  '../../../src/raft/raft-rs-durable-store.js';
 import {createRuntimeDispatcher} from
   '../../../src/raft/raft-rs-runtime-owner.js';
 import {PartitionNodeCluster} from './partition-node-cluster.js';
@@ -204,6 +206,40 @@ test('a durable Raft record without a matching lifecycle record fails closed',
       assert.equal(refused.reason, 'lifecycle-record-missing');
       assert.equal(cluster.coreEntryCount(), before,
         'missing lifecycle authority refuses before reconstructing a RawNode');
+    } finally {
+      cluster.dispose();
+    }
+  });
+
+test('snapshot-only durable evidence cannot mint a missing lifecycle row',
+  async () => {
+    const cluster = new PartitionNodeCluster({
+      partitionId: 'snapshot-only-missing-lifecycle',
+      replicaIds: ['snapshot-only-replica'],
+    });
+    try {
+      const replica = cluster.replica('snapshot-only-replica');
+      const status = replica.node.readStatus();
+      await replica.node.close();
+      const store = new RaftRsDurableStore(replica.db);
+      store.putSnapshot(cluster.partitionId, {metadata: {index: '1',
+        term: status.term, confState: status.confState}}, '0');
+      replica.db.transaction(() => {
+        replica.db.prepare('DELETE FROM _raft_rs_replica_lifecycle ' +
+          'WHERE group_id = ?').run(cluster.partitionId);
+        replica.db.prepare('DELETE FROM _raft_rs_log WHERE group_id = ?')
+          .run(cluster.partitionId);
+        replica.db.prepare('DELETE FROM _raft_rs_hard_state WHERE group_id = ?')
+          .run(cluster.partitionId);
+        replica.db.prepare('DELETE FROM _raft_rs_applied_state WHERE group_id = ?')
+          .run(cluster.partitionId);
+      })();
+      const before = cluster.coreEntryCount();
+      const refused = await cluster.restart('snapshot-only-replica').node.tick();
+      assert.equal(refused.outcome, 'CORE_REFUSED');
+      assert.equal(refused.reason, 'lifecycle-record-missing');
+      assert.equal(cluster.coreEntryCount(), before,
+        'snapshot-only evidence refuses before core reconstruction');
     } finally {
       cluster.dispose();
     }
