@@ -379,54 +379,62 @@ test('V11: an invocation expiring during idempotent selection read cannot return
 
 // Independent review: invalidate inside submission admission and final readback,
 // after earlier checks have already passed. Ordinals identify the exact awaited read.
+function installLateInvalidation(f, mode, writes, direct) {
+  let current = true;
+  let nodeReads = 0;
+  let invalidatedAt = null;
+  const triggerRead = direct ? 1 : mode.startsWith('before-attempt') ? 3 : 4;
+  const read = f.gateway.readAuthoritativeRows;
+  f.gateway.readAuthoritativeRows = async (table, ...args) => {
+    const answer = await read(table, ...args);
+    if (table === 'nodes' && ++nodeReads === triggerRead) {
+      invalidatedAt = writes.submitted();
+      if (mode.endsWith('lifetime')) current = false;
+      else {
+        const claim = JSON.parse(f.row().message_group_membership_owner_claim);
+        f.clock.advance(claim.expiresAt - f.clock.now() + 1);
+      }
+    }
+    return answer;
+  };
+  return {current: () => current,
+    observation: () => ({nodeReads, invalidatedAt})};
+}
+async function lateInvalidationWitness(mode, t) {
+  const fx = await promotionWorld(t); const {f} = fx;
+  assert.equal(await caughtUp(fx), true);
+  const before = f.row();
+  const direct = mode.startsWith('idempotent');
+  if (direct) assert.equal((await fx.select()).outcome, 'recorded');
+  const selected = direct ? f.row() : null;
+  const writes = countWrites(f, BRANCH_CAS);
+  const invalidation = installLateInvalidation(f, mode, writes, direct);
+  const leader = leaderOf(f);
+  const answer = direct ? await f.repository.selectMessageGroupMembershipBranch({
+    operationId: O, identity: before.message_group_membership_identity,
+    priorPermit: before.message_group_membership_permit,
+    nextPermit: selected.message_group_membership_permit, branch: 'promote'},
+  invalidation.current) : await f.repository.selectMessageGroupPromotion({operationId: O,
+    destinationNodeId: SUCCESSOR, destinationReplicaId: leader},
+  (query) => f.cluster.node(leader).readCommittedMembership(query), fx.observeCatchUp,
+  invalidation.current);
+  const {nodeReads, invalidatedAt} = invalidation.observation();
+  assert.notEqual(invalidatedAt, null, 'the declared boot-await window must engage');
+  assert.equal(invalidatedAt, mode.startsWith('final-readback') ? 1 : 0,
+    'the invalidation occurs on its declared side of durable submission');
+  assert.equal(answer.outcome, direct && mode.endsWith('lease') ? 'stale_owner' : 'unknown',
+    'the late boot-await result must not return RECORDED');
+  assert.equal(writes.submitted(), mode.startsWith('final-readback') ? 1 : 0,
+    'no new submission after the late boot-await invalidation');
+  assert.equal(writes.applied(), mode.startsWith('final-readback') ? 1 : 0);
+  if (!mode.startsWith('final-readback')) assert.deepEqual(f.row(), selected ?? before);
+  else assert.equal(f.row().message_group_membership_phase, 'promotion_proposal_in_flight');
+  console.log(JSON.stringify({mode, outcome: answer.outcome, nodeReads, invalidatedAt,
+    submitted: writes.submitted(), applied: writes.applied()}));
+}
 for (const mode of ['before-attempt-lifetime', 'before-attempt-lease',
   'final-readback-lifetime', 'final-readback-lease',
   'idempotent-branch-lifetime', 'idempotent-branch-lease']) {
-  test(`round2 ${mode}: late invalidation at the exact boot await cannot grant`, {timeout: 30000}, async (t) => {
-    const fx = await promotionWorld(t); const {f} = fx;
-    assert.equal(await caughtUp(fx), true);
-    const before = f.row();
-    const direct = mode.startsWith('idempotent');
-    if (direct) assert.equal((await fx.select()).outcome, 'recorded');
-    const selected = direct ? f.row() : null;
-    const writes = countWrites(f, BRANCH_CAS);
-    let current = true;
-    let nodeReads = 0;
-    let invalidatedAt = null;
-    const triggerRead = direct ? 1 : mode.startsWith('before-attempt') ? 3 : 4;
-    const read = f.gateway.readAuthoritativeRows;
-    f.gateway.readAuthoritativeRows = async (table, ...args) => {
-      const answer = await read(table, ...args);
-      if (table === 'nodes' && ++nodeReads === triggerRead) {
-        invalidatedAt = writes.submitted();
-        if (mode.endsWith('lifetime')) current = false;
-        else {
-          const claim = JSON.parse(f.row().message_group_membership_owner_claim);
-          f.clock.advance(claim.expiresAt - f.clock.now() + 1);
-        }
-      }
-      return answer;
-    };
-    const leader = leaderOf(f);
-    const answer = direct ? await f.repository.selectMessageGroupMembershipBranch({
-      operationId: O, identity: before.message_group_membership_identity,
-      priorPermit: before.message_group_membership_permit,
-      nextPermit: selected.message_group_membership_permit, branch: 'promote'}, () => current) :
-      await f.repository.selectMessageGroupPromotion({operationId: O,
-        destinationNodeId: SUCCESSOR, destinationReplicaId: leader},
-      (query) => f.cluster.node(leader).readCommittedMembership(query), fx.observeCatchUp,
-      () => current);
-    assert.notEqual(invalidatedAt, null, 'the declared boot-await window must engage');
-    assert.equal(invalidatedAt, mode.startsWith('final-readback') ? 1 : 0,
-      'the invalidation occurs on its declared side of durable submission');
-    assert.equal(answer.outcome, direct && mode.endsWith('lease') ? 'stale_owner' : 'unknown',
-      'the late boot-await result must not return RECORDED');
-    assert.equal(writes.submitted(), mode.startsWith('final-readback') ? 1 : 0,
-      'no new submission after the late boot-await invalidation');
-    assert.equal(writes.applied(), mode.startsWith('final-readback') ? 1 : 0);
-    if (!mode.startsWith('final-readback')) assert.deepEqual(f.row(), selected ?? before);
-    else assert.equal(f.row().message_group_membership_phase, 'promotion_proposal_in_flight');
-    console.log(JSON.stringify({mode, outcome: answer.outcome, nodeReads, invalidatedAt,
-      submitted: writes.submitted(), applied: writes.applied()}));
-  });
+  test(`round2 ${mode}: late invalidation at the exact boot await cannot grant`,
+    {timeout: 30000}, (t) => lateInvalidationWitness(mode, t));
 }

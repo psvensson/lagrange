@@ -70,21 +70,28 @@ while pending reaches no core.
 ## Recording the voter stamp
 
 The queued learner-action read also answers the transition's PROMOTE action.
-Its committed outcome is the replica's applied configuration naming the target
-a voter while the replica's registry holds the target's learner origin of the
-same transition (a promotion retains no origin of its own). The one recorder
+Its committed outcome is the immutable versioned promotion fact that native
+apply wrote beside the unchanged learner origin in the permanent reservation,
+atomically with ConfState and the applied boundary. The fact binds the exact
+entry index and term, managed action, original ADD bytes, before key and
+generation, and ordinary target-only after configuration at that exact
+generation. The queued answer also carries current membership as a separate
+witness. The one recorder
 records it with its own three receipt columns: the phase (voter committed),
 the permit (committed, at the configuration change that made the target a
-voter) and the voter stamp, the witness's same-read committed configuration,
-which must be the recorded learner configuration with exactly the target
-promoted. Ordinary history, the learner stamp, the holder, the lane and the
+voter) and the voter stamp, which is that canonical promotion fact. Recording
+requires the current permit and its exact before configuration, target-only
+delta and original-origin binding. Later unrelated membership drift, restart,
+or an ABA return to the same configuration key cannot relabel its index.
+Ordinary history, the learner stamp, the holder, the lane and the
 UNKNOWN obligation are untouched. A lost answer is resolved by exact readback;
 a recorded voter fact is replayed without a native read and never rewritten.
 
 ## Absence and the ordered successor
 
 A NOT_RECORDED promotion answer carries the same queued observation as the
-learner action. A replica that holds the target as a learner vouches that no
+learner action. Only absence of the retained promotion fact plus a current
+configuration holding the target as a learner vouches that no
 promotion of it is in its applied history; an absent target, a voter without
 the transition's origin or a joint configuration vouch for nothing. With that
 vouch, the slice C1 fence (a leader of a strictly newer term that applied an
@@ -101,6 +108,12 @@ debt: its hint filter, the replicated-row wakes and the 1 s periodic sweep pass
 over it, so promotion adds no per-tick work; the restart scan's authoritative
 census still finds it and reports it retained (PHASE_NOT_OWNED). Unresolved
 promotion debt stays UNKNOWN and visible until its explicit caller acts.
+
+An exact ordinary FAILED row may finish an already authorized PROMOTE only:
+status FAILED, workflow step FAILED, positive completed time, UNKNOWN debt,
+the same live holder and exact permit. A strictly newer-term NONCOMMITTED fence
+may issue its ordered successor. This cannot issue the initial promotion,
+resurrect status, select abandonment or change ordinary failure history.
 
 ## Not in this contract
 
