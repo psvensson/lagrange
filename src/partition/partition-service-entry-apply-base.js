@@ -993,7 +993,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
    * @param {{afterCommit: Array, afterRollback: Array}} committed.effects
    * @return {string} A PARTITION_COMMITTED_COMMAND_OUTCOME.
    */
-  applyCommittedEntry({command, index, term, effects}) {
+  applyCommittedEntry({command, index, term, effects, committedConfiguration}) {
     const scheduleEffect = (phase, effect) => {
       effects[phase].push(() => {
         try {
@@ -1104,6 +1104,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
     } else {
       // A transaction command (participant, or a legacy marker): its owner.
       return applyCommittedTransactionCommand(this, {command, index, term,
+        committedConfiguration,
         afterCommit: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, effect),
         afterRollback: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, effect)});
     }

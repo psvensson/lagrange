@@ -75,6 +75,11 @@ const REGISTRATION_REQUIRED_LEADER_TABLES = Object.freeze([
   SYSTEM_TABLE_NAME.SERVICES,
   SYSTEM_TABLE_NAME.TABLES,
   SYSTEM_TABLE_NAME.MESSAGE_GROUPS,
+  // Participant activation precedes every registration write and is decided
+  // by the transaction control partition.  Start only that additional cohort
+  // with the existing registration dependency cut; unrelated system groups
+  // remain in the deferred election cohort.
+  SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
 ]);
 const REGISTRATION_REQUIRED_LEADER_PARTITION_IDS = Object.freeze(
   REGISTRATION_REQUIRED_LEADER_TABLES.map((tableName) =>

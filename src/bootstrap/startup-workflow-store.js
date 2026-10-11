@@ -1,4 +1,4 @@
-import {mkdir, readFile, rename, writeFile} from 'node:fs/promises';
+import {mkdir, open, readFile, rename} from 'node:fs/promises';
 import {join as joinPath} from 'node:path';
 
 const LOCAL_STR_UNDERSCORE = '_';
@@ -70,6 +70,13 @@ function cloneWorkflowRecord(record) {
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
     completedAt: record.completedAt,
+    recordRevision: record.recordRevision,
+    immutableAuthorization: record.immutableAuthorization ?
+      {...record.immutableAuthorization} : null,
+    startupInvocation: record.startupInvocation ?
+      {...record.startupInvocation} : null,
+    participantReleaseCommand: record.participantReleaseCommand ?
+      {...record.participantReleaseCommand} : null,
   };
 }
 
@@ -132,14 +139,25 @@ class FileStartupWorkflowStorage {
     });
     const tempPath = `${recordPath}${STARTUP_WORKFLOW_TEMP_SUFFIX}.` +
       `${process.pid}.${Date.now()}`;
-    await writeFile(
-      tempPath,
-      JSON.stringify(record, null, STARTUP_WORKFLOW_JSON_INDENT) +
-        STARTUP_WORKFLOW_JSON_LINE_SUFFIX,
-      STARTUP_WORKFLOW_UTF8,
-    );
+    const bytes = JSON.stringify(record, null, STARTUP_WORKFLOW_JSON_INDENT) +
+      STARTUP_WORKFLOW_JSON_LINE_SUFFIX;
+    const file = await open(tempPath, 'wx', 0o600);
+    try {
+      await file.writeFile(bytes, STARTUP_WORKFLOW_UTF8);
+      await file.sync();
+    } finally {
+      await file.close();
+    }
     await rename(tempPath, recordPath);
-    return cloneWorkflowRecord(record);
+    const directory = await open(
+      joinPath(this.dataDir, STARTUP_WORKFLOW_STORAGE_DIRNAME), 'r');
+    try {
+      await directory.sync();
+    } finally {
+      await directory.close();
+    }
+    return cloneWorkflowRecord(JSON.parse(
+      await readFile(recordPath, STARTUP_WORKFLOW_UTF8)));
   }
 }
 
@@ -280,6 +298,7 @@ class StartupWorkflowStore {
         planVersion,
         attemptCount: existing.attemptCount + 1,
         updatedAt: now,
+        recordRevision: (existing.recordRevision ?? 0) + 1,
       };
       await this.storage.saveRecord(storageKey, updated);
       return cloneWorkflowRecord(updated);
@@ -302,6 +321,10 @@ class StartupWorkflowStore {
       createdAt: now,
       updatedAt: now,
       completedAt: STARTUP_WORKFLOW_DEFAULT_COMPLETED_AT,
+      recordRevision: 1,
+      immutableAuthorization: options.immutableAuthorization || null,
+      startupInvocation: options.startupInvocation || null,
+      participantReleaseCommand: options.participantReleaseCommand || null,
     };
     await this.storage.saveRecord(storageKey, created);
     return cloneWorkflowRecord(created);
@@ -356,6 +379,7 @@ class StartupWorkflowStore {
       completedAt: terminal ?
         this.now() :
         STARTUP_WORKFLOW_DEFAULT_COMPLETED_AT,
+      recordRevision: (existing.recordRevision ?? 0) + 1,
     };
     await this.storage.saveRecord(storageKey, updated);
     return cloneWorkflowRecord(updated);
@@ -400,9 +424,33 @@ class StartupWorkflowStore {
       completedAt: terminal ?
         this.now() :
         STARTUP_WORKFLOW_DEFAULT_COMPLETED_AT,
+      recordRevision: (existing.recordRevision ?? 0) + 1,
     };
     await this.storage.saveRecord(storageKey, updated);
     return cloneWorkflowRecord(updated);
+  }
+
+  async updateSession(options = {}) {
+    const nodeId = normalizeNonEmptyString(options.nodeId);
+    const sessionId = normalizeNonEmptyString(options.sessionId);
+    if (nodeId === null || sessionId === null ||
+        typeof options.update !== 'function') {
+      throw new Error(STARTUP_WORKFLOW_ERROR.SESSION_NOT_FOUND);
+    }
+    const storageKey = this.buildStorageKey({nodeId});
+    const existing = await this.storage.loadRecord(storageKey);
+    if (!existing || existing.sessionId !== sessionId) {
+      throw new Error(STARTUP_WORKFLOW_ERROR.SESSION_NOT_FOUND);
+    }
+    const updated = options.update(cloneWorkflowRecord(existing));
+    if (!updated || updated.sessionId !== existing.sessionId ||
+        updated.nodeId !== existing.nodeId ||
+        updated.workflowKind !== existing.workflowKind) {
+      throw new Error(STARTUP_WORKFLOW_ERROR.SESSION_NOT_FOUND);
+    }
+    updated.recordRevision = (existing.recordRevision ?? 0) + 1;
+    updated.updatedAt = this.now();
+    return this.storage.saveRecord(storageKey, updated);
   }
 }
 

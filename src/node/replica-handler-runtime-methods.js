@@ -645,6 +645,7 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
         this.replicaCreateAdmissionRecoveryRearmOwner.cancel();
         await Promise.allSettled([
           this.replicaCreateAdmissionRecoveryTask,
+          this.participantReleaseRecovery?.shutdown?.(),
         ].filter(Boolean));
         // A removal waiting for its replica to leave consensus stops waiting.
         this.removalConsensusExitRelease?.abort();

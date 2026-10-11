@@ -164,8 +164,8 @@ test('BootstrapService waits for lifecycle metadata publication readiness before
       'lease writer should start once lifecycle metadata publication readiness is satisfied');
     t.equal(heartbeatStarts, 1,
       'heartbeat writer should start once lifecycle metadata publication readiness is satisfied');
-    t.equal(recoveryStarts, 1,
-      'deferred transaction recovery should arm once steady-state writers become active');
+    t.equal(recoveryStarts, 0,
+      'the provisional seed engine cannot consume final transaction recovery activation');
   });
 
 test('BootstrapService final SQL attachment engages transaction recovery when background writers are already active',

@@ -52,7 +52,7 @@ export function testCoreOk(fields = {}) {
  *   applyCommittedEntry}.
  */
 export function applyCommandThroughApplicationOwner({database, groupId, index,
-  term, command, applyCommittedEntry}) {
+  term, command, applyCommittedEntry, committedConfiguration = null}) {
   applyCommittedEntryTransaction({
     store: new RaftRsDurableStore(database),
     groupId,
@@ -63,11 +63,13 @@ export function applyCommandThroughApplicationOwner({database, groupId, index,
       data: Buffer.from(encodeProposal(command)).toString('base64'),
     },
     confState: {},
+    committedConfiguration,
     applyCommittedEntry: (bytes, position) => applyCommittedEntry(
       Object.freeze({
         command: decodeCommittedProposal(bytes),
         index: Number(position.index),
         term: Number(position.term),
+        committedConfiguration: position.committedConfiguration,
         effects: position.effects,
       })),
   });
@@ -128,6 +130,8 @@ export class ControllableConsensusPort {
       command,
       applyCommittedEntry:
         this.request[RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY],
+      committedConfiguration: this.committedMembershipHandler ?
+        this.committedMembershipHandler({purpose: 'witness'}) : null,
     });
     this.committedIndex = index;
   }

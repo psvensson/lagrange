@@ -56,6 +56,8 @@ import {createCommittedStatementOutcomeTable} from
 import {openParticipantTransactionStore} from
   './partition-participant-transaction-store.js';
 import {isHeldByHostFailure} from './partition-write-kernel.js';
+import {admitParticipantReleaseProposalDispatch} from
+  './partition-participant-release-dispatch-admission.js';
 import {REPLICA_DB_PRAGMA} from '../storage/storage-constants.js';
 
 const {
@@ -458,6 +460,8 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
       // that also advances the rs-raft applied state.
       [RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY]: (committed) =>
         this.applyCommittedEntry(committed),
+      [RAFT_OPERATION_PORT_REQUEST.ADMIT_PROPOSAL_DISPATCH]: (command) =>
+        admitParticipantReleaseProposalDispatch(this, command),
       [RAFT_OPERATION_PORT_REQUEST.SNAPSHOT_CATCHUP_NEEDED]: (decision) => {
         if (typeof this.onSnapshotCatchupNeeded ===
             PARTITION_SERVICE_TYPE.FUNCTION) {
