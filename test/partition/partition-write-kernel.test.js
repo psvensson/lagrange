@@ -191,12 +191,7 @@ test('partition write kernel separates commit/apply from replayable side effects
     t.same(
       sideEffectPlan,
       {
-        emitCdcEntry: {
-          type: 'UPDATE',
-          sql: 'UPDATE test_table SET value = ? WHERE id = ?',
-          params: ['b', 'r1'],
-          changes: 1,
-        },
+        emitCdcEntry: null,
         splitReplicationEntry: {
           type: 'UPDATE',
           sql: 'UPDATE test_table SET value = ? WHERE id = ?',
@@ -206,7 +201,7 @@ test('partition write kernel separates commit/apply from replayable side effects
         scheduleSizeUpdate: true,
         requestManagedSplitEvaluation: true,
       },
-      'successful apply should return one explicit side-effect plan',
+      'successful apply mirrors and evaluates size while durable apply owns CDC',
     );
     t.same(
       failurePlan,
