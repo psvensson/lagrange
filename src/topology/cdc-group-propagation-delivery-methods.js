@@ -1,3 +1,7 @@
+import {hasDurableCdcEvents, isCommittedCdcDelivery} from '../cdc/cdc-delivery-outcome.js';
+import {classifyTransportDeliveryOutcome, isDeliveredTransportDeliveryOutcome} from '../transport/transport-semantic-outcome.js';
+import {copyCdcEvent} from '../cdc/cdc-event-envelope.js';
+import {buildEventIdentity} from '../partition/cdc-event-buffer.js';
 /**
  * Delivery, batching, and retry methods for CDCGroupPropagationService.
  */
@@ -166,9 +170,7 @@ class CDCGroupPropagationDeliveryMethods {
    */ scheduleDeferredDeliveryEvents(events, options, attempt) {
     for (const event of events) {
       this.scheduleBackgroundRetry({
-        tableName: event.tableName,
-        operation: event.operation,
-        data: event.data,
+        ...copyCdcEvent(event),
         sourceGroupId: options.sourceGroupId,
         targets: options.targets,
         attempt,
@@ -220,10 +222,7 @@ class CDCGroupPropagationDeliveryMethods {
     }
     const eventKey = this.buildBackgroundRetryEventKey(options);
     entry.pendingEventsByKey.set(eventKey, {
-      eventKey,
-      tableName: options.tableName,
-      operation: options.operation,
-      data: options.data,
+      ...copyCdcEvent(options),
     });
     if (entry.pendingEventsByKey.size >= this.immediateBatchMaxEvents && entry.timer) {
       clearTimeout(entry.timer);
@@ -302,9 +301,7 @@ class CDCGroupPropagationDeliveryMethods {
     if (trafficGate.state === CDC_GROUP_PROPAGATION_TRAFFIC_GATE_STATE.DEFER_RETRY_WAVE) {
       for (const event of events) {
         this.scheduleBackgroundRetry({
-          tableName: event.tableName,
-          operation: event.operation,
-          data: event.data,
+          ...copyCdcEvent(event),
           sourceGroupId: entry.sourceGroupId,
           targets: entry.targets,
           attempt: 1,
@@ -344,6 +341,9 @@ class CDCGroupPropagationDeliveryMethods {
    * @param {number} options.attempt
    * @private
    */ scheduleBackgroundRetry(options) {
+    // The partition's durable obligation owns re-entry. This volatile retry
+    // queue cannot replace or discharge a carried durable event.
+    if (Object.hasOwn(options, 'eventKey')) return;
     if (this.state !== CDC_GROUP_PROPAGATION_STATE.RUNNING) {
       return;
     }
@@ -477,6 +477,7 @@ class CDCGroupPropagationDeliveryMethods {
    * @return {string}
    * @private
    */ buildBackgroundRetryEventKey(options) {
+    if (Object.hasOwn(options, 'eventKey')) return buildEventIdentity(options);
     const tableName = typeof options?.tableName === 'string' ? options.tableName : '';
     const operation = typeof options?.operation === 'string' ? options.operation : '';
     const data = options?.data && typeof options.data === 'object' ? options.data : null;
@@ -497,7 +498,7 @@ class CDCGroupPropagationDeliveryMethods {
     if (!entry || !eventKey) {
       return;
     }
-    entry.pendingEventsByKey.set(eventKey, {data, eventKey});
+    entry.pendingEventsByKey.set(eventKey, {data, retryEventKey: eventKey});
   }
   /**
    * Execute one background retry entry, draining all queued row events and
@@ -524,7 +525,7 @@ class CDCGroupPropagationDeliveryMethods {
       tableName: entry.tableName,
       operation: entry.operation,
       data: pendingEvent.data,
-      eventKey: pendingEvent.eventKey,
+      retryEventKey: pendingEvent.retryEventKey,
     }));
     const trafficGate = this.resolvePropagationTrafficGate(pendingEvents);
     if (trafficGate.state === CDC_GROUP_PROPAGATION_TRAFFIC_GATE_STATE.DEFER_RETRY_WAVE) {
@@ -554,7 +555,7 @@ class CDCGroupPropagationDeliveryMethods {
     }
     if (deliveryFailures.length > 0) {
       for (const pendingEvent of pendingEvents) {
-        this.recordBackgroundRetryEvent(entry, pendingEvent.eventKey, pendingEvent.data);
+        this.recordBackgroundRetryEvent(entry, pendingEvent.retryEventKey, pendingEvent.data);
       }
     }
     if (entry.pendingEventsByKey.size === 0) {
@@ -706,9 +707,7 @@ class CDCGroupPropagationDeliveryMethods {
           } :
           {
             type: LATENCY_TOPOLOGY_MESSAGE_TYPE.CDC_PROPAGATION,
-            tableName: events[0].tableName,
-            operation: events[0].operation,
-            data: events[0].data,
+            ...copyCdcEvent(events[0]),
             sourceNodeId: this.nodeId,
             sourceGroupId: options.sourceGroupId,
             targetGroupId: target.groupId,
@@ -728,12 +727,17 @@ class CDCGroupPropagationDeliveryMethods {
         });
         continue;
       }
-      if (!result?.acknowledged) {
+      const accepted = hasDurableCdcEvents(events) ?
+        isCommittedCdcDelivery(result, events, target.groupId) :
+        result?.success !== false &&
+          isDeliveredTransportDeliveryOutcome(classifyTransportDeliveryOutcome(result));
+      if (!accepted) {
         deliveryFailures.push({
           targetGroupId: target.groupId,
           coordinatorNodeId: target.coordinatorNodeId,
           address: target.address,
           error: result?.error || null,
+          outcome: result,
         });
       }
     }
@@ -750,21 +754,13 @@ class CDCGroupPropagationDeliveryMethods {
     const explicitEvents = Array.isArray(options?.events) ?
       options.events
         .filter((event) => event?.tableName && event?.operation && event?.data)
-        .map((event) => ({
-          tableName: event.tableName,
-          operation: event.operation,
-          data: event.data,
-        })) :
+        .map(copyCdcEvent) :
       [];
     if (explicitEvents.length > 0) {
       return explicitEvents;
     }
     return [
-      {
-        tableName: options.tableName,
-        operation: options.operation,
-        data: options.data,
-      },
+      copyCdcEvent(options),
     ];
   }
 }

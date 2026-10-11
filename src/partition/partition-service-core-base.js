@@ -13,6 +13,8 @@ import {createRaftRsOperationPort} from '../raft/raft-rs-operation-port.js';
 import {resolveOwnedTimeSource} from '../time/time-source.js';
 import {resolveOwnedRandomSource} from '../random/random-source.js';
 import {isLivePartitionServiceRow} from '../constants/service.js';
+import {isActiveCdcSourceScopeEvidence, isCdcSourceScopeEvidence} from
+  './partition-cdc-source-coverage.js';
 const {
   AddressManager,
   CDCEventBuffer,
@@ -90,6 +92,16 @@ class PartitionServiceCoreBase extends EventEmitter {
       start: PARTITION_SERVICE_DEFAULT.KEY_RANGE_START,
       end: PARTITION_SERVICE_DEFAULT.KEY_RANGE_END,
     };
+    const suppliedSourceScope = options.sourceScopeEvidence ??
+      options.sourceScopeProvenance ?? null;
+    this.sourceScopeProvenance = isCdcSourceScopeEvidence(suppliedSourceScope) ?
+      suppliedSourceScope : null;
+    this.cdcSourceScopeEvidence = isActiveCdcSourceScopeEvidence(
+      options.sourceScopeEvidence) ? options.sourceScopeEvidence : null;
+    this.cdcCoverageTransferCapacityBytes =
+      options.cdcCoverageTransferCapacityBytes;
+    this.cdcCoverageTransferMaxSessions =
+      options.cdcCoverageTransferMaxSessions;
     this.replicaId = options.replicaId;
     this.replicaIds = copyPeerList(options.replicaIds, this.replicaId);
     this.nodeId = options.nodeId || PARTITION_SERVICE_DEFAULT.NODE_ID;
