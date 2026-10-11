@@ -137,6 +137,20 @@ function buildPgwireServiceScopedError(baseMessage, serviceId) {
   return `${baseMessage}: '${serviceId}'`;
 }
 
+function buildPgwireSqlCore(sqlRequestExecutor) {
+  const sqlCore = {executeRequest: sqlRequestExecutor};
+  for (const method of [
+    'acceptDistributedBeginForConsumer',
+    'canAcceptDistributedBeginForConsumer',
+    'retireDistributedBeginConsumer',
+  ]) {
+    if (typeof sqlRequestExecutor[method] === 'function') {
+      sqlCore[method] = (...args) => sqlRequestExecutor[method](...args);
+    }
+  }
+  return sqlCore;
+}
+
 /**
  * Parse and resolve runtime config from a service definition.
  *
@@ -378,7 +392,7 @@ class PostgresWireRuntimeModule {
       pgwireCredentialVerifier: credentialVerifier,
     });
     const adapter = new PostgresWireAdapter({
-      sqlCore: {executeRequest: replicaContext.sqlRequestExecutor},
+      sqlCore: buildPgwireSqlCore(replicaContext.sqlRequestExecutor),
       authHandler,
       logger: this._logger,
     });
