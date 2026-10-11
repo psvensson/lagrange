@@ -263,7 +263,7 @@ function classifierRefusalCases() {
   ];
 }
 // Rowid-alias, order-dependent and ceiling cases of round-6 R6-1 (design v7 3.3).
-export const ROWID_CEILING = 2n ** 62n;
+const ROWID_CEILING = 2n ** 62n;
 function rowidRefusalCases() {
   const L = V3.CLASSIFIER_LAYER;
   return [
