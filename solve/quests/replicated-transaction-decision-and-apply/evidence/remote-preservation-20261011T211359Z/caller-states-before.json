@@ -1,0 +1,92 @@
+{
+  "original-staged": {
+    "head": "0996d7576516af24f5f4d3e1e9aee37c775aabae",
+    "branch": "refs/heads/integrate/rs-raft-2026-09-30",
+    "indexSha256": "3a3d1cb10179d14f124a5ba92b067eb6d36896541c19fb88e8a93a2255b9d7ad",
+    "statusSha256": "6552eb91a5cc9065277421c3b30983bc47bf232176f261c5c0ad1a375d23d8b8",
+    "dirtyContentSha256": "6d2caacad1a2fddd10b0f631089e90452201b49964baf83e21d5286552b11431",
+    "dirtyPathCount": 18,
+    "oversized": []
+  },
+  "candidate": {
+    "head": "10c2f0610f2924b8e7773497b03ac95fa4f42e58",
+    "branch": "refs/heads/integration/rs-raft-candidate-20261011",
+    "indexSha256": "9cabd6d7a8eebd914310bcb5e72d3d65355f74cd75a8f3137966e992968bdd49",
+    "statusSha256": "2f2a18159cb6b969bc9d4f297bbd9208ef59d7163eeb40d5269248f152b922d8",
+    "dirtyContentSha256": "461c39fe91e7dbd3f58d0301c7156340a5799580449dcce87f4a13349ff18cf8",
+    "dirtyPathCount": 2,
+    "oversized": []
+  },
+  "recovery-foundation": {
+    "head": "10c2f0610f2924b8e7773497b03ac95fa4f42e58",
+    "branch": "refs/heads/checkpoint/rs-raft-recovery-chain-20261011",
+    "indexSha256": "d9510137f7cc55787fccfa80011f8a42ed5dfd17298478a3528221bd430e5436",
+    "statusSha256": "9e5e7479ab830776691fff85f1aee6c3897807e0a92224e45169423848d1a36a",
+    "dirtyContentSha256": "e48297e7656bf5121daacb79cf24c007977eec997a0d93b85d6a25338208fd17",
+    "dirtyPathCount": 103,
+    "oversized": []
+  },
+  "startup-wip": {
+    "head": "c6d71665e98be03de916705f272a9d6340e4a842",
+    "branch": "refs/heads/integration/rs-raft-startup-20261011",
+    "indexSha256": "ca384aaa12984178960158d793b549a2ef63b75f6d5452f7d21c7487d7e5c25c",
+    "statusSha256": "e8c898508bd02d9352b7ca3273cdb764e0d27b0c870ac703418779f2f21a931b",
+    "dirtyContentSha256": "7b51a6fd654b422e7635f6e592dc54a3598c00d059719470d2a9f35cd1ba9d1c",
+    "dirtyPathCount": 40,
+    "oversized": []
+  },
+  "activation-startup-wip": {
+    "head": "c6d71665e98be03de916705f272a9d6340e4a842",
+    "branch": "refs/heads/fix/rs-raft-startup-activation-20261011",
+    "indexSha256": "8c876002f9122ad2b55b5cfb7818294bf70459048334454d9f127e497a896ee1",
+    "statusSha256": "d4207285d1aa0b3e533c5223fa42ea9a12821d6028e1c807f38408889ca12b9b",
+    "dirtyContentSha256": "47d1a5ac3269fca0350a7968d62fe185bd7bfc0ec70b0e62d9bcf0de206bdd6e",
+    "dirtyPathCount": 59,
+    "oversized": []
+  },
+  "tx1-owner-wip": {
+    "head": "e7c89f4b5114c0238312d3831b65889a4622f4e9",
+    "branch": "refs/heads/tx1/work-20261010",
+    "indexSha256": "775ee49801a0c92172acb5193f4bc0f20a1e130ff472696e391d53e944109e67",
+    "statusSha256": "dcaa664c99bd16643dea516d174adf85f04c3025ae1e90d13621343ca4e70933",
+    "dirtyContentSha256": "e686e35e9da3d2700f28a862aad003e42f7d725a9b0ab1f1d24066bc3cffe841",
+    "dirtyPathCount": 796,
+    "oversized": []
+  },
+  "freshmg-wip": {
+    "head": "50a003b86e4d2f0017d6772d11446c027339151e",
+    "branch": "refs/heads/freshmg/integration-20261010",
+    "indexSha256": "8137a11d3a20b082df7c142a3238fec5aba8c9123100b120305c30503340c399",
+    "statusSha256": "b023e3dc9386c07935ece4599abd1e1ef828338f98949429cf86fbfdc59fd0ac",
+    "dirtyContentSha256": "7edb5f04940e2c2e5b85577d6a9a0c9fed790862d8fc6171982b6d0fb9945240",
+    "dirtyPathCount": 73,
+    "oversized": []
+  },
+  "query-wip": {
+    "head": "be99622d6b21162e9cc459104d7f1b5d8cd3830d",
+    "branch": "refs/heads/tx1/query-seam-20261011",
+    "indexSha256": "6e2ad9543303a009701dca0b7e91c190fc42117d06ec3812a9fe1f4c48303a82",
+    "statusSha256": "ff66509340720d9c6940a357ad5c0feed165ea4527f55ab6c0d689521b8a4b9c",
+    "dirtyContentSha256": "189832c65b40d632a4b273602f56003017a634499ac547f9b7cd7768ffde418e",
+    "dirtyPathCount": 79,
+    "oversized": []
+  },
+  "cdc-wip": {
+    "head": "e7c89f4b5114c0238312d3831b65889a4622f4e9",
+    "branch": "refs/heads/tx1/cdc-receipt8-20261011",
+    "indexSha256": "1acd788a3d7a443b40191af97ace7c7ed0f8827375cb850b5dded7d12a5bf1e7",
+    "statusSha256": "13f46fa69b1ccb1ff21c97cbe91cfcb4dc3c33b1aaeca5a311fd95a393694962",
+    "dirtyContentSha256": "62cf5dd83c46e2c5a64afa7c7168cfd86dc6dd0e1d80e8dce98712858930d79e",
+    "dirtyPathCount": 188,
+    "oversized": []
+  },
+  "coordinator-fixtures-wip": {
+    "head": "c6d71665e98be03de916705f272a9d6340e4a842",
+    "branch": "refs/heads/fix/rs-raft-coordinator-fixtures-20261011",
+    "indexSha256": "48d4c1b40a714b5fce163120de3fc0534cfcdfc6ab3ac45145da4376a14fd895",
+    "statusSha256": "407018e9d983ad2b1b6899adeeec490acd416e0e43fc2e249bbcffe2dceb3289",
+    "dirtyContentSha256": "0327ba65b80d208bb66392a723a7ce576ad0123b4105b8889c0a3de31eafa409",
+    "dirtyPathCount": 1,
+    "oversized": []
+  }
+}

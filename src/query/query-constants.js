@@ -58,6 +58,25 @@ const QUERY_ERROR_CODE = Object.freeze({
   TRANSACTION_PARTICIPANTS_FROZEN: 'TRANSACTION_PARTICIPANTS_FROZEN',
   TRANSACTION_RECOVERY_INCOMPLETE: 'TRANSACTION_RECOVERY_INCOMPLETE',
   TRANSACTION_STATE_PERSIST_FAILED: 'TRANSACTION_STATE_PERSIST_FAILED',
+  // An engine that cannot persist transaction state refuses an explicit
+  // BEGIN and a multi-partition statement before any participant work
+  // (TX1 seam S4b); DIRECT_AUTOCOMMIT statements never reach the
+  // coordinator.
+  TRANSACTION_STATE_PERSISTENCE_UNAVAILABLE:
+    'TRANSACTION_STATE_PERSISTENCE_UNAVAILABLE',
+  // The insert-once decision of a transaction is already recorded (TX1 seam
+  // C): the writer that finds it reads the recorded decision and follows it.
+  TRANSACTION_DECISION_RECORDED: 'TRANSACTION_DECISION_RECORDED',
+  // Neither this coordinator's decision nor the one recorded first could be
+  // established: nothing was fanned out, and recovery resolves it.
+  TRANSACTION_DECISION_IN_DOUBT: 'TRANSACTION_DECISION_IN_DOUBT',
+  // A participant refused the PREPARE durably because a committed write
+  // applied on its partition between the transaction's BEGIN and its PREPARE
+  // (TX1 design 3.2, limit L5): the transaction rolled back.
+  TRANSACTION_CONFLICT: 'TRANSACTION_CONFLICT',
+  // A ROLLBACK asked of a transaction whose COMMIT is already decided: the
+  // decision stands and recovery completes it.
+  TRANSACTION_COMMIT_DECIDED: 'TRANSACTION_COMMIT_DECIDED',
   PRIMARY_KEY_REQUIRED: 'PRIMARY_KEY_REQUIRED',
   TABLE_EXISTS: 'TABLE_EXISTS',
   TABLE_PARTITION_PROVISIONING_RETRYABLE:
@@ -126,6 +145,22 @@ const QUERY_ERROR_MSG = Object.freeze({
     'Transaction recovery state is incomplete or incompatible',
   TRANSACTION_STATE_PERSIST_FAILED:
     'Distributed transaction state persistence failed',
+  TRANSACTION_STATE_PERSISTENCE_UNAVAILABLE:
+    'Distributed transaction state cannot be persisted by this engine; ' +
+    'the transaction was not started',
+  TRANSACTION_DECISION_RECORDED:
+    'Distributed transaction decision is already recorded',
+  TRANSACTION_DECISION_IN_DOUBT:
+    'Distributed transaction decision could not be established; its ' +
+    'outcome is decided by recovery',
+  TRANSACTION_CONFLICT:
+    'Transaction conflict: a committed write applied on a participant ' +
+    'partition after the transaction began; the transaction rolled back',
+  TRANSACTION_COMMIT_DECIDED:
+    'Transaction COMMIT is already decided; it cannot be rolled back',
+  PARTICIPANT_ANSWER_UNTYPED:
+    'Participant answered without the typed outcome the transaction ' +
+    'protocol requires',
   COMMIT_FAILED: 'Commit failed',
   ROLLBACK_FAILED: 'Rollback failed',
   PREPARE_FAILED: 'Prepare failed',
@@ -216,6 +251,11 @@ const QUERY_LOG_MSG = Object.freeze({
   ROUTING_INSERT: 'Routing INSERT to partitions',
   ROUTING_UPDATE: 'Routing UPDATE to partitions',
   ROUTING_DELETE: 'Routing DELETE to partitions',
+  STATEMENT_CONFLICT_RETRY:
+    'Statement-autocommit attempt retried after a definitive participant ' +
+    'conflict',
+  STATEMENT_CONFLICT_RETRY_STOPPED:
+    'Statement-autocommit conflict answered: its retry bound is spent',
   BEGIN_TRANSACTION: 'BEGIN TRANSACTION',
   COMMIT: 'COMMIT',
   ROLLBACK: 'ROLLBACK',

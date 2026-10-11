@@ -1,0 +1,6 @@
+
+> lagrange-server@0.2.6 test:complexity:cognitive:scoped
+> node scripts/check-cognitive-complexity.js --scoped src/query/distributed/distributed-transaction-creation.js src/query/distributed/distributed-transaction-creation-resources.js
+
+Scoped cognitive complexity ratchet: 0 violation(s) in 2 target(s) (threshold: 20).
+Saved cognitive complexity report to test-output/analysis/cognitive-complexity-scoped.json.
