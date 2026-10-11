@@ -508,7 +508,12 @@ async function executeAuthoritativeSystemTableRead(
     },
   });
 
-  await readLocalAuthoritativeRows();
+  // Required owner-RPC reads carry their own bounded operation contract. A
+  // hosted replica must not materialize the full local table before that
+  // owner handles PAGE/CHUNK/CANCEL.
+  if (!requireOwnerRpcRead) {
+    await readLocalAuthoritativeRows();
+  }
 
   const shouldConfirmEmptyLocalReadWithOwnerRpc =
     authoritativeReadModeContract.confirmEmptyLocalReadWithOwnerRpc === true &&

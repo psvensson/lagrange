@@ -1,3 +1,4 @@
+import {hasDurableCdcEvents, isCommittedCdcOutcome, isProvisionalCdcOutcome} from '../../cdc/cdc-delivery-outcome.js';
 
 const LOCAL_STR_OPERATIONAL_MESSAGE_GROUP_INGRESS_NOT_RE = 'Operational message-group ingress not ready ';
 
@@ -217,14 +218,22 @@ function buildPartitionCdcPropagationSubscriber(options = {}) {
       throw resolveDeferredSelectionError(readiness);
     }
 
-    await propagatePartitionCDCEvent(
+    const answer = await propagatePartitionCDCEvent(
       propagationMessageGroupService,
       cdcEvent,
     );
 
+    if (isProvisionalCdcOutcome(answer, [cdcEvent])) return answer;
+    if (answer?.success === false || (hasDurableCdcEvents([cdcEvent]) &&
+        !isCommittedCdcOutcome(answer, [cdcEvent]))) {
+      throw Object.assign(new Error('CDC propagation did not complete'),
+        {code: 'cdc_propagation_incomplete', cause: answer, retryAfterMs: answer?.retryAfterMs});
+    }
+
     if (typeof afterPropagation === 'function') {
       await afterPropagation(cdcEvent);
     }
+    return answer;
   };
 
   subscriber.canAcceptCDCEvent = (cdcEvent = {}) => {

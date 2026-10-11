@@ -13,7 +13,6 @@
 // the participant never adds a second decision lookup during committed apply.
 
 import {createHash} from 'node:crypto';
-import {isExecutionEnvelope} from './partition-transaction-execution-envelope.js';
 import {
   PARTICIPANT_TRANSACTION_BYTES as BYTES,
   PARTICIPANT_TRANSACTION_COMMAND as COMMAND,
@@ -135,33 +134,71 @@ function operationsOf(operationsText) {
   return Array.isArray(parsed) && parsed.every(isOperation) ? parsed : null;
 }
 
-function participantEntriesOf(decisionRecord, participantId) {
-  const participants = Array.isArray(decisionRecord?.participants) ?
-    decisionRecord.participants : [];
-  return participants.filter((entry) => Array.isArray(entry) &&
-    entry[0] === participantId);
+function validDecisionParticipants(record) {
+  if (!Array.isArray(record.participants)) return false;
+  const prefix = `${record.transactionId}${BYTES.IDENTITY_SEPARATOR}`;
+  return record.participants.every((entry, index, entries) =>
+    Array.isArray(entry) && entry.length === 2 &&
+    isNonEmptyString(entry[0]) && entry[0].startsWith(prefix) &&
+    entry[0].length > prefix.length &&
+    (index === 0 || entries[index - 1][0] < entry[0]) &&
+    (isNonEmptyString(entry[1]) ||
+      (record.decision === DECISION.ROLLBACK && entry[1] === null)));
 }
 
-// The decision record a decision carries, when its text hashes to its
-// digest; null otherwise.
-function hashedDecisionRecordOf(binding) {
-  return typeof binding.decisionText === 'string' &&
-    sha256Hex(binding.decisionText) === binding.decisionDigest ?
-    parsedJsonOf(binding.decisionText) : null;
+/**
+ * Consume the exact canonical immutable decision bytes, validating the
+ * complete participant set, not just the local binding. Missing, malformed,
+ * duplicate, unsorted or mismatched content returns null (never a decision).
+ * @param {Object} binding - Text/digest and optional expected transaction/decision.
+ * @return {Object|null} Deeply frozen record, including text and digest.
+ */
+function canonicalDecisionRecord(binding) {
+  const record = parsedJsonOf(binding?.decisionText);
+  if (!isNonEmptyString(record?.transactionId) ||
+      !DECISIONS.includes(record.decision) ||
+      !validDecisionParticipants(record) ||
+      (binding.transactionId !== undefined &&
+        binding.transactionId !== record.transactionId) ||
+      (binding.decision !== undefined && binding.decision !== record.decision)) {
+    return null;
+  }
+  const {transactionId, decision, participants} = record;
+  const decisionText = JSON.stringify({transactionId, decision, participants});
+  if (decisionText !== binding.decisionText ||
+      sha256Hex(decisionText) !== binding.decisionDigest) return null;
+  return Object.freeze({transactionId, decision,
+    participants: Object.freeze(participants.map((entry) => Object.freeze(entry))),
+    decisionText, decisionDigest: binding.decisionDigest});
 }
 
-// The record names this transaction and this decision.
-function namesDecision(record, binding) {
-  return DECISIONS.includes(binding.decision) &&
-    record?.transactionId === binding.transactionId &&
-    record?.decision === binding.decision;
+/**
+ * Produce exactly the decision bytes the canonical reader accepts.
+ * @param {string} transactionId
+ * @param {string} decision
+ * @param {Iterable<Array>} participants - [participantId, preparedDigest|null].
+ * @return {Object|null} Frozen record, or null for invalid input.
+ */
+function buildDecisionRecord(transactionId, decision, participants) {
+  if (!participants || typeof participants[Symbol.iterator] !== 'function') {
+    return null;
+  }
+  const entries = Array.from(participants, (entry) =>
+    Array.isArray(entry) ? [...entry] : entry)
+    .sort((left, right) =>
+      left?.[0] < right?.[0] ? -1 : left?.[0] > right?.[0] ? 1 : 0);
+  const decisionText = JSON.stringify({transactionId, decision,
+    participants: entries});
+  return canonicalDecisionRecord({decisionText,
+    decisionDigest: sha256Hex(decisionText)});
 }
 
 // Exactly one entry for this participant, whose digest is the one the
 // decision carries; only a ROLLBACK may carry none.
 function namesPreparedContent(record, binding) {
   const preparedDigest = binding.preparedDigest ?? null;
-  const entries = participantEntriesOf(record, binding.participantId);
+  const entries = record?.participants.filter((entry) =>
+    entry[0] === binding.participantId) || [];
   return entries.length === 1 && (entries[0][1] ?? null) === preparedDigest &&
     (binding.decision === DECISION.ROLLBACK || isNonEmptyString(preparedDigest));
 }
@@ -181,8 +218,8 @@ function decisionBindingRefusalOf(binding) {
   if (!isNonEmptyString(binding?.decisionDigest)) {
     return CODE.DECISION_BINDING_REQUIRED;
   }
-  const record = hashedDecisionRecordOf(binding);
-  return namesDecision(record, binding) &&
+  const record = canonicalDecisionRecord(binding);
+  return record &&
     namesPreparedContent(record, binding) ?
     null : CODE.DECISION_DIGEST_MISMATCH;
 }
@@ -215,8 +252,7 @@ function identityFieldsOf(identity) {
  * The PARTICIPANT_PREPARE command the leader proposes (design 2.3).
  * @param {Object} identity - The request's identity fields.
  * @param {Object} carried - {operationsText, validationText}.
- * @param {Object} stamp - {executionEnvelope, timestamp, proposedBy,
- *   proposedAt}.
+ * @param {Object} stamp - {timestamp, proposedBy, proposedAt}.
  * @return {Object} The command.
  */
 function buildPrepareCommand(identity, {operationsText, validationText},
@@ -238,8 +274,7 @@ function buildPrepareCommand(identity, {operationsText, validationText},
  * @param {Object} identity - The request's identity fields.
  * @param {Object} binding - {decision, preparedDigest, decisionText,
  *   decisionDigest}.
- * @param {Object} stamp - {executionEnvelope, timestamp, proposedBy,
- *   proposedAt}.
+ * @param {Object} stamp - {timestamp, proposedBy, proposedAt}.
  * @return {Object} The command.
  */
 function buildDecisionCommand(identity, binding, stamp) {
@@ -285,18 +320,16 @@ function carriesPinnedIdentity(command) {
 }
 
 function isPinnedPrepare(command) {
-  return isExecutionEnvelope(command.executionEnvelope) &&
-    typeof command.operationsText === 'string' &&
+  return typeof command.operationsText === 'string' &&
     typeof command.validationText === 'string' &&
     command.preparedDigest ===
       preparedDigestOf(command.operationsText, command.validationText) &&
     command.entryId === prepareEntryIdOf(command.participantId);
 }
 
-// A decision carries its binding, the leader's envelope and no operations.
+// A decision carries its binding and no operations.
 function isPinnedDecision(command) {
-  return isExecutionEnvelope(command.executionEnvelope) &&
-    decisionBindingRefusalOf(command) === null &&
+  return decisionBindingRefusalOf(command) === null &&
     command.entryId ===
       decisionEntryIdOf(command.participantId, command.decisionDigest) &&
     command.operationsText === undefined && command.operations === undefined;
@@ -328,9 +361,11 @@ function isPinnedParticipantCommand(command) {
 }
 
 export {
+  buildDecisionRecord,
   buildDecisionCommand,
   buildGenerationOriginCommand,
   buildPrepareCommand,
+  canonicalDecisionRecord,
   carriedOriginIndexOf,
   decisionBindingRefusalOf,
   decisionEntryIdOf,
@@ -339,6 +374,7 @@ export {
   isPinnedParticipantCommand,
   operationOutcomeKeyOf,
   operationsOf,
+  participantIdOf,
   preparedDigestOf,
   prepareEntryIdOf,
   validationTextOf,
