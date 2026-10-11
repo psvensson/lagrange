@@ -1,3 +1,4 @@
+import {copyCdcEventMetadata} from '../cdc/cdc-event-envelope.js';
 import {
   CDC_OPERATION,
   COLUMN,
@@ -167,6 +168,7 @@ function buildCriticalVisibilityCdcPropagationReplacePendingKey(events = []) {
     return null;
   }
   const event = events[0];
+  if (Object.hasOwn(event, 'eventKey')) return null;
   const tableName = normalizeCdcPropagationTableName(event?.tableName);
   const operation = normalizeCdcPropagationOperation(event?.operation);
   const primaryKeyValue = resolveCdcPropagationPrimaryKeyValue(event);
@@ -226,6 +228,7 @@ function normalizeCdcPropagationEvents(events) {
     events
       .filter((event) => event && typeof event === 'object')
       .map((event) => ({
+        ...copyCdcEventMetadata(event),
         tableName: normalizeCdcPropagationTableName(event.tableName),
         operation: normalizeCdcPropagationOperation(event.operation),
         data: event.data && typeof event.data === 'object' ? event.data : null,

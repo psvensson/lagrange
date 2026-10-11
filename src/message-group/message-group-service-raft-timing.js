@@ -1,3 +1,6 @@
+import {copyCdcEventMetadata} from '../cdc/cdc-event-envelope.js';
+import {hasDurableCdcEvents} from '../cdc/cdc-delivery-outcome.js';
+import {scheduleCdcCommittedAcceptance} from './message-group-cdc-commit-owner.js';
 /**
  * Message Group Service - runtime raft timing reconfiguration through the
  * operation port, and committed-entry application to the local state
@@ -50,17 +53,22 @@ function applyCommittedCdcChange(service, change, {index, effects},
 const COMMITTED_COMMAND_APPLICATION = Object.freeze({
   // A message is tracked by its pending delivery; its entry is the record.
   [MESSAGE_GROUP_COMMAND_TYPE.MESSAGE]: () => {},
-  [MESSAGE_GROUP_COMMAND_TYPE.CDC]: (service, committed) => {
+  [MESSAGE_GROUP_COMMAND_TYPE.CDC]: (service, committed, context) => {
     const command = committed.command;
     applyCommittedCdcChange(service, {
       tableName: command.tableName,
       operation: command.operation,
       data: command.data,
+      ...copyCdcEventMetadata(command),
       timestamp: command.timestamp || service.hlcClock.now().toString(),
       causeId: normalizeCauseId(command.causeId),
     }, committed, command);
+    if (hasDurableCdcEvents([command])) {
+      scheduleCdcCommittedAcceptance(service, committed,
+        context.cdcCommitGeneration);
+    }
   },
-  [MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH]: (service, committed) => {
+  [MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH]: (service, committed, context) => {
     const events = service.normalizeCDCBatchEvents(committed.command.events);
     for (const event of events) {
       const causeId = normalizeCauseId(event.causeId);
@@ -68,15 +76,21 @@ const COMMITTED_COMMAND_APPLICATION = Object.freeze({
         tableName: event.tableName,
         operation: event.operation,
         data: event.data,
+        ...copyCdcEventMetadata(event),
         timestamp: event.timestamp,
         causeId,
       }, committed, {
         tableName: event.tableName,
         operation: event.operation,
         data: event.data,
-        logIndex: committed.index,
+        ...copyCdcEventMetadata(event),
+        messageGroupLogIndex: committed.index,
         causeId,
       });
+    }
+    if (hasDurableCdcEvents(events)) {
+      scheduleCdcCommittedAcceptance(service, committed,
+        context.cdcCommitGeneration);
     }
   },
   [MESSAGE_GROUP_COMMAND_TYPE.ACK]: (service, {command}) => {
@@ -190,16 +204,17 @@ function assignRaftTiming(serviceClass) {
      * skipped.
      * Requirements: 6.1, 6.2, 6.4, 6.5
      * @param {Object} committed - {command, index, term, effects}.
+     * @param {Object} [context] - The owning runtime generation.
      * @return {void}
      */
-    applyCommittedEntry(committed) {
+    applyCommittedEntry(committed, context = {}) {
       const type = committed.command?.type;
       if (!isMessageGroupCommandType(type)) {
         throw new Error(
           `${MESSAGE_GROUP_SERVICE_ERROR_MSG.UNKNOWN_COMMITTED_COMMAND}: ` +
           `${JSON.stringify(type ?? null)} at index ${committed.index}`);
       }
-      COMMITTED_COMMAND_APPLICATION[type](this, committed);
+      COMMITTED_COMMAND_APPLICATION[type](this, committed, context);
     },
   });
 }
