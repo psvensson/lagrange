@@ -376,6 +376,17 @@ class ReplicaCreateAdmissionOwner {
     return observation.rows?.length === 1 ? observation.rows[0] : null;
   }
 
+  async authorizeParticipantRelease(evidence) {
+    const row = await this.readOperation(evidence?.operationId);
+    if (!rowMatchesAdmission(row, requestFromAdmissionRow(row)) ||
+        !rowMatchesAdmissionIdentity(row, evidence) ||
+        row.completed_at !== null && row.completed_at !== undefined ||
+        row.create_admission_state !== CREATE_ADMISSION_STATE.MATERIALIZED) {
+      return null;
+    }
+    return admissionEvidenceFromRow(row, requestFromAdmissionRow(row));
+  }
+
   async readReplicaAdmissions(replicaId) {
     if (!this.gateway) {
       throw admissionError(

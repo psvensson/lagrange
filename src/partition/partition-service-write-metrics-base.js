@@ -1,5 +1,6 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {PartitionServiceTransactionBase} from './partition-service-transaction-base.js';
+import {fenceLegacyLocalMutation} from './partition-participant-transaction-legacy-fence.js';
 import {
   startAdmittedPartitionWrite,
 } from './partition-service-raft-write-commit.js';
@@ -26,6 +27,9 @@ import {
   admitCommittedCommand,
   committedCommandRefusalResult,
 } from './partition-committed-command-admission.js';
+import {readPartitionWriteOrigin} from './partition-participant-transaction-store.js';
+import {transactionSchemaWriteRefusal} from
+  '../query/distributed/distributed-transaction-schema-enforcement.js';
 
 
 const {
@@ -75,6 +79,14 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
         idempotencyKey: options.idempotencyKey || null,
         splitMirrorOrigin: options.splitMirrorOrigin || null,
       };
+      const statementKind = classifyPartitionStatementHead(sql).kind;
+      if (statementKind !== PARTITION_STATEMENT_KIND.READ) {
+        const schemaRefusal = transactionSchemaWriteRefusal(this.db, this.tableName,
+          readPartitionWriteOrigin(this.db) !== null);
+        if (schemaRefusal !== null) {
+          return {...schemaRefusal, partitionId: this.partitionId};
+        }
+      }
       // A re-delivery of a write whose entry key is settled is answered from
       // its outcome row by applyWrite (nothing is proposed), before any
       // admission rule or the ceiling pre-check: state that changed after the
@@ -180,6 +192,10 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
           count: rows.length,
           partitionId: this.partitionId,
         };
+      }
+      const fenced = fenceLegacyLocalMutation(this);
+      if (fenced !== null) {
+        return fenced;
       }
       const outcome = runAdmittedPartitionStatement(this, admission, params);
       if (!outcome.admitted) {
@@ -685,6 +701,11 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
       proposedBy: entry?.proposedBy || this.replicaId,
       proposedAt: entry?.proposedAt,
     });
+    const schemaRefusal = transactionSchemaWriteRefusal(this.db, this.tableName,
+      readPartitionWriteOrigin(this.db) !== null);
+    if (schemaRefusal !== null) {
+      return {...schemaRefusal, partitionId: this.partitionId};
+    }
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.APPLY_WRITE_CALLED, {
       partitionId: this.partitionId,
       replicaId: this.replicaId,
