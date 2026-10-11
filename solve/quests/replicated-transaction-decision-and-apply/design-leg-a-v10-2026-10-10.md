@@ -545,6 +545,37 @@ migration ALTER proposed with no pre-check and admitting any table (migration
 owner); the index service ignores `success:false` answers; R2 and DROP INDEX
 reads see uncommitted session schema until c'.
 
+### 0.0.13 Lead decision: the write generation has a committed origin (2026-10-11)
+
+The increment-3 verification (verifier subagent:a8825d45068289746) showed that a
+generation row created `(1, 0)` at every partition open is not a function of
+the committed log prefix: a replica that applied part of the log before this
+build exists counts fewer writes than one that replays every entry on it, so
+the same committed PREPARE can be REFUSED on one replica and PREPARED on
+another. Sections 3.2 and 5.1 assumed `(1, 0)` identically on every replica,
+which holds only for partitions created on this build; L6 said nothing about
+where g starts. Decision:
+
+- A participant-owned committed command `PARTICIPANT_GENERATION_ORIGIN`
+  (pinned bytes like the other two) is proposed once by the leader when
+  transaction admission is enabled on a partition (after the L6 drain). Its
+  application, inside the one application transaction, sets the generation
+  row to `(1, 0)` and records the origin `(index, term)` in it. From that entry
+  on, g is a deterministic function of the committed prefix on every replica,
+  old or new, because every replica applies the origin before any later entry.
+- Until the origin has applied on the leader, a BEGIN carrying a
+  transactionId is refused typed (`generation_origin_pending`); a PREPARE
+  carries the origin index in its validation text and the apply refuses a
+  PREPARE whose carried origin differs from the replica's recorded origin
+  (typed, a bug path: Raft order makes it unreachable without one).
+- The witness is the verifier's reproduction: a database written on the
+  increment-2 build and reopened on the candidate (g 0) against a replica that
+  replayed every entry on the candidate (g 3) converge after the origin command
+  and then agree on the same PREPARE and COMMIT; a BEGIN before the origin is
+  refused on the request path.
+- The pre-cutover census (L6) gains: the origin command has applied on every
+  replica of every partition before transaction admission is enabled.
+
 ## 1. Consumed surfaces (verified)
 
 Participant transaction owner, current behaviour to replace:
