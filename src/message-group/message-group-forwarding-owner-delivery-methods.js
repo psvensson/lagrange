@@ -1,3 +1,6 @@
+import {hasDurableCdcEvents, isCommittedCdcDelivery, isProvisionalCdcDelivery} from '../cdc/cdc-delivery-outcome.js';
+import {classifyTransportDeliveryOutcome, isDeliveredTransportDeliveryOutcome} from '../transport/transport-semantic-outcome.js';
+import {copyCdcEventMetadata} from '../cdc/cdc-event-envelope.js';
 import {createMessageGroupForwardingOwnerTargetMethods} from
   './message-group-forwarding-owner-target-methods.js';
 
@@ -354,6 +357,7 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
 
     async forwardCDCEventToLeader(tableName, operation, data, options = {}) {
       const service = this.service;
+      const metadata = copyCdcEventMetadata(options);
       const eventTimestamp =
         typeof options.timestamp === typeofToken.STRING &&
         options.timestamp.length > num.ZERO ?
@@ -371,6 +375,7 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
         tableName,
         operation,
         data,
+        ...metadata,
         timestamp: eventTimestamp,
         sourceNodeId: service.nodeId,
         relayDepth,
@@ -397,6 +402,7 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
       const normalizedEvents = (Array.isArray(events) ? events : [])
         .filter((event) => event?.tableName && event?.operation && event?.data)
         .map((event) => {
+          const metadata = copyCdcEventMetadata(event);
           const timestamp =
             typeof event.timestamp === typeofToken.STRING &&
             event.timestamp.length > num.ZERO ?
@@ -406,6 +412,7 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
             tableName: event.tableName,
             operation: event.operation,
             data: event.data,
+            ...metadata,
             timestamp,
             causeId: normalizeCauseId(event.causeId),
             replayOnly: event.replayOnly === true || replayOnly,
@@ -463,11 +470,12 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
         payload?.type ===
         messageGroupApplicationMessageType.LATENCY_CDC_PROPAGATION
       ) {
-        await service.applyCDCEvent(
+        const answer = await service.applyCDCEvent(
           payload?.tableName || logContext.tableName || null,
           payload?.operation || logContext.operation || null,
           payload?.data || null,
           {
+            ...copyCdcEventMetadata(payload),
             timestamp: payload?.timestamp || undefined,
             causeId: normalizeCauseId(logContext.causeId ?? payload?.causeId),
             replayOnly,
@@ -477,14 +485,14 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
               true,
           },
         );
-        return true;
+        return answer ?? true;
       }
 
       if (
         payload?.type ===
         messageGroupApplicationMessageType.LATENCY_CDC_PROPAGATION_BATCH
       ) {
-        await service.applyCDCBatch(
+        const answer = await service.applyCDCBatch(
           Array.isArray(payload?.events) ? payload.events : [],
           {
             replayOnly,
@@ -494,7 +502,7 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
               true,
           },
         );
-        return true;
+        return answer ?? true;
       }
 
       return false;
@@ -545,7 +553,7 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
             logContext,
           );
         if (locallyApplied) {
-          return;
+          return locallyApplied;
         }
         const error = strictForwarding ?
           this.buildDeferredCdcForwardError(
@@ -592,8 +600,13 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
             payload,
             deliveryOptions,
           );
-          const deliveryAcked = deliveryResult?.acknowledged === true;
-          const deliverySucceeded = deliveryResult?.success !== false;
+          const events = Array.isArray(payload.events) ? payload.events : [payload];
+          if (isProvisionalCdcDelivery(deliveryResult, events)) return deliveryResult;
+          const deliveryAcked = isDeliveredTransportDeliveryOutcome(
+            classifyTransportDeliveryOutcome(deliveryResult));
+          const deliverySucceeded = deliveryResult?.success !== false &&
+            (!hasDurableCdcEvents(events) ||
+              isCommittedCdcDelivery(deliveryResult, events, service.groupId));
           const deliveryErrorMessage =
             typeof deliveryResult?.error === typeofToken.STRING &&
             deliveryResult.error.length > num.ZERO ?
@@ -685,7 +698,7 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
             serviceId: target.serviceId,
             address: leaderAddress,
           });
-          return;
+          return deliveryResult;
         } catch (error) {
           const shouldRepairTopology =
             service.shouldRepairForwardTopology(error?.message || null);
@@ -732,7 +745,7 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
             logContext,
           );
         if (locallyApplied) {
-          return;
+          return locallyApplied;
         }
       }
       if (lastDeliveryError) {
