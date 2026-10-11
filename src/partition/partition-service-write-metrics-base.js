@@ -1,7 +1,7 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {PartitionServiceTransactionBase} from './partition-service-transaction-base.js';
 import {
-  startPartitionRaftWriteCommit,
+  startAdmittedPartitionWrite,
 } from './partition-service-raft-write-commit.js';
 import {collectBoundedSqliteRows} from
   '../query/query-result-budget.js';
@@ -9,7 +9,6 @@ import {
   admitPartitionStatement,
   classifyPartitionStatementHead,
   partitionStatementRefusalAnswer,
-  prepareSessionStatement,
   runAdmittedPartitionStatement,
 } from './partition-statement-admission.js';
 import {
@@ -22,8 +21,6 @@ import {
 } from './partition-committed-statement-outcome.js';
 import {PARTITION_COMMITTED_STATEMENT_RECORD_STATE} from
   './partition-committed-statement-outcome-constants.js';
-import {buildPartitionWriteLeadershipRefusal} from
-  './partition-write-kernel.js';
 import {
   PARTITION_COMMITTED_COMMAND_ORIGIN,
   admitCommittedCommand,
@@ -41,7 +38,6 @@ const {
   PARTITION_SERVICE_OPERATION,
   PARTITION_SERVICE_SQL_FRAGMENT,
   PARTITION_SERVICE_VALUE,
-  PARTITION_WRITE_COMMIT_MODE,
   RaftRole,
   SQL,
   TABLES,
@@ -54,7 +50,6 @@ const {
   WRITE_PHASE_FIELD_TOTAL_MS,
   buildPartitionWriteEntry,
   getSystemCachePrimaryKeyFieldOrFallback,
-  resolvePartitionWriteCommitMode,
 } = PARTITION_SERVICE_SHARED;
 
 class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
@@ -87,12 +82,12 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
       if (!transaction && this.isSettledRedelivery(operation)) {
         return this.proposeWrite(operation);
       }
-      // The statement-admission owner decides what a sessionless statement
-      // may prepare; a session statement keeps the session path's own rule
-      // until the session classifier takes it over.
-      const admission = transaction ?
-        prepareSessionStatement(this.db, sql) :
-        admitPartitionStatement(this, sql, params);
+      // The statement-admission owner decides what a statement may prepare,
+      // sessionless and legacy (sessionId-only) session statements alike: a
+      // refused head (a PRAGMA, TEMP DDL) is never prepared on the shared
+      // connection. A participant session statement never reaches here (its
+      // staging owner answers it).
+      const admission = admitPartitionStatement(this, sql, params);
       if (!admission.admitted) {
         return partitionStatementRefusalAnswer(this, sql, admission);
       }
@@ -129,6 +124,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
           return this.executeTransactionWrite(
             operation,
             transaction.sessionId,
+            admission,
           );
         }
         return this.proposeWrite(operation);
@@ -209,10 +205,12 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
    * Execute a write operation within an active transaction.
    * @param {Object} operation - Write operation.
    * @param {string|null} sessionId - Transaction session ID.
+   * @param {Object|null} admitted - Its statement's admission, when the
+   *   caller admitted it (admitted here otherwise, before any prepare).
    * @return {Promise<Object>} Operation result.
    * @private
    */
-  async executeTransactionWrite(operation, sessionId = null) {
+  async executeTransactionWrite(operation, sessionId = null, admitted = null) {
     const transaction = this.resolveActiveTransactionState(sessionId);
     if (!transaction) {
       throw new Error(PARTITION_SERVICE_ERROR_MSG.NO_ACTIVE_TRANSACTION);
@@ -240,9 +238,13 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
     if (!admission.admitted) {
       return committedCommandRefusalResult(admission, this.partitionId);
     }
+    const statement = admitted ?? admitPartitionStatement(this, entry.sql,
+      entry.params || []);
+    if (!statement.admitted) {
+      return partitionStatementRefusalAnswer(this, entry.sql, statement);
+    }
     try {
-      const stmt = this.db.prepare(entry.sql);
-      const info = stmt.run(...(entry.params || []));
+      const info = statement.statement.run(...(entry.params || []));
       const trackedEntry = {...entry, changes: info.changes};
       transactionState.operations.push(trackedEntry);
       this.trackTransactionWriteSetKey(transactionState, trackedEntry);
@@ -721,28 +723,12 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
       );
       return settledAnswer;
     }
-    // Leadership is the consensus core's own, read through the port.
-    const consensusStatus = this.raft.readStatus();
-    const commitMode = resolvePartitionWriteCommitMode({
-      replicaIds: this.replicaIds,
-      raftState: consensusStatus.role,
-      raftLeaderState: RaftRole.LEADER,
-      hasKnownRemoteLeader: this.hasKnownRemoteLeaderWitness(),
-    });
-    // A rejected write is never proposed: only the consensus leader proposes,
-    // and a group held by its host failure proposes nothing.
-    if (commitMode === PARTITION_WRITE_COMMIT_MODE.REJECTED) {
-      this.recordWritePhaseDuration(
-        phaseTimings,
-        WRITE_PHASE_FIELD_APPLY_WRITE_MS,
-        applyStartMs,
-      );
-      return buildPartitionWriteLeadershipRefusal(
-        consensusStatus, this.partitionId);
-    }
-    // One propose() through the port; the committed-entry application
-    // applies the write and resolves it with its durable commit witness.
-    return startPartitionRaftWriteCommit(this, {
+    // The write commit owner: parked unproposed while a prepared participant
+    // transaction reserves the partition (re-admitted by its decision);
+    // otherwise only the consensus leader proposes, once, through the port,
+    // and the committed-entry application answers it with its durable commit
+    // witness.
+    return startAdmittedPartitionWrite(this, {
       entry,
       phaseTimings,
       applyStartMs,

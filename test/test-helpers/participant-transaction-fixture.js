@@ -13,6 +13,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import Database from 'better-sqlite3';
+import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {LoggingService} from '../../src/logging/logging-service.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {RAFT_OPERATION_PORT_REQUEST} from '../../src/raft/raft-operation-port-request.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
@@ -25,6 +27,8 @@ import {readCommittedStatementOutcome} from
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
   '../../src/partition/partition-write-kernel.js';
 import {COMMIT_MODE, PARTICIPANT_COMMIT_OUTCOME} from '../../src/constants/transactions.js';
+import {TRANSACTION_CLASSIFIER_LIST_VERSION} from
+  '../../src/partition/partition-transaction-determinism-constants.js';
 import {
   ControllableConsensusPort,
   createControllablePartitionService,
@@ -35,7 +39,7 @@ const REPLICAS = Object.freeze(['tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3']);
 const TABLE = 'test_table';
 const SESSION = 'tx1-v3-session';
 const EPOCH = 7;
-const ELSEWHERE = 'tx1-v3-elsewhere';
+export const ELSEWHERE = 'tx1-v3-elsewhere';
 const INSERT_SQL = 'INSERT INTO test_table (id, value) VALUES (?, ?)';
 const ROW = Object.freeze({id: 'row-1', value: 'value-1'});
 const ROW_2 = Object.freeze({id: 'row-2', value: 'value-2'});
@@ -159,6 +163,8 @@ function originCommandOf(partitionId = PARTITION_ID) {
 }
 // The execution compatibility envelope (design v8 section 3.3): the build every
 // replica must run to apply a transaction command; this process's own build.
+// The classifier list version is the classifier owner's (tx1-leg-a-1 in the
+// design; tx1-leg-a-2 since the owner vetted HaltIfNull in increment 4).
 const ENVELOPE = (() => {
   const db = new Database(':memory:');
   try {
@@ -167,7 +173,7 @@ const ENVELOPE = (() => {
       sqliteSourceId: db.prepare('SELECT sqlite_source_id() AS v').get().v,
       compileOptionsDigest: sha256(db.pragma('compile_options', {simple: false})
         .map((row) => row.compile_options).join('\n')),
-      classifierListVersion: 'tx1-leg-a-1',
+      classifierListVersion: TRANSACTION_CLASSIFIER_LIST_VERSION,
     });
   } finally {
     db.close();
@@ -257,7 +263,7 @@ function classifierRefusalCases() {
   ];
 }
 // Rowid-alias, order-dependent and ceiling cases of round-6 R6-1 (design v7 3.3).
-const ROWID_CEILING = 2n ** 62n;
+export const ROWID_CEILING = 2n ** 62n;
 function rowidRefusalCases() {
   const L = V3.CLASSIFIER_LAYER;
   return [
@@ -345,11 +351,13 @@ function committedQueryOf(entryId, sql) {
     proposedBy: ELSEWHERE, proposedAt: 0};
 }
 
+// A fixture replica: the fixture table unless `extra.tableName` names
+// another (a production system table, with `extra.schema`).
 function createReplica(replicaId, extra = {}) {
   return createControllablePartitionService({
     partitionId: PARTITION_ID,
-    tableId: TABLE,
-    tableName: TABLE,
+    tableId: extra.tableName ?? TABLE,
+    tableName: extra.tableName ?? TABLE,
     replicaId,
     replicaIds: [...REPLICAS],
     nodeId: 'test-node',
@@ -397,6 +405,27 @@ async function shutdownAll(...replicas) {
       // The facts were measured before shutdown.
     }
   }
+}
+// Run `measure(leader, proposed)` on a fresh fixture leader and shut it down.
+async function onFixtureLeader(measure, extra) {
+  const {leader, proposed} = await startLeader(extra);
+  try {
+    return await measure(leader, proposed);
+  } finally {
+    await shutdownAll(leader);
+  }
+}
+// The configuration and logging singletons a participant witness resets
+// around each test: fresh before it, cleared after it.
+function resetFixtureSingletons() {
+  ConfigurationManager.resetInstance();
+  LoggingService.resetInstance();
+  ConfigurationManager.getInstance().initialize({node: {id: 'test-node'}});
+  LoggingService.getInstance().initialize({level: 'error'});
+}
+function clearFixtureSingletons() {
+  ConfigurationManager.resetInstance();
+  LoggingService.resetInstance();
 }
 function temporaryDbPath() {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'tx1-v3-'));
@@ -623,6 +652,9 @@ async function decidedOnTwoReplicas(tx, operations, setup) {
 export {
   COMMITTED,
   GENERATION_ORIGIN_INDEX,
+  clearFixtureSingletons,
+  onFixtureLeader,
+  resetFixtureSingletons,
   originCommandOf,
   originOf,
   prepareRound,

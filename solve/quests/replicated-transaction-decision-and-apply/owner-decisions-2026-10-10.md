@@ -215,3 +215,48 @@ comparison. Final-candidate canonical/changed-discovery proof remains required.
    Continue CREATE, ordered successor, transfer/promotion/cleanup, then TX2,
    RS2/SN1 and physical acceptance in the existing dependency order. This record
    does not turn design review or preservation into completion of those units.
+
+## Rulings 2026-10-11
+
+Owner rulings on the increment-4 corrective round of TX1 Leg A, each recorded
+with its status. The decisions above stand except where a ruling here changes
+them, and their text is kept as history. The design detail is in
+[design revision 10, section 0.0.14](design-leg-a-v10-2026-10-10.md).
+
+| Ruling | Status |
+| --- | --- |
+| Boundary A, prevention: every legacy (sessionId-only) session statement is admitted by the statement-admission owner before any prepare, through the sessionless path's admission | DECIDED+IMPLEMENTED (this correction) |
+| Boundary A, cleanup: closing the bypass removes nothing a connection already holds. A connection that could have run the unguarded legacy path is reopened through the lifecycle owner after the drain and the legacy path's retirement. Enable refuses a connection that served a legacy session since its open (a connection stamp recorded at open) | The enable precondition: DECIDED+IMPLEMENTED (this correction). The reopen at cutover: DECIDED+UNIMPLEMENTED (the cutover's step) |
+| Boundary B: on a table without a declared primary key, the self-check's ceiling probe passes only on the exact `implicit_key` refusal of its own probe; all nine probes keep precise outcomes; the positive control is the M1 cutover's UPDATE, PREPARE and COMMIT on `schema_migration_partitions` | DECIDED+IMPLEMENTED (this correction) |
+| The partition bootstrap drops a schema's table-level `primaryKey` (five system tables) | DECIDED: routed to the bootstrap owner, not fixed in TX1 |
+| Boundary C, a blocker: the nullable insert-result contract. `lastInsertRowid` is null whenever the inserted row's identity cannot be established: every `ON CONFLICT DO UPDATE` (mixed insert/update batches included), every statement that changed no row, and UPDATE and DELETE. An ordinary successful INSERT keeps its rowid. Neither the self-check's plant nor a c' insert that was staged and rolled back leaks into an outcome. The query owner consumes null | DECIDED+IMPLEMENTED (this correction) |
+| The envelope mismatch stays diagnostic for already-committed commands within the approved execution environment; admission and deployment enforce the environment | DECIDED+IMPLEMENTED (increment 4) |
+| The release obligation: pause new mutation admission before draining accepted work, then settle, complete the compatibility transition, verify the eligible replicas, and resume. This supersedes design revision 10's drain-then-pause wording, which keeps a superseded note | DECIDED+UNIMPLEMENTED (the release owner) |
+| Receipt-8 acknowledgement batching: grouped by committed entry under the CDC delivery owner, with bounded count and byte limits and a flush deadline; only acknowledged events are marked delivered | DECIDED+UNIMPLEMENTED (the CDC delivery owner) |
+| `MIGRATION_ALTER_TABLE` is retained with a narrow content contract: forward and inverse ADD, DROP and RENAME COLUMN; deterministic column definitions; literal defaults; `ON CONFLICT ROLLBACK` excluded from admitted column definitions; unsupported forms refused before proposal | DECIDED+UNIMPLEMENTED (a later increment) |
+| Long double: no restriction, once the loaded runtime's SQLite source id is confirmed to match the pinned 3.49.2 | DECIDED+UNIMPLEMENTED at the ruling, pending the confirmation. Measured in this correction: the runtime's source id equals the pin, and the bundled source uses no long double; the finding can close |
+| A separate index-DDL command type for TX1 | DEFERRED |
+
+Lead decisions of the same day, on items this correction raised:
+- Window functions in session writes: an OVER or WINDOW keyword anywhere in a
+  staged session write is refused at `row_order` with the detail
+  `window_clause` (L9d), until a total-order proof exists. `first_value` and
+  `nth_value` compile with no aggregate opcode, so L9c could not see them.
+  Reads keep their windows. DECIDED+IMPLEMENTED (this correction).
+- No further gating: participant BEGIN does not also check the connection
+  stamp. With every legacy statement admitted before any prepare, a legacy
+  BEGIN admitted between enable's check and the origin's application cannot
+  set connection state; the reopen covers connections that ran the unguarded
+  path before this correction was deployed. DECIDED.
+- The `_participant_transactions.session_id` index: the sessionId-only
+  outcome read and the PREPARED-row fence scan the table, bounded by its
+  retention. Routed with the retention to the cutover/retention increment.
+
+Undecided items known at this correction:
+- F-DET (L11): the query engine freezes per-replica values, the partition
+  apply refuses them, or the exposure is accepted. The seam's FDET witness
+  stays red until one of the first two lands.
+- F-MIR (L1): the mirroring of transaction entries; the replay-cursor RC1 and
+  RC2 witnesses stay red.
+- An apply-side size bound on a carried PREPARE (the 256-operation and 1 MiB
+  bound is enforced at staging, on the leader).

@@ -83,6 +83,47 @@ const PARTICIPANT_TRANSACTION_FAILURE_CODE = Object.freeze({
     'participant_transaction_session_write_param_unsupported',
   GENERATION_ORIGIN_PENDING:
     'participant_transaction_generation_origin_pending',
+  // Staging under F6 c' (design 3.1, 3.3): a statement the classifier
+  // refuses at any layer but `compile`; a statement that does not compile or
+  // fails deterministically (nothing staged); a replay of the staged
+  // operations that no longer runs (the session is doomed); the 256-operation
+  // or 1 MiB bound; and a leader whose determinism self-check failed.
+  SESSION_WRITE_NONDETERMINISTIC:
+    'participant_transaction_session_write_nondeterministic',
+  STATEMENT_FAILED: 'participant_transaction_statement_failed',
+  REPLAY_DIVERGED: 'participant_transaction_replay_diverged',
+  REPLAY_BUDGET_EXCEEDED: 'participant_transaction_replay_budget_exceeded',
+  DETERMINISM_SELF_CHECK_FAILED:
+    'participant_transaction_determinism_self_check_failed',
+  // BEGIN after the removal fence (retryable elsewhere), and the L6 fences
+  // between the two protocols: a sessionId-only request that names a
+  // participant transaction's session, or a legacy BEGIN on a partition whose
+  // participant admission is enabled (its generation origin applied here).
+  REMOVAL_FENCED: 'participant_transaction_removal_fenced',
+  LEGACY_SESSION_FENCED: 'participant_transaction_legacy_session_fenced',
+  // Enabling admission on a connection that served a legacy session since
+  // its open (0.0.14, the L6 clause): the cutover reopens it first.
+  CONNECTION_SERVED_LEGACY: 'participant_transaction_connection_served_legacy',
+});
+
+// The phase of a volatile staging session on the leader (design 3.1, 4):
+// ACTIVE stages; PREPARING is sealed into its PARTICIPANT_PREPARE (in flight,
+// or kept for the coordinator's retry after a non-settling answer); DOOMED
+// failed its replay and answers every request with its code until a
+// ROLLBACK or the hold sweep discards it.
+const PARTICIPANT_TRANSACTION_SESSION_PHASE = Object.freeze({
+  ACTIVE: 'ACTIVE',
+  PREPARING: 'PREPARING',
+  DOOMED: 'DOOMED',
+});
+
+// The bound on what one session stages (design 3.1): operations and the
+// encoded bytes of its operations text. Each write replays every staged
+// operation, so these bound the replay's work; no wall-clock bound is
+// promised.
+const PARTICIPANT_TRANSACTION_REPLAY_BOUND = Object.freeze({
+  MAX_OPERATIONS: 256,
+  MAX_BYTES: 1024 * 1024,
 });
 
 // The admission owner's refusals of a participant transaction command before
@@ -192,6 +233,23 @@ const PARTICIPANT_TRANSACTION_SQL = Object.freeze({
   SELECT_RESERVATION:
     'SELECT 1 AS reserved FROM _participant_transactions WHERE state = ? ' +
     'LIMIT 1',
+  // Whether some row carries a routing sessionId (a sessionId-only outcome
+  // read never answers NOT_COMMITTED from absence for it, the L6 window).
+  SELECT_SESSION_KNOWN:
+    'SELECT 1 AS known FROM _participant_transactions WHERE session_id = ? ' +
+    'LIMIT 1',
+  // Whether a PREPARED row carries a routing sessionId (a sessionId-only
+  // request naming it is fenced, never run as an ordinary write).
+  SELECT_SESSION_PREPARED:
+    'SELECT 1 AS prepared FROM _participant_transactions ' +
+    'WHERE session_id = ? AND state = ? LIMIT 1',
+  // The PREPARED rows the hold sweep reports (it never terminates them).
+  SELECT_PREPARED_PARTICIPANTS:
+    'SELECT participant_id AS participantId FROM _participant_transactions ' +
+    'WHERE state = ?',
+  // A generation table created by an earlier increment-3 build lacks the
+  // origin columns; they are added at open, as the outcome table's are.
+  GENERATION_TABLE_COLUMNS: 'PRAGMA table_info(_partition_write_generation)',
   INSERT_ROW:
     'INSERT INTO _participant_transactions (transaction_id, participant_id, ' +
     'session_id, commit_mode, transaction_epoch, state, operations_text, ' +
@@ -252,6 +310,34 @@ const PARTICIPANT_TRANSACTION_LOG_MSG = Object.freeze({
   ORIGIN_RECORDED: 'Partition write generation origin recorded',
   ORIGIN_MISMATCH: 'Participant transaction PREPARE carries another ' +
     'generation origin than this replica\'s (alarm)',
+  // The execution envelope (design 2.3 step 0, 3.3, revision 10 AU): applied
+  // as carried, the mismatch recorded for the release owner.
+  TRANSACTION_ENVELOPE_MISMATCH: 'Participant transaction command carries ' +
+    'another execution envelope than this replica\'s build; applied as ' +
+    'carried',
+  SELF_CHECK_FAILED: 'Participant transaction determinism self-check ' +
+    'failed on this leader; every BEGIN is refused',
+  SESSION_DOOMED: 'Participant transaction session doomed: a staged ' +
+    'operation no longer replays',
+  SESSIONS_DISCARDED: 'Participant transaction staging sessions discarded: ' +
+    'this replica stopped leading',
+  SESSION_EXPIRED: 'Participant transaction staging session discarded by ' +
+    'the hold sweep',
+  PREPARED_HELD: 'Participant transaction PREPARED past the hold window; ' +
+    'reported only, released by its decision alone',
+  PREPARED_HOLD_READ_FAILED: 'Participant transaction hold sweep could not ' +
+    'read the PREPARED rows; staging sessions are still swept',
+  WRITE_PARKED: 'Write parked unproposed while a prepared participant ' +
+    'transaction reserves the partition',
+});
+
+// The origin columns of the generation table, each with the DDL that adds
+// it to a table created without it.
+const PARTICIPANT_TRANSACTION_GENERATION_ORIGIN_COLUMNS = Object.freeze({
+  origin_index:
+    'ALTER TABLE _partition_write_generation ADD COLUMN origin_index INTEGER',
+  origin_term:
+    'ALTER TABLE _partition_write_generation ADD COLUMN origin_term INTEGER',
 });
 
 export {
@@ -261,9 +347,12 @@ export {
   PARTICIPANT_TRANSACTION_COMMAND_TYPES,
   PARTICIPANT_TRANSACTION_DECISION,
   PARTICIPANT_TRANSACTION_FAILURE_CODE,
+  PARTICIPANT_TRANSACTION_GENERATION_ORIGIN_COLUMNS,
   PARTICIPANT_TRANSACTION_LOG_MSG,
   PARTICIPANT_TRANSACTION_MESSAGE,
   PARTICIPANT_TRANSACTION_REFUSAL_CAUSE,
+  PARTICIPANT_TRANSACTION_REPLAY_BOUND,
+  PARTICIPANT_TRANSACTION_SESSION_PHASE,
   PARTICIPANT_TRANSACTION_SQL,
   PARTICIPANT_TRANSACTION_STATE,
   PARTICIPANT_TRANSACTION_STORE_ERROR,

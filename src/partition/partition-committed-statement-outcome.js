@@ -31,6 +31,19 @@
 // answered from the row before it is proposed, and one that was proposed
 // anyway (its original not yet applied here when it was proposed) is answered
 // from the row when it is applied - the same answer either way.
+//
+// The nullable insert-result contract (TX1 owner ruling 2026-10-11, design
+// revision 10, 0.0.14): an APPLIED statement's result carries
+// `lastInsertRowid` only when the inserted row's identity is established by
+// the statement itself - an INSERT or REPLACE with no DO UPDATE clause that
+// changed at least one row. It is null for every ON CONFLICT DO UPDATE (a
+// mixed batch of inserted and updated rows included), every statement that
+// changed no row, and every UPDATE, DELETE and DDL statement, because the
+// connection's last insert rowid is then connection state (a rolled-back c'
+// validation, the self-check's ceiling plant, an rs-raft log append) and
+// differs between replicas. The row and the answer are the same on every
+// replica; a consumer (the query owner) reads null as "no inserted-row
+// identity", never as a row id. committedStatementResult applies it.
 
 import {
   PARTITION_COMMITTED_COMMAND_ERROR_CODE,

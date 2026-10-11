@@ -10,15 +10,31 @@ import {PartitionService} from '../../src/partition/partition-service.js';
 import {
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_OPERATION,
-  PARTITION_SERVICE_SQL,
-  PARTITION_TRANSACTION_PREPARED_STATE,
 } from '../../src/partition/partition-service-constants.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {PARTICIPANT_COMMIT_OUTCOME} from '../../src/constants/transactions.js';
+import {enableParticipantTransactionAdmission} from
+  '../../src/partition/partition-participant-transaction-request.js';
+import {
+  PARTICIPANT_TRANSACTION_COMMAND,
+  PARTICIPANT_TRANSACTION_STATE,
+} from '../../src/partition/partition-participant-transaction-constants.js';
 import {
   restartOverCommittedCommands,
 } from './partition-rs-raft-restart-fixture.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
+import {
+  beginMessage,
+  commitMessage,
+  identityOf,
+  pick,
+  prepareCommandOf,
+  prepareMessage,
+  queryMessage,
+  send,
+  txMessage,
+} from '../test-helpers/participant-transaction-fixture.js';
 
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
@@ -192,13 +208,14 @@ test(
 );
 
 // ---------------------------------------------------------------------------
-// Property 12: Prepare stages locally; the session's marker follows its commit
-// Consensus persistence never runs inside a user session transaction (F6
-// layer 1): prepare proposes no marker while the session stages on the
-// partition's connection and reports its state as LOCAL_STAGING, and the
-// TRANSACTION_COMMIT marker is proposed only after the SQLite COMMIT. Every
-// observation is read on an independent connection through the rs-raft
-// store's DDL-free committed-entry reader.
+// Property 12: PREPARE is a committed command, acknowledged after it applies
+// Superseded by TX1 design revision 10, section 9.2 (quest
+// replicated-transaction-decision-and-apply): a participant session stages
+// under F6 c' and never holds a SQLite transaction; PREPARE proposes its
+// PARTICIPANT_PREPARE and is acknowledged only after that command applied
+// (W1a), the staged row stays invisible while PREPARED, and the bound COMMIT
+// decision applies it. Every observation is read on an independent
+// connection through the rs-raft store's DDL-free committed-entry reader.
 // Validates: Requirements 1.3, 8.1
 // ---------------------------------------------------------------------------
 function readIndependently(dbPath, read) {
@@ -210,10 +227,10 @@ function readIndependently(dbPath, read) {
   }
 }
 
-function sessionMarkerTypes(dbPath, partitionId, sessionId) {
+function participantCommandTypes(dbPath, partitionId, participantId) {
   return readIndependently(dbPath, (independent) =>
     RaftRsDurableStore.readCommittedEntriesIn(independent, partitionId)
-      .filter((entry) => entry.command?.sessionId === sessionId)
+      .filter((entry) => entry.command?.participantId === participantId)
       .map((entry) => entry.command.type));
 }
 
@@ -223,9 +240,22 @@ function visibleRowIds(dbPath, rowId) {
     .all(rowId).map((row) => row.id));
 }
 
+// A participant transaction on `partition` (its admission enabled), with one
+// staged row.
+async function stagedParticipant(partition, transactionId, row) {
+  const enabled = await enableParticipantTransactionAdmission(partition);
+  assert.equal(enabled.success, true, JSON.stringify(enabled));
+  const tx = identityOf(transactionId, {partitionId: partition.partitionId,
+    sessionId: transactionId});
+  await send(partition, beginMessage(tx));
+  const staged = await send(partition, queryMessage(tx,
+    `INSERT INTO ${TEST_TABLE_NAME} (id, value) VALUES (?, ?)`, [row.id, row.value]));
+  return {tx, staged};
+}
+
 test(
-  'Property 12: prepare stages locally without a marker and the commit ' +
-  'marker follows the SQLite commit',
+  'Property 12: PREPARE is acknowledged only after its committed ' +
+  'PARTICIPANT_PREPARE applies, and the bound COMMIT applies the staged row',
   async (t) => {
     await fc.assert(
       fc.asyncProperty(
@@ -239,60 +269,37 @@ test(
           await partition.initialize();
 
           try {
-            const sessionId = 'prepare-local-staging';
-            const {commitIndex: committedBefore} =
-              partition.raft.readStatus();
-            await partition.beginTransaction(sessionId, 500);
-            await partition.executeQuery(
-              `INSERT INTO ${TEST_TABLE_NAME} (id, value) VALUES ('${rowId}', '${value}')`,
-              [],
-              {sessionId},
-            );
-            const prepareResult = await partition.prepareTransaction(sessionId);
-            const {commitIndex: committedWhileStaging} =
-              partition.raft.readStatus();
-
-            // At the instant the session's SQLite COMMIT has run: are its
-            // rows visible, and has its marker reached the durable log yet?
-            let atCommit = null;
-            const exec = partition.db.exec.bind(partition.db);
-            partition.db.exec = (sql) => {
-              const executed = exec(sql);
-              if (sql === PARTITION_SERVICE_SQL.COMMIT) {
-                atCommit = {
-                  rows: visibleRowIds(dbPath, rowId),
-                  markers: sessionMarkerTypes(
-                    dbPath, partition.partitionId, sessionId),
-                };
-              }
-              return executed;
+            const {tx, staged} = await stagedParticipant(partition, `p12-${rowId}`,
+              {id: rowId, value});
+            const prepared = await send(partition, prepareMessage(tx));
+            const atPrepare = {
+              commands: participantCommandTypes(dbPath, partition.partitionId,
+                tx.participantId),
+              rows: visibleRowIds(dbPath, rowId),
+              connectionHeld: partition.db.inTransaction,
             };
-            const commitResult = await partition.commitTransaction(sessionId);
-            partition.db.exec = exec;
-            const markersAfterCommit = sessionMarkerTypes(
-              dbPath, partition.partitionId, sessionId);
-
+            const committed = await send(partition,
+              commitMessage(tx, prepared?.preparedDigest));
             assert.deepEqual({
-              prepared: prepareResult.success === true &&
-                prepareResult.operation ===
-                  PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION,
-              preparedState: prepareResult.preparedState,
-              committedWhileStaging,
-              committed: commitResult.success === true &&
-                commitResult.committed === true,
-              atCommit,
-              markersAfterCommit,
+              staged: staged?.provisional === true,
+              prepared: pick(prepared, ['success', 'state']),
+              atPrepare,
+              committed: pick(committed, ['success', 'state']),
+              afterCommit: {
+                commands: participantCommandTypes(dbPath, partition.partitionId,
+                  tx.participantId),
+                rows: visibleRowIds(dbPath, rowId),
+              },
             }, {
-              prepared: true,
-              preparedState: PARTITION_TRANSACTION_PREPARED_STATE.LOCAL_STAGING,
-              committedWhileStaging: committedBefore,
-              committed: true,
-              atCommit: {rows: [rowId], markers: []},
-              markersAfterCommit: [
-                PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT,
-              ],
-            }, 'no marker while staging; the commit marker lands only after ' +
-              'the session\'s rows are committed');
+              staged: true,
+              prepared: {success: true, state: PARTICIPANT_TRANSACTION_STATE.PREPARED},
+              atPrepare: {commands: [PARTICIPANT_TRANSACTION_COMMAND.PREPARE], rows: [],
+                connectionHeld: false},
+              committed: {success: true, state: PARTICIPANT_TRANSACTION_STATE.COMMITTED},
+              afterCommit: {commands: [PARTICIPANT_TRANSACTION_COMMAND.PREPARE,
+                PARTICIPANT_TRANSACTION_COMMAND.DECISION], rows: [rowId]},
+            }, 'no row is visible before the decision; each step is a committed ' +
+              'command, acknowledged after it applied');
             return true;
           } finally {
             await partition.shutdown();
@@ -303,9 +310,10 @@ test(
       {numRuns: 10},
     );
 
-    t.pass('prepare stages locally and the commit marker follows the commit');
+    t.pass('PREPARE and COMMIT are committed participant commands');
   },
 );
+
 
 // ---------------------------------------------------------------------------
 // Property 10: Snapshot read visibility
@@ -514,31 +522,26 @@ test(
 
 // Property 13 (leader change) returns with F6 layer 2 (replicated interactive transactions): layer 1 proposes no PREPARE marker to rebuild from.
 // ---------------------------------------------------------------------------
-// Property 13 across a restart: reconstruction reads the committed PREPARE
-// markers from the rs-raft store (the only durable log). The markers are
-// committed through the partition's own operation port, as a leader's
-// replication commits them on a replica that later takes over; the legacy
-// log is never written, so a reconstruction that reads it finds nothing.
+// Property 13 across a restart: the PREPARED row is read, nothing is
+// reconstructed
+// Superseded by TX1 design revision 10, section 9.2 (W12c): a committed
+// PARTICIPANT_PREPARE leaves a durable PREPARED row in
+// _participant_transactions, written with the applied index; after a restart
+// that row, not a scan of the log, answers PREPARED with its digest and log
+// index, and the legacy reconstruction finds no prepared session.
 // Validates: Requirements 8.2, 8.3, 8.4
 // ---------------------------------------------------------------------------
 test(
-  'Property 13 (restart): prepared state is reconstructed from the committed rs-raft log',
+  'Property 13 (restart): a PREPARED participant row survives a restart and ' +
+  'is read, not reconstructed',
   async (t) => {
-    const preparedMarker = {
-      type: PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION,
-      sessionId: 'restart-prepared',
-      epoch: 1_300,
-      writeSet: [`${TEST_TABLE_NAME}:prepared-row`],
-      proposedBy: 'previous-leader',
-      proposedAt: 1_700_000_000_000,
-    };
-    const terminatedMarker = {
-      ...preparedMarker,
-      sessionId: 'restart-rolled-back',
-      writeSet: [`${TEST_TABLE_NAME}:rolled-back-row`],
-    };
+    const partitionId = `tx-partition-restart-${Date.now()}`;
+    const tx = identityOf('p13-restart', {partitionId, sessionId: 'restart-prepared'});
+    const prepare = prepareCommandOf(tx, [{entryId: 'p13-op',
+      sql: `INSERT INTO ${TEST_TABLE_NAME} (id, value) VALUES (?, ?)`,
+      params: ['prepared-row', 'v']}], 0, partitionId);
     const {restarted, committed, dispose} = await restartOverCommittedCommands({
-      partitionId: `tx-partition-restart-${Date.now()}`,
+      partitionId,
       tableId: TEST_TABLE_NAME,
       tableName: TEST_TABLE_NAME,
       schema: {
@@ -547,35 +550,19 @@ test(
           {name: 'value', type: 'TEXT'},
         ],
       },
-    }, [
-      preparedMarker,
-      terminatedMarker,
-      {
-        type: PARTITION_SERVICE_OPERATION.ROLLBACK,
-        sessionId: terminatedMarker.sessionId,
-        transactionEpoch: terminatedMarker.epoch,
-      },
-    ]);
+    }, [prepare]);
     try {
-      const committedPrepare = committed.find((entry) =>
-        entry.command.sessionId === preparedMarker.sessionId);
-      const reconstruction = restarted.reconstructPreparedState();
-      const reconstructed = restarted.preparedTransactions.get(
-        preparedMarker.sessionId);
+      const outcome = await send(restarted, txMessage(
+        PARTITION_SERVICE_OPERATION.TRANSACTION_OUTCOME, tx));
       t.strictSame({
-        preparedTransactionCount: reconstruction.preparedTransactionCount,
-        preparedSessions: [...restarted.preparedTransactions.keys()],
-        writeSet: reconstructed ? [...reconstructed.writeSet] : null,
-        transactionEpoch: reconstructed?.transactionEpoch ?? null,
-        raftLogIndex: reconstructed?.raftLogIndex ?? null,
+        outcome: pick(outcome, ['outcome', 'state', 'prepareIndex', 'preparedDigest']),
+        legacyPrepared: restarted.reconstructPreparedState().preparedTransactionCount,
       }, {
-        preparedTransactionCount: 1,
-        preparedSessions: [committedPrepare.command.sessionId],
-        writeSet: committedPrepare.command.writeSet,
-        transactionEpoch: committedPrepare.command.epoch,
-        raftLogIndex: committedPrepare.index,
-      }, 'the committed PREPARE marker the rs-raft store holds is the ' +
-        'reconstructed prepared state; the rolled-back session is terminal');
+        outcome: {outcome: PARTICIPANT_COMMIT_OUTCOME.UNKNOWN,
+          state: PARTICIPANT_TRANSACTION_STATE.PREPARED,
+          prepareIndex: committed[0].index, preparedDigest: prepare.preparedDigest},
+        legacyPrepared: 0,
+      }, 'the durable row is the prepared authority after a restart');
     } finally {
       await dispose();
     }
@@ -583,11 +570,15 @@ test(
 );
 
 // ---------------------------------------------------------------------------
-// Property 15: Participant prepared-state hold timeout
+// Property 15: a PREPARED participant row is never released by time
+// Superseded by TX1 design revision 10, section 9.2 (W12d): the hold sweep
+// reports a PREPARED row past its window and never terminates it, so the
+// bound COMMIT decision applies after the window (no PREPARE_LOST).
 // Validates: Requirements 9.3
 // ---------------------------------------------------------------------------
 test(
-  'Property 15: prepared-state hold timeout releases prepared state autonomously',
+  'Property 15: the hold sweep never releases a PREPARED participant row; ' +
+  'its bound COMMIT applies after the hold window',
   async (t) => {
     await fc.assert(
       fc.asyncProperty(
@@ -595,61 +586,28 @@ test(
         valueArb,
         async (rowId, value) => {
           const holdTimeoutMs = 5;
-          const partition = new PartitionService(withFoundingStamp({
-            partitionId: `tx-partition-${Date.now()}-${Math.random()}`,
-            tableId: TEST_TABLE_NAME,
-            tableName: TEST_TABLE_NAME,
-            replicaId: 'tx-partition-r1',
-            replicaIds: ['tx-partition-r1'],
-            schema: {
-              columns: [
-                {name: 'id', type: 'TEXT', primaryKey: true},
-                {name: 'value', type: 'TEXT'},
-              ],
-            },
-            dbPath: ':memory:',
-            preparedStateHoldTimeoutMs: holdTimeoutMs,
-          }));
+          const partition = createTransactionPartition({
+            preparedStateHoldTimeoutMs: holdTimeoutMs});
           await partition.initialize();
 
           try {
-            const sessionId = 'prepared-timeout';
-            await partition.beginTransaction(sessionId, 1_200);
-            await partition.executeQuery(
-              `INSERT INTO ${TEST_TABLE_NAME} (id, value) VALUES ('${rowId}', '${value}')`,
-              [],
-              {sessionId},
-            );
-            const prepareResult = await partition.prepareTransaction(sessionId);
-            if (!prepareResult.success) {
-              return false;
-            }
-            const preparedState = partition.preparedTransactions.get(sessionId);
-            if (!preparedState) {
-              return false;
-            }
-
-            const releasedCount = partition.enforcePreparedStateHoldTimeouts(
-              preparedState.preparedAt + holdTimeoutMs + 1,
-            );
-            if (releasedCount !== 1) {
-              return false;
-            }
-            if (partition.preparedTransactions.has(sessionId)) {
-              return false;
-            }
-
-            const commitAfterTimeout = await partition.commitTransaction(sessionId);
-            if (commitAfterTimeout.success !== false ||
-              commitAfterTimeout.error !== PARTITION_SERVICE_ERROR_MSG.PREPARE_LOST) {
-              return false;
-            }
-
+            const {tx} = await stagedParticipant(partition, `p15-${rowId}`,
+              {id: rowId, value});
+            const prepared = await send(partition, prepareMessage(tx));
+            const nowMs = Date.now();
+            const released = [partition.enforcePreparedStateHoldTimeouts(nowMs),
+              partition.enforcePreparedStateHoldTimeouts(nowMs + holdTimeoutMs + 1)];
+            const held = await send(partition, txMessage(
+              PARTITION_SERVICE_OPERATION.TRANSACTION_OUTCOME, tx));
+            const committed = await send(partition,
+              commitMessage(tx, prepared?.preparedDigest));
             const rows = await partition.executeQuery(
-              `SELECT id FROM ${TEST_TABLE_NAME} WHERE id = '${rowId}'`,
-              [],
-            );
-            return rows.rows.length === 0;
+              `SELECT id FROM ${TEST_TABLE_NAME} WHERE id = ?`, [rowId]);
+            return prepared?.state === PARTICIPANT_TRANSACTION_STATE.PREPARED &&
+              released.every((count) => count === 0) &&
+              held?.state === PARTICIPANT_TRANSACTION_STATE.PREPARED &&
+              committed?.state === PARTICIPANT_TRANSACTION_STATE.COMMITTED &&
+              rows.rows.length === 1;
           } finally {
             await partition.shutdown();
           }
@@ -658,6 +616,6 @@ test(
       {numRuns: 10},
     );
 
-    t.pass('prepared hold timeout releases state and subsequent commit returns PREPARE_LOST');
+    t.pass('a PREPARED row is an obligation released only by its decision');
   },
 );

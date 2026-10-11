@@ -65,11 +65,11 @@
 //   ran it as an applied write with no changes (HEAD's executeQuery proposed
 //   every non-SELECT-prefixed read, a CTE read among them; such reads are now
 //   answered as reads).
-// - Residual of the retained-result rule (committedStatementResult): an
-//   upsert whose every row took its DO UPDATE path changed rows without
-//   inserting one, and retains the connection's last insert rowid (connection
-//   state). Reading it would need the insert count, which SQLite does not
-//   report apart from the update count.
+// - The retained-result rule (committedStatementResult): a statement with a
+//   DO UPDATE clause retains and answers a null last insert rowid, even when
+//   some of its rows inserted (SQLite does not report an upsert's inserts
+//   apart from its updates, and an all-update upsert leaves the connection's
+//   value). HEAD retained the connection's value for such an upsert.
 
 // The typed code of every refusal, on the request paths and at the apply (an
 // offending committed statement is recorded STATEMENT_FAILED with it).
@@ -228,6 +228,7 @@ const PARTITION_STATEMENT_CHAR = Object.freeze({
   CLOSE_PAREN: ')',
   COMMA: ',',
   DOT: '.',
+  EQUALS: '=',
   SEMICOLON: ';',
   PLUS: '+',
   QUESTION: '?',
@@ -277,7 +278,8 @@ const PARTITION_STATEMENT_INTEGER_TEXT = Object.freeze({
 const PARTITION_STATEMENT_SHAPE_SQL = Object.freeze({
   TABLE_LIST: 'SELECT wr FROM pragma_table_list(?) ' +
     'WHERE schema = \'main\' AND type = \'table\'',
-  TABLE_INFO: 'SELECT name, pk FROM pragma_table_info(?) ORDER BY cid',
+  TABLE_INFO: 'SELECT name, pk, "notnull" AS notNullFlag ' +
+    'FROM pragma_table_info(?) ORDER BY cid',
   PRIMARY_KEY_INDEX:
     'SELECT COUNT(*) AS count FROM pragma_index_list(?) WHERE origin = \'pk\'',
   MAIN_INDEX_TABLE: 'SELECT tbl_name AS tableName FROM main.sqlite_master ' +

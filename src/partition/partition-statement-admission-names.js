@@ -149,6 +149,60 @@ function markListPositions(tokens, index) {
 }
 
 /**
+ * The assignments of the SET list whose SET is at `setIndex`: for each, its
+ * target tokens (one name, or the names of a row-value target) and the tokens
+ * of its value expression; null when no SET list starts there. The list ends
+ * as setListTargets reads it.
+ * @param {Array<Object>} tokens - The lexed tokens.
+ * @param {number} setIndex - The index of the SET keyword.
+ * @return {Array<{targets: Array<Object>, value: Array<Object>}>|null} The
+ *   assignments.
+ */
+function setListAssignments(tokens, setIndex) {
+  if (tokens[setIndex]?.upper !== KEYWORD.SET) {
+    return null;
+  }
+  const depth = tokens[setIndex].depth;
+  const assignments = [newAssignment()];
+  for (let index = setIndex + 1; index < tokens.length &&
+      !endsSetList(tokens[index], depth); index += 1) {
+    const token = tokens[index];
+    const atDepth = token.depth === depth;
+    if (assignments.at(-1).assigned && atDepth && token.text === CHAR.COMMA) {
+      assignments.push(newAssignment());
+    } else {
+      readAssignmentToken(assignments.at(-1), token, atDepth);
+    }
+  }
+  return assignments.map(({targets, value}) => ({targets, value}));
+}
+
+function newAssignment() {
+  return {targets: [], value: [], assigned: false};
+}
+
+// The SET list's end at its own depth: WHERE, FROM, ON, RETURNING or `;`.
+function endsSetList(token, depth) {
+  return token.depth === depth &&
+    (SET_LIST_ENDS.has(token.upper) || token.text === CHAR.SEMICOLON);
+}
+
+const ROW_VALUE_PUNCTUATION = new Set([CHAR.OPEN_PAREN, CHAR.CLOSE_PAREN, CHAR.COMMA]);
+
+// One token of a SET list, read into the assignment it belongs to: a target
+// name (a row value's parentheses and commas dropped), the `=`, or a value
+// token.
+function readAssignmentToken(current, token, atDepth) {
+  if (current.assigned) {
+    current.value.push(token);
+  } else if (atDepth && token.text === CHAR.EQUALS) {
+    current.assigned = true;
+  } else if (!ROW_VALUE_PUNCTUATION.has(token.text)) {
+    current.targets.push(token);
+  }
+}
+
+/**
  * Read every STRING token in a name position as the identifier it names
  * (token.identifier, ASCII lower-case), as SQLite does.
  * @param {{tokens: Array<Object>}} lexed - The lexed statement (mutated).
@@ -165,8 +219,12 @@ function resolveNamePositions(lexed) {
   return lexed;
 }
 
-// The index of the verb of a DML statement (its head, or a WITH statement's
-// first top-level verb), or -1 when the statement is not DML.
+/**
+ * The index of the verb of a DML statement (its head, or a WITH statement's
+ * first top-level verb), or -1 when the statement is not DML.
+ * @param {{head: string, tokens: Array<Object>}} lexed - The lexed statement.
+ * @return {number} The verb's token index, or -1.
+ */
 function dmlVerbIndex(lexed) {
   if (lexed.head !== KEYWORD.WITH) {
     return DML_VERBS.has(lexed.head) ? 0 : -1;
@@ -240,9 +298,11 @@ function hasRollbackResolution(tokens) {
 }
 
 export {
+  dmlVerbIndex,
   hasRollbackResolution,
   namesRefusedFunction,
   resolveNamePositions,
+  setListAssignments,
   setListTargets,
   writesForeignTable,
 };

@@ -17,8 +17,16 @@
 //   be below 2^62 before an allocating statement (legacy state) and after it.
 //   Without R1/R2 refusals an allocating statement only adds rows, so its
 //   final maximum bounds every intermediate one.
+// The session path (the staging classifier, partition-transaction-
+// determinism.js) asks the stricter forms: R1 refuses every alias token, and
+// R2 requires every primary-key column named and an INTEGER PRIMARY KEY's
+// every value an explicit integer in [-2^62, 2^62).
 import {asciiLower} from './partition-statement-admission-lexer.js';
-import {setListTargets} from './partition-statement-admission-names.js';
+import {
+  dmlVerbIndex,
+  setListAssignments,
+  setListTargets,
+} from './partition-statement-admission-names.js';
 import {
   PARTITION_ROWID_ALIASES as ROWID_ALIASES,
   PARTITION_ROWID_LIMIT as ROWID_LIMIT,
@@ -33,7 +41,8 @@ import {
 // (prepared once per connection), fresh for every admitted statement ---
 
 const ABSENT_SHAPE = Object.freeze({exists: false, withoutRowid: false,
-  columns: Object.freeze([]), integerPrimaryKey: null, maxRowid: null});
+  columns: Object.freeze([]), primaryKey: Object.freeze([]),
+  notNull: Object.freeze([]), integerPrimaryKey: null, maxRowid: null});
 const statementsByConnection = new WeakMap();
 
 function quoteIdentifier(name) {
@@ -81,7 +90,8 @@ function aliasKeyColumn(statements, tableName, keys) {
 /**
  * The shape of a main-database table on a connection, read now: whether it
  * exists, is a WITHOUT ROWID table, its columns (ASCII lower-case,
- * declaration order), its INTEGER PRIMARY KEY alias column (or null), and its
+ * declaration order), its primary-key columns (in key order), its NOT NULL
+ * columns, its INTEGER PRIMARY KEY alias column (or null), and its
  * maximum-rowid read (null without a rowid, or when a column shadows each of
  * the three alias names).
  * @param {Object} db - The partition's connection.
@@ -102,10 +112,15 @@ function readTableShape(db, tableName) {
   const names = columns.map((column) => asciiLower(column.name));
   const rowidName = withoutRowid ? null :
     ROWID_ALIASES.find((alias) => !names.includes(alias)) ?? null;
+  const keyColumns = columns.filter((column) => column.pk > 0);
   return Object.freeze({
     exists: true,
     withoutRowid,
     columns: Object.freeze(names),
+    primaryKey: Object.freeze([...keyColumns].sort((left, right) => left.pk - right.pk)
+      .map((column) => asciiLower(column.name))),
+    notNull: Object.freeze(columns.filter((column) => column.notNullFlag === 1)
+      .map((column) => asciiLower(column.name))),
     integerPrimaryKey: withoutRowid ? null : aliasKeyColumn(statements, tableName,
       columns.filter((column) => column.pk > 0)),
     maxRowid: rowidName === null ? null :
@@ -176,6 +191,15 @@ function topLevelWhereRegion(tokens) {
 }
 
 /**
+ * R1 on the session path: whether the statement carries any alias token.
+ * @param {{tokens: Array<Object>}} lexed - The lexed write.
+ * @return {boolean} Whether R1 refuses it in a session.
+ */
+function hasRowidAliasToken(lexed) {
+  return lexed.tokens.some((_token, index) => isAliasToken(lexed.tokens, index));
+}
+
+/**
  * R1 on the ordinary path: whether the statement carries an alias token
  * outside an UPDATE's or DELETE's top-level WHERE clause.
  * @param {{head: string, tokens: Array<Object>}} lexed - The lexed write.
@@ -204,6 +228,16 @@ function doUpdateStarts(tokens) {
     }
   });
   return starts;
+}
+
+/**
+ * Whether a statement carries an upsert's DO UPDATE clause (any `DO UPDATE`
+ * token pair): its changed rows may be updates, not inserts.
+ * @param {Array<Object>} tokens - The lexed statement's tokens.
+ * @return {boolean} Whether some DO UPDATE clause is present.
+ */
+function hasDoUpdateClause(tokens) {
+  return doUpdateStarts(tokens).length > 0;
 }
 
 // The index of the `)` closing the `(` at `open` (paired by the lexer).
@@ -413,7 +447,7 @@ const INSERT_KEYWORDS = new Set([KEYWORD.INSERT, KEYWORD.REPLACE]);
 function refusesKeyAllocation(db, lexed, params, ownTableName) {
   const {tokens} = lexed;
   const replace = hasReplaceResolution(tokens);
-  if (!replace && doUpdateStarts(tokens).length === 0) {
+  if (!replace && !hasDoUpdateClause(tokens)) {
     return false;
   }
   const start = tokens.findIndex((token) => token.depth === 0 &&
@@ -429,10 +463,129 @@ function refusesKeyAllocation(db, lexed, params, ownTableName) {
   return lexed.head === KEYWORD.WITH || canAllocateKey(insert, shape, tokens, params);
 }
 
+// --- R2 in a session: every primary-key column named, an INTEGER PRIMARY
+// KEY's every value an explicit integer in [-2^62, 2^62) ---
+
+const SESSION_KEY_MIN = -ROWID_LIMIT.CEILING;
+
+// The integer a bound value names exactly: an integer number, or canonical
+// decimal text (revision 10, AT); null otherwise.
+function integerValueOf(value) {
+  if (typeof value === 'number') {
+    return Number.isInteger(value) ? BigInt(value) : null;
+  }
+  return typeof value === 'string' && INTEGER_TEXT.CANONICAL_DECIMAL.test(value) ?
+    BigInt(value) : null;
+}
+
+// The integer an element names: a plain-digit literal with at most one sign,
+// or a plain `?` param bound to an integer value; null otherwise.
+function elementIntegerOf(element, positional) {
+  if (element === undefined) {
+    return null;
+  }
+  if (element.length === 1 && element[0].type === TOKEN.PARAM) {
+    const bound = positional.get(element[0]);
+    return bound === undefined ? null : integerValueOf(bound.value);
+  }
+  const signed = element.length === 2 && isSign(element[0]);
+  const digits = signed ? element[1] : element[0];
+  if (element.length !== (signed ? 2 : 1) || digits.type !== TOKEN.NUMBER ||
+      !INTEGER_TEXT.LITERAL_DIGITS.test(digits.text)) {
+    return null;
+  }
+  const magnitude = BigInt(digits.text);
+  return element[0].text === CHAR.DASH ? -magnitude : magnitude;
+}
+
+function isSessionKey(element, positional) {
+  const key = elementIntegerOf(element, positional);
+  return key !== null && key >= SESSION_KEY_MIN && key < ROWID_LIMIT.CEILING;
+}
+
+// Whether some assignment of the SET list at `setIndex` gives the key a value
+// that is not one explicit in-range integer (a row-value target naming the
+// key included).
+function assignsSessionKeyBadly(tokens, setIndex, keyColumn, positional) {
+  return (setListAssignments(tokens, setIndex) ?? []).some(({targets, value}) =>
+    targets.some((target) => target.identifier === keyColumn) &&
+    (targets.length !== 1 || !isSessionKey(value, positional)));
+}
+
+// Every SET list of the statement whose assignments can rekey: an UPDATE's
+// top-level SET and each upsert's DO UPDATE SET.
+function setListStarts(tokens) {
+  return tokens.flatMap((token, index) => token.upper === KEYWORD.SET &&
+    (token.depth === 0 || tokens[index - 1]?.upper === KEYWORD.UPDATE) ? [index] : []);
+}
+
+/**
+ * Whether the session key rule refuses every INSERT into a table (the
+ * classifier's `implicit_key` layer, whatever the statement): the table
+ * declares no primary key, so every row's rowid would be allocated
+ * implicitly.
+ * @param {{primaryKey: Array<string>}} shape - The table's shape.
+ * @return {boolean} Whether no session INSERT into it is admitted.
+ */
+function refusesEverySessionInsert(shape) {
+  return shape.primaryKey.length === 0;
+}
+
+function refusesSessionInsertKey(shape, tokens, start, positional) {
+  const insert = parseInsert(tokens, start);
+  if (insert === null || insert.columns === null || refusesEverySessionInsert(shape) ||
+      !shape.primaryKey.every((key) => insert.columns.includes(key))) {
+    return true;
+  }
+  if (shape.integerPrimaryKey === null) {
+    return false;
+  }
+  if (insert.rows === null || insert.rows.length === 0) {
+    return true;
+  }
+  const keyPosition = insert.columns.lastIndexOf(shape.integerPrimaryKey);
+  return insert.rows.some((row) => !isSessionKey(row[keyPosition], positional));
+}
+
+/**
+ * R2 on the session path (design 3.3; the classifier's `implicit_key`
+ * layer): an INSERT or REPLACE must name every primary-key column in a
+ * column list (a table without a declared key refuses every insert), and on
+ * an INTEGER PRIMARY KEY table every value it gives the key - in VALUES rows,
+ * an UPDATE's SET and an upsert's DO UPDATE SET alike - must be an explicit
+ * integer in [-2^62, 2^62): a NULL, an omitted key, an expression, a SELECT
+ * source or a non-canonical string param refuses.
+ * @param {Object} db - The partition's connection.
+ * @param {{head: string, tokens: Array<Object>}} lexed - The lexed write.
+ * @param {Array} params - The bound params (JSON scalars).
+ * @param {string|null} ownTableName - The partition's own table (the only
+ *   table a session write may target).
+ * @return {boolean} Whether the key rule refuses the write.
+ */
+function refusesSessionKey(db, lexed, params, ownTableName) {
+  const {tokens} = lexed;
+  const verb = dmlVerbIndex(lexed);
+  if (verb < 0) {
+    return true;
+  }
+  const shape = readTableShape(db, ownTableName);
+  const positional = positionalParams(tokens, Array.isArray(params) ? params : []);
+  if (INSERT_KEYWORDS.has(tokens[verb].upper) &&
+      refusesSessionInsertKey(shape, tokens, verb, positional)) {
+    return true;
+  }
+  return shape.integerPrimaryKey !== null && setListStarts(tokens).some((setIndex) =>
+    assignsSessionKeyBadly(tokens, setIndex, shape.integerPrimaryKey, positional));
+}
+
 export {
+  hasDoUpdateClause,
+  hasRowidAliasToken,
   hasUnadmittedRowidAlias,
   isAtRowidCeiling,
   readIndexTable,
   readTableShape,
+  refusesEverySessionInsert,
   refusesKeyAllocation,
+  refusesSessionKey,
 };

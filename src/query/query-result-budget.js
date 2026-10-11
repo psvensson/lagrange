@@ -17,6 +17,12 @@ const QUERY_RESULT_BUDGET_ERROR_MESSAGE = Object.freeze({
   WALL_TIME_EXHAUSTED: 'Query result wall-time budget exhausted',
 });
 const QUERY_RESULT_BUDGET_ERROR_NAME = 'QueryResultBudgetError';
+// The request fields that carry a read's result budget to a partition.
+const QUERY_RESULT_REQUEST_FIELD = Object.freeze({
+  DEADLINE_MS: 'resultDeadlineMs',
+  MAX_BYTES: 'resultMaxBytes',
+  MAX_ROWS: 'resultMaxRows',
+});
 
 class QueryResultBudgetError extends Error {
   constructor(code, message, options = {}) {
@@ -103,4 +109,5 @@ function collectBoundedSqliteRows(statement, params = [], options = {}) {
 export {
   collectBoundedSqliteRows,
   QUERY_RESULT_BUDGET_ERROR_CODE,
+  QUERY_RESULT_REQUEST_FIELD,
 };

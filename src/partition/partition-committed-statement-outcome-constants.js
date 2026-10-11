@@ -113,29 +113,35 @@ const PARTITION_DETERMINISTIC_STATEMENT_BINDING_ERRORS = Object.freeze(new Set([
 
 /**
  * The result an applied committed statement retains in its outcome row and
- * answers with: its affected-row count, and its last insert rowid only when
- * the statement inserted rows - it is of an inserting kind (an INSERT or
- * REPLACE head, a WITH-headed one included; UPSERT commands render as one)
- * and changed at least one row. The connection's last insert rowid is
+ * answers with, under the nullable insert-result contract (owner ruling
+ * 2026-10-11; partition-committed-statement-outcome.js): its affected-row
+ * count, and its last insert rowid only when the statement set it - an
+ * INSERT or REPLACE (a WITH-headed one included; UPSERT commands render as
+ * one) without a DO UPDATE clause that changed at least one row, so every
+ * changed row was inserted by it. The connection's last insert rowid is
  * connection state: after a statement that inserted nothing (an UPDATE, a
  * DELETE, index DDL, an ALTER, an INSERT whose every row was ignored, a DO
  * NOTHING, an empty SELECT source) it is whatever last inserted on the
  * connection - an rs-raft log append on the shared connection, an
- * unreplicated local write, a rolled-back allocation - which differs between
- * replicas; such a statement retains and answers null, so the row and the
- * answer are the same on every replica. Residual, with no sender in src: an
- * upsert whose every row took its DO UPDATE path changed rows without
- * inserting one, and retains the connection's value.
+ * unreplicated local write, a rolled-back allocation (a c' validation, the
+ * self-check's ceiling plant) - which differs between replicas. An upsert's
+ * changed rows may be updates only, which leave it there too, and SQLite
+ * does not report its inserts apart from its updates; so every statement
+ * with a DO UPDATE clause (a mixed batch of inserted and updated rows
+ * included), and every statement that inserted nothing, retains and answers
+ * null, and the row and the answer are the same on every replica (revision
+ * 10, 0.0.14).
  * @param {{changes: number, lastInsertRowid: *}} info - The statement's run
  *   info.
- * @param {{insertsRows: boolean}} kind - Whether the statement is of an
- *   inserting kind (read from its head by the statement-admission owner).
+ * @param {{retainsInsertRowid: boolean}} kind - Whether the statement is an
+ *   INSERT or REPLACE without a DO UPDATE clause (read from its text by the
+ *   statement-admission owner).
  * @return {{changes: number, lastInsertRowid: *}} The retained result.
  */
-function committedStatementResult(info, {insertsRows}) {
+function committedStatementResult(info, {retainsInsertRowid}) {
   return {
     changes: info.changes,
-    lastInsertRowid: insertsRows === true && info.changes > 0 ?
+    lastInsertRowid: retainsInsertRowid === true && info.changes > 0 ?
       info.lastInsertRowid : null,
   };
 }

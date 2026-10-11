@@ -34,14 +34,10 @@ import {advancePartitionWriteGeneration, isPartitionReserved} from
   './partition-participant-transaction-store.js';
 import {applyCommittedTransactionCommand, settleReservedCommittedStatement} from
   './partition-participant-transaction-apply.js';
-import {refuseParticipantSessionQuery, routeParticipantTransactionRequest} from
+import {answerParticipantSessionQuery, routeParticipantTransactionRequest} from
   './partition-participant-transaction-request.js';
-
-const QUERY_RESULT_REQUEST_FIELD = Object.freeze({
-  DEADLINE_MS: 'resultDeadlineMs',
-  MAX_BYTES: 'resultMaxBytes',
-  MAX_ROWS: 'resultMaxRows',
-});
+import {QUERY_RESULT_REQUEST_FIELD} from '../query/query-result-budget.js';
+import {findParticipantSession} from './partition-participant-transaction-session.js';
 const READ_AUTHORITY_WITNESS_STATE = Object.freeze({
   NOT_APPLICABLE: 'not_applicable',
   OBSERVED: 'observed',
@@ -324,10 +320,10 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
     }
     const sessionId =
       payload.sessionId || payload.operation?.sessionId || null;
+    // An open session finishes: a legacy one, or a participant staging one.
     return {
-      allowed: Boolean(
-        sessionId && this.resolveOpenTransactionState(sessionId),
-      ),
+      allowed: Boolean((sessionId && this.resolveOpenTransactionState(sessionId)) ||
+        findParticipantSession(this, payload)),
       servingRequest,
     };
   }
@@ -403,8 +399,8 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       Math.floor(payload.transactionEpoch) :
       null;
     try {
-      // A request carrying a transactionId is the participant protocol's, and
-      // no legacy BEGIN stages while a participant transaction is in flight.
+      // A request carrying a transactionId is the participant protocol's; the
+      // L6 fences keep a sessionId-only request off a participant's partition.
       const result = await (routeParticipantTransactionRequest(this, payload) ??
         this.executeTransactionControl(operation, sessionId, transactionEpoch));
       if (!result) {
@@ -731,8 +727,8 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         partitionId: this.partitionId,
       };
     }
-    const sealedSession = refuseParticipantSessionQuery(this, payload);
-    if (sealedSession !== null) return sealedSession;
+    const participantAnswer = answerParticipantSessionQuery(this, payload);
+    if (participantAnswer !== null) return participantAnswer;
     const readAuthorityWitness =
       this.buildRemoteReadAuthorityWitness(isWriteOperation);
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.HANDLING_REMOTE_QUERY, {
