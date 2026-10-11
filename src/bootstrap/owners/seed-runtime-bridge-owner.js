@@ -19,6 +19,9 @@ import {
 } from '../../cache/cache-constants.js';
 import {resolveHostedNodeClock} from
   '../shared/hosted-replica-authorities.js';
+import {SQLQueryEngine} from '../../query/sql-query-engine.js';
+import {CONTROL_PLANE_READINESS_DIMENSION} from
+  '../../control-plane/control-plane-readiness-constants.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 
@@ -31,6 +34,36 @@ class SeedRuntimeBridgeOwner {
   constructor(options = {}) {
     this.delegates = options.delegates || {};
     this.compatibilityPhase = options.compatibilityPhase || null;
+    this.sqlQueryEngine = null;
+    this.bootstrapTopologySnapshotOwner = null;
+  }
+
+  attachBootstrapTopologySnapshotOwner(owner) {
+    this.bootstrapTopologySnapshotOwner = owner;
+    this.sqlQueryEngine?.queryExecutor.setBootstrapTopologySnapshotOwner(owner);
+  }
+
+  acquireSqlQueryEngine() {
+    if (this.sqlQueryEngine !== null) return this.sqlQueryEngine;
+    const d = this.delegates;
+    const cdcIntegrationService = this.ensureBootstrapCdcIntegrationService();
+    const engine = new SQLQueryEngine({
+      nowFn: resolveHostedNodeClock(d), systemCache: d.getSystemTableCache(),
+      messageRouter: d.getMessageRouter(), nodeId: d.getNodeId(),
+      cdcIntegrationService, partitionServicesProvider: () => d.getPartitionServices(),
+      bootstrapTopologySnapshotOwner: this.bootstrapTopologySnapshotOwner,
+      rebalanceCoordinator: d.getRebalanceCoordinator(),
+      controlPlaneReadinessService:
+        d.getRebalanceCoordinator()?.controlPlaneReadinessService || null,
+      defaultRoutingReadinessDimension:
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+      migrationAutoWire: false, autoStartDistributedTransactionRecovery: false,
+      unrefRetryDelayTimers: true,
+    });
+    this.sqlQueryEngine = engine;
+    d.setSqlQueryEngine?.(engine);
+    cdcIntegrationService.setSqlQueryEngine(engine);
+    return engine;
   }
 
   getCompatibilityOverride(methodName) {
