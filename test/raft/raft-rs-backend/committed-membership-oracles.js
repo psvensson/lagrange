@@ -22,6 +22,10 @@ import {fileURLToPath} from 'node:url';
 
 import Database from 'better-sqlite3';
 
+import {COMMITTED_MEMBERSHIP_STAMP_KIND} from
+  '../../../src/raft/raft-committed-membership-constants.js';
+import {raftRsConfStateKey} from
+  '../../../src/raft/raft-rs-conf-state-key.js';
 import {RAFT_RS_TABLE} from
   '../../../src/raft/raft-rs-durable-store-constants.js';
 import {instantiateRaftRsCore} from './raw-raft-rs-test-core.js';
@@ -232,9 +236,45 @@ function foldAt(fold, index) {
   return {voters: at.voters, learners: at.learners};
 }
 
+/**
+ * The COMMITTED stamp a correct leader answers, built from the oracles
+ * alone: the voters of the fold of its durable log over the TEST'S genesis
+ * founders at its durable applied index (O-a), that applied state's indexes
+ * and its durable identity reservations - a first-term leader whose commit
+ * index is its applied index, no learners and no transition in flight.
+ * @param {string} dbFile - The leader's database file.
+ * @param {string} groupId - The group.
+ * @param {Object} answer - {genesisPeerIds, leaderId}: the founders' raft
+ *   peer ids as the test knows them, and the leader's replica id.
+ * @return {Object} The stamp (the answer's contract shape).
+ */
+function committedOracleStamp(dbFile, groupId, {genesisPeerIds, leaderId}) {
+  const applied = durableAppliedState(dbFile, groupId);
+  const voters = foldAt(logFold(dbFile, groupId, genesisPeerIds),
+    applied.appliedIndex).voters;
+  const reserved = reservedIdentities(dbFile);
+  return {
+    kind: COMMITTED_MEMBERSHIP_STAMP_KIND.COMMITTED,
+    voters,
+    votersOutgoing: [],
+    learners: [],
+    learnersNext: [],
+    appliedIndex: applied.appliedIndex,
+    configurationKey: raftRsConfStateKey({voters}),
+    membershipGenerationIndex: applied.membershipGenerationIndex,
+    commitIndex: applied.appliedIndex,
+    term: 1,
+    leaderId,
+    gateOpen: true,
+    identities: Object.fromEntries(voters.map((peerId) =>
+      [peerId, reserved.get(peerId)])),
+  };
+}
+
 export {
   bindingWireNumbers,
   bootstrapFold,
+  committedOracleStamp,
   durableAppliedState,
   durableHardState,
   durableLog,

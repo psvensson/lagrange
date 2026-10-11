@@ -226,8 +226,11 @@ const RATCHET_TARGETS = [
     // surface to the measured 697 groups / 26385 lines.
     // Reservation's shared dispatch/restart witnesses tighten the line count
     // to the measured 26369 without changing the exact 697 groups.
-    baselineCloneGroupCount: 697,
-    baselineDuplicatedLineCount: 26369,
+    // 2026-10-11: tightened 697/26369 -> 696/26345 on the checker's hint
+    // after the COMMITTED oracle stamp builder and the lost-first-answer /
+    // native-r2-election helpers each moved into one shared test fixture.
+    baselineCloneGroupCount: 696,
+    baselineDuplicatedLineCount: 26345,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },
