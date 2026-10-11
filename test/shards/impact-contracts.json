@@ -3,6 +3,43 @@
   "id": "impact-contracts",
   "description": "Semantic contract edges for the impact proof-cone selector (developer-velocity epic V4a). Production paths declare the contracts they own; tests declare the contracts they exercise. Changing a contract-owning path selects every test claiming that contract. Unknown or undeclared contracts fail closed. This manifest is EXPLICIT and hand-curated; static dependency and coverage relationships are generated and live elsewhere. Every owner/test path must exist in the tree (directory prefix or file); dead edges are a contract defect.",
   "contracts": {
+    "distributed-transaction-coordinator-participant-protocol": {
+      "description": "The query coordinator and partition participant share one TX1 revision-10 identity, manifest, prepare evidence, immutable decision and typed-answer protocol. Every coordinator-managed transaction prepares before one decision; a recorded COMMIT only moves forward, and recovery re-drives the exact recorded decision.",
+      "owners": [
+        "src/query/distributed/distributed-transaction-",
+        "src/query/sql-query-engine-participant-wire.js",
+        "src/query/sql-query-engine-transaction-persistence-methods.js",
+        "src/query/query-executor-partition-request-builders.js",
+        "src/query/sql-query-engine-write-execution.js",
+        "src/bootstrap/system-table-workflow-schema-definitions.js",
+        "src/partition/partition-participant-transaction-",
+        "src/query/sql-query-engine-select-execution.js",
+        "src/query/query-executor-base.js",
+        "src/query/query-executor-join-execution.js"
+      ],
+      "tests": [
+        "test/query/partition-transaction-seam-falsifiers.test.js",
+        "test/query/transaction-coordinator-participant-protocol.test.js",
+        "test/integration/transaction-coordinator-restart.integration.test.js",
+        "test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js",
+        "test/partition/partition-transaction-replicated-apply-v3.test.js",
+        "test/query/transaction-recovery-ownership.test.js",
+        "test/query/transaction-session-reads.test.js",
+        "test/partition/participant-decision-canonical-record.test.js"
+      ]
+    },
+    "transaction-workflow-recovery-ownership": {
+      "description": "The workflow registry retains restart obligations by immutable workflow ID and preserves an existing live owner binding. Query request and recovery work share one session FIFO and complete only their exact transaction identity.",
+      "owners": [
+        "src/workflow/durable-workflow-coordinator.js",
+        "src/query/distributed/distributed-transaction-"
+      ],
+      "tests": [
+        "test/query/transaction-recovery-ownership.test.js",
+        "test/workflow/durable-workflow-coordinator.test.js",
+        "test/workflow/durable-workflow-recovery-identity.test.js"
+      ]
+    },
     "wit-world-interface": {
       "description": "The WIT world/component interface shape; every WASM service consumer depends on it.",
       "owners": [
@@ -893,6 +930,65 @@
     }
   },
   "coupledPairs": {
+    "distributed-transaction-coordinator-participant-protocol": {
+      "description": "Coordinator decisions are bound to the PREPARE evidence participants answer, and participants apply only that bound decision and return exact durable outcomes.",
+      "endpoints": [
+        {
+          "id": "coordinator-decision-and-wire",
+          "owners": [
+            "src/query/distributed/distributed-transaction-",
+            "src/query/sql-query-engine-participant-wire.js",
+            "src/query/sql-query-engine-transaction-persistence-methods.js",
+            "src/query/query-executor-partition-request-builders.js",
+            "src/query/sql-query-engine-write-execution.js",
+            "src/bootstrap/system-table-workflow-schema-definitions.js",
+            "src/query/sql-query-engine-select-execution.js",
+            "src/query/query-executor-base.js",
+            "src/query/query-executor-join-execution.js"
+          ]
+        },
+        {
+          "id": "participant-request-and-apply",
+          "owners": [
+            "src/partition/partition-participant-transaction-"
+          ]
+        }
+      ],
+      "contract": "distributed-transaction-coordinator-participant-protocol",
+      "witnessTests": [
+        "test/query/partition-transaction-seam-falsifiers.test.js",
+        "test/query/transaction-coordinator-participant-protocol.test.js",
+        "test/integration/transaction-coordinator-restart.integration.test.js",
+        "test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js",
+        "test/partition/partition-transaction-replicated-apply-v3.test.js",
+        "test/query/transaction-recovery-ownership.test.js",
+        "test/query/transaction-session-reads.test.js",
+        "test/partition/participant-decision-canonical-record.test.js"
+      ]
+    },
+    "transaction-workflow-recovery-ownership": {
+      "description": "Workflow restart ownership and query recovery preserve the same immutable workflow and owner identity across process loss.",
+      "endpoints": [
+        {
+          "id": "workflow-registry",
+          "owners": [
+            "src/workflow/durable-workflow-coordinator.js"
+          ]
+        },
+        {
+          "id": "query-request-and-recovery",
+          "owners": [
+            "src/query/distributed/distributed-transaction-"
+          ]
+        }
+      ],
+      "contract": "transaction-workflow-recovery-ownership",
+      "witnessTests": [
+        "test/query/transaction-recovery-ownership.test.js",
+        "test/workflow/durable-workflow-coordinator.test.js",
+        "test/workflow/durable-workflow-recovery-identity.test.js"
+      ]
+    },
     "seed-registration-election-scheduling": {
       "description": "Registration owns the exact direct-write dependency cut and one wait budget; partition scheduling prioritizes that cut and releases all other elections without restating it.",
       "endpoints": [
