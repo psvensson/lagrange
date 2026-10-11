@@ -11,16 +11,23 @@ import {
 } from './pipeline/startup-pipeline-runner.js';
 import {createSeedStartupPlan} from './pipeline/seed-startup-plan.js';
 import {
+  attachSqlRuntimeToStartupOwner,
   activateSteadyStateRuntimeHandoff,
 } from './shared/startup-sql-runtime-handoff.js';
 import {
   WORK_CLASS,
 } from '../runtime/work-class-scheduler.js';
+import {runtimeBuildProvenance, RUNTIME_BUILD_STATE} from
+  '../diagnostics/runtime-build-provenance.js';
+import {requestParticipantRelease} from '../node/participant-release-client.js';
+import {PARTICIPANT_CUTOVER_BOUND, PARTICIPANT_CUTOVER_OUTCOME,
+  PARTICIPANT_RELEASE_TRIGGER} from
+  '../partition/partition-participant-transaction-cutover-constants.js';
 import {
   NodeState,
 } from '../node/node-lifecycle-state-machine.js';
 import {BOOTSTRAP_SUB_PHASE} from '../node/node-constants.js';
-import {NUM} from '../constants/index.js';
+import {NUM, TABLES} from '../constants/index.js';
 
 const BootstrapPhase = BOOTSTRAP_PHASE;
 const BootstrapEvent = BOOTSTRAP_EVENT;
@@ -196,6 +203,15 @@ function createBootstrapServiceSeedWorkflowMethods() {
         }
         this.phase = BootstrapPhase.COMPLETE;
         this.clearNodeReadyRebalanceState();
+        const sqlQueryEngine = this.seedRuntimeBridgeOwner.acquireSqlQueryEngine();
+        attachSqlRuntimeToStartupOwner({
+          owner: this,
+          sqlQueryEngine,
+          systemTableCache: this.getSystemTableCache(),
+          cacheMutationTarget: this.getSystemTableCache(),
+          messageRouter: this.messageRouter,
+          partitionServicesProvider: () => this.partitionServices,
+        });
         activateSteadyStateRuntimeHandoff({
           owner: this.runtimeHandoffOwner,
           activateControlPlaneBackgroundWriters: true,
@@ -234,6 +250,80 @@ function createBootstrapServiceSeedWorkflowMethods() {
         transport: this.transport,
         messageRouter: this.messageRouter,
       };
+    },
+    async releaseSeedParticipantCohorts(deadlineAtMs) {
+      const build = this.seedStartupInvocation;
+      if (!build || build.deadlineAtMs !== deadlineAtMs) {
+        throw new Error('Seed participant release invocation unavailable');
+      }
+      const services = [...this.partitionServices.values()].sort((left, right) => {
+        const leftControl = left.tableName === TABLES.SQL_TRANSACTIONS ? 0 : 1;
+        const rightControl = right.tableName === TABLES.SQL_TRANSACTIONS ? 0 : 1;
+        return leftControl - rightControl || left.partitionId.localeCompare(right.partitionId);
+      });
+      const timeSource = this.nodeService.getTimeSource();
+      for (const service of services) {
+        const authorization = this.replicaHandler
+          .participantReleaseAuthorizationOwner.authorizeFreshSeed({
+            partitionId: service.partitionId,
+            targetBuildDigest: build.targetBuildDigest,
+            seedAuthorization: this.seedStartupAuthorization,
+            nodeId: this.nodeId,
+            bootIncarnation: this.bootIncarnation,
+            deadlineAtMs,
+          });
+        if (authorization === null) {
+          throw new Error('Seed participant release authority unavailable');
+        }
+        let answer = null;
+        let firstRefusal = null;
+        do {
+          answer = await requestParticipantRelease(this.replicaHandler, {
+            partitionId: service.partitionId,
+            targetBuildDigest: build.targetBuildDigest,
+            trigger: PARTICIPANT_RELEASE_TRIGGER.FRESH_SEED,
+            deadlineAtMs,
+            authorization,
+          });
+          if (answer.outcome === PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER) break;
+          firstRefusal ||= answer;
+          this.seedFirstParticipantReleaseRefusal ||= answer;
+          const retryAfterMs = answer.outcome ===
+              PARTICIPANT_CUTOVER_OUTCOME.NOT_LEADER ?
+            PARTICIPANT_CUTOVER_BOUND.PAUSE_RETRY_AFTER_MS :
+            answer.retryAfterMs;
+          if (!Number.isSafeInteger(retryAfterMs) || retryAfterMs < 0 ||
+              timeSource.now() + retryAfterMs > deadlineAtMs) break;
+          await this.sleep(Math.min(retryAfterMs,
+            Math.max(0, deadlineAtMs - timeSource.now())));
+        } while (timeSource.now() <= deadlineAtMs);
+        if (answer?.outcome !== PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER) {
+          const error = new Error('Seed participant release failed: ' +
+            JSON.stringify({partitionId: service.partitionId,
+              deadlineAtMs, now: timeSource.now(),
+              firstRefusal: this.seedFirstParticipantReleaseRefusal || firstRefusal,
+              answer}));
+          error.firstRefusal = this.seedFirstParticipantReleaseRefusal;
+          error.code = 'STARTUP_CHECKPOINT_HELD';
+          error.retryable = true;
+          error.retryAfterMs = PARTICIPANT_CUTOVER_BOUND.PAUSE_RETRY_AFTER_MS;
+          throw error;
+        }
+      }
+    },
+    async prepareFreshSeedActivationReadCut(sqlQueryEngine) {
+      if (this.seedParticipantActivationReadCutReady === true) return;
+      const systemTableCache = this.getSystemTableCache();
+      const cdcIntegrationService = this.seedRuntimeBridgeOwner
+        .ensureBootstrapCdcIntegrationService();
+      this.seedRuntimeBridgeOwner.ensureLatencyTopologyOwners();
+      for (const partition of this.partitionServices.values()) {
+        partition.systemTableCache = systemTableCache;
+        partition.cdcIntegrationService = cdcIntegrationService;
+        partition.sqlQueryEngine = sqlQueryEngine;
+      }
+      await this.seedCacheHydrationPhase.subscribeToInitialSystemTableCDC();
+      this.seedParticipantActivationReadCutReady = true;
     },
     buildSeedCheckpointSteps(startupPipelineRunner, seedPlan) {
       const phases = Array.isArray(seedPlan?.phases) ? seedPlan.phases : [];
@@ -292,6 +382,29 @@ function createBootstrapServiceSeedWorkflowMethods() {
                 .ensureBootstrapCdcIntegrationService();
               this.initializeReplicaStateMachine();
             }
+            const sqlQueryEngine = this.seedRuntimeBridgeOwner.acquireSqlQueryEngine();
+            this.acquireReplicaHandler();
+            if (this.seedStartupInvocation === null) {
+              const build = await runtimeBuildProvenance();
+              if (build.state !== RUNTIME_BUILD_STATE.MEASURED) {
+                throw new Error(`Seed participant release build unavailable: ${build.reason}`);
+              }
+              const prepared = await this.seedStartupSessionStore
+                .prepareAuthorizedInvocation({
+                  bootIncarnation: this.bootIncarnation,
+                  dataDirectoryProcessOwner: this.dataDirectoryProcessOwner,
+                  nodeId: this.nodeId,
+                  planVersion: SEED_WORKFLOW_PLAN_VERSION,
+                  targetBuildDigest: build.digest,
+                  timeoutMs: this.config.leadershipWaitTimeoutMs,
+                });
+              this.seedStartupAuthorization = prepared.authorization;
+              this.seedStartupInvocation = prepared.record.startupInvocation;
+            }
+            await this.prepareFreshSeedActivationReadCut(sqlQueryEngine);
+            await this.releaseSeedParticipantCohorts(
+              this.seedStartupInvocation.deadlineAtMs);
+            this.sqlQueryEngine = sqlQueryEngine;
             await startupPipelineRunner.run({
               phases: phases.slice(NUM.THREE, NUM.FOUR),
             });
@@ -323,9 +436,7 @@ function createBootstrapServiceSeedWorkflowMethods() {
             });
 
             const replicaHandlerStartMs = Date.now();
-            if (!this.replicaHandler) {
-              this.initializeReplicaHandler();
-            }
+            this.initializeReplicaHandler();
             this.logger.info(POST_PIPELINE_LOG.REPLICA_HANDLER, {
               nodeId: this.nodeId,
               durationMs: Date.now() - replicaHandlerStartMs,
@@ -398,6 +509,12 @@ function createBootstrapServiceSeedWorkflowMethods() {
       });
 
       try {
+        await this.seedStartupSessionStore.prepareDurableAuthority({
+            bootIncarnation: this.bootIncarnation,
+            dataDirectoryProcessOwner: this.dataDirectoryProcessOwner,
+            nodeId: this.nodeId,
+            planVersion: SEED_WORKFLOW_PLAN_VERSION,
+          });
         const startupPipelineRunner = new StartupPipelineRunner({
           logger: this.logger,
           eventSink: this,
@@ -407,18 +524,36 @@ function createBootstrapServiceSeedWorkflowMethods() {
           nodeId: this.nodeId,
           allowResumeLatest: true,
         });
-        await startupPipelineRunner.runWorkflow({
-          nodeId: this.nodeId,
-          sessionId: seedSessionId,
-          allowResumeLatest: true,
-          planVersion: SEED_WORKFLOW_PLAN_VERSION,
-          sessionStore: this.seedStartupSessionStore,
-          steps: this.buildSeedCheckpointSteps(
-            startupPipelineRunner,
-            seedPlan,
-          ),
-          isRetryableFailure: () => false,
-        });
+        const timeSource = this.nodeService.getTimeSource();
+        for (;;) {
+          try {
+            await startupPipelineRunner.runWorkflow({
+              nodeId: this.nodeId,
+              sessionId: seedSessionId,
+              allowResumeLatest: true,
+              planVersion: SEED_WORKFLOW_PLAN_VERSION,
+              sessionStore: this.seedStartupSessionStore,
+              steps: this.buildSeedCheckpointSteps(
+                startupPipelineRunner,
+                seedPlan,
+              ),
+              isRetryableFailure: (error) =>
+                error?.code === 'STARTUP_CHECKPOINT_HELD',
+            });
+            break;
+          } catch (error) {
+            if (error?.code !== 'STARTUP_CHECKPOINT_HELD' ||
+                timeSource.now() >= this.seedStartupInvocation.deadlineAtMs) {
+              throw error;
+            }
+            const remaining = this.seedStartupInvocation.deadlineAtMs -
+              timeSource.now();
+            await this.sleep(Math.min(
+              error.retryAfterMs ?? PARTICIPANT_CUTOVER_BOUND.PAUSE_RETRY_AFTER_MS,
+              remaining,
+            ));
+          }
+        }
         return this.completeSuccessfulBootstrap();
       } catch (error) {
         return this.handleBootstrapFailure(error);

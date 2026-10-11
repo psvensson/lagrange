@@ -1187,6 +1187,7 @@ function readGroupObservation(group, expectedGeneration, rawStatus = null) {
   // may run ahead of it), never the core's status.applied.
   return {ok: true, value: {status: status.value, confState: conf.value,
     ...observedParticipation(group),
+    lastIndex: group.persistedLastIndex,
     configurationKey: raftRsConfStateKey(conf.value),
     membershipGenerationIndex: group.membershipGenerationKnown ?
       Number(group.membershipGenerationIndex) : null,
