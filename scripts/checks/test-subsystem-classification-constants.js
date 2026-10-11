@@ -131,6 +131,7 @@ export const SUBSYSTEM_RULES = Object.freeze([
   {id: 'integration-convergence', pattern: /^test\/integration\/(?!.*(rebalance|admission)).*(benchmark|strict-)/, subsystem: SUBSYSTEM_CONVERGENCE_TOPOLOGY},
   {id: 'integration-admin', pattern: /^test\/integration\/(?!.*(cdc|websocket)).*(admin|debug-join)/, subsystem: SUBSYSTEM_ADMIN_DIAGNOSTICS},
   {id: 'integration-harness', pattern: /^test\/integration\/.*(failure-scenarios|multi-node-cluster)/, subsystem: SUBSYSTEM_DISTRIBUTED_HARNESS},
+  {id: 'integration-transactions', pattern: /^test\/integration\/(?!pgwire-).*transaction-coordinator/, subsystem: SUBSYSTEM_TRANSACTIONS},
 
   {id: 'directory-rebalancer', pattern: new RegExp(`^test\\/rebalancer\\/${NOT_PGWIRE}`), subsystem: SUBSYSTEM_PLACEMENT_REBALANCE},
   {id: 'directory-bootstrap', pattern: new RegExp(`^test\\/(bootstrap|node|entrypoint|boot)\\/(.*\\/)?${NOT_PGWIRE}`), subsystem: SUBSYSTEM_BOOTSTRAP_MEMBERSHIP},

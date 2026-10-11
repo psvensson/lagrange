@@ -124,7 +124,8 @@ function createBootstrapServiceReplicaHandlerRuntimeMethods() {
      * Initialize the ReplicaHandler to handle CREATE_REPLICA/REMOVE_REPLICA.
      * @private
      */
-    initializeReplicaHandler() {
+    acquireReplicaHandler() {
+      if (this.replicaHandler) return this.replicaHandler;
       const messageGroupService =
         this.getLeaderMessageGroupService();
 
@@ -280,10 +281,22 @@ function createBootstrapServiceReplicaHandlerRuntimeMethods() {
           this.rebalanceCoordinator?.executorOutcomeEmitter,
         timeSource: this.nodeService.getTimeSource(),
         ownerIncarnation: this.bootIncarnation,
+        deferInitialization: true,
       });
 
       this.replicaHandler = acquired.replicaHandler;
       this.replicaStateMachine = acquired.replicaStateMachine;
+      // Attach actual live services before seed writes without publishing
+      // lifecycle metadata or claiming ACTIVE authority from an empty cache.
+      for (const [replicaId, partition] of this.partitionServices) {
+        this.replicaHandler.localServices.set(replicaId, partition);
+      }
+      return this.replicaHandler;
+    },
+
+    initializeReplicaHandler() {
+      this.acquireReplicaHandler();
+      this.replicaHandler.initialize();
 
       const partitionRegistrationStartedAt = Date.now();
       this.writeBootstrapReplicaRegistrationTrace(
@@ -369,7 +382,7 @@ function createBootstrapServiceReplicaHandlerRuntimeMethods() {
 
       this.logger.info(BootstrapLog.REPLICA_HANDLER_READY, {
         nodeId: this.nodeId,
-        hasMessageGroupService: !!messageGroupService,
+        hasMessageGroupService: !!this.getLeaderMessageGroupService(),
         registeredPartitions: this.partitionServices.size,
       });
     },

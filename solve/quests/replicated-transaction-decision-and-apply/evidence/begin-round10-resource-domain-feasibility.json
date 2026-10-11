@@ -1,0 +1,270 @@
+{
+  "scope": "Design feasibility only. No production source, test, metadata, Quest log, transport or schema mutation was performed.",
+  "provenance": {
+    "subjectSha256": "df779a902d3972db751eebdd8790b828ed8bfa2f422f042a60ecf1445c7acc53",
+    "creationContractSha256": "ad2af733350077f01cdee79ce42f2d5ddbeccfe965039bbe454da348fb454057",
+    "round9IndependentInputSha256": "99e0040e1ceb8d943a61ad871a4886050eb0977781f3ef4413d8f89e0f3527de",
+    "sqliteVersion": "3.49.2"
+  },
+  "fixedEnvelope": {
+    "immutableSessionPageBytes": 4096,
+    "creditRequestJsonUtf8Bytes": 431,
+    "creditGrantJsonUtf8Bytes": 168,
+    "requestJsonUtf8Bytes": 434,
+    "maximumPageResultJsonUtf8Bytes": 8499,
+    "request": {
+      "contract_version": 1,
+      "credit_id": "cccccccccccccccccccccccccccccccc",
+      "transaction_id": "ffffffffffffffffffffffffffffffff",
+      "attempt_key": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "attempt_row_bytes": 9007199254740991,
+      "phase": "IMMUTABLE_PAGE",
+      "page_offset": 9007199254740991,
+      "page_bytes": 4096,
+      "resource_generation": 9007199254740991,
+      "original_deadline_at_ms": 9007199254740991,
+      "turn_deadline_at_ms": 9007199254740991
+    },
+    "resultFields": [
+      "transaction_id",
+      "attempt_key",
+      "identity_state",
+      "initial_match",
+      "session_octets",
+      "page_offset",
+      "session_page_hex",
+      "resource_generation"
+    ],
+    "note": "JSON sizes are shape witnesses. The design resource census must also pay frame, parsed record, native, send and callback roots."
+  },
+  "targetCreditModel": {
+    "creditRequestedBeforeClassificationSend": true,
+    "targetOwnsReceiveParseNativeAndResponseBeforeClassificationSend": true,
+    "creditIdentity": [
+      "credit_id",
+      "contract_version",
+      "transaction_id",
+      "attempt_key",
+      "phase",
+      "page_offset",
+      "resource_generation",
+      "connection_delivery_generation"
+    ],
+    "releaseEvents": [
+      "grant_send_failure",
+      "unused_grant_expiry",
+      "classification_send_callback",
+      "classification_send_error",
+      "connection_close",
+      "shutdown_generation_fence"
+    ],
+    "nonReleaseEvents": [
+      "transport_ack",
+      "origin_timeout",
+      "caller_disconnect"
+    ],
+    "ungrantedClassificationRequest": "REFUSE_WITHOUT_NATIVE_WORK"
+  },
+  "protectedCompletionSchedule": {
+    "oldCounterexample": {
+      "base": 1835,
+      "recordCount": 2,
+      "pool": 3671,
+      "total": 3670,
+      "free": 1,
+      "eachRecordAloneWithUpgradeFits": true,
+      "rotation": [
+        {
+          "turn": 0,
+          "record": 0,
+          "before": 3670,
+          "need": 1835,
+          "admitted": false,
+          "tokenRetained": true
+        },
+        {
+          "turn": 1,
+          "record": 1,
+          "before": 3670,
+          "need": 1835,
+          "admitted": false,
+          "tokenRetained": true
+        },
+        {
+          "turn": 2,
+          "record": 0,
+          "before": 3670,
+          "need": 1835,
+          "admitted": false,
+          "tokenRetained": true
+        },
+        {
+          "turn": 3,
+          "record": 1,
+          "before": 3670,
+          "need": 1835,
+          "admitted": false,
+          "tokenRetained": true
+        },
+        {
+          "turn": 4,
+          "record": 0,
+          "before": 3670,
+          "need": 1835,
+          "admitted": false,
+          "tokenRetained": true
+        },
+        {
+          "turn": 5,
+          "record": 1,
+          "before": 3670,
+          "need": 1835,
+          "admitted": false,
+          "tokenRetained": true
+        },
+        {
+          "turn": 6,
+          "record": 0,
+          "before": 3670,
+          "need": 1835,
+          "admitted": false,
+          "tokenRetained": true
+        },
+        {
+          "turn": 7,
+          "record": 1,
+          "before": 3670,
+          "need": 1835,
+          "admitted": false,
+          "tokenRetained": true
+        }
+      ],
+      "retainedAfter": 3670
+    },
+    "illustrativeUnits": {
+      "total": 3671,
+      "fixedIngress": 1,
+      "protectedCompletion": 1835,
+      "retainedCapacity": 1835,
+      "recordBytes": 1835,
+      "recordsAdmitted": 1,
+      "secondRecordRefusedBeforeRetention": true,
+      "totalRequiredForTwoRecordsAndCompletion": 5506,
+      "withThatTotalBothRecordsAndCompletionFit": true
+    },
+    "note": "Illustrative units reproduce the review schedule; implementation constants require the complete native/root census and checked arithmetic."
+  },
+  "scalarDomain": {
+    "cases": [
+      {
+        "name": "ordinary",
+        "javascriptCodeUnits": 16,
+        "utf8Bytes": 16,
+        "utf8Hex": "6f7264696e6172792d73657373696f6e",
+        "sqlite": {
+          "storage_class": "text",
+          "sqlite_text_length": 16,
+          "sqlite_octets": 16,
+          "stored_hex": "6F7264696E6172792D73657373696F6E"
+        },
+        "fatalOrdinary": "ordinary-session",
+        "fatalBomPreserving": "ordinary-session",
+        "deliveryKey": "07dbcc022bbe6b29158880fd2798b8ba92a1b3954fd43f377ba60860169cb063"
+      },
+      {
+        "name": "bom-only",
+        "javascriptCodeUnits": 1,
+        "utf8Bytes": 3,
+        "utf8Hex": "efbbbf",
+        "sqlite": {
+          "storage_class": "text",
+          "sqlite_text_length": 1,
+          "sqlite_octets": 3,
+          "stored_hex": "EFBBBF"
+        },
+        "fatalOrdinary": "",
+        "fatalBomPreserving": "﻿",
+        "deliveryKey": "9c5d00441bf114c8e5c3e3aaebf291dd3efea2a08ae997cf36a5a6b411be6e26"
+      },
+      {
+        "name": "leading-nul",
+        "javascriptCodeUnits": 1,
+        "utf8Bytes": 1,
+        "utf8Hex": "00",
+        "sqlite": {
+          "storage_class": "text",
+          "sqlite_text_length": 0,
+          "sqlite_octets": 1,
+          "stored_hex": "00"
+        },
+        "fatalOrdinary": "\u0000",
+        "fatalBomPreserving": "\u0000",
+        "deliveryKey": "c009138bd06576d179b25900f572db701fb24fd565a39b472505861ebbf86148"
+      },
+      {
+        "name": "leading-nul-plus-a",
+        "javascriptCodeUnits": 2,
+        "utf8Bytes": 2,
+        "utf8Hex": "0061",
+        "sqlite": {
+          "storage_class": "text",
+          "sqlite_text_length": 0,
+          "sqlite_octets": 2,
+          "stored_hex": "0061"
+        },
+        "fatalOrdinary": "\u0000a",
+        "fatalBomPreserving": "\u0000a",
+        "deliveryKey": "f1103f7f379dc9a54e48acfc6dd6c3e0bcb04e0de17f1dec297016423fdaf914"
+      },
+      {
+        "name": "embedded-nul",
+        "javascriptCodeUnits": 3,
+        "utf8Bytes": 3,
+        "utf8Hex": "610062",
+        "sqlite": {
+          "storage_class": "text",
+          "sqlite_text_length": 1,
+          "sqlite_octets": 3,
+          "stored_hex": "610062"
+        },
+        "fatalOrdinary": "a\u0000b",
+        "fatalBomPreserving": "a\u0000b",
+        "deliveryKey": "489ee6ca88bd50818e2e562ab40977f6773a959ea5bedf9cd36c234fb1d56987"
+      },
+      {
+        "name": "supplementary",
+        "javascriptCodeUnits": 2,
+        "utf8Bytes": 4,
+        "utf8Hex": "f09f92be",
+        "sqlite": {
+          "storage_class": "text",
+          "sqlite_text_length": 1,
+          "sqlite_octets": 4,
+          "stored_hex": "F09F92BE"
+        },
+        "fatalOrdinary": "💾",
+        "fatalBomPreserving": "💾",
+        "deliveryKey": "808695aac6e27bc4644e1bcb6b9a065e4019748851931c3ccfed4c2d1e839324"
+      }
+    ],
+    "bomOnlyOrdinaryDecoderDropsData": true,
+    "bomOnlyPreservingDecoderKeepsData": true,
+    "leadingNulSqliteLengthIsZero": true,
+    "leadingNulOctetLengthIsOne": true
+  },
+  "preliminaryKeyAuthority": {
+    "keyMatchAlone": "RETAIN_AND_READ_EXACT_IMMUTABLE_SIX",
+    "keyDifferentAlone": "RETAIN_ORIGINAL_IDENTITY",
+    "keyDifferentPlusDefinitivePrimaryKeyCollision": "CANONICAL_FOREIGN",
+    "malformedMissingUnavailableOrPressure": "RETAIN_ORIGINAL_IDENTITY",
+    "forbiddenFromKeyAlone": [
+      "ACTIVE",
+      "ADOPT",
+      "OVERWRITE",
+      "RELEASE_RECORD",
+      "REMINT",
+      "COMMIT",
+      "ROLLBACK"
+    ]
+  }
+}

@@ -1,0 +1,295 @@
+{
+  "sourceSnapshot": "d1ea7302fcf51b2c4be21b8d47db6295bef3d555",
+  "sourceApproval": "pending independent review",
+  "scope": "Author packet and root exact-byte checks, not independent source approval",
+  "files": [
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/advanced-orderings.json",
+      "retained": "advanced-orderings.json",
+      "bytes": 29150,
+      "sha256": "49a0a40de7710a2128ad2e5ac501c501f31657c599984c9fc6b768a5fa5602a2"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/advanced-orderings.log",
+      "retained": "advanced-orderings.log.txt",
+      "bytes": 29890,
+      "sha256": "5ac70deb23aea13c13671262d066d7f9679338b0f5a1043d6de7f552d2b4f329"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/advanced-orderings.mjs",
+      "retained": "advanced-orderings.mjs.txt",
+      "bytes": 3915,
+      "sha256": "378596bf6f1003f2ce3127fd66c3a67be1fa1723facf57c5240c1d6ca731d49e"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/cognitive-global.log",
+      "retained": "cognitive-global.log.txt",
+      "bytes": 386,
+      "sha256": "322be9395c91769f890091ddbae4fcecb0283b0b07f3a2076e0de836058a70be"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/cognitive-scoped.log",
+      "retained": "cognitive-scoped.log.txt",
+      "bytes": 535,
+      "sha256": "eff90d2ddc0372c2b692ce916a2b5144c3c1d745447fe0ca06b4ec8dd8a8fbd9"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/complexity-changed.log",
+      "retained": "complexity-changed.log.txt",
+      "bytes": 427,
+      "sha256": "95bbe8e349df2df5f92a254f82449f72e5839507b74cdc37d309541b7134d060"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/complexity-global.log",
+      "retained": "complexity-global.log.txt",
+      "bytes": 6590,
+      "sha256": "a203691ad085393c1a2819298e4d4f5efe100d75d51c38dfc39de42c943062d3"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/complexity-scoped.log",
+      "retained": "complexity-scoped.log.txt",
+      "bytes": 1205,
+      "sha256": "aff6aaa07fee65255245debc4757844c576946c616cb23dac6d69dd69047ef42"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/cumulative-final.log",
+      "retained": "cumulative-final.log.txt",
+      "bytes": 1155,
+      "sha256": "0543561cac83965583cf28e649120958a058bf58d222b54638183a07be34f47e"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/cumulative.log",
+      "retained": "cumulative.log.txt",
+      "bytes": 1155,
+      "sha256": "41d4e692ee7ef419612b18ee8a831eb1b5fd4e765c463796b6317eddee5c718a"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/diff-check-final.log",
+      "retained": "diff-check-final.log.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/diff-check.log",
+      "retained": "diff-check.log.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/eslint-final.log",
+      "retained": "eslint-final.log.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/eslint.log",
+      "retained": "eslint.log.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/evaluate-round3.py",
+      "retained": "evaluate-round3.py.txt",
+      "bytes": 4975,
+      "sha256": "1241e35bdac6965c7d0e4658db400df35fde42a71bba2304f0ddb5aeec8cce00"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/evaluate-round4.py",
+      "retained": "evaluate-round4.py.txt",
+      "bytes": 4885,
+      "sha256": "56af2120852b160c3739365ef25694cb578770b889989a914121f29bd61bbfdc"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/evidence-manifest.sha256",
+      "retained": "evidence-manifest.sha256",
+      "bytes": 6771,
+      "sha256": "2fb5549b89eb5c541e85cc6ef4018af64b746cb1f54815276b931646882c82f9"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/extract-round3.py",
+      "retained": "extract-round3.py.txt",
+      "bytes": 645,
+      "sha256": "da964e15ea0de65a4bd5a75a5365ecf4bf7d882d0ab82881c988195fa17c9423"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/file-size.log",
+      "retained": "file-size.log.txt",
+      "bytes": 2418,
+      "sha256": "58536c0ede208616938912bcfd763be5ac6e3d1ae2a0ae5b8e6b0f3e6df6e2c3"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/freeze-summary.json",
+      "retained": "freeze-summary.json",
+      "bytes": 2401,
+      "sha256": "6f98426f839074ae70e1d2d5c10d6728a6ed50385d13693b0d414b5cfde2e83b"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/impact.log",
+      "retained": "impact.log.txt",
+      "bytes": 228,
+      "sha256": "4ef732c9603782f3ba5d77cc02ee14cd9a45c1c788c64f336a6f78b15465aac5"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/original-adversary-new.json",
+      "retained": "original-adversary-new.json",
+      "bytes": 2737,
+      "sha256": "21da5cfa1d64df09841868f6be8fe0c9f36bff54c66b75071900938be1ddcf1a"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/original-adversary-new.log",
+      "retained": "original-adversary-new.log.txt",
+      "bytes": 4627,
+      "sha256": "009db1f9f4e7b7b70480fcfa906456f6c8308c4ea159b7176c3e1cc3644dfbe5"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/original-adversary-new.mjs",
+      "retained": "original-adversary-new.mjs.txt",
+      "bytes": 8970,
+      "sha256": "264101c8f02b3e2619475de8b35c6061cd9b2c9870e6e6caa0f2cca9ce53c5dc"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/round3-assertions.log",
+      "retained": "round3-assertions.log.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/round3-bounded-controls.json",
+      "retained": "round3-bounded-controls.json",
+      "bytes": 16319,
+      "sha256": "1d1236805ca70a3ed23fb50896ba71cf43a7ebf30fae86b51e4f82382aa47f65"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/round3-bounded-controls.mjs",
+      "retained": "round3-bounded-controls.mjs.txt",
+      "bytes": 2455,
+      "sha256": "6dc49137ab80949e2033715687cd7bef42e6695424383543f4b5273c3d9cb5fa"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/round3-interactions.json",
+      "retained": "round3-interactions.json",
+      "bytes": 10926,
+      "sha256": "5863cd73db400e148122eb05dd567eef619eb4e2edb2d95cb573cd0d2d004dfc"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/round3-interactions.log",
+      "retained": "round3-interactions.log.txt",
+      "bytes": 11311,
+      "sha256": "ad822a350cf73709e33c61c06915b2ef98b11621d9a29517a758bd3237aa9f88"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/round3-interactions.mjs",
+      "retained": "round3-interactions.mjs.txt",
+      "bytes": 4814,
+      "sha256": "08faf80f95e588c9b3f380eb6d0440b3b9a9e2448616a50829212325b7465cd7"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/round3-pgwire-sweep.json",
+      "retained": "round3-pgwire-sweep.json",
+      "bytes": 1097,
+      "sha256": "f9913a0a4ea29fabb2f186977932127460967e2ce3212af95619aa4821638b0b"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/round3-pgwire-sweep.log",
+      "retained": "round3-pgwire-sweep.log.txt",
+      "bytes": 3107,
+      "sha256": "39e1001dfb455fa96785ad61dcdbbe55b4287437d766b77709330b7d2fd2adf0"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/round3-pgwire-sweep.mjs",
+      "retained": "round3-pgwire-sweep.mjs.txt",
+      "bytes": 2822,
+      "sha256": "e04e833d2e30527bf907654afe9b3a26135dd2a6e279ed9593b9a6d490d4366e"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/round3-resource-probe.json",
+      "retained": "round3-resource-probe.json",
+      "bytes": 7715,
+      "sha256": "ac4cc548fdade52b1c424d6ec0a48c8947bb0fbed3395891368617ab0dcb0038"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/round3-resource-probe.mjs",
+      "retained": "round3-resource-probe.mjs.txt",
+      "bytes": 2027,
+      "sha256": "80f4dab2ba74bf19330905944a3d1f5bdb749880abf31b8245d854c55ece0003"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/round3-to-round4-delta.txt",
+      "retained": "round3-to-round4-delta.txt",
+      "bytes": 1161,
+      "sha256": "35c8fd8e2ae0b298a2521ffba4d5da7469ba377c41f9f3aceecda29a32ffae2c"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/round4-assertions-final.log",
+      "retained": "round4-assertions-final.log.txt",
+      "bytes": 1662,
+      "sha256": "428e2ed507f40d356d09507c05f6b35488c2aed22929d9a672a69ac9cc55c8e4"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/round4-assertions.log",
+      "retained": "round4-assertions.log.txt",
+      "bytes": 1662,
+      "sha256": "428e2ed507f40d356d09507c05f6b35488c2aed22929d9a672a69ac9cc55c8e4"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/round4-resource-envelope.json",
+      "retained": "round4-resource-envelope.json",
+      "bytes": 8245,
+      "sha256": "da286ed717343f562908ca578649a3c4711cc9620ad2d4f7e05ed673ff756cc7"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/round4-resource-envelope.mjs",
+      "retained": "round4-resource-envelope.mjs.txt",
+      "bytes": 2189,
+      "sha256": "17816c92ea1ed67bd7c2851c6fca58759edb4b98252fa352973bde6098f8ae98"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/semantic-probes-unchanged.json",
+      "retained": "semantic-probes-unchanged.json",
+      "bytes": 12898,
+      "sha256": "c3c4497e0e5abdfc718de5676c1fe8a05175cb46a865d7ae17e8e2fe7f8dee39"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/semantic-probes-unchanged.log",
+      "retained": "semantic-probes-unchanged.log.txt",
+      "bytes": 13591,
+      "sha256": "776608824d28472926cc3f9c18fd8870f0c2d109119d3b39f7a541cde02a8223"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/semantic-probes.log",
+      "retained": "semantic-probes.log.txt",
+      "bytes": 13630,
+      "sha256": "a9c122407c16bf1cfde28c13f7a55ccbfe8943a6444727e43d4ddc02e3b654a0"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/semantic-probes.mjs",
+      "retained": "semantic-probes.mjs.txt",
+      "bytes": 10930,
+      "sha256": "f57721fb740439695895c002c90513c0d5bad93f2c33d5ae2feb693bab129881"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/shards.log",
+      "retained": "shards.log.txt",
+      "bytes": 547,
+      "sha256": "121a75d21f6c607e89c921f1a33ee941fff5cc38d97abceb26084adcee2966da"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round4-working/source-manifest.sha256",
+      "retained": "source-manifest.sha256",
+      "bytes": 4711,
+      "sha256": "0ebfe26ac040a33e3d4c6766d579adfb77b86a9735561b120b1533209facf808"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-round4-proof-snapshot.json",
+      "retained": "begin-round4-proof-snapshot.json",
+      "bytes": 321,
+      "sha256": "5519a6d9237398c767d278c8aaa99518809e2e68003e5f24e3d651f932616d5e"
+    },
+    {
+      "original": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-round4-root-verification.json",
+      "retained": "begin-round4-root-verification.json",
+      "bytes": 1448,
+      "sha256": "c677463fb3f604fea366e3a8ddc20dc97d02f9000b7105a23abd02366d0bba7d"
+    }
+  ]
+}

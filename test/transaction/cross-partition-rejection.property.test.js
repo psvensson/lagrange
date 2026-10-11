@@ -9,6 +9,13 @@
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
+// Engines persist transaction state (TX1 seam S4b: an explicit BEGIN or a
+// multi-partition statement on an engine that cannot is refused, typed) and
+// their partitions answer the participant transaction protocol.
+import {createTransactionPersistenceGateway} from
+  '../test-helpers/transaction-persistence-gateway.js';
+import {answerParticipantTransactionRequest} from
+  '../test-helpers/participant-protocol-double.js';
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -36,8 +43,10 @@ function createMockMessageRouter() {
           changes: 1,
         };
       }
+      // A participant answers the transaction protocol (TX1 design 2.2): a
+      // PREPARE names its state and digest, a COMMIT its outcome.
       if (message.type === 'TRANSACTION') {
-        return {acknowledged: true, success: true};
+        return answerParticipantTransactionRequest(message);
       }
       return {acknowledged: true, success: true, changes: 1};
     },
@@ -141,6 +150,7 @@ test('Property 47: Cross-partition INSERT enlists all touched partitions', async
 
         const engine = new SQLQueryEngine({
           messageRouter: createMockMessageRouter(),
+          controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
           systemCache: cache,
         });
 
@@ -196,6 +206,7 @@ test('Property 47: Cross-partition UPDATE enlists all touched partitions', async
 
         const engine = new SQLQueryEngine({
           messageRouter: createMockMessageRouter(),
+          controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
           systemCache: cache,
         });
 
@@ -257,6 +268,7 @@ test('Property 47: Cross-partition DELETE enlists all touched partitions', async
 
         const engine = new SQLQueryEngine({
           messageRouter: createMockMessageRouter(),
+          controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
           systemCache: cache,
         });
 
@@ -318,6 +330,7 @@ test('Property 47: Cross-partition writes keep transaction active', async (t) =>
 
         const engine = new SQLQueryEngine({
           messageRouter: createMockMessageRouter(),
+          controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
           systemCache: cache,
         });
 

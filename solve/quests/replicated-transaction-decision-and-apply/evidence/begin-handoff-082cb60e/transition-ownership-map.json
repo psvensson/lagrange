@@ -1,0 +1,49 @@
+{
+  "acceptedDesignSha256": "3679b87f4aeb84fd8d9397aac9f73f686e5fcb990c1e61e86df35e9731f91fa5",
+  "invariants": [
+    "The six immutable creation fields remain transaction_id, session_id, transaction_epoch, timeout_deadline, transaction_mode, and created_at.",
+    "Durable COMMIT and its decision digest are never replaced by initial ACTIVE/OPEN authority or a rollback derived from an uncertain BEGIN.",
+    "A valid durable participant manifest member without a progress row remains admitted and is redriven under the recorded decision.",
+    "Malformed, missing-page, foreign, duplicate, or mismatched durable rows hold/refuse; they do not release identity or resource ownership."
+  ],
+  "rejectedPredecessor": "d1ea7302fcf51b2c4be21b8d47db6295bef3d555",
+  "schemaVersion": 1,
+  "sourceBase": "c6d71665e98be03de916705f272a9d6340e4a842",
+  "transitions": [
+    {
+      "durableKnowledge": "The exact initial INSERT outcome is unknown. Only the same immutable six-field creation identity and exact delivery key may be retried.",
+      "release": "Waiter timeout releases the attachment and operation only. Record count/bytes and consumer entitlement remain.",
+      "sessionEntitlement": "A live exact consumer remains attached to the retained record even after its waiter timer detaches.",
+      "state": "UNRESOLVED_INITIAL",
+      "waiterAndTurn": "Each retry or sweep reserves a fresh operation token and installs a fresh pre-FIFO control-turn budget before any I/O. The transaction deadline is unchanged."
+    },
+    {
+      "durableKnowledge": "A canonical same-creation row has advanced beyond the initial row. This fact is monotonic across retry, explicit consumer retirement, server-only ownership, and a late APPLIED result for the original INSERT.",
+      "release": "Observation alone does not release the record or charge.",
+      "sessionEntitlement": "If the original consumer is live, it remains the only claimant until acceptance or explicit retirement.",
+      "state": "OBSERVED_ADVANCED",
+      "waiterAndTurn": "Advanced reread and recovery use the current reserved turn budget, installed before the read. The expired first turn is never reused."
+    },
+    {
+      "durableKnowledge": "The existing recovery owner has accepted the same-creation mutable row and its durable decision/participant authority. Missing participant progress does not shrink the manifest or fabricate PREPARE evidence.",
+      "release": "Handoff alone does not release while a live client result remains. Release requires ordinary-owner/terminal transfer plus no live client result.",
+      "sessionEntitlement": "A live unclaimed result remains retained for the original consumer. A retired or server-only record has no client entitlement.",
+      "state": "ADVANCED_HANDOFF_ACCEPTED",
+      "waiterAndTurn": "Recovery remains bounded by its fresh control turn and the original transaction deadline/decision authority."
+    },
+    {
+      "durableKnowledge": "The exact initial row is known durable and may be reported ACTIVE only for the same immutable creation identity.",
+      "release": "Acceptance or explicit retirement removes the client entitlement; server debt remains when durable work is not yet owned by ordinary recovery.",
+      "sessionEntitlement": "The exact live consumer remains until once-only claim/acceptance or explicit retirement. A background sweep may resolve before the client retries.",
+      "state": "INITIAL_RESOLVED",
+      "waiterAndTurn": "A background owner may progress genuinely unknown work; SUCCESS_CLAIMED alone arbitrates against competing resolution."
+    },
+    {
+      "durableKnowledge": "Durable initial or advanced knowledge remains retained; no new transaction identity is minted for the attempt.",
+      "release": "Record charge releases only after existing terminal/recovery ownership has accepted the debt and no live result remains.",
+      "sessionEntitlement": "No client result may be installed or resurrected.",
+      "state": "RETIRED_OR_SERVER_ONLY",
+      "waiterAndTurn": "Existing bounded sweep/backoff performs server recovery. A detached operation with consumer null cannot overwrite an already-retained live consumer before explicit retirement."
+    }
+  ]
+}

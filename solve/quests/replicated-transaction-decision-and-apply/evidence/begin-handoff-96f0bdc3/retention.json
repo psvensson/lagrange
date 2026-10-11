@@ -1,0 +1,146 @@
+{
+  "snapshot": "96f0bdc34bd4702e4e365ff329c77aa997648ff0",
+  "scope": "Author proof pending independent source review; no normal production startup or global static acceptance",
+  "artifacts": [
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round3-working/cumulative-freeze.log",
+      "retained": "cumulative-freeze.log.txt",
+      "sha256": "6717f8b2413fda68284498fd83d5d133e3442bd6153375d15ced6328c789950b"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round3-working/semantic-probes.mjs",
+      "retained": "semantic-probes.mjs.txt",
+      "sha256": "a4beb2910da80350b4f8e3221813f2191140f666fea49a6a4a10e17ee03dd210"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round3-working/semantic-probes-freeze.log",
+      "retained": "semantic-probes-freeze.log.txt",
+      "sha256": "85cc8dcb62fb3f3e45d4a00972b7bee33af7cfb1db06ecfd35d9982bdffd4e16"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round3-working/semantic-probes-freeze.json",
+      "retained": "semantic-probes-freeze.json",
+      "sha256": "915c519eacc9fdff1324bd0f43cff5f52269a209097fa3d9bc92c955a52599b2"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round3-working/advanced-orderings.mjs",
+      "retained": "advanced-orderings.mjs.txt",
+      "sha256": "09878e860d3f0ad6ef1445a750faa879968a848b0383bc43055b72283870f114"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round3-working/advanced-orderings-freeze.log",
+      "retained": "advanced-orderings-freeze.log.txt",
+      "sha256": "70d3c50916d50ad7dbadb0ced77c1eaa8a6879ffc8fbfdfaef7baa2b8aaf088d"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round3-working/advanced-orderings-freeze.json",
+      "retained": "advanced-orderings-freeze.json",
+      "sha256": "0a8b25dc219a13342d84a4e0a4faea05ee204412887354539c874bcd81952e36"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round3-working/original-adversary-current.mjs",
+      "retained": "original-adversary-current.mjs.txt",
+      "sha256": "21ffcfd2207d098bf5ae0df22b3d7a8d1146a487412feef54acd25f811dde1de"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round3-working/original-adversary-freeze.log",
+      "retained": "original-adversary-freeze.log.txt",
+      "sha256": "5f93b42b7196fbb5cf27d1ee5ad90f310ff35832f23a7f42d2a152c6a4c55f7a"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round3-working/original-adversary-freeze.json",
+      "retained": "original-adversary-freeze.json",
+      "sha256": "2cc7bd3e29834b175aa0027a90a33ade985665e6b34623b33f7259abcabc627d"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round3-working/evaluate-round3.py",
+      "retained": "evaluate-round3.py.txt",
+      "sha256": "4ee023e682807ff114e02c41d5fa7d6d3c70a2f6cc74e57bf69f243901adbc08"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round3-working/evaluate-freeze.log",
+      "retained": "evaluate-freeze.log.txt",
+      "sha256": "b50c3358381826953424ed6f7c70b9edf7caa8c784e9fc16ff18d5059a44cdee"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round3-working/eslint-freeze-final.log",
+      "retained": "eslint-freeze-final.log.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round3-working/diff-check-freeze-final.log",
+      "retained": "diff-check-freeze-final.log.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round3-working/impact-freeze-final.log",
+      "retained": "impact-freeze-final.log.txt",
+      "sha256": "4ef732c9603782f3ba5d77cc02ee14cd9a45c1c788c64f336a6f78b15465aac5"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round3-working/shards-freeze-final.log",
+      "retained": "shards-freeze-final.log.txt",
+      "sha256": "121a75d21f6c607e89c921f1a33ee941fff5cc38d97abceb26084adcee2966da"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round3-working/metadata-refresh-final.log",
+      "retained": "metadata-refresh-final.log.txt",
+      "sha256": "e8fc6fe94a074d4ece19e67a8d41d7d976ff53afdd7a4f8aba022af1dc4e7302"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round3-working/source-line-counts-freeze-final.log",
+      "retained": "source-line-counts-freeze-final.log.txt",
+      "sha256": "186e3cffd449d30dd91ac8f6ceaf4e5564c58467ffe04f51062d23da9811d6f3"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round3-working/complexity-new-creation-final.log",
+      "retained": "complexity-new-creation-final.log.txt",
+      "sha256": "bb5445b6e1062efe06695d191f8a67894aa250bd135d7c0836d01705bfe571ea"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round3-working/complexity-recovery-current-final.log",
+      "retained": "complexity-recovery-current-final.log.txt",
+      "sha256": "25b39bcd810d2cccb3de1b6e4154eed2de0495b76f105d8c9caef75855ee8790"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round3-working/complexity-recovery-base-final.log",
+      "retained": "complexity-recovery-base-final.log.txt",
+      "sha256": "0e1818581f07b89252c965f4332ff38095762200ad362122a2247329b9f04269"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round3-working/cognitive-creation-recovery-final.log",
+      "retained": "cognitive-creation-recovery-final.log.txt",
+      "sha256": "a543e43553a46dc97e309997c5afb8e566747bd2e8c887379ba0238e149b1a1b"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round3-working/complexity-global-final.log",
+      "retained": "complexity-global-final.log.txt",
+      "sha256": "a203691ad085393c1a2819298e4d4f5efe100d75d51c38dfc39de42c943062d3"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round3-working/cognitive-global-final.log",
+      "retained": "cognitive-global-final.log.txt",
+      "sha256": "322be9395c91769f890091ddbae4fcecb0283b0b07f3a2076e0de836058a70be"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round3-working/file-size-global-final.log",
+      "retained": "file-size-global-final.log.txt",
+      "sha256": "722b462141cc090d7fc3f6a8d7d5c39400b61710efbf8fa90eddf518979a1e61"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round3-working/source-manifest-freeze.sha256",
+      "retained": "source-manifest-freeze.sha256",
+      "sha256": "825f7bd0aae895f246038ed9da4999728359df8b7fbc1a66dc5683b9c52a3113"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round3-working/evidence-manifest-freeze.sha256",
+      "retained": "evidence-manifest-freeze.sha256",
+      "sha256": "e6aa589a565b9eacd8f93805d6a28fa9122186c59d164376a29d05016c8c29d4"
+    },
+    {
+      "source": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/begin-source-round3-working/freeze-summary.json",
+      "retained": "freeze-summary.json",
+      "sha256": "cc1d9d377dd009347b8adfb83a9faaa269bd3b534aecc9908c69c29cdf56d732"
+    }
+  ]
+}
