@@ -90,8 +90,10 @@ const NUMERIC_TEXT_TWO = '2';
 const SRC_ROOT = path.resolve(process.cwd(), 'src');
 const DECODER_MODULE =
   'src/rebalancer/replica-operation-membership-epoch-binding.js';
+// The decode owner lives in src/rebalancer; a consumer in another directory
+// names the same owner through '../rebalancer/'. Both specifiers count.
 const DECODER_IMPORT_PATTERN =
-  /from '\.\/replica-operation-membership-epoch-binding\.js'/;
+  /from '(?:\.\/|\.\.\/rebalancer\/)replica-operation-membership-epoch-binding\.js'/;
 const FIELD_TOKEN_PATTERN =
   /membershipPublicationEpoch|membership_publication_epoch|MEMBERSHIP_PUBLICATION_EPOCH/;
 const NUMERIC_REINTERPRETATION_PATTERN =
@@ -115,6 +117,12 @@ const DECODE_CONSUMERS = Object.freeze([
   'src/rebalancer/unified-rebalancer-rebalance-loop.js',
   'src/rebalancer/rebalance-coordinator-operation-creation-admission.js',
   'src/rebalancer/storage-reservation-authority.js',
+  // Superseded (R09, 2026-10-11) for a8686b37c "preserve reservation identity
+  // in dispatch projection" (quest zero-liferaft-active-runtime, independently
+  // verified 2026-10-07T11:44Z): the dispatch service's row-to-operation
+  // projection binds the durable epoch through the decode owner and leaves
+  // the field off the operation when unbound.
+  'src/control-plane/replica-dispatch-readiness-capture.js',
 ]);
 // Encode, SQL-text, schema, and pass-through sites: they mention the field
 // but never interpret its value.
@@ -135,6 +143,12 @@ const ENCODE_OR_SCHEMA_PASSTHROUGH = Object.freeze([
   'src/bootstrap/system-table-runtime-schema-definitions.js',
   'src/partition/partition-service-constants.js',
   'src/partition/partition-service-entry-apply-base.js',
+  // Superseded (R09, 2026-10-11) for f13f7f37a "zero-liferaft-active-runtime:
+  // preserve remote handoff identity" (independently verified
+  // 2026-10-07T13:09Z): the coordinator-created remote handoff projects the
+  // operation's already-decoded epoch onto the delivered row (`?? null`) and
+  // interprets nothing.
+  'src/rebalancer/operation-workflow-coordinator-created-handoff-scheduling.js',
 ]);
 
 function initializeEnvironment() {
