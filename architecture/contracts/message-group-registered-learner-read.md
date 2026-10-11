@@ -194,8 +194,9 @@ operation-row CAS (the full observed row as basis) changing only the permit
 column. The successor keeps the transition and target, takes the next permit
 sequence, the observation's leader term, configuration stamp, lifecycle and
 runtime fences, the current holder's fences and the destination node. It is
-issued only over an in-flight attempt of an open ordinary operation; an
-ordinarily settled operation keeps its debt for its own settlement owner. A
+issued only over an in-flight attempt of an open ordinary operation, except
+for the narrow PROMOTE continuation below. An ordinarily settled learner
+action keeps its debt for its own settlement owner. A
 lost answer is resolved by exact readback; a concurrent or late duplicate CAS
 matches nothing. The old permit is never refreshed and no sequence is reused.
 
@@ -206,7 +207,12 @@ configuration holds the target as a learner (a committed promotion would make
 it a voter, and only the transition's later branches, which wait for the
 promotion's recorded outcome, change that); an absent target vouches for
 nothing. The vouch only ever proves a fenced attempt noncommitted; it is never
-a promotion prerequisite.
+a promotion prerequisite. An already authorized PROMOTE may continue on an
+exact ordinary FAILED row only when status and workflow step are FAILED,
+completed time is positive, obligation is UNKNOWN, and the same live claim and
+permit still match. Only a strictly newer-term NONCOMMITTED observation may
+issue the successor. Settlement cannot issue an initial PROMOTE, revive the
+operation, select abandonment or alter ordinary history.
 
 The native turn proposes the successor only at its leader term and exact
 configuration with no configuration change pending; raft-rs drops any second
