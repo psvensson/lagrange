@@ -1560,7 +1560,7 @@ owner, with its own argument. SQLite's bytecode is not an application API.
   11. **Rowid ceiling (`rowid_ceiling`; state).** For a write that can allocate
       a rowid: R3 below. The maximum is checked before the statement, and again
       after it, inside the c' transaction, as an exact BigInt.
-- **The opcode allow-list: 116 opcodes, SQLite 3.49.2** (revision 8 adds
+- **The opcode allow-list: 116 opcodes, SQLite 3.49.2** (revision 8 adds [superseded 2026-10-11: 117 opcodes after the HaltIfNull vetting; see 0.0.14]
   `SoftNull`; 0.5 item 4). `Add`, `AddImm`,
   `Affinity`, `AggFinal`, `AggInverse`, `AggStep`, `AggValue`, `And`,
   `BeginSubrtn`, `BitAnd`, `BitNot`, `BitOr`, `Blob`, `Cast`, `Clear`,
@@ -1682,7 +1682,7 @@ owner, with its own argument. SQLite's bytecode is not an application API.
   - `sqliteSourceId` is `sqlite_source_id()`;
   - `compileOptionsDigest` is the sha256 of `PRAGMA compile_options`, joined by
     LF;
-  - `classifierListVersion` is the module's list version, `tx1-leg-a-1`.
+  - `classifierListVersion` is the module's list version, `tx1-leg-a-1`. [superseded 2026-10-11: list version tx1-leg-a-2; see 0.0.14]
 
   The leader stamps its own envelope (W20 checks both commands on the wire).
 
