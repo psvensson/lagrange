@@ -1,0 +1,1309 @@
+TAP version 13
+# Wait bound spent {
+#   event: 'wait_bound_spent',
+#   wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+#   awaited: 'participant stage operation success',
+#   boundMs: null,
+#   elapsedMs: 0,
+#   lastObserved: {
+#     stage: 'PREPARING',
+#     maxRetries: 3,
+#     attempts: 4,
+#     lastError: 'Participant answered without the typed outcome the transaction protocol requires',
+#     lastErrorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE'
+#   },
+#   scope: {
+#     transactionId: '5e295381083bee7dfdeddf3e0b771054',
+#     partitionId: 'p1'
+#   },
+#   repeats: 0
+# }
+# Wait bound spent {
+#   event: 'wait_bound_spent',
+#   wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+#   awaited: 'participant stage operation success',
+#   boundMs: null,
+#   elapsedMs: 0,
+#   lastObserved: {
+#     stage: 'PREPARING',
+#     maxRetries: 3,
+#     attempts: 4,
+#     lastError: 'Participant answered without the typed outcome the transaction protocol requires',
+#     lastErrorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE'
+#   },
+#   scope: {
+#     transactionId: '5e295381083bee7dfdeddf3e0b771054',
+#     partitionId: 'p2'
+#   },
+#   repeats: 0
+# }
+# Wait bound spent {
+#   event: 'wait_bound_spent',
+#   wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+#   awaited: 'participant stage operation success',
+#   boundMs: null,
+#   elapsedMs: 72,
+#   lastObserved: {
+#     stage: 'PREPARING',
+#     maxRetries: 3,
+#     attempts: 4,
+#     lastError: 'Participant answered without the typed outcome the transaction protocol requires',
+#     lastErrorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE'
+#   },
+#   scope: {
+#     transactionId: '41ba0bddae558ccc48768bf217e4b8d4',
+#     partitionId: 'p1'
+#   },
+#   repeats: 0
+# }
+# Wait bound spent {
+#   event: 'wait_bound_spent',
+#   wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+#   awaited: 'participant stage operation success',
+#   boundMs: null,
+#   elapsedMs: 71,
+#   lastObserved: {
+#     stage: 'PREPARING',
+#     maxRetries: 3,
+#     attempts: 4,
+#     lastError: 'Participant answered without the typed outcome the transaction protocol requires',
+#     lastErrorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE'
+#   },
+#   scope: {
+#     transactionId: '41ba0bddae558ccc48768bf217e4b8d4',
+#     partitionId: 'p2'
+#   },
+#   repeats: 0
+# }
+# Wait bound spent {
+#   event: 'wait_bound_spent',
+#   wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+#   awaited: 'participant stage operation success',
+#   boundMs: null,
+#   elapsedMs: 71,
+#   lastObserved: {
+#     stage: 'ROLLING_BACK',
+#     maxRetries: 3,
+#     attempts: 4,
+#     lastError: 'rollback failed',
+#     lastErrorCode: null
+#   },
+#   scope: {
+#     transactionId: '160a3f40525beb8ab439049152025b3f',
+#     partitionId: 'p2'
+#   },
+#   repeats: 0
+# }
+# Wait bound spent {
+#   event: 'wait_bound_spent',
+#   wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+#   awaited: 'participant stage operation success',
+#   boundMs: null,
+#   elapsedMs: 71,
+#   lastObserved: {
+#     stage: 'PREPARING',
+#     maxRetries: 3,
+#     attempts: 4,
+#     lastError: 'Participant answered without the typed outcome the transaction protocol requires',
+#     lastErrorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE'
+#   },
+#   scope: {
+#     transactionId: 'ebe1d8038f8cdc902da8207714a539fa',
+#     partitionId: 'p1'
+#   },
+#   repeats: 0
+# }
+# Wait bound spent {
+#   event: 'wait_bound_spent',
+#   wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+#   awaited: 'participant stage operation success',
+#   boundMs: null,
+#   elapsedMs: 72,
+#   lastObserved: {
+#     stage: 'PREPARING',
+#     maxRetries: 3,
+#     attempts: 4,
+#     lastError: 'prepare failed',
+#     lastErrorCode: null
+#   },
+#   scope: {
+#     transactionId: 'ebe1d8038f8cdc902da8207714a539fa',
+#     partitionId: 'p2'
+#   },
+#   repeats: 0
+# }
+# Wait bound spent {
+#   event: 'wait_bound_spent',
+#   wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+#   awaited: 'participant stage operation success',
+#   boundMs: null,
+#   elapsedMs: 71,
+#   lastObserved: {
+#     stage: 'PREPARING',
+#     maxRetries: 3,
+#     attempts: 4,
+#     lastError: 'Participant answered without the typed outcome the transaction protocol requires',
+#     lastErrorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE'
+#   },
+#   scope: {
+#     transactionId: '189a1268222438d35fffb98cba4e2296',
+#     partitionId: 'p1'
+#   },
+#   repeats: 0
+# }
+# Wait bound spent {
+#   event: 'wait_bound_spent',
+#   wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+#   awaited: 'participant stage operation success',
+#   boundMs: null,
+#   elapsedMs: 72,
+#   lastObserved: {
+#     stage: 'PREPARING',
+#     maxRetries: 3,
+#     attempts: 4,
+#     lastError: 'Participant answered without the typed outcome the transaction protocol requires',
+#     lastErrorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE'
+#   },
+#   scope: {
+#     transactionId: 'f5e0a09a0dc73b8a1321798849fb546e',
+#     partitionId: 'p1'
+#   },
+#   repeats: 0
+# }
+# Wait bound spent {
+#   event: 'wait_bound_spent',
+#   wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+#   awaited: 'participant stage operation success',
+#   boundMs: null,
+#   elapsedMs: 72,
+#   lastObserved: {
+#     stage: 'PREPARING',
+#     maxRetries: 3,
+#     attempts: 4,
+#     lastError: 'Participant answered without the typed outcome the transaction protocol requires',
+#     lastErrorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE'
+#   },
+#   scope: {
+#     transactionId: '65124468f8ac367f742d8b90177a960d',
+#     partitionId: 'p1'
+#   },
+#   repeats: 0
+# }
+# Wait bound spent {
+#   event: 'wait_bound_spent',
+#   wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+#   awaited: 'participant stage operation success',
+#   boundMs: null,
+#   elapsedMs: 72,
+#   lastObserved: {
+#     stage: 'PREPARING',
+#     maxRetries: 3,
+#     attempts: 4,
+#     lastError: 'Participant answered without the typed outcome the transaction protocol requires',
+#     lastErrorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE'
+#   },
+#   scope: {
+#     transactionId: '65124468f8ac367f742d8b90177a960d',
+#     partitionId: 'p2'
+#   },
+#   repeats: 0
+# }
+# Wait bound spent {
+#   event: 'wait_bound_spent',
+#   wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+#   awaited: 'participant stage operation success',
+#   boundMs: null,
+#   elapsedMs: 72,
+#   lastObserved: {
+#     stage: 'PREPARING',
+#     maxRetries: 3,
+#     attempts: 4,
+#     lastError: 'Participant answered without the typed outcome the transaction protocol requires',
+#     lastErrorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE'
+#   },
+#   scope: {
+#     transactionId: 'e10142e51f7018038404f8367ae33253',
+#     partitionId: 'p1'
+#   },
+#   repeats: 0
+# }
+# Wait bound spent {
+#   event: 'wait_bound_spent',
+#   wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+#   awaited: 'participant stage operation success',
+#   boundMs: null,
+#   elapsedMs: 72,
+#   lastObserved: {
+#     stage: 'PREPARING',
+#     maxRetries: 3,
+#     attempts: 4,
+#     lastError: 'Participant answered without the typed outcome the transaction protocol requires',
+#     lastErrorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE'
+#   },
+#   scope: {
+#     transactionId: 'ac92e7aef8887c6b21c2b296986ed995',
+#     partitionId: 'p1'
+#   },
+#   repeats: 0
+# }
+# Wait bound spent {
+#   event: 'wait_bound_spent',
+#   wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+#   awaited: 'participant stage operation success',
+#   boundMs: null,
+#   elapsedMs: 0,
+#   lastObserved: {
+#     stage: 'PREPARING',
+#     maxRetries: 0,
+#     attempts: 1,
+#     lastError: 'Participant answered without the typed outcome the transaction protocol requires',
+#     lastErrorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE'
+#   },
+#   scope: {
+#     transactionId: 'b78631942c461f63a33e8273c33dc1f3',
+#     partitionId: 'p1'
+#   },
+#   repeats: 0
+# }
+# Wait bound spent {
+#   event: 'wait_bound_spent',
+#   wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+#   awaited: 'participant stage operation success',
+#   boundMs: null,
+#   elapsedMs: 0,
+#   lastObserved: {
+#     stage: 'PREPARING',
+#     maxRetries: 0,
+#     attempts: 1,
+#     lastError: 'Participant answered without the typed outcome the transaction protocol requires',
+#     lastErrorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE'
+#   },
+#   scope: {
+#     transactionId: 'dab7af397a21a3e3b5578408b4915c29',
+#     partitionId: 'p1'
+#   },
+#   repeats: 0
+# }
+# Wait bound spent {
+#   event: 'wait_bound_spent',
+#   wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+#   awaited: 'participant stage operation success',
+#   boundMs: null,
+#   elapsedMs: 0,
+#   lastObserved: {
+#     stage: 'PREPARING',
+#     maxRetries: 0,
+#     attempts: 1,
+#     lastError: 'Participant answered without the typed outcome the transaction protocol requires',
+#     lastErrorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE'
+#   },
+#   scope: {
+#     transactionId: 'e9bb66a7d0e95a0f72c9b8669fb7e574',
+#     partitionId: 'p1'
+#   },
+#   repeats: 0
+# }
+# Subtest: DistributedTransactionCoordinator - enlists participants and commits
+    # Subtest: should be equal
+    ok 1 - should be equal
+      ---
+      duration_ms: 0
+      ...
+    # Subtest: should be equal
+    ok 2 - should be equal
+      ---
+      duration_ms: 0
+      ...
+    # Subtest: should be equivalent
+    ok 3 - should be equivalent
+      ---
+      duration_ms: 0
+      ...
+    # Subtest: should be equivalent
+    ok 4 - should be equivalent
+      ---
+      duration_ms: 0
+      ...
+    # Subtest: should be equal
+    ok 5 - should be equal
+      ---
+      duration_ms: 0
+      ...
+    # Subtest: should be equal
+    not ok 6 - should be equal
+      ---
+      duration_ms: 0
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:58:5'
+      failureType: 'testCodeFailure'
+      error: |-
+        should be equal
+        |   const beginResult = await coordinator.begin('s1');
+        |   t.equal(beginResult.success, true);
+        |   t.ok(beginResult.transactionId.startsWith('tx-s1-'));
+        | ----^
+        | 
+        |   const enlistResult = await coordinator.enlistParticipants('s1', ['p1', 'p2']);
+      code: 'ERR_TEST_FAILURE'
+      stack: |-
+        Test.<anonymous> (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:58:5)
+      ...
+    # Subtest: should be equal
+    not ok 7 - should be equal
+      ---
+      duration_ms: 0
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:65:5'
+      failureType: 'testCodeFailure'
+      error: |-
+        should be equal
+        [48;2;172;62;163m[38;2;255;229;241m--- expected                                                               [39m[49m[m
+        [48;2;58;117;0m[38;2;242;255;229m+++ actual                                                                 [39m[49m[m
+        [48;2;34;34;34m[38;2;117;158;239m@@ -1,1 +1,1 @@                                                            [39m[49m[m
+        [48;2;172;62;163m[38;2;255;229;241m-true                                                                      [39m[49m[m
+        [48;2;58;117;0m[38;2;242;255;229m+false                                                                     [39m[49m[m
+        | 
+        |   const commitResult = await coordinator.commit('s1');
+        |   t.equal(commitResult.success, true);
+        | ----^
+        |   t.same(commitResult.participants.sort(), ['p1', 'p2']);
+        |   t.equal(coordinator.hasActiveTransaction('s1'), false);
+      code: 'ERR_TEST_FAILURE'
+      stack: |-
+        Test.<anonymous> (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:65:5)
+      ...
+    # Subtest: should be equivalent
+    not ok 8 - should be equivalent
+      ---
+      duration_ms: 0
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:68:5'
+      failureType: 'testCodeFailure'
+      error: |-
+        should be equivalent
+        [48;2;172;62;163m[38;2;255;229;241m--- expected                                                               [39m[49m[m
+        [48;2;58;117;0m[38;2;242;255;229m+++ actual                                                                 [39m[49m[m
+        [48;2;34;34;34m[38;2;117;158;239m@@ -1,6 +1,6 @@                                                            [39m[49m[m
+        [48;2;51;51;51m[38;2;204;204;204m Array [                                                                   [39m[49m[m
+        [48;2;51;51;51m[38;2;204;204;204m   "begin:s1:p1",                                                          [39m[49m[m
+        [48;2;51;51;51m[38;2;204;204;204m   "begin:s1:p2",                                                          [39m[49m[m
+        [48;2;172;62;163m[38;2;255;229;241m-  "commit:s1:p1",                                                         [39m[49m[m
+        [48;2;172;62;163m[38;2;255;229;241m-  "commit:s1:p2",                                                         [39m[49m[m
+        [48;2;58;117;0m[38;2;242;255;229m+  "rollback:s1:p1",                                                       [39m[49m[m
+        [48;2;58;117;0m[38;2;242;255;229m+  "rollback:s1:p2",                                                       [39m[49m[m
+        [48;2;51;51;51m[38;2;204;204;204m ]                                                                         [39m[49m[m
+        |   t.same(commitResult.participants.sort(), ['p1', 'p2']);
+        |   t.equal(coordinator.hasActiveTransaction('s1'), false);
+        |   t.same(calls, [
+        | ----^
+        |     'begin:s1:p1',
+        |     'begin:s1:p2',
+      code: 'ERR_TEST_FAILURE'
+      stack: |-
+        Test.<anonymous> (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:68:5)
+      ...
+not ok 1 - DistributedTransactionCoordinator - enlists participants and commits
+  ---
+  duration_ms: 186.882
+  type: 'suite'
+  location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:41:1'
+  failureType: 'subtestsFailed'
+  failures:
+    0: 'should be equal'
+    1: 'should be equal'
+    2: 'should be equivalent'
+  error: '3 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: DistributedTransactionCoordinator - commit failure surfaces failed participants
+    # Subtest: should be equal
+    ok 1 - should be equal
+      ---
+      duration_ms: 0
+      ...
+    # Subtest: should be equal
+    not ok 2 - should be equal
+      ---
+      duration_ms: 0
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:94:7'
+      failureType: 'testCodeFailure'
+      error: |-
+        should be equal
+        [48;2;172;62;163m[38;2;255;229;241m--- expected                                                               [39m[49m[m
+        [48;2;58;117;0m[38;2;242;255;229m+++ actual                                                                 [39m[49m[m
+        [48;2;34;34;34m[38;2;117;158;239m@@ -1,1 +1,1 @@                                                            [39m[49m[m
+        [48;2;172;62;163m[38;2;255;229;241m-1                                                                         [39m[49m[m
+        [48;2;58;117;0m[38;2;242;255;229m+2                                                                         [39m[49m[m
+        | 
+        |     t.equal(commitResult.success, false);
+        |     t.equal(commitResult.failedParticipants.length, 1);
+        | ------^
+        |     t.equal(commitResult.failedParticipants[0].partitionId, 'p2');
+        |   },
+      code: 'ERR_TEST_FAILURE'
+      stack: |-
+        Test.<anonymous> (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:94:7)
+      ...
+    # Subtest: should be equal
+    not ok 3 - should be equal
+      ---
+      duration_ms: 0
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:95:7'
+      failureType: 'testCodeFailure'
+      error: |-
+        should be equal
+        [48;2;172;62;163m[38;2;255;229;241m--- expected                                                               [39m[49m[m
+        [48;2;58;117;0m[38;2;242;255;229m+++ actual                                                                 [39m[49m[m
+        [48;2;34;34;34m[38;2;117;158;239m@@ -1,1 +1,1 @@                                                            [39m[49m[m
+        [48;2;172;62;163m[38;2;255;229;241m-p2                                                                        [39m[49m[m
+        [48;2;58;117;0m[38;2;242;255;229m+p1                                                                        [39m[49m[m
+        |     t.equal(commitResult.success, false);
+        |     t.equal(commitResult.failedParticipants.length, 1);
+        |     t.equal(commitResult.failedParticipants[0].partitionId, 'p2');
+        | ------^
+        |   },
+        | );
+      code: 'ERR_TEST_FAILURE'
+      stack: |-
+        Test.<anonymous> (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:95:7)
+      ...
+not ok 2 - DistributedTransactionCoordinator - commit failure surfaces failed participants
+  ---
+  duration_ms: 159.499
+  type: 'suite'
+  location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:76:1'
+  failureType: 'subtestsFailed'
+  failures:
+    0: 'should be equal'
+    1: 'should be equal'
+  error: '2 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: DistributedTransactionCoordinator - rollback clears active transaction
+    # Subtest: should be equal
+    ok 1 - should be equal
+      ---
+      duration_ms: 0
+      ...
+    # Subtest: should be equivalent
+    ok 2 - should be equivalent
+      ---
+      duration_ms: 0
+      ...
+    # Subtest: should be equal
+    ok 3 - should be equal
+      ---
+      duration_ms: 0
+      ...
+ok 3 - DistributedTransactionCoordinator - rollback clears active transaction
+  ---
+  duration_ms: 2.628
+  type: 'suite'
+  ...
+# Subtest: DistributedTransactionCoordinator - rollback failure stays in rollback lane for replay
+    # Subtest: should be equal
+    ok 1 - should be equal
+      ---
+      duration_ms: 0
+      ...
+    # Subtest: should be equal
+    ok 2 - should be equal
+      ---
+      duration_ms: 0
+      ...
+    # Subtest: failed rollback should remain recoverable instead of becoming terminal
+    ok 3 - failed rollback should remain recoverable instead of becoming terminal
+      ---
+      duration_ms: 0
+      ...
+    # Subtest: should be equal
+    ok 4 - should be equal
+      ---
+      duration_ms: 0
+      ...
+    # Subtest: should be equal
+    ok 5 - should be equal
+      ---
+      duration_ms: 0
+      ...
+    # Subtest: should be equal
+    ok 6 - should be equal
+      ---
+      duration_ms: 0
+      ...
+    # Subtest: replayed rollback should only revisit the unfinished participant
+    ok 7 - replayed rollback should only revisit the unfinished participant
+      ---
+      duration_ms: 0
+      ...
+ok 4 - DistributedTransactionCoordinator - rollback failure stays in rollback lane for replay
+  ---
+  duration_ms: 75.322
+  type: 'suite'
+  ...
+# Subtest: DistributedTransactionCoordinator - defers recovery sweep on retryable control-plane persistence failures
+    # Subtest: Transaction recovery state is incomplete or incompatible
+    not ok 1 - Transaction recovery state is incomplete or incompatible
+      ---
+      duration_ms: 0
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/src/query/distributed/distributed-transaction-recovery-validation.js:98:17'
+      failureType: 'testCodeFailure'
+      error: |-
+        Transaction recovery state is incomplete or incompatible
+        | 
+        | function buildTransactionRecoveryIncompleteError({decisionDimension, row}) {
+        |   const error = new Error(QUERY_ERROR_MSG.TRANSACTION_RECOVERY_INCOMPLETE);
+        | ----------------^
+        |   error.errorCode = QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE;
+        |   const evidenceFields = {
+      code: 'ERR_TEST_FAILURE'
+      stack: |-
+        buildTransactionRecoveryIncompleteError (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/src/query/distributed/distributed-transaction-recovery-validation.js:98:17)
+        DistributedTransactionCoordinator.recoverFromSystemTables (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/src/query/distributed/distributed-transaction-recovery.js:509:15)
+        DistributedTransactionCoordinator.runRecoverySweep (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/src/query/distributed/distributed-transaction-recovery.js:245:16)
+        async Test.<anonymous> (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:198:24)
+      ...
+not ok 5 - DistributedTransactionCoordinator - defers recovery sweep on retryable control-plane persistence failures
+  ---
+  duration_ms: 8.572
+  type: 'suite'
+  location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:158:1'
+  failureType: 'subtestsFailed'
+  failures:
+    0: 'Transaction recovery state is incomplete or incompatible'
+  error: '1 subtest failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: DistributedTransactionCoordinator - supports recovery payloads
+    # Subtest: Transaction recovery state is incomplete or incompatible
+    not ok 1 - Transaction recovery state is incomplete or incompatible
+      ---
+      duration_ms: 0
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/src/query/distributed/distributed-transaction-recovery-validation.js:98:17'
+      failureType: 'testCodeFailure'
+      error: |-
+        Transaction recovery state is incomplete or incompatible
+        | 
+        | function buildTransactionRecoveryIncompleteError({decisionDimension, row}) {
+        |   const error = new Error(QUERY_ERROR_MSG.TRANSACTION_RECOVERY_INCOMPLETE);
+        | ----------------^
+        |   error.errorCode = QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE;
+        |   const evidenceFields = {
+      code: 'ERR_TEST_FAILURE'
+      stack: |-
+        buildTransactionRecoveryIncompleteError (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/src/query/distributed/distributed-transaction-recovery-validation.js:98:17)
+        DistributedTransactionCoordinator.recoverFromSystemTables (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/src/query/distributed/distributed-transaction-recovery.js:509:15)
+        DistributedTransactionCoordinator.recover (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/src/query/distributed/distributed-transaction-recovery.js:114:10)
+        Test.<anonymous> (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:227:15)
+      ...
+not ok 6 - DistributedTransactionCoordinator - supports recovery payloads
+  ---
+  duration_ms: 2.561
+  type: 'suite'
+  location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:225:1'
+  failureType: 'subtestsFailed'
+  failures:
+    0: 'Transaction recovery state is incomplete or incompatible'
+  error: '1 subtest failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: DistributedTransactionCoordinator - prepare failure reports stage and participant
+    # Subtest: should be equal
+    ok 1 - should be equal
+      ---
+      duration_ms: 0
+      ...
+    # Subtest: should be equal
+    ok 2 - should be equal
+      ---
+      duration_ms: 0
+      ...
+    # Subtest: should be equal
+    ok 3 - should be equal
+      ---
+      duration_ms: 0
+      ...
+    # Subtest: should be equal
+    not ok 4 - should be equal
+      ---
+      duration_ms: 0
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:266:7'
+      failureType: 'testCodeFailure'
+      error: |-
+        should be equal
+        [48;2;172;62;163m[38;2;255;229;241m--- expected                                                               [39m[49m[m
+        [48;2;58;117;0m[38;2;242;255;229m+++ actual                                                                 [39m[49m[m
+        [48;2;34;34;34m[38;2;117;158;239m@@ -1,1 +1,1 @@                                                            [39m[49m[m
+        [48;2;172;62;163m[38;2;255;229;241m-1                                                                         [39m[49m[m
+        [48;2;58;117;0m[38;2;242;255;229m+2                                                                         [39m[49m[m
+        |     t.equal(result.success, false);
+        |     t.equal(result.stage, TRANSACTION_STATUS.PREPARING);
+        |     t.equal(result.failedParticipants.length, 1);
+        | ------^
+        |     t.equal(result.failedParticipants[0].partitionId, 'p2');
+        |     t.equal(coordinator.hasActiveTransaction('s5'), false);
+      code: 'ERR_TEST_FAILURE'
+      stack: |-
+        Test.<anonymous> (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:266:7)
+      ...
+    # Subtest: should be equal
+    not ok 5 - should be equal
+      ---
+      duration_ms: 0
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:267:7'
+      failureType: 'testCodeFailure'
+      error: |-
+        should be equal
+        [48;2;172;62;163m[38;2;255;229;241m--- expected                                                               [39m[49m[m
+        [48;2;58;117;0m[38;2;242;255;229m+++ actual                                                                 [39m[49m[m
+        [48;2;34;34;34m[38;2;117;158;239m@@ -1,1 +1,1 @@                                                            [39m[49m[m
+        [48;2;172;62;163m[38;2;255;229;241m-p2                                                                        [39m[49m[m
+        [48;2;58;117;0m[38;2;242;255;229m+p1                                                                        [39m[49m[m
+        |     t.equal(result.stage, TRANSACTION_STATUS.PREPARING);
+        |     t.equal(result.failedParticipants.length, 1);
+        |     t.equal(result.failedParticipants[0].partitionId, 'p2');
+        | ------^
+        |     t.equal(coordinator.hasActiveTransaction('s5'), false);
+        |   });
+      code: 'ERR_TEST_FAILURE'
+      stack: |-
+        Test.<anonymous> (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:267:7)
+      ...
+not ok 7 - DistributedTransactionCoordinator - prepare failure reports stage and participant
+  ---
+  duration_ms: 151.667
+  type: 'suite'
+  location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:247:1'
+  failureType: 'subtestsFailed'
+  failures:
+    0: 'should be equal'
+    1: 'should be equal'
+  error: '2 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: DistributedTransactionCoordinator - emits persistence callbacks
+    # Subtest: should be equal
+    ok 1 - should be equal
+      ---
+      duration_ms: 0
+      ...
+    # Subtest: should be equal
+    ok 2 - should be equal
+      ---
+      duration_ms: 0
+      ...
+    # Subtest: should be equal
+    not ok 3 - should be equal
+      ---
+      duration_ms: 0
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:314:5'
+      failureType: 'testCodeFailure'
+      error: |-
+        should be equal
+        | 
+        |   t.ok(persistedTransactions.includes(TRANSACTION_STATUS.ACTIVE));
+        |   t.ok(persistedTransactions.includes(TRANSACTION_STATUS.PREPARED));
+        | ----^
+        |   t.ok(persistedTransactions.includes(TRANSACTION_STATUS.COMMITTED));
+        |   t.ok(persistedParticipants.some((entry) =>
+      code: 'ERR_TEST_FAILURE'
+      stack: |-
+        Test.<anonymous> (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:314:5)
+      ...
+    # Subtest: should be equal
+    not ok 4 - should be equal
+      ---
+      duration_ms: 0
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:315:5'
+      failureType: 'testCodeFailure'
+      error: |-
+        should be equal
+        |   t.ok(persistedTransactions.includes(TRANSACTION_STATUS.ACTIVE));
+        |   t.ok(persistedTransactions.includes(TRANSACTION_STATUS.PREPARED));
+        |   t.ok(persistedTransactions.includes(TRANSACTION_STATUS.COMMITTED));
+        | ----^
+        |   t.ok(persistedParticipants.some((entry) =>
+        |     entry.partitionId === 'p1' && entry.status === 'COMMITTED'));
+      code: 'ERR_TEST_FAILURE'
+      stack: |-
+        Test.<anonymous> (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:315:5)
+      ...
+    # Subtest: should be equal
+    not ok 5 - should be equal
+      ---
+      duration_ms: 0
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:316:5'
+      failureType: 'testCodeFailure'
+      error: |-
+        should be equal
+        |   t.ok(persistedTransactions.includes(TRANSACTION_STATUS.PREPARED));
+        |   t.ok(persistedTransactions.includes(TRANSACTION_STATUS.COMMITTED));
+        |   t.ok(persistedParticipants.some((entry) =>
+        | ----^
+        |     entry.partitionId === 'p1' && entry.status === 'COMMITTED'));
+        |   t.ok(persistedWriteOperations.some((entry) =>
+      code: 'ERR_TEST_FAILURE'
+      stack: |-
+        Test.<anonymous> (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:316:5)
+      ...
+not ok 8 - DistributedTransactionCoordinator - emits persistence callbacks
+  ---
+  duration_ms: 85.451
+  type: 'suite'
+  location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:271:1'
+  failureType: 'subtestsFailed'
+  failures:
+    0: 'should be equal'
+    1: 'should be equal'
+    2: 'should be equal'
+  error: '3 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: DistributedTransactionCoordinator - recovers from canonical system table rows
+    # Subtest: Transaction recovery state is incomplete or incompatible
+    not ok 1 - Transaction recovery state is incomplete or incompatible
+      ---
+      duration_ms: 0
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/src/query/distributed/distributed-transaction-recovery-validation.js:98:17'
+      failureType: 'testCodeFailure'
+      error: |-
+        Transaction recovery state is incomplete or incompatible
+        | 
+        | function buildTransactionRecoveryIncompleteError({decisionDimension, row}) {
+        |   const error = new Error(QUERY_ERROR_MSG.TRANSACTION_RECOVERY_INCOMPLETE);
+        | ----------------^
+        |   error.errorCode = QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE;
+        |   const evidenceFields = {
+      code: 'ERR_TEST_FAILURE'
+      stack: |-
+        buildTransactionRecoveryIncompleteError (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/src/query/distributed/distributed-transaction-recovery-validation.js:98:17)
+        DistributedTransactionCoordinator.recoverFromSystemTables (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/src/query/distributed/distributed-transaction-recovery.js:509:15)
+        Test.<anonymous> (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:325:17)
+      ...
+not ok 9 - DistributedTransactionCoordinator - recovers from canonical system table rows
+  ---
+  duration_ms: 3.654
+  type: 'suite'
+  location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:322:1'
+  failureType: 'subtestsFailed'
+  failures:
+    0: 'Transaction recovery state is incomplete or incompatible'
+  error: '1 subtest failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: DistributedTransactionCoordinator - uses injected workflow coordinator
+    # Subtest: transaction state should be owned by the injected workflow coordinator
+    ok 1 - transaction state should be owned by the injected workflow coordinator
+      ---
+      duration_ms: 0
+      ...
+    # Subtest: should be equal
+    ok 2 - should be equal
+      ---
+      duration_ms: 0
+      ...
+    # Subtest: participant state should be persisted through the injected workflow coordinator
+    ok 3 - participant state should be persisted through the injected workflow coordinator
+      ---
+      duration_ms: 0
+      ...
+ok 10 - DistributedTransactionCoordinator - uses injected workflow coordinator
+  ---
+  duration_ms: 1.036
+  type: 'suite'
+  ...
+# Subtest: DistributedTransactionCoordinator - recovery replay resumes commit lane
+    # Subtest: Transaction recovery state is incomplete or incompatible
+    not ok 1 - Transaction recovery state is incomplete or incompatible
+      ---
+      duration_ms: 0
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/src/query/distributed/distributed-transaction-recovery-validation.js:98:17'
+      failureType: 'testCodeFailure'
+      error: |-
+        Transaction recovery state is incomplete or incompatible
+        | 
+        | function buildTransactionRecoveryIncompleteError({decisionDimension, row}) {
+        |   const error = new Error(QUERY_ERROR_MSG.TRANSACTION_RECOVERY_INCOMPLETE);
+        | ----------------^
+        |   error.errorCode = QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE;
+        |   const evidenceFields = {
+      code: 'ERR_TEST_FAILURE'
+      stack: |-
+        buildTransactionRecoveryIncompleteError (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/src/query/distributed/distributed-transaction-recovery-validation.js:98:17)
+        DistributedTransactionCoordinator.recoverFromSystemTables (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/src/query/distributed/distributed-transaction-recovery.js:509:15)
+        Test.<anonymous> (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:403:17)
+      ...
+not ok 11 - DistributedTransactionCoordinator - recovery replay resumes commit lane
+  ---
+  duration_ms: 1.745
+  type: 'suite'
+  location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:386:1'
+  failureType: 'subtestsFailed'
+  failures:
+    0: 'Transaction recovery state is incomplete or incompatible'
+  error: '1 subtest failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: DistributedTransactionCoordinator - recovery replay treats idempotent participant commit misses as committed
+    # Subtest: Transaction recovery state is incomplete or incompatible
+    not ok 1 - Transaction recovery state is incomplete or incompatible
+      ---
+      duration_ms: 0
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/src/query/distributed/distributed-transaction-recovery-validation.js:98:17'
+      failureType: 'testCodeFailure'
+      error: |-
+        Transaction recovery state is incomplete or incompatible
+        | 
+        | function buildTransactionRecoveryIncompleteError({decisionDimension, row}) {
+        |   const error = new Error(QUERY_ERROR_MSG.TRANSACTION_RECOVERY_INCOMPLETE);
+        | ----------------^
+        |   error.errorCode = QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE;
+        |   const evidenceFields = {
+      code: 'ERR_TEST_FAILURE'
+      stack: |-
+        buildTransactionRecoveryIncompleteError (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/src/query/distributed/distributed-transaction-recovery-validation.js:98:17)
+        DistributedTransactionCoordinator.recoverFromSystemTables (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/src/query/distributed/distributed-transaction-recovery.js:509:15)
+        Test.<anonymous> (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:460:15)
+      ...
+not ok 12 - DistributedTransactionCoordinator - recovery replay treats idempotent participant commit misses as committed
+  ---
+  duration_ms: 1.309
+  type: 'suite'
+  location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:442:1'
+  failureType: 'subtestsFailed'
+  failures:
+    0: 'Transaction recovery state is incomplete or incompatible'
+  error: '1 subtest failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: DistributedTransactionCoordinator - recovery replay only commits pending participants
+    # Subtest: Transaction recovery state is incomplete or incompatible
+    not ok 1 - Transaction recovery state is incomplete or incompatible
+      ---
+      duration_ms: 0
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/src/query/distributed/distributed-transaction-recovery-validation.js:98:17'
+      failureType: 'testCodeFailure'
+      error: |-
+        Transaction recovery state is incomplete or incompatible
+        | 
+        | function buildTransactionRecoveryIncompleteError({decisionDimension, row}) {
+        |   const error = new Error(QUERY_ERROR_MSG.TRANSACTION_RECOVERY_INCOMPLETE);
+        | ----------------^
+        |   error.errorCode = QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE;
+        |   const evidenceFields = {
+      code: 'ERR_TEST_FAILURE'
+      stack: |-
+        buildTransactionRecoveryIncompleteError (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/src/query/distributed/distributed-transaction-recovery-validation.js:98:17)
+        DistributedTransactionCoordinator.recoverFromSystemTables (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/src/query/distributed/distributed-transaction-recovery.js:509:15)
+        Test.<anonymous> (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:512:17)
+      ...
+not ok 13 - DistributedTransactionCoordinator - recovery replay only commits pending participants
+  ---
+  duration_ms: 1.25
+  type: 'suite'
+  location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:503:1'
+  failureType: 'subtestsFailed'
+  failures:
+    0: 'Transaction recovery state is incomplete or incompatible'
+  error: '1 subtest failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: DistributedTransactionCoordinator - recovery replay rolls back preparing transactions
+    # Subtest: Transaction recovery state is incomplete or incompatible
+    not ok 1 - Transaction recovery state is incomplete or incompatible
+      ---
+      duration_ms: 0
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/src/query/distributed/distributed-transaction-recovery-validation.js:98:17'
+      failureType: 'testCodeFailure'
+      error: |-
+        Transaction recovery state is incomplete or incompatible
+        | 
+        | function buildTransactionRecoveryIncompleteError({decisionDimension, row}) {
+        |   const error = new Error(QUERY_ERROR_MSG.TRANSACTION_RECOVERY_INCOMPLETE);
+        | ----------------^
+        |   error.errorCode = QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE;
+        |   const evidenceFields = {
+      code: 'ERR_TEST_FAILURE'
+      stack: |-
+        buildTransactionRecoveryIncompleteError (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/src/query/distributed/distributed-transaction-recovery-validation.js:98:17)
+        DistributedTransactionCoordinator.recoverFromSystemTables (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/src/query/distributed/distributed-transaction-recovery.js:509:15)
+        Test.<anonymous> (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:562:17)
+      ...
+not ok 14 - DistributedTransactionCoordinator - recovery replay rolls back preparing transactions
+  ---
+  duration_ms: 1.232
+  type: 'suite'
+  location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:549:1'
+  failureType: 'subtestsFailed'
+  failures:
+    0: 'Transaction recovery state is incomplete or incompatible'
+  error: '1 subtest failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: DistributedTransactionCoordinator - recovery replay resumes rollback lane
+    # Subtest: Transaction recovery state is incomplete or incompatible
+    not ok 1 - Transaction recovery state is incomplete or incompatible
+      ---
+      duration_ms: 0
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/src/query/distributed/distributed-transaction-recovery-validation.js:98:17'
+      failureType: 'testCodeFailure'
+      error: |-
+        Transaction recovery state is incomplete or incompatible
+        | 
+        | function buildTransactionRecoveryIncompleteError({decisionDimension, row}) {
+        |   const error = new Error(QUERY_ERROR_MSG.TRANSACTION_RECOVERY_INCOMPLETE);
+        | ----------------^
+        |   error.errorCode = QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE;
+        |   const evidenceFields = {
+      code: 'ERR_TEST_FAILURE'
+      stack: |-
+        buildTransactionRecoveryIncompleteError (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/src/query/distributed/distributed-transaction-recovery-validation.js:98:17)
+        DistributedTransactionCoordinator.recoverFromSystemTables (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/src/query/distributed/distributed-transaction-recovery.js:509:15)
+        Test.<anonymous> (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:609:17)
+      ...
+not ok 15 - DistributedTransactionCoordinator - recovery replay resumes rollback lane
+  ---
+  duration_ms: 1.185
+  type: 'suite'
+  location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:600:1'
+  failureType: 'subtestsFailed'
+  failures:
+    0: 'Transaction recovery state is incomplete or incompatible'
+  error: '1 subtest failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: DistributedTransactionCoordinator - freezes before selecting one phase
+    # Subtest: caller preference must not override coordinator selection
+    ok 1 - caller preference must not override coordinator selection
+      ---
+      duration_ms: 0
+      ...
+    # Subtest: should be equal
+    not ok 2 - should be equal
+      ---
+      duration_ms: 0
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:665:7'
+      failureType: 'testCodeFailure'
+      error: |-
+        should be equal
+        [48;2;172;62;163m[38;2;255;229;241m--- expected                                                               [39m[49m[m
+        [48;2;58;117;0m[38;2;242;255;229m+++ actual                                                                 [39m[49m[m
+        [48;2;34;34;34m[38;2;117;158;239m@@ -1,1 +1,1 @@                                                            [39m[49m[m
+        [48;2;172;62;163m[38;2;255;229;241m-true                                                                      [39m[49m[m
+        [48;2;58;117;0m[38;2;242;255;229m+false                                                                     [39m[49m[m
+        |     const result = await coordinator.commit('one-phase');
+        | 
+        |     t.equal(result.success, true);
+        | ------^
+        |     t.equal(result.commitMode, COMMIT_MODE.ONE_PHASE_COMMIT,
+        |       'caller preference must not override coordinator selection');
+      code: 'ERR_TEST_FAILURE'
+      stack: |-
+        Test.<anonymous> (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:665:7)
+      ...
+    # Subtest: one phase must not prepare
+    not ok 3 - one phase must not prepare
+      ---
+      duration_ms: 0
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:668:7'
+      failureType: 'testCodeFailure'
+      error: |-
+        one phase must not prepare
+        [48;2;172;62;163m[38;2;255;229;241m--- expected                                                               [39m[49m[m
+        [48;2;58;117;0m[38;2;242;255;229m+++ actual                                                                 [39m[49m[m
+        [48;2;34;34;34m[38;2;117;158;239m@@ -1,1 +1,6 @@                                                            [39m[49m[m
+        [48;2;172;62;163m[38;2;255;229;241m-Array []                                                                  [39m[49m[m
+        [48;2;58;117;0m[38;2;242;255;229m+Array [                                                                   [39m[49m[m
+        [48;2;58;117;0m[38;2;242;255;229m+  "one-phase:p1",                                                         [39m[49m[m
+        [48;2;58;117;0m[38;2;242;255;229m+  "one-phase:p1",                                                         [39m[49m[m
+        [48;2;58;117;0m[38;2;242;255;229m+  "one-phase:p1",                                                         [39m[49m[m
+        [48;2;58;117;0m[38;2;242;255;229m+  "one-phase:p1",                                                         [39m[49m[m
+        [48;2;58;117;0m[38;2;242;255;229m+]                                                                         [39m[49m[m
+        |     t.equal(result.commitMode, COMMIT_MODE.ONE_PHASE_COMMIT,
+        |       'caller preference must not override coordinator selection');
+        |     t.same(prepareCalls, [], 'one phase must not prepare');
+        | ------^
+        |     t.same(result.decisionTrace.map((entry) => entry.event), [
+        |       'PARTICIPANT_SET_FROZEN',
+      code: 'ERR_TEST_FAILURE'
+      stack: |-
+        Test.<anonymous> (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:668:7)
+      ...
+    # Subtest: Cannot read properties of undefined (reading 'map')
+    not ok 4 - Cannot read properties of undefined (reading 'map')
+      ---
+      duration_ms: 0
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:669:33'
+      failureType: 'testCodeFailure'
+      error: |-
+        Cannot read properties of undefined (reading 'map')
+        |       'caller preference must not override coordinator selection');
+        |     t.same(prepareCalls, [], 'one phase must not prepare');
+        |     t.same(result.decisionTrace.map((entry) => entry.event), [
+        | --------------------------------^
+        |       'PARTICIPANT_SET_FROZEN',
+        |       'COMMIT_MODE_SELECTED',
+      code: 'ERR_TEST_FAILURE'
+      stack: |-
+        Test.<anonymous> (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:669:33)
+      ...
+not ok 16 - DistributedTransactionCoordinator - freezes before selecting one phase
+  ---
+  duration_ms: 87.695
+  type: 'suite'
+  location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:646:1'
+  failureType: 'subtestsFailed'
+  failures:
+    0: 'should be equal'
+    1: 'one phase must not prepare'
+    2: "Cannot read properties of undefined (reading 'map')"
+  error: '3 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: DistributedTransactionCoordinator - final second participant selects two phase
+    # Subtest: should be equal
+    not ok 1 - should be equal
+      ---
+      duration_ms: 0
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:693:7'
+      failureType: 'testCodeFailure'
+      error: |-
+        should be equal
+        [48;2;172;62;163m[38;2;255;229;241m--- expected                                                               [39m[49m[m
+        [48;2;58;117;0m[38;2;242;255;229m+++ actual                                                                 [39m[49m[m
+        [48;2;34;34;34m[38;2;117;158;239m@@ -1,1 +1,1 @@                                                            [39m[49m[m
+        [48;2;172;62;163m[38;2;255;229;241m-TWO_PHASE_COMMIT                                                          [39m[49m[m
+        [48;2;58;117;0m[38;2;242;255;229m+undefined                                                                 [39m[49m[m
+        |     const result = await coordinator.commit('two-phase');
+        | 
+        |     t.equal(result.commitMode, COMMIT_MODE.TWO_PHASE_COMMIT);
+        | ------^
+        |     t.same(prepareCalls.sort(), ['p1', 'p2']);
+        |   });
+      code: 'ERR_TEST_FAILURE'
+      stack: |-
+        Test.<anonymous> (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:693:7)
+      ...
+    # Subtest: should be equivalent
+    not ok 2 - should be equivalent
+      ---
+      duration_ms: 0
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:694:7'
+      failureType: 'testCodeFailure'
+      error: |-
+        should be equivalent
+        [48;2;172;62;163m[38;2;255;229;241m--- expected                                                               [39m[49m[m
+        [48;2;58;117;0m[38;2;242;255;229m+++ actual                                                                 [39m[49m[m
+        [48;2;34;34;34m[38;2;117;158;239m@@ -1,4 +1,10 @@                                                           [39m[49m[m
+        [48;2;51;51;51m[38;2;204;204;204m Array [                                                                   [39m[49m[m
+        [48;2;51;51;51m[38;2;204;204;204m   "p1",                                                                   [39m[49m[m
+        [48;2;58;117;0m[38;2;242;255;229m+  "p1",                                                                   [39m[49m[m
+        [48;2;58;117;0m[38;2;242;255;229m+  "p1",                                                                   [39m[49m[m
+        [48;2;58;117;0m[38;2;242;255;229m+  "p1",                                                                   [39m[49m[m
+        [48;2;51;51;51m[38;2;204;204;204m   "p2",                                                                   [39m[49m[m
+        [48;2;58;117;0m[38;2;242;255;229m+  "p2",                                                                   [39m[49m[m
+        [48;2;58;117;0m[38;2;242;255;229m+  "p2",                                                                   [39m[49m[m
+        [48;2;58;117;0m[38;2;242;255;229m+  "p2",                                                                   [39m[49m[m
+        [48;2;51;51;51m[38;2;204;204;204m ]                                                                         [39m[49m[m
+        | 
+        |     t.equal(result.commitMode, COMMIT_MODE.TWO_PHASE_COMMIT);
+        |     t.same(prepareCalls.sort(), ['p1', 'p2']);
+        | ------^
+        |   });
+      code: 'ERR_TEST_FAILURE'
+      stack: |-
+        Test.<anonymous> (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:694:7)
+      ...
+not ok 17 - DistributedTransactionCoordinator - final second participant selects two phase
+  ---
+  duration_ms: 163.66
+  type: 'suite'
+  location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:675:1'
+  failureType: 'subtestsFailed'
+  failures:
+    0: 'should be equal'
+    1: 'should be equivalent'
+  error: '2 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: DistributedTransactionCoordinator - rejects enlistment after freeze
+    # Subtest: should be equal
+    ok 1 - should be equal
+      ---
+      duration_ms: 0
+      ...
+    # Subtest: should be equivalent
+    ok 2 - should be equivalent
+      ---
+      duration_ms: 0
+      ...
+ok 18 - DistributedTransactionCoordinator - rejects enlistment after freeze
+  ---
+  duration_ms: 77.465
+  type: 'suite'
+  ...
+# Subtest: DistributedTransactionCoordinator - commit queues behind paused enlistment
+    # Subtest: commit cannot freeze while participant begin is in flight
+    ok 1 - commit cannot freeze while participant begin is in flight
+      ---
+      duration_ms: 0
+      ...
+    # Subtest: should be equivalent
+    ok 2 - should be equivalent
+      ---
+      duration_ms: 0
+      ...
+ok 19 - DistributedTransactionCoordinator - commit queues behind paused enlistment
+  ---
+  duration_ms: 76.865
+  type: 'suite'
+  ...
+# Subtest: DistributedTransactionCoordinator - one phase resolves ambiguous commit outcome
+    # Subtest: should be equal
+    ok 1 - should be equal
+      ---
+      duration_ms: 0
+      ...
+    # Subtest: durable committed outcome closes commit-before-ack replay
+    not ok 2 - durable committed outcome closes commit-before-ack replay
+      ---
+      duration_ms: 0
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:784:7'
+      failureType: 'testCodeFailure'
+      error: |-
+        durable committed outcome closes commit-before-ack replay
+        [48;2;172;62;163m[38;2;255;229;241m--- expected                                                               [39m[49m[m
+        [48;2;58;117;0m[38;2;242;255;229m+++ actual                                                                 [39m[49m[m
+        [48;2;34;34;34m[38;2;117;158;239m@@ -1,1 +1,1 @@                                                            [39m[49m[m
+        [48;2;172;62;163m[38;2;255;229;241m-true                                                                      [39m[49m[m
+        [48;2;58;117;0m[38;2;242;255;229m+false                                                                     [39m[49m[m
+        |     await committed.begin('one-phase-ack-lost');
+        |     await committed.enlistParticipants('one-phase-ack-lost', ['p1']);
+        |     t.equal((await committed.commit('one-phase-ack-lost')).success, true,
+        | ------^
+        |       'durable committed outcome closes commit-before-ack replay');
+      code: 'ERR_TEST_FAILURE'
+      stack: |-
+        Test.<anonymous> (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:784:7)
+      ...
+    # Subtest: should be equal
+    not ok 3 - should be equal
+      ---
+      duration_ms: 0
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:799:7'
+      failureType: 'testCodeFailure'
+      error: |-
+        should be equal
+        [48;2;172;62;163m[38;2;255;229;241m--- expected                                                               [39m[49m[m
+        [48;2;58;117;0m[38;2;242;255;229m+++ actual                                                                 [39m[49m[m
+        [48;2;34;34;34m[38;2;117;158;239m@@ -1,1 +1,1 @@                                                            [39m[49m[m
+        [48;2;172;62;163m[38;2;255;229;241m-false                                                                     [39m[49m[m
+        [48;2;58;117;0m[38;2;242;255;229m+undefined                                                                 [39m[49m[m
+        |     );
+        |     t.equal(notCommittedResult.success, false);
+        |     t.equal(notCommittedResult.deferred, false);
+        | ------^
+        | 
+        |     const unknown = buildCoordinator(PARTICIPANT_COMMIT_OUTCOME.UNKNOWN);
+      code: 'ERR_TEST_FAILURE'
+      stack: |-
+        Test.<anonymous> (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:799:7)
+      ...
+    # Subtest: should be equal
+    not ok 4 - should be equal
+      ---
+      duration_ms: 0
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:805:7'
+      failureType: 'testCodeFailure'
+      error: |-
+        should be equal
+        [48;2;172;62;163m[38;2;255;229;241m--- expected                                                               [39m[49m[m
+        [48;2;58;117;0m[38;2;242;255;229m+++ actual                                                                 [39m[49m[m
+        [48;2;34;34;34m[38;2;117;158;239m@@ -1,1 +1,1 @@                                                            [39m[49m[m
+        [48;2;172;62;163m[38;2;255;229;241m-true                                                                      [39m[49m[m
+        [48;2;58;117;0m[38;2;242;255;229m+undefined                                                                 [39m[49m[m
+        |     await unknown.enlistParticipants('one-phase-unknown', ['p1']);
+        |     const unknownResult = await unknown.commit('one-phase-unknown');
+        |     t.equal(unknownResult.deferred, true);
+        | ------^
+        |     t.equal(
+        |       unknown.getTransaction('one-phase-unknown').status,
+      code: 'ERR_TEST_FAILURE'
+      stack: |-
+        Test.<anonymous> (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:805:7)
+      ...
+    # Subtest: Cannot read properties of null (reading 'status')
+    not ok 5 - Cannot read properties of null (reading 'status')
+      ---
+      duration_ms: 0
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:807:50'
+      failureType: 'testCodeFailure'
+      error: |-
+        Cannot read properties of null (reading 'status')
+        |     t.equal(unknownResult.deferred, true);
+        |     t.equal(
+        |       unknown.getTransaction('one-phase-unknown').status,
+        | -------------------------------------------------^
+        |       TRANSACTION_STATUS.COMMITTING,
+        |     );
+      code: 'ERR_TEST_FAILURE'
+      stack: |-
+        Test.<anonymous> (/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:807:50)
+      ...
+not ok 20 - DistributedTransactionCoordinator - one phase resolves ambiguous commit outcome
+  ---
+  duration_ms: 16.6
+  type: 'suite'
+  location: '/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test/query/distributed-transaction-coordinator.test.js:767:1'
+  failureType: 'subtestsFailed'
+  failures:
+    0: 'durable committed outcome closes commit-before-ack replay'
+    1: 'should be equal'
+    2: 'should be equal'
+    3: "Cannot read properties of null (reading 'status')"
+  error: '4 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: DistributedTransactionCoordinator - recovery rejects incomplete frozen set
+    # Subtest: expected to throw
+    ok 1 - expected to throw
+      ---
+      duration_ms: 0
+      ...
+ok 21 - DistributedTransactionCoordinator - recovery rejects incomplete frozen set
+  ---
+  duration_ms: 1.202
+  type: 'suite'
+  ...
+# Subtest: DistributedTransactionCoordinator - recovery rejects multi-participant 1PC
+    # Subtest: expected to throw
+    ok 1 - expected to throw
+      ---
+      duration_ms: 0
+      ...
+    # Subtest: invalid recovery must not install a live transaction
+    ok 2 - invalid recovery must not install a live transaction
+      ---
+      duration_ms: 0
+      ...
+    # Subtest: expected to throw
+    ok 3 - expected to throw
+      ---
+      duration_ms: 0
+      ...
+    # Subtest: repeated recovery must reject the same poison state
+    ok 4 - repeated recovery must reject the same poison state
+      ---
+      duration_ms: 0
+      ...
+ok 22 - DistributedTransactionCoordinator - recovery rejects multi-participant 1PC
+  ---
+  duration_ms: 0.581
+  type: 'suite'
+  ...
+1..22
+# tests 62
+# suites 22
+# pass 35
+# fail 27
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1613.25882
