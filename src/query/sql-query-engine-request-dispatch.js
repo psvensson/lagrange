@@ -15,6 +15,8 @@ import {
   TRANSACTION_END_TYPES,
   admitExpectedTransaction,
 } from './sql-query-engine-statement-admission.js';
+import {copyDistributedBeginConsumer} from
+  './distributed/distributed-begin-consumer.js';
 
 const STATEMENT_LOG_LIMIT = 100;
 
@@ -35,8 +37,13 @@ const {
  * @return {{state: string, failure?: Object}} STATEMENT_ADMISSION decision.
  */
 function admitRequestTransaction(transactionCoordinator, sqlRequest) {
-  const endsBlock = TRANSACTION_END_TYPES.has(
-    classifyTransactionControlStatement(sqlRequest.statement));
+  const transactionControl = classifyTransactionControlStatement(
+    sqlRequest.statement,
+  );
+  if (transactionControl === 'BEGIN_TRANSACTION') {
+    return {state: STATEMENT_ADMISSION.ADMITTED};
+  }
+  const endsBlock = TRANSACTION_END_TYPES.has(transactionControl);
   return admitExpectedTransaction(transactionCoordinator,
     sqlRequest.sessionId,
     endsBlock ? null : sqlRequest.expectedTransactionId);
@@ -137,22 +144,24 @@ class SQLQueryEngineRequestDispatch extends
         sqlRequest,
         executionOptions,
       );
+      const queryOptions = {
+        sessionId: sqlRequest.sessionId,
+        tenantId: sqlRequest.tenantId,
+        dialect: sqlRequest.dialect,
+        timeoutMs: sqlRequest.timeoutMs,
+        timeoutBudget: sqlRequest.timeoutBudget,
+        cancellationToken: sqlRequest.cancellationToken || null,
+        budgets: sqlRequest.budgets,
+        ...expectedTransactionOption(sqlRequest),
+        ...(issuingServiceId ? {issuingServiceId} : {}),
+        ...(sqlRequest.securityContext ?
+          {securityContext: sqlRequest.securityContext} : {}),
+      };
+      copyDistributedBeginConsumer(sqlRequest, queryOptions);
       return this.executeQuery(
         sqlRequest.statement,
         sqlRequest.parameters,
-        {
-          sessionId: sqlRequest.sessionId,
-          tenantId: sqlRequest.tenantId,
-          dialect: sqlRequest.dialect,
-          timeoutMs: sqlRequest.timeoutMs,
-          timeoutBudget: sqlRequest.timeoutBudget,
-          cancellationToken: sqlRequest.cancellationToken || null,
-          budgets: sqlRequest.budgets,
-          ...expectedTransactionOption(sqlRequest),
-          ...(issuingServiceId ? {issuingServiceId} : {}),
-          ...(sqlRequest.securityContext ?
-            {securityContext: sqlRequest.securityContext} : {}),
-        },
+        queryOptions,
       );
     }
     case EXECUTION_MODE.PARTITION_CALLBACK:
