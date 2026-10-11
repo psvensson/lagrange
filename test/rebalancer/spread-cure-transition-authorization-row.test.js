@@ -6,17 +6,41 @@
 // destination replica and the operation id AFTER the canonical replica id is
 // allocated, stamps it on the operation's existing first steps-history
 // metadata record, and the row decode exposes it. A move that carries no
-// authorization preserves the pre-admission payload byte-identical to main's:
-// the digests below were captured by running this creation path at f2fed102a
-// BEFORE any src file of this quest was edited
-// (scratch capture-row-digest.mjs; each digest is stable across runs).
+// authorization writes exactly the row owner's canonical row: the write is the
+// owner's INSERT statement, every pre-admission parameter is the value the
+// repository's row builder produced for the same operation in the same
+// persist call, the committed-membership stamp a join row carries has exactly
+// the answer owner's fields, no authorization field appears anywhere in the
+// payload, and the appended CREATE-admission columns begin null.
+//
+// Superseded (R09, 2026-10-11). Until here the unauthorized rows were held to
+// sha256 digests of their first pre-admission parameters, captured on main at
+// f2fed102a (2026-09-19) and recaptured for owner decision O1 (2026-09-26: the
+// committed-membership stamp in steps_history[0]). A digest freezes bytes two
+// owners change deliberately: 0d60f1ac4 "Advance raft-rs membership generation
+// slice" (2026-10-07, independently approved 12:24Z, merged at b98722cab)
+// added learnersNext, configurationKey and membershipGenerationIndex to the
+// committed-membership answer, so the stamp inside every join row's first
+// steps-history record changed while the REMOVE row, which carries no stamp,
+// still digested to its sealed value (measured 2026-10-11 against the green
+// base bb3ed72d0; the message-group columns the same merge appended sit after
+// the pre-admission range and did not move it). The expectation is consumed
+// from the owners instead of a byte string: the INSERT column list, the
+// repository's row builder, and COMMITTED_MEMBERSHIP_ANSWER_FIELD. A
+// deliberate owner change is followed; an unowned value on an unauthorized
+// row is still refused.
 //
 // Raw node:test so the anchored receipt runner selects exactly one scenario.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createHash} from 'node:crypto';
 
+import {
+  REPLICA_OPERATION_CREATE_ADMISSION_COLUMNS,
+} from '../../src/bootstrap/replica-operation-create-admission-schema-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {
+  COMMITTED_MEMBERSHIP_ANSWER_FIELD,
+} from '../../src/raft/raft-committed-membership-constants.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   SPREAD_CURE_TRANSITION_AUTHORIZATION_MOVE_FIELD,
@@ -26,6 +50,9 @@ import {
 import {
   OPERATION_METADATA_KEY,
 } from '../../src/rebalancer/replica-operation-progress.js';
+import {
+  REPLICA_OPERATION_INSERT_SQL,
+} from '../../src/rebalancer/replica-operation-repository-constants.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {
   createMockCache,
@@ -45,40 +72,30 @@ const SECOND_CRITICAL_PARTITION_ID = 'sql_transactions-p1';
 const ORDINARY_PARTITION_ID = 'tbl-users-p1';
 const SEED_NODE_ID = 'seed-node';
 const PUBLISHED_EPOCH = 4;
-const FROZEN_TIME = 0;
-const STEPS_HISTORY_PARAM_INDEX = 13;
-const PRE_CREATE_ADMISSION_PARAM_COUNT = 17;
-const TIMESTAMP_PARAM_INDEXES = new Set([9, 10, 11]);
 const AUTHORIZATION_KEY = OPERATION_METADATA_KEY.CURE_TRANSITION_AUTHORIZATION;
+const STAMP_KEY = OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP;
 const MOVE_FIELD = SPREAD_CURE_TRANSITION_AUTHORIZATION_MOVE_FIELD;
 const INSERT_STATEMENT_FRAGMENT = 'INSERT INTO replica_operations';
+const STEPS_HISTORY_COLUMN = 'steps_history';
+const COLUMN_LIST_OPEN = '(';
+const COLUMN_LIST_CLOSE = ')';
+const COLUMN_SEPARATOR = ',';
 
-// Main's canonical pre-admission INSERT payload digests for moves carrying no
-// authorization,
-// captured at f2fed102a before this quest edited src. Timestamps (created_at,
-// updated_at, completed_at and each steps-history entry's own timestamp) are
-// the only values normalised; every other byte is main's.
-//
-// Superseded under R09 by owner decision O1 (2026-09-26): every partition
-// ADD/REPLACE row now carries its committed-membership stamp in
-// steps_history[0] and its address hints in ascending raft peer id order, so
-// the three join digests were recaptured on the O1 branch (e1 scratch
-// capture over this file's own fixtures); the REMOVE row, which carries no
-// stamp, preserves main's pre-admission payload. The claim is unchanged: a
-// move without an authorization writes no authorization field. This Quest's
-// appended admission columns are separately required to begin nullable.
-const MAIN_ROW_DIGEST = Object.freeze({
-  'critical-add':
-    '07cf06efba2b52eddd3c645ff62d6e55b39cdb9d5cef067b695211f7600f4745',
-  'critical-add-no-epoch':
-    '45cbecaf6759fe38e303ea4268cc0809f245d7c00bfa5e1bd1f8f0510d67d74a',
-  'ordinary-add':
-    '57a1d7fda54a443e6f5e968d42798b746020d9786e57f8e09f832d664a7fa7d7',
-  'critical-replace':
-    '0bcfe39bb458e06b25eb241c9de86106613b777ecb97e5d1863c456856eb2af1',
-  'ordinary-remove':
-    '722d411ac720e9d8900d17eb2a64238840150848c0e554036d25e0f3861a88fb',
-});
+// The owner's INSERT column list, in parameter order, read from the statement
+// the repository writes with; the appended CREATE-admission columns are named
+// by their own schema owner, and everything before them is pre-admission.
+const INSERT_COLUMNS = Object.freeze(REPLICA_OPERATION_INSERT_SQL
+  .slice(REPLICA_OPERATION_INSERT_SQL.indexOf(COLUMN_LIST_OPEN) + 1,
+    REPLICA_OPERATION_INSERT_SQL.indexOf(COLUMN_LIST_CLOSE))
+  .split(COLUMN_SEPARATOR)
+  .map((column) => column.trim()));
+const ADMISSION_COLUMNS = Object.freeze(
+  REPLICA_OPERATION_CREATE_ADMISSION_COLUMNS.map(({name}) => name));
+const PRE_ADMISSION_COLUMNS = Object.freeze(
+  INSERT_COLUMNS.filter((column) => !ADMISSION_COLUMNS.includes(column)));
+const STEPS_HISTORY_PARAM_INDEX = INSERT_COLUMNS.indexOf(STEPS_HISTORY_COLUMN);
+const STAMP_FIELDS = Object.freeze(
+  Object.values(COMMITTED_MEMBERSHIP_ANSWER_FIELD).slice().sort());
 
 const UNAUTHORIZED_MOVES = Object.freeze([
   ['critical-add', {
@@ -122,28 +139,19 @@ const POLICY_AUTHORIZATION = Object.freeze({
   destinationNodeId: 'node-2',
 });
 
-function canonicalizeStepsHistory(text) {
-  const parsed = JSON.parse(text);
-  for (const entry of parsed) {
-    if (entry && typeof entry === 'object' &&
-        typeof entry.timestamp === 'number') {
-      entry.timestamp = FROZEN_TIME;
-    }
-  }
-  return JSON.stringify(parsed);
+// Owner decision O1: a join row (ADD, REPLACE) carries the group's committed
+// membership in its first steps-history record; a REMOVE row carries none.
+function isJoin(move) {
+  return move.type !== OperationType.REMOVE;
 }
 
-function canonicalInsert(params) {
-  return JSON.stringify(params.slice(0, PRE_CREATE_ADMISSION_PARAM_COUNT)
-    .map((value, index) => {
-      if (index === STEPS_HISTORY_PARAM_INDEX && typeof value === 'string') {
-        return canonicalizeStepsHistory(value);
-      }
-      if (TIMESTAMP_PARAM_INDEXES.has(index) && typeof value === 'number') {
-        return FROZEN_TIME;
-      }
-      return value;
-    }));
+function stampOf(params) {
+  const first = JSON.parse(params[STEPS_HISTORY_PARAM_INDEX])[0];
+  return first && typeof first === 'object' ? first[STAMP_KEY] : undefined;
+}
+
+function nullable(value) {
+  return value === undefined ? null : value;
 }
 
 async function createOperationCapturingInserts(move) {
@@ -162,11 +170,28 @@ async function createOperationCapturingInserts(move) {
   });
   coordinator.initialize();
   const inserts = [];
+  // The repository builds the canonical row and the INSERT parameters from the
+  // same operation in the same persist call; both are captured so the write
+  // can be held to the row owner rather than to a byte string.
+  const canonicalRows = [];
+  const repository = coordinator.repository;
+  const buildReplicaOperationRow =
+    repository.buildReplicaOperationRow.bind(repository);
+  repository.buildReplicaOperationRow = (operation) => {
+    const row = buildReplicaOperationRow(operation);
+    canonicalRows.push(row);
+    return row;
+  };
   const engine = coordinator.sqlQueryEngine;
   const executeQuery = engine.executeQuery.bind(engine);
   engine.executeQuery = async (sql, params) => {
     if (String(sql).includes(INSERT_STATEMENT_FRAGMENT)) {
-      inserts.push({params, canonical: canonicalInsert(params)});
+      inserts.push({
+        sql: String(sql),
+        params,
+        payload: JSON.stringify(params),
+        canonicalRow: canonicalRows.at(-1),
+      });
     }
     return executeQuery(sql, params);
   };
@@ -180,21 +205,36 @@ async function createOperationCapturingInserts(move) {
 
 test('the authorization rides the operation row and rows without it preserve ' +
   'the pre-admission payload', async () => {
-  // 1. Every move shape that carries no authorization preserves main's row
-  // payload before this Quest's additive nullable admission columns.
+  // 1. Every move shape that carries no authorization writes exactly the row
+  // owner's canonical row, before this Quest's additive nullable admission
+  // columns.
   for (const [name, move] of UNAUTHORIZED_MOVES) {
     const {inserts} = await createOperationCapturingInserts(move);
     assert.equal(inserts.length, 1, `${name} wrote exactly one row`);
-    const digest = createHash('sha256')
-      .update(inserts[0].canonical).digest('hex');
-    assert.equal(digest, MAIN_ROW_DIGEST[name],
-      `${name}: the pre-admission row payload is byte-identical to main's`);
-    assert.ok(
-      inserts[0].params.slice(PRE_CREATE_ADMISSION_PARAM_COUNT)
-        .every((value) => value === null),
-      `${name}: additive CREATE admission columns begin unclaimed`,
-    );
-    assert.equal(inserts[0].canonical.includes(AUTHORIZATION_KEY), false,
+    const {sql, params, payload, canonicalRow} = inserts[0];
+    assert.equal(sql, REPLICA_OPERATION_INSERT_SQL,
+      `${name}: the write is the row owner's INSERT statement`);
+    assert.equal(params.length, INSERT_COLUMNS.length,
+      `${name}: one parameter per owner column`);
+    assert.ok(canonicalRow, `${name}: the row owner built the canonical row`);
+    assert.deepEqual(
+      PRE_ADMISSION_COLUMNS.map((column) =>
+        params[INSERT_COLUMNS.indexOf(column)]),
+      PRE_ADMISSION_COLUMNS.map((column) => nullable(canonicalRow[column])),
+      `${name}: every pre-admission parameter is the row owner's value`);
+    const stamp = stampOf(params);
+    assert.equal(stamp !== undefined, isJoin(move),
+      `${name}: a join row carries the committed-membership stamp, a REMOVE ` +
+      'row none');
+    if (stamp !== undefined) {
+      assert.deepEqual(Object.keys(stamp).sort(), STAMP_FIELDS,
+        `${name}: the stamp carries exactly the answer owner's fields`);
+    }
+    for (const column of ADMISSION_COLUMNS) {
+      assert.equal(params[INSERT_COLUMNS.indexOf(column)], null,
+        `${name}: additive CREATE admission column ${column} begins unclaimed`);
+    }
+    assert.equal(payload.includes(AUTHORIZATION_KEY), false,
       `${name}: a field absent from the move stays absent on the row`);
   }
 
@@ -263,7 +303,7 @@ test('the authorization rides the operation row and rows without it preserve ' +
       [MOVE_FIELD]: junk,
     });
     assert.equal(
-      junkInserts[0].canonical.includes(AUTHORIZATION_KEY), false,
+      junkInserts[0].payload.includes(AUTHORIZATION_KEY), false,
       `an unsanctioned move field (${typeof junk}) stamps nothing`);
   }
 });

@@ -28,7 +28,7 @@
   "censusSize": 2341,
   "digest": "fnv1a32-ff033146",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-cd7bdae0",
+  "observationDigest": "fnv1a32-490e3835",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -11466,10 +11466,12 @@
         "src/bootstrap/system-table-runtime-schema-definitions.js",
         "src/bootstrap/system-table-schemas-constants.js",
         "src/config/configuration-manager.js",
+        "src/control-plane/replica-dispatch-readiness-capture.js",
         "src/partition/partition-service-constants.js",
         "src/partition/partition-service-entry-apply-base.js",
         "src/partition/partition-service.js",
         "src/rebalancer/move-planner-move-calculation-methods.js",
+        "src/rebalancer/operation-workflow-coordinator-created-handoff-scheduling.js",
         "src/rebalancer/operation-workflow-dispatch-epoch-gate.js",
         "src/rebalancer/operation-workflow-dispatch-response-reconcile.js",
         "src/rebalancer/rebalance-coordinator-operation-creation-admission.js",
@@ -11490,7 +11492,8 @@
         "src/rebalancer/unified-rebalancer-rebalance-loop.js"
       ],
       "directories": [
-        "src"
+        "src",
+        "test/rebalancer"
       ]
     },
     "test/rebalancer/replica-operation-repository-owner-clock-waits.test.js": {
