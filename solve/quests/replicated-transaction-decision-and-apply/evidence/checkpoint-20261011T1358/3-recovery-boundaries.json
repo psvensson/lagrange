@@ -1,0 +1,57 @@
+{
+  "status": "OPEN; component proof only; recovery acceptance blocked",
+  "cdcBoundary": {
+    "object": "One CDC-propagated system-table row in an authoritative cache-hydration page",
+    "path": [
+      "src/cdc/cdc-complete-coverage-reconcile.js",
+      "src/query/query-executor-partition-request-builders.js",
+      "src/partition/partition-service-entry-apply-base.js",
+      "src/partition/partition-service-cdc-coverage-methods.js",
+      "src/partition/partition-cdc-source-coverage.js"
+    ],
+    "sourceSha256": "0a4be56f9a77964bec51c2d51a7edbf00aefb9eddbbe1190fddf73ec05c565c1",
+    "boundary": "CDC_COVERAGE_BOUND.MAX_BYTES = 16 * 1024 * 1024; readCoveragePage measures JSON row bytes after SELECT * LIMIT257 .all allocation. First oversized row returns rowTooLarge/refused.",
+    "transport": "Existing authoritative hydration QUERY request/response, local or routed; this is an application page budget, not proven transport-frame limit or snapshot/image limit.",
+    "correction": "Accepted bounded fragment design, implementation incomplete. Existing snapshot transfer remains separately owned. No global size-limit raise.",
+    "requiredProof": [
+      "Actual >16MiB transfer through production hydration",
+      "Interruption/session loss then recovery",
+      "Bounded source/consumer allocations including ordinary page preallocation",
+      "Durable original CDC event delivered on production restart without another SQL write",
+      "Lost delivery ACK retains original identity and obligation, with existing duplicate semantics"
+    ],
+    "sourceReviewVerdict": "PENDING",
+    "worktree": "/mnt/data/peter/projects/.worktrees/tx1-cdc-20261011",
+    "baseCommit": "e7c89f4b5114c0238312d3831b65889a4622f4e9",
+    "sourceStatus": "Uncommitted C17 work; not claimed present at published base or candidate head"
+  },
+  "snapshotMarker": {
+    "sourceSha256": "52b4520ffb0fd06d88aa7394c7deaca4424790e3170bdc97a7f10c287554c88a",
+    "marker": "checkpointsRoot/install/install-state.json",
+    "transition": "requestSnapshotInstall validates before marker acquisition; rejectInvalidCheckpoint calls replacing writeMarker. Invalid generation overwrites genuine-owner-shaped STAGED marker with new legacy REJECTED marker.",
+    "restart": "resolvePendingSnapshotInstall returns REJECTED/prior_rejection_retained while old staging remains.",
+    "reproducer": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/freshmg-f1-source-review-cdc56-probes.mjs",
+    "reproducerSha256": "b86d25bc1f09915868c8bf9b1b1fa067209fd73f4dd48329e8276aa4c14641be",
+    "logSha256": "e8d224db0331a12c878ab7f0d272a46c8eaf32cd9d01a523a38045a28b7cea68",
+    "ceiling": "Constructed marker/staging proves exported-boundary overwrite and restart classification only. Authentic image/CREATE paired refusal-and-recovery witness now being implemented.",
+    "independentSourceVerdict": "No completed verdict; earlier review workers interrupted by automated content check. Blocker retained."
+  },
+  "component399": {
+    "commit": "b16e932497d123c982a13f864503dd9ad668ec75",
+    "tree": "aaedf7c796070b43d8105e7f8de6615404d13c0f",
+    "host": "tv-dator",
+    "files": 8,
+    "assertions": 399,
+    "attempt": 1,
+    "logSha256": "a815f2ed9103dc3338d7d3a7126ec313aa3dd51076213c26d1a396253b0e6b34",
+    "ledgerSha256": "239c5258d90a3542b8dd787168c400aa293596f953eafd207cb6e382174e57cb",
+    "commandFile": "399-component-reproduction.sh",
+    "commandStatus": "Reconstructed executable reproduction from retained exact commit, canonical helper and per-file ledger; no claim this preserves the original shell spelling.",
+    "ceiling": "Component evidence; not complete production REPLACE, second REPLACE, seed-storage loss, SQL/CDC/cache survival or merge approval."
+  },
+  "integratedRecoveryRequired": [
+    "Two complete normal production REPLACE workflows with transfer/replay/promotion/activation/handoff/source removal and both absence proofs",
+    "Exact retired generation cleanup, reservation and membership-lane release under their respective owner prerequisites",
+    "Make specified seed storage genuinely unavailable and prove SQL/CDC/cache recovery from surviving deployment"
+  ]
+}

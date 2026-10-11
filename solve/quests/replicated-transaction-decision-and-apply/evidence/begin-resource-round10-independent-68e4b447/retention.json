@@ -1,0 +1,19 @@
+{
+  "scope": "Independent complete all63 BEGIN round10 supplement REJECT; source HOLD. Protected finishing-lane arithmetic and BOM/NUL byte controls supported.",
+  "subject": "df779a902d3972db751eebdd8790b828ed8bfa2f422f042a60ecf1445c7acc53",
+  "verifiedDiagnosticEntries": 10,
+  "artifacts": {
+    "diagnostics-manifest.sha256": {
+      "bytes": 1208,
+      "sha256": "0c10143df08c5a8b28da365d24818c00c0bf879deec5797aa758e066a1a43cca"
+    },
+    "diagnostics.tar.gz": {
+      "bytes": 64469,
+      "sha256": "2a66591315a4471d8d0d1b63469cb0ce2975aee446f27c37091566eb737137aa"
+    },
+    "review-begin-uncertain-design-round10-independent.md": {
+      "bytes": 43091,
+      "sha256": "68e4b447c7f17e20971999025341ff864265ab2b276499c57ba66439a049d77a"
+    }
+  }
+}

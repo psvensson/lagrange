@@ -16,14 +16,15 @@ const TRANSACTION_DECISION_ERROR = Object.freeze({
 });
 
 /**
- * Select the coordinator-owned commit protocol from the final participant set.
- * The caller supplies capability evidence, never a preferred commit mode.
+ * Select the coordinator-owned commit protocol from the final participant
+ * set: prepare-first for every coordinator-managed transaction, a single
+ * participant included (TX1 owner decision 2026-10-10, design 11.2; the
+ * ONE_PHASE_COMMIT fast path is retired). DIRECT_AUTOCOMMIT statements never
+ * reach the coordinator.
  *
  * @param {Object} input
  * @param {string} input.transactionMode
  * @param {string} input.participantSetState
- * @param {number} input.participantCount
- * @param {boolean} input.onePhaseCommitSupported
  * @return {string}
  */
 function selectTransactionCommitMode(input) {
@@ -32,9 +33,6 @@ function selectTransactionCommitMode(input) {
   }
   if (input.participantSetState !== PARTICIPANT_SET_STATE.FROZEN) {
     throw new Error(TRANSACTION_DECISION_ERROR.PARTICIPANTS_NOT_FROZEN);
-  }
-  if (input.participantCount === 1 && input.onePhaseCommitSupported === true) {
-    return COMMIT_MODE.ONE_PHASE_COMMIT;
   }
   return COMMIT_MODE.TWO_PHASE_COMMIT;
 }
@@ -45,7 +43,6 @@ function selectTransactionCommitMode(input) {
  * @param {Object} input
  * @param {string} input.transactionMode
  * @param {number} input.participantCount
- * @param {boolean} input.onePhaseCommitSupported
  * @param {number} input.decidedAt
  * @return {Object}
  */
@@ -60,8 +57,6 @@ function buildFrozenTransactionDecision(input) {
   const commitMode = selectTransactionCommitMode({
     transactionMode: input.transactionMode,
     participantSetState,
-    participantCount: input.participantCount,
-    onePhaseCommitSupported: input.onePhaseCommitSupported,
   });
   const modeEvent = Object.freeze({
     sequence: 2,

@@ -15,6 +15,12 @@ import {PG_SESSION_STATE} from
 import {createTestPostgresWireAdapter} from
   '../helpers/pgwire-auth-handler.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
+// Engines persist transaction state (TX1 seam S4b) and their partitions
+// answer the participant transaction protocol.
+import {createTransactionPersistenceGateway} from
+  '../test-helpers/transaction-persistence-gateway.js';
+import {answerParticipantTransactionRequest} from
+  '../test-helpers/participant-protocol-double.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {
   QUERY_ERROR_CODE,
@@ -49,8 +55,10 @@ function createMockMessageRouter() {
           changes: 0,
         };
       }
+      // A participant answers the transaction protocol (TX1 design 2.2): a
+      // PREPARE names its state and digest, a COMMIT its outcome.
       if (message.type === 'TRANSACTION') {
-        return {acknowledged: true, success: true};
+        return answerParticipantTransactionRequest(message);
       }
       return {acknowledged: true, success: true};
     },
@@ -128,6 +136,7 @@ function createAdapterWithEngine(opts = {}) {
   const engine = new SQLQueryEngine({
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
+    controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
   });
 
   const adapter = createTestPostgresWireAdapter({

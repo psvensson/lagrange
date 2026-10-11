@@ -218,7 +218,7 @@ class DurableWorkflowCoordinator {
       return null;
     }
     this.workflowsById.delete(workflowId);
-    if (workflow.ownerKey) {
+    if (this.workflowsByOwnerKey.get(workflow.ownerKey) === workflow) {
       this.workflowsByOwnerKey.delete(workflow.ownerKey);
     }
     this.clearCommittedTransitions(workflowId);
@@ -596,7 +596,7 @@ class DurableWorkflowCoordinator {
    * participants registry — the run-23 clobber orphaned an already-enlisted
    * participant BEGIN that way, and the coordinator then committed against
    * the empty set. Recovery exists to restore state after a restart
-   * (nothing live) or to refresh terminal records.
+   * (nothing known); terminal records cannot be resurrected by stale rows.
    * @return {Object|null} The restored workflow, or null when skipped.
    * @private
    */
@@ -614,14 +614,19 @@ class DurableWorkflowCoordinator {
     const existingWorkflow = this.getWorkflowById(
       String(workflowRecord.workflowId || ''),
     );
-    const existingIsLive =
-      existingWorkflow &&
-      !(typeof isTerminalWorkflow === LOCAL_STR_FUNCTION &&
-        isTerminalWorkflow(existingWorkflow, null));
-    if (existingIsLive) {
-      return null;
+    // A row is a restart input. It cannot rewind any known workflow,
+    // including one whose terminal state has not reached the cache yet.
+    if (existingWorkflow) return null;
+    const workflow = this.createWorkflowRecord(workflowRecord);
+    const owner = this.workflowsByOwnerKey.get(workflow.ownerKey);
+    this.setWorkflowState(workflow);
+    // Retain the old durable obligation by ID, without replacing a newer
+    // live owner's binding. Its coordinator can redrive that exact ID.
+    if (owner && !(typeof isTerminalWorkflow === LOCAL_STR_FUNCTION &&
+        isTerminalWorkflow(owner, null))) {
+      this.workflowsByOwnerKey.set(workflow.ownerKey, owner);
     }
-    return this.setWorkflowState(this.createWorkflowRecord(workflowRecord));
+    return workflow;
   }
 
   /**

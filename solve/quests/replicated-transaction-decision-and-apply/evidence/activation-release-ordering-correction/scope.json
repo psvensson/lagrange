@@ -1,0 +1,8 @@
+{
+  "sourceManifestSha256": "9231873cb44acd78c90d5de4b9ee08ed0c7e995ccd8637f0312259a1f1a2db47",
+  "verifiedFiles": 64,
+  "focusedResult": "participant-release-protocol14/14",
+  "sourceApproval": false,
+  "normalOracleRun": false,
+  "remainingBlocker": "Normal startup does not yet reconstruct exact retirement obligation/control route after process restart; in-memory retention alone is insufficient. Formatting errors remain."
+}
