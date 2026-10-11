@@ -21,6 +21,16 @@
  *   Snapshot-installed learners satisfy the identical predicate through
  *   their post-install acks: one progress contract.
  *
+ * - `evaluateExactLearnerPromotionProof` is the predicate's exact entry for
+ *   observations whose commit and match indices are not already known to be
+ *   exact integers (FreshMG 6.B slice B2's RUNNING acknowledgement and 6.C
+ *   slice C2's promotion selection): an absent, non-integer or zero commit
+ *   and an absent or non-integer match refuse PROGRESS_UNOBSERVED before the
+ *   predicate is consulted, because the predicate reads an absent index as 0
+ *   and so grants 0/0. The predicate itself keeps that reading: its partition
+ *   consumer reports an unobserved match as 0 on purpose (PROGRESS_BEHIND is
+ *   what triggers its replication nudge).
+ *
  * - `validateLearnerPromotionProofResponse` runs on the LEARNER after the
  *   proof round trip: fail-closed refusal when the proof was not granted,
  *   the discovered leader changed, the membership epoch moved, the proof
@@ -47,6 +57,10 @@ const LEARNER_PROMOTION_PROOF_REASON = Object.freeze({
   EPOCH_MISMATCH: 'epoch_mismatch',
   PROGRESS_BEHIND: 'progress_behind',
   PROGRESS_PROVEN: 'progress_proven',
+  // The exact entry (evaluateExactLearnerPromotionProof): the commit or the
+  // match index is absent or not an exact non-negative integer, or the
+  // commit index is 0.
+  PROGRESS_UNOBSERVED: 'progress_unobserved',
   // Channel-level refusals (minted by the promotion owner around the RPC)
   REQUEST_INVALID: 'request_invalid',
   TRANSPORT_FAILED: 'proof_transport_failed',
@@ -57,6 +71,22 @@ const LEARNER_PROMOTION_PROOF_REASON = Object.freeze({
   EPOCH_CHANGED: 'epoch_changed',
   STALE_PROOF_TERM: 'stale_proof_term',
   PROOF_ACCEPTED: 'proof_accepted',
+});
+
+// Why a leader's observed acknowledgement is, or is not yet, a caught-up
+// learner (learner-catch-up-acknowledgement.js: FreshMG 6.B slice B2's
+// RUNNING decision, shared with 6.C slice C2's promotion selection).
+const LEARNER_CATCH_UP_ACKNOWLEDGEMENT = Object.freeze({
+  ACKNOWLEDGED: 'acknowledged',
+  LEADER_UNAVAILABLE: 'leader_unavailable',
+  BEHIND: 'behind',
+  REMOVED: 'removed',
+  // The learner's own committed view does not hold it as the exact learner
+  // (C2's promotion selection asks for it; the join judges its own view).
+  LEARNER_UNOBSERVED: 'learner_unobserved',
+  // The acknowledging leader has not applied an entry of its own term, so its
+  // commit index is not yet current promotion authority (C2's selection).
+  LEADER_TERM_UNAPPLIED: 'leader_term_unapplied',
 });
 
 // Typed cause carried by every channel-level refusal (quest
@@ -168,6 +198,32 @@ function evaluateLearnerPromotionProof(facts = {}) {
   });
 }
 
+function isExactIndex(value) {
+  return Number.isSafeInteger(value) && value >= PROGRESS_PROOF_NUMERIC_ZERO;
+}
+
+/**
+ * The predicate's exact entry. The leader's commit index and its match for
+ * the learner must be present exact non-negative integers with
+ * match >= commit > 0; only then is evaluateLearnerPromotionProof consulted
+ * (leader, term, the two membership epochs). Missing values never normalize
+ * to a synthetic 0/0 grant. Same facts and frozen proof shape as the
+ * predicate.
+ * @param {Object} facts - As evaluateLearnerPromotionProof.
+ * @return {Object} frozen proof outcome
+ */
+function evaluateExactLearnerPromotionProof(facts = {}) {
+  if (!isExactIndex(facts.committedIndex) || !isExactIndex(facts.learnerMatchIndex) ||
+      facts.committedIndex === PROGRESS_PROOF_NUMERIC_ZERO) {
+    return refusedProof(LEARNER_PROMOTION_PROOF_REASON.PROGRESS_UNOBSERVED, facts);
+  }
+  if (facts.learnerMatchIndex < facts.committedIndex) {
+    return refusedProof(LEARNER_PROMOTION_PROOF_REASON.PROGRESS_BEHIND, {
+      ...facts, safePromotionIndex: facts.committedIndex});
+  }
+  return evaluateLearnerPromotionProof(facts);
+}
+
 function validationOutcome(accepted, reason, proof) {
   return Object.freeze({
     accepted,
@@ -260,9 +316,11 @@ function validateLearnerPromotionProofResponse(observation = {}) {
 }
 
 export {
+  LEARNER_CATCH_UP_ACKNOWLEDGEMENT,
   LEARNER_PROMOTION_PROOF_DECISION,
   LEARNER_PROMOTION_PROOF_REASON,
   LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE,
+  evaluateExactLearnerPromotionProof,
   evaluateLearnerPromotionProof,
   refuseLearnerPromotionProof,
   validateLearnerPromotionProofResponse,

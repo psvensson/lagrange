@@ -16,7 +16,7 @@ an independent approval, a changed sealed acceptance, or route activation.
 | Observed fact | Permitted continuation |
 | --- | --- |
 | The exact original learner action has committed and applied | Recover its historical result through the native owner; no reproposal merely because a reply or former runtime was lost. |
-| Outcome unavailable, or no exact origin is retained | Keep UNKNOWN and the existing membership obligation. Neither current absence nor a missing record proves non-commitment, with the one exception below. |
+| Outcome unavailable, or no exact origin is retained | Keep UNKNOWN and the existing membership obligation. Neither current absence nor a missing record proves non-commitment, with the two premised exceptions below (the learner action's registry vouch, slice C1; the promotion's configuration vouch, slice C2). |
 | A prior attempt is definitively fenced AND non-committed | A successor attempt needs a separately proved, durably ordered existing-owner transition. This increment DOES NOT issue it; the ordered successor (runbook 6.C slice C1) does. |
 
 Narrow supersession (6.C slice C1, recorded in its design note, section 8): an
@@ -31,6 +31,23 @@ and a stamp or image that folds it names the target while it is configured.
 A reservation without an origin (a migrated schema, a stamp or image bootstrap
 that folded the action, a local proposal or address hint) vouches for nothing:
 the absence stays UNKNOWN. See the registered read contract.
+
+Second narrow supersession (6.C slice C2, recorded in its design note, section
+8): an absence resolves an issued PROMOTE action as noncommitted on a different
+vouch. A promotion retains no origin, so the registry cannot vouch for it; the
+vouch is the answering replica's applied configuration still holding the target
+as a learner under its own identity (`raft-rs-committed-membership-read.js`,
+`answerCommittedPromotionAction`), under the same fence: the replica leads a
+term strictly newer than the attempt's leader term and has applied an entry of
+that term. The premise is that a committed promotion makes the target a voter
+and nothing in the applied history after it makes the target a learner again:
+the only AddLearnerNode of the target is the transition's learner action, which
+the runtime consumer and the native turn refuse once the learner fact is
+recorded, and the only remover of the target is the transition's abandonment
+branch, which J1 excludes after promotion authorization. An absent target, a
+voter without the transition's learner origin, or a joint configuration vouches
+for nothing: the absence stays UNKNOWN. See the
+[promotion contract](message-group-learner-promotion.md).
 
 The immutable logical target/operation/transition and a fenced execution attempt
 are different. Do not overwrite the first issued permit with current native
@@ -67,6 +84,16 @@ Extend the existing semantic committed-membership read with the explicit
 `learner-action` purpose. It accepts group id plus the existing exact managed
 ADD_LEARNER action tuple, snapshots/validates the request, and runs through the
 native group's existing execution queue and recovery/lifecycle boundaries.
+
+Narrow supersession (6.C slice C2, recorded in its design note): the same
+purpose also accepts the transition's PROMOTE action tuple. A promotion
+retains no origin; its committed outcome is the replica's applied
+configuration naming the target a voter while its registry holds the target's
+learner origin of the same transition, answered with that origin as the
+receipt and the same-read witness membership. A replica holding the target as
+a learner answers NOT_RECORDED with the vouch set; anything else NOT_RECORDED
+unvouched. Only a managed ADD_LEARNER application still writes an origin. See
+the [promotion contract](message-group-learner-promotion.md).
 It returns frozen historical COMMITTED, UNRESOLVED, or REFUSED data. A record
 beyond the same local applied/committed membership boundary is never returned
 as committed. A mismatched or malformed record is not success. A closed or

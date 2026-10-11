@@ -3,13 +3,13 @@
   "id": "test-primary-classification",
   "counts": {
     "unit": 2043,
-    "integration": 89,
+    "integration": 92,
     "bootstrap": 202,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2341,
-  "digest": "fnv1a32-e563a8be",
+  "censusSize": 2344,
+  "digest": "fnv1a32-cd526c73",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1011,6 +1011,9 @@
     "test/integration/message-group-learner-discovery.integration.test.js": "integration",
     "test/integration/message-group-learner-join.integration.test.js": "integration",
     "test/integration/message-group-learner-process-loss.integration.test.js": "integration",
+    "test/integration/message-group-learner-promotion-recording-guards.integration.test.js": "integration",
+    "test/integration/message-group-learner-promotion-selection-guards.integration.test.js": "integration",
+    "test/integration/message-group-learner-promotion.integration.test.js": "integration",
     "test/integration/message-group-learner-recipient.integration.test.js": "integration",
     "test/integration/message-group-learner-runtime-authorization.integration.test.js": "integration",
     "test/integration/message-group-learner-successor-ordering.integration.test.js": "integration",

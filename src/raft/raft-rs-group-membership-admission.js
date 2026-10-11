@@ -4,8 +4,9 @@
 // port and describes itself ({groupId, localReplicaIdentity, logger,
 // logContext?}, where `logContext` is the caller's own fields for each
 // admission record). Founder admission uses port.proposeConfChange; the
-// operation-owned learner consumer below uses the semantic membership port
-// after authoritative operation observation. Neither bypasses native admission.
+// operation-owned learner and promotion (6.C slice C2) consumers below use the
+// semantic membership port after authoritative operation observation. None
+// bypasses native admission.
 //
 // Only the leader proposes an admission, in the port's canonical request
 // shape; a replica that is not the leader, or a peer the committed
@@ -16,7 +17,8 @@
 // (RAFT_MEMBERSHIP_ADMISSION_OUTCOME), never as proposed regardless of the
 // answer.
 
-import {membershipTransitionRefusal} from './raft-rs-membership-transition.js';
+import {membershipTransitionRefusal, TARGET_STATUS_OBSERVATION_FIELDS} from
+  './raft-rs-membership-transition.js';
 import {deepFreeze} from './raft-operation-port.js';
 import {raftRsMembershipAdministration} from
   './raft-rs-membership-administration.js';
@@ -286,10 +288,9 @@ function refusedLearnerAuthorization(observed) {
     observed?.reason ?? RAFT_MEMBERSHIP_AUTHORIZATION_REASON.MISMATCH), retryable: missing});
 }
 
-function learnerRecipientMatches(status, receiver, transition) {
+function recipientMatches(status, receiver, transition, stage) {
   return status?.groupId === receiver.groupId &&
-    status.replicaIdentity === receiver.localReplicaIdentity &&
-    transition?.stage === RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER;
+    status.replicaIdentity === receiver.localReplicaIdentity && transition?.stage === stage;
 }
 
 function reserveAndProposeAuthorizedLearner(port, receiver, transition, admitExecution) {
@@ -341,20 +342,20 @@ function learnerDelivery(receiver, delivery) {
   return {admitExecution};
 }
 
-async function proposeAuthorizedGroupLearner(port, group, request, observeAuthorization,
-  delivery) {
-  if (typeof observeAuthorization !== 'function') {
-    return membershipTransitionRefusal(RAFT_MEMBERSHIP_AUTHORIZATION_REASON.REQUIRED);
-  }
+// The authoritative operation observation of the issued attempt of one stage
+// at this bound recipient: {transition, receiver, admitExecution} or
+// {refusal}. The repository's observation decides; nothing is refreshed.
+async function observedAuthorization(port, group, request, observeAuthorization, delivery,
+  stage) {
   if (!learnerPortAvailable(port)) {
-    return refusedLearnerAuthorization({
-      outcome: RAFT_MEMBERSHIP_AUTHORIZATION_OUTCOME.UNAVAILABLE});
+    return {refusal: refusedLearnerAuthorization({
+      outcome: RAFT_MEMBERSHIP_AUTHORIZATION_OUTCOME.UNAVAILABLE})};
   }
   const receiver = learnerReceiver(group);
   // Only a host-composed delivery context may cross this boundary. Inbound
   // JSON cannot carry its callable fence. Do not read it from request.
   const captured = learnerDelivery(receiver, delivery);
-  if (captured.refusal) return captured.refusal;
+  if (captured.refusal) return captured;
   let observed;
   try {
     observed = await observeAuthorization(request, receiver);
@@ -362,17 +363,86 @@ async function proposeAuthorizedGroupLearner(port, group, request, observeAuthor
     observed = {outcome: RAFT_MEMBERSHIP_AUTHORIZATION_OUTCOME.UNAVAILABLE};
   }
   if (observed?.outcome !== RAFT_MEMBERSHIP_AUTHORIZATION_OUTCOME.OBSERVED) {
-    return refusedLearnerAuthorization(observed);
+    return {refusal: refusedLearnerAuthorization(observed)};
   }
-  if (!learnerRecipientMatches(port.readStatus(), receiver, observed.transition)) {
-    return membershipTransitionRefusal(RAFT_MEMBERSHIP_AUTHORIZATION_REASON.WRONG_RECIPIENT);
+  if (!recipientMatches(port.readStatus(), receiver, observed.transition, stage)) {
+    return {refusal: membershipTransitionRefusal(
+      RAFT_MEMBERSHIP_AUTHORIZATION_REASON.WRONG_RECIPIENT)};
   }
-  return reserveAndProposeAuthorizedLearner(port, receiver, observed.transition,
-    captured.admitExecution);
+  return {transition: observed.transition, receiver, admitExecution: captured.admitExecution};
+}
+
+async function proposeAuthorizedGroupLearner(port, group, request, observeAuthorization,
+  delivery) {
+  if (typeof observeAuthorization !== 'function') {
+    return membershipTransitionRefusal(RAFT_MEMBERSHIP_AUTHORIZATION_REASON.REQUIRED);
+  }
+  const observed = await observedAuthorization(port, group, request, observeAuthorization,
+    delivery, RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER);
+  if (observed.refusal) return observed.refusal;
+  return reserveAndProposeAuthorizedLearner(port, observed.receiver, observed.transition,
+    observed.admitExecution);
+}
+
+// A target whose own port did not answer: retryable unavailability, never
+// evidence.
+function targetUnavailable() {
+  return {refusal: refusedLearnerAuthorization({
+    outcome: RAFT_MEMBERSHIP_AUTHORIZATION_OUTCOME.UNAVAILABLE})};
+}
+// The target's own port status as the native promotion turn takes it: exactly
+// its identity, applied configuration, term, runtime and lifecycle. The leader
+// cannot authenticate this provenance; the host binds it to the target's real
+// port. {observation}, or {refusal} when the target's port did not answer.
+function targetStatusObservation(status) {
+  if (status?.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) return targetUnavailable();
+  return {observation: Object.fromEntries(TARGET_STATUS_OBSERVATION_FIELDS.map((field) =>
+    [field, status[field]]))};
+}
+async function observedTarget(observeTarget, transition) {
+  try {
+    return targetStatusObservation(await observeTarget(transition.replicaIdentity));
+  } catch {
+    return targetUnavailable();
+  }
+}
+
+/**
+ * Propose the issued promotion (6.C slice C2) at this recipient, the leader
+ * the permit names: the repository's observation of the exact in-flight
+ * promotion and its bound holder, then the target's own status through the
+ * host's capability, then the native turn with the permit's own fences. That
+ * synchronous turn alone re-proves leadership at the permit's term
+ * (STALE_LEADERSHIP), its configuration (STALE_CONFIGURATION), the target's
+ * learner role and observation, and the leader's own exact caught-up progress
+ * before it proposes ADD_NODE. The permit is never refreshed.
+ * @param {Object} port - The leader replica's raft-rs operation port.
+ * @param {Object} group - The host-composed receiver bindings.
+ * @param {Object} request - {operationId, identity, permit, executionClaim}.
+ * @param {Function} observeAuthorization - The repository's promotion observation.
+ * @param {Object} delivery - The host-composed delivery context.
+ * @param {Function} observeTarget - (replicaIdentity) => the target's status.
+ * @return {Promise<Object>} The native turn's answer, or a typed refusal.
+ */
+async function proposeAuthorizedGroupPromotion(port, group, request, observeAuthorization,
+  delivery, observeTarget) {
+  if (typeof observeAuthorization !== 'function' || typeof observeTarget !== 'function') {
+    return membershipTransitionRefusal(RAFT_MEMBERSHIP_AUTHORIZATION_REASON.REQUIRED);
+  }
+  const observed = await observedAuthorization(port, group, request, observeAuthorization,
+    delivery, RAFT_MEMBERSHIP_TRANSITION_STAGE.PROMOTE);
+  if (observed.refusal) return observed.refusal;
+  const target = await observedTarget(observeTarget, observed.transition);
+  if (target.refusal) return target.refusal;
+  if (!liveDelivery(observed.admitExecution)) return deliveryRefusal();
+  return port[RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION](
+    {...observed.transition, targetStatusObservation: target.observation},
+    observed.admitExecution);
 }
 
 export {
   proposeAuthorizedGroupLearner,
+  proposeAuthorizedGroupPromotion,
   RAFT_GROUP_MEMBERSHIP_ADMISSION_LOG_MSG,
   REDRIVEN_ADMISSION_OUTCOMES,
   admissionOfPortAnswer,

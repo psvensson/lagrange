@@ -55,7 +55,8 @@ function shouldReturnDeferredDispatchOwnerProgressResult(result) {
       OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES.DISPATCH_LOCAL_OWNER_COMMAND
   );
 }
-import {recordMessageGroupLearnerFromRecipient, recoverMessageGroupLearnerFromRecipient} from
+import {recordMessageGroupLearnerFromRecipient, recoverMessageGroupLearnerFromRecipient,
+  recoverMessageGroupVoterFromRecipient, issueMessageGroupSuccessorFromRecipient} from
   './operation-workflow-message-group-native-read.js';
 
 class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
@@ -89,6 +90,18 @@ class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
   /** Restart entry: the repository reconstructs the receipt input from durable state. */
   recoverMessageGroupLearnerOutcomeFromRecipient(operationId, recipient) {
     return recoverMessageGroupLearnerFromRecipient(this, operationId, recipient);
+  }
+
+  /** Explicit entry (6.C slice C2): record an issued promotion's exact outcome
+   * as the voter stamp, read at the selected recipient; no proposal follows. */
+  recoverMessageGroupVoterOutcomeFromRecipient(operationId, recipient) {
+    return recoverMessageGroupVoterFromRecipient(this, operationId, recipient);
+  }
+
+  /** Explicit entry (6.C slice C2): issue the ordered successor of the row's
+   * fenced, noncommitted in-flight attempt at the selected recipient. */
+  issueMessageGroupSuccessorFromRecipient(operationId, recipient) {
+    return issueMessageGroupSuccessorFromRecipient(this, operationId, recipient);
   }
 
   selectOperationWorkflowOwnerAdapterSnapshotOperation(

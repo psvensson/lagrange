@@ -100,13 +100,30 @@ promotion authorization, full lab FAIL, timing findings and final off-seed/main
 proofs remain intact. No new coordinator, state store, lease or generic receipt
 framework is introduced by this transition.
 
+## The promotion's voter stamp (6.C slice C2)
+
+The same recorder, through its recording spec, records an issued promotion's
+exact outcome. Its changed fields ONLY: the phase (voter committed), the
+promotion permit's committed state and proposal index, and the voter stamp.
+Everything listed unchanged above stays unchanged, the learner stamp included.
+The evidence is the queued action read's committed promotion answer, and the
+voter stamp must be the recorded learner configuration with exactly the target
+promoted. See the [promotion contract](message-group-learner-promotion.md).
+
 ## Native refusals retain their meaning
 
 The recorder classifies the native result without treating every refusal as a
 transient outage. Exact UNRESOLVED / NOT_RECORDED stays UNKNOWN, unless its
-same-turn observation fences the attempt at a leader whose registry vouches
-for the absence (NONCOMMITTED; see the ordered successor in the registered
-read contract), which records nothing. Native UNAVAILABLE
+same-turn observation fences the attempt at a leader that vouches for the
+absence: for the learner action its registry (no reservation of the target at
+all), for the promotion (6.C slice C2) its applied configuration still holding
+the target as a learner under its own identity (NONCOMMITTED; see the ordered
+successor in the registered read contract and the
+[promotion contract](message-group-learner-promotion.md)), which records
+nothing. The promotion vouch rests on the premise that only the transition's
+later branches, which wait for the promotion's recorded outcome, can demote or
+remove the target; an absent target, a voter without the transition's origin
+or a joint configuration vouches for nothing. Native UNAVAILABLE
 or a thrown read failure remains UNAVAILABLE. Wrong action, corrupt origin,
 impossible applied boundary, invalid shape and contradictory kind/reason pairs
 return CONFLICT. Within an otherwise exact historical answer, the existing

@@ -107,7 +107,16 @@ test('T7: the stamp origins - the leader\'s COMMITTED answer at creation, ' +
     // group leader's COMMITTED answer, re-validated by the target, and the
     // learner and the acknowledging leader are judged on committed answers.
     'src/message-group/message-group-learner-join.js',
+    // FreshMG 6.C C2: that acknowledgement moved to the promotion-progress
+    // owner, shared by the join and the promotion selection; it validates the
+    // leader's committed answer, never produces a stamp.
+    'src/raft/learner-catch-up-acknowledgement.js',
     'src/rebalancer/committed-membership-bootstrap-read.js',
+    // FreshMG 6.C C2: the promotion selection validates the learner's own
+    // committed answer, and the voter recorder records the witness's
+    // same-read COMMITTED answer as the voter stamp (re-validated, never
+    // carried to a new replica).
+    'src/rebalancer/replica-operation-message-group-promotion.js',
   ]);
   assert.deepEqual(filesMatching(/\bgenesisStamp\(/u)
     .filter((file) => file !== 'src/raft/raft-committed-membership-stamp.js'),

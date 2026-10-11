@@ -72,6 +72,16 @@ A COMMITTED permit is accepted only for exact readback of a coherent recorded
 phase, never reconstituted as IN_FLIGHT. The proposal authorizer stays unchanged
 and rejects that committed input. Unavailable rows cannot be replaced by caches.
 
+Since 6.C slice C2 the workflow has two more explicit entries of the same shape
+(an operation ID and an explicitly selected witness, the retained lane, the
+same recipient read): recoverMessageGroupVoterOutcomeFromRecipient records an
+issued promotion's exact outcome as the voter stamp, and
+issueMessageGroupSuccessorFromRecipient has the repository issue the ordered
+successor of the row's fenced, noncommitted in-flight attempt (below). Discovery
+does not own promotion debt: the hint filter, the wakes and the periodic sweep
+pass over it, so it adds no periodic work; the restart scan reports it
+PHASE_NOT_OWNED. See the [promotion contract](message-group-learner-promotion.md).
+
 ## Owned discovery and reentry
 
 Three existing triggers converge on one algorithm, owned by OperationWorkflowOwner
@@ -188,6 +198,15 @@ issued only over an in-flight attempt of an open ordinary operation; an
 ordinarily settled operation keeps its debt for its own settlement owner. A
 lost answer is resolved by exact readback; a concurrent or late duplicate CAS
 matches nothing. The old permit is never refreshed and no sequence is reused.
+
+Since 6.C slice C2 the same fence and issuance also order a promotion attempt,
+through the explicit successor entry. The native answer to the transition's
+PROMOTE action sets `originRegistryComplete` when the replica's applied
+configuration holds the target as a learner (a committed promotion would make
+it a voter, and only the transition's later branches, which wait for the
+promotion's recorded outcome, change that); an absent target vouches for
+nothing. The vouch only ever proves a fenced attempt noncommitted; it is never
+a promotion prerequisite.
 
 The native turn proposes the successor only at its leader term and exact
 configuration with no configuration change pending; raft-rs drops any second

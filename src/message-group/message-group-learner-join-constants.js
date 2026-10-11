@@ -55,22 +55,12 @@ const MESSAGE_GROUP_LEARNER_JOIN_REFUSAL = Object.freeze({
   OPEN_NOT_LEARNER: 'message_group_learner_join_open_not_learner',
 });
 
-// Why the leader's acknowledgement is not yet a running target.
-const MESSAGE_GROUP_LEARNER_ACKNOWLEDGEMENT = Object.freeze({
-  ACKNOWLEDGED: 'acknowledged',
-  LEADER_UNAVAILABLE: 'leader_unavailable',
-  BEHIND: 'behind',
-  REMOVED: 'removed',
-});
-
-// Why the leader's own progress for the learner is no input to the shared
-// promotion-progress predicate yet. The join checks the two indices exactly
-// first, because that predicate reads an absent or non-integer index as 0.
-const MESSAGE_GROUP_LEARNER_PROGRESS = Object.freeze({
-  // The commit or the match index is absent or not an exact non-negative
-  // integer, or the commit index is 0.
-  UNOBSERVED: 'progress_unobserved',
-});
+// Why the leader's acknowledgement is not yet a running target, and why the
+// leader's own progress is no input to the promotion-progress predicate yet,
+// are the promotion-progress owner's vocabulary (6.C slice C2 moved both with
+// the shared decision, raft/learner-catch-up-acknowledgement.js):
+// LEARNER_CATCH_UP_ACKNOWLEDGEMENT and LEARNER_PROMOTION_PROOF_REASON
+// .PROGRESS_UNOBSERVED in raft/learner-promotion-progress.js.
 
 // The bounded wait for the leader's acknowledgement (overridable per host).
 // Spending it is NOT_CAUGHT_UP, never a failure or a running claim.
@@ -81,10 +71,8 @@ const MESSAGE_GROUP_LEARNER_JOIN_DEFAULT = Object.freeze({
 });
 
 export {
-  MESSAGE_GROUP_LEARNER_ACKNOWLEDGEMENT,
   MESSAGE_GROUP_LEARNER_JOIN_DEFAULT,
   MESSAGE_GROUP_LEARNER_JOIN_DESCRIPTOR,
   MESSAGE_GROUP_LEARNER_JOIN_OUTCOME,
   MESSAGE_GROUP_LEARNER_JOIN_REFUSAL,
-  MESSAGE_GROUP_LEARNER_PROGRESS,
 };

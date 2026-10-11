@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2324,
+    "ordinary": 2327,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2341,
-  "digest": "fnv1a32-227f3812",
+  "censusSize": 2344,
+  "digest": "fnv1a32-e07879bf",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1010,6 +1010,9 @@
     "test/integration/message-group-learner-discovery.integration.test.js": "ordinary",
     "test/integration/message-group-learner-join.integration.test.js": "ordinary",
     "test/integration/message-group-learner-process-loss.integration.test.js": "ordinary",
+    "test/integration/message-group-learner-promotion-recording-guards.integration.test.js": "ordinary",
+    "test/integration/message-group-learner-promotion-selection-guards.integration.test.js": "ordinary",
+    "test/integration/message-group-learner-promotion.integration.test.js": "ordinary",
     "test/integration/message-group-learner-recipient.integration.test.js": "ordinary",
     "test/integration/message-group-learner-runtime-authorization.integration.test.js": "ordinary",
     "test/integration/message-group-learner-successor-ordering.integration.test.js": "ordinary",

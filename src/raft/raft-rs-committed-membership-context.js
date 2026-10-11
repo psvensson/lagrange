@@ -179,14 +179,31 @@ function snapshotLearnerContext(context) {
   }
   return Object.freeze(captured);
 }
-function canonicalLearnerContext(context) {
+// A retained learner origin is only ever the transition's ADD_LEARNER. The
+// queued action read (raft-rs-committed-membership-read.js) also answers the
+// transition's PROMOTE (FreshMG 6.C slice C2): its committed outcome is the
+// applied configuration naming the target a voter, never an origin.
+const LEARNER_ORIGIN_STAGES = Object.freeze(new Set([
+  RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER]));
+const READABLE_ACTION_STAGES = Object.freeze(new Set([
+  RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER, RAFT_MEMBERSHIP_TRANSITION_STAGE.PROMOTE]));
+function canonicalContextOfStages(context, stages) {
   const captured = snapshotLearnerContext(context);
   const encoded = encodeCommittedMembershipContext(captured);
-  if (captured.stage !== RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER) {
+  if (!stages.has(captured.stage)) {
     throw new Error(LEARNER_ORIGIN_ERROR);
   }
   return Object.freeze(JSON.parse(Buffer.from(encoded, CONTEXT_ENCODING)
     .toString(CONTEXT_TEXT_ENCODING)));
+}
+function canonicalLearnerContext(context) {
+  return canonicalContextOfStages(context, LEARNER_ORIGIN_STAGES);
+}
+/** The exact action tuple the queued action read answers: the transition's
+ * ADD_LEARNER or PROMOTE, snapshotted without invoking accessors. Throws for
+ * anything else. */
+function canonicalMembershipActionContext(context) {
+  return canonicalContextOfStages(context, READABLE_ACTION_STAGES);
 }
 function encodeCommittedLearnerAdmission({groupId, index, term, context}) {
   if (typeof groupId !== 'string' || groupId.length === 0 ||
@@ -223,7 +240,7 @@ function learnerAdmissionMatchesReservation(encoded, reservation, boundary) {
 
 export {
   INVALID_COMMITTED_LEARNER_ADMISSION,
-  canonicalLearnerContext,
+  canonicalMembershipActionContext,
   encodeCommittedLearnerAdmission,
   decodeCommittedLearnerAdmission,
   learnerAdmissionMatchesReservation,

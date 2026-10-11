@@ -20,7 +20,7 @@ import {encodeCommittedLearnerAdmission, decodeCommittedLearnerAdmission,
 import {MEMBERSHIP_PHASE as PHASE, MEMBERSHIP_PERMIT_STATE as STATE,
   MEMBERSHIP_AUTHORIZATION_OUTCOME as OUTCOME, MEMBERSHIP_OBLIGATION,
   decodeMembershipIdentity, decodeMembershipPermit, membershipBranchSpec,
-  decodeMembershipOwnerClaim, membershipOwnerClaimFence} from
+  decodeMembershipOwnerClaim, membershipOwnerClaimFence, membershipActionMatches} from
   './replica-operation-message-group-membership-permit.js';
 
 import {observeMembershipOperation, membershipRowIdentityMatches,
@@ -105,7 +105,7 @@ function selectedBranchRecorded(row, spec, nextPermit) {
 // The selected branch is a later phase than the recorded learner fact, so its
 // idempotent read-back keeps its own request/holder/boot logic. It does not
 // renew a lease or create runtime authority.
-async function readBackSelectedBranch(repository, row, identity, prior, next) {
+async function readBackSelectedBranch(repository, row, identity, prior, next, isCurrent) {
   const learner = priorLearnerStamp(row, identity, prior);
   if (!learner || !nextPermitFollowsLearner(next, learner)) return result(OUTCOME.INVALID, row);
   const currentClaim = decodeMembershipOwnerClaim(row.messageGroupMembershipOwnerClaim);
@@ -113,6 +113,10 @@ async function readBackSelectedBranch(repository, row, identity, prior, next) {
     return result(OUTCOME.STALE_OWNER, row);
   }
   if (!await membershipBootIsCurrent(repository)) return result(OUTCOME.UNAVAILABLE, row);
+  if (!isCurrent()) return result(OUTCOME.UNKNOWN, row);
+  if (!membershipClaimIsLocalAndLive(repository, currentClaim, identity)) {
+    return result(OUTCOME.STALE_OWNER, row);
+  }
   return result(OUTCOME.RECORDED, row);
 }
 // A new selection consumes the recorder's one pure recorded-fact predicate
@@ -124,7 +128,7 @@ function newBranchFactRefusal(row, identity, encodedIdentity, next) {
   return nextPermitFollowsLearner(next, learner) ? null : OUTCOME.INVALID;
 }
 
-async function selectMessageGroupMembershipBranch(repository, request) {
+async function selectMessageGroupMembershipBranch(repository, request, isInvocationCurrent) {
   // The only accepted representations here are scalar strings and encoded row values.
   if (!request || typeof request !== 'object') return result(OUTCOME.INVALID);
   const {operationId, identity: encodedIdentity, priorPermit, nextPermit, branch} = request;
@@ -134,14 +138,16 @@ async function selectMessageGroupMembershipBranch(repository, request) {
   const spec = membershipBranchSpec(branch);
   if (!identity || identity.operationId !== operationId || !prior || !next || !spec ||
     !permitsMatch(prior, next, identity, spec)) return result(OUTCOME.INVALID);
+  const isCurrent = recordingInvocation(repository, isInvocationCurrent);
+  if (!isCurrent()) return result(OUTCOME.UNAVAILABLE);
   const before = await observeMembershipOperation(repository, operationId);
-  if (!before.available) return result(OUTCOME.UNAVAILABLE);
+  if (!before.available || !isCurrent()) return result(OUTCOME.UNAVAILABLE);
   const row = before.row;
   if (!membershipRowIdentityMatches(row, identity, encodedIdentity)) {
     return result(OUTCOME.CONFLICT, row);
   }
   if (selectedBranchRecorded(row, spec, nextPermit)) {
-    return readBackSelectedBranch(repository, row, identity, prior, next);
+    return readBackSelectedBranch(repository, row, identity, prior, next, isCurrent);
   }
   const factRefusal = newBranchFactRefusal(row, identity, encodedIdentity, next);
   if (factRefusal !== null) return result(factRefusal, row);
@@ -155,6 +161,10 @@ async function selectMessageGroupMembershipBranch(repository, request) {
     return result(OUTCOME.STALE_OWNER, row);
   }
   if (!await membershipBootIsCurrent(repository)) return result(OUTCOME.UNAVAILABLE, row);
+  const submissionIsCurrent = () => isCurrent() &&
+    membershipClaimIsLocalAndLive(repository, claim, identity);
+  const beforeAttempt = async () => submissionIsCurrent() &&
+    await membershipBootIsCurrent(repository);
   const params = [spec.phase, nextPermit, MEMBERSHIP_OBLIGATION.UNKNOWN,
     operationId, row.type, row.partitionId, row.entityType, row.entityId,
     row.sourceReplicaId, row.replicaId, row.sourceNodeId, row.targetNodeId,
@@ -165,13 +175,14 @@ async function selectMessageGroupMembershipBranch(repository, request) {
   // A false or lost answer is not a cancellation. Re-observe the exact row;
   // retrying this same CAS or its competing branch is safe on the same basis.
   try {
-    await repository.executeOperationMutationWithRetry(branchSelectionSql(settlement), params);
+    await repository.executeOperationMutationWithRetry(branchSelectionSql(settlement), params,
+      {beforeAttempt, submissionIsCurrent});
   } catch (error) {
     // The exact authoritative read below resolves an uncertain write result.
     noteUncertainMembershipWrite(repository, operationId, error);
   }
   const after = await observeMembershipOperation(repository, operationId);
-  if (!after.available) return result(OUTCOME.UNKNOWN);
+  if (!after.available || !isCurrent()) return result(OUTCOME.UNKNOWN);
   const observed = after.row;
   if (membershipRowIdentityMatches(observed, identity, encodedIdentity) &&
     observed.messageGroupMembershipPhase === spec.phase &&
@@ -180,8 +191,7 @@ async function selectMessageGroupMembershipBranch(repository, request) {
     observed.messageGroupLearnerStamp === row.messageGroupLearnerStamp &&
     observed.messageGroupSourceLifecycleClaim === row.messageGroupSourceLifecycleClaim &&
     observed.messageGroupMembershipOwnerClaim === row.messageGroupMembershipOwnerClaim &&
-    membershipClaimIsLocalAndLive(repository, claim, identity) &&
-    await membershipBootIsCurrent(repository)) {
+    await membershipBootIsCurrent(repository) && submissionIsCurrent()) {
     return result(OUTCOME.RECORDED, observed);
   }
   return result(OUTCOME.UNKNOWN, observed);
@@ -193,11 +203,8 @@ export {selectMessageGroupMembershipBranch};
  * codec admits any sequence from 1; only the successor issuance writes one
  * above 1, over the exact attempt before it). Pure. */
 function learnerActionMatches(permit, identity) {
-  return permit.permitStage === RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER &&
-    permit.transitionIdentity === identity.transitionIdentity &&
-    permit.replicaIdentity === identity.targetReplicaId && permit.peerId === identity.targetPeerId;
+  return membershipActionMatches(permit, identity, RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER);
 }
-export {learnerActionMatches};
 // Initial issuance is always the first attempt; a successor is never issued here.
 function initialLearnerPermitMatches(permit, identity) {
   return learnerActionMatches(permit, identity) && permit.permitSequence === 1 &&
@@ -294,7 +301,9 @@ export {authorizeMessageGroupLearner};
 
 // Record recovered fact, never issue an action. The host supplies the existing
 // native read port as a capability, not wire/payload-provided receipt bytes.
-function learnerRecordingInput(request) {
+// The action matcher names which action of the transition is recorded (the
+// learner action here; the promotion for the voter stamp, 6.C slice C2).
+function actionRecordingInput(request, actionMatches = learnerActionMatches) {
   const data = copyStrictOwnDataRecord(request);
   if (!data) return null;
   const {operationId, identity: encodedIdentity, permit: encodedPermit, executionClaim} = data;
@@ -302,7 +311,7 @@ function learnerRecordingInput(request) {
   const permit = decodeMembershipPermit(encodedPermit);
   const claim = decodeMembershipOwnerClaim(executionClaim);
   if (!identity || identity.operationId !== operationId || !permit || !claim ||
-    !learnerActionMatches(permit, identity)) return null;
+    !actionMatches(permit, identity)) return null;
   // This read/record-only input may already be COMMITTED after a lost answer.
   // Never rewrite it as IN_FLIGHT or pass it to the proposal authorizer.
   return {operationId, encodedIdentity, encodedPermit, identity, permit, executionClaim, claim};
@@ -439,10 +448,12 @@ function learnerOutcomeEvidence(observed, input, query) {
     return {refusal: OUTCOME.CONFLICT};
   }
 }
-async function observeLearnerRecording(readCommittedLearner, input) {
+// The recording spec's own reading of the native answer to the exact action
+// query; a thrown read is UNAVAILABLE, never evidence.
+async function observeActionRecording(readCommittedAction, input, spec, row) {
   const query = learnerOutcomeQuery(input);
   try {
-    return learnerOutcomeEvidence(await readCommittedLearner(query), input, query);
+    return spec.evidence(await readCommittedAction(query), input, query, row);
   } catch {
     return {refusal: OUTCOME.UNAVAILABLE};
   }
@@ -474,8 +485,11 @@ function recordingBasisRefusal(repository, row, input) {
   return recordedLearnerIntent(row, input.encodedPermit) || exactRecordedLearner(row, input) ?
     null : OUTCOME.CONFLICT;
 }
-async function recordObservedLearner(repository, row, input, evidence, isCurrent) {
+// One conditional UPDATE of the three receipt columns the spec names, over
+// the full observed row as basis, then exact authoritative readback.
+async function recordObservedAction(repository, row, input, evidence, isCurrent, spec) {
   const basis = membershipRowWhere(row);
+  const receipt = spec.receipt(evidence);
   const submissionIsCurrent = () => isCurrent() &&
     membershipClaimIsLocalAndLive(repository, input.claim, input.identity);
   // A retry is a NEW submission, even when it retains the logical write ID.
@@ -485,11 +499,9 @@ async function recordObservedLearner(repository, row, input, evidence, isCurrent
     await membershipBootIsCurrent(repository);
   try {
     await repository.executeOperationMutationWithRetry(
-      `UPDATE replica_operations SET message_group_membership_phase = ?,
-        message_group_membership_permit = ?, message_group_learner_stamp = ?
+      `UPDATE replica_operations SET ${receipt.set}
         WHERE ${basis.where}`,
-      [PHASE.LEARNER_COMMITTED, evidence.committedPermit, evidence.stamp, ...basis.params],
-      {beforeAttempt, submissionIsCurrent});
+      [...receipt.params, ...basis.params], {beforeAttempt, submissionIsCurrent});
   } catch (error) {
     // COMMIT may have succeeded. Only exact owner readback settles that answer.
     noteUncertainMembershipWrite(repository, input.operationId, error);
@@ -499,34 +511,49 @@ async function recordObservedLearner(repository, row, input, evidence, isCurrent
   if (!isCurrent() || !await membershipBootIsCurrent(repository)) return result(OUTCOME.UNKNOWN);
   const after = await observeMembershipOperation(repository, input.operationId);
   if (!isCurrent() || !after.available) return result(OUTCOME.UNKNOWN);
-  const recorded = recordingBasisRefusal(repository, after.row, input) === null &&
-    recordedLearnerFactIsValid(after.row, input.identity, input.encodedIdentity) &&
-    after.row.messageGroupMembershipPermit === evidence.committedPermit &&
-    after.row.messageGroupLearnerStamp === evidence.stamp;
-  return result(recorded ? OUTCOME.RECORDED : OUTCOME.UNKNOWN, after.row);
+  return result(spec.readback(repository, after.row, input, evidence) ?
+    OUTCOME.RECORDED : OUTCOME.UNKNOWN, after.row);
 }
-function finishLearnerRecording(repository, row, input, evidence, isCurrent) {
+function finishActionRecording(repository, row, input, evidence, isCurrent, spec) {
   if (!isCurrent()) return result(OUTCOME.UNAVAILABLE);
-  const refusal = recordingBasisRefusal(repository, row, input);
+  const refusal = spec.basisRefusal(repository, row, input);
   if (refusal !== null) return result(refusal, row);
-  if (exactRecordedLearner(row, input)) return result(OUTCOME.RECORDED, row);
+  if (spec.recorded(row, input)) return result(OUTCOME.RECORDED, row);
   // An already-recorded observation cannot regress back into an in-flight row.
   if (evidence === null) return result(OUTCOME.CONFLICT, row);
-  return recordObservedLearner(repository, row, input, evidence, isCurrent);
+  return recordObservedAction(repository, row, input, evidence, isCurrent, spec);
 }
-/** Advance only the membership phase after actual, exact native observation.
- * The same-row CAS includes immutable identity, prior permit, holder, phase,
- * terminal status/step/time and every membership stamp. Ordinary progress,
- * membership debt/lane, reservations and physical CREATE remain untouched.
- */
-async function recordMessageGroupLearnerOutcome(repository, request, readCommittedLearner,
-  isInvocationCurrent) {
-  const input = learnerRecordingInput(request);
-  if (!input || typeof readCommittedLearner !== 'function' ||
-    (isInvocationCurrent !== undefined && typeof isInvocationCurrent !== 'function')) {
-    return result(OUTCOME.INVALID);
-  }
-  const isCurrent = () => {
+/** The one recorder of a membership action's exact outcome, by recording spec:
+ * the learner fact (LEARNER_RECORDING below) and, since 6.C slice C2, the
+ * promotion's voter stamp (replica-operation-message-group-promotion.js).
+ * A spec answers basisRefusal(repository, row, input), recorded(row, input),
+ * evidence(observed, input, query, row) -> {committedPermit, stamp} or
+ * {refusal}, receipt(evidence) -> {set, params} (its three receipt columns)
+ * and readback(repository, row, input, evidence). The same-row CAS includes
+ * immutable identity, prior permit, holder, phase, terminal status/step/time
+ * and every membership stamp. Ordinary progress, membership debt/lane,
+ * reservations and physical CREATE remain untouched. */
+async function recordMembershipActionOutcome(repository, input, spec, readCommittedAction,
+  isCurrent) {
+  if (!isCurrent()) return result(OUTCOME.UNAVAILABLE);
+  const before = await observeMembershipOperation(repository, input.operationId);
+  if (!before.available) return result(OUTCOME.UNAVAILABLE);
+  const initialRefusal = spec.basisRefusal(repository, before.row, input);
+  if (initialRefusal !== null) return result(initialRefusal, before.row);
+  const evidence = spec.recorded(before.row, input) ? null :
+    await observeActionRecording(readCommittedAction, input, spec, before.row);
+  if (evidence?.refusal) return result(evidence.refusal, before.row);
+  if (!await membershipBootIsCurrent(repository)) return result(OUTCOME.UNAVAILABLE);
+  // Neither the native read nor boot observation can carry an earlier row
+  // across an await. Use the actual final row as the exact conditional basis.
+  const current = await observeMembershipOperation(repository, input.operationId);
+  if (!current.available) return result(OUTCOME.UNAVAILABLE);
+  return finishActionRecording(repository, current.row, input, evidence, isCurrent, spec);
+}
+/** The caller's local invocation lifetime as a predicate (an absent one is
+ * current); unavailable lifetime evidence is never current. */
+function recordingInvocation(repository, isInvocationCurrent) {
+  return () => {
     try {
       return !repository.isShuttingDownRequested() &&
         (isInvocationCurrent === undefined || isInvocationCurrent() === true);
@@ -534,20 +561,31 @@ async function recordMessageGroupLearnerOutcome(repository, request, readCommitt
       return false;
     }
   };
-  if (!isCurrent()) return result(OUTCOME.UNAVAILABLE);
-  const before = await observeMembershipOperation(repository, input.operationId);
-  if (!before.available) return result(OUTCOME.UNAVAILABLE);
-  const initialRefusal = recordingBasisRefusal(repository, before.row, input);
-  if (initialRefusal !== null) return result(initialRefusal, before.row);
-  const evidence = exactRecordedLearner(before.row, input) ? null :
-    await observeLearnerRecording(readCommittedLearner, input);
-  if (evidence?.refusal) return result(evidence.refusal, before.row);
-  if (!await membershipBootIsCurrent(repository)) return result(OUTCOME.UNAVAILABLE);
-  // Neither the native read nor boot observation can carry an earlier row
-  // across an await. Use the actual final row as the exact conditional basis.
-  const current = await observeMembershipOperation(repository, input.operationId);
-  if (!current.available) return result(OUTCOME.UNAVAILABLE);
-  return finishLearnerRecording(repository, current.row, input, evidence, isCurrent);
+}
+const LEARNER_RECEIPT_SET = 'message_group_membership_phase = ?, ' +
+  'message_group_membership_permit = ?, message_group_learner_stamp = ?';
+const LEARNER_RECORDING = Object.freeze({
+  basisRefusal: recordingBasisRefusal,
+  recorded: exactRecordedLearner,
+  evidence: (observed, input, query) => learnerOutcomeEvidence(observed, input, query),
+  receipt: (evidence) => ({set: LEARNER_RECEIPT_SET,
+    params: [PHASE.LEARNER_COMMITTED, evidence.committedPermit, evidence.stamp]}),
+  readback: (repository, row, input, evidence) =>
+    recordingBasisRefusal(repository, row, input) === null &&
+    recordedLearnerFactIsValid(row, input.identity, input.encodedIdentity) &&
+    row.messageGroupMembershipPermit === evidence.committedPermit &&
+    row.messageGroupLearnerStamp === evidence.stamp,
+});
+/** Advance only the learner phase after actual, exact native observation. */
+async function recordMessageGroupLearnerOutcome(repository, request, readCommittedLearner,
+  isInvocationCurrent) {
+  const input = actionRecordingInput(request);
+  if (!input || typeof readCommittedLearner !== 'function' ||
+    (isInvocationCurrent !== undefined && typeof isInvocationCurrent !== 'function')) {
+    return result(OUTCOME.INVALID);
+  }
+  return recordMembershipActionOutcome(repository, input, LEARNER_RECORDING,
+    readCommittedLearner, recordingInvocation(repository, isInvocationCurrent));
 }
 export {recordMessageGroupLearnerOutcome};
 
@@ -639,3 +677,8 @@ function recordedLearnerOrigin(identity, permit) {
   return encodeCommittedLearnerAdmission({groupId: identity.groupId,
     index: String(permit.proposalIndex), term: String(permit.leaderTerm), context: action});
 }
+// The shared recorder pieces the promotion's voter-stamp recording consumes
+// (replica-operation-message-group-promotion.js, 6.C slice C2).
+export {actionRecordingInput, recordMembershipActionOutcome, recordingInvocation,
+  recordingSettlementAllowed, learnerObservationRefusal, learnerWitnessUnavailable,
+  learnerOutcomeQuery};

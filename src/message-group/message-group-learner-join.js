@@ -31,8 +31,9 @@ import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from
 import {committedStampOfAnswer, durableRecordBootstrap, replicaIdsOfStamp} from
   '../raft/raft-committed-membership-stamp.js';
 import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
-import {LEARNER_PROMOTION_PROOF_DECISION, LEARNER_PROMOTION_PROOF_REASON,
-  evaluateLearnerPromotionProof} from '../raft/learner-promotion-progress.js';
+import {LEARNER_CATCH_UP_ACKNOWLEDGEMENT as ACK} from '../raft/learner-promotion-progress.js';
+import {learnerCatchUpAcknowledgement, namesExactLearner as namesLearner} from
+  '../raft/learner-catch-up-acknowledgement.js';
 import {RAFT_CHECKPOINT_CREATION_OUTCOME, RAFT_CHECKPOINT_PAYLOAD_SIDECAR_SUFFIXES,
   RAFT_CHECKPOINT_VALIDATION_OUTCOME} from '../raft/snapshot-checkpoint-constants.js';
 import {createSqliteStateMachineCheckpoint, readCheckpoint} from
@@ -47,27 +48,16 @@ import {RAFT_ROLE} from './constants.js';
 import {readMessageGroupCommittedMembership} from './message-group-consensus-port.js';
 import {MessageGroupService} from './message-group-service.js';
 import {
-  MESSAGE_GROUP_LEARNER_ACKNOWLEDGEMENT as ACK,
   MESSAGE_GROUP_LEARNER_JOIN_DEFAULT as DEFAULT,
   MESSAGE_GROUP_LEARNER_JOIN_DESCRIPTOR as DESCRIPTOR,
   MESSAGE_GROUP_LEARNER_JOIN_OUTCOME as OUTCOME,
   MESSAGE_GROUP_LEARNER_JOIN_REFUSAL as REFUSAL,
-  MESSAGE_GROUP_LEARNER_PROGRESS as PROGRESS,
 } from './message-group-learner-join-constants.js';
 
 const CORE_OK = RAFT_OPERATION_OUTCOME.CORE_OK;
 // The refusals the leader-side producer answers.
 const PRODUCER_REFUSALS = Object.freeze(new Set([REFUSAL.DESCRIPTOR_UNAVAILABLE,
   REFUSAL.LEARNER_NOT_IN_CONFIGURATION, REFUSAL.DESCRIPTOR_MOVED]));
-// The leader's acknowledgement, decided in this order: the first unmet fact
-// names the state (a leader whose committed configuration no longer holds the
-// learner REMOVED it; the existing promotion-progress predicate not granting
-// is BEHIND).
-const ACKNOWLEDGEMENT_RULES = Object.freeze([
-  Object.freeze({fact: 'leads', state: ACK.LEADER_UNAVAILABLE}),
-  Object.freeze({fact: 'holdsLearner', state: ACK.REMOVED}),
-  Object.freeze({fact: 'caughtUp', state: ACK.BEHIND}),
-]);
 
 // A typed refusal of this join's own. Never deferRetry: the worker runs after
 // the admission went MATERIALIZED, and this slice has no attempt rotation, so
@@ -78,14 +68,6 @@ const ACKNOWLEDGEMENT_RULES = Object.freeze([
 function refusal(code, detail = null) {
   return Object.assign(new Error(detail === null ? code : `${code}: ${detail}`),
     {code, errorCode: code, detail, deferRetry: false});
-}
-
-// A configuration names exactly this learner: a learner, not a voter, under
-// its own permanent identity.
-function namesLearner(stamp, identity) {
-  return stamp.learners.includes(identity.targetPeerId) &&
-    !stamp.voters.includes(identity.targetPeerId) &&
-    stamp.identities[identity.targetPeerId] === identity.targetReplicaId;
 }
 
 function learnerCheckpointIdentity(groupId, clusterId, membershipEpoch) {
@@ -328,79 +310,13 @@ async function openLearner(host, input, descriptor, dbPath) {
   return service;
 }
 
-// The leader's own observed progress for the learner (its follower progress
-// at the address it resolves the learner's peer to), or undefined.
-function leaderMatchIndex(status, identity) {
-  const peer = status.peers?.find((entry) => entry.peerId === identity.targetPeerId &&
-    entry.replicaIdentity === identity.targetReplicaId);
-  return peer?.address ? status.followerProgress?.[peer.address] : undefined;
-}
-
-// The leader's committed answer and its own status are one leader in one term.
-function observedLeaderLeads(leader, status, identity) {
-  return leader !== null && status?.outcome === CORE_OK &&
-    status.role === RAFT_ROLE.LEADER && status.groupId === identity.groupId &&
-    status.replicaIdentity === leader.leaderId && status.term === leader.term;
-}
-
-function isExactIndex(value) {
-  return Number.isSafeInteger(value) && value >= 0;
-}
-
-// Why the leader's own indices are no exact progress yet, or null: both
-// present exact non-negative integers with match >= commit > 0. Checked
-// BEFORE the shared promotion-progress predicate, which reads an absent or
-// non-integer index as 0 and so grants 0/0 (its owner, 6.C, keeps that).
-function progressUnproven(commitIndex, matchIndex) {
-  if (!isExactIndex(commitIndex) || !isExactIndex(matchIndex) || commitIndex === 0) {
-    return PROGRESS.UNOBSERVED;
-  }
-  return matchIndex >= commitIndex ? null : LEARNER_PROMOTION_PROOF_REASON.PROGRESS_BEHIND;
-}
-
-// The existing promotion-progress predicate on the leader's own exact
-// observation, the two observed epochs being the configuration generations
-// of the leader and of the learner's own applied configuration.
-function caughtUpProof(leader, status, own, identity) {
-  const learnerMatchIndex = leaderMatchIndex(status, identity);
-  const unproven = progressUnproven(status.commitIndex, learnerMatchIndex);
-  return unproven !== null ? {decision: null, reason: unproven} :
-    evaluateLearnerPromotionProof({raftIsLeader: true, currentTerm: status.term,
-      committedIndex: status.commitIndex, learnerMatchIndex,
-      leaderMembershipEpoch: leader.membershipGenerationIndex,
-      learnerMembershipEpoch: own.membershipGenerationIndex});
-}
-
-/**
- * Whether the group's current leader acknowledges the learner caught up. The
- * leader's committed configuration (its BOOTSTRAP-purpose answer) and its own
- * status must be one leader in one term; that configuration must still hold
- * the exact learner; its commit index and its follower match for the
- * learner must be exact integers with match >= commit > 0; and only then the
- * existing promotion-progress predicate (evaluateLearnerPromotionProof) must
- * grant on that observation, with the configuration generations of the
- * leader and of the learner's own applied configuration as the two observed
- * epochs. Pure; never a promotion grant.
- * @param {Object} observation - {membership, status} from the leader.
- * @param {Object} own - The learner's own committed configuration stamp.
- * @param {Object} identity - The recorded learner identity.
- * @param {number} boundary - The installed image's applied index.
- * @return {Object} {state: MESSAGE_GROUP_LEARNER_ACKNOWLEDGEMENT, ...}.
- */
-function learnerAcknowledgement(observation, own, identity, boundary) {
-  const leader = committedStampOfAnswer(observation?.membership);
-  const status = observation?.status;
-  const leads = observedLeaderLeads(leader, status, identity);
-  const proof = leads ? caughtUpProof(leader, status, own, identity) : null;
-  const facts = {leads, holdsLearner: leads && namesLearner(leader, identity),
-    caughtUp: proof?.decision === LEARNER_PROMOTION_PROOF_DECISION.GRANTED &&
-      status.commitIndex >= boundary};
-  const unmet = ACKNOWLEDGEMENT_RULES.find((rule) => facts[rule.fact] !== true);
-  return unmet ? {state: unmet.state, proofReason: proof?.reason ?? null} :
-    {state: ACK.ACKNOWLEDGED, leaderReplicaId: status.replicaIdentity, term: status.term,
-      commitIndex: status.commitIndex, matchIndex: proof.learnerMatchIndex,
-      configurationGeneration: leader.membershipGenerationIndex};
-}
+// The leader's acknowledgement (caught up, behind, removed, no leader) is the
+// shared decision of the promotion-progress owner
+// (learner-catch-up-acknowledgement.js): the leader's committed answer and
+// status agree on one leader and term and hold the exact learner, its commit
+// and match are exact with match >= commit > 0, the two configuration
+// generations agree, and the commit reaches the installed boundary. RUNNING is
+// that observation, never a promotion grant.
 
 async function observeLeader(host, groupId) {
   try {
@@ -423,7 +339,7 @@ async function awaitAcknowledgement(host, service, identity, boundary) {
   const deadline = clock.now() + timeoutMs;
   for (;;) {
     const own = ownLearnerStamp(service, identity);
-    const acknowledged = own === null ? {state: null} : learnerAcknowledgement(
+    const acknowledged = own === null ? {state: null} : learnerCatchUpAcknowledgement(
       await observeLeader(host, identity.groupId), own, identity, boundary);
     if (own === null || acknowledged.state === ACK.ACKNOWLEDGED ||
         acknowledged.state === ACK.REMOVED || clock.now() >= deadline) {
