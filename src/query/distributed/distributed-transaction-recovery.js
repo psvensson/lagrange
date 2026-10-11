@@ -3,13 +3,17 @@ import {
   isCanonicalTransactionEpoch,
 } from '../../constants/index.js';
 import {
+  QUERY_ERROR_MSG,
   QUERY_OPERATION,
 } from '../query-constants.js';
 import {
   buildTransactionRecoveryIncompleteError,
   buildRecoveredTransactionDecisionState,
+  validatePersistedTransactionRow,
 } from './distributed-transaction-recovery-validation.js';
-import {redriveAuthoritativeRecovery} from
+import {redriveAuthoritativeRecovery,
+  TRANSACTION_AUTHORITY_STATE,
+  transactionRecoveryAuthorityCandidate} from
   './distributed-transaction-recovery-authority.js';
 import {PARTICIPANT_TRANSACTION_DECISION} from
   '../../partition/partition-participant-transaction-constants.js';
@@ -27,6 +31,15 @@ import {
   TRANSACTION_STATUS,
   WRITE_OPERATION_STATUS,
 } from './distributed-transaction-coordinator-constants.js';
+import {INITIAL_ROW_FIELDS, sameImmutableCreation,
+  TRANSACTION_CREATION_STATE} from
+  './distributed-transaction-creation-contract.js';
+import {captureTransactionCreationRecoveryOperation,
+  reconcileTransactionCreationOwned,
+  recordTransactionCreationSweepDiagnostic,
+  releaseTerminalServerTransactionCreation,
+  releaseTransactionCreationOperation} from
+  './distributed-transaction-creation.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
@@ -50,6 +63,52 @@ const RECOVERED_TRANSACTION_DECISION_EVENT = 'RECOVERY_STATE_RESTORED';
 
 function shouldDeferRecoverySweepError(errorLike) {
   return isRetryableControlPlaneError(errorLike);
+}
+
+function rotatingCreationSelection(coordinator, transactions) {
+  const candidates = transactions.filter((tx) =>
+    tx.transactionCreationState &&
+    tx.transactionCreationState !== TRANSACTION_CREATION_STATE.ENTERED_ACTIVE)
+    .sort((left, right) => left.transactionId.localeCompare(right.transactionId));
+  if (candidates.length === 0) return [];
+  let start = candidates.findIndex((tx) =>
+    coordinator.transactionCreationSweepCursor === null ||
+    tx.transactionId > coordinator.transactionCreationSweepCursor);
+  if (start < 0) start = 0;
+  const selected = [];
+  const limit = Math.min(candidates.length,
+    coordinator.maxUncertainCreationSweepPerTurn);
+  for (let offset = 0; offset < limit; offset += 1) {
+    selected.push(candidates[(start + offset) % candidates.length]);
+  }
+  coordinator.transactionCreationSweepCursor = selected.at(-1).transactionId;
+  return selected;
+}
+
+function hasMatchingCreationIdentity(tx, transaction, capturedRow) {
+  if (capturedRow) {
+    return INITIAL_ROW_FIELDS.every((field) =>
+      Object.is(transaction[field], capturedRow[field]));
+  }
+  return tx.transactionCreationAdvancedObserved === true &&
+    sameImmutableCreation(transaction, tx.transactionCreationInitialRow);
+}
+
+function canAcceptAdvancedCreation(coordinator, tx, capturedRow, payload) {
+  return payload?.state === TRANSACTION_AUTHORITY_STATE.AVAILABLE &&
+    coordinator.workflowCoordinator.getWorkflowById(tx.workflowId) === tx &&
+    coordinator.transactionsBySession.get(tx.sessionId) === tx &&
+    validatePersistedTransactionRow(payload.transaction,
+      tx.transactionId) !== null &&
+    hasMatchingCreationIdentity(tx, payload.transaction, capturedRow) &&
+    transactionRecoveryAuthorityCandidate(tx, payload) !== null;
+}
+
+function reportRejectedAdvancedCreation(coordinator, tx, error) {
+  coordinator.logger?.warn?.(RECOVERY_SWEEP_LOG_MSG, {
+    transactionId: tx.transactionId,
+    error: error?.message || String(error),
+  });
 }
 
 // The PREPARE evidence a recovered participant row retained (design 2.1,
@@ -99,8 +158,170 @@ async function redriveRecoveredTransaction(coordinator, tx) {
       result: await coordinator.completeRollbackDecision(tx)};
 }
 
+function emptySweepResult(fields = {}) {
+  return {
+    swept: 0, resolved: 0, failed: 0, deferred: 0,
+    results: [], ...fields,
+  };
+}
+
+async function refreshRecoverySweepState(coordinator, creationGeneration) {
+  if (typeof coordinator.loadRecoveryStateForSweep !== LOCAL_STR_FUNCTION) {
+    return true;
+  }
+  let payload;
+  try {
+    payload = await coordinator.loadRecoveryStateForSweep();
+  } catch (error) {
+    // Discovery is a hint source. A failed cache census cannot suppress the
+    // authoritative retries of IDs already retained by this owner.
+    coordinator.logger?.warn?.(RECOVERY_SWEEP_LOG_MSG, {
+      error: error?.message || String(error),
+      retainedTransactions: coordinator.recoveredTransactionIds.size,
+    });
+  }
+  if (coordinator.transactionCreationShutdown ||
+      creationGeneration !== coordinator.transactionCreationGeneration) {
+    return false;
+  }
+  if (payload && typeof payload === LOCAL_STR_OBJECT) {
+    coordinator.recoverFromSystemTables(payload);
+  }
+  return true;
+}
+
+function recoverySweepSelection(coordinator) {
+  const all = Array.from(coordinator.workflowCoordinator.workflowsById.values());
+  const creations = rotatingCreationSelection(coordinator, all);
+  const creationIds = new Set(creations.map((tx) => tx.workflowId));
+  const pendingIds = new Set(all.filter((tx) =>
+    tx.transactionCreationState && tx.transactionCreationState !==
+      TRANSACTION_CREATION_STATE.ENTERED_ACTIVE).map((tx) => tx.workflowId));
+  const ordinary = all.filter((tx) => !pendingIds.has(tx.workflowId) && (
+    tx.recoveryDiscovered ||
+    (!TERMINAL_TRANSACTION_STATUS.has(tx.status) &&
+      coordinator.isTransactionBudgetExceeded(tx))
+  ));
+  return {creationIds, creations, transactions: [...creations, ...ordinary]};
+}
+
+async function redriveSelectedRecovery(coordinator, tx, creationOperation) {
+  if (!tx.recoveryDiscovered && TERMINAL_TRANSACTION_STATUS.has(tx.status)) {
+    return {path: null, result: {success: true}};
+  }
+  const creationPending = tx.transactionCreationState &&
+    tx.transactionCreationState !== TRANSACTION_CREATION_STATE.ENTERED_ACTIVE;
+  if (!creationPending) return redriveRecoveredTransaction(coordinator, tx);
+  if (tx.transactionCreationAdvancedHandoff === true &&
+      tx.recoveryDiscovered === true) {
+    return redriveRecoveredTransaction(coordinator, tx);
+  }
+  return {path: QUERY_OPERATION.BEGIN_TRANSACTION,
+    result: await reconcileTransactionCreationOwned(
+      coordinator, tx, null, creationOperation)};
+}
+
+function sweepEntry(tx, path, protocolResult, deferred = false) {
+  return {
+    transactionId: tx.transactionId,
+    sessionId: tx.sessionId,
+    sweepPath: path,
+    statusAfter: tx.status,
+    success: protocolResult?.success === true,
+    ...(deferred ? {deferred: true} : {}),
+    error: protocolResult?.error || null,
+  };
+}
+
+async function runSelectedRecovery(coordinator, tx, creationOperation) {
+  let outcome;
+  try {
+    await coordinator.runTransactionOperation(tx.sessionId, async () => {
+      outcome = await redriveSelectedRecovery(coordinator, tx, creationOperation);
+      releaseTerminalServerTransactionCreation(coordinator, tx);
+    });
+  } catch (error) {
+    if (!coordinator.shouldDeferRecoverySweepError(error)) throw error;
+    return {deferredCause: error,
+      entry: sweepEntry(tx, outcome?.path ?? null, error, true)};
+  } finally {
+    if (creationOperation) {
+      releaseTransactionCreationOperation(coordinator, creationOperation);
+    }
+  }
+  const deferred = outcome.result?.success !== true &&
+    coordinator.shouldDeferRecoverySweepError(outcome.result);
+  return {deferredCause: deferred ? outcome.result : null,
+    entry: sweepEntry(tx, outcome.path, outcome.result, deferred)};
+}
+
+async function executeRecoverySweepSelection(coordinator, selection) {
+  const results = [];
+  let deferredCause = null;
+  for (const tx of selection.transactions) {
+    const selectedCreation = selection.creationIds.has(tx.workflowId);
+    const operation = selectedCreation ?
+      captureTransactionCreationRecoveryOperation(coordinator, tx) : null;
+    if (selectedCreation && !operation) {
+      const pressure = {deferRetry: true,
+        error: QUERY_ERROR_MSG.TRANSACTION_CREATION_PRESSURE};
+      deferredCause ||= pressure;
+      results.push(sweepEntry(tx, QUERY_OPERATION.BEGIN_TRANSACTION,
+        pressure, true));
+      continue;
+    }
+    const executed = await runSelectedRecovery(coordinator, tx, operation);
+    deferredCause ||= executed.deferredCause;
+    results.push(executed.entry);
+  }
+  return {deferredCause, results};
+}
+
+function finishRecoverySweep(coordinator, selection, execution) {
+  const deferred = execution.results.filter((entry) => entry.deferred).length;
+  const resolved = execution.results.filter((entry) => entry.success).length;
+  const failed = execution.results.filter(
+    (entry) => entry.success !== true && entry.deferred !== true).length;
+  if (deferred > 0 && execution.deferredCause) {
+    coordinator.deferRecoverySweep(execution.deferredCause);
+  } else if (deferred === 0) {
+    coordinator.clearRecoverySweepDeferState();
+  }
+  recordTransactionCreationSweepDiagnostic(coordinator, {
+    selectedCount: selection.creations.length,
+    stopReason: deferred > 0 ? 'deferred' : failed > 0 ? 'failed' :
+      'turn_complete',
+  });
+  return {
+    swept: selection.transactions.length, resolved, failed, deferred,
+    deferredUntilMs: deferred > 0 ?
+      coordinator.recoverySweepDeferredUntilMs : 0,
+    skipped: false,
+    results: execution.results,
+  };
+}
+
 const distributedTransactionRecoveryMethods = {
   shouldDeferRecoverySweepError,
+
+  acceptAdvancedTransactionCreation(tx, capturedRow, payload) {
+    if (!canAcceptAdvancedCreation(this, tx, capturedRow, payload)) {
+      return false;
+    }
+    try {
+      const candidate = transactionRecoveryAuthorityCandidate(tx, payload);
+      if (!candidate) return false;
+      Object.assign(tx, candidate);
+      tx.transactionRowInserted = true;
+      tx.transactionCreationAdvancedHandoff = true;
+      tx.recoveryDiscovered = true;
+      this.recoveredTransactionIds.add(tx.workflowId);
+      return true;
+    } catch (error) {
+      reportRejectedAdvancedCreation(this, tx, error);
+      return false;
+    }
+  },
 
   recover(rows) {
     if (!Array.isArray(rows)) {
@@ -203,143 +424,24 @@ const distributedTransactionRecoveryMethods = {
 
   async runRecoverySweep() {
     if (this.recoverySweepInFlight) {
-      return {
-        swept: 0,
-        resolved: 0,
-        failed: 0,
-        skipped: true,
-        deferred: 0,
-        results: [],
-      };
+      return emptySweepResult({skipped: true});
     }
     if (this.isRecoverySweepDeferred()) {
-      return {
-        swept: 0,
-        resolved: 0,
-        failed: 0,
+      return emptySweepResult({
         skipped: false,
         deferred: 1,
         deferredUntilMs: this.recoverySweepDeferredUntilMs,
-        results: [],
-      };
+      });
     }
     this.recoverySweepInFlight = true;
+    const creationGeneration = this.transactionCreationGeneration;
     try {
-      if (typeof this.loadRecoveryStateForSweep === LOCAL_STR_FUNCTION) {
-        let payload;
-        try {
-          payload = await this.loadRecoveryStateForSweep();
-        } catch (error) {
-          // Discovery is a hint source. A failed cache census cannot suppress
-          // the authoritative retries of IDs already retained by this owner.
-          this.logger?.warn?.(RECOVERY_SWEEP_LOG_MSG, {
-            error: error?.message || String(error),
-            retainedTransactions: this.recoveredTransactionIds.size,
-          });
-        }
-        if (payload && typeof payload === LOCAL_STR_OBJECT) {
-          this.recoverFromSystemTables(payload);
-        }
+      if (!await refreshRecoverySweepState(this, creationGeneration)) {
+        return emptySweepResult({skipped: true, deferredUntilMs: 0});
       }
-
-      const stuckTransactions = Array.from(
-        this.workflowCoordinator.workflowsById.values(),
-      ).filter(
-        (tx) =>
-          tx.recoveryDiscovered || (!TERMINAL_TRANSACTION_STATUS.has(tx.status) &&
-            this.isTransactionBudgetExceeded(tx)),
-      );
-      const results = [];
-      let deferred = 0;
-
-      for (const tx of stuckTransactions) {
-        let protocolResult = null;
-        let sweepPath = null;
-        try {
-          await this.runTransactionOperation(
-            tx.sessionId,
-            async () => {
-              if (!tx.recoveryDiscovered && TERMINAL_TRANSACTION_STATUS.has(tx.status)) {
-                protocolResult = {success: true};
-                return;
-              }
-              const redriven = await redriveRecoveredTransaction(this, tx);
-              sweepPath = redriven.path;
-              protocolResult = redriven.result;
-            },
-          );
-        } catch (error) {
-          if (this.shouldDeferRecoverySweepError(error)) {
-            deferred += 1;
-            const deferredResult = this.buildDeferredRecoverySweepResult(
-              error,
-              {
-                swept: stuckTransactions.length,
-                results: [
-                  {
-                    transactionId: tx.transactionId,
-                    sessionId: tx.sessionId,
-                    sweepPath,
-                    statusAfter: tx.status,
-                    success: false,
-                    deferred: true,
-                    error: error?.message || String(error),
-                  },
-                ],
-              },
-            );
-            results.push(...deferredResult.results);
-            continue;
-          }
-          throw error;
-        }
-
-        if (
-          protocolResult?.success !== true &&
-          this.shouldDeferRecoverySweepError(protocolResult)
-        ) {
-          deferred += 1;
-          this.deferRecoverySweep(protocolResult);
-          results.push({
-            transactionId: tx.transactionId,
-            sessionId: tx.sessionId,
-            sweepPath,
-            statusAfter: tx.status,
-            success: false,
-            deferred: true,
-            error: protocolResult?.error || null,
-          });
-          continue;
-        }
-
-        results.push({
-          transactionId: tx.transactionId,
-          sessionId: tx.sessionId,
-          sweepPath,
-          statusAfter: tx.status,
-          success: protocolResult?.success === true,
-          error: protocolResult?.error || null,
-        });
-      }
-
-      const resolved = results.filter((entry) => entry.success).length;
-      const failed = results.filter(
-        (entry) => entry.success !== true && entry.deferred !== true,
-      ).length;
-      if (deferred === 0) {
-        this.clearRecoverySweepDeferState();
-      }
-      return {
-        swept: stuckTransactions.length,
-        resolved,
-        failed,
-        deferred,
-        deferredUntilMs: deferred > 0 ?
-          this.recoverySweepDeferredUntilMs :
-          0,
-        skipped: false,
-        results,
-      };
+      const selection = recoverySweepSelection(this);
+      const execution = await executeRecoverySweepSelection(this, selection);
+      return finishRecoverySweep(this, selection, execution);
     } finally {
       this.recoverySweepInFlight = false;
     }
