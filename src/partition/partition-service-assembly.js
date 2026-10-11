@@ -16,6 +16,8 @@ import {configureParticipantDeterminismSelfCheck} from
   './partition-participant-transaction-self-check.js';
 import {TRANSACTION_ENVELOPE_SERVICE_METHODS} from
   './partition-transaction-execution-envelope.js';
+import {createPartitionServiceCdcCoverageMethods} from
+  './partition-service-cdc-coverage-methods.js';
 
 class PartitionService extends PartitionServiceSplitAccessorBase {
   constructor(options = {}) {
@@ -41,6 +43,7 @@ Object.assign(
   createPartitionServiceMergeReplicationResumptionMethods(),
   createPartitionServiceSplitMirrorQueueMethods(),
   createPartitionServiceSourceReplicationStartMethods(),
+  createPartitionServiceCdcCoverageMethods(),
   TRANSACTION_ENVELOPE_SERVICE_METHODS,
 );
 

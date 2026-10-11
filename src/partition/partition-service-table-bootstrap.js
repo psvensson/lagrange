@@ -11,6 +11,8 @@ import {
 import {
   getSchemaByTableName,
 } from '../bootstrap/system-table-schemas-constants.js';
+import {ensureSqlTransactionParticipantsTableColumns} from
+  './partition-coordinator-table-columns.js';
 
 const {
   PARTITION_SERVICE_COLUMN,
@@ -173,6 +175,8 @@ function createPartitionServiceTable(service) {
   service.ensureMessageGroupsTableColumns();
   service.ensurePartitionsTableColumns();
   service.ensureSqlTransactionsTableColumns();
+  // The coordinator's retained PREPARE evidence (TX1 seam E).
+  ensureSqlTransactionParticipantsTableColumns(service);
   service.ensureReplicaOperationsTableColumns();
   const indexSchema =
     service.tableName === SYSTEM_TABLE_NAME.WASM_OPERATIONS ?
