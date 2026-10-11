@@ -1,0 +1,34 @@
+import json,pathlib,sys
+p=pathlib.Path(__file__).parent
+checks=[]
+def check(group,label,value): checks.append((group,label,bool(value)))
+original=json.loads((p/'original-adversary-freeze.json').read_text())
+check('prior','malformed row retains debt',original['invalidAdvancedMutableRow']['diagnostics']['recordCount']==1)
+check('prior','array accessor never executes',original['accessorArrayReadback']['getterCalls']==0 and not original['accessorArrayReadback']['result']['success'])
+check('prior','original expiry refuses ACTIVE',not original['expiredRetry']['retry']['success'])
+check('prior','rotation reaches seventeenth after owned backoff',original['sweepPrefixStarvation']['seventeenth']>1)
+check('prior','post-tag failure closes with only CommandComplete',original['postTagAcceptanceFailure']['messageTypes']==['C'] and original['postTagAcceptanceFailure']['socketDestroyed'])
+check('prior','configuration getter refused',original['accessorConfiguration']=={'accepted':False,'getterCalls':0})
+check('prior','direct shutdown refuses success and releases exact resources',not original['shutdownDuringDirectBegin']['result']['success'] and original['shutdownDuringDirectBegin']['diagnostics']['recordCount']==0)
+check('prior','close leaves server-only debt and no Ready',original['closeBeforeTag']['messageTypes']==['E'] and original['closeBeforeTag']['creationState']=='SERVER_RECOVERY_ONLY' and original['closeBeforeTag']['sessionClosed'])
+x={r['name']:r for r in json.loads((p/'semantic-probes-freeze.json').read_text())['results']}
+check('B2-1','advanced transient readback rereads after availability',x['advanced-unavailable-then-readable']['readsAfterAvailability']>0 and x['advanced-unavailable-then-readable']['state']=='RECOVERY_PENDING')
+check('B2-2','advanced handoff retains exact live disposition',x['advanced-live-consumer-and-manifest-handoff']['before']['consumerRetained'] and x['advanced-live-consumer-and-manifest-handoff']['before']['recordCount']==1)
+check('B2-3','long identity pressure precedes delivery',x['exact-envelope-charge']['writes']==0 and x['exact-envelope-charge']['diagnostics']['totalBytes']==0)
+u=x['utf8-retained-representation-accounting']['observed']
+check('B2-3','UTF8 charge covers raw, normalized, row, buffer, consumer aliases',u['distinctRepresentations'] and u['charged']>=u['lowerBound'])
+check('B2-4','exact admitted capacity supports same-id reentry',x['exact-byte-pool-cannot-reenter']['retry']['success'] and x['exact-byte-pool-cannot-reenter']['first']['transactionId']==x['exact-byte-pool-cannot-reenter']['retry']['transactionId'])
+check('B2-5','injected spent control turn cannot publish or accept',not x['control-deadline-completion-before-timer']['first']['success'] and not x['control-deadline-completion-before-timer']['accepted'])
+check('B2-5','real-clock spent control turn cannot accept',not x['real-clock-delayed-timer']['accepted'])
+check('B2-6','shutdown fences census and late insert',x['shutdown-with-inflight-census-and-late-insert']['afterLate']['state'] is None and x['shutdown-with-inflight-census-and-late-insert']['diagnostics']['recordCount']==0)
+check('B2-7','typed uncertainty enters one folded backoff',x['typed-uncertainty-sweep-backoff']['diagnostic']['deferredAttempts']==1 and x['typed-uncertainty-sweep-backoff']['second']['swept']==0)
+check('B2-7','selected expired cohort stays bounded',x['expired-cohort-turn-cap']['resultCount']<=x['expired-cohort-turn-cap']['configuredTurnCap'] and x['expired-cohort-turn-cap']['diagnostic']['selectedCount']==16)
+check('B2-8','SQLQueryEngine refuses accessor options without calling them',x['engine-accessor-configuration']=={'name':'engine-accessor-configuration','getterCalls':0,'accepted':False})
+check('B2-1','expired claimed success reenters recovery',not x['expired-success-claim-never-hands-off']['retry']['success'] and x['expired-success-claim-never-hands-off']['state']=='RECOVERY_PENDING')
+for r in json.loads((p/'advanced-orderings-freeze.json').read_text()):
+ digest=r['beforeRetry']['durable']['decision_digest']
+ ok=(r['beforeRetry']['sameRecord'] and r['afterRetry']['sameRecord'] and r['afterRetry']['consumerRetained'] and r['afterRetry']['recordCount']==1 and len(r['commitEmissions'])==1 and not r['rollbackEmissions'] and r['commitEmissions'][0]['identity']['decisionDigest']==digest and r['afterReplay']['durable']['decision_digest']==digest and r['afterReplay']['durable']['decision']=='COMMIT' and not r['finalRetry']['success'] and r['afterFinal']['recordCount']==0)
+ check('B2-2/SR4',r['order']+' preserves exact record and COMMIT-only then consumes terminal disposition',ok)
+for group,label,ok in checks: print(('PASS' if ok else 'FAIL')+f' [{group}] {label}')
+print(f'{sum(ok for _,_,ok in checks)}/{len(checks)} assertions passed')
+sys.exit(1 if any(not ok for _,_,ok in checks) else 0)

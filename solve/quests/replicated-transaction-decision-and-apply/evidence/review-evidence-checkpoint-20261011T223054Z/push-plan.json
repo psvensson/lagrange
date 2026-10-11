@@ -1,0 +1,41 @@
+{
+  "utc": "2026-10-11T22:30:54.970039+00:00",
+  "namespace": "refs/heads/checkpoint/rs-raft-preservation-20261011T223054Z",
+  "mainBefore": "878eb8ac059dab71deae5feb0fa88e0c5c610c93",
+  "newRefs": {
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T223054Z/tx1-owner-wip": "e1b8504c8def56f721632323dd14f1a01c71190f"
+  },
+  "coverage": {
+    "tx1-owner-wip": {
+      "status": "NEW_SNAPSHOT_PENDING_PUSH",
+      "sha": "e1b8504c8def56f721632323dd14f1a01c71190f",
+      "ref": "refs/heads/checkpoint/rs-raft-preservation-20261011T223054Z/tx1-owner-wip",
+      "changedSinceRemote": "c532be18bcb5629eb81735152a35ec5dcfd6b71b",
+      "changedPaths": [
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-retained-authorization-settlement/completed-oracle-result.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-retained-authorization-settlement/corrected-source-provenance.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-retained-authorization-settlement/pgwire-after-retained-authorization-settlement.log.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T222116Z/activation-startup-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T222116Z/caller-states-after-capture.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T222116Z/caller-states-after-push.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T222116Z/caller-states-before.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T222116Z/candidate.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T222116Z/cdc-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T222116Z/coordinator-fixtures-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T222116Z/freshmg-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T222116Z/original-staged.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T222116Z/push-attempt.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T222116Z/push-plan.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T222116Z/query-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T222116Z/recovery-foundation.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T222116Z/remote-receipt.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T222116Z/remote-refs.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T222116Z/startup-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T222116Z/tx1-owner-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/log.ndjson"
+      ]
+    }
+  },
+  "callerStatesVerified": true,
+  "preservationOnly": true
+}

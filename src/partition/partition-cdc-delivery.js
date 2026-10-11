@@ -14,6 +14,7 @@ import {
 } from '../constants/cdc-lifecycle-constants.js';
 import {getTableCdcPolicy} from '../cache/cdc-table-policy.js';
 import {buildEventIdentity} from './cdc-event-buffer.js';
+import {isProvisionalCdcOutcome} from '../cdc/cdc-delivery-outcome.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
   PARTITION_SERVICE_CDC,
@@ -23,6 +24,16 @@ import {
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_TYPE,
 } from './partition-service-constants.js';
+import {PARTITION_CDC_OBLIGATION_REASON} from
+  './partition-cdc-obligation-constants.js';
+import {
+  cdcObligationDiagnosticsOf,
+  createCdcObligationLane,
+  driveCdcObligations,
+  flushCdcAcknowledgements,
+  resetCdcObligationLane,
+  settleAcknowledgedObligations,
+} from './partition-cdc-obligation-delivery.js';
 
 const PARTITION_CDC_DELIVERY_LITERAL = Object.freeze({
   OBJECT: 'object',
@@ -35,6 +46,8 @@ const PARTITION_CDC_DELIVERY_LITERAL = Object.freeze({
 });
 const CDC_NO_SUBSCRIBER_BUFFER_SUPPRESSED_TABLES = new Set([SYSTEM_TABLE_NAME.LOGS]);
 const CDC_SUBSCRIBER_NOT_READY_MSG = 'CDC subscriber not ready for delivery';
+const CDC_SUBSCRIBER_REFUSED_MSG = 'CDC subscriber refused the event';
+const CDC_SUBSCRIBER_REFUSED_CODE = 'cdc_subscriber_refused';
 function incrementBoundedOwnerCounter(owner, fieldName, delta = 1) {
   if (!owner || typeof fieldName !== 'string' || fieldName.length === 0) {
     return;
@@ -100,11 +113,55 @@ function markReplayOnlyCdcEvent(cdcEvent) {
  *
  * Operates directly on the owning PartitionService instance's mutable state
  * so that the single source of truth for CDC fields remains on the owner.
+ * It also owns the obligation lane (partition-cdc-obligation-delivery.js):
+ * the durable obligations a committed participant decision records are
+ * driven from here on the leader, their acknowledgements batched by committed
+ * entry and proposed as CDC_DELIVERED; a new leadership tenure re-drives the
+ * ledger's owed obligations, and a subscription handshake drives them to the
+ * new subscriber.
  */ class PartitionCDCDelivery {
   /**
    * @param {Object} owner - The PartitionService instance that owns CDC state.
    */ constructor(owner) {
     this.owner = owner;
+    this.obligationLane = createCdcObligationLane();
+    if (typeof owner.on === PARTITION_SERVICE_TYPE.FUNCTION) {
+      owner.on(PARTITION_SERVICE_EVENT.LEADER_ELECTED, () => {
+        resetCdcObligationLane(this);
+        this.driveCdcObligations(PARTITION_CDC_OBLIGATION_REASON.LEADER_ELECTED);
+      });
+      owner.on(PARTITION_SERVICE_EVENT.SHUTDOWN, () => resetCdcObligationLane(this));
+    }
+  }
+  /**
+   * Drive the ledger's owed obligations to the current subscribers (leader
+   * only; tracked so shutdown awaits it). Delegates to the obligation lane.
+   * @param {string} reason - A PARTITION_CDC_OBLIGATION_REASON.
+   * @return {Promise<Object>} The drive's outcome.
+   */ driveCdcObligations(reason) {
+    const drive = driveCdcObligations(this, reason);
+    if (typeof this.owner.trackPendingCDCEvent === PARTITION_SERVICE_TYPE.FUNCTION) {
+      this.owner.trackPendingCDCEvent(drive);
+    }
+    return drive;
+  }
+  /**
+   * Propose the pending acknowledgements now, as one CDC_DELIVERED.
+   * @param {string} reason - A PARTITION_CDC_OBLIGATION_REASON.
+   * @return {Promise<Object>} The flush's outcome.
+   */ flushCdcAcknowledgements(reason) {
+    return flushCdcAcknowledgements(this, reason);
+  }
+  /**
+   * The ledger committed these events delivered (a CDC_DELIVERED applied).
+   * @param {Array<string>} eventKeys - Their event keys.
+   */ settleAcknowledgedObligations(eventKeys) {
+    settleAcknowledgedObligations(this, eventKeys);
+  }
+  /**
+   * @return {Object} The obligation lane's diagnostics.
+   */ getCdcObligationDiagnostics() {
+    return cdcObligationDiagnosticsOf(this);
   }
   /**
    * Resolve the underlying subscriber object from a wrapper.
@@ -316,9 +373,13 @@ function markReplayOnlyCdcEvent(cdcEvent) {
       while (this.owner.cdcSubscribers.size > 0 && this.owner.cdcEventBuffer.hasEvents()) {
         const replayedCount = await this.owner.cdcEventBuffer.replay(async (cdcEvent) => {
           const subscribers = [...this.owner.cdcSubscribers];
+          let provisional = false;
           for (const subscriber of subscribers) {
-            await this.deliverCDCEventToSubscriber(subscriber, markReplayOnlyCdcEvent(cdcEvent));
+            const answer = await this.deliverCDCEventToSubscriber(
+              subscriber, markReplayOnlyCdcEvent(cdcEvent));
+            provisional ||= isProvisionalCdcOutcome(answer, [cdcEvent]);
           }
+          if (provisional) return false;
           this.owner.cdcPipelineMetrics.increment(CDC_PIPELINE_METRIC.EVENTS_DELIVERED);
           this.owner.emit(PARTITION_SERVICE_EVENT.CDC_EVENT, cdcEvent);
         });
@@ -388,11 +449,16 @@ function markReplayOnlyCdcEvent(cdcEvent) {
       }
       throw error;
     }
-    if (typeof subscriber === PARTITION_SERVICE_TYPE.FUNCTION) {
-      await subscriber(cdcEvent);
-      return;
+    const answer = typeof subscriber === PARTITION_SERVICE_TYPE.FUNCTION ?
+      await subscriber(cdcEvent) : await subscriber.handleCDCEvent(cdcEvent);
+    if (answer?.success === false && !isProvisionalCdcOutcome(answer, [cdcEvent])) {
+      const error = new Error(CDC_SUBSCRIBER_REFUSED_MSG);
+      error.code = CDC_SUBSCRIBER_REFUSED_CODE;
+      error.cause = answer;
+      error.retryAfterMs = answer.retryAfterMs;
+      throw error;
     }
-    await subscriber.handleCDCEvent(cdcEvent);
+    return answer;
   }
   /**
    * Create a wrapper that enriches stream metadata for one subscriber.
@@ -410,10 +476,12 @@ function markReplayOnlyCdcEvent(cdcEvent) {
         subscriberId: subscriptionState.subscriberId,
         subscriptionEpoch: subscriptionState.subscriptionEpoch,
       };
-      await this.deliverCDCEventToSubscriber(subscriber, decoratedEvent);
+      const answer = await this.deliverCDCEventToSubscriber(subscriber, decoratedEvent);
+      if (isProvisionalCdcOutcome(answer, [cdcEvent])) return answer;
       this.owner.cdcEventBuffer.recordDelivered(cdcEvent);
       subscriptionState.lastDeliveredSequenceNumber = decoratedEvent.sequenceNumber;
       subscriptionState.lastDeliveredAt = this.owner.timeSource.now();
+      return answer;
     };
   }
   /**
@@ -468,6 +536,8 @@ function markReplayOnlyCdcEvent(cdcEvent) {
         PARTITION_SERVICE_CDC.CATCHUP_MODE_BACKFILL :
         PARTITION_SERVICE_CDC.CATCHUP_MODE_NONE;
     let bufferedEventsReplayed = 0;
+    let provisionalEvents = 0;
+    let catchupFailed = false;
     let catchupCompletedAt = this.owner.timeSource.now();
     let preserveReplayDelayAfterHandshake = false;
     const deliveredIdentities = new Set();
@@ -487,12 +557,17 @@ function markReplayOnlyCdcEvent(cdcEvent) {
       });
       const trackingWrapper = async (cdcEvent) => {
         deliveredIdentities.add(buildEventIdentity(cdcEvent));
-        await wrapper(markReplayOnlyCdcEvent(cdcEvent));
+        const answer = await wrapper(markReplayOnlyCdcEvent(cdcEvent));
+        if (isProvisionalCdcOutcome(answer, [cdcEvent])) {
+          provisionalEvents++;
+          return false;
+        }
       };
       try {
         bufferedEventsReplayed = await this.owner.cdcEventBuffer.replay(trackingWrapper);
         this.owner.cdcReplayRetryDepth = 0;
       } catch (error) {
+        catchupFailed = true;
         this.owner.cdcPipelineMetrics.increment(CDC_PIPELINE_METRIC.DELIVERY_FAILURES);
         this.owner.cdcBufferReplayDelayMs = this.resolveBufferedReplayDelayAfterError(error);
         incrementBoundedOwnerCounter(
@@ -512,22 +587,6 @@ function markReplayOnlyCdcEvent(cdcEvent) {
           replayBufferGrowthCount: this.owner.cdcReplayBufferGrowthCount || 0,
         });
       }
-      catchupCompletedAt = this.owner.timeSource.now();
-      nextCatchupCompletedAt = catchupCompletedAt;
-      this.owner.emit(PARTITION_SERVICE_EVENT.CDC_CATCHUP_COMPLETED, {
-        partitionId: this.owner.partitionId,
-        subscriberId,
-        subscriptionEpoch,
-        bufferedEventsReplayed,
-        bufferedEventsRemaining: this.owner.cdcEventBuffer.size(),
-      });
-      this.owner.logger.debug(PARTITION_SERVICE_LOG_MSG.CDC_CATCHUP_COMPLETED, {
-        partitionId: this.owner.partitionId,
-        subscriberId,
-        subscriptionEpoch,
-        bufferedEventsReplayed,
-        bufferedEventsRemaining: this.owner.cdcEventBuffer.size(),
-      });
     } // Sliding window replay: deliver recent events that the new
     // subscriber missed, deduplicating against buffer-replayed events.
     // Skip for already-subscribed subscribers — they already received
@@ -552,17 +611,31 @@ function markReplayOnlyCdcEvent(cdcEvent) {
           subscriberId: subscriptionState.subscriberId,
           subscriptionEpoch: subscriptionState.subscriptionEpoch,
         };
-        await this.deliverCDCEventToSubscriber(subscriber, replayEvent);
+        const answer = await this.deliverCDCEventToSubscriber(subscriber, replayEvent);
+        if (isProvisionalCdcOutcome(answer, [cdcEvent])) {
+          provisionalEvents++;
+          continue;
+        }
         subscriptionState.lastDeliveredSequenceNumber = replayEvent.sequenceNumber;
         subscriptionState.lastDeliveredAt = this.owner.timeSource.now();
         slidingWindowEventsReplayed++;
       }
       if (
         catchupMode === PARTITION_SERVICE_CDC.CATCHUP_MODE_NONE &&
-        slidingWindowEventsReplayed > 0
+        slidingWindowEventsReplayed + provisionalEvents > 0
       ) {
         catchupMode = PARTITION_SERVICE_CDC.CATCHUP_MODE_SLIDING_WINDOW;
       }
+    }
+    const completed = !catchupFailed && provisionalEvents === 0 &&
+      this.owner.cdcEventBuffer.size() === 0;
+    catchupCompletedAt = completed ? this.owner.timeSource.now() : null;
+    nextCatchupCompletedAt = catchupCompletedAt;
+    if (completed && catchupMode === PARTITION_SERVICE_CDC.CATCHUP_MODE_BACKFILL) {
+      const observation = {partitionId: this.owner.partitionId, subscriberId,
+        subscriptionEpoch, bufferedEventsReplayed, bufferedEventsRemaining: 0};
+      this.owner.emit(PARTITION_SERVICE_EVENT.CDC_CATCHUP_COMPLETED, observation);
+      this.owner.logger.debug(PARTITION_SERVICE_LOG_MSG.CDC_CATCHUP_COMPLETED, observation);
     }
     subscriptionState.streamMode = PARTITION_SERVICE_CDC.STREAM_MODE_STEADY;
     subscriptionState.subscriptionEpoch = subscriptionEpoch;
@@ -577,7 +650,8 @@ function markReplayOnlyCdcEvent(cdcEvent) {
         bufferedEventsAtHandshake,
         bufferedEventsReplayed,
         slidingWindowEventsReplayed,
-        completed: this.owner.cdcEventBuffer.size() === 0,
+        provisionalEvents,
+        completed,
         completedAt: catchupCompletedAt,
       },
       streamMode: subscriptionState.streamMode,
@@ -597,6 +671,10 @@ function markReplayOnlyCdcEvent(cdcEvent) {
         PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
     }
     this.scheduleBufferedCDCReplay(PARTITION_CDC_DELIVERY_LITERAL.POST_SUBSCRIPTION_HANDSHAKE);
+    // The ledger's owed obligations reach the new subscriber too, in log
+    // order, after the volatile buffer's catch-up was scheduled.
+    this.driveCdcObligations(PARTITION_CDC_OBLIGATION_REASON.SUBSCRIPTION_HANDSHAKE)
+      .catch(() => undefined);
     return handshake;
   }
   /**
