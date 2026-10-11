@@ -1,18 +1,17 @@
 // Canonical release identity and census validation. The census consists of
 // replies read from each exact current member's owners, never progress from
 // a leader's replication transport. Local resume re-reads its own facts.
-import {createHash} from 'node:crypto';
 import {deepFreeze} from '../raft/raft-operation-port.js';
 import {COMMITTED_MEMBERSHIP_MAX_PEERS} from '../raft/raft-committed-membership-constants.js';
 import {PARTITION_ROWID_LIMIT} from './partition-statement-admission-constants.js';
 import {TRANSACTION_RELEASE_CENSUS_STATE} from
   '../query/distributed/distributed-transaction-release-census.js';
 import {isReleaseDrained} from './partition-participant-release-facts.js';
-import {PARTICIPANT_CUTOVER_OUTCOME as OUTCOME, PARTICIPANT_RELEASE_VERSION} from
+import {PARTICIPANT_CUTOVER_OUTCOME as OUTCOME} from
   './partition-participant-transaction-cutover-constants.js';
+import {releaseIdentityOf, releaseIdentityValid} from
+  './partition-participant-release-identity.js';
 
-const DIGEST = 'sha256';
-const ENCODING = 'hex';
 const GENERATION_FIELDS = Object.freeze(['nodeId', 'ownerIncarnation', 'replicaId',
   'lifecycleIncarnation', 'runtimeGeneration', 'connectionGeneration', 'admissionGeneration']);
 const DIGEST_PATTERN = /^[a-f0-9]{64}$/;
@@ -51,22 +50,6 @@ function transactionReleaseProofValid(proof, {release, attempt, census}) {
     entry.participantIds.every(nonempty));
 }
 
-function releaseIdentityOf({partitionId, targetBuildDigest, configurationKey,
-  membershipGenerationIndex}) {
-  if (!nonempty(partitionId) || !DIGEST_PATTERN.test(targetBuildDigest) ||
-      !nonempty(configurationKey) || !ordinal(membershipGenerationIndex)) return null;
-  const identity = {partitionId, protocolVersion: PARTICIPANT_RELEASE_VERSION,
-    targetBuildDigest, configurationKey, membershipGenerationIndex};
-  const releaseId = createHash(DIGEST).update(JSON.stringify(identity)).digest(ENCODING);
-  return Object.freeze({...identity, releaseId});
-}
-
-function releaseIdentityValid(release) {
-  const canonical = release && releaseIdentityOf(release);
-  return canonical !== null && release.protocolVersion === canonical.protocolVersion &&
-    release.releaseId === canonical.releaseId;
-}
-
 function sameReplicaGeneration(left, right) {
   return left != null && right != null &&
     GENERATION_FIELDS.every((field) => left[field] != null && left[field] === right[field]);
@@ -102,7 +85,7 @@ function rowidValid(rowid) {
 }
 
 function releaseFactsDefect(release, facts, options = {}) {
-  const {originRequired = true} = options;
+  const {originRequired = true, pausedRequired = true} = options;
   if (facts?.outcome !== OUTCOME.OBSERVED || !facts.membership || !facts.generation ||
       !facts.connection || !facts.work) return OUTCOME.UNAVAILABLE;
   if (facts.partitionId !== release.partitionId ||
@@ -112,7 +95,8 @@ function releaseFactsDefect(release, facts, options = {}) {
     return OUTCOME.STALE;
   }
   if (facts.buildDigest !== release.targetBuildDigest) return OUTCOME.BUILD_MISMATCH;
-  if (facts.paused !== true || !sameReplicaGeneration(facts.generation, facts.generation) ||
+  if (pausedRequired && facts.paused !== true ||
+      !sameReplicaGeneration(facts.generation, facts.generation) ||
       !nonempty(facts.leaderReplicaId) || !ordinal(facts.membership.term) ||
       facts.membership.term === 0) return OUTCOME.STALE;
   if (!isReleaseDrained(facts.work)) return OUTCOME.DRAIN_PENDING;

@@ -14,9 +14,12 @@
 
 import {createHash} from 'node:crypto';
 import {isExecutionEnvelope} from './partition-transaction-execution-envelope.js';
+import {isPinnedParticipantReleaseCommand} from
+  './partition-participant-release-command.js';
 import {
   PARTICIPANT_TRANSACTION_BYTES as BYTES,
   PARTICIPANT_TRANSACTION_COMMAND as COMMAND,
+  PARTICIPANT_RELEASE_COMMAND_TYPES,
   PARTICIPANT_TRANSACTION_DECISION as DECISION,
   PARTICIPANT_TRANSACTION_FAILURE_CODE as CODE,
 } from './partition-participant-transaction-constants.js';
@@ -353,6 +356,9 @@ function isPinnedGenerationOrigin(command) {
  * @return {boolean} Whether its bytes are pinned.
  */
 function isPinnedParticipantCommand(command) {
+  if (PARTICIPANT_RELEASE_COMMAND_TYPES.includes(command.type)) {
+    return isPinnedParticipantReleaseCommand(command);
+  }
   if (command.type === COMMAND.GENERATION_ORIGIN) {
     return isPinnedGenerationOrigin(command);
   }

@@ -47,6 +47,11 @@ const RAFT_OPERATION_PORT_REQUEST = Object.freeze({
   SEND_TO_PEER: 'sendToPeer',
   RESOLVE_PEER_ADDRESS: 'resolvePeerAddress',
   APPLY_COMMITTED_ENTRY: 'applyCommittedEntry',
+  // A group-specific local HOLD checked in the runtime turn after inbound
+  // traffic drains and immediately before the native proposal primitive.
+  // It may refuse this exact proposal locally; it is never an input to
+  // committed application and therefore cannot become replicated authority.
+  ADMIT_PROPOSAL_DISPATCH: 'admitProposalDispatch',
   SNAPSHOT_CATCHUP_NEEDED: 'snapshotCatchupNeeded',
   // A durable apply transaction did NOT commit, so any cached applied
   // progress is unreliable and must be re-read from the durable store. It
