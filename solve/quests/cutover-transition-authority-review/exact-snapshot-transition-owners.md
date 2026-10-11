@@ -26,6 +26,34 @@ owner, not from a cache miss. Local `_raft_rs_replica_lifecycle.incarnation`,
 peer reservations, node boot incarnation, publication epoch and membership
 configuration generation remain separate dimensions.
 
+## Witnesses at 82b54ef9 for the local-restart gates
+
+Cited 2026-10-11 (round-2 independent review F3.1). The three local-restart
+gates in the table above are proved by existing tests of the classified tree,
+all present at 82b54ef9 under `test/raft/raft-rs-backend/`:
+
+- LOCAL_OPEN: `test/raft/raft-rs-backend/restart-from-durable-record.test.js`
+  (restart reconstructs raft state from the replica's own durable record on
+  real storage; no recovery state is inferred from a service or system-table
+  cache); `test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js`
+  (restart/rejoin equivalence across restart points and classes for a replica
+  with a valid durable record; a replica without a record is refused typed);
+  `test/raft/raft-rs-backend/stampless-opening-refusal.test.js` (a replica
+  opens from a stamp or from the durable-record bootstrap, never from an
+  absent stamp; typed STAMP_INVALID refusal).
+- KNOWN_WIPE and the MISSING-versus-unreadable distinction:
+  `test/raft/raft-rs-backend/open-time-identity-refusal.test.js` (an identity
+  whose prior existence the host's authoritative row proves and whose durable
+  raft record is gone is refused reseed-required at open, held durably by the
+  lifecycle owner, and never enters the core);
+  `test/raft/raft-rs-backend/durable-rejoin-record-refusal.test.js` (no
+  record refuses DURABLE_RECORD_MISSING at the durable-record-read phase,
+  non-retryable, distinct from an unreadable record, which is a retryable
+  host failure at the same phase: the READ_UNAVAILABLE row).
+
+These are component and refusal witnesses for the existing gates within the
+measured ceiling; they are not intact-member application catch-up evidence.
+
 ## Specified repair boundary for intact accepted application images
 
 This section identifies missing writes/operations; it does not pretend they
@@ -44,8 +72,13 @@ No branch here introduces an external snapshot database or second runtime.
    binding and permitted compaction boundary are durably recorded. It must
    not use receiver `MemStorage.apply_snapshot` to publish on a live sender.
    Current callback `snapshotCatchupNeeded` in the operation request has no
-   inspected runtime consumer; wire the existing snapshot/runtime edge rather
-   than claim a manually invoked dispatcher proves scheduling.
+   inspected runtime ~~consumer~~ producer (corrected 2026-10-11, round-2
+   independent review F3.2: at 82b54ef9 `SNAPSHOT_CATCHUP_NEEDED` has a
+   handler registration at `src/partition/partition-service-raft-init-base.js:458`
+   and its constant at `src/raft/raft-operation-port-request.js:50`, and
+   nothing under `src/` issues the request); wire the existing
+   snapshot/runtime edge rather than claim a manually invoked dispatcher
+   proves scheduling.
 3. **Staging/admission:** `createSnapshotTransferReceiver` stages immutable
    bytes. `drainReady` retains sole authority to identify the exact snapshot
    accepted by THIS receiver's actual live core. Bind native metadata/data,

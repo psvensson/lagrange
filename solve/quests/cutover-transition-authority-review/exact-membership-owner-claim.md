@@ -7,9 +7,20 @@ expiry-only orphan sweep are not membership successor authority.
 
 ## Durable fact and existing owner
 
-ReplicaOperationRepository owns nullable JSON
+~~ReplicaOperationRepository owns nullable JSON
 `message_group_membership_owner_claim` in the existing replica_operations row.
-The existing membership schema/upgrade loop registers it. Exact fields are:
+The existing membership schema/upgrade loop registers it.~~ Corrected
+2026-10-11 (round-2 independent review B1.2): the column
+`message_group_membership_owner_claim` and its registration by the membership
+schema/upgrade loop are PROPOSED and ABSENT at 82b54ef9 (0 hits under `src/`
+in that tree). The identifiers exist only in the later FreshMG increment on
+the candidate branch, which this classification does not evaluate. The
+proposal is that ReplicaOperationRepository would own a nullable JSON column
+`message_group_membership_owner_claim` in the existing replica_operations row,
+registered by the existing membership schema/upgrade loop beside the columns
+of `src/bootstrap/replica-operation-message-group-membership-schema-constants.js`.
+Every present-tense statement about the claim in this document describes
+that proposed contract, never 82b54ef9 behaviour. Exact fields are:
 version, operationId, transitionIdentity, ownerNodeId, ownerBootIncarnation,
 generation, expiresAt. Version is 1; boot/generation/expiry are positive safe
 integers; identity strings are nonempty. Generation must increase without
