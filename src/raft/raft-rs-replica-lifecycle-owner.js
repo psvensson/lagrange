@@ -24,6 +24,10 @@ const LIFECYCLE_STATE = Object.freeze({
   ACTIVE: 'active',
   RETIRED: 'retired',
 });
+const LIFECYCLE_INITIALIZATION_MODE = Object.freeze({
+  RUNTIME_OPEN: Symbol('runtime-open'),
+  AUTHENTICATED_SNAPSHOT_STAGE: Symbol('authenticated-snapshot-stage'),
+});
 // Durable lifecycle generation is the persistent authority. Runtime-instance
 // identity is the exact process-local projection of that generation: the
 // registry holds one entry per opened runtime (the frozen operation port a
@@ -44,11 +48,23 @@ const LIFECYCLE_REASON = Object.freeze({
   IDENTITY_MISMATCH: 'lifecycle-identity-mismatch',
   RETIRED: 'retired',
   STALE_RUNTIME_GENERATION: 'runtime-generation-not-registered',
+  SCHEMA_MISMATCH: 'lifecycle-schema-mismatch',
   // A replica whose own history was proven lost while it ran (owner decision
   // O4): retired with this reason, it is refused with it, also after a
   // restart.
   RESEED_REQUIRED: COMMITTED_MEMBERSHIP_REFUSAL.RESEED_REQUIRED,
 });
+
+const LIFECYCLE_SCHEMA_SHAPE = Object.freeze([
+  ['group_id', 'TEXT', 1, null, 1],
+  ['peer_id', 'TEXT', 1, null, 2],
+  ['replica_identity', 'TEXT', 1, null, 0],
+  ['state', 'TEXT', 1, null, 0],
+  ['reason', 'TEXT', 0, null, 0],
+  ['changed_at', 'TEXT', 1, null, 0],
+  ['incarnation', 'TEXT', 0, null, 0],
+  ['retirement_evidence', 'TEXT', 0, null, 0],
+]);
 
 // The refusal a retired row answers: a reseed hold keeps its own reason.
 function retiredRefusalReason(reason) {
@@ -80,6 +96,134 @@ function stampUnstampedRow(db, {groupId, peerId, mintIncarnation}) {
   `).run(String(mintIncarnation()), groupId, peerId);
 }
 
+function createLifecycleTable(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS ${LIFECYCLE_TABLE} (
+      group_id TEXT NOT NULL,
+      peer_id TEXT NOT NULL,
+      replica_identity TEXT NOT NULL,
+      state TEXT NOT NULL CHECK (state IN ('active', 'retired')),
+      reason TEXT,
+      changed_at TEXT NOT NULL,
+      incarnation TEXT,
+      retirement_evidence TEXT,
+      PRIMARY KEY (group_id, peer_id),
+      UNIQUE (group_id, replica_identity)
+    )
+  `);
+  addMissingLifecycleColumns(db);
+}
+
+function lifecycleTablePresent(db) {
+  return db.prepare(`SELECT 1 FROM sqlite_master
+    WHERE type = 'table' AND name = ?`).get(LIFECYCLE_TABLE) !== undefined;
+}
+
+function lifecycleTableSchemaMatches(db) {
+  const shape = db.prepare(`PRAGMA table_info(${LIFECYCLE_TABLE})`).all()
+    .map((column) => [column.name, column.type, column.notnull,
+      column.dflt_value, column.pk]);
+  if (JSON.stringify(shape) !== JSON.stringify(LIFECYCLE_SCHEMA_SHAPE)) {
+    return false;
+  }
+  const uniqueKeys = new Set(db.prepare(
+    `PRAGMA index_list(${LIFECYCLE_TABLE})`).all()
+    .filter((index) => index.unique === 1)
+    .map((index) => db.prepare(`PRAGMA index_info('${index.name}')`).all()
+      .map(({name}) => name).join(',')));
+  return uniqueKeys.has('group_id,peer_id') &&
+    uniqueKeys.has('group_id,replica_identity');
+}
+
+function hasDurableRaftRows(db, groupId) {
+  const tables = db.prepare(`
+    SELECT name FROM sqlite_master
+    WHERE type = 'table' AND name IN (
+      '_raft_rs_log', '_raft_rs_hard_state', '_raft_rs_applied_state',
+      '_raft_rs_snapshot'
+    )
+  `).all().map((entry) => entry.name);
+  return tables.some((table) => db.prepare(
+    `SELECT 1 FROM ${table} WHERE group_id = ? LIMIT 1`,
+  ).get(groupId) !== undefined);
+}
+
+function readLifecycleIncarnation(db, {groupId, peerId, replicaIdentity}) {
+  return db.prepare(`
+    SELECT incarnation FROM ${LIFECYCLE_TABLE}
+    WHERE group_id = ? AND peer_id = ? AND replica_identity = ?
+  `).get(groupId, peerId, replicaIdentity)?.incarnation ?? null;
+}
+
+function initializeAbsentLifecycleRow({db, groupId, peerId, replicaIdentity,
+  mintIncarnation}) {
+  if (hasDurableRaftRows(db, groupId)) {
+    return {state: null, refusalReason: LIFECYCLE_REASON.MISSING,
+      incarnation: null, created: false};
+  }
+  db.prepare(`
+    INSERT INTO ${LIFECYCLE_TABLE}
+      (group_id, peer_id, replica_identity, state, reason, changed_at,
+        incarnation)
+    VALUES (?, ?, ?, 'active', NULL, ?, ?)
+  `).run(groupId, peerId, replicaIdentity, new Date().toISOString(),
+    String(mintIncarnation()));
+  return {state: LIFECYCLE_STATE.ACTIVE, refusalReason: null,
+    incarnation: readLifecycleIncarnation(db,
+      {groupId, peerId, replicaIdentity}), created: true};
+}
+
+function initializeExistingLifecycleRow({db, groupId, peerId,
+  replicaIdentity, mintIncarnation, mode, replayAuthorized, row}) {
+  if (row.peer_id !== peerId || row.replica_identity !== replicaIdentity) {
+    return {state: null, refusalReason: LIFECYCLE_REASON.IDENTITY_MISMATCH,
+      incarnation: null, created: false};
+  }
+  if (mode === LIFECYCLE_INITIALIZATION_MODE.AUTHENTICATED_SNAPSHOT_STAGE &&
+      !replayAuthorized) {
+    return {state: null, refusalReason: LIFECYCLE_REASON.IDENTITY_MISMATCH,
+      incarnation: null, created: false};
+  }
+  if (mode === LIFECYCLE_INITIALIZATION_MODE.AUTHENTICATED_SNAPSHOT_STAGE &&
+      row.state !== LIFECYCLE_STATE.ACTIVE) {
+    return {state: row.state,
+      refusalReason: retiredRefusalReason(row.reason),
+      incarnation: null, created: false};
+  }
+  stampUnstampedRow(db, {groupId, peerId, mintIncarnation});
+  return {state: row.state,
+    refusalReason: row.state === LIFECYCLE_STATE.RETIRED ?
+      retiredRefusalReason(row.reason) : null,
+    incarnation: readLifecycleIncarnation(db,
+      {groupId, peerId, replicaIdentity}), created: false};
+}
+
+function initializeLifecycleRow({db, groupId, peerId, replicaIdentity,
+  mintIncarnation, mode, replayAuthorized = false}) {
+  if (mode === LIFECYCLE_INITIALIZATION_MODE.AUTHENTICATED_SNAPSHOT_STAGE &&
+      lifecycleTablePresent(db) && !lifecycleTableSchemaMatches(db)) {
+    return {state: null, refusalReason: LIFECYCLE_REASON.SCHEMA_MISMATCH,
+      incarnation: null, created: false, schemaValid: false};
+  }
+  createLifecycleTable(db);
+  const row = db.prepare(`
+    SELECT peer_id, replica_identity, state, reason
+    FROM ${LIFECYCLE_TABLE}
+    WHERE group_id = ? AND (peer_id = ? OR replica_identity = ?)
+  `).get(groupId, peerId, replicaIdentity);
+  return row === undefined ? initializeAbsentLifecycleRow({db, groupId,
+    peerId, replicaIdentity, mintIncarnation}) :
+    initializeExistingLifecycleRow({db, groupId, peerId, replicaIdentity,
+      mintIncarnation, mode, replayAuthorized, row});
+}
+
+function initializeSnapshotStagingLifecycleRow({db, groupId, peerId,
+  replicaIdentity, replayAuthorized = false, mintIncarnation = randomUUID}) {
+  return Object.freeze(initializeLifecycleRow({db, groupId, peerId,
+    replicaIdentity, replayAuthorized, mintIncarnation,
+    mode: LIFECYCLE_INITIALIZATION_MODE.AUTHENTICATED_SNAPSHOT_STAGE}));
+}
+
 class RaftRsReplicaLifecycleOwner {
   #db;
   #groupId;
@@ -97,60 +241,11 @@ class RaftRsReplicaLifecycleOwner {
     this.#groupId = groupId;
     this.#peerId = peerId;
     this.#replicaIdentity = replicaIdentity;
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS ${LIFECYCLE_TABLE} (
-        group_id TEXT NOT NULL,
-        peer_id TEXT NOT NULL,
-        replica_identity TEXT NOT NULL,
-        state TEXT NOT NULL CHECK (state IN ('active', 'retired')),
-        reason TEXT,
-        changed_at TEXT NOT NULL,
-        incarnation TEXT,
-        retirement_evidence TEXT,
-        PRIMARY KEY (group_id, peer_id),
-        UNIQUE (group_id, replica_identity)
-      )
-    `);
-    addMissingLifecycleColumns(db);
-    const row = db.prepare(`
-      SELECT peer_id, replica_identity, state, reason
-      FROM ${LIFECYCLE_TABLE}
-      WHERE group_id = ? AND (peer_id = ? OR replica_identity = ?)
-    `).get(groupId, peerId, replicaIdentity);
-    if (row === undefined) {
-      const raftTables = db.prepare(`
-        SELECT name FROM sqlite_master
-        WHERE type = 'table' AND name IN (
-          '_raft_rs_log', '_raft_rs_hard_state', '_raft_rs_applied_state'
-        )
-      `).all().map((entry) => entry.name);
-      const hasDurableRaftRecord = raftTables.some((table) =>
-        db.prepare(`SELECT 1 FROM ${table} WHERE group_id = ? LIMIT 1`)
-          .get(groupId) !== undefined);
-      if (hasDurableRaftRecord) {
-        this.#state = null;
-        this.#refusalReason = LIFECYCLE_REASON.MISSING;
-      } else {
-        db.prepare(`
-          INSERT INTO ${LIFECYCLE_TABLE}
-            (group_id, peer_id, replica_identity, state, reason, changed_at,
-              incarnation)
-          VALUES (?, ?, ?, 'active', NULL, ?, ?)
-        `).run(groupId, peerId, replicaIdentity, new Date().toISOString(),
-          String(mintIncarnation()));
-        this.#state = LIFECYCLE_STATE.ACTIVE;
-      }
-    } else {
-      if (row.peer_id !== peerId || row.replica_identity !== replicaIdentity) {
-        this.#state = null;
-        this.#refusalReason = LIFECYCLE_REASON.IDENTITY_MISMATCH;
-      } else {
-        stampUnstampedRow(db, {groupId, peerId, mintIncarnation});
-        this.#state = row.state;
-        this.#refusalReason = row.state === LIFECYCLE_STATE.RETIRED ?
-          retiredRefusalReason(row.reason) : null;
-      }
-    }
+    const initialized = initializeLifecycleRow({db, groupId, peerId,
+      replicaIdentity, mintIncarnation,
+      mode: LIFECYCLE_INITIALIZATION_MODE.RUNTIME_OPEN});
+    this.#state = initialized.state;
+    this.#refusalReason = initialized.refusalReason;
   }
 
   get groupId() {
@@ -407,6 +502,7 @@ export {
   DURABLE_LIFECYCLE_READ,
   LIFECYCLE_STATE,
   RaftRsReplicaLifecycleOwner,
+  initializeSnapshotStagingLifecycleRow,
   readDurableReplicaLifecycle,
   registerRuntimeLifecycle,
   retireReplicaLifecycle,

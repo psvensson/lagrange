@@ -1,0 +1,2497 @@
+TAP version 14
+1..1
+# Subtest: test/integration/pgwire-command-tag-real-engine.integration.test.js
+(node:1214769) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 transition listeners added to [BootstrapReadinessState]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
+(Use `node --trace-warnings ...` to show where the warning was created)
+    LogsTableService initialized
+    metrics.logging.logs_table_connect.start {
+      bufferedEntries: 0,
+      flushMode: 'background',
+      chunkSize: 20,
+      yieldMs: 5
+    }
+    Connected to LoggingService, flushed 0 buffered entries
+    PG wire startup message received { user: 'pgwire_tags_app', database: 'pgwire_tags' }
+    pgwire.auth {
+      timestamp: 1791756379446,
+      message: 'PG wire authentication succeeded',
+      decision: 'authenticated',
+      securityContext: {
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+      },
+      action: 'pgwire.connect'
+    }
+    Protocol session mapped to tenant/policy {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags'
+    }
+    PG wire authentication successful { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756379586,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+    # Subtest: PG-wire command tags from the real engine through a real client
+        ok 1 - expiry_rows: created
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756388039,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 2 - expiry_rows: seeded
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756388207,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 3 - expiry table emptied
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756388233,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 4 - ROLLBACK while idle: no ErrorResponse
+        ok 5 - ROLLBACK while idle: answered ROLLBACK
+        ok 6 - ROLLBACK while idle: the session is idle
+        ok 7 - ROLLBACK while idle: a WARNING notice says no transaction is in progress
+    PG wire parse message received {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      name: '(unnamed)'
+    }
+    PG wire bind message received {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      portal: '(unnamed)',
+      statement: '(unnamed)'
+    }
+    PG wire execute message received {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      portal: '(unnamed)'
+    }
+    pgwire.auth {
+      timestamp: 1791756388281,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+    PG wire sync message received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 8 - extended ROLLBACK while idle: no ErrorResponse
+        ok 9 - extended ROLLBACK while idle: answered ROLLBACK
+        ok 10 - extended ROLLBACK while idle: the session is idle
+        ok 11 - extended ROLLBACK while idle: a WARNING notice says no transaction is in progress
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756388325,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 12 - COMMIT while idle: no ErrorResponse
+        ok 13 - COMMIT while idle: answered COMMIT
+        ok 14 - COMMIT while idle: the session is idle
+        ok 15 - COMMIT while idle: a WARNING notice says no transaction is in progress
+    PG wire parse message received {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      name: '(unnamed)'
+    }
+    PG wire bind message received {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      portal: '(unnamed)',
+      statement: '(unnamed)'
+    }
+    PG wire execute message received {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      portal: '(unnamed)'
+    }
+    pgwire.auth {
+      timestamp: 1791756388370,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+    PG wire sync message received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 16 - extended COMMIT while idle: no ErrorResponse
+        ok 17 - extended COMMIT while idle: answered COMMIT
+        ok 18 - extended COMMIT while idle: the session is idle
+        ok 19 - extended COMMIT while idle: a WARNING notice says no transaction is in progress
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756388414,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 20 - BEGIN
+        ok 21 - the BEGIN opened one engine transaction
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756388792,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 22 - the write inside the block answered
+        ok 23 - the engine dropped the transaction once its budget was spent
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756391265,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 24 - simple COMMIT after expiry: 25P04 transaction_timeout
+        ok 25 - simple COMMIT after expiry: the error says nothing was committed
+        ok 26 - simple COMMIT after expiry: the engine's typed code is the detail
+        ok 27 - simple COMMIT after expiry: the block is over (idle)
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756391272,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 28 - simple ROLLBACK after the failed COMMIT: no ErrorResponse
+        ok 29 - simple ROLLBACK after the failed COMMIT: answered ROLLBACK
+        ok 30 - simple ROLLBACK after the failed COMMIT: the session is idle
+        ok 31 - simple ROLLBACK after the failed COMMIT: a WARNING notice says no transaction is in progress
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756391313,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 32 - simple: the session is usable
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756391362,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 33 - simple: the expired block's insert is absent
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756391408,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 34 - BEGIN
+        ok 35 - the BEGIN opened one engine transaction
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756391735,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 36 - the write inside the block answered
+        ok 37 - the engine dropped the transaction once its budget was spent
+    PG wire parse message received {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      name: '(unnamed)'
+    }
+    PG wire bind message received {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      portal: '(unnamed)',
+      statement: '(unnamed)'
+    }
+    PG wire execute message received {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      portal: '(unnamed)'
+    }
+    pgwire.auth {
+      timestamp: 1791756394900,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+    PG wire sync message received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 38 - extended COMMIT after expiry: 25P04 transaction_timeout
+        ok 39 - extended COMMIT after expiry: the error says nothing was committed
+        ok 40 - extended COMMIT after expiry: the engine's typed code is the detail
+        ok 41 - extended COMMIT after expiry: the block is over (idle)
+    PG wire parse message received {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      name: '(unnamed)'
+    }
+    PG wire bind message received {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      portal: '(unnamed)',
+      statement: '(unnamed)'
+    }
+    PG wire execute message received {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      portal: '(unnamed)'
+    }
+    pgwire.auth {
+      timestamp: 1791756395134,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+    PG wire sync message received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 42 - extended ROLLBACK after the failed COMMIT: no ErrorResponse
+        ok 43 - extended ROLLBACK after the failed COMMIT: answered ROLLBACK
+        ok 44 - extended ROLLBACK after the failed COMMIT: the session is idle
+        ok 45 - extended ROLLBACK after the failed COMMIT: a WARNING notice says no transaction is in progress
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756395136,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 46 - extended: the session is usable
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756395182,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 47 - extended: the expired block's insert is absent
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756395226,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 48 - BEGIN
+        ok 49 - the BEGIN opened one engine transaction
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756395535,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 50 - the write inside the block answered
+        ok 51 - the engine dropped the transaction once its budget was spent
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756398643,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        # simple statement after expiry: {"tags":[],"error":{"code":"25P04","detail":"{\"engine_error_code\":\"NO_TRANSACTION\",\"engine_error\":\"transaction 4e67886b8d7acff31797feccfcdff015 is no longer active on the server (it was rolled back, e.g. its transaction budget expired); the statement was not executed\",\"transaction_id\":\"4e67886b8d7acff31797feccfcdff015\"}","message":"transaction 4e67886b8d7acff31797feccfcdff015 is no longer active on the server (it was rolled back, e.g. its transaction budget expired); the statement was not executed"},"notices":[],"status":"E"}
+        ok 52 - simple statement after expiry: refused 25P04 (never autocommitted)
+        ok 53 - simple statement after expiry: the block is failed
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+        ok 54 - simple: later statements are ignored until the block ends
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+        ok 55 - simple: BEGIN inside the failed block is refused
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756398766,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 56 - simple COMMIT ending the failed block
+        ok 57 - simple COMMIT ending the failed block: answered ROLLBACK
+        ok 58 - simple: the block ended
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756398810,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 59 - simple: neither the expired insert nor the late one is present
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756398854,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 60 - BEGIN
+        ok 61 - the BEGIN opened one engine transaction
+    PG wire parse message received {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      name: '(unnamed)'
+    }
+    PG wire bind message received {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      portal: '(unnamed)',
+      statement: '(unnamed)'
+    }
+    PG wire execute message received {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      portal: '(unnamed)'
+    }
+    pgwire.auth {
+      timestamp: 1791756399182,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+    PG wire sync message received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 62 - the write inside the block answered
+        ok 63 - the engine dropped the transaction once its budget was spent
+    PG wire parse message received {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      name: '(unnamed)'
+    }
+    PG wire bind message received {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      portal: '(unnamed)',
+      statement: '(unnamed)'
+    }
+    PG wire execute message received {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      portal: '(unnamed)'
+    }
+    pgwire.auth {
+      timestamp: 1791756402128,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+    PG wire sync message received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        # extended statement after expiry: {"tags":[],"error":{"code":"25P04","detail":"{\"engine_error_code\":\"NO_TRANSACTION\",\"engine_error\":\"transaction 60dd41ddbd95952eb6210238e4f489d7 is no longer active on the server (it was rolled back, e.g. its transaction budget expired); the statement was not executed\",\"transaction_id\":\"60dd41ddbd95952eb6210238e4f489d7\"}","message":"transaction 60dd41ddbd95952eb6210238e4f489d7 is no longer active on the server (it was rolled back, e.g. its transaction budget expired); the statement was not executed"},"notices":[],"status":"E"}
+        ok 64 - extended statement after expiry: refused 25P04 (never autocommitted)
+        ok 65 - extended statement after expiry: the block is failed
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+        ok 66 - extended: later statements are ignored until the block ends
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+        ok 67 - extended: BEGIN inside the failed block is refused
+    PG wire parse message received {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      name: '(unnamed)'
+    }
+    PG wire bind message received {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      portal: '(unnamed)',
+      statement: '(unnamed)'
+    }
+    PG wire execute message received {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      portal: '(unnamed)'
+    }
+    pgwire.auth {
+      timestamp: 1791756402231,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+    PG wire sync message received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 68 - extended COMMIT ending the failed block
+        ok 69 - extended COMMIT ending the failed block: answered ROLLBACK
+        ok 70 - extended: the block ended
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756402275,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 71 - extended: neither the expired insert nor the late one is present
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756402322,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 72 - BEGIN
+        ok 73 - the BEGIN opened one engine transaction
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756402623,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 74 - the write inside the block answered
+        ok 75 - the engine dropped the transaction once its budget was spent
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756404968,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 76 - CREATE TABLE after expiry: refused 25P04 (never run outside the block)
+        ok 77 - CREATE TABLE after expiry: nothing executed
+        ok 78 - CREATE TABLE after expiry: the block is failed
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756404968,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 79 - CREATE TABLE: ROLLBACK ends the block
+        ok 80 - CREATE TABLE: idle
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756405017,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 81 - BEGIN
+        ok 82 - the BEGIN opened one engine transaction
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756405241,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 83 - the write inside the block answered
+        ok 84 - the engine dropped the transaction once its budget was spent
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756406995,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 85 - SELECT after expiry: refused 25P04 (never run outside the block)
+        ok 86 - SELECT after expiry: nothing executed
+        ok 87 - SELECT after expiry: the block is failed
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756406995,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 88 - SELECT: ROLLBACK ends the block
+        ok 89 - SELECT: idle
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756407037,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 90 - BEGIN
+        ok 91 - the BEGIN opened one engine transaction
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756407245,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 92 - the write inside the block answered
+        ok 93 - the engine dropped the transaction once its budget was spent
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756409076,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.service.read'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 94 - SHOW SERVICES after expiry: refused 25P04 (never run outside the block)
+        ok 95 - SHOW SERVICES after expiry: nothing executed
+        ok 96 - SHOW SERVICES after expiry: the block is failed
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756409076,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 97 - SHOW SERVICES: ROLLBACK ends the block
+        ok 98 - SHOW SERVICES: idle
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756409118,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 99 - the late CREATE TABLE created nothing
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756409164,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 100 - no expired write is present
+        ok 101 - facade: the engine dropped the transaction
+        ok 102 - facade INSERT INTO expiry_rows (id, label) VALUES (502, 'f-late'): refused NO_TRANSACTION, not autocommitted
+        ok 103 - facade INSERT INTO expiry_rows (id, label) VALUES (502, 'f-late'): transaction() rejects typed
+        ok 104 - facade: the engine dropped the transaction
+        ok 105 - facade CREATE TABLE late_expiry_rows (id INTEGER PRIMARY KEY): refused NO_TRANSACTION, not autocommitted
+        ok 106 - facade CREATE TABLE late_expiry_rows (id INTEGER PRIMARY KEY): transaction() rejects typed
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756413202,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 107 - facade: neither the block's insert nor the late one is present
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756413206,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 108 - facade: the late CREATE TABLE created nothing
+    PG wire startup message received { user: 'pgwire_tags_app', database: 'pgwire_tags' }
+    pgwire.auth {
+      timestamp: 1791756413253,
+      message: 'PG wire authentication succeeded',
+      decision: 'authenticated',
+      securityContext: {
+      },
+      action: 'pgwire.connect'
+    }
+    Protocol session mapped to tenant/policy {
+      sessionId: 'pgwire-4f21cad2-2cbf-427d-9af7-01b4e828926c',
+      tenantId: 'pgwire_tags'
+    }
+    PG wire authentication successful { sessionId: 'pgwire-4f21cad2-2cbf-427d-9af7-01b4e828926c' }
+    PG wire simple query received { sessionId: 'pgwire-4f21cad2-2cbf-427d-9af7-01b4e828926c' }
+    pgwire.auth {
+      timestamp: 1791756413300,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-4f21cad2-2cbf-427d-9af7-01b4e828926c',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 109 - doomed BEGIN
+    PG wire simple query received { sessionId: 'pgwire-4f21cad2-2cbf-427d-9af7-01b4e828926c' }
+    pgwire.auth {
+      timestamp: 1791756413370,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-4f21cad2-2cbf-427d-9af7-01b4e828926c',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 110 - doomed insert
+    pgwire.auth {
+      timestamp: 1791756413671,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-4f21cad2-2cbf-427d-9af7-01b4e828926c',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+    PG wire connection closed
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 111 - disconnect: the engine transaction ended well inside the 60 s budget
+    PG wire startup message received { user: 'pgwire_tags_app', database: 'pgwire_tags' }
+    pgwire.auth {
+      timestamp: 1791756414680,
+      message: 'PG wire authentication succeeded',
+      decision: 'authenticated',
+      securityContext: {
+      },
+      action: 'pgwire.connect'
+    }
+    Protocol session mapped to tenant/policy {
+      sessionId: 'pgwire-0c4c32ee-cb8b-4867-a712-6b53a6dbc6f5',
+      tenantId: 'pgwire_tags'
+    }
+    PG wire authentication successful { sessionId: 'pgwire-0c4c32ee-cb8b-4867-a712-6b53a6dbc6f5' }
+    PG wire simple query received { sessionId: 'pgwire-0c4c32ee-cb8b-4867-a712-6b53a6dbc6f5' }
+    pgwire.auth {
+      timestamp: 1791756414721,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-0c4c32ee-cb8b-4867-a712-6b53a6dbc6f5',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 112 - other BEGIN
+    PG wire simple query received { sessionId: 'pgwire-0c4c32ee-cb8b-4867-a712-6b53a6dbc6f5' }
+    pgwire.auth {
+      timestamp: 1791756414773,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-0c4c32ee-cb8b-4867-a712-6b53a6dbc6f5',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 113 - another session writes the same partition in a block
+    PG wire simple query received { sessionId: 'pgwire-0c4c32ee-cb8b-4867-a712-6b53a6dbc6f5' }
+    pgwire.auth {
+      timestamp: 1791756415097,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-0c4c32ee-cb8b-4867-a712-6b53a6dbc6f5',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 114 - other COMMIT
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756415646,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 115 - the disconnected block's insert is absent; the other one committed
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756415651,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 116 - create table: no ErrorResponse
+        ok 117 - create table: CommandComplete is exactly CREATE TABLE
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756419706,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 118 - insert one row: no ErrorResponse
+        ok 119 - insert one row: CommandComplete is exactly INSERT 0 1
+        ok 120 - insert one row: node-postgres rowCount matches the tag
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756419755,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 121 - multi-row insert of three: no ErrorResponse
+        ok 122 - multi-row insert of three: CommandComplete is exactly INSERT 0 3
+        ok 123 - multi-row insert of three: node-postgres rowCount matches the tag
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756419802,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 124 - update two rows: no ErrorResponse
+        ok 125 - update two rows: CommandComplete is exactly UPDATE 2
+        ok 126 - update two rows: node-postgres rowCount matches the tag
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756419851,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 127 - update zero rows: no ErrorResponse
+        ok 128 - update zero rows: CommandComplete is exactly UPDATE 0
+        ok 129 - update zero rows: node-postgres rowCount matches the tag
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756419898,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 130 - select four rows: no ErrorResponse
+        ok 131 - select four rows: CommandComplete is exactly SELECT 4
+        ok 132 - select four rows: node-postgres rowCount matches the tag
+    PG wire parse message received {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      name: '(unnamed)'
+    }
+    PG wire bind message received {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      portal: '(unnamed)',
+      statement: '(unnamed)'
+    }
+    PG wire execute message received {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      portal: '(unnamed)'
+    }
+    pgwire.auth {
+      timestamp: 1791756419948,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+    PG wire sync message received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 133 - extended insert: no ErrorResponse
+        ok 134 - extended insert: CommandComplete is exactly INSERT 0 1
+        ok 135 - extended insert: node-postgres rowCount matches the tag
+    PG wire parse message received {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      name: '(unnamed)'
+    }
+    PG wire bind message received {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      portal: '(unnamed)',
+      statement: '(unnamed)'
+    }
+    PG wire execute message received {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      portal: '(unnamed)'
+    }
+    pgwire.auth {
+      timestamp: 1791756419991,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+    PG wire sync message received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 136 - extended update: no ErrorResponse
+        ok 137 - extended update: CommandComplete is exactly UPDATE 1
+        ok 138 - extended update: node-postgres rowCount matches the tag
+    PG wire parse message received {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      name: '(unnamed)'
+    }
+    PG wire bind message received {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      portal: '(unnamed)',
+      statement: '(unnamed)'
+    }
+    PG wire execute message received {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      portal: '(unnamed)'
+    }
+    pgwire.auth {
+      timestamp: 1791756420038,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+    PG wire sync message received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 139 - extended delete of zero rows: no ErrorResponse
+        ok 140 - extended delete of zero rows: CommandComplete is exactly DELETE 0
+        ok 141 - extended delete of zero rows: node-postgres rowCount matches the tag
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756420086,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 142 - insert on conflict do update: no ErrorResponse
+        ok 143 - insert on conflict do update: CommandComplete is exactly INSERT 0 1
+        ok 144 - insert on conflict do update: node-postgres rowCount matches the tag
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756420138,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 145 - begin: no ErrorResponse
+        ok 146 - begin: CommandComplete is exactly BEGIN
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756420193,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 147 - insert inside a transaction: no ErrorResponse
+        ok 148 - insert inside a transaction: CommandComplete is exactly INSERT 0 1
+        ok 149 - insert inside a transaction: node-postgres rowCount matches the tag
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756420589,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 150 - update inside a transaction: no ErrorResponse
+        ok 151 - update inside a transaction: CommandComplete is exactly UPDATE 1
+        ok 152 - update inside a transaction: node-postgres rowCount matches the tag
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756420806,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 153 - commit: no ErrorResponse
+        ok 154 - commit: CommandComplete is exactly COMMIT
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756421201,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 155 - delete two rows: no ErrorResponse
+        ok 156 - delete two rows: CommandComplete is exactly DELETE 2
+        ok 157 - delete two rows: node-postgres rowCount matches the tag
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756421251,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        ok 158 - select after the writes: no ErrorResponse
+        ok 159 - select after the writes: CommandComplete is exactly SELECT 4
+        ok 160 - select after the writes: node-postgres rowCount matches the tag
+        ok 161 - the table holds exactly the rows the counted statements changed
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756421299,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+    {"level":50,"time":"2026-10-11T22:07:31.304Z","nodeId":"pgwire-command-tags-node","pid":1214769,"event":"wait_bound_spent","wait":"schema_provisioning_request_deadline","awaited":"schema provisioning job outcome within the request budget","boundMs":30000,"elapsedMs":30004,"lastObserved":{"phase":"race_timer_fired","workflowStatus":"PENDING","scheduledRetry":false},"scope":{"workflowId":"schema-job-119b900191d8674da1b8156abfa62eee","ownerId":"schema-worker-6a495dfe-2449-460c-ad89-72b773f59817"},"repeats":0,"nodeId":"pgwire-command-tags-node","msg":"Wait bound spent"}
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        not ok 162 - kind_simple: created
+          ---
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,5 @@
+            -null
+            +Object {
+            +  "code": "55P03",
+            +  "detail": "{\"provisioning_job_id\":\"schema-job-119b900191d8674da1b8156abfa62eee\",\"retry_after_ms\":1000}",
+            +  "message": "Schema provisioning remains active",
+            +}
+          at:
+            fileName: test/integration/pgwire-command-tag-real-engine.integration.test.js
+            lineNumber: 260
+            columnNumber: 5
+            functionName: seedTable
+            isToplevel: true
+          stack: >
+            seedTable
+            (test/integration/pgwire-command-tag-real-engine.integration.test.js:260:5)
+          
+            witnessStatementKindTags
+            (test/integration/pgwire-command-tag-real-engine.integration.test.js:267:5)
+          
+            Test.<anonymous>
+            (test/integration/pgwire-command-tag-real-engine.integration.test.js:789:5)
+          source: |
+            async function seedTable(t, client, table, ddl, seed) {
+              const created = await observe(client, `CREATE TABLE ${table}${ddl}`);
+              t.same(created.error, null, `${table}: created`);
+            ----^
+              const seeded = await observe(client, `INSERT INTO ${table}${seed}`);
+              t.same(seeded.error, null, `${table}: seeded`);
+          ...
+        
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756451370,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+    {"level":50,"time":"2026-10-11T22:07:31.516Z","nodeId":"pgwire-command-tags-node","pid":1214769,"subsystem":"sql-query-engine","event":"wait_bound_spent","wait":"partition_routing_wait","awaited":"Timed out waiting for routable partition service for partition tbl-119b900191d8674da1b8156abfa62eee-p1","boundMs":29414,"elapsedMs":29415,"lastObserved":{"predicateSatisfied":false,"polls":495,"classification":"publication_wait_timeout","requiredCount":1,"routableCount":0,"routingReadinessDimension":"serveEligible"},"scope":{"partitionId":"tbl-119b900191d8674da1b8156abfa62eee-p1"},"repeats":0,"nodeId":"pgwire-command-tags-node","msg":"Wait bound spent"}
+    {"level":50,"time":"2026-10-11T22:07:31.516Z","nodeId":"pgwire-command-tags-node","pid":1214769,"subsystem":"table-creation-service","tableId":"tbl-119b900191d8674da1b8156abfa62eee","tableName":"kind_simple","partitionId":"tbl-119b900191d8674da1b8156abfa62eee-p1","replicaCount":1,"error":"Timed out waiting for routable partition service for partition tbl-119b900191d8674da1b8156abfa62eee-p1","nodeId":"pgwire-command-tags-node","msg":"Initial table partition provisioning failed"}
+    {"level":50,"time":"2026-10-11T22:08:01.330Z","nodeId":"pgwire-command-tags-node","pid":1214769,"subsystem":"query-executor","event":"wait_bound_spent","wait":"partition_execution_deadline","awaited":"successful partition delivery before the execution deadline","boundMs":29999,"elapsedMs":29958,"lastObserved":{"attempts":513,"lastError":"Partition service not found","lastErrorCode":null,"lastParticipantNodeId":null,"awaitedRoutingRepair":false,"site":"retry_delay_exceeds_budget","retryDelayMs":50,"remainingBudgetMs":41},"scope":{"partitionId":"tbl-119b900191d8674da1b8156abfa62eee-p1","forRead":false,"nodeId":"pgwire-command-tags-node"},"repeats":0,"nodeId":"pgwire-command-tags-node","msg":"Wait bound spent"}
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        not ok 163 - kind_simple: seeded
+          ---
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,5 @@
+            -null
+            +Object {
+            +  "code": "XX000",
+            +  "detail": undefined,
+            +  "message": "Distributed operation failed due to participant failures",
+            +}
+          at:
+            fileName: test/integration/pgwire-command-tag-real-engine.integration.test.js
+            lineNumber: 262
+            columnNumber: 5
+            functionName: seedTable
+            isToplevel: true
+          stack: >
+            seedTable
+            (test/integration/pgwire-command-tag-real-engine.integration.test.js:262:5)
+          
+            witnessStatementKindTags
+            (test/integration/pgwire-command-tag-real-engine.integration.test.js:267:5)
+          
+            Test.<anonymous>
+            (test/integration/pgwire-command-tag-real-engine.integration.test.js:789:5)
+          source: |2
+              t.same(created.error, null, `${table}: created`);
+              const seeded = await observe(client, `INSERT INTO ${table}${seed}`);
+              t.same(seeded.error, null, `${table}: seeded`);
+            ----^
+            }
+          ...
+        
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756481381,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+    {"level":50,"time":"2026-10-11T22:08:01.667Z","nodeId":"pgwire-command-tags-node","pid":1214769,"subsystem":"replica-handler","operationId":"schema-job-119b900191d8674da1b8156abfa62eee:operation:pgwire-command-tags-node","replicaId":"schema-job-119b900191d8674da1b8156abfa62eee:replica:pgwire-command-tags-node","partitionId":"tbl-119b900191d8674da1b8156abfa62eee-p1","error":"Fresh replica participant release failed: {\"partitionId\":\"tbl-119b900191d8674da1b8156abfa62eee-p1\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":null,\"partitionId\":\"tbl-119b900191d8674da1b8156abfa62eee-p1\",\"phase\":\"release\",\"retryAfterMs\":100,\"missingFact\":\"current_control_owner_fact\",\"controlPartitionId\":\"sql_transactions-p1\",\"controlNodeId\":\"pgwire-command-tags-node\",\"controlOutcome\":\"query_transaction_drain_pending\",\"controlMissingFact\":null,\"controlReason\":null,\"controlDetail\":null,\"controlDispatch\":null,\"controlQuerySettlementFailure\":null}}","stack":"Error: Fresh replica participant release failed: {\"partitionId\":\"tbl-119b900191d8674da1b8156abfa62eee-p1\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":null,\"partitionId\":\"tbl-119b900191d8674da1b8156abfa62eee-p1\",\"phase\":\"release\",\"retryAfterMs\":100,\"missingFact\":\"current_control_owner_fact\",\"controlPartitionId\":\"sql_transactions-p1\",\"controlNodeId\":\"pgwire-command-tags-node\",\"controlOutcome\":\"query_transaction_drain_pending\",\"controlMissingFact\":null,\"controlReason\":null,\"controlDetail\":null,\"controlDispatch\":null,\"controlQuerySettlementFailure\":null}}\n    at Object.releaseFreshCreate (file:///mnt/data/peter/projects/.worktrees/rs-raft-startup-activation-20261011/src/node/replica-handler-release-recovery.js:168:13)\n    at runNextTicks (node:internal/process/task_queues:64:5)\n    at process.processTimers (node:internal/timers:518:9)\n    at async ReplicaHandler.createReplicaAsync (file:///mnt/data/peter/projects/.worktrees/rs-raft-startup-activation-20261011/src/node/replica-handler-create-methods.js:413:11)\n    at async start (file:///mnt/data/peter/projects/.worktrees/rs-raft-startup-activation-20261011/src/node/replica-handler-create-methods.js:167:15)","nodeId":"pgwire-command-tags-node","msg":"Replica creation failed"}
+    {"level":50,"time":"2026-10-11T22:08:01.837Z","nodeId":"pgwire-command-tags-node","pid":1214769,"subsystem":"replica-handler","operationId":"schema-job-119b900191d8674da1b8156abfa62eee:operation:pgwire-command-tags-node","replicaId":"schema-job-119b900191d8674da1b8156abfa62eee:replica:pgwire-command-tags-node","error":"Fresh replica participant release failed: {\"partitionId\":\"tbl-119b900191d8674da1b8156abfa62eee-p1\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":null,\"partitionId\":\"tbl-119b900191d8674da1b8156abfa62eee-p1\",\"phase\":\"release\",\"retryAfterMs\":100,\"missingFact\":\"current_control_owner_fact\",\"controlPartitionId\":\"sql_transactions-p1\",\"controlNodeId\":\"pgwire-command-tags-node\",\"controlOutcome\":\"query_transaction_drain_pending\",\"controlMissingFact\":null,\"controlReason\":null,\"controlDetail\":null,\"controlDispatch\":null,\"controlQuerySettlementFailure\":null}}","stack":"Error: Fresh replica participant release failed: {\"partitionId\":\"tbl-119b900191d8674da1b8156abfa62eee-p1\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":null,\"partitionId\":\"tbl-119b900191d8674da1b8156abfa62eee-p1\",\"phase\":\"release\",\"retryAfterMs\":100,\"missingFact\":\"current_control_owner_fact\",\"controlPartitionId\":\"sql_transactions-p1\",\"controlNodeId\":\"pgwire-command-tags-node\",\"controlOutcome\":\"query_transaction_drain_pending\",\"controlMissingFact\":null,\"controlReason\":null,\"controlDetail\":null,\"controlDispatch\":null,\"controlQuerySettlementFailure\":null}}\n    at Object.releaseFreshCreate (file:///mnt/data/peter/projects/.worktrees/rs-raft-startup-activation-20261011/src/node/replica-handler-release-recovery.js:168:13)\n    at runNextTicks (node:internal/process/task_queues:64:5)\n    at process.processTimers (node:internal/timers:518:9)\n    at async ReplicaHandler.createReplicaAsync (file:///mnt/data/peter/projects/.worktrees/rs-raft-startup-activation-20261011/src/node/replica-handler-create-methods.js:413:11)\n    at async start (file:///mnt/data/peter/projects/.worktrees/rs-raft-startup-activation-20261011/src/node/replica-handler-create-methods.js:167:15)","nodeId":"pgwire-command-tags-node","msg":"Async replica creation failed"}
+    {"level":50,"time":"2026-10-11T22:08:02.069Z","nodeId":"pgwire-command-tags-node","pid":1214769,"subsystem":"rebalance-coordinator","operationId":"schema-job-119b900191d8674da1b8156abfa62eee:operation:pgwire-command-tags-node","type":"ADD","partitionId":"tbl-119b900191d8674da1b8156abfa62eee-p1","targetNodeId":"pgwire-command-tags-node","errorMessage":"Fresh replica participant release failed: {\"partitionId\":\"tbl-119b900191d8674da1b8156abfa62eee-p1\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":null,\"partitionId\":\"tbl-119b900191d8674da1b8156abfa62eee-p1\",\"phase\":\"release\",\"retryAfterMs\":100,\"missingFact\":\"current_control_owner_fact\",\"controlPartitionId\":\"sql_transactions-p1\",\"controlNodeId\":\"pgwire-command-tags-node\",\"controlOutcome\":\"query_transaction_drain_pending\",\"controlMissingFact\":null,\"controlReason\":null,\"controlDetail\":null,\"controlDispatch\":null,\"controlQuerySettlementFailure\":null}}","nodeId":"pgwire-command-tags-node","msg":"Operation failed"}
+    {"level":50,"time":"2026-10-11T22:08:02.603Z","nodeId":"pgwire-command-tags-node","pid":1214769,"subsystem":"sql-query-engine","event":"wait_bound_spent","wait":"partition_routing_wait","awaited":"Timed out waiting for routable partition service for partition tbl-119b900191d8674da1b8156abfa62eee-p1","boundMs":29847,"elapsedMs":29848,"lastObserved":{"predicateSatisfied":false,"polls":509,"classification":"publication_wait_timeout","requiredCount":1,"routableCount":0,"routingReadinessDimension":"serveEligible"},"scope":{"partitionId":"tbl-119b900191d8674da1b8156abfa62eee-p1"},"repeats":0,"nodeId":"pgwire-command-tags-node","msg":"Wait bound spent"}
+    {"level":50,"time":"2026-10-11T22:08:02.604Z","nodeId":"pgwire-command-tags-node","pid":1214769,"subsystem":"table-creation-service","tableId":"tbl-119b900191d8674da1b8156abfa62eee","tableName":"kind_simple","partitionId":"tbl-119b900191d8674da1b8156abfa62eee-p1","replicaCount":1,"error":"Timed out waiting for routable partition service for partition tbl-119b900191d8674da1b8156abfa62eee-p1","nodeId":"pgwire-command-tags-node","msg":"Initial table partition provisioning failed"}
+    {"level":50,"time":"2026-10-11T22:08:03.712Z","nodeId":"pgwire-command-tags-node","pid":1214769,"subsystem":"table-creation-service","tableId":"tbl-119b900191d8674da1b8156abfa62eee","tableName":"kind_simple","partitionId":"tbl-119b900191d8674da1b8156abfa62eee-p1","replicaCount":1,"error":"Operation persistence collision winner is durably terminal for deterministic intent schema-job-119b900191d8674da1b8156abfa62eee:operation:pgwire-command-tags-node: failed","nodeId":"pgwire-command-tags-node","msg":"Initial table partition provisioning failed"}
+    {"level":50,"time":"2026-10-11T22:08:31.363Z","nodeId":"pgwire-command-tags-node","pid":1214769,"subsystem":"query-executor","event":"wait_bound_spent","wait":"partition_execution_deadline","awaited":"successful partition delivery before the execution deadline","boundMs":29999,"elapsedMs":29980,"lastObserved":{"attempts":530,"lastError":"Partition service not found","lastErrorCode":null,"lastParticipantNodeId":null,"awaitedRoutingRepair":false,"site":"retry_delay_exceeds_budget","retryDelayMs":50,"remainingBudgetMs":19},"scope":{"partitionId":"tbl-119b900191d8674da1b8156abfa62eee-p1","forRead":false,"nodeId":"pgwire-command-tags-node"},"repeats":0,"nodeId":"pgwire-command-tags-node","msg":"Wait bound spent"}
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        not ok 164 - line comment before UPDATE: no ErrorResponse
+          ---
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,5 @@
+            -null
+            +Object {
+            +  "code": "XX000",
+            +  "detail": undefined,
+            +  "message": "Distributed operation failed due to participant failures",
+            +}
+          at:
+            fileName: test/integration/pgwire-command-tag-real-engine.integration.test.js
+            lineNumber: 271
+            columnNumber: 9
+            functionName: witnessStatementKindTags
+            isToplevel: true
+          stack: >
+            witnessStatementKindTags
+            (test/integration/pgwire-command-tag-real-engine.integration.test.js:271:9)
+          
+            Test.<anonymous>
+            (test/integration/pgwire-command-tag-real-engine.integration.test.js:789:5)
+          source: |2
+                for (const [label, text, values, tag] of cases) {
+                  last = await observe(client, text, values);
+                  t.same(last.error, null, `${label}: no ErrorResponse`);
+            --------^
+                  t.same(last.tags, [tag], `${label}: CommandComplete is exactly ${tag}`);
+                  t.same(last.rowCounts, [Number(tag.split(' ').at(-1))],
+          ...
+        
+        not ok 165 - line comment before UPDATE: CommandComplete is exactly UPDATE 2
+          ---
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,3 +1,1 @@
+            -Array [
+            -  "UPDATE 2",
+            -]
+            +Array []
+          at:
+            fileName: test/integration/pgwire-command-tag-real-engine.integration.test.js
+            lineNumber: 272
+            columnNumber: 9
+            functionName: witnessStatementKindTags
+            isToplevel: true
+          stack: >
+            witnessStatementKindTags
+            (test/integration/pgwire-command-tag-real-engine.integration.test.js:272:9)
+          
+            Test.<anonymous>
+            (test/integration/pgwire-command-tag-real-engine.integration.test.js:789:5)
+          source: |2
+                  last = await observe(client, text, values);
+                  t.same(last.error, null, `${label}: no ErrorResponse`);
+                  t.same(last.tags, [tag], `${label}: CommandComplete is exactly ${tag}`);
+            --------^
+                  t.same(last.rowCounts, [Number(tag.split(' ').at(-1))],
+                    `${label}: node-postgres rowCount matches the tag`);
+          ...
+        
+        not ok 166 - line comment before UPDATE: node-postgres rowCount matches the tag
+          ---
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,3 +1,1 @@
+            -Array [
+            -  2,
+            -]
+            +undefined
+          at:
+            fileName: test/integration/pgwire-command-tag-real-engine.integration.test.js
+            lineNumber: 273
+            columnNumber: 9
+            functionName: witnessStatementKindTags
+            isToplevel: true
+          stack: >
+            witnessStatementKindTags
+            (test/integration/pgwire-command-tag-real-engine.integration.test.js:273:9)
+          
+            Test.<anonymous>
+            (test/integration/pgwire-command-tag-real-engine.integration.test.js:789:5)
+          source: |2
+                  t.same(last.error, null, `${label}: no ErrorResponse`);
+                  t.same(last.tags, [tag], `${label}: CommandComplete is exactly ${tag}`);
+                  t.same(last.rowCounts, [Number(tag.split(' ').at(-1))],
+            --------^
+                    `${label}: node-postgres rowCount matches the tag`);
+                }
+          ...
+        
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756511416,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+    {"level":50,"time":"2026-10-11T22:09:01.380Z","nodeId":"pgwire-command-tags-node","pid":1214769,"subsystem":"query-executor","event":"wait_bound_spent","wait":"partition_execution_deadline","awaited":"successful partition delivery before the execution deadline","boundMs":29999,"elapsedMs":29963,"lastObserved":{"attempts":542,"lastError":"Partition service not found","lastErrorCode":null,"lastParticipantNodeId":null,"awaitedRoutingRepair":false,"site":"retry_delay_exceeds_budget","retryDelayMs":50,"remainingBudgetMs":36},"scope":{"partitionId":"tbl-119b900191d8674da1b8156abfa62eee-p1","forRead":false,"nodeId":"pgwire-command-tags-node"},"repeats":0,"nodeId":"pgwire-command-tags-node","msg":"Wait bound spent"}
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        not ok 167 - block comment before DELETE: no ErrorResponse
+          ---
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,5 @@
+            -null
+            +Object {
+            +  "code": "XX000",
+            +  "detail": undefined,
+            +  "message": "Distributed operation failed due to participant failures",
+            +}
+          at:
+            fileName: test/integration/pgwire-command-tag-real-engine.integration.test.js
+            lineNumber: 271
+            columnNumber: 9
+            functionName: witnessStatementKindTags
+            isToplevel: true
+          stack: >
+            witnessStatementKindTags
+            (test/integration/pgwire-command-tag-real-engine.integration.test.js:271:9)
+          
+            Test.<anonymous>
+            (test/integration/pgwire-command-tag-real-engine.integration.test.js:789:5)
+          source: |2
+                for (const [label, text, values, tag] of cases) {
+                  last = await observe(client, text, values);
+                  t.same(last.error, null, `${label}: no ErrorResponse`);
+            --------^
+                  t.same(last.tags, [tag], `${label}: CommandComplete is exactly ${tag}`);
+                  t.same(last.rowCounts, [Number(tag.split(' ').at(-1))],
+          ...
+        
+        not ok 168 - block comment before DELETE: CommandComplete is exactly DELETE 1
+          ---
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,3 +1,1 @@
+            -Array [
+            -  "DELETE 1",
+            -]
+            +Array []
+          at:
+            fileName: test/integration/pgwire-command-tag-real-engine.integration.test.js
+            lineNumber: 272
+            columnNumber: 9
+            functionName: witnessStatementKindTags
+            isToplevel: true
+          stack: >
+            witnessStatementKindTags
+            (test/integration/pgwire-command-tag-real-engine.integration.test.js:272:9)
+          
+            Test.<anonymous>
+            (test/integration/pgwire-command-tag-real-engine.integration.test.js:789:5)
+          source: |2
+                  last = await observe(client, text, values);
+                  t.same(last.error, null, `${label}: no ErrorResponse`);
+                  t.same(last.tags, [tag], `${label}: CommandComplete is exactly ${tag}`);
+            --------^
+                  t.same(last.rowCounts, [Number(tag.split(' ').at(-1))],
+                    `${label}: node-postgres rowCount matches the tag`);
+          ...
+        
+        not ok 169 - block comment before DELETE: node-postgres rowCount matches the tag
+          ---
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,3 +1,1 @@
+            -Array [
+            -  1,
+            -]
+            +undefined
+          at:
+            fileName: test/integration/pgwire-command-tag-real-engine.integration.test.js
+            lineNumber: 273
+            columnNumber: 9
+            functionName: witnessStatementKindTags
+            isToplevel: true
+          stack: >
+            witnessStatementKindTags
+            (test/integration/pgwire-command-tag-real-engine.integration.test.js:273:9)
+          
+            Test.<anonymous>
+            (test/integration/pgwire-command-tag-real-engine.integration.test.js:789:5)
+          source: |2
+                  t.same(last.error, null, `${label}: no ErrorResponse`);
+                  t.same(last.tags, [tag], `${label}: CommandComplete is exactly ${tag}`);
+                  t.same(last.rowCounts, [Number(tag.split(' ').at(-1))],
+            --------^
+                    `${label}: node-postgres rowCount matches the tag`);
+                }
+          ...
+        
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756541436,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+    {"level":50,"time":"2026-10-11T22:09:31.437Z","nodeId":"pgwire-command-tags-node","pid":1214769,"subsystem":"query-executor","event":"wait_bound_spent","wait":"partition_execution_deadline","awaited":"successful partition delivery before the execution deadline","boundMs":29999,"elapsedMs":29999,"lastObserved":{"attempts":540,"lastError":"Partition service not found","lastErrorCode":null,"lastParticipantNodeId":null,"awaitedRoutingRepair":false,"site":"budget_spent_before_retry"},"scope":{"partitionId":"tbl-119b900191d8674da1b8156abfa62eee-p1","forRead":false,"nodeId":"pgwire-command-tags-node"},"repeats":0,"nodeId":"pgwire-command-tags-node","msg":"Wait bound spent"}
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        not ok 170 - block comment before INSERT: no ErrorResponse
+          ---
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,5 @@
+            -null
+            +Object {
+            +  "code": "XX000",
+            +  "detail": undefined,
+            +  "message": "Distributed operation failed due to participant failures",
+            +}
+          at:
+            fileName: test/integration/pgwire-command-tag-real-engine.integration.test.js
+            lineNumber: 271
+            columnNumber: 9
+            functionName: witnessStatementKindTags
+            isToplevel: true
+          stack: >
+            witnessStatementKindTags
+            (test/integration/pgwire-command-tag-real-engine.integration.test.js:271:9)
+          
+            Test.<anonymous>
+            (test/integration/pgwire-command-tag-real-engine.integration.test.js:789:5)
+          source: |2
+                for (const [label, text, values, tag] of cases) {
+                  last = await observe(client, text, values);
+                  t.same(last.error, null, `${label}: no ErrorResponse`);
+            --------^
+                  t.same(last.tags, [tag], `${label}: CommandComplete is exactly ${tag}`);
+                  t.same(last.rowCounts, [Number(tag.split(' ').at(-1))],
+          ...
+        
+        not ok 171 - block comment before INSERT: CommandComplete is exactly INSERT 0 1
+          ---
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,3 +1,1 @@
+            -Array [
+            -  "INSERT 0 1",
+            -]
+            +Array []
+          at:
+            fileName: test/integration/pgwire-command-tag-real-engine.integration.test.js
+            lineNumber: 272
+            columnNumber: 9
+            functionName: witnessStatementKindTags
+            isToplevel: true
+          stack: >
+            witnessStatementKindTags
+            (test/integration/pgwire-command-tag-real-engine.integration.test.js:272:9)
+          
+            Test.<anonymous>
+            (test/integration/pgwire-command-tag-real-engine.integration.test.js:789:5)
+          source: |2
+                  last = await observe(client, text, values);
+                  t.same(last.error, null, `${label}: no ErrorResponse`);
+                  t.same(last.tags, [tag], `${label}: CommandComplete is exactly ${tag}`);
+            --------^
+                  t.same(last.rowCounts, [Number(tag.split(' ').at(-1))],
+                    `${label}: node-postgres rowCount matches the tag`);
+          ...
+        
+        not ok 172 - block comment before INSERT: node-postgres rowCount matches the tag
+          ---
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,3 +1,1 @@
+            -Array [
+            -  1,
+            -]
+            +undefined
+          at:
+            fileName: test/integration/pgwire-command-tag-real-engine.integration.test.js
+            lineNumber: 273
+            columnNumber: 9
+            functionName: witnessStatementKindTags
+            isToplevel: true
+          stack: >
+            witnessStatementKindTags
+            (test/integration/pgwire-command-tag-real-engine.integration.test.js:273:9)
+          
+            Test.<anonymous>
+            (test/integration/pgwire-command-tag-real-engine.integration.test.js:789:5)
+          source: |2
+                  t.same(last.error, null, `${label}: no ErrorResponse`);
+                  t.same(last.tags, [tag], `${label}: CommandComplete is exactly ${tag}`);
+                  t.same(last.rowCounts, [Number(tag.split(' ').at(-1))],
+            --------^
+                    `${label}: node-postgres rowCount matches the tag`);
+                }
+          ...
+        
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756571490,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+    {"level":50,"time":"2026-10-11T22:10:01.483Z","nodeId":"pgwire-command-tags-node","pid":1214769,"subsystem":"query-executor","event":"wait_bound_spent","wait":"partition_execution_deadline","awaited":"successful partition delivery before the execution deadline","boundMs":29998,"elapsedMs":29990,"lastObserved":{"attempts":544,"lastError":"Partition service not found","lastErrorCode":null,"lastParticipantNodeId":null,"awaitedRoutingRepair":false,"site":"retry_delay_exceeds_budget","retryDelayMs":50,"remainingBudgetMs":8},"scope":{"partitionId":"tbl-119b900191d8674da1b8156abfa62eee-p1","forRead":false,"nodeId":"pgwire-command-tags-node"},"repeats":0,"nodeId":"pgwire-command-tags-node","msg":"Wait bound spent"}
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        not ok 173 - CTE before UPDATE: no ErrorResponse
+          ---
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,5 @@
+            -null
+            +Object {
+            +  "code": "XX000",
+            +  "detail": undefined,
+            +  "message": "Distributed operation failed due to participant failures",
+            +}
+          at:
+            fileName: test/integration/pgwire-command-tag-real-engine.integration.test.js
+            lineNumber: 271
+            columnNumber: 9
+            functionName: witnessStatementKindTags
+            isToplevel: true
+          stack: >
+            witnessStatementKindTags
+            (test/integration/pgwire-command-tag-real-engine.integration.test.js:271:9)
+          
+            Test.<anonymous>
+            (test/integration/pgwire-command-tag-real-engine.integration.test.js:789:5)
+          source: |2
+                for (const [label, text, values, tag] of cases) {
+                  last = await observe(client, text, values);
+                  t.same(last.error, null, `${label}: no ErrorResponse`);
+            --------^
+                  t.same(last.tags, [tag], `${label}: CommandComplete is exactly ${tag}`);
+                  t.same(last.rowCounts, [Number(tag.split(' ').at(-1))],
+          ...
+        
+        not ok 174 - CTE before UPDATE: CommandComplete is exactly UPDATE 1
+          ---
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,3 +1,1 @@
+            -Array [
+            -  "UPDATE 1",
+            -]
+            +Array []
+          at:
+            fileName: test/integration/pgwire-command-tag-real-engine.integration.test.js
+            lineNumber: 272
+            columnNumber: 9
+            functionName: witnessStatementKindTags
+            isToplevel: true
+          stack: >
+            witnessStatementKindTags
+            (test/integration/pgwire-command-tag-real-engine.integration.test.js:272:9)
+          
+            Test.<anonymous>
+            (test/integration/pgwire-command-tag-real-engine.integration.test.js:789:5)
+          source: |2
+                  last = await observe(client, text, values);
+                  t.same(last.error, null, `${label}: no ErrorResponse`);
+                  t.same(last.tags, [tag], `${label}: CommandComplete is exactly ${tag}`);
+            --------^
+                  t.same(last.rowCounts, [Number(tag.split(' ').at(-1))],
+                    `${label}: node-postgres rowCount matches the tag`);
+          ...
+        
+        not ok 175 - CTE before UPDATE: node-postgres rowCount matches the tag
+          ---
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,3 +1,1 @@
+            -Array [
+            -  1,
+            -]
+            +undefined
+          at:
+            fileName: test/integration/pgwire-command-tag-real-engine.integration.test.js
+            lineNumber: 273
+            columnNumber: 9
+            functionName: witnessStatementKindTags
+            isToplevel: true
+          stack: >
+            witnessStatementKindTags
+            (test/integration/pgwire-command-tag-real-engine.integration.test.js:273:9)
+          
+            Test.<anonymous>
+            (test/integration/pgwire-command-tag-real-engine.integration.test.js:789:5)
+          source: |2
+                  t.same(last.error, null, `${label}: no ErrorResponse`);
+                  t.same(last.tags, [tag], `${label}: CommandComplete is exactly ${tag}`);
+                  t.same(last.rowCounts, [Number(tag.split(' ').at(-1))],
+            --------^
+                    `${label}: node-postgres rowCount matches the tag`);
+                }
+          ...
+        
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756601537,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        not ok 176 - rows after the commented writes: no ErrorResponse
+          ---
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,5 @@
+            -null
+            +Object {
+            +  "code": "XX000",
+            +  "detail": undefined,
+            +  "message": "Distributed operation failed due to participant failures",
+            +}
+          at:
+            fileName: test/integration/pgwire-command-tag-real-engine.integration.test.js
+            lineNumber: 271
+            columnNumber: 9
+            functionName: witnessStatementKindTags
+            isToplevel: true
+          stack: >
+            witnessStatementKindTags
+            (test/integration/pgwire-command-tag-real-engine.integration.test.js:271:9)
+          
+            Test.<anonymous>
+            (test/integration/pgwire-command-tag-real-engine.integration.test.js:789:5)
+          source: |2
+                for (const [label, text, values, tag] of cases) {
+                  last = await observe(client, text, values);
+                  t.same(last.error, null, `${label}: no ErrorResponse`);
+            --------^
+                  t.same(last.tags, [tag], `${label}: CommandComplete is exactly ${tag}`);
+                  t.same(last.rowCounts, [Number(tag.split(' ').at(-1))],
+          ...
+        
+        not ok 177 - rows after the commented writes: CommandComplete is exactly SELECT 4
+          ---
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,3 +1,1 @@
+            -Array [
+            -  "SELECT 4",
+            -]
+            +Array []
+          at:
+            fileName: test/integration/pgwire-command-tag-real-engine.integration.test.js
+            lineNumber: 272
+            columnNumber: 9
+            functionName: witnessStatementKindTags
+            isToplevel: true
+          stack: >
+            witnessStatementKindTags
+            (test/integration/pgwire-command-tag-real-engine.integration.test.js:272:9)
+          
+            Test.<anonymous>
+            (test/integration/pgwire-command-tag-real-engine.integration.test.js:789:5)
+          source: |2
+                  last = await observe(client, text, values);
+                  t.same(last.error, null, `${label}: no ErrorResponse`);
+                  t.same(last.tags, [tag], `${label}: CommandComplete is exactly ${tag}`);
+            --------^
+                  t.same(last.rowCounts, [Number(tag.split(' ').at(-1))],
+                    `${label}: node-postgres rowCount matches the tag`);
+          ...
+        
+        not ok 178 - rows after the commented writes: node-postgres rowCount matches the tag
+          ---
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,3 +1,1 @@
+            -Array [
+            -  4,
+            -]
+            +undefined
+          at:
+            fileName: test/integration/pgwire-command-tag-real-engine.integration.test.js
+            lineNumber: 273
+            columnNumber: 9
+            functionName: witnessStatementKindTags
+            isToplevel: true
+          stack: >
+            witnessStatementKindTags
+            (test/integration/pgwire-command-tag-real-engine.integration.test.js:273:9)
+          
+            Test.<anonymous>
+            (test/integration/pgwire-command-tag-real-engine.integration.test.js:789:5)
+          source: |2
+                  t.same(last.error, null, `${label}: no ErrorResponse`);
+                  t.same(last.tags, [tag], `${label}: CommandComplete is exactly ${tag}`);
+                  t.same(last.rowCounts, [Number(tag.split(' ').at(-1))],
+            --------^
+                    `${label}: node-postgres rowCount matches the tag`);
+                }
+          ...
+        
+        not ok 179 - kind_simple: the rows the commented writes changed
+          ---
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,18 +1,1 @@
+            -Array [
+            -  Object {
+            -    "id": 1,
+            -    "label": "lc",
+            -  },
+            -  Object {
+            -    "id": 2,
+            -    "label": "lc",
+            -  },
+            -  Object {
+            -    "id": 4,
+            -    "label": "w",
+            -  },
+            -  Object {
+            -    "id": 5,
+            -    "label": "e",
+            -  },
+            -]
+            +undefined
+          at:
+            fileName: test/integration/pgwire-command-tag-real-engine.integration.test.js
+            lineNumber: 276
+            columnNumber: 7
+            functionName: witnessStatementKindTags
+            isToplevel: true
+          stack: >
+            witnessStatementKindTags
+            (test/integration/pgwire-command-tag-real-engine.integration.test.js:276:7)
+          
+            Test.<anonymous>
+            (test/integration/pgwire-command-tag-real-engine.integration.test.js:789:5)
+          source: |2
+                    `${label}: node-postgres rowCount matches the tag`);
+                }
+                t.same(last.rows?.[0]?.map((row) => ({...row, id: Number(row.id)})),
+            ------^
+                  finalRows, `${table}: the rows the commented writes changed`);
+              }
+          ...
+        
+    PG wire simple query received { sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba' }
+    pgwire.auth {
+      timestamp: 1791756601690,
+      message: 'PG wire authorization granted',
+      decision: 'authorized',
+      securityContext: {
+      },
+      action: 'pgwire.execute_query'
+    }
+    Executing SqlRequest via SqlCore {
+      sessionId: 'pgwire-6d11eecc-0bb7-4ce7-b6be-dba9fdbcc8ba',
+      tenantId: 'pgwire_tags',
+      executionMode: 'sql_statement'
+    }
+        tenantId: 'pgwire_tags',
+        principal: 'pgwire_tags_app',
+        roles: [ 'application' ]
+        not ok 180 - timeout!
+          ---
+          signal: SIGALRM
+          handles:
+            - type: Server
+              events:
+                - request
+                - connection
+                - listening
+                - clientError
+              connectionKey: 4:0.0.0.0:52752
+            - type: Server
+              events:
+                - request
+                - connection
+                - listening
+                - error
+                - upgrade
+              connectionKey: 6:::1:52754
+            - type: Socket
+              events:
+                - close
+                - error
+                - prefinish
+                - finish
+                - drain
+                - data
+                - end
+                - readable
+                - connect
+            - type: Socket
+              events:
+                - close
+                - error
+                - prefinish
+                - finish
+                - drain
+                - data
+                - end
+                - readable
+                - timeout
+                - resume
+                - pause
+            - type: Server
+              events:
+                - request
+                - connection
+                - listening
+                - clientError
+                - upgrade
+              connectionKey: 4:127.0.0.1:52753
+            - type: Server
+              events:
+                - connection
+              connectionKey: 4:127.0.0.1:52755
+            - type: Socket
+              events:
+                - close
+                - error
+                - prefinish
+                - finish
+                - drain
+                - data
+                - end
+                - readable
+                - connect
+            - type: Socket
+              events:
+                - close
+                - error
+                - prefinish
+                - finish
+                - drain
+                - data
+                - end
+                - readable
+            - type: Socket
+              events:
+                - close
+                - error
+                - prefinish
+                - finish
+                - drain
+                - data
+                - end
+                - readable
+                - connect
+            - type: Socket
+              events:
+                - close
+                - error
+                - prefinish
+                - finish
+                - drain
+                - data
+                - end
+                - readable
+          expired: TAP
+          ...
+        
+        1..180
+    # error thrown in teardown
+    not ok 1 - PG-wire command tags from the real engine through a real client # time=300009.063ms
+      ---
+      at:
+        fileName: test/integration/pgwire-command-tag-real-engine.integration.test.js
+        lineNumber: 768
+        columnNumber: 1
+        isToplevel: true
+      source: |
+        ]);
+      
+        test('PG-wire command tags from the real engine through a real client',
+        ^
+          {timeout: TEST_TIMEOUT_MS}, async (t) => {
+            refuseUnderProbe(PROBE_GUARD_SUBJECT);
+      ...
+    
+    not ok 2 - timeout!
+      ---
+      signal: null
+      handles:
+        - type: Server
+          events:
+            - request
+            - connection
+            - listening
+            - clientError
+          connectionKey: 4:0.0.0.0:52752
+        - type: Server
+          events:
+            - request
+            - connection
+            - listening
+            - error
+            - upgrade
+          connectionKey: 6:::1:52754
+        - type: Socket
+          events:
+            - close
+            - error
+            - prefinish
+            - finish
+            - drain
+            - data
+            - end
+            - readable
+            - connect
+        - type: Socket
+          events:
+            - close
+            - error
+            - prefinish
+            - finish
+            - drain
+            - data
+            - end
+            - readable
+            - timeout
+            - resume
+            - pause
+        - type: Server
+          events:
+            - request
+            - connection
+            - listening
+            - clientError
+            - upgrade
+          connectionKey: 4:127.0.0.1:52753
+        - type: Server
+          events:
+            - connection
+          connectionKey: 4:127.0.0.1:52755
+        - type: Socket
+          events:
+            - close
+            - error
+            - prefinish
+            - finish
+            - drain
+            - data
+            - end
+            - readable
+            - connect
+        - type: Socket
+          events:
+            - close
+            - error
+            - prefinish
+            - finish
+            - drain
+            - data
+            - end
+            - readable
+        - type: Socket
+          events:
+            - close
+            - error
+            - prefinish
+            - finish
+            - drain
+            - data
+            - end
+            - readable
+            - connect
+        - type: Socket
+          events:
+            - close
+            - error
+            - prefinish
+            - finish
+            - drain
+            - data
+            - end
+            - readable
+      expired: TAP
+      test: PG-wire command tags from the real engine through a real client
+      ...
+    
+    not ok 3 - error thrown while awaiting Promise
+      ---
+      thrown:
+        message: timeout!
+        test: PG-wire command tags from the real engine through a real client
+      test: PG-wire command tags from the real engine through a real client
+      ...
+    
+    1..3
+    PG wire terminate received { sessionId: 'pgwire-0c4c32ee-cb8b-4867-a712-6b53a6dbc6f5' }
+not ok 1 - timeout!
+  ---
+  expired: test/integration/pgwire-command-tag-real-engine.integration.test.js
+  ...
+
+# No coverage generated
+# { total: 183, pass: 161, fail: 22 }
+# time=302147.642ms
