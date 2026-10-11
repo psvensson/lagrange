@@ -1,29 +1,24 @@
 {
   "schema": "test-receipt/1",
   "quest": "cutover-transition-authority-review",
-  "status": "fail",
+  "status": "pass",
   "sourceSha": "ae20b6601ca27bcab7758840bc4830945558b524",
-  "evidence": "solve/quests/cutover-transition-authority-review/evidence/classification-gcp-20261008.json",
+  "evidence": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/cutover-transition-authority-review--c0-terminal-packet-20261011-abb430569.tar.gz",
   "additionalEvidence": [
-    "solve/quests/cutover-transition-authority-review/evidence/owner-entry-2026-10-08.json",
-    "solve/quests/cutover-transition-authority-review/evidence/gcp-37740082892.json",
-    "solve/quests/cutover-transition-authority-review/transition-contract-review.md",
-    "solve/quests/cutover-transition-authority-review/evidence/gcp-37743852151.json",
-    "solve/quests/cutover-transition-authority-review/evidence/review-5452918820.json",
-    "solve/quests/cutover-transition-authority-review/process-loss-conclusions.md",
-    "solve/quests/cutover-transition-authority-review/recovery-policy-proposal.md"
+    "https://github.com/psvensson/lagrange/releases/download/solve-evidence/cutover-transition-authority-review--independent-review-c0-packet-20261011.md"
   ],
   "testFileDigests": {
     "scripts/quest-evidence/cutover-transition-authority-baseline.js": "363e258e16c14151d44a98ff3a33f4d5136b068c51536cf0a419f11e95bafef9",
     "scripts/quest-evidence/cutover-owner-entry-baseline.js": "4b2a613ce9bd724cd4a1cb9956262d1099f805482aedc62d3b506aa4018b9efb",
     "scripts/quest-evidence/cutover-workflow-crash-baseline.js": "c0fa2fa1dd3369d41f435b902a80a8464a3049ad83244afcae16cc58c884313b",
-    "scripts/quest-evidence/cutover-terminal-obligation-baseline.js": "c4be04d577c445f799516e0ec4f629c567bc2992c76867913691de26f1cfc3b5"
+    "scripts/quest-evidence/cutover-terminal-obligation-baseline.js": "c4be04d577c445f799516e0ec4f629c567bc2992c76867913691de26f1cfc3b5",
+    "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js": "0e2a8d1ed5074757bfaa09d34d2bbbe6dfb990885cffbc2c4dc91839aa9499c1"
   },
   "receipts": [
     {
       "id": "replacement-source-target-and-obligations-classified",
-      "passed": false,
-      "detail": "Reopened after independent review 5454259637 / 4217048455: the operator has selected J1, but the exact durable promotion authorization carrier, conditional write/commit point and unknown-result recovery must be explicit before this classification is accepted. Earlier policy approval is not implementation of that boundary."
+      "passed": true,
+      "detail": "Independent review round 3 at e708f80d7 by subagent:a9332b0bbda84f020 APPROVE. At preserved product 82b54ef9 the planner parks fresh replacement, the handler refuses it, and no ADD_LEARNER caller, membership permit/holder claim column or membership CAS exists. Promotion authorization is explicitly mechanism-absent. The existing operation-row membership columns retain debt through ordinary terminal settlement and enforce the group lane (run 37751962637). J1 and exact-promotion-authorization-contract, exact-membership-owner-claim and terminal-membership-resolution are proposed FreshMG contracts, explicitly absent in this product; they are not claimed as implemented behavior."
     },
     {
       "id": "workflow-commit-projection-and-restart-classified",
@@ -32,8 +27,8 @@
     },
     {
       "id": "snapshot-local-open-wipe-and-install-classified",
-      "passed": false,
-      "detail": "Reopened after independent review 5454259637 / 4217048521: four named gates are insufficient. Each current or missing transition needs its concrete owner method, durable carrier/commit point and restart/lost-answer/wake interaction. Existing component/refusal proofs remain valid only within their measured ceiling."
+      "passed": true,
+      "detail": "Independent review rounds 2-3 at e708f80d7 APPROVE by mechanism. exact-snapshot-transition-owners binds LOCAL_OPEN to readOpeningRecord/openingParticipationRefusal/create_node; KNOWN_WIPE to openingWithoutRecordRefusal, holdForReseed and durable retired lifecycle row; READ_UNAVAILABLE to typed host failure, never absence. Installation binds STAGED, rename/fsync and INSTALLED through commitSnapshotInstall and boot-boundary resolvePendingSnapshotInstall, with descriptor-last checkpoint, transfer marker, persistReady and committed application transaction. All 47 cited symbols and five local-restart/refusal witnesses exist at 82b54ef9. Intact application-image catch-up remains unimplemented at the existing application transaction owner; SNAPSHOT_CATCHUP_NEEDED has no producer. Component/refusal evidence (run 37740082892, 72 assertions) remains bounded."
     },
     {
       "id": "source-bound-deterministic-discriminators-measured",
@@ -44,8 +39,70 @@
     },
     {
       "id": "independent-category-complete-contract-review",
-      "passed": false,
-      "detail": "Review 5454259637 supports prior corrections but raises two new substantive classification findings. No approving verdict exists. Earlier rejections and author self-review remain unchanged."
+      "passed": true,
+      "detail": "Independent category-complete contract review by subagent:a9332b0bbda84f020 covers owner-interaction, recovery-replay, concurrency-serialization and harness-fidelity. Round 1 at 1ff8e0004 REJECT; round 2 at 1c00baf12 approves snapshot classification but rejects replacement text B1; round 3 at e708f80d7 APPROVE after correction 2f72fa874. All seven PR104 COMMENTED reviews are retained as nonapprovals and their findings answered or recorded. This approval classifies historical 82b54ef9 only; no runtime/FreshMG/cutover/A1-v13 certification. Review retained at https://github.com/psvensson/lagrange/releases/download/solve-evidence/cutover-transition-authority-review--independent-review-c0-packet-20261011.md (sha256 24b7e2a31e07e7009f2cdd4f0d13e71521eaf3273e84858df0890b3737014816)."
     }
-  ]
+  ],
+  "independentReview": {
+    "reviewer": "subagent:a9332b0bbda84f020",
+    "subject": "e708f80d731b403b9cf7252bdcc068a1d143aa7b",
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/cutover-transition-authority-review--independent-review-c0-packet-20261011.md",
+    "sha256": "24b7e2a31e07e7009f2cdd4f0d13e71521eaf3273e84858df0890b3737014816",
+    "verdict": "approve",
+    "scope": "historical classification of 82b54ef9 only"
+  },
+  "preservedPacket": {
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/cutover-transition-authority-review--c0-terminal-packet-20261011-abb430569.tar.gz",
+    "sha256": "9771bc315548addf02a2af1d9b7da11e1c6e8235f35d048822f167d7da512b1c",
+    "bytes": 27386009,
+    "manifest": "manifest.json",
+    "manifestSha256": "71cb7efaf067bc3b1b338fbd4c3960a87ea12c6618cdcafea6645c5b989097c0",
+    "productSha": "82b54ef9b7c8d6be9f2d6450cbc5e6713ade00af",
+    "witnessSha": "ae20b6601ca27bcab7758840bc4830945558b524",
+    "members": [
+      {
+        "path": "quest-before-closure/evidence/classification-gcp-20261008.json",
+        "bytes": 133360,
+        "sha256": "0265af9a44641fdbd3f1c075c6be8926311f13123f5c12204ea32555133dc12c"
+      },
+      {
+        "path": "quest-before-closure/evidence/owner-entry-2026-10-08.json",
+        "bytes": 7352,
+        "sha256": "897993979e0ef93d109cc849c68ac51d84bcb71ea70c9c32fd24ba67dd235894"
+      },
+      {
+        "path": "quest-before-closure/evidence/gcp-37740082892.json",
+        "bytes": 4046,
+        "sha256": "9297aef27dbb6d3c44827770829b97d91028bec109a870b46e08516376b24ba7"
+      },
+      {
+        "path": "quest-before-closure/transition-contract-review.md",
+        "bytes": 15698,
+        "sha256": "777b018f909abde4ce42aa70057bac439bc94867f91146201cac0b085352f613"
+      },
+      {
+        "path": "quest-before-closure/evidence/gcp-37743852151.json",
+        "bytes": 6667,
+        "sha256": "286c7ace1ad66525c277766503b36bc7c4edb9cf6a9ef48a10a30fd03c33e751"
+      },
+      {
+        "path": "quest-before-closure/evidence/review-5452918820.json",
+        "bytes": 1210,
+        "sha256": "ab9d1f3bf677589575cf4cbb23e2d2ff610aaa680dde3eb4cc28e5a91c5b2d95"
+      },
+      {
+        "path": "quest-before-closure/process-loss-conclusions.md",
+        "bytes": 5099,
+        "sha256": "b8cf628e5f46c2888febfb271cf971302c53dc002c4d55e5c7d4117e6b8e3ee1"
+      },
+      {
+        "path": "quest-before-closure/recovery-policy-proposal.md",
+        "bytes": 7384,
+        "sha256": "374a19ebb9bd6d838e779a87021d637dcca664fef6205868cfbf892669e9d82f"
+      }
+    ],
+    "reproduction": "Extract preserved-product.tar.gz or measured-witness-tree.tar.gz as indicated by the preserved reports, restore the specified historical-bytes variant, install the locked dependencies, and follow the original commands and limits. The five retired runners and three workflow callers are historical proof inputs, not current runtime tests.",
+    "limits": "Classification of historical 82b54ef9 only. Early raw Actions archives 37736547313, 37738789039, 37739512267 and 37740082892 expired; their retained reconstructed JSON is not raw output. No FreshMG, current cutover or A1-v13 certification."
+  },
+  "testFileDigestScope": "Historical measured witness bytes at sourceSha, preserved in measured-witness-tree.tar.gz and historical-bytes. The corresponding temporary runners are retired from the active tree."
 }

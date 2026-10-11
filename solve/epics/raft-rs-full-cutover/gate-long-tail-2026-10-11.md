@@ -425,3 +425,21 @@ Publication policy (owner decision, same review): no sealed-red convention. Non-
 - 2.9 a second unclassified epoch reader existed: operation-workflow-coordinator-created-handoff-scheduling.js (f13f7f37a, projects membershipPublicationEpoch ?? null; classified passthrough).
 - 3.6/3.7/3.8 (#22 seed-node-bootstrap, #23 single-node-default-replica-count-writes, #24 insert-or-ignore-raft-replay): NOT S2 cases: on lenovo-laptop the expiry names the TEST ("expired: Seed node bootstrap integration", "expired: single node ... writes"), i.e. the test's own unscaled `{timeout}` binds, which the runner cannot reach. Owner: the test files (scale the declaration via test/integration/helpers/test-machine-factor.js). S2 still binds wherever the root sum is the limit (managed-split reached the 540 s bound at x2.1 with the runner fix).
 - S1/S2 runner repair: fix/runner-tap-timeout-20261011 @ 73ba55a49 (from main 878eb8ac0): TAP_TIMEOUT = max(sum of top-level declared timeouts, largest, file-level setTimeout) x machine factor, bounded to 90% of the per-process kill budget; explicit TAP_TIMEOUT wins; floor unchanged. On main the exposure is 30 files (26 with >1 timed top-level test + 10 with a file-level setTimeout; the ledger's 35 was measured at b5e62dd0d); 30 files change budget at x1, 78 at x2.09; the only reductions are the two 600 s files to the 540 s bound. Verified on lenovo-laptop (x2.1): create-table and managed-split red -> green; single-path-partition-cutover green both; #22/#23 unchanged (test-owned budgets).
+
+## C0 preservation and retirement disposition 2026-10-11
+
+The historical classification independent review completed with round-3 approval
+at `e708f80d7` after two rejecting rounds. The retained C0 receipt records all five
+classification receipts, the actual reviewer, the preserved product `82b54ef9`,
+and measured witness `ae20b660`. The immutable terminal packet is at
+https://github.com/psvensson/lagrange/releases/download/solve-evidence/cutover-transition-authority-review--c0-terminal-packet-20261011-abb430569.tar.gz
+(sha256 `9771bc315548addf02a2af1d9b7da11e1c6e8235f35d048822f167d7da512b1c`,
+27,386,009 bytes). It includes exact product/witness inputs, original and
+reconciled records, all measured runner/workflow variants, six retained raw
+archives, failed controls, and explicit limits for expired early raw archives.
+
+The five C0 cutover evidence runners and their three workflow callers are retired
+together after that preservation. `retry-recovery-window.js` remains with its
+query delivery-budget owner. This supersedes the open-review status in the
+historical ledger above; it does not waive any current publication red or
+certify the current runtime. Terminal Quest landing remains subject to its guards.
