@@ -1,0 +1,81 @@
+TAP version 13
+# (node:1148673) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 transition listeners added to [BootstrapReadinessState]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# LogsTableService initialized
+# metrics.logging.logs_table_connect.start {
+#   bufferedEntries: 0,
+#   flushMode: 'background',
+#   chunkSize: 20,
+#   yieldMs: 5
+# }
+# Connected to LoggingService, flushed 0 buffered entries
+# PG wire startup message received { user: 'pgwire_tags_app', database: 'pgwire_tags' }
+# pgwire.auth {
+#   timestamp: 1791746501747,
+#   message: 'PG wire authentication succeeded',
+#   decision: 'authenticated',
+#   securityContext: {
+#     tenantId: 'pgwire_tags',
+#     principal: 'pgwire_tags_app',
+#     roles: [ 'application' ]
+#   },
+#   action: 'pgwire.connect'
+# }
+# Protocol session mapped to tenant/policy {
+#   sessionId: 'pgwire-46434404-3fdd-4a62-91c2-5e29fe347b5e',
+#   tenantId: 'pgwire_tags'
+# }
+# PG wire authentication successful { sessionId: 'pgwire-46434404-3fdd-4a62-91c2-5e29fe347b5e' }
+# PG wire simple query received { sessionId: 'pgwire-46434404-3fdd-4a62-91c2-5e29fe347b5e' }
+# pgwire.auth {
+#   timestamp: 1791746501806,
+#   message: 'PG wire authorization granted',
+#   decision: 'authorized',
+#   securityContext: {
+#     tenantId: 'pgwire_tags',
+#     principal: 'pgwire_tags_app',
+#     roles: [ 'application' ]
+#   },
+#   action: 'pgwire.execute_query'
+# }
+# Executing SqlRequest via SqlCore {
+#   sessionId: 'pgwire-46434404-3fdd-4a62-91c2-5e29fe347b5e',
+#   tenantId: 'pgwire_tags',
+#   executionMode: 'sql_statement'
+# }
+# {"level":50,"time":"2026-10-11T19:21:42.672Z","nodeId":"pgwire-command-tags-node","pid":1148673,"subsystem":"replica-state-machine","replicaId":"schema-job-80cdff34b273e2b28097a6482a1dec4e:replica:pgwire-command-tags-node","currentState":"pending","attemptedState":"pending","nodeId":"pgwire-command-tags-node","msg":"Invalid state transition attempted"}
+# PG wire simple query received { sessionId: 'pgwire-46434404-3fdd-4a62-91c2-5e29fe347b5e' }
+# pgwire.auth {
+#   timestamp: 1791746504490,
+#   message: 'PG wire authorization granted',
+#   decision: 'authorized',
+#   securityContext: {
+#     tenantId: 'pgwire_tags',
+#     principal: 'pgwire_tags_app',
+#     roles: [ 'application' ]
+#   },
+#   action: 'pgwire.execute_query'
+# }
+# Executing SqlRequest via SqlCore {
+#   sessionId: 'pgwire-46434404-3fdd-4a62-91c2-5e29fe347b5e',
+#   tenantId: 'pgwire_tags',
+#   executionMode: 'sql_statement'
+# }
+# {"level":50,"time":"2026-10-11T19:22:14.478Z","nodeId":"pgwire-command-tags-node","pid":1148673,"subsystem":"query-executor","event":"wait_bound_spent","wait":"partition_execution_deadline","awaited":"successful partition delivery before the execution deadline","boundMs":29999,"elapsedMs":29987,"lastObserved":{"attempts":537,"lastError":"The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried","lastErrorCode":null,"lastParticipantNodeId":"pgwire-command-tags-node","awaitedRoutingRepair":true,"site":"retry_delay_exceeds_budget","retryDelayMs":50,"remainingBudgetMs":12},"scope":{"partitionId":"tbl-80cdff34b273e2b28097a6482a1dec4e-p1","forRead":false,"nodeId":"pgwire-command-tags-node"},"repeats":0,"nodeId":"pgwire-command-tags-node","msg":"Wait bound spent"}
+# PG wire simple query received { sessionId: 'pgwire-46434404-3fdd-4a62-91c2-5e29fe347b5e' }
+# pgwire.auth {
+#   timestamp: 1791746534536,
+#   message: 'PG wire authorization granted',
+#   decision: 'authorized',
+#   securityContext: {
+#     tenantId: 'pgwire_tags',
+#     principal: 'pgwire_tags_app',
+#     roles: [ 'application' ]
+#   },
+#   action: 'pgwire.execute_query'
+# }
+# Executing SqlRequest via SqlCore {
+#   sessionId: 'pgwire-46434404-3fdd-4a62-91c2-5e29fe347b5e',
+#   tenantId: 'pgwire_tags',
+#   executionMode: 'sql_statement'
+# }
