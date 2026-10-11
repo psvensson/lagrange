@@ -1,0 +1,62 @@
+import {pathToFileURL} from 'node:url';
+const root=process.argv[2];
+const imp=p=>import(pathToFileURL(root+'/'+p));
+const {SQLQueryEngine}=await imp('src/query/sql-query-engine.js');
+const {DistributedTransactionCoordinator:DTC}=await imp('src/query/distributed/distributed-transaction-coordinator.js');
+const bc=await imp('src/query/distributed/distributed-begin-consumer.js');
+const {buildDecisionRecord,participantIdOf}=await imp('src/partition/partition-participant-transaction-bytes.js');
+const {participantSetTextOf}=await imp('src/query/distributed/distributed-transaction-participant-manifest.js');
+const silent={debug(){},info(){},warn(){},error(){}};
+const uncertain=()=>Object.assign(new Error('lost'),{code:'TRANSACTION_CREATION_UNCERTAIN'});
+const optionsFor=session=>{const options={sessionId:session};const consumer=bc.createDistributedBeginConsumer(bc.DISTRIBUTED_BEGIN_CONSUMER_KIND.PGWIRE,session);bc.attachDistributedBeginConsumer(options,consumer);return {options,consumer};};
+const result=[];
+async function probe(name,fn){try{result.push({name,...await fn()});}catch(error){result.push({name,error:error.stack});}}
+await probe('advanced-unavailable-then-readable',async()=>{
+ let attempted,reads=0,writes=0,available=false;
+ const engine=new SQLQueryEngine({logger:silent,autoStartDistributedTransactionRecovery:false,controlPlaneSystemTableGateway:{supportsMutationSubmission:()=>true,async submitMutation(m){writes++;attempted??={...m.row};return {success:false,error:'lost'};},async readAuthoritativeRows(table){reads++;if(reads===1)return {success:true,rows:[{...attempted,status:'ROLLING_BACK'}]};if(!available)return {success:false,error:'authoritative_row_source_unavailable'};return {success:true,rows:table==='sql_transactions'?[{...attempted,status:'ROLLING_BACK'}]:[]};}}});
+ const {options}=optionsFor('advanced-held');const first=await engine.executeQuery('BEGIN',[],options);const before=reads;available=true;
+ const sweeps=[await engine.transactionCoordinator.runRecoverySweep(),await engine.transactionCoordinator.runRecoverySweep()];
+ const retry=await engine.executeQuery('BEGIN',[],options);const tx=engine.transactionCoordinator.transactionsBySession.get('advanced-held');
+ const out={first,retry,readsBeforeAvailability:before,readsAfterAvailability:reads-before,writes,state:tx?.transactionCreationState,diagnostics:engine.transactionCoordinator.getTransactionCreationDiagnostics(),sweeps};await engine.shutdown();return out;
+});
+await probe('advanced-live-consumer-and-manifest-handoff',async()=>{
+ let attempted,row,reads=0,writes=0;const commits=[];
+ const engine=new SQLQueryEngine({logger:silent,autoStartDistributedTransactionRecovery:false,controlPlaneSystemTableGateway:{supportsMutationSubmission:()=>true,async submitMutation(m){writes++;if(!attempted){attempted={...m.row};const d=buildDecisionRecord(attempted.transaction_id,'COMMIT',[[participantIdOf(attempted.transaction_id,'partition-x'),'digest-x']]);row={...attempted,status:'COMMITTING',participant_set_state:'FROZEN',participant_set_text:participantSetTextOf(attempted.transaction_id,['partition-x']),commit_mode:'TWO_PHASE_COMMIT',frozen_participant_count:1,decision:d.decision,decision_text:d.decisionText,decision_digest:d.decisionDigest};return {success:false,error:'lost'};}return {success:true,completionState:'applied'};},async readAuthoritativeRows(table){reads++;return {success:true,rows:table==='sql_transactions'?[row]:[]};},async updateSystemTableRow(){return {success:true};}}});
+ const {options,consumer}=optionsFor('advanced-live');const first=await engine.executeQuery('BEGIN',[],options);const c=engine.transactionCoordinator;const tx=c.transactionsBySession.get('advanced-live');const before={creationState:tx?.transactionCreationState??null,consumerRetained:tx?.transactionCreationConsumer===consumer,participantIds:[...tx.participants.keys()],decision:tx.decision,admission:c.transactionCreationAdmission('advanced-live'),recordCount:c.getTransactionCreationDiagnostics().recordCount};
+ const retry=await engine.executeQuery('BEGIN',[],options);
+ // I/O callback only: exercise actual authoritative recovery and decision fanout.
+ c.commitParticipant=async(session,partition,identity)=>{commits.push({session,partition,identity});};
+ const replay=await c.resumeRecoveredTransactions();
+ const out={first,before,retry,replay,commits,reads,writes,after:c.getTransaction('advanced-live')};await engine.shutdown();return out;
+});
+await probe('exact-envelope-charge',async()=>{
+ const session='s'.repeat(20000);let writes=0;const c=new DTC({logger:silent,maxUncertainTransactionCreationCanonicalBytes:65000,persistTransaction:async()=>{writes++;throw uncertain();}});const first=await c.begin(session);return {first,writes,configured:65000,diagnostics:c.getTransactionCreationDiagnostics()};
+});
+await probe('utf8-retained-representation-accounting',async()=>{
+ const session='💾'.repeat(5000);let observed=null,c;c=new DTC({logger:silent,maxUncertainTransactionCreationCanonicalBytes:200000,persistTransaction:async()=>{const [attachment]=c.transactionCreationAttachmentsBySession.get(session);const raw=attachment.boundRecord,current=raw.transactionCreationReservation.tx;const strings=value=>Object.values(value).filter(entry=>typeof entry==='string').reduce((total,entry)=>total+Buffer.byteLength(entry),0);observed={distinctRepresentations:raw!==current,lowerBound:raw.transactionCreationInitialRowBytes.length+strings(raw.transactionCreationInitialRow)+strings(raw)+strings(current)+strings(attachment.consumer),charged:c.getTransactionCreationDiagnostics().recordBytes};throw uncertain();}});const first=await c.begin(session);return {first,observed,diagnostics:c.getTransactionCreationDiagnostics()};
+});
+await probe('typed-uncertainty-sweep-backoff',async()=>{let writes=0;const c=new DTC({logger:silent,persistTransaction:async()=>{writes++;throw uncertain();}});await c.begin('retry-defer');const first=await c.runRecoverySweep();const second=await c.runRecoverySweep();return {first,second,writes,diagnostic:c.getTransactionCreationDiagnostics().sweep};});
+await probe('engine-accessor-configuration',async()=>{let getterCalls=0;const options={logger:silent,autoStartDistributedTransactionRecovery:false};Object.defineProperty(options,'maxUncertainTransactionCreations',{get(){getterCalls++;return 1;}});let accepted=false;try{const e=new SQLQueryEngine(options);accepted=true;await e.shutdown();}catch{}return {getterCalls,accepted};});
+await probe('control-deadline-completion-before-timer',async()=>{let now=0;const c=new DTC({logger:silent,now:()=>now,transactionBudgetMs:1000,transactionCreationTurnBudgetMs:10,persistTransaction:async()=>{now=20;}});const {options,consumer}=optionsFor('spent-turn');const first=await c.begin('spent-turn',options);const entitlement=bc.distributedBeginAcceptanceOf(first);const canAccept=c.canAcceptDistributedBegin(consumer,entitlement);const accepted=c.acceptDistributedBegin(consumer,entitlement);return {now,first,canAccept,accepted,active:c.getTransaction('spent-turn')};});
+await probe('real-clock-delayed-timer',async()=>{const started=Date.now();const c=new DTC({logger:silent,transactionBudgetMs:1000,transactionCreationTurnBudgetMs:10,persistTransaction:async()=>{const until=Date.now()+25;while(Date.now()<until){}}});const {options,consumer}=optionsFor('delayed-timer');const first=await c.begin('delayed-timer',options);const elapsed=Date.now()-started;const accepted=c.acceptDistributedBegin(consumer,bc.distributedBeginAcceptanceOf(first));return {elapsed,first,accepted};});
+
+await probe('shutdown-with-inflight-census-and-late-insert',async()=>{
+ let persisted;let releaseInsert,enterInsert,releaseCensus,enterCensus;
+ const insertEntered=new Promise(r=>enterInsert=r),insertGate=new Promise(r=>releaseInsert=r),censusEntered=new Promise(r=>enterCensus=r),censusGate=new Promise(r=>releaseCensus=r);
+ const c=new DTC({logger:silent,persistTransaction:async(record)=>{persisted=record;enterInsert();await insertGate;},loadRecoveryStateForSweep:async()=>{enterCensus();return censusGate;}});
+ const pending=c.begin('shutdown-census');await insertEntered;const sweep=c.runRecoverySweep();await censusEntered;
+ const original=c.transactionsBySession.get('shutdown-census');const row={...original.transactionCreationInitialRow};c.retireUncertainCreationsForProcessShutdown();
+ releaseCensus({transactions:[row],participants:[],writeOperations:[]});await new Promise(r=>setImmediate(r));const restored=c.transactionsBySession.get('shutdown-census');
+ const beforeLate={sameObject:restored===original,exists:!!restored,state:restored?.transactionCreationState??null,recovery:restored?.recoveryDiscovered,shutdown:c.transactionCreationShutdown};
+ releaseInsert();const first=await pending;const swept=await sweep;const after=c.transactionsBySession.get('shutdown-census');return {beforeLate,first,swept,afterLate:{sameRestoredObject:after===restored,state:after?.transactionCreationState??null,recovery:after?.recoveryDiscovered},diagnostics:c.getTransactionCreationDiagnostics()};
+});
+
+await probe('exact-byte-pool-cannot-reenter',async()=>{
+ const session='full-byte-pool';let admittedBytes=0;const measure=new DTC({logger:silent,now:()=>1000,persistTransaction:async()=>{admittedBytes=measure.getTransactionCreationDiagnostics().totalBytes;throw uncertain();}});await measure.begin(session);measure.retireUncertainCreationsForProcessShutdown();let available=false,writes=0;const c=new DTC({logger:silent,now:()=>1000,maxUncertainTransactionCreationCanonicalBytes:admittedBytes,persistTransaction:async()=>{writes++;if(!available)throw uncertain();}});const first=await c.begin(session);available=true;const retry=await c.begin(session);const sweep=await c.runRecoverySweep();return {cap:admittedBytes,first,retry,sweep,writes,diagnostics:c.getTransactionCreationDiagnostics()};
+});
+
+await probe('expired-cohort-turn-cap',async()=>{let now=0,writes=0;const c=new DTC({logger:silent,now:()=>now,transactionBudgetMs:10,maxUncertainTransactionCreations:32,maxUncertainCreationSweepPerTurn:16,persistTransaction:async()=>{writes++;throw uncertain();}});for(let i=0;i<17;i++)await c.begin('expired-cohort-'+i);now=100;const sweep=await c.runRecoverySweep();return {swept:sweep.swept,resultCount:sweep.results.length,configuredTurnCap:16,writesAfterTurn:writes,diagnostic:c.getTransactionCreationDiagnostics().sweep};});
+
+await probe('expired-success-claim-never-hands-off',async()=>{let now=0,writes=0,handoffs=0;const c=new DTC({logger:silent,now:()=>now,transactionBudgetMs:10,persistTransaction:async()=>{writes++;},retainAdvancedTransactionReadback:async()=>{handoffs++;return false;}});const {options,consumer}=optionsFor('expired-claim');const first=await c.begin('expired-claim',options);now=100;const canAccept=c.canAcceptDistributedBegin(consumer,bc.distributedBeginAcceptanceOf(first));const sweep=await c.runRecoverySweep();const retry=await c.begin('expired-claim',options);return {first,canAccept,sweep,retry,writes,handoffs,state:c.transactionsBySession.get('expired-claim')?.transactionCreationState,diagnostics:c.getTransactionCreationDiagnostics()};});
+console.log('SEMANTIC_RESULTS_START');
+console.log(JSON.stringify({root,results:result},null,2));

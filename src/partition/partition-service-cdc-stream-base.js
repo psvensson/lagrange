@@ -417,12 +417,13 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
    * @private
    */
   getCommittedEntryKey(command) {
-    if (!command || !command.sql) {
+    if (!command) {
       return null;
     }
     if (command.entryId) {
       return `entry:${command.entryId}`;
     }
+    if (!command.sql) return null;
     const params = Array.isArray(command.params) ?
       JSON.stringify(command.params) :
       STRING.EMPTY;

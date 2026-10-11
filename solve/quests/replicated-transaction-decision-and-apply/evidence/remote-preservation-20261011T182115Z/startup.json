@@ -1,0 +1,11 @@
+{
+  "worktree": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011",
+  "worktreeHead": "c6d71665e98be03de916705f272a9d6340e4a842",
+  "base": "c6d71665e98be03de916705f272a9d6340e4a842",
+  "snapshot": "5a49cbc822f3f246746261e98687cd14887c2b9d",
+  "tree": "c57f99f9ec0790da110a9b583eede882c444cb19",
+  "remoteRef": "refs/heads/checkpoint/rs-raft-preservation-20261011T182115Z/startup-wip",
+  "callerStatePreserved": true,
+  "callerIndexSha256": "ca384aaa12984178960158d793b549a2ef63b75f6d5452f7d21c7487d7e5c25c",
+  "status": "WIP; BEGIN source review rejected predecessor, corrections in progress; no readiness approval"
+}

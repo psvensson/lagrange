@@ -275,6 +275,11 @@ class SeedPartitionsPhase {
         messageGroupService: d.getBootstrapMessageGroupService(),
         messageRouter: d.getMessageRouter(),
         rebalanceCoordinator: d.getRebalanceCoordinator(),
+        // Release and transaction admission read the node's actual topology
+        // owner even before cache hydration. The fresh seed cache is the
+        // stable empty/known bootstrap view at this point; a missing owner
+        // must remain unavailable rather than be treated as no transition.
+        systemTableCache: d.getSystemTableCache(),
         cdcIntegrationService: d.getCdcIntegrationService(),
         sqlQueryEngine: d.getCdcIntegrationService()?.sqlQueryEngine || null,
         deferElection: Boolean(options.deferElection),
