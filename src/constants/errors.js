@@ -35,6 +35,11 @@ const ERRORS = Object.freeze({
     'The consensus port refused the proposal; the write was not proposed',
   WRITE_COMMIT_DEADLINE_EXCEEDED:
     'The write was not proposed before its commit deadline',
+  // A write that committed while a prepared transaction reserved its
+  // partition: it applied without effect and may be retried.
+  WRITE_RESERVED:
+    'The write met a prepared transaction reserving the partition and was ' +
+    'applied without effect; it may be retried',
   PARTITION_SERVICE_NOT_FOUND: 'Partition service not found',
   NO_HANDLER_FOR_ADDRESS: 'No handler registered for address',
 });
@@ -56,6 +61,7 @@ const REROUTABLE_WRITE_ERROR_FRAGMENTS = Object.freeze([
   ERRORS.WRITE_BACKPRESSURE,
   ERRORS.WRITE_CONSENSUS_REFUSED,
   ERRORS.WRITE_COMMIT_DEADLINE_EXCEEDED,
+  ERRORS.WRITE_RESERVED,
 ]);
 
 /**

@@ -338,8 +338,10 @@ function settleFailedCommittedStatement(service, {error, command, entryKey,
 export {
   answerSettledStatement,
   createCommittedStatementOutcomeTable,
+  isDeterministicStatementFailure,
   readCommittedStatementOutcome,
   recordCommittedStatementOutcome,
   settleFailedCommittedStatement,
   settleRecordedCommittedStatement,
+  statementEnvironmentFailure,
 };

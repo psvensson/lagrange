@@ -41,6 +41,12 @@ const ROW = Object.freeze({id: 'row-1', value: 'value-1'});
 const ROW_2 = Object.freeze({id: 'row-2', value: 'value-2'});
 const OTHER_ROW = Object.freeze({id: 'row-9', value: 'other'});
 const SETTLE_TICKS = 25;
+// Where every fixture replica's write generation counts from (design 0.0.13):
+// the generation origin is the first data entry of a fresh group, after the
+// empty entry its first leader appends at index 1 (as on a real rs-raft group,
+// partition-rs-raft-restart-fixture.js), so the controllable replicas apply
+// it at index 2 too and the PREPAREs this fixture builds carry that origin.
+const GENERATION_ORIGIN_INDEX = 2;
 
 const V3 = Object.freeze({
   PREPARE_COMMAND: 'PARTICIPANT_PREPARE',
@@ -98,6 +104,7 @@ const V3 = Object.freeze({
   PARTITION_SCOPE: 'partition',
   OPERATION_KEY_PREFIX: 'txop:',
   GENERATION_TABLE: '_partition_write_generation',
+  GENERATION_ORIGIN_COMMAND: 'PARTICIPANT_GENERATION_ORIGIN',
 });
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
@@ -129,9 +136,26 @@ function generationOf(partition) {
     return null;
   }
 }
-function validationTextOf(generation, partitionId = PARTITION_ID) {
+function validationTextOf(generation, partitionId = PARTITION_ID,
+  originIndex = GENERATION_ORIGIN_INDEX) {
   return JSON.stringify([[V3.PARTITION_SCOPE, partitionId,
-    sha256(`generation:${generation === null ? 'none' : generation}`)]]);
+    sha256(`generation:${generation === null ? 'none' : generation}`), originIndex]]);
+}
+// The log index the replica's write generation counts from (null when no
+// origin has applied there, or the table is absent).
+function originOf(partition) {
+  try {
+    return partition.db.prepare(
+      `SELECT origin_index FROM ${V3.GENERATION_TABLE} WHERE singleton = 1`).get()
+      ?.origin_index ?? null;
+  } catch {
+    return null;
+  }
+}
+// The committed generation origin of the fixture partition (design 0.0.13).
+function originCommandOf(partitionId = PARTITION_ID) {
+  return {type: V3.GENERATION_ORIGIN_COMMAND, entryId: `${partitionId}:generation-origin`,
+    partitionId, timestamp: '', proposedBy: ELSEWHERE, proposedAt: 0};
 }
 // The execution compatibility envelope (design v8 section 3.3): the build every
 // replica must run to apply a transaction command; this process's own build.
@@ -153,9 +177,10 @@ function operationOf(row, extra = {}) {
   return {entryId: extra.entryId ?? `op-${row.id}`, sql: extra.sql ?? INSERT_SQL,
     params: extra.params ?? [row.id, row.value]};
 }
-function prepareCommandOf(identity, operations, generation, partitionId = PARTITION_ID) {
+function prepareCommandOf(identity, operations, generation, partitionId = PARTITION_ID,
+  originIndex = GENERATION_ORIGIN_INDEX) {
   const operationsText = JSON.stringify(operations);
-  const validationText = validationTextOf(generation, partitionId);
+  const validationText = validationTextOf(generation, partitionId, originIndex);
   return {
     type: V3.PREPARE_COMMAND,
     entryId: `${identity.participantId}:prepare`,
@@ -340,9 +365,16 @@ function createReplica(replicaId, extra = {}) {
       {transactionDeterminismSelfCheck: extra.determinismSelfCheck} : {}),
   }, new ControllableConsensusPort());
 }
+// Start a replica; unless `extra.generationOrigin` is false, a fresh one
+// applies the partition's generation origin first, at GENERATION_ORIGIN_INDEX
+// (transaction admission enabled on the partition, design 0.0.13).
 async function startReplica(replicaId, extra) {
   const replica = createReplica(replicaId, extra);
   await replica.initialize();
+  if (extra?.generationOrigin !== false && originOf(replica) === null) {
+    replica.controllablePort.committedIndex = GENERATION_ORIGIN_INDEX - 1;
+    applyCommitted(replica, originCommandOf());
+  }
   return replica;
 }
 async function startLeader(extra) {
@@ -590,6 +622,9 @@ async function decidedOnTwoReplicas(tx, operations, setup) {
 
 export {
   COMMITTED,
+  GENERATION_ORIGIN_INDEX,
+  originCommandOf,
+  originOf,
   prepareRound,
   DECLARED_INDEX,
   DECLARED_INDEX_SCHEMA,

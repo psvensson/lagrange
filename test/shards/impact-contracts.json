@@ -533,14 +533,19 @@
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-committed-statement-outcome-constants.js",
         "src/partition/partition-committed-command-admission.js",
-        "src/partition/partition-service-write-metrics-base.js"
+        "src/partition/partition-service-write-metrics-base.js",
+        "src/partition/partition-participant-transaction-apply.js",
+        "src/partition/partition-participant-transaction-bytes.js",
+        "src/partition/partition-participant-transaction-constants.js",
+        "src/partition/partition-participant-transaction-store.js"
       ],
       "tests": [
         "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
         "test/raft/raft-rs-backend/operation-port-throw-containment.test.js",
         "test/partition/committed-statement-outcome.test.js",
         "test/partition/partition-runtime-reconstruction-leadership.test.js",
-        "test/partition/partition-unreadable-durable-record.test.js"
+        "test/partition/partition-unreadable-durable-record.test.js",
+        "test/partition/partition-participant-transaction-apply.test.js"
       ]
     },
     "partition-raft-operation-port": {
@@ -566,6 +571,7 @@
       "description": "A user session's SQLite transaction and the rs-raft store share the partition's one connection: the transaction owner ends its session (COMMIT or ROLLBACK) before it proposes a transaction marker and proposes none while staging; the store refuses every durable consensus write inside a transaction it did not open; the runtime asks that admission before it enters the core and before every Ready, and the write path turns the refusal into a bounded deferral, so no consensus row is ever written inside, or erased by, a user session.",
       "owners": [
         "src/partition/partition-service-transaction-base.js",
+        "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-service-raft-write-commit.js",
         "src/raft/raft-rs-durable-store.js",
         "src/raft/raft-rs-persistence-admission.js",
@@ -573,7 +579,8 @@
       ],
       "tests": [
         "test/transaction/session-transaction-isolation.test.js",
-        "test/raft/raft-rs-backend/persistence-admission.test.js"
+        "test/raft/raft-rs-backend/persistence-admission.test.js",
+        "test/partition/partition-participant-transaction-apply.test.js"
       ]
     },
     "spread-cure-transition-authorization": {
@@ -1286,7 +1293,9 @@
             "src/partition/partition-service-entry-apply-base.js",
             "src/partition/partition-committed-statement-outcome.js",
             "src/partition/partition-committed-command-admission.js",
-            "src/partition/partition-service-write-metrics-base.js"
+            "src/partition/partition-service-write-metrics-base.js",
+            "src/partition/partition-participant-transaction-apply.js",
+            "src/partition/partition-participant-transaction-store.js"
           ]
         }
       ],
@@ -1296,7 +1305,8 @@
         "test/raft/raft-rs-backend/operation-port-throw-containment.test.js",
         "test/partition/committed-statement-outcome.test.js",
         "test/partition/partition-runtime-reconstruction-leadership.test.js",
-        "test/partition/partition-unreadable-durable-record.test.js"
+        "test/partition/partition-unreadable-durable-record.test.js",
+        "test/partition/partition-participant-transaction-apply.test.js"
       ]
     },
     "partition-raft-operation-port": {
@@ -1363,7 +1373,8 @@
         {
           "id": "session-transaction",
           "owners": [
-            "src/partition/partition-service-transaction-base.js"
+            "src/partition/partition-service-transaction-base.js",
+            "src/partition/partition-participant-transaction-request.js"
           ]
         },
         {
@@ -1378,7 +1389,8 @@
       "contract": "partition-session-transaction-persistence-admission",
       "witnessTests": [
         "test/transaction/session-transaction-isolation.test.js",
-        "test/raft/raft-rs-backend/persistence-admission.test.js"
+        "test/raft/raft-rs-backend/persistence-admission.test.js",
+        "test/partition/partition-participant-transaction-apply.test.js"
       ]
     },
     "partition-write-answer-retry-classification": {

@@ -8,6 +8,8 @@ import {
   PARTITION_SERVICE_CREATE_ADMISSION_COLUMN_SQL,
   PARTITION_SERVICE_CREATE_ADMISSION_LOG_MSG,
 } from './partition-service-create-admission-migration-constants.js';
+import {PARTICIPANT_TRANSACTION_COMMAND_TYPES} from
+  './partition-participant-transaction-constants.js';
 const PARTITION_SERVICE_DEFAULT = Object.freeze({
   NODE_ID: STRING.UNKNOWN,
   MEMORY_DB_PATH: ':memory:',
@@ -187,6 +189,7 @@ const PARTITION_COMMITTED_MARKER_COMMAND_TYPES = Object.freeze([
 const PARTITION_COMMITTED_COMMAND_TYPES = Object.freeze([
   ...PARTITION_COMMITTED_SQL_COMMAND_TYPES,
   ...PARTITION_COMMITTED_MARKER_COMMAND_TYPES,
+  ...PARTICIPANT_TRANSACTION_COMMAND_TYPES,
 ]);
 
 // The reason a group's host failure names when a committed entry carries a
@@ -206,6 +209,7 @@ const PARTITION_COMMITTED_COMMAND_OUTCOME = Object.freeze({
   STATEMENT_FAILED: 'statement_failed',
   STATEMENT_ENVIRONMENT_FAILED: 'statement_environment_failed',
   UNRECOGNISED: 'unrecognised',
+  RESERVED_REFUSED: 'reserved_refused',
 });
 
 // The typed error codes of the committed-entry application and of partition

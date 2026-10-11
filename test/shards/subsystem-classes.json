@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 146,
     "solver-tooling": 7,
-    "storage-partition": 171,
+    "storage-partition": 172,
     "storage-raft": 119,
     "test-infrastructure": 143,
     "transactions": 16,
     "transport-messaging": 95,
     "wasm-toolchain": 57
   },
-  "censusSize": 2334,
-  "digest": "fnv1a32-fe99f988",
+  "censusSize": 2335,
+  "digest": "fnv1a32-6bdf2ee1",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-73d457d9",
+  "observationDigest": "fnv1a32-16112bd2",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1264,6 +1264,7 @@
     "test/partition/partition-descriptor-epoch-contract.test.js": "storage-partition",
     "test/partition/partition-leader-row-publication-integrity.test.js": "storage-partition",
     "test/partition/partition-legacy-consensus-state.test.js": "storage-partition",
+    "test/partition/partition-participant-transaction-apply.test.js": "storage-partition",
     "test/partition/partition-peer-cache-identity-record.test.js": "storage-partition",
     "test/partition/partition-port-refusal-outcomes.test.js": "storage-partition",
     "test/partition/partition-raft-storage.test.js": "storage-partition",
@@ -8447,6 +8448,7 @@
     },
     "test/partition/durable-replay-cursor.test.js": {
       "files": [
+        "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-service-core-base.js",
         "src/raft/raft-operation-port.js",
         "src/raft/raft-rs-ready-loop-constants.js"
@@ -8549,6 +8551,20 @@
         "src/partition/partition-raft-storage.js"
       ]
     },
+    "test/partition/partition-participant-transaction-apply.test.js": {
+      "files": [
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
     "test/partition/partition-port-refusal-outcomes.test.js": {
       "files": [
         "src/config/configuration-manager.js",
@@ -8637,6 +8653,7 @@
     "test/partition/partition-service-hlc-monotonicity.test.js": {
       "files": [
         "src/partition/partition-hlc-warmup.js",
+        "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-service-constants.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port.js",
@@ -8776,6 +8793,7 @@
       "files": [
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-mirror-replay-cursor.js",
+        "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-write-kernel.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
@@ -8814,6 +8832,7 @@
     },
     "test/partition/partition-transaction.property.test.js": {
       "files": [
+        "src/partition/partition-participant-transaction-request.js",
         "src/raft/raft-operation-port.js"
       ]
     },
@@ -8924,6 +8943,7 @@
     },
     "test/partition/retiring-source-resume-refusal.test.js": {
       "files": [
+        "src/partition/partition-participant-transaction-request.js",
         "src/raft/raft-operation-port.js",
         "test/partition/partition-rs-raft-restart-fixture.js"
       ]

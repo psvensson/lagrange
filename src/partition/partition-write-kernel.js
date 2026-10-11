@@ -6,6 +6,8 @@ import {RAFT_RS_PERSISTENCE_ADMISSION} from
   '../raft/raft-rs-durable-store-constants.js';
 import {PARTITION_COMMITTED_COMMAND_ERROR_CODE} from
   './partition-service-constants.js';
+import {PARTICIPANT_TRANSACTION_COMMAND_TYPES} from
+  './partition-participant-transaction-constants.js';
 import {PARTITION_SETTLED_REPLAY} from
   './partition-committed-statement-outcome-constants.js';
 import {
@@ -34,7 +36,10 @@ const PARTITION_WRITE_COMMIT_MODE = Object.freeze({
 // it was handed over. CONSENSUS_HOST_FAILURE is not a code the kernel
 // answers with: it names the cause of the unknown outcome of a write whose
 // proposal the port's host failed (outcomeUnknownAnswer); its retirement is
-// the owner's open decision.
+// the owner's open decision. RESERVED: the write committed and met a prepared
+// participant transaction's reservation when it applied - consumed without
+// effect and its entry key left unsettled (TX1 design 4), so it is retried
+// and applies once the decision has applied.
 const PARTITION_WRITE_LEADERSHIP_REFUSAL = Object.freeze({
   NOT_LEADER: 'partition_write_not_leader',
   CONSENSUS_RECOVERY_REQUIRED: 'partition_write_consensus_recovery_required',
@@ -45,6 +50,7 @@ const PARTITION_WRITE_LEADERSHIP_REFUSAL = Object.freeze({
   BACKPRESSURE: 'partition_write_backpressure',
   SERVICE_SHUTDOWN: 'partition_write_service_shutdown',
   COMMIT_DEADLINE_EXCEEDED: 'partition_write_commit_deadline_exceeded',
+  RESERVED: 'partition_write_reserved',
 });
 const REFUSAL = PARTITION_WRITE_LEADERSHIP_REFUSAL;
 
@@ -70,6 +76,7 @@ const RETRYABLE_WRITE_FAILURE_CODES = Object.freeze([
   REFUSAL.BACKPRESSURE,
   REFUSAL.SERVICE_SHUTDOWN,
   REFUSAL.COMMIT_DEADLINE_EXCEEDED,
+  REFUSAL.RESERVED,
 ]);
 
 // Why pending writes are released without an answer from consensus: their
@@ -514,8 +521,12 @@ function buildPartitionWriteFailureResult(error, partitionId, logIndex = null) {
   return result;
 }
 
+// A participant transaction command has none of a write's side effects: it is
+// not mirrored (TX1 design 8.1), and its decision's CDC events and size update
+// are its own apply's (partition-participant-transaction-apply.js).
 function buildPartitionWriteSideEffectPlan(entry, executionResult) {
-  if (executionResult?.success !== true) {
+  if (executionResult?.success !== true ||
+      PARTICIPANT_TRANSACTION_COMMAND_TYPES.includes(entry?.type)) {
     return Object.freeze({
       emitCdcEntry: null,
       splitReplicationEntry: null,

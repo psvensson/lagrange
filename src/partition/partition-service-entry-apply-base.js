@@ -30,6 +30,12 @@ import {
   pickTypedWriteAnswer,
 } from './partition-write-kernel.js';
 import {runCommittedPartitionStatement} from './partition-statement-admission.js';
+import {advancePartitionWriteGeneration, isPartitionReserved} from
+  './partition-participant-transaction-store.js';
+import {applyCommittedTransactionCommand, settleReservedCommittedStatement} from
+  './partition-participant-transaction-apply.js';
+import {refuseParticipantSessionQuery, routeParticipantTransactionRequest} from
+  './partition-participant-transaction-request.js';
 
 const QUERY_RESULT_REQUEST_FIELD = Object.freeze({
   DEADLINE_MS: 'resultDeadlineMs',
@@ -397,11 +403,10 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       Math.floor(payload.transactionEpoch) :
       null;
     try {
-      const result = await this.executeTransactionControl(
-        operation,
-        sessionId,
-        transactionEpoch,
-      );
+      // A request carrying a transactionId is the participant protocol's, and
+      // no legacy BEGIN stages while a participant transaction is in flight.
+      const result = await (routeParticipantTransactionRequest(this, payload) ??
+        this.executeTransactionControl(operation, sessionId, transactionEpoch));
       if (!result) {
         return {
           acknowledged: false,
@@ -726,6 +731,8 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         partitionId: this.partitionId,
       };
     }
+    const sealedSession = refuseParticipantSessionQuery(this, payload);
+    if (sealedSession !== null) return sealedSession;
     const readAuthorityWitness =
       this.buildRemoteReadAuthorityWitness(isWriteOperation);
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.HANDLING_REMOTE_QUERY, {
@@ -1027,6 +1034,10 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
           return settleRecordedCommittedStatement(this, {
             recorded, command, afterCommit});
         }
+        // A PREPARED participant transaction holds every other statement.
+        if (isPartitionReserved(this.db)) {
+          return settleReservedCommittedStatement(this, {command, afterCommit});
+        }
         let info;
         try {
           info = runCommittedPartitionStatement(this, command);
@@ -1044,6 +1055,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
           term,
           result: info,
         });
+        advancePartitionWriteGeneration(this.db);
         if (command.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE) {
           afterCommit(() => this.registerMigrationDefaultFromAlterSql(command.sql));
         }
@@ -1072,23 +1084,11 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
           }
         });
       }
-    } else if (
-      command.type === PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT
-    ) {
-      this.recordTransactionCommitOutcome(
-        command.sessionId,
-        command.transactionEpoch,
-      );
-      scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, () => {
-        this.logger.debug(PARTITION_SERVICE_LOG_MSG.TRANSACTION_COMMIT_APPLIED, {
-          partitionId: this.partitionId,
-          operationCount: command.operations?.length || 0,
-        });
-        this.resolveCommittedWrite(command.entryId, {
-          success: true,
-          partitionId: this.partitionId,
-        });
-      });
+    } else {
+      // A transaction command (participant, or a legacy marker): its owner.
+      return applyCommittedTransactionCommand(this, {command, index, term,
+        afterCommit: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, effect),
+        afterRollback: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, effect)});
     }
     scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, () =>
       this.emit(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, {
@@ -1096,12 +1096,9 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         command,
       }),
     );
-    // A statement or a transaction outcome was applied; a marker (or a write
-    // type without a statement) is recorded in the log only.
-    return commandType === PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT ||
-      (isCommittedSqlCommandType(commandType) &&
-        Boolean(command.sql)) ?
-      PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED :
+    // A statement was applied; a write type without a statement is recorded
+    // in the log only.
+    return command.sql ? PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED :
       PARTITION_COMMITTED_COMMAND_OUTCOME.RECORDED_ONLY;
   }
 }
