@@ -9,6 +9,8 @@ import {answerParticipantTransactionRequest} from
   '../test-helpers/participant-protocol-double.js';
 import {participantSetTextOf} from
   '../../src/query/distributed/distributed-transaction-participant-manifest.js';
+import {transactionRecoveryAuthorityCandidate} from
+  '../../src/query/distributed/distributed-transaction-recovery-authority.js';
 import {
   isParticipantTransactionAnswer,
   preparedEvidenceOf,
@@ -23,6 +25,30 @@ const deferred = () => {
 const ticks = async () => {
   for (let i = 0; i < 40; i += 1) await Promise.resolve();
 };
+
+function isInitialTransactionInsert(mutation) {
+  return mutation.operation === 'insert' &&
+    mutation.tableName === 'sql_transactions';
+}
+
+function advancedWithoutProgressRow(mutation, recordedCommit) {
+  const transactionId = mutation.row.transaction_id;
+  const participantSetText = participantSetTextOf(transactionId, ['p1']);
+  const decision = recordedCommit ? buildTransactionDecisionRecord({
+    transactionId,
+    participants: new Map([['p1', {partitionId: 'p1', ...evidence}]]),
+  }, 'COMMIT') : null;
+  return {...mutation.row,
+    status: recordedCommit ? 'COMMITTING' : 'ACTIVE',
+    participant_set_state: recordedCommit ? 'FROZEN' : 'OPEN',
+    participant_set_text: participantSetText,
+    commit_mode: recordedCommit ? 'TWO_PHASE_COMMIT' : 'NOT_SELECTED',
+    frozen_participant_count: recordedCommit ? 1 : 0,
+    decision: decision?.decision ?? null,
+    decision_text: decision?.decisionText ?? null,
+    decision_digest: decision?.decisionDigest ?? null,
+    updated_at: mutation.row.updated_at + 1};
+}
 
 test('review R2-A: exact old COMMIT cannot commit newer session transaction', async ()=>{
   const writes=[];
@@ -358,15 +384,16 @@ test('C56-6: matching advanced readback is left to durable recovery without ' +
   const begun = await engine.executeQuery('BEGIN', [], {sessionId: 'advanced'});
   await commitEntered.promise;
   const before = gateway.rows('sql_transactions');
-  const heldAfterBegin = engine.transactionCoordinator.getTransaction('advanced');
+  const held = engine.transactionCoordinator.workflowCoordinator
+    .getWorkflowById(insertedId);
+  const heldAfterBegin = held && [held.transactionId, held.status];
   releaseCommit.resolve();
   const replay = await engine.waitForDistributedTransactionRecoveryReplay();
   const after = gateway.rows('sql_transactions');
   const participantAfter = gateway.rows('sql_transaction_participants')[0];
   assert.deepEqual({beginSuccess: begun.success,
     beginError: begun.errorCode, insertedId,
-    heldAfterBegin: heldAfterBegin && [heldAfterBegin.transactionId,
-      heldAfterBegin.status],
+    heldAfterBegin,
     rowsBefore: before.map((row) => [row.transaction_id, row.status, row.decision,
       row.frozen_participant_count]),
     replay: {resumed: replay.resumed, failed: replay.failed},
@@ -386,6 +413,97 @@ test('C56-6: matching advanced readback is left to durable recovery without ' +
     operations: [['COMMIT', insertedId, 'COMMIT']],
     prepareCoordinates: [3, 2], inserts: 1});
 });
+
+test('advanced BEGIN handoff preserves admitted participants without progress',
+  async (_t) => {
+    async function runScenario(recordedCommit) {
+      let advancedRow = null;
+      const deliveries = [];
+      const gateway = {
+        supportsMutationSubmission: () => true,
+        async submitMutation(mutation) {
+          if (isInitialTransactionInsert(mutation)) {
+            advancedRow = advancedWithoutProgressRow(mutation, recordedCommit);
+            return {success: false, error: 'simulated lost INSERT answer'};
+          }
+          return {success: true, completionState: 'applied'};
+        },
+        async readAuthoritativeRows(tableName) {
+          if (tableName === 'sql_transactions') {
+            return {success: true, rows: advancedRow ? [{...advancedRow}] : []};
+          }
+          if (tableName === 'sql_transaction_participants') {
+            return {success: true, rows: []};
+          }
+          return {success: true, rows: []};
+        },
+      };
+      const cache = createMockSystemCache(
+        [{table_name: 'users', primaryKey: 'id'}],
+        [{partition_id: 'p1', table_name: 'users', partition_key_start: null,
+          partition_key_end: null}],
+      );
+      const router = {async deliver(address, message) {
+        const partitionId = address.split('/')[2];
+        deliveries.push(structuredClone(message));
+        return {...answerParticipantTransactionRequest(message, partitionId),
+          decisionIndex: 12, decisionTerm: 9};
+      }};
+      const engine = new SQLQueryEngine({
+        controlPlaneSystemTableGateway: gateway,
+        systemCache: cache,
+        messageRouter: router,
+      });
+      await engine.waitForDistributedTransactionRecoveryReplay();
+      const begun = await engine.executeQuery('BEGIN', [], {
+        sessionId: recordedCommit ? 'missing-progress-commit' :
+          'missing-progress-open',
+      });
+      await ticks();
+      await engine.waitForDistributedTransactionRecoveryReplay();
+      const restored = engine.transactionCoordinator.workflowCoordinator
+        .getWorkflowById(advancedRow.transaction_id);
+      await engine.shutdown();
+      return {advancedRow, begun, deliveries, restored};
+    }
+
+    const open = await runScenario(false);
+    assert.equal(open.begun.errorCode, 'TRANSACTION_RECOVERY_INCOMPLETE');
+    assert.deepEqual([...open.restored.participants.entries()].map(
+      ([partitionId, participant]) => [partitionId, participant.status]),
+    [['p1', 'FAILED']]);
+    assert.deepEqual(open.deliveries, []);
+
+    const openId = open.advancedRow.transaction_id;
+    const openTx = {transactionId: openId,
+      sessionId: open.advancedRow.session_id,
+      workflowId: openId,
+      createdAt: open.advancedRow.created_at,
+      updatedAt: open.advancedRow.updated_at};
+    const participantId = `${openId}:p1`;
+    const basePayload = {state: 'available', transaction: open.advancedRow};
+    assert.equal(transactionRecoveryAuthorityCandidate(openTx, basePayload), null,
+      'an unavailable participant page cannot certify the recovery census');
+    assert.equal(transactionRecoveryAuthorityCandidate(openTx, {...basePayload,
+      participants: [{transaction_id: 'f'.repeat(32), participant_id: participantId,
+        partition_id: 'p1'}]}), null, 'a foreign progress row is refused');
+    assert.equal(transactionRecoveryAuthorityCandidate(openTx, {...basePayload,
+      participants: [
+        {transaction_id: openId, participant_id: participantId,
+          partition_id: 'p1'},
+        {transaction_id: openId, participant_id: participantId,
+          partition_id: 'p1'},
+      ]}), null, 'duplicate progress rows are refused');
+    assert.equal(transactionRecoveryAuthorityCandidate(openTx, {...basePayload,
+      participants: [{transaction_id: openId, participant_id: participantId,
+        partition_id: 'p2'}]}), null, 'manifest-mismatched progress is refused');
+
+    const committed = await runScenario(true);
+    assert.equal(committed.begun.errorCode, 'TRANSACTION_RECOVERY_INCOMPLETE');
+    assert.deepEqual(committed.deliveries.map((message) => [message.operation,
+      message.transactionId, message.decision]),
+    [['COMMIT', committed.advancedRow.transaction_id, 'COMMIT']]);
+  });
 
 test('C56-6: BEGIN admits only the canonical recovery epoch domain before ' +
   'the first durable row write', async (t) => {

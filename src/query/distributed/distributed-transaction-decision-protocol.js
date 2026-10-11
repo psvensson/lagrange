@@ -50,6 +50,8 @@ import {reportTransactionBudgetSpent} from
   './distributed-transaction-protocol.js';
 import {completePrepareEvidenceOf} from
   './distributed-transaction-prepare-evidence.js';
+import {isPendingTransactionCreation} from
+  './distributed-transaction-creation.js';
 
 const {COMMIT, ROLLBACK} = PARTICIPANT_TRANSACTION_DECISION;
 const PREPARE_SENT_TRANSACTION_STATUS = Object.freeze(new Set([
@@ -89,6 +91,10 @@ function rolledBackCommitFailure(preparation) {
 }
 
 function endTransaction(coordinator, tx) {
+  if (isPendingTransactionCreation(tx)) {
+    coordinator.endedTransactions?.record(tx);
+    return;
+  }
   if (coordinator.transactionsBySession.get(tx.sessionId) === tx) {
     coordinator.transactionsBySession.delete(tx.sessionId);
     coordinator.endedTransactions?.record(tx);

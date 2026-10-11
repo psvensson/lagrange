@@ -7,6 +7,8 @@ import {
 const APPLICATION_DATABASE_SESSION = Symbol('applicationDatabaseSession');
 const APPLICATION_DATABASE_TRANSACTION_CONTROL =
   Symbol('applicationDatabaseTransactionControl');
+import {attachDistributedBeginConsumer} from
+  './distributed/distributed-begin-consumer.js';
 const objectCreate = Object.create;
 const objectFreeze = Object.freeze;
 const APPLICATION_STATEMENT_POLICY_ALLOW = objectFreeze({allowed: true});
@@ -21,6 +23,7 @@ function createApplicationDatabaseExecutionOptions(
   sessionId,
   transactionControl = false,
   expectedTransactionId = null,
+  beginConsumer = null,
 ) {
   const options = objectCreate(null);
   options.sessionId = sessionId;
@@ -35,6 +38,7 @@ function createApplicationDatabaseExecutionOptions(
   if (transactionControl) {
     options[APPLICATION_DATABASE_TRANSACTION_CONTROL] = true;
   }
+  attachDistributedBeginConsumer(options, beginConsumer);
   return objectFreeze(options);
 }
 
