@@ -1,0 +1,68 @@
+{
+  "utc": "2026-10-11T22:05:05.455527+00:00",
+  "namespace": "refs/heads/checkpoint/rs-raft-preservation-20261011T220505Z",
+  "mainBefore": "878eb8ac059dab71deae5feb0fa88e0c5c610c93",
+  "newRefs": {
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T220505Z/tx1-owner-wip": "6f41c7ca71546717d54ae5428bbad8a9d7d247b5",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T220505Z/freshmg-wip": "3df5d9e3daf11e8e287cdec647005804312c7d28",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T220505Z/cdc-wip": "521717e5aae95b6b06050e5ee355dc3aec0b9de2"
+  },
+  "coverage": {
+    "tx1-owner-wip": {
+      "status": "NEW_SNAPSHOT_PENDING_PUSH",
+      "sha": "6f41c7ca71546717d54ae5428bbad8a9d7d247b5",
+      "ref": "refs/heads/checkpoint/rs-raft-preservation-20261011T220505Z/tx1-owner-wip",
+      "changedSinceRemote": "411b3515f8a88bddc320f8d48ffca9139922d4b4",
+      "changedPaths": [
+        "solve/quests/replicated-transaction-decision-and-apply/cdc-coverage-response-resource-handoff-amendment-20261011.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-ordered-replay-26dedb08-durable-census.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-ordered-replay-26dedb08-oracle/result.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/begin-resource-round9-independent-92b86663/diagnostics-manifest.sha256",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/begin-resource-round9-independent-92b86663/diagnostics.tar.gz",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/begin-resource-round9-independent-92b86663/retention.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/begin-resource-round9-independent-92b86663/review-begin-uncertain-design-round9-independent.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/design-freeze-b4b0294f/cdc-coverage-response-resource-handoff-amendment-20261011.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/design-freeze-b4b0294f/retention.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T215731Z/activation-startup-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T215731Z/caller-states-after-capture.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T215731Z/caller-states-after-push.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T215731Z/caller-states-before.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T215731Z/candidate.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T215731Z/cdc-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T215731Z/coordinator-fixtures-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T215731Z/freshmg-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T215731Z/original-staged.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T215731Z/push-attempt.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T215731Z/push-plan.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T215731Z/query-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T215731Z/recovery-foundation.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T215731Z/remote-receipt.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T215731Z/remote-refs.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T215731Z/startup-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T215731Z/tx1-owner-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/log.ndjson"
+      ]
+    },
+    "freshmg-wip": {
+      "status": "NEW_SNAPSHOT_PENDING_PUSH",
+      "sha": "3df5d9e3daf11e8e287cdec647005804312c7d28",
+      "ref": "refs/heads/checkpoint/rs-raft-preservation-20261011T220505Z/freshmg-wip",
+      "changedSinceRemote": "4a30d6168971e06ecbf602c743863964b936eca6",
+      "changedPaths": [
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-ordered-replay-26dedb08-durable-census.json",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-ordered-replay-26dedb08-oracle/result.json"
+      ]
+    },
+    "cdc-wip": {
+      "status": "NEW_SNAPSHOT_PENDING_PUSH",
+      "sha": "521717e5aae95b6b06050e5ee355dc3aec0b9de2",
+      "ref": "refs/heads/checkpoint/rs-raft-preservation-20261011T220505Z/cdc-wip",
+      "changedSinceRemote": "663e4153da51cdcbb45844974e0fe13bd6d4ad71",
+      "changedPaths": [
+        "solve/quests/replicated-transaction-decision-and-apply/cdc-coverage-response-resource-handoff-amendment-20261011.md"
+      ]
+    }
+  },
+  "callerStatesVerified": true,
+  "preservationOnly": true
+}

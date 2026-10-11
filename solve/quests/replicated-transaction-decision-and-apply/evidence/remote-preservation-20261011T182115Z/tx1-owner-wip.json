@@ -1,0 +1,11 @@
+{
+  "worktree": "/mnt/data/peter/projects/.worktrees/tx1-work-20261010",
+  "worktreeHead": "e7c89f4b5114c0238312d3831b65889a4622f4e9",
+  "base": "e7c89f4b5114c0238312d3831b65889a4622f4e9",
+  "snapshot": "c4804834c2f194ef86a72ca3f61f2f9fe718ffe4",
+  "tree": "b621e3f0e5efaed9d36047566c683e07fb08ee95",
+  "remoteRef": "refs/heads/checkpoint/rs-raft-preservation-20261011T182115Z/tx1-owner-wip",
+  "callerStatePreserved": true,
+  "callerIndexSha256": "775ee49801a0c92172acb5193f4bc0f20a1e130ff472696e391d53e944109e67",
+  "status": "Preservation only; no additional review or readiness approval"
+}
