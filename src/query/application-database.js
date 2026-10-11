@@ -26,6 +26,10 @@ import {
 } from './application-database-result.js';
 import {COMMIT_POINT_REACHED_FIELD} from
   './distributed/distributed-transaction-commit-point.js';
+import {
+  DISTRIBUTED_BEGIN_CONSUMER_KIND,
+  createDistributedBeginConsumer,
+} from './distributed/distributed-begin-consumer.js';
 
 const LOCAL_STR_BEGIN = 'BEGIN';
 const LOCAL_STR_COMMIT = 'COMMIT';
@@ -187,6 +191,14 @@ async function executeCanonical(sqlCore, sql, params, options, operation,
       thrown,
       operation,
       projectEngineFailureCause(thrown),
+    );
+  }
+  if (operation === LOCAL_STR_BEGIN_OPERATION && result?.success === true &&
+      typeof sqlCore.acceptDistributedBeginForConsumer === 'function' &&
+      sqlCore.acceptDistributedBeginForConsumer(options, result) !== true) {
+    throw createApplicationDatabaseError(
+      APPLICATION_DATABASE_ERROR_CODE.QUERY_FAILED,
+      APPLICATION_DATABASE_ERROR_MSG.QUERY_FAILED,
     );
   }
   if (readOwnData(result, FAILURE_METADATA_PROPERTY.SUCCESS) !== true) {
@@ -525,9 +537,15 @@ function createApplicationDatabaseFacade(options) {
       tail: reflectApply(promiseResolve, PromiseConstructor, []),
       transactionId: null,
     };
+    record.beginConsumer = createDistributedBeginConsumer(
+      DISTRIBUTED_BEGIN_CONSUMER_KIND.APPLICATION,
+      record.sessionId,
+    );
     const controlOptions = createApplicationDatabaseExecutionOptions(
       record.sessionId,
       true,
+      null,
+      record.beginConsumer,
     );
     try {
       record.transactionId = await executeCanonical(
@@ -592,6 +610,12 @@ function createApplicationDatabaseFacade(options) {
       }
     } finally {
       record.state = APPLICATION_DATABASE_TRANSACTION_STATE.CLOSED;
+      if (typeof sqlCore.retireDistributedBeginConsumer === 'function') {
+        sqlCore.retireDistributedBeginConsumer(
+          record.sessionId,
+          record.beginConsumer,
+        );
+      }
       release();
     }
   }

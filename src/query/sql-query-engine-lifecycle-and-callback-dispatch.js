@@ -5,6 +5,14 @@ import {
 import {initializeSqlQueryEngineInstance} from
   './sql-query-engine-instance-initializer.js';
 import {
+  activateSqlQueryEngineTransactionRecovery,
+  setSqlQueryEngineMigrationCoordinator,
+  setSqlQueryEngineMigrationPipeline,
+  setSqlQueryEngineSystemCache,
+  shutdownSqlQueryEngineLifecycle,
+} from
+  './sql-query-engine-lifecycle-methods.js';
+import {
   buildPartitionReadFailureHostResult,
   mergePartitionReadFailuresIntoHostResult,
 } from './callback/partition-callback-dispatcher.js';
@@ -32,8 +40,6 @@ const {
   EXECUTION_MODE,
   LoggingService,
   MODULE_MANIFEST_LOOKUP_BY_ARTIFACT_POINTER_SQL,
-  MigrationCoordinator,
-  MigrationPipeline,
   NATIVE_CALLBACK_EXPORTS_ARG,
   NATIVE_CALLBACK_MODULE_ARG,
   NATIVE_CALLBACK_RETURN_LINE,
@@ -110,14 +116,6 @@ function resolveCallbackRuntimeRegistry(engine, sqlRequest, wasmExecutor) {
   return callbackRuntimeRegistry;
 }
 
-function resumeDurableProvisioningWork(engine) {
-  void engine.tableCreationService.resumeDurableProvisioningJobs?.()
-    .catch((error) => engine.logger.warn(
-      QUERY_LOG_MSG.SCHEMA_PROVISIONING_RECOVERY_DEFERRED,
-      {error: error.message},
-    ));
-}
-
 class SQLQueryEngineLifecycleAndCallbackDispatch {
   constructor(options = {}) {
     initializeSqlQueryEngineInstance(this, options);
@@ -140,61 +138,12 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
     return console;
   }
 
-  /**
-   * Set the system cache.
-   * @param {Object} cache - System table cache.
-   */
   setSystemCache(cache) {
-    this.systemCache = cache;
-    this.partitionResolver.setSystemCache(cache);
-    this.tableCreationService.setSystemCache(cache);
-    this.queryExecutor.setSystemCache(cache);
-    if (this.migrationCoordinator) {
-      this.migrationCoordinator.systemTableCache = cache;
-    } else if (cache && this.migrationAutoWireEnabled) {
-      this.migrationCoordinator = new MigrationCoordinator({
-        sqlCore: this,
-        systemTableCache: cache,
-        transactionCoordinator: this.transactionCoordinator,
-        logger: this.logger,
-        now: this.nowFn,
-      });
-      if (!this.migrationPipeline) {
-        this.migrationPipeline = new MigrationPipeline({
-          migrationCoordinator: this.migrationCoordinator,
-          logger: this.logger,
-        });
-      }
-    }
-    if (this.distributedTransactionRecoveryActivated) {
-      void this.activateDistributedTransactionRecovery({
-        resetRecoveryState: true,
-      });
-    }
+    setSqlQueryEngineSystemCache(this, cache);
   }
 
-  /**
-   * Activate distributed transaction recovery replay and periodic sweeps.
-   * Joining nodes use this to defer replay until the READY cutover completes.
-   *
-   * @param {Object} [options]
-   * @param {boolean} [options.resetRecoveryState=true] - When true, reload the
-   *   recovered coordinator view from the latest system-cache snapshot.
-   * @return {Promise<Object>} Replay summary.
-   */
   activateDistributedTransactionRecovery(options = {}) {
-    this.distributedTransactionRecoveryActivated = true;
-    const resetRecoveryState = options.resetRecoveryState !== false;
-    if (resetRecoveryState) {
-      this.transactionStateRecovered = false;
-    }
-    this.recoverDistributedTransactionStateFromCache();
-    const replayPromise = this.resumeRecoveredDistributedTransactions();
-    resumeDurableProvisioningWork(this);
-    if (typeof this.transactionCoordinator.startRecoverySweep === LOCAL_STR_FUNCTION) {
-      this.transactionCoordinator.startRecoverySweep();
-    }
-    return replayPromise;
+    return activateSqlQueryEngineTransactionRecovery(this, options);
   }
 
   /**
@@ -280,70 +229,16 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
     this.tableCreationService.setPartitionSplitMergeManager(manager);
   }
 
-  /**
-   * Set schema migration pipeline.
-   * @param {Object|null} pipeline - Migration pipeline adapter.
-   */
   setMigrationPipeline(pipeline) {
-    this.migrationPipeline = pipeline || null;
+    setSqlQueryEngineMigrationPipeline(this, pipeline);
   }
 
-  /**
-   * Set schema migration coordinator owner.
-   * @param {Object|null} coordinator - Migration coordinator owner.
-   */
   setMigrationCoordinator(coordinator) {
-    this.migrationCoordinator = coordinator || null;
-    if (
-      !this.migrationPipeline &&
-      this.migrationAutoWireEnabled &&
-      this.migrationCoordinator
-    ) {
-      this.migrationPipeline = new MigrationPipeline({
-        migrationCoordinator: this.migrationCoordinator,
-        logger: this.logger,
-      });
-    }
+    setSqlQueryEngineMigrationCoordinator(this, coordinator);
   }
 
-  /**
-   * Shutdown lifecycle-owned query services.
-   * @return {Promise<void>}
-   */
   async shutdown() {
-    // Abort in-flight query retry loops so they stop re-arming backoff timers
-    // (otherwise a query retrying a torn-down cluster keeps the loop alive).
-    if (
-      this.queryExecutor &&
-      typeof this.queryExecutor.markShuttingDown === LOCAL_STR_FUNCTION
-    ) {
-      this.queryExecutor.markShuttingDown();
-    }
-    if (
-      this.servicePartitionAccessPublisher &&
-      typeof this.servicePartitionAccessPublisher.stop === LOCAL_STR_FUNCTION
-    ) {
-      this.servicePartitionAccessPublisher.stop();
-    }
-    if (
-      this.transactionCoordinator &&
-      typeof this.transactionCoordinator.stopRecoverySweep === LOCAL_STR_FUNCTION
-    ) {
-      this.transactionCoordinator.stopRecoverySweep();
-    }
-    if (
-      this.tableCreationService &&
-      typeof this.tableCreationService.shutdown === LOCAL_STR_FUNCTION
-    ) {
-      await this.tableCreationService.shutdown();
-    }
-    if (
-      this.runtimeReplicaStateProjectionOwner &&
-      typeof this.runtimeReplicaStateProjectionOwner.shutdown ===
-        LOCAL_STR_FUNCTION
-    ) {
-      this.runtimeReplicaStateProjectionOwner.shutdown();
-    }
+    await shutdownSqlQueryEngineLifecycle(this);
   }
 
   /**
@@ -426,7 +321,10 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
     if (!lifecycle || typeof lifecycle.setQueryExecutorFactory !== LOCAL_STR_FUNCTION) {
       return;
     }
+    const executorsByServiceId = new Map();
     lifecycle.setQueryExecutorFactory((serviceId) => {
+      const existing = executorsByServiceId.get(serviceId);
+      if (existing) return existing;
       const queryExecutor = async (sql, params) =>
         this.executeQuery(sql, params, {
           sessionId: serviceId,
@@ -442,12 +340,21 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
         });
       queryExecutor.executeRequest = (request) =>
         this.executeRequest(request, {issuingServiceId: serviceId});
+      queryExecutor.acceptDistributedBeginForConsumer = (options, result,
+        enterLocalBlock) => this.acceptDistributedBeginForConsumer(
+        options,
+        result,
+        enterLocalBlock,
+      );
+      queryExecutor.retireDistributedBeginConsumer = (sessionId, consumer) =>
+        this.retireDistributedBeginConsumer(sessionId, consumer);
       queryExecutor.getRuntimeAccessPolicy = () =>
         this.runtimeAccessPolicyOwner?.getRuntimePolicy(serviceId) ||
         Promise.resolve(Object.freeze({
           status: RUNTIME_ACCESS_POLICY_DENIED_STATUS,
           reason: RUNTIME_ACCESS_POLICY_OWNER_UNAVAILABLE,
         }));
+      executorsByServiceId.set(serviceId, queryExecutor);
       return queryExecutor;
     });
   }

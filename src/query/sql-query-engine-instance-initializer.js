@@ -265,6 +265,12 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
         engine.loadDistributedTransactionRecoveryState(),
       retainAdvancedTransactionReadback: (row) =>
         engine.retainAdvancedDistributedTransactionReadback(row),
+      maxUncertainTransactionCreations:
+        options.maxUncertainTransactionCreations,
+      maxUncertainTransactionCreationCanonicalBytes:
+        options.maxUncertainTransactionCreationCanonicalBytes,
+      maxUncertainCreationSweepPerTurn:
+        options.maxUncertainCreationSweepPerTurn,
     });
   engine.managedSplitWorkflow = options.managedSplitWorkflow || null;
 

@@ -27,6 +27,10 @@ import {
   TRANSACTION_STATUS,
   WRITE_OPERATION_STATUS,
 } from './distributed-transaction-coordinator-constants.js';
+import {TRANSACTION_CREATION_STATE} from
+  './distributed-transaction-creation-contract.js';
+import {reconcileTransactionCreationOwned} from
+  './distributed-transaction-creation.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
@@ -242,13 +246,26 @@ const distributedTransactionRecoveryMethods = {
         }
       }
 
-      const stuckTransactions = Array.from(
+      const allTransactions = Array.from(
         this.workflowCoordinator.workflowsById.values(),
-      ).filter(
-        (tx) =>
-          tx.recoveryDiscovered || (!TERMINAL_TRANSACTION_STATUS.has(tx.status) &&
-            this.isTransactionBudgetExceeded(tx)),
       );
+      const uncertainCreations = allTransactions.filter((tx) =>
+        tx.transactionCreationState &&
+        tx.transactionCreationState !==
+          TRANSACTION_CREATION_STATE.ENTERED_ACTIVE)
+        .sort((left, right) => left.transactionId.localeCompare(
+          right.transactionId,
+        ))
+        .slice(0, this.maxUncertainCreationSweepPerTurn);
+      const uncertainIds = new Set(uncertainCreations.map((tx) => tx.workflowId));
+      const stuckTransactions = [...uncertainCreations, ...allTransactions.filter(
+        (tx) =>
+          !uncertainIds.has(tx.workflowId) && (
+            tx.recoveryDiscovered ||
+            (!TERMINAL_TRANSACTION_STATUS.has(tx.status) &&
+              this.isTransactionBudgetExceeded(tx))
+          ),
+      )];
       const results = [];
       let deferred = 0;
 
@@ -261,6 +278,17 @@ const distributedTransactionRecoveryMethods = {
             async () => {
               if (!tx.recoveryDiscovered && TERMINAL_TRANSACTION_STATUS.has(tx.status)) {
                 protocolResult = {success: true};
+                return;
+              }
+              if (tx.transactionCreationState &&
+                  tx.transactionCreationState !==
+                    TRANSACTION_CREATION_STATE.ENTERED_ACTIVE) {
+                sweepPath = QUERY_OPERATION.BEGIN_TRANSACTION;
+                protocolResult = await reconcileTransactionCreationOwned(
+                  this,
+                  tx,
+                  tx.transactionCreationConsumer || null,
+                );
                 return;
               }
               const redriven = await redriveRecoveredTransaction(this, tx);

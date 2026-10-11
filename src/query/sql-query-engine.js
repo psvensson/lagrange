@@ -1,9 +1,5 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {
-  STATEMENT_ADMISSION,
-  admitExpectedTransaction,
-} from './sql-query-engine-statement-admission.js';
-import {
   classifySystemPartition,
 } from '../bootstrap/system-partition-classification.js';
 import {SQLQueryEngineWriteExecution} from './sql-query-engine-write-execution.js';
@@ -20,6 +16,10 @@ import {
   participantFailureOf,
   participantTransactionRequestOf,
 } from './sql-query-engine-participant-wire.js';
+import {
+  distributedBeginAcceptanceOf,
+  distributedBeginConsumerOf,
+} from './distributed/distributed-begin-consumer.js';
 
 const LOCAL_STR_SHA1 = 'sha1';
 const LOCAL_STR_HEX = 'hex';
@@ -93,6 +93,21 @@ function buildPriorityControlPlaneTransactionDeliveryIdentity({
 }
 
 class SQLQueryEngine extends SQLQueryEngineWriteExecution {
+  acceptDistributedBeginForConsumer(options, result, enterLocalBlock) {
+    return this.transactionCoordinator.acceptDistributedBegin(
+      distributedBeginConsumerOf(options),
+      distributedBeginAcceptanceOf(result),
+      enterLocalBlock,
+    );
+  }
+
+  retireDistributedBeginConsumer(sessionId, consumer) {
+    this.transactionCoordinator.retireDistributedBeginConsumer(
+      sessionId,
+      consumer,
+    );
+  }
+
   /**
    * Persist a distributed write operation not associated with a transaction.
    * @param {Object} writePlan - DistributedWritePlan.
@@ -215,11 +230,7 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
    * @private
    */
   async handleAdmittedBegin(sessionId, options = {}) {
-    const admission = admitExpectedTransaction(this.transactionCoordinator,
-      sessionId, options.expectedTransactionId);
-    return admission.state === STATEMENT_ADMISSION.REFUSED ?
-      admission.failure :
-      this.handleBeginTransaction(sessionId, options);
+    return this.handleBeginTransaction(sessionId, options);
   }
 
   /**

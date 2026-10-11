@@ -596,6 +596,8 @@ class PgWireProtocolHandler {
 
     await this._executeAndSend(admission.statement, []);
 
+    if (this._phase === HANDLER_PHASE.CLOSED ||
+        !this._session || this._session.isClosed()) return;
     this._socket.write(
       buildReadyForQuery(this._session.getTransactionState()),
     );
@@ -662,8 +664,21 @@ class PgWireProtocolHandler {
       const notice = takeTransactionEndNotice(this._session, statementType);
       if (notice) this._socket.write(notice);
       this._socket.write(buildCommandComplete(tag));
-
-      this._applyTransactionOutcome(statementType, result);
+      if (statementType === AST_TYPE.BEGIN_TRANSACTION &&
+          typeof this._adapter.acceptDistributedBegin === 'function') {
+        const accepted = this._adapter.acceptDistributedBegin(
+          this._session.sessionId,
+          result,
+          (transactionId) => this._session.enterTransaction(transactionId),
+        );
+        if (accepted !== true) {
+          this._socket.destroy();
+          this.destroy();
+          return;
+        }
+      } else {
+        this._applyTransactionOutcome(statementType, result);
+      }
     } catch (err) {
       this._answerFailure(err, stateBefore);
     }

@@ -10,6 +10,10 @@ import {
   REQUEST_CELL_ROUTE_ERROR_CODE,
   RequestCellRoutingError,
 } from '../service/request-cell-routing-contract.js';
+import {distributedBeginConsumerOf} from
+  '../query/distributed/distributed-begin-consumer.js';
+import {QUERY_ERROR_CODE, QUERY_ERROR_MSG} from
+  '../query/query-constants.js';
 
 const CURRENT_SQL_REQUEST_EXECUTOR_UNAVAILABLE =
   'current SQL request executor is unavailable';
@@ -51,18 +55,88 @@ function createRequestCellInvocationOwner(deps) {
       definition.service_id ?? replicaServiceId;
   }
 
-  function executeWithCurrentSqlRequestExecutor(
-    owner,
-    issuingServiceIdentity,
-    request,
-  ) {
-    const currentQueryExecutor = owner._queryExecutorFactory?.(
-      issuingServiceIdentity,
+  function retireReplacedBeginOwner(binding) {
+    binding.executor.retireDistributedBeginConsumer?.(
+      binding.consumer.sessionId,
+      binding.consumer,
     );
-    if (typeof currentQueryExecutor?.executeRequest !== 'function') {
+    return {
+      success: false,
+      error: QUERY_ERROR_MSG.TRANSACTION_CREATION_UNCERTAIN,
+      errorCode: QUERY_ERROR_CODE.TRANSACTION_CREATION_UNCERTAIN,
+      transactionId: binding.transactionId,
+      retryable: true,
+    };
+  }
+
+  function requireCurrentQueryExecutor(owner, issuingServiceIdentity) {
+    const current = owner._queryExecutorFactory?.(issuingServiceIdentity);
+    if (typeof current?.executeRequest !== 'function') {
       throw new Error(CURRENT_SQL_REQUEST_EXECUTOR_UNAVAILABLE);
     }
-    return currentQueryExecutor.executeRequest(request);
+    return current;
+  }
+
+  function bindBeginConsumer(beginOwnerByConsumer, consumer, current) {
+    if (!consumer) return null;
+    const retained = beginOwnerByConsumer.get(consumer);
+    if (retained) return retained;
+    const binding = {consumer, executor: current, transactionId: null};
+    beginOwnerByConsumer.set(consumer, binding);
+    return binding;
+  }
+
+  function retainBeginTransactionId(binding, result) {
+    if (binding && typeof result?.transactionId === 'string') {
+      binding.transactionId = result.transactionId;
+    }
+  }
+
+  function buildCurrentSqlRequestExecutor(owner, issuingServiceIdentity) {
+    const beginOwnerByConsumer = new WeakMap();
+    const executeRequest = async (request) => {
+      const current = requireCurrentQueryExecutor(
+        owner,
+        issuingServiceIdentity,
+      );
+      const consumer = distributedBeginConsumerOf(request);
+      const binding = bindBeginConsumer(
+        beginOwnerByConsumer,
+        consumer,
+        current,
+      );
+      if (binding && binding.executor !== current) {
+        return retireReplacedBeginOwner(binding);
+      }
+      const result = await current.executeRequest(request);
+      retainBeginTransactionId(binding, result);
+      return result;
+    };
+    executeRequest.acceptDistributedBeginForConsumer = (options, ...args) => {
+      const consumer = distributedBeginConsumerOf(options);
+      const binding = consumer ? beginOwnerByConsumer.get(consumer) : null;
+      const current = owner._queryExecutorFactory?.(issuingServiceIdentity);
+      if (!binding || binding.executor !== current) {
+        if (binding) retireReplacedBeginOwner(binding);
+        return false;
+      }
+      const accepted = binding.executor.acceptDistributedBeginForConsumer?.(
+        options,
+        ...args,
+      ) === true;
+      if (accepted) beginOwnerByConsumer.delete(consumer);
+      return accepted;
+    };
+    executeRequest.retireDistributedBeginConsumer = (sessionId, consumer) => {
+      const binding = beginOwnerByConsumer.get(consumer);
+      if (!binding) return false;
+      beginOwnerByConsumer.delete(consumer);
+      return binding.executor.retireDistributedBeginConsumer?.(
+        sessionId,
+        consumer,
+      );
+    };
+    return executeRequest;
   }
 
   function injectServiceQueryExecutor(
@@ -78,12 +152,10 @@ function createRequestCellInvocationOwner(deps) {
     const queryExecutor = owner._queryExecutorFactory(issuingServiceIdentity);
     replicaContext.queryExecutor = queryExecutor;
     if (typeof queryExecutor?.executeRequest === 'function') {
-      replicaContext.sqlRequestExecutor = (request) =>
-        executeWithCurrentSqlRequestExecutor(
-          owner,
-          issuingServiceIdentity,
-          request,
-        );
+      replicaContext.sqlRequestExecutor = buildCurrentSqlRequestExecutor(
+        owner,
+        issuingServiceIdentity,
+      );
     }
     owner.emit(
       QUERY_EXECUTOR_FACTORY_EVENT.EXECUTOR_INJECTED,

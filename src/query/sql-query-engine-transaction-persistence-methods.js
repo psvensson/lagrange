@@ -30,6 +30,13 @@ import {TRANSACTION_ID_COLLISION_CODE} from
 import {PARTICIPANT_SET_STATE} from '../constants/index.js';
 import {sqlQueryEngineTransactionSetMethods} from './sql-query-engine-transaction-set-methods.js';
 import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
+import {
+  INITIAL_ROW_FIELDS,
+  TRANSACTION_CREATION_READ_STATE,
+  hasCanonicalImmutableCreationFields,
+  isCanonicalInitialRow,
+  sameImmutableCreation,
+} from './distributed/distributed-transaction-creation-contract.js';
 
 const {
   CONTROL_PLANE_MUTATION_OPERATION,
@@ -51,27 +58,6 @@ const SQL_TRANSACTION_ROW_READ_SQL = `SELECT * FROM ${TABLES.SQL_TRANSACTIONS} `
 // participant-set, commit-mode, progress, decision and updated_at may all
 // advance before a lost INSERT response is resolved by its authoritative
 // readback, so they are deliberately excluded from this identity predicate.
-const INSERTED_ROW_IMMUTABLE_FIELDS = Object.freeze([
-  'transaction_id',
-  'session_id',
-  'transaction_epoch',
-  'timeout_deadline',
-  'transaction_mode',
-  'created_at',
-]);
-const INSERTED_ROW_INITIAL_FIELDS = Object.freeze([
-  ...INSERTED_ROW_IMMUTABLE_FIELDS,
-  'status',
-  'participant_set_state',
-  'participant_set_text',
-  'commit_mode',
-  'frozen_participant_count',
-  'decision',
-  'decision_text',
-  'decision_digest',
-  'updated_at',
-]);
-
 function trimmedString(value) {
   return String(value || '').trim();
 }
@@ -88,6 +74,15 @@ function persistenceUnavailableError() {
     QUERY_ERROR_CODE.TRANSACTION_STATE_PERSISTENCE_UNAVAILABLE,
     QUERY_ERROR_MSG.TRANSACTION_STATE_PERSISTENCE_UNAVAILABLE,
   );
+}
+
+function creationUncertainError(message, readState) {
+  const error = typedPersistenceError(
+    QUERY_ERROR_CODE.TRANSACTION_CREATION_UNCERTAIN,
+    message || QUERY_ERROR_MSG.TRANSACTION_CREATION_UNCERTAIN,
+  );
+  error.creationReadState = readState;
+  return error;
 }
 
 function isPrimaryKeyCollision(result) {
@@ -109,6 +104,64 @@ function sqlTransactionRowFieldsOf(record) {
     frozen_participant_count: record.frozenParticipantCount,
     updated_at: record.updatedAt,
   };
+}
+
+function rowsMatchExactly(left, right, fields) {
+  return fields.every((field) => Object.is(left[field], right[field]));
+}
+
+function advancedCreationRecoveryError(stored) {
+  const recoveryHold = typedPersistenceError(
+    QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE,
+    QUERY_ERROR_MSG.TRANSACTION_RECOVERY_INCOMPLETE,
+  );
+  recoveryHold.advancedTransactionRow = Object.freeze({...stored});
+  return recoveryHold;
+}
+
+function validateCreationReadbackMutableFields(row) {
+  return typeof row.status === LOCAL_STR_STRING && row.status.length > 0 &&
+    typeof row.participant_set_state === LOCAL_STR_STRING &&
+    typeof row.participant_set_text === LOCAL_STR_STRING &&
+    typeof row.commit_mode === LOCAL_STR_STRING &&
+    Number.isSafeInteger(row.frozen_participant_count) &&
+    row.frozen_participant_count >= 0 &&
+    Number.isSafeInteger(row.updated_at) && row.updated_at >= 0 &&
+    !Object.is(row.updated_at, -0);
+}
+
+function nullableString(value) {
+  return value === null || typeof value === LOCAL_STR_STRING;
+}
+
+function validateCreationReadbackDecisionFields(row) {
+  return nullableString(row.decision) &&
+    nullableString(row.decision_text) &&
+    nullableString(row.decision_digest);
+}
+
+function canonicalCreationReadback(row, transactionId) {
+  return row !== null &&
+    INITIAL_ROW_FIELDS.every((field) => Object.hasOwn(row, field)) &&
+    hasCanonicalImmutableCreationFields(row, transactionId) &&
+    validateCreationReadbackMutableFields(row) &&
+    validateCreationReadbackDecisionFields(row);
+}
+
+function resolveAvailableCreationReadback(result, stored, initialRow) {
+  if (sameImmutableCreation(stored, initialRow) &&
+      rowsMatchExactly(stored, initialRow, INITIAL_ROW_FIELDS)) return;
+  if (sameImmutableCreation(stored, initialRow)) {
+    throw advancedCreationRecoveryError(stored);
+  }
+  if (isPrimaryKeyCollision(result)) {
+    throw typedPersistenceError(TRANSACTION_ID_COLLISION_CODE,
+      result?.error || QUERY_ERROR_MSG.TRANSACTION_STATE_PERSIST_FAILED);
+  }
+  throw creationUncertainError(
+    result?.error,
+    TRANSACTION_CREATION_READ_STATE.AVAILABLE,
+  );
 }
 
 const sqlQueryEngineTransactionPersistenceMethods = {
@@ -175,7 +228,7 @@ const sqlQueryEngineTransactionPersistenceMethods = {
    * @private
    */
   async insertDistributedTransactionRowOnce(transactionId, record) {
-    const row = {
+    const builtRow = {
       transaction_id: transactionId,
       ...sqlTransactionRowFieldsOf(record),
       decision: null,
@@ -183,52 +236,87 @@ const sqlQueryEngineTransactionPersistenceMethods = {
       decision_digest: null,
       created_at: record.createdAt,
     };
+    const row = record.transactionCreationInitialRow || builtRow;
+    if (!isCanonicalInitialRow(row) ||
+        !rowsMatchExactly(row, builtRow, INITIAL_ROW_FIELDS)) {
+      throw creationUncertainError(
+        QUERY_ERROR_MSG.TRANSACTION_CREATION_UNCERTAIN,
+        TRANSACTION_CREATION_READ_STATE.INVALID,
+      );
+    }
     const result = await this.getControlPlaneSystemTableGateway().submitMutation({
       operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
       tableName: TABLES.SQL_TRANSACTIONS,
       row,
     }, this.buildDistributedTransactionMutationOptions(
       TABLES.SQL_TRANSACTIONS,
-      {workClass: PRESSURE_WORK_CLASS.CRITICAL},
+      {
+        workClass: PRESSURE_WORK_CLASS.CRITICAL,
+        idempotencyKey: record.transactionCreationDeliveryKey,
+        timeoutBudget: record.timeoutBudget,
+      },
     ));
-    if (result?.success === true || isPrimaryKeyCollision(result)) {
-      this.assertDistributedTransactionMutationSucceeded(
-        result,
-        TABLES.SQL_TRANSACTIONS,
-      );
+    if (result?.success === true &&
+        resolveMutationCompletionState(result) ===
+          CONTROL_PLANE_MUTATION_OUTCOME.APPLIED) {
       return;
     }
-    const stored = copyStrictOwnDataRecord(
-      await this.readDistributedTransactionRow(transactionId),
+    const readback = await this.readDistributedTransactionCreationRow(
+      transactionId,
     );
-    if (stored === null) {
-      this.assertDistributedTransactionMutationSucceeded(
-        result,
-        TABLES.SQL_TRANSACTIONS,
-      );
+    if (readback.state === TRANSACTION_CREATION_READ_STATE.AVAILABLE) {
+      // A same-creation row may already have advanced under another recovery
+      // worker. Only the complete immutable mismatch plus the gateway's
+      // specific primary-key disposition authorizes reminting.
+      resolveAvailableCreationReadback(result, readback.row, row);
       return;
     }
-    const sameCreation = INSERTED_ROW_IMMUTABLE_FIELDS.every((field) =>
-      Object.hasOwn(stored, field) && Object.is(stored[field], row[field]));
-    if (!sameCreation) {
-      throw typedPersistenceError(TRANSACTION_ID_COLLISION_CODE,
-        result?.error || QUERY_ERROR_MSG.TRANSACTION_STATE_PERSIST_FAILED);
+    throw creationUncertainError(result?.error, readback.state);
+  },
+
+  /**
+   * Read and capture the exact-key creation row without collapsing absence,
+   * unavailability and malformed data into one value.
+   * @param {string} transactionId
+   * @return {Promise<{state: string, row?: Object}>}
+   * @private
+   */
+  async readDistributedTransactionCreationRow(transactionId) {
+    const gateway = this.getControlPlaneSystemTableGateway();
+    if (typeof gateway?.readAuthoritativeRows !== LOCAL_STR_FUNCTION) {
+      return {state: TRANSACTION_CREATION_READ_STATE.UNAVAILABLE};
     }
-    const stillInitial = INSERTED_ROW_INITIAL_FIELDS.every((field) =>
-      Object.hasOwn(stored, field) && Object.is(stored[field], row[field]));
-    if (!stillInitial) {
-      // The insert belongs to this exact creation, but another recovery
-      // worker has already advanced its durable authority. Do not install the
-      // stale ACTIVE candidate and do not classify this as an ID collision
-      // (which would mint a replacement). The normal recovery owner will
-      // reread and resume the advanced row.
-      const recoveryHold = typedPersistenceError(
-        QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE,
-        QUERY_ERROR_MSG.TRANSACTION_RECOVERY_INCOMPLETE,
+    let read;
+    try {
+      read = await gateway.readAuthoritativeRows(
+        TABLES.SQL_TRANSACTIONS,
+        SQL_TRANSACTION_ROW_READ_SQL,
+        [trimmedString(transactionId)],
+        {workClass: PRESSURE_WORK_CLASS.CRITICAL},
       );
-      recoveryHold.advancedTransactionRow = Object.freeze({...stored});
-      throw recoveryHold;
+    } catch (_error) {
+      return {state: TRANSACTION_CREATION_READ_STATE.UNAVAILABLE};
     }
+    if (read?.success !== true || !Array.isArray(read.rows)) {
+      return {state: TRANSACTION_CREATION_READ_STATE.UNAVAILABLE};
+    }
+    if (read.rows.length === 0) {
+      return {state: TRANSACTION_CREATION_READ_STATE.MISSING};
+    }
+    if (read.rows.length !== 1 || !Object.hasOwn(read.rows, 0)) {
+      return {state: TRANSACTION_CREATION_READ_STATE.INVALID};
+    }
+    let row;
+    try {
+      row = copyStrictOwnDataRecord(read.rows[0]);
+    } catch (_error) {
+      return {state: TRANSACTION_CREATION_READ_STATE.INVALID};
+    }
+    if (!canonicalCreationReadback(row, transactionId)) {
+      return {state: TRANSACTION_CREATION_READ_STATE.INVALID};
+    }
+    return {state: TRANSACTION_CREATION_READ_STATE.AVAILABLE,
+      row: Object.freeze(row)};
   },
 
   /**

@@ -28,6 +28,14 @@ import {
   ADAPTER_ERROR_MSG,
   ADAPTER_LOG_MSG,
 } from '../sql-adapter-constants.js';
+import {
+  DISTRIBUTED_BEGIN_CONSUMER_KIND,
+  attachDistributedBeginConsumer,
+  createDistributedBeginConsumer,
+} from '../distributed/distributed-begin-consumer.js';
+import {classifyTransactionControlStatement} from
+  '../sql-transaction-control-grammar.js';
+import {AST_TYPE} from '../parser-constants.js';
 
 const ANONYMOUS_PRINCIPAL = 'anonymous';
 const CLOSED_SESSION_ROLLBACK_STATEMENT = 'ROLLBACK';
@@ -156,6 +164,10 @@ class PostgresWireAdapter {
       state: PG_SESSION_STATE.AUTHENTICATED,
       createdAt: Date.now(),
       securityContext: authResult.context,
+      beginConsumer: createDistributedBeginConsumer(
+        DISTRIBUTED_BEGIN_CONSUMER_KIND.PGWIRE,
+        sessionId,
+      ),
     };
 
     this.sessions.set(sessionId, session);
@@ -206,7 +218,7 @@ class PostgresWireAdapter {
     }
 
     const wallTimeLimitMs = resolvePgWireWallTimeLimitMs(options);
-    const request = createSqlRequest({
+    const requestFields = {
       statement: sql,
       parameters: params,
       tenantId: session.tenantId,
@@ -220,7 +232,12 @@ class PostgresWireAdapter {
       }),
       securityContext: session.securityContext,
       expectedTransactionId: options.expectedTransactionId ?? null,
-    });
+    };
+    if (classifyTransactionControlStatement(sql) ===
+        AST_TYPE.BEGIN_TRANSACTION) {
+      attachDistributedBeginConsumer(requestFields, session.beginConsumer);
+    }
+    const request = createSqlRequest(requestFields);
 
     this.logger.debug(ADAPTER_LOG_MSG.EXECUTING_VIA_SQLCORE, {
       sessionId: request.sessionId,
@@ -229,6 +246,21 @@ class PostgresWireAdapter {
     });
 
     return await this.sqlCore.executeRequest(request);
+  }
+
+  acceptDistributedBegin(sessionId, result, enterLocalBlock) {
+    const session = this.sessions.get(sessionId);
+    if (!session || session.state === PG_SESSION_STATE.CLOSED ||
+        typeof this.sqlCore.acceptDistributedBeginForConsumer !== 'function') {
+      return false;
+    }
+    const options = {};
+    attachDistributedBeginConsumer(options, session.beginConsumer);
+    return this.sqlCore.acceptDistributedBeginForConsumer(
+      options,
+      result,
+      enterLocalBlock,
+    );
   }
 
   /**
@@ -275,6 +307,13 @@ class PostgresWireAdapter {
    */
   closeSession(sessionId, options = {}) {
     const session = this.sessions.get(sessionId);
+    if (session &&
+        typeof this.sqlCore.retireDistributedBeginConsumer === 'function') {
+      this.sqlCore.retireDistributedBeginConsumer(
+        sessionId,
+        session.beginConsumer,
+      );
+    }
     if (session && options.transactionOpen === true) {
       this.rollbackClosedSessionTransaction(sessionId);
     }
