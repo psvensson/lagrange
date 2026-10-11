@@ -17,6 +17,17 @@ import {TRANSPORT_EVENT} from '../constants/transport.js';
 // queueMicrotask is a global in Node.js, but ESLint doesn't know about it
 const queueMicrotaskFn = globalThis.queueMicrotask;
 
+const INPROC_SEND_ERROR_CODE = Object.freeze({
+  CLOSED: 'inproc_websocket_closed',
+  DELIVERY_FAILED: 'inproc_websocket_delivery_failed',
+});
+
+function createSendError(code, cause) {
+  const error = new Error(code, cause ? {cause} : undefined);
+  error.code = code;
+  return error;
+}
+
 /**
  * Global registry for in-process servers.
  * This is only enabled when explicitly requested via options.inProcess
@@ -87,16 +98,38 @@ class InProcWebSocket extends EventEmitter {
    * Messages are delivered asynchronously via microtask to preserve
    * ordering without recursion.
    * @param {string|Buffer} data - Data to send.
+   * @param {Object|Function} [options] - WebSocket options or callback.
+   * @param {Function} [callback] - Settles after peer delivery unwinds.
    */
-  send(data) {
-    if (this.readyState !== WebSocket.OPEN || !this._peer) {
+  send(data, options, callback) {
+    const onComplete = typeof options === 'function' ? options : callback;
+    let callbackSettled = false;
+    const settle = (error) => {
+      if (callbackSettled || typeof onComplete !== 'function') return;
+      callbackSettled = true;
+      onComplete(error);
+    };
+    const peer = this._peer;
+    if (this.readyState !== WebSocket.OPEN || !peer) {
+      queueMicrotaskFn(() => settle(createSendError(
+        INPROC_SEND_ERROR_CODE.CLOSED)));
       return;
     }
     // Deliver asynchronously to preserve ordering without recursion.
     queueMicrotaskFn(() => {
-      if (this._peer.readyState === WebSocket.OPEN) {
-        this._peer.emit(TRANSPORT_EVENT.MESSAGE, data);
+      if (this.readyState !== WebSocket.OPEN ||
+          peer.readyState !== WebSocket.OPEN) {
+        settle(createSendError(INPROC_SEND_ERROR_CODE.CLOSED));
+        return;
       }
+      try {
+        peer.emit(TRANSPORT_EVENT.MESSAGE, data);
+      } catch (error) {
+        if (typeof onComplete !== 'function') throw error;
+        settle(createSendError(INPROC_SEND_ERROR_CODE.DELIVERY_FAILED, error));
+        return;
+      }
+      settle();
     });
   }
 
@@ -152,6 +185,7 @@ function createInProcWebSocketPair() {
 
 export {
   INPROC,
+  INPROC_SEND_ERROR_CODE,
   InProcWebSocket,
   createInProcWebSocketPair,
 };

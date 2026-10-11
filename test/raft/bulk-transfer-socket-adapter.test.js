@@ -209,3 +209,39 @@ test('a non-SENT chunk outcome is FATAL: both driver loops abort typed',
       fixture.close();
     }
   });
+
+test('a delayed non-SENT control outcome closes the transfer socket',
+  async (t) => {
+    let resolveControl;
+    let closeCount = 0;
+    const connection = {
+      onMessage() {},
+      onClose() {},
+      sendControl: () => new Promise((resolve) => {
+        resolveControl = resolve;
+      }),
+      sendChunkFrame: () => {
+        throw new Error('the control guard must not send a chunk');
+      },
+      close: () => {
+        closeCount += 1;
+      },
+    };
+    const socket = bulkConnectionTransferSocket(connection);
+    let localCloseCount = 0;
+    socket.on('close', () => {
+      localCloseCount += 1;
+    });
+    socket.send(JSON.stringify({kind: 'ABORT', transferId: TRANSFER_ID}));
+    t.equal(closeCount, 0,
+      'the adapter retains accepted control debt while completion is pending');
+    resolveControl(Object.freeze({
+      outcome: BULK_CHANNEL_SEND_OUTCOME.PENDING_LIMIT,
+    }));
+    await Promise.resolve();
+    await Promise.resolve();
+    t.equal(closeCount, 1,
+      'a completed non-SENT control outcome closes the connection');
+    t.equal(localCloseCount, 1,
+      'the adapter reports the fatal control refusal exactly once');
+  });

@@ -1,3 +1,5 @@
+import {EventEmitter} from 'node:events';
+
 import t from '../../src/test-helpers/tap.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -9,6 +11,7 @@ import {
 } from '../../src/transport/bulk-transfer-channel.js';
 import {
   createInProcWebSocketPair,
+  INPROC_SEND_ERROR_CODE,
 } from '../../src/transport/inproc-transport.js';
 import {
   ROUTER_IDENTIFY_CHANNEL,
@@ -92,6 +95,30 @@ async function createDrainedBucket() {
   return bucket;
 }
 
+class CallbackControlledSocket extends EventEmitter {
+  constructor() {
+    super();
+    this.sent = [];
+    this.callbacks = [];
+    this.closed = false;
+  }
+
+  send(data, callback) {
+    this.sent.push(data);
+    this.callbacks.push(callback);
+  }
+
+  settleNext(error) {
+    this.callbacks.shift()(error);
+  }
+
+  close() {
+    if (this.closed) return;
+    this.closed = true;
+    queueMicrotask(() => this.emit(TRANSPORT_EVENT.CLOSE));
+  }
+}
+
 t.test('bulk saturation leaves critical enqueue+dispatch and quarantine ' +
   'untouched, and the governor sees the bulk lane', async (t) => {
   initializeTestEnvironment();
@@ -143,8 +170,11 @@ t.test('bulk saturation leaves critical enqueue+dispatch and quarantine ' +
       'bulk pending requests are visible in the router stats bridge');
     t.equal(stats.bulkChannel.saturatedPeerCount, 1,
       'the saturated bulk peer is visible');
-    t.ok(stats.bulkChannel.inFlightBytes > 0,
-      'the in-flight bulk chunk bytes are visible');
+    t.equal(stats.bulkChannel.inFlightBytes, 0,
+      'a token-waiting chunk is not mislabeled as a physical write');
+    t.equal(stats.bulkChannel.retainedSendBytes,
+      TEST_MAX_PENDING_SENDS * TEST_CHUNK_FRAME_BYTES,
+      'all token-waiting frame bytes remain visible as retained custody');
     t.equal(stats.bulkChannel.tokenDepth, 0,
       'the drained token bucket depth is visible');
 
@@ -342,4 +372,160 @@ t.test('a stale socket close cannot evict a live replacement connection',
     } finally {
       registry.closeAll();
     }
+  });
+
+t.test('accepted bulk frames retain bounded custody through callback unwind',
+  async (t) => {
+    const ws = new CallbackControlledSocket();
+    const registry = createBulkTransferChannelRegistry({maxPendingSends: 2});
+    const connection = registry.adoptIncomingSocket({
+      nodeId: TEST_PEER_NODE_ID,
+      ws,
+    });
+    const control = {kind: 'ACK', transferId: 'custody-1'};
+    const controlBytes = Buffer.byteLength(JSON.stringify(control));
+    const chunk = Buffer.alloc(7);
+    try {
+      const controlSend = connection.sendControl(control);
+      const chunkSend = connection.sendChunkFrame(chunk);
+      await Promise.resolve();
+      t.same(connection.getStats(), {
+        nodeId: TEST_PEER_NODE_ID,
+        open: true,
+        pendingSends: 2,
+        retainedSendBytes: controlBytes + chunk.length,
+        inFlightBytes: controlBytes,
+        maxPendingSends: 2,
+      }, 'both accepted frames remain charged while the first callback waits');
+      t.equal(ws.sent.length, 1, 'the physical writer stays single-flight');
+      const refused = await connection.sendControl({kind: 'COMPLETE'});
+      t.equal(refused.outcome, BULK_CHANNEL_SEND_OUTCOME.PENDING_LIMIT,
+        'a third frame is refused before it becomes accepted debt');
+
+      ws.settleNext();
+      t.equal(connection.getStats().retainedSendBytes,
+        controlBytes + chunk.length,
+        'callback entry alone does not release either retained frame');
+      t.equal((await controlSend).outcome, BULK_CHANNEL_SEND_OUTCOME.SENT);
+      await Promise.resolve();
+      t.equal(ws.sent.length, 2, 'the chunk starts after control completion');
+      ws.settleNext();
+      t.equal(connection.getStats().retainedSendBytes, chunk.length,
+        'the callback frame remains charged until its continuation runs');
+      t.equal((await chunkSend).outcome, BULK_CHANNEL_SEND_OUTCOME.SENT);
+      t.equal(connection.getStats().retainedSendBytes, 0,
+        'the last continuation returns all accepted frame custody');
+
+      const failedSend = connection.sendControl({kind: 'FAILED'});
+      await Promise.resolve();
+      ws.settleNext(new Error('native write failed'));
+      t.ok(connection.getStats().retainedSendBytes > 0,
+        'a failing callback keeps custody through its executing stack');
+      t.equal((await failedSend).outcome, BULK_CHANNEL_SEND_OUTCOME.CLOSED);
+      t.equal(connection.getStats().retainedSendBytes, 0,
+        'the failed-write continuation returns its retained frame');
+      t.equal(connection.isOpen(), false,
+        'a physical write failure closes the connection owner');
+    } finally {
+      registry.closeAll();
+    }
+  });
+
+t.test('paced chunk cancellation does not block control or another peer',
+  async (t) => {
+    const bucket = await createDrainedBucket();
+    const registry = createBulkTransferChannelRegistry({
+      tokenBucket: bucket,
+      maxPendingSends: 2,
+    });
+    const blockedSocket = new CallbackControlledSocket();
+    const liveSocket = new CallbackControlledSocket();
+    const blocked = registry.adoptIncomingSocket({
+      nodeId: 'blocked-peer',
+      ws: blockedSocket,
+    });
+    const live = registry.adoptIncomingSocket({
+      nodeId: 'live-peer',
+      ws: liveSocket,
+    });
+    const abortController = new AbortController();
+    try {
+      const chunkSend = blocked.sendChunkFrame(Buffer.alloc(8), {
+        signal: abortController.signal,
+      });
+      await Promise.resolve();
+      const abortSend = blocked.sendControl({kind: 'ABORT'});
+      const peerSend = live.sendControl({kind: 'ACK'});
+      await Promise.resolve();
+      t.equal(blockedSocket.sent.length, 1,
+        'terminal control overtakes only the token-waiting chunk');
+      t.equal(liveSocket.sent.length, 1,
+        'the shared token bucket does not pace another peer control');
+      blockedSocket.settleNext();
+      liveSocket.settleNext();
+      t.equal((await abortSend).outcome, BULK_CHANNEL_SEND_OUTCOME.SENT);
+      t.equal((await peerSend).outcome, BULK_CHANNEL_SEND_OUTCOME.SENT);
+      abortController.abort();
+      t.equal((await chunkSend).outcome, BULK_CHANNEL_SEND_OUTCOME.CANCELLED,
+        'cancellation removes the paced frame without a socket write');
+      t.equal(bucket.pendingCount(), 0,
+        'normal and aborted grants leave no bucket listener/waiter roots');
+
+      const closeBlocked = blocked.sendChunkFrame(Buffer.alloc(8));
+      await Promise.resolve();
+      blocked.close();
+      await flushDeliveries();
+      t.equal((await closeBlocked).outcome, BULK_CHANNEL_SEND_OUTCOME.CLOSED,
+        'connection close releases its own paced wait with a closed outcome');
+      const afterClose = live.sendControl({kind: 'COMPLETE'});
+      await Promise.resolve();
+      liveSocket.settleNext();
+      t.equal((await afterClose).outcome, BULK_CHANNEL_SEND_OUTCOME.SENT,
+        'closing one connection does not dispose the shared peer bucket');
+    } finally {
+      registry.closeAll();
+    }
+  });
+
+t.test('in-process send settles once after delivery unwind and typed failures',
+  async (t) => {
+    const delivered = [];
+    const first = createInProcWebSocketPair();
+    let insideDelivery = false;
+    let callbackCount = 0;
+    first.b.on(TRANSPORT_EVENT.MESSAGE, (data) => {
+      insideDelivery = true;
+      delivered.push(data);
+      insideDelivery = false;
+    });
+    await new Promise((resolve, reject) => first.a.send('first', (error) => {
+      callbackCount += 1;
+      t.equal(insideDelivery, false,
+        'completion runs only after the peer listener stack unwinds');
+      if (error) return reject(error);
+      first.a.send('second', (secondError) => {
+        callbackCount += 1;
+        if (secondError) return reject(secondError);
+        resolve();
+      });
+    }));
+    t.same(delivered, ['first', 'second'],
+      'callback reentry queues the successor after the first delivery');
+    t.equal(callbackCount, 2, 'each accepted send settles exactly once');
+
+    const closing = createInProcWebSocketPair();
+    const closed = new Promise((resolve) => closing.a.send('late', resolve));
+    closing.b.close();
+    const closeError = await closed;
+    t.equal(closeError.code, INPROC_SEND_ERROR_CODE.CLOSED,
+      'close before the queued delivery has a typed callback failure');
+
+    const throwing = createInProcWebSocketPair();
+    throwing.b.on(TRANSPORT_EVENT.MESSAGE, () => {
+      throw new Error('consumer failed');
+    });
+    const deliveryError = await new Promise((resolve) =>
+      throwing.a.send('throw', resolve));
+    t.equal(deliveryError.code, INPROC_SEND_ERROR_CODE.DELIVERY_FAILED,
+      'a consumer throw settles the sender with a typed delivery failure');
   });

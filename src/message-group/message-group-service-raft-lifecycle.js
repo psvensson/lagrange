@@ -29,6 +29,8 @@ import {
   openMessageGroupConsensusPort,
   readMessageGroupCommittedMembership,
 } from './message-group-consensus-port.js';
+import {closeCdcCommitWaits, openCdcCommitWaits} from
+  './message-group-cdc-commit-owner.js';
 import {MESSAGE_GROUP_SERVICE_LITERAL} from
   './message-group-service-runtime-support.js';
 
@@ -179,9 +181,11 @@ function assignRaftLifecycle(serviceClass) {
         },
       );
       this.raftTimingConfig = resolveReplicaRaftTiming(this);
+      openCdcCommitWaits(this);
       try {
         await this.openConsensus();
       } catch (error) {
+        closeCdcCommitWaits(this);
         this.logger.error(
           MESSAGE_GROUP_SERVICE_LITERAL.FAILED_DURING_INITIALIZE_CLEANING_UP_RAFT,
           {

@@ -187,8 +187,9 @@ test('gap 4: the bulk dial passes an explicit per-socket maxPayload',
         this.sent = [];
         queueMicrotask(() => this.emit('open'));
       }
-      send(data) {
+      send(data, callback) {
         this.sent.push(data);
+        queueMicrotask(() => callback?.());
       }
       close() {}
       terminate() {}

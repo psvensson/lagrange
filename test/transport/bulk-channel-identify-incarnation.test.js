@@ -33,10 +33,15 @@ class FakeBulkSocket extends EventEmitter {
   constructor() {
     super();
     this.sent = [];
+    this.completedSends = 0;
     queueMicrotask(() => this.emit('open'));
   }
-  send(data) {
+  send(data, callback) {
     this.sent.push(data);
+    queueMicrotask(() => {
+      this.completedSends += 1;
+      callback?.();
+    });
   }
   close() {}
   terminate() {}
@@ -73,6 +78,8 @@ test('the bulk IDENTIFY frame stamps the dialling node\'s boot incarnation',
         'the first frame is the bulk IDENTIFY');
       t.equal(identify.bootIncarnation, TEST_BOOT_INCARNATION,
         'the snapshot channel identifies the exact generation');
+      t.equal(sockets[0].completedSends, 1,
+        'dial returns only after physical IDENTIFY send completion');
     } finally {
       registry.closeAll();
     }

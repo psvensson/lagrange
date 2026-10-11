@@ -237,6 +237,7 @@ const BULK_TRANSFER_CHANNEL_DEFAULT = Object.freeze({
 // fields, so the shape stays present (typed zero-state, never undefined).
 const BULK_CHANNEL_EMPTY_STATS = Object.freeze({
   pendingRequests: 0,
+  retainedSendBytes: 0,
   inFlightBytes: 0,
   tokenDepth: 0,
   maxPendingRequests: 0,
