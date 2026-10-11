@@ -1,6 +1,5 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
-  DistributedTransactionCoordinator,
   TRANSACTION_STATUS,
 } from '../../src/query/distributed/distributed-transaction-coordinator.js';
 import {
@@ -16,6 +15,9 @@ import {
 } from '../../src/constants/index.js';
 import {DurableWorkflowCoordinator} from
   '../../src/workflow/durable-workflow-coordinator.js';
+
+import {createTestTransactionCoordinator, recordedCommit} from
+  '../test-helpers/transaction-coordinator-unit-fixture.js';
 
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
@@ -40,7 +42,7 @@ const OPEN_TRANSACTION_DECISION = Object.freeze({
 
 test('DistributedTransactionCoordinator - enlists participants and commits', async (t) => {
   const calls = [];
-  const coordinator = new DistributedTransactionCoordinator({
+  const coordinator = createTestTransactionCoordinator({
     beginParticipant: async (sessionId, partitionId) => {
       calls.push(`begin:${sessionId}:${partitionId}`);
     },
@@ -55,7 +57,9 @@ test('DistributedTransactionCoordinator - enlists participants and commits', asy
 
   const beginResult = await coordinator.begin('s1');
   t.equal(beginResult.success, true);
-  t.ok(beginResult.transactionId.startsWith('tx-s1-'));
+  // Superseded (TX1 design 2.1, seam B/S, W10a): the identity is 128 random
+  // bits with no session, clock or sequence component.
+  t.match(beginResult.transactionId, /^[0-9a-f]{32}$/u);
 
   const enlistResult = await coordinator.enlistParticipants('s1', ['p1', 'p2']);
   t.equal(enlistResult.success, true);
@@ -76,7 +80,7 @@ test('DistributedTransactionCoordinator - enlists participants and commits', asy
 test(
   'DistributedTransactionCoordinator - commit failure surfaces failed participants',
   async (t) => {
-    const coordinator = new DistributedTransactionCoordinator({
+    const coordinator = createTestTransactionCoordinator({
       beginParticipant: async () => {},
       commitParticipant: async (_sessionId, partitionId) => {
         if (partitionId === 'p2') {
@@ -98,7 +102,7 @@ test(
 
 test('DistributedTransactionCoordinator - rollback clears active transaction', async (t) => {
   const calls = [];
-  const coordinator = new DistributedTransactionCoordinator({
+  const coordinator = createTestTransactionCoordinator({
     beginParticipant: async () => {},
     commitParticipant: async () => {},
     rollbackParticipant: async (_sessionId, partitionId) => {
@@ -119,7 +123,7 @@ test('DistributedTransactionCoordinator - rollback failure stays in rollback ' +
   'lane for replay', async (t) => {
   const calls = [];
   let failPartition = 'p2';
-  const coordinator = new DistributedTransactionCoordinator({
+  const coordinator = createTestTransactionCoordinator({
     beginParticipant: async () => {},
     commitParticipant: async () => {},
     rollbackParticipant: async (_sessionId, partitionId) => {
@@ -159,7 +163,7 @@ test(
   'DistributedTransactionCoordinator - defers recovery sweep on retryable control-plane persistence failures',
   async (t) => {
     const nowMs = 10_000;
-    const coordinator = new DistributedTransactionCoordinator({
+    const coordinator = createTestTransactionCoordinator({
       now: () => nowMs,
       loadRecoveryStateForSweep: async () => ({
         transactions: [
@@ -223,7 +227,7 @@ test(
 );
 
 test('DistributedTransactionCoordinator - supports recovery payloads', async (t) => {
-  const coordinator = new DistributedTransactionCoordinator();
+  const coordinator = createTestTransactionCoordinator();
   coordinator.recover([
     {
       sessionId: 's4',
@@ -246,7 +250,7 @@ test('DistributedTransactionCoordinator - supports recovery payloads', async (t)
 
 test('DistributedTransactionCoordinator - prepare failure reports stage and participant',
   async (t) => {
-    const coordinator = new DistributedTransactionCoordinator({
+    const coordinator = createTestTransactionCoordinator({
       beginParticipant: async () => {},
       prepareParticipant: async (_sessionId, partitionId) => {
         if (partitionId === 'p2') {
@@ -273,7 +277,7 @@ test('DistributedTransactionCoordinator - emits persistence callbacks', async (t
   const persistedParticipants = [];
   const persistedWriteOperations = [];
 
-  const coordinator = new DistributedTransactionCoordinator({
+  const coordinator = createTestTransactionCoordinator({
     beginParticipant: async () => {},
     prepareParticipant: async () => {},
     commitParticipant: async () => {},
@@ -321,7 +325,7 @@ test('DistributedTransactionCoordinator - emits persistence callbacks', async (t
 
 test('DistributedTransactionCoordinator - recovers from canonical system table rows',
   async (t) => {
-    const coordinator = new DistributedTransactionCoordinator();
+    const coordinator = createTestTransactionCoordinator();
     coordinator.recoverFromSystemTables({
       transactions: [{
         transaction_id: 'tx-s7-1',
@@ -363,7 +367,7 @@ test('DistributedTransactionCoordinator - recovers from canonical system table r
 test('DistributedTransactionCoordinator - uses injected workflow coordinator',
   async (t) => {
     const workflowCoordinator = new DurableWorkflowCoordinator();
-    const coordinator = new DistributedTransactionCoordinator({
+    const coordinator = createTestTransactionCoordinator({
       workflowCoordinator,
       beginParticipant: async () => {},
       commitParticipant: async () => {},
@@ -388,7 +392,7 @@ test('DistributedTransactionCoordinator - recovery replay resumes commit lane',
     const prepareCalls = [];
     const commitCalls = [];
     const persistedStatuses = [];
-    const coordinator = new DistributedTransactionCoordinator({
+    const coordinator = createTestTransactionCoordinator({
       prepareParticipant: async (sessionId, partitionId) => {
         prepareCalls.push(`${sessionId}:${partitionId}`);
       },
@@ -433,19 +437,34 @@ test('DistributedTransactionCoordinator - recovery replay resumes commit lane',
     t.equal(recovery.totalRecovered, 1);
     t.equal(recovery.resumed, 1);
     t.equal(recovery.failed, 0);
-    t.same(prepareCalls, []);
+    // Superseded (TX1 seam E, design 2.1 and 4): neither recovered
+    // participant row retained its PREPARE evidence (prepared digest, index,
+    // term), so before its COMMIT decision the coordinator asks each again
+    // under the same identity (the participant answers a PREPARED row from
+    // the row) - a PREPARED status alone is not that evidence.
+    t.same(prepareCalls.sort(),
+      ['recover-commit-1:p1', 'recover-commit-1:p2']);
     t.same(commitCalls.sort(), ['recover-commit-1:p1', 'recover-commit-1:p2']);
     t.ok(persistedStatuses.includes(TRANSACTION_STATUS.COMMITTED));
     t.equal(coordinator.hasActiveTransaction('recover-commit-1'), false);
   });
 
-test('DistributedTransactionCoordinator - recovery replay treats ' +
-  'idempotent participant commit misses as committed', async (t) => {
+// Superseded (TX1 seam D, S2; design 9.2 row
+// distributed-transaction-coordinator :442-502): a two-phase commit miss is no
+// longer assumed COMMITTED; the participant's durable outcome is read, and a
+// COMMITTED outcome settles the participant.
+test('DistributedTransactionCoordinator - recovery replay resolves ' +
+  'participant commit misses by the participant outcome', async (t) => {
   const commitCalls = [];
   const retryDiagnostics = [];
-  const coordinator = new DistributedTransactionCoordinator({
+  const outcomeReads = [];
+  const coordinator = createTestTransactionCoordinator({
     onParticipantRetry: (diagnostic) => {
       retryDiagnostics.push(diagnostic);
+    },
+    resolveParticipantCommitOutcome: async (sessionId, partitionId) => {
+      outcomeReads.push(`${sessionId}:${partitionId}`);
+      return PARTICIPANT_COMMIT_OUTCOME.COMMITTED;
     },
     commitParticipant: async (sessionId, partitionId) => {
       commitCalls.push(`${sessionId}:${partitionId}`);
@@ -460,6 +479,7 @@ test('DistributedTransactionCoordinator - recovery replay treats ' +
   coordinator.recoverFromSystemTables({
     transactions: [{
       transaction_id: 'tx-recover-idempotent-commit-1',
+      ...recordedCommit('tx-recover-idempotent-commit-1', ['p1', 'p2']),
       session_id: 'recover-idempotent-commit-1',
       status: TRANSACTION_STATUS.COMMITTING,
       ...frozenTransactionDecision(2),
@@ -492,7 +512,9 @@ test('DistributedTransactionCoordinator - recovery replay treats ' +
   t.equal(recovery.resumed, 1);
   t.equal(recovery.failed, 0);
   t.equal(retryDiagnostics.length, 0,
-    'idempotent commit misses should not be retried');
+    'a commit miss resolved COMMITTED is not retried');
+  t.same(outcomeReads, ['recover-idempotent-commit-1:p1'],
+    'the miss is resolved by one outcome read');
   t.same(commitCalls.sort(), [
     'recover-idempotent-commit-1:p1',
     'recover-idempotent-commit-1:p2',
@@ -503,7 +525,7 @@ test('DistributedTransactionCoordinator - recovery replay treats ' +
 test('DistributedTransactionCoordinator - recovery replay only commits pending participants',
   async (t) => {
     const commitCalls = [];
-    const coordinator = new DistributedTransactionCoordinator({
+    const coordinator = createTestTransactionCoordinator({
       commitParticipant: async (sessionId, partitionId) => {
         commitCalls.push(`${sessionId}:${partitionId}`);
       },
@@ -512,6 +534,7 @@ test('DistributedTransactionCoordinator - recovery replay only commits pending p
     coordinator.recoverFromSystemTables({
       transactions: [{
         transaction_id: 'tx-recover-commit-2',
+      ...recordedCommit('tx-recover-commit-2', ['p1', 'p2']),
         session_id: 'recover-commit-2',
         status: TRANSACTION_STATUS.COMMITTING,
         ...frozenTransactionDecision(2),
@@ -550,7 +573,7 @@ test('DistributedTransactionCoordinator - recovery replay rolls back preparing t
   async (t) => {
     const commitCalls = [];
     const rollbackCalls = [];
-    const coordinator = new DistributedTransactionCoordinator({
+    const coordinator = createTestTransactionCoordinator({
       commitParticipant: async (sessionId, partitionId) => {
         commitCalls.push(`${sessionId}:${partitionId}`);
       },
@@ -600,7 +623,7 @@ test('DistributedTransactionCoordinator - recovery replay rolls back preparing t
 test('DistributedTransactionCoordinator - recovery replay resumes rollback lane',
   async (t) => {
     const rollbackCalls = [];
-    const coordinator = new DistributedTransactionCoordinator({
+    const coordinator = createTestTransactionCoordinator({
       rollbackParticipant: async (sessionId, partitionId) => {
         rollbackCalls.push(`${sessionId}:${partitionId}`);
       },
@@ -643,10 +666,13 @@ test('DistributedTransactionCoordinator - recovery replay resumes rollback lane'
     t.equal(coordinator.hasActiveTransaction('recover-rollback-1'), false);
   });
 
-test('DistributedTransactionCoordinator - freezes before selecting one phase',
+// Superseded (TX1 owner decision 2026-10-10, design 11.2, seam F, S7):
+// prepare-first for a single participant too; the ONE_PHASE_COMMIT fast path
+// is retired.
+test('DistributedTransactionCoordinator - freezes before prepare-first',
   async (t) => {
     const prepareCalls = [];
-    const coordinator = new DistributedTransactionCoordinator({
+    const coordinator = createTestTransactionCoordinator({
       beginParticipant: async () => {},
       prepareParticipant: async (sessionId, partitionId) => {
         prepareCalls.push(`${sessionId}:${partitionId}`);
@@ -663,9 +689,10 @@ test('DistributedTransactionCoordinator - freezes before selecting one phase',
     const result = await coordinator.commit('one-phase');
 
     t.equal(result.success, true);
-    t.equal(result.commitMode, COMMIT_MODE.ONE_PHASE_COMMIT,
-      'caller preference must not override coordinator selection');
-    t.same(prepareCalls, [], 'one phase must not prepare');
+    t.equal(result.commitMode, COMMIT_MODE.TWO_PHASE_COMMIT,
+      'the coordinator selects prepare-first');
+    t.same(prepareCalls, ['one-phase:p1'],
+      'a single participant prepares before the decision');
     t.same(result.decisionTrace.map((entry) => entry.event), [
       'PARTICIPANT_SET_FROZEN',
       'COMMIT_MODE_SELECTED',
@@ -675,7 +702,7 @@ test('DistributedTransactionCoordinator - freezes before selecting one phase',
 test('DistributedTransactionCoordinator - final second participant selects two phase',
   async (t) => {
     const prepareCalls = [];
-    const coordinator = new DistributedTransactionCoordinator({
+    const coordinator = createTestTransactionCoordinator({
       beginParticipant: async () => {},
       prepareParticipant: async (_sessionId, partitionId) => {
         prepareCalls.push(partitionId);
@@ -698,7 +725,7 @@ test('DistributedTransactionCoordinator - rejects enlistment after freeze',
   async (t) => {
     const participantBegins = [];
     let frozenEnlistResult;
-    const coordinator = new DistributedTransactionCoordinator({
+    const coordinator = createTestTransactionCoordinator({
       beginParticipant: async (_sessionId, partitionId) => {
         participantBegins.push(partitionId);
       },
@@ -737,7 +764,7 @@ test('DistributedTransactionCoordinator - commit queues behind paused enlistment
     const beginReachedPromise = new Promise((resolve) => {
       beginReached = resolve;
     });
-    const coordinator = new DistributedTransactionCoordinator({
+    const coordinator = createTestTransactionCoordinator({
       beginParticipant: async () => {
         beginReached();
         await beginPaused;
@@ -764,10 +791,16 @@ test('DistributedTransactionCoordinator - commit queues behind paused enlistment
     t.same(commitResult.participants, ['p1']);
   });
 
-test('DistributedTransactionCoordinator - one phase resolves ambiguous commit outcome',
+// Superseded (TX1 design 11.2 and seams C', D): the single participant is
+// prepared first, so its COMMIT follows a recorded COMMIT decision. A commit
+// miss reads the participant's durable outcome: COMMITTED completes it; any
+// other outcome leaves the decided transaction COMMITTING for recovery (a
+// recorded COMMIT is never rolled back, and NOT_COMMITTED from a participant
+// after it is an alarm, not a rollback).
+test('DistributedTransactionCoordinator - single-participant commit miss',
   async (t) => {
     const buildCoordinator = (outcome) =>
-      new DistributedTransactionCoordinator({
+      createTestTransactionCoordinator({
         participantRetryMaxRetries: 0,
         beginParticipant: async () => {},
         commitParticipant: async () => {
@@ -796,7 +829,12 @@ test('DistributedTransactionCoordinator - one phase resolves ambiguous commit ou
       'one-phase-restart-before-delivery',
     );
     t.equal(notCommittedResult.success, false);
-    t.equal(notCommittedResult.deferred, false);
+    t.equal(notCommittedResult.deferred, true);
+    t.equal(notCommittedResult.commitPointReached, true);
+    t.equal(
+      notCommitted.getTransaction('one-phase-restart-before-delivery').status,
+      TRANSACTION_STATUS.COMMITTING,
+    );
 
     const unknown = buildCoordinator(PARTICIPANT_COMMIT_OUTCOME.UNKNOWN);
     await unknown.begin('one-phase-unknown');
@@ -811,7 +849,7 @@ test('DistributedTransactionCoordinator - one phase resolves ambiguous commit ou
 
 test('DistributedTransactionCoordinator - recovery rejects incomplete frozen set',
   async (t) => {
-    const coordinator = new DistributedTransactionCoordinator();
+    const coordinator = createTestTransactionCoordinator();
     t.throws(() => coordinator.recoverFromSystemTables({
       transactions: [{
         transaction_id: 'tx-incomplete-frozen',
@@ -834,9 +872,14 @@ test('DistributedTransactionCoordinator - recovery rejects incomplete frozen set
     });
   });
 
-test('DistributedTransactionCoordinator - recovery rejects multi-participant 1PC',
+// Superseded (TX1 design 9.2 derivation 4): ONE_PHASE_COMMIT is retired with
+// the fast path; a recovered legacy row naming it is refused as incomplete
+// (its disposition is the cutover's L6 precondition), never installed.
+const RETIRED_ONE_PHASE_COMMIT_MODE = 'ONE_PHASE_COMMIT';
+
+test('DistributedTransactionCoordinator - recovery rejects a legacy 1PC row',
   async (t) => {
-    const coordinator = new DistributedTransactionCoordinator();
+    const coordinator = createTestTransactionCoordinator();
     const payload = {
       transactions: [{
         transaction_id: 'tx-invalid-one-phase',
@@ -844,7 +887,7 @@ test('DistributedTransactionCoordinator - recovery rejects multi-participant 1PC
         status: TRANSACTION_STATUS.COMMITTING,
         transaction_mode: TRANSACTION_MODE.EXPLICIT,
         participant_set_state: PARTICIPANT_SET_STATE.FROZEN,
-        commit_mode: COMMIT_MODE.ONE_PHASE_COMMIT,
+        commit_mode: RETIRED_ONE_PHASE_COMMIT_MODE,
         frozen_participant_count: 2,
         created_at: 1,
         updated_at: 1,

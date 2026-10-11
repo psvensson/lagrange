@@ -1,0 +1,35 @@
+{
+  "scope": "Publication completeness correction: global *.log ignore excluded raw log files from earlier temporary-index snapshots. These byte-identical .log.txt copies make the already-referenced raw evidence available in the next preservation push. Prior source/results/verdict scope unchanged.",
+  "entries": [
+    {
+      "originalLocalPath": "activation-ordered-replay-26dedb08/focused-ordered-settlement-replay.log",
+      "publishedCopy": "activation-ordered-replay-26dedb08/focused-ordered-settlement-replay.log.txt",
+      "sha256": "63cb520b3de77ce4e94e02b95de37fdc0f956e267464caa35940a94219e0284d",
+      "bytes": 7253
+    },
+    {
+      "originalLocalPath": "activation-ordered-replay-26dedb08/terminal-matrix-after-ordered-replay.log",
+      "publishedCopy": "activation-ordered-replay-26dedb08/terminal-matrix-after-ordered-replay.log.txt",
+      "sha256": "1633101113bbead239795c1184429c68a697253d01a21ac24c314b268a136402",
+      "bytes": 3401
+    },
+    {
+      "originalLocalPath": "activation-ordered-replay-26dedb08/terminal-matrix-settlement-stage.log",
+      "publishedCopy": "activation-ordered-replay-26dedb08/terminal-matrix-settlement-stage.log.txt",
+      "sha256": "c480111833e5422d61b462f1451664285158d084b6d96eb11b30ff9d39bb0427",
+      "bytes": 12381
+    },
+    {
+      "originalLocalPath": "activation-ordered-replay-26dedb08-oracle/pgwire-after-ordered-settlement-replay.log",
+      "publishedCopy": "activation-ordered-replay-26dedb08-oracle/pgwire-after-ordered-settlement-replay.log.txt",
+      "sha256": "852a811a18d336a4c61506fb0784861f04c94ff41fa26a1f7e354d197fa660a0",
+      "bytes": 108577
+    },
+    {
+      "originalLocalPath": "activation-explicit-commit-trace/terminal-matrix-explicit-commit-trace.log",
+      "publishedCopy": "activation-explicit-commit-trace/terminal-matrix-explicit-commit-trace.log.txt",
+      "sha256": "9ba7f02d0421923fe05e8f1b68a4c6e931425d86a3cdd7402434f419db81c767",
+      "bytes": 3812
+    }
+  ]
+}

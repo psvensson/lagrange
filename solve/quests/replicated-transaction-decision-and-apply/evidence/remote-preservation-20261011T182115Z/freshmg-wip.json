@@ -1,0 +1,11 @@
+{
+  "worktree": "/mnt/data/peter/projects/.worktrees/freshmg-integration-20261010",
+  "worktreeHead": "50a003b86e4d2f0017d6772d11446c027339151e",
+  "base": "50a003b86e4d2f0017d6772d11446c027339151e",
+  "snapshot": "c60e5368880ef86cfca771d07755cc1fca2d5526",
+  "tree": "11615dafa13824a697bf7934912ef307deedb4a5",
+  "remoteRef": "refs/heads/checkpoint/rs-raft-preservation-20261011T182115Z/freshmg-wip",
+  "callerStatePreserved": true,
+  "callerIndexSha256": "8137a11d3a20b082df7c142a3238fec5aba8c9123100b120305c30503340c399",
+  "status": "Preservation only; no additional review or readiness approval"
+}
