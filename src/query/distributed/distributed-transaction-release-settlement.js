@@ -89,6 +89,11 @@ function settlementOf(kind, authority, fields = {}) {
     participantSetText: authority.row.participant_set_text, ...fields};
 }
 
+function reportFailure(observeFailure, stage, transactionId, fields = {}) {
+  if (typeof observeFailure !== 'function') return;
+  observeFailure(deepFreeze({stage, transactionId, ...fields}));
+}
+
 async function applySettlement(service, settlement) {
   const answer = await service.handleApplicationMessage({
     type: COORDINATOR_SETTLEMENT_TYPE,
@@ -102,40 +107,69 @@ async function applySettlement(service, settlement) {
   return result;
 }
 
-async function readAuthority(engine, transactionId, now) {
+async function readAuthority(engine, transactionId, now, observeFailure, stage) {
   try {
-    return releaseRowOf(
+    const authority = releaseRowOf(
       await engine.readDistributedTransactionRecoveryState(transactionId),
       transactionId,
       now,
     );
-  } catch {
+    if (authority === null) {
+      reportFailure(observeFailure, stage, transactionId,
+        {reason: 'authoritative_row_invalid_or_unavailable'});
+    }
+    return authority;
+  } catch (error) {
+    reportFailure(observeFailure, stage, transactionId,
+      {reason: 'authoritative_read_failed', error: String(error?.message ?? error)});
     return null;
   }
 }
 
-async function ensureFrozen(engine, service, authority, now) {
+async function ensureFrozen(engine, service, authority, now, observeFailure) {
   if (authority === null) return null;
   if (authority.row.participant_set_state === PARTICIPANT_SET_STATE.FROZEN) {
     return authority;
   }
-  if (!authority.expired || authority.decision.state !== RECORDED_DECISION_STATE.ABSENT ||
-      await applySettlement(service, settlementOf(KIND.FREEZE, authority)) === null) return null;
-  return readAuthority(engine, authority.row.transaction_id, now);
+  const transactionId = authority.row.transaction_id;
+  if (!authority.expired || authority.decision.state !== RECORDED_DECISION_STATE.ABSENT) {
+    reportFailure(observeFailure, 'freeze_ineligible', transactionId,
+      {expired: authority.expired, decisionState: authority.decision.state});
+    return null;
+  }
+  if (await applySettlement(service, settlementOf(KIND.FREEZE, authority)) === null) {
+    reportFailure(observeFailure, 'freeze_apply', transactionId);
+    return null;
+  }
+  return readAuthority(engine, transactionId, now, observeFailure, 'freeze_readback');
 }
 
-async function ensureDecision(engine, service, authority, now) {
+async function ensureDecision(engine, service, authority, now, observeFailure) {
   if (authority?.decision.state === RECORDED_DECISION_STATE.RECORDED) return authority;
-  if (!authority || authority.row.participant_set_state !== PARTICIPANT_SET_STATE.FROZEN ||
-      authority.decision.state !== RECORDED_DECISION_STATE.ABSENT) return null;
+  if (!authority) return null;
+  const transactionId = authority.row.transaction_id;
+  if (authority.row.participant_set_state !== PARTICIPANT_SET_STATE.FROZEN ||
+      authority.decision.state !== RECORDED_DECISION_STATE.ABSENT) {
+    reportFailure(observeFailure, 'decision_ineligible', transactionId,
+      {participantSetState: authority.row.participant_set_state,
+        decisionState: authority.decision.state});
+    return null;
+  }
   const record = buildDecisionRecord(authority.row.transaction_id, DECISION.ROLLBACK,
     authority.pairs.map(([participantId]) => [participantId, null]));
-  if (!record || await applySettlement(service, settlementOf(KIND.DECIDE, authority, {
+  if (!record) {
+    reportFailure(observeFailure, 'decision_record', transactionId);
+    return null;
+  }
+  if (await applySettlement(service, settlementOf(KIND.DECIDE, authority, {
     decision: record.decision,
     decisionText: record.decisionText,
     decisionDigest: record.decisionDigest,
-  })) === null) return null;
-  return readAuthority(engine, authority.row.transaction_id, now);
+  })) === null) {
+    reportFailure(observeFailure, 'decision_apply', transactionId);
+    return null;
+  }
+  return readAuthority(engine, transactionId, now, observeFailure, 'decision_readback');
 }
 
 function participantAnswerComplete(decision, answer, expected) {
@@ -153,73 +187,119 @@ function participantAnswerComplete(decision, answer, expected) {
   }
 }
 
-async function settleParticipants(engine, authority) {
+async function settleParticipants(engine, authority, observeFailure) {
   const record = authority.decision;
   const replies = [];
   for (let index = 0; index < authority.pairs.length; index += 1) {
     const [participantId, partitionId] = authority.pairs[index];
     const recorded = record.participants[index];
-    if (recorded?.[0] !== participantId) return null;
+    if (recorded?.[0] !== participantId) {
+      reportFailure(observeFailure, 'participant_binding', authority.row.transaction_id,
+        {participantId, partitionId});
+      return null;
+    }
+    const operation = record.decision === DECISION.COMMIT ?
+      QUERY_OPERATION.COMMIT : QUERY_OPERATION.ROLLBACK;
     let answer;
     try {
       answer = await engine.deliverTransactionOperation(
         authority.row.session_id,
         partitionId,
-        record.decision === DECISION.COMMIT ? QUERY_OPERATION.COMMIT :
-          QUERY_OPERATION.ROLLBACK,
+        operation,
         {transactionId: authority.row.transaction_id, participantId,
           commitMode: COMMIT_MODE.TWO_PHASE_COMMIT,
           transactionEpoch: authority.row.transaction_epoch,
           decision: record.decision, preparedDigest: recorded[1],
           decisionText: record.decisionText, decisionDigest: record.decisionDigest},
       );
-    } catch {
+    } catch (error) {
+      reportFailure(observeFailure, 'participant_delivery', authority.row.transaction_id,
+        {participantId, partitionId, operation,
+          error: String(error?.message ?? error),
+          failureCode: error?.failureCode ?? null,
+          state: error?.state ?? null, outcome: error?.outcome ?? null});
       return null;
     }
     if (!participantAnswerComplete(record.decision, answer, {
-      operation: record.decision === DECISION.COMMIT ? QUERY_OPERATION.COMMIT :
-        QUERY_OPERATION.ROLLBACK,
+      operation,
       partitionId,
       transactionId: authority.row.transaction_id,
       participantId,
-    })) return null;
+    })) {
+      reportFailure(observeFailure, 'participant_reply', authority.row.transaction_id,
+        {participantId, partitionId, operation});
+      return null;
+    }
     replies.push(participantId);
   }
   return replies;
 }
 
-async function settleOne(engine, service, transactionId, now) {
-  let authority = await readAuthority(engine, transactionId, now);
-  authority = await ensureFrozen(engine, service, authority, now);
-  authority = await ensureDecision(engine, service, authority, now);
+async function settleOne(engine, service, transactionId, now, observeFailure) {
+  let authority = await readAuthority(engine, transactionId, now,
+    observeFailure, 'initial_authority');
+  authority = await ensureFrozen(engine, service, authority, now, observeFailure);
+  authority = await ensureDecision(engine, service, authority, now, observeFailure);
   if (!authority || authority.decision.state !== RECORDED_DECISION_STATE.RECORDED) return null;
-  const participantIds = await settleParticipants(engine, authority);
+  const participantIds = await settleParticipants(engine, authority, observeFailure);
   if (participantIds === null) return null;
   const terminalStatus = TERMINAL_STATUS[authority.decision.decision];
-  if (!terminalStatus || await applySettlement(service,
+  if (!terminalStatus) {
+    reportFailure(observeFailure, 'terminal_status', transactionId,
+      {decision: authority.decision.decision});
+    return null;
+  }
+  if (await applySettlement(service,
     settlementOf(KIND.PROGRESS, authority, {
       decisionDigest: authority.decision.decisionDigest,
       status: terminalStatus,
-    })) === null) return null;
-  const after = await readAuthority(engine, transactionId, now);
+    })) === null) {
+    reportFailure(observeFailure, 'progress_apply', transactionId,
+      {decision: authority.decision.decision, terminalStatus});
+    return null;
+  }
+  const after = await readAuthority(engine, transactionId, now,
+    observeFailure, 'progress_readback');
   if (!after || after.decision.state !== RECORDED_DECISION_STATE.RECORDED ||
       after.decision.decisionText !== authority.decision.decisionText ||
-      after.row.status !== terminalStatus) return null;
+      after.row.status !== terminalStatus) {
+    reportFailure(observeFailure, 'progress_binding', transactionId,
+      {decision: authority.decision.decision, terminalStatus,
+        observedStatus: after?.row?.status ?? null});
+    return null;
+  }
   return deepFreeze({transactionId, decision: after.decision.decision,
     decisionDigest: after.decision.decisionDigest, terminalStatus,
     participantIds: Object.freeze(participantIds)});
 }
 
-async function settleTransactionReleaseRows({engine, service, census, now = Date.now()}) {
-  if (!engine || typeof engine.readDistributedTransactionRecoveryState !== 'function' ||
+async function settleTransactionReleaseRows({engine, service, census, now = Date.now(),
+  observeFailure = null}) {
+  const inputInvalid = !engine ||
+      typeof engine.readDistributedTransactionRecoveryState !== 'function' ||
       typeof engine.deliverTransactionOperation !== 'function' ||
       !service || typeof service.handleApplicationMessage !== 'function' ||
       census?.state !== TRANSACTION_RELEASE_CENSUS_STATE.HELD ||
       census.legacyTransactionIds?.length !== 0 ||
-      !Array.isArray(census.recoverableTransactionIds)) return null;
+      !Array.isArray(census.recoverableTransactionIds);
+  if (inputInvalid) {
+    reportFailure(observeFailure, 'settlement_input', null, {
+      enginePresent: engine !== null && engine !== undefined,
+      recoveryReaderPresent:
+        typeof engine?.readDistributedTransactionRecoveryState === 'function',
+      participantDeliveryPresent: typeof engine?.deliverTransactionOperation === 'function',
+      settlementPortPresent: typeof service?.handleApplicationMessage === 'function',
+      censusState: census?.state ?? null,
+      legacyTransactionCount: Array.isArray(census?.legacyTransactionIds) ?
+        census.legacyTransactionIds.length : null,
+      recoverableTransactionCount: Array.isArray(census?.recoverableTransactionIds) ?
+        census.recoverableTransactionIds.length : null,
+    });
+    return null;
+  }
   const transactions = [];
   for (const transactionId of census.recoverableTransactionIds) {
-    const result = await settleOne(engine, service, transactionId, now);
+    const result = await settleOne(engine, service, transactionId, now, observeFailure);
     if (result === null) return null;
     transactions.push(result);
   }

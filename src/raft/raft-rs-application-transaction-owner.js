@@ -50,6 +50,7 @@ function runIsolatedEffects(effects) {
  */
 function applyCommittedEntryTransaction({store, groupId, entry, confState,
   membershipGenerationIndex, applyCommittedEntry, admitted = false,
+  committedConfiguration = null,
   committedMembershipContext = null, applyCommittedMembershipContext = null,
   runApplySlice = null}) {
   if (committedMembershipContext !== null &&
@@ -61,7 +62,8 @@ function applyCommittedEntryTransaction({store, groupId, entry, confState,
     if (carriesProposedCommand(entry) &&
         typeof applyCommittedEntry === 'function') {
       const applied = applyCommittedEntry(Buffer.from(entry.data, 'base64'),
-        {index: entry.index, term: entry.term, effects});
+        {index: entry.index, term: entry.term, effects,
+          committedConfiguration});
       if (applied && typeof applied.then === 'function') {
         throw new TypeError(ASYNC_APPLICATION_CALLBACK_ERROR);
       }

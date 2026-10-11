@@ -41,6 +41,8 @@ import {
 } from '../../transport/node-address-resolution.js';
 import {LoggingService} from '../../logging/logging-service.js';
 import {SUBSYSTEM} from '../../constants/index.js';
+import {retireParticipantReleaseBeforeReplacement} from
+  '../../node/participant-release-lifecycle-retirement.js';
 
 const SNAPSHOT_WIRING_LOG_MSG = Object.freeze({
   DISPATCH_FAILED: 'Snapshot catch-up dispatch failed',
@@ -195,8 +197,10 @@ function armSnapshotOfferRouting(context) {
       connection,
       resolveLocalReplica: (raftGroupId) =>
         resolveLocalReplicaService(replicaHandler, raftGroupId),
-      orchestrate: ({service, socket}) =>
-        orchestrateSnapshotCatchupInstall({
+      orchestrate: ({service, socket}) => {
+        const deadlineAtMs = replicaHandler.timeSource.now() +
+          replicaHandler.syncTimeoutMs;
+        return orchestrateSnapshotCatchupInstall({
           service,
           receiveOptions: {
             socket,
@@ -216,6 +220,9 @@ function armSnapshotOfferRouting(context) {
             );
             return replicaHandler.createPartitionService(serviceOptions);
           },
+          beforeServiceReplacement: (current) =>
+            retireParticipantReleaseBeforeReplacement(replicaHandler, current,
+              {deadlineAtMs}),
           registerReplacementService: (replacement) =>
             replicaHandler.replaceLocalReplicaService(
               service.replicaId, replacement),
@@ -226,7 +233,8 @@ function armSnapshotOfferRouting(context) {
               error: error?.message,
             });
           return null;
-        }),
+        });
+      },
       onOutcome: context.onRouteOutcome,
     });
   });

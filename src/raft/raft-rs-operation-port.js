@@ -88,12 +88,14 @@ function coreOk(reason, fields = {}) {
 // command the port encoded, decoded by the same codec, and the entry's
 // position and deferred-effect bag the runtime hands the application.
 function committedEntryApplication(applyCommittedEntry) {
-  return (bytes, {index, term, effects}) => applyCommittedEntry(Object.freeze({
-    command: decodeCommittedProposal(bytes),
-    index: Number(index),
-    term: Number(term),
-    effects,
-  }));
+  return (bytes, {index, term, effects, committedConfiguration}) =>
+    applyCommittedEntry(Object.freeze({
+      command: decodeCommittedProposal(bytes),
+      index: Number(index),
+      term: Number(term),
+      committedConfiguration,
+      effects,
+    }));
 }
 
 function tickIntervalOf(timing) {
@@ -226,6 +228,10 @@ function createRaftRsOperationPort(request) {
       registry.resolveReplicaIdentity(raftPeerId),
     applyCommittedEntry: committedEntryApplication(required(
       request, RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY)),
+    admitProposalDispatch: (bytes) => {
+      const admit = request[RAFT_OPERATION_PORT_REQUEST.ADMIT_PROPOSAL_DISPATCH];
+      return typeof admit === 'function' ? admit(decodeCommittedProposal(bytes)) : null;
+    },
     applyCommittedMembershipContext: (context, position) => {
       registry.reserveCommittedReplica(context.replicaIdentity, context.peerId);
       if (context.stage === RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER) {
@@ -324,7 +330,7 @@ function createRaftRsOperationPort(request) {
     subscribe,
     step: enqueueStep,
     propose: (value) => executeTurn({
-      type: 'propose', bytes: encodeProposal(value),
+      type: RUNTIME_COMMAND.PROPOSE, bytes: encodeProposal(value),
     }),
     proposeConfChange: (change) => protocolTurn(() => {
       const normalized = normalizedConfChange(change, registry);

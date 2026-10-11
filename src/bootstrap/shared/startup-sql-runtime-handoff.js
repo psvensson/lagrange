@@ -7,6 +7,8 @@ import {
 import {
   ensureServiceInstallationReconcilerOwner,
 } from './service-installation-reconciler-setup.js';
+import {CONTROL_PLANE_READINESS_DIMENSION} from
+  '../../control-plane/control-plane-readiness-constants.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const numberIsSafeInteger = Number.isSafeInteger;
@@ -60,6 +62,7 @@ function attachRuntimeAccessPolicyOwner(owner, sqlQueryEngine) {
  * @param {Object|null} [options.cacheMutationTarget]
  * @param {Object|null} [options.messageRouter]
  * @param {Function|null} [options.partitionServicesProvider]
+ * @param {boolean} [options.activateDistributedTransactionRecovery=true]
  * @return {*}
  */
 function attachSqlRuntimeToStartupOwner(options) {
@@ -140,6 +143,21 @@ function attachSqlRuntimeToStartupOwner(options) {
   }
 
   const rebalanceCoordinator = owner.rebalanceCoordinator || null;
+  if (typeof sqlQueryEngine.setRebalanceCoordinator === LOCAL_STR_FUNCTION) {
+    sqlQueryEngine.setRebalanceCoordinator(rebalanceCoordinator);
+  }
+  if (rebalanceCoordinator &&
+      typeof sqlQueryEngine.setTablePartitionProvisioner === LOCAL_STR_FUNCTION &&
+      typeof sqlQueryEngine.provisionInitialTablePartition === LOCAL_STR_FUNCTION) {
+    sqlQueryEngine.setTablePartitionProvisioner((context) =>
+      sqlQueryEngine.provisionInitialTablePartition(context));
+  }
+  if (typeof sqlQueryEngine.setDefaultRoutingReadinessDimension ===
+      LOCAL_STR_FUNCTION) {
+    sqlQueryEngine.setDefaultRoutingReadinessDimension(
+      CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+    );
+  }
   if (
     rebalanceCoordinator &&
     typeof rebalanceCoordinator.syncOwnerDependencies === LOCAL_STR_FUNCTION
@@ -178,7 +196,8 @@ function attachSqlRuntimeToStartupOwner(options) {
   }
 
   let transactionRecovery = null;
-  if (typeof owner.activateDistributedTransactionRecovery ===
+  if (options.activateDistributedTransactionRecovery !== false &&
+      typeof owner.activateDistributedTransactionRecovery ===
       LOCAL_STR_FUNCTION) {
     transactionRecovery = activateOwnerTrackedTransactionRecovery(owner);
   }

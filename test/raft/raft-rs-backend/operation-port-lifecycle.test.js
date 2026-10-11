@@ -94,6 +94,107 @@ test('malformed ingress is refused locally without core entry', async () => {
   }
 });
 
+test('a queued proposal rechecks local admission after the prior runtime turn and before ' +
+  'native propose', async () => {
+  const heldSends = [];
+  let holdSends = false;
+  let held = false;
+  let cluster = null;
+  cluster = new PartitionNodeCluster({
+    partitionId: 'queued-proposal-dispatch-admission',
+    replicaIds: ['dispatch-a', 'dispatch-b', 'dispatch-c'],
+    sendFor: (fromReplicaId, address, envelope) => holdSends ?
+      new Promise((resolve) => heldSends.push(() => {
+        cluster.queue(fromReplicaId, address, envelope);
+        resolve(undefined);
+      })) : undefined,
+    admitFor: (_replicaId, command) => held && command.entryId === 'second' ?
+      {admitted: false, reason: 'test-local-hold', retryable: true,
+        recoveryRequired: false} : null,
+  });
+  try {
+    assert.equal(cluster.settle(() => cluster.leaderReplicaId() !== null), true);
+    const leader = cluster.leaderReplicaId();
+    const followers = [...cluster.replicas.keys()]
+      .filter((replicaId) => replicaId !== leader);
+    const first = await cluster.propose(leader, {entryId: 'first'});
+    for (const follower of followers) {
+      for (const envelope of cluster.replica(follower).inbox.splice(0)) {
+        cluster.node(follower).step(envelope);
+      }
+      cluster.node(follower).tick();
+    }
+    for (const envelope of cluster.replica(leader).inbox.splice(0)) {
+      cluster.node(leader).step(envelope);
+    }
+    holdSends = true;
+    const completingFirst = Promise.resolve(cluster.node(leader).tick());
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.ok(heldSends.length > 0,
+      'the first committed Ready is held in a real peer delivery');
+    const second = cluster.propose(leader, {entryId: 'second'});
+    held = true;
+    while (heldSends.length > 0) {
+      heldSends.shift()();
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    holdSends = false;
+    assert.equal(first.outcome, 'CORE_OK');
+    assert.equal((await completingFirst).outcome, 'CORE_OK');
+    const refused = await second;
+    assert.equal(refused.outcome, 'CORE_REFUSED');
+    assert.equal(refused.reason, 'test-local-hold');
+    assert.equal(refused.phase, 'dispatch');
+  } finally {
+    cluster.dispose();
+  }
+});
+
+test('one committed entry gives every replica the same application configuration when ' +
+  'one local identity reservation is absent', async () => {
+  const observed = new Map();
+  const command = {entryId: 'replicated-configuration-only'};
+  const cluster = new PartitionNodeCluster({
+    partitionId: 'replicated-configuration-local-reservation-gap',
+    replicaIds: ['config-a', 'config-b', 'config-c'],
+    applyFor: (replicaId, applied, {committedConfiguration}) => {
+      if (applied.entryId === command.entryId) {
+        observed.set(replicaId, committedConfiguration);
+      }
+    },
+  });
+  try {
+    assert.equal(cluster.settle(() => cluster.leaderReplicaId() !== null), true);
+    const leader = cluster.leaderReplicaId();
+    const incompleteReplicaId = [...cluster.replicas.keys()]
+      .find((replicaId) => replicaId !== leader);
+    const omittedReplicaId = [...cluster.replicas.keys()]
+      .find((replicaId) => replicaId !== incompleteReplicaId);
+    const incompleteReplica = cluster.replica(incompleteReplicaId);
+    const omittedPeerId = cluster.raftPeerIdOf(omittedReplicaId);
+    const registry = new RaftRsPeerIdentityRegistry(incompleteReplica.db);
+    assert.equal(registry.replicaIdentityOf(omittedPeerId), omittedReplicaId);
+    incompleteReplica.db.prepare(
+      'DELETE FROM raft_rs_peer_identity WHERE replica_identity = ?')
+      .run(omittedReplicaId);
+    assert.equal(registry.resolveReplicaIdentity(omittedPeerId).replicaIdentity,
+      null, 'precondition: one lawful local observation lacks the reservation');
+
+    assert.equal((await cluster.propose(leader, command)).outcome, 'CORE_OK');
+    assert.equal(cluster.settle(() => observed.size === cluster.replicas.size),
+      true, 'the exact entry applies on every replica');
+    const facts = [...observed.values()];
+    assert.equal(new Set(facts.map(JSON.stringify)).size, 1,
+      'application receives one replicated configuration despite local registry drift');
+    assert.equal(Object.hasOwn(facts[0], 'identities'), false,
+      'a local identity projection never enters deterministic application');
+    assert.equal(facts[0].voters.includes(omittedPeerId), true,
+      'the replicated ConfState still carries the omitted peer');
+  } finally {
+    cluster.dispose();
+  }
+});
+
 test('durable retirement refuses every active operation before core entry after restart',
   async () => {
     const cluster = new PartitionNodeCluster({
