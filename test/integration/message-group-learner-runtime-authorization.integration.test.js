@@ -738,8 +738,8 @@ test('durable learner intent is consumed only through the bound repository and r
         const f = await fixture(t);
         const proposed = await f.run(); assertCommittedLearner(f, proposed);
         const created = await learnerCheckpoint(f);
-        assert.equal(created.descriptor.payloadVersion, 2,
-          'origin-bearing images must not silently reuse the old payload contract');
+        assert.equal(created.descriptor.payloadVersion, 3,
+          'origin-bearing images use the canonical reservation-history contract');
         const payload = new Database(path.join(created.checkpointDir, RAFT_CHECKPOINT_PAYLOAD_FILE),
           {readonly: true});
         try {
@@ -754,10 +754,11 @@ test('durable learner intent is consumed only through the bound repository and r
         } finally {
           payload.close();
         }
-        const old = {...created.descriptor, payloadVersion: 1};
+        const old = {...created.descriptor, payloadVersion: 2};
         writeAtomicDurable(path.join(created.checkpointDir, RAFT_CHECKPOINT_DESCRIPTOR_FILE), old);
         assert.equal(readCheckpoint({checkpointDir: created.checkpointDir}).outcome,
-          RAFT_CHECKPOINT_VALIDATION_OUTCOME.UNSUPPORTED_PAYLOAD_KIND);
+          RAFT_CHECKPOINT_VALIDATION_OUTCOME.UNSUPPORTED_PAYLOAD_KIND,
+          'a pre-history image is not allowed to fabricate promotion evidence');
       });
     await t.test('actual origin-bearing image installs and reopens on the exact fresh learner',
       async (t) => {

@@ -20,6 +20,8 @@ import {RAFT_MEMBERSHIP_TRANSITION_REASON as REASON, RAFT_MEMBERSHIP_OPERATION,
 import {COMMITTED_LEARNER_ACTION_KIND as KIND, COMMITTED_MEMBERSHIP_REFUSAL} from
   '../../src/raft/raft-committed-membership-constants.js';
 import {deriveRaftRsPeerId} from '../../src/raft/raft-rs-peer-identity.js';
+import {encodeCommittedPromotionAdmission} from
+  '../../src/raft/raft-rs-committed-membership-context.js';
 import {committedStampOfAnswer} from '../../src/raft/raft-committed-membership-stamp.js';
 import {MEMBERSHIP_PHASE as PHASE, decodeMembershipIdentity} from
   '../../src/rebalancer/replica-operation-message-group-membership-permit.js';
@@ -149,6 +151,8 @@ test('voter evidence guards: a committed promotion answer is evidence only with 
     context: {...committed.receipt.context, ...context}}});
   const membership = (changes) =>
     ({...committed, membership: {...committed.membership, ...changes}});
+  const promotionFact = (changes) =>
+    ({...committed, promotionFact: {...committed.promotionFact, ...changes}});
   const generation = promotion.leaderConfigurationStamp.membershipGenerationIndex;
   const cases = {
     'a receipt the origin codec refuses': [{...committed, receipt: {groupId: 7}}, 'conflict'],
@@ -169,10 +173,11 @@ test('voter evidence guards: a committed promotion answer is evidence only with 
     'a membership that is no committed stamp': [membership({voters: 'no-peers'}), 'conflict'],
     'a moved applied index': [{...committed,
       observedAppliedIndex: committed.observedAppliedIndex + 1}, 'conflict'],
-    'a stamp at the permit\'s own configuration generation':
-      [membership({membershipGenerationIndex: generation}), 'conflict'],
-    'a stamp of a term before the permit\'s': [membership({term: promotion.leaderTerm - 1}),
-      'conflict'],
+    'a fact at the permit\'s own configuration generation':
+      [promotionFact({index: String(generation), after: {...committed.promotionFact.after,
+        membershipGenerationIndex: String(generation)}}), 'conflict'],
+    'a fact of a term before the permit\'s':
+      [promotionFact({term: String(promotion.leaderTerm - 1)}), 'conflict'],
   };
   const receipts = countWrites(f, VOTER_RECEIPT); const before = f.row();
   for (const [name, [answer, expected]] of Object.entries(cases)) {
@@ -240,18 +245,15 @@ test('the recorded voter fact is one pure predicate: every clause refuses its fo
     assert.equal(valid({}), true, 'positive control: the recorded row is a valid voter fact');
     const permit = JSON.parse(operation.messageGroupMembershipPermit);
     const voter = JSON.parse(operation.messageGroupVoterStamp);
-    const canonical = (stamp) => {
-      const validated = committedStampOfAnswer(stamp);
-      assert.ok(validated,
-        'the forgery is a valid committed stamp: only the fact predicate refuses it');
-      return JSON.stringify(validated);
-    };
-    const extra = 'forged-extra-member'; const extraPeer = deriveRaftRsPeerId(extra);
+    const canonical = (stamp) => JSON.stringify(stamp);
+    const canonicalFact = (fact) => encodeCommittedPromotionAdmission(fact);
+    const extraPeer = deriveRaftRsPeerId('forged-extra-member');
     const widened = (role) => {
-      const voters = role === 'voter' ? [...voter.voters, extraPeer] : voter.voters;
-      const learners = role === 'learner' ? [...voter.learners, extraPeer] : voter.learners;
-      return canonical({...voter, voters, learners, identities: {...voter.identities,
-        [extraPeer]: extra}, configurationKey: configurationOf(voters, learners)});
+      const voters = role === 'voter' ? [...voter.after.voters, extraPeer] : voter.after.voters;
+      const learners = role === 'learner' ? [...voter.after.learners, extraPeer] :
+        voter.after.learners;
+      return canonical({...voter, after: {...voter.after, voters, learners,
+        configurationKey: configurationOf(voters, learners)}});
     };
     const leaderGeneration = permit.leaderConfigurationStamp.membershipGenerationIndex;
     const forgeries = {
@@ -274,22 +276,25 @@ test('the recorded voter fact is one pure predicate: every clause refuses its fo
         JSON.stringify({...permit, proposalIndex: permit.proposalIndex + 1})},
       'a voter stamp with an extra voter': {messageGroupVoterStamp: widened('voter')},
       'a voter stamp with a voter exchanged for another peer': {messageGroupVoterStamp: (() => {
-        const exchanged = voter.voters.find((peer) => peer !== identity.targetPeerId &&
-          voter.identities[peer] !== identity.sourceReplicaId);
-        const voters = voter.voters.map((peer) => (peer === exchanged ? extraPeer : peer));
-        const identities = Object.fromEntries(Object.entries(voter.identities)
-          .filter(([peer]) => peer !== exchanged).concat([[extraPeer, extra]]));
-        return canonical({...voter, voters, identities,
-          configurationKey: configurationOf(voters, voter.learners)});
+        const sourcePeer = deriveRaftRsPeerId(identity.sourceReplicaId);
+        const exchanged = voter.after.voters.find((peer) =>
+          peer !== identity.targetPeerId && peer !== sourcePeer);
+        const voters = voter.after.voters.map((peer) =>
+          (peer === exchanged ? extraPeer : peer));
+        return canonical({...voter, after: {...voter.after, voters,
+          configurationKey: configurationOf(voters, voter.after.learners)}});
       })()},
       'a voter stamp with an extra learner': {messageGroupVoterStamp: widened('learner')},
       'a voter stamp at the permit\'s own configuration generation': {
-        messageGroupVoterStamp: canonical({...voter, membershipGenerationIndex: leaderGeneration}),
+        messageGroupVoterStamp: canonical({...voter, index: String(leaderGeneration),
+          after: {...voter.after, membershipGenerationIndex: String(leaderGeneration)}}),
         messageGroupMembershipPermit: JSON.stringify({...permit, proposalIndex: leaderGeneration})},
       'a voter stamp of a term before the permit\'s':
-        {messageGroupVoterStamp: canonical({...voter, term: permit.leaderTerm - 1})},
+        {messageGroupVoterStamp: canonical({...voter, term: String(permit.leaderTerm - 1)})},
       'a voter stamp still naming the target a learner':
-        {messageGroupVoterStamp: operation.messageGroupLearnerStamp},
+        {messageGroupVoterStamp: canonical({...voter, after: {...voter.after,
+          voters: voter.after.voters.filter((peer) => peer !== identity.targetPeerId),
+          learners: [...voter.after.learners, identity.targetPeerId]}})},
       'a learner stamp that already names the target a voter':
         {messageGroupLearnerStamp: operation.messageGroupVoterStamp},
       'a learner stamp that dropped the source, with a voter stamp that dropped it too': (() => {
@@ -304,7 +309,8 @@ test('the recorded voter fact is one pure predicate: every clause refuses its fo
             configurationKey: configurationOf(voters, learners)});
         };
         return {messageGroupLearnerStamp: without(learner, learner.learners),
-          messageGroupVoterStamp: without(voter, [])};
+          messageGroupVoterStamp: canonical({...voter, after: {...voter.after,
+            voters: voter.after.voters.filter((peer) => peer !== sourcePeer)}})};
       })(),
       'a learner stamp that never held the target as its learner': {messageGroupLearnerStamp: (() => {
         const learner = JSON.parse(operation.messageGroupLearnerStamp);
@@ -317,6 +323,8 @@ test('the recorded voter fact is one pure predicate: every clause refuses its fo
     for (const [name, changes] of Object.entries(forgeries)) {
       assert.equal(valid(changes), false, name);
     }
+    assert.equal(canonicalFact(voter), operation.messageGroupVoterStamp,
+      'the positive receipt is the one canonical versioned fact');
   });
 
 test('an expired holder records nothing and asks for no evidence: STALE_OWNER', {timeout: 30000},
@@ -393,8 +401,8 @@ async (t) => {
   assert.equal(receipts.submitted(), 2, 'the replay writes nothing');
 });
 
-test('concurrent recordings with disagreeing evidence: one receipt applies; the loser reports ' +
-  'UNKNOWN, never RECORDED for evidence that is not on the row', {timeout: 30000}, async (t) => {
+test('concurrent recordings of the same immutable promotion fact: one receipt applies and both ' +
+  'callers read back the same exact fact', {timeout: 30000}, async (t) => {
   const fx = await promotionWorld(t); const {f} = fx;
   assert.equal((await fx.select()).outcome, 'recorded');
   assert.equal((await fx.propose()).reason, REASON.PROPOSED);
@@ -403,9 +411,6 @@ test('concurrent recordings with disagreeing evidence: one receipt applies; the 
   const committed = await f.cluster.node(FOUNDERS[0]).readCommittedMembership(
     learnerQuery(f, fx.permit()));
   assert.equal(committed.kind, KIND.COMMITTED);
-  const disagreeing = {...committed, membership: {...committed.membership,
-    gateOpen: !committed.membership.gateOpen}};
-  assert.ok(committedStampOfAnswer(disagreeing.membership), 'a valid stamp that differs');
   // Lockstep: the first receipt waits until the second recording read its own
   // basis row (its fourth operation-row read overall), so both CAS over the
   // in-flight row and exactly one applies.
@@ -421,13 +426,13 @@ test('concurrent recordings with disagreeing evidence: one receipt applies; the 
   const receipts = countWrites(f, VOTER_RECEIPT);
   const [first, second] = await Promise.all([
     f.repository.recordMessageGroupVoterOutcome(request, async () => committed),
-    f.repository.recordMessageGroupVoterOutcome(request, async () => disagreeing)]);
+    f.repository.recordMessageGroupVoterOutcome(request, async () => committed)]);
   f.pauseOperation(null);
-  assert.deepEqual([first.outcome, second.outcome], ['recorded', 'unknown'],
-    'the receipt on the row is the first recorder\'s; the second proves nothing of its own');
+  assert.deepEqual([first.outcome, second.outcome], ['recorded', 'recorded'],
+    'both callers read back the one immutable native fact');
   assert.deepEqual([receipts.submitted(), receipts.applied()], [2, 1], 'one receipt applied');
   assert.equal(f.row().message_group_voter_stamp,
-    JSON.stringify(committedStampOfAnswer(committed.membership)), 'the first evidence is recorded');
+    encodeCommittedPromotionAdmission(committed.promotionFact), 'the exact fact is recorded');
 });
 
 test('V2 (crafted): a committed answer whose stamp carries one extra voter or one extra learner ' +
@@ -443,15 +448,12 @@ async (t) => {
   assert.equal(committed.kind, KIND.COMMITTED);
   const extra = 'extra-member'; const extraPeer = deriveRaftRsPeerId(extra);
   const widened = (role) => {
-    const membership = committed.membership;
-    const voters = role === 'voter' ? [...membership.voters, extraPeer] : [...membership.voters];
-    const learners = role === 'learner' ? [...membership.learners, extraPeer] :
-      [...membership.learners];
-    const widenedMembership = {...membership, voters, learners,
-      identities: {...membership.identities, [extraPeer]: extra},
+    const after = committed.promotionFact.after;
+    const voters = role === 'voter' ? [...after.voters, extraPeer] : [...after.voters];
+    const learners = role === 'learner' ? [...after.learners, extraPeer] : [...after.learners];
+    const widenedAfter = {...after, voters, learners,
       configurationKey: configurationOf(voters, learners)};
-    assert.ok(committedStampOfAnswer(widenedMembership), `${role}: a valid committed stamp`);
-    return {...committed, membership: widenedMembership};
+    return {...committed, promotionFact: {...committed.promotionFact, after: widenedAfter}};
   };
   const receipts = countWrites(f, VOTER_RECEIPT); const before = f.row();
   for (const role of ['voter', 'learner']) {
@@ -465,8 +467,8 @@ async (t) => {
 });
 
 test('V2 (real schedule, F1): an unrelated learner joins before the ordered successor commits: ' +
-  'the promotion commits natively but its voter stamp can never be recorded; fail closed, the ' +
-  'debt stays for an operator (J1)', {timeout: 60000}, async (t) => {
+  'its exact promotion fact is recorded against the successor while original learner ' +
+  'provenance and membership debt are retained', {timeout: 60000}, async (t) => {
   const fx = await promotionWorld(t); const {f} = fx;
   assert.equal((await fx.select()).outcome, 'recorded');
   const promotion = fx.permit(); const leader = leaderOf(f);
@@ -498,11 +500,17 @@ test('V2 (real schedule, F1): an unrelated learner joins before the ordered succ
   assert.ok(votersEverywhere(f));
   const receipts = countWrites(f, VOTER_RECEIPT); const before = f.row();
   for (const witness of FOUNDERS) {
-    assert.equal((await fx.recordVoter(witness)).outcome, 'conflict',
-      `${witness}: a voter stamp carrying the unrelated learner is not exactly the target promoted`);
+    assert.equal((await fx.recordVoter(witness)).outcome, 'recorded',
+      `${witness}: the exact current successor authorized this before configuration`);
   }
-  assert.equal(receipts.submitted(), 0, 'nothing written'); assert.deepEqual(f.row(), before);
+  assert.equal(receipts.submitted(), 1, 'one receipt; subsequent witnesses replay it');
+  assert.equal(f.row().message_group_learner_stamp, before.message_group_learner_stamp,
+    'the original learner stamp is historical and stays unchanged');
+  for (const key of Object.keys(before)) {
+    if (!['message_group_membership_phase', 'message_group_membership_permit',
+      'message_group_voter_stamp'].includes(key)) assert.deepEqual(f.row()[key], before[key], key);
+  }
   assert.deepEqual([f.row().message_group_membership_phase,
-    f.row().message_group_membership_obligation_state], [PHASE.PROMOTION_IN_FLIGHT, 'unknown'],
-  'F1: the promotion debt is retained and visible; an operator must resolve it');
+    f.row().message_group_membership_obligation_state], [PHASE.VOTER_COMMITTED, 'unknown'],
+  'recording forward progress neither releases the lane nor removes the source');
 });
