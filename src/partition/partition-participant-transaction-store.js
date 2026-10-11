@@ -13,6 +13,7 @@ import {PARTICIPANT_COMMIT_OUTCOME} from '../constants/transactions.js';
 import {stampParticipantConnection} from './partition-participant-transaction-connection.js';
 import {
   PARTICIPANT_TRANSACTION_GENERATION_ORIGIN_COLUMNS as ORIGIN_COLUMNS,
+  PARTICIPANT_TRANSACTION_RELEASE_COLUMNS as RELEASE_COLUMNS,
   PARTICIPANT_TRANSACTION_SQL as SQL,
   PARTICIPANT_TRANSACTION_STATE as STATE,
   PARTICIPANT_TRANSACTION_STORE_ERROR as STORE_ERROR,
@@ -70,7 +71,10 @@ function openParticipantTransactionStore(db) {
   db.exec(SQL.CREATE_GENERATION_TABLE);
   const present = new Set(db.prepare(SQL.GENERATION_TABLE_COLUMNS).all()
     .map((column) => column.name));
-  for (const [column, addColumn] of Object.entries(ORIGIN_COLUMNS)) {
+  for (const [column, addColumn] of Object.entries({
+    ...ORIGIN_COLUMNS,
+    ...RELEASE_COLUMNS,
+  })) {
     if (!present.has(column)) {
       db.exec(addColumn);
     }
@@ -105,6 +109,90 @@ function readPartitionWriteOrigin(db) {
   const row = generationRowOf(db);
   return row.origin_index === null ? null :
     Object.freeze({originIndex: row.origin_index, originTerm: row.origin_term});
+}
+
+function participantReleaseStateOf(row) {
+  return Object.freeze({
+    pauseGeneration: row.participant_pause_generation,
+    pauseEntryId: row.participant_pause_entry_id,
+    controlRevision: row.participant_release_control_revision,
+    controlText: row.participant_release_control_text,
+    authorizationText: row.participant_release_authorization_text,
+    authorizationIndex: row.participant_release_authorization_index,
+    authorizationTerm: row.participant_release_authorization_term,
+  });
+}
+
+/**
+ * Read the release fields owned by the singleton generation row.
+ * @param {Object} db - The partition connection.
+ * @return {Object} Frozen exact stored fields.
+ */
+function readParticipantReleaseState(db) {
+  return participantReleaseStateOf(generationRowOf(db));
+}
+
+/**
+ * Apply one durable pause invocation. Replaying the same entry is inert;
+ * every distinct committed pause advances the generation and clears the
+ * dependent authorization in the same application transaction.
+ * @param {Object} db - The partition connection.
+ * @param {string} entryId - Exact pause command identity.
+ * @return {{applied: boolean, state: Object}} Result and current state.
+ */
+function applyParticipantAdmissionPause(db, entryId) {
+  const before = readParticipantReleaseState(db);
+  if (before.pauseEntryId === entryId) {
+    return Object.freeze({applied: false, state: before});
+  }
+  const moved = db.prepare(
+    'UPDATE _partition_write_generation SET ' +
+    'participant_pause_generation = participant_pause_generation + 1, ' +
+    'participant_pause_entry_id = ?, ' +
+    'participant_release_authorization_text = NULL, ' +
+    'participant_release_authorization_index = NULL, ' +
+    'participant_release_authorization_term = NULL WHERE singleton = 1',
+  ).run(entryId);
+  if (moved.changes !== ONE_ROW) throw new Error(STORE_ERROR.GENERATION_ROW_MISSING);
+  return Object.freeze({applied: true, state: readParticipantReleaseState(db)});
+}
+
+/**
+ * Conditionally replace the control transition slot and increment its durable
+ * revision. The caller has already validated the canonical payload.
+ * @param {Object} db - The partition connection.
+ * @param {number} expectedRevision - Revision captured by the command.
+ * @param {string} controlText - Canonical control state, or null to clear.
+ * @return {Object|null} New state, or null when another command won.
+ */
+function updateParticipantReleaseControl(db, expectedRevision, controlText) {
+  const moved = db.prepare(
+    'UPDATE _partition_write_generation SET ' +
+    'participant_release_control_revision = ' +
+    'participant_release_control_revision + 1, ' +
+    'participant_release_control_text = ? WHERE singleton = 1 AND ' +
+    'participant_release_control_revision = ?',
+  ).run(controlText, expectedRevision);
+  return moved.changes === ONE_ROW ? readParticipantReleaseState(db) : null;
+}
+
+/**
+ * Record the target-specific authorization at the command's committed
+ * position, conditional on the expected durable pause generation.
+ * @param {Object} db - The partition connection.
+ * @param {Object} authorization - Canonical text and commit position.
+ * @return {Object|null} New state, or null when a newer pause won.
+ */
+function applyParticipantReleaseAuthorization(db, authorization) {
+  const moved = db.prepare(
+    'UPDATE _partition_write_generation SET ' +
+    'participant_release_authorization_text = ?, ' +
+    'participant_release_authorization_index = ?, ' +
+    'participant_release_authorization_term = ? WHERE singleton = 1 AND ' +
+    'participant_pause_generation = ?',
+  ).run(authorization.text, authorization.index, authorization.term,
+    authorization.expectedPauseGeneration);
+  return moved.changes === ONE_ROW ? readParticipantReleaseState(db) : null;
 }
 
 /**
@@ -300,6 +388,8 @@ function participantOutcomeOf(row, volatileState = STATE.ABSENT) {
 
 export {
   advancePartitionWriteGeneration,
+  applyParticipantAdmissionPause,
+  applyParticipantReleaseAuthorization,
   insertParticipantTransactionRow,
   isParticipantSessionKnown,
   isParticipantSessionPrepared,
@@ -307,9 +397,11 @@ export {
   openParticipantTransactionStore,
   participantOutcomeOf,
   readParticipantTransactionRow,
+  readParticipantReleaseState,
   readPreparedParticipantIds,
   readPartitionWriteGeneration,
   readPartitionWriteOrigin,
   recordPartitionWriteOrigin,
+  updateParticipantReleaseControl,
   updateParticipantTransactionDecided,
 };

@@ -920,12 +920,27 @@ function resolveEntryConfStateOrFailure(group, expectedGeneration, entry) {
 function applyEntryDurablyOrFailure({group, entry, resolvedConfState,
   nextMembershipGeneration, admitted}) {
   try {
+    const confState = resolvedConfState.value;
+    // Only facts replicated in the Raft record may enter deterministic
+    // application. Peer identity reservations are intentionally local and
+    // may be absent on an otherwise current replica; the release command
+    // carries its immutable identity manifest and application validates that
+    // manifest against these replicated peer IDs.
+    const committedConfiguration = deepFreeze({
+      voters: [...(confState.voters || [])].map(String).sort(),
+      votersOutgoing: [...(confState.votersOutgoing || [])].map(String).sort(),
+      learners: [...(confState.learners || [])].map(String).sort(),
+      learnersNext: [...(confState.learnersNext || [])].map(String).sort(),
+      configurationKey: raftRsConfStateKey(confState),
+      membershipGenerationIndex: Number(nextMembershipGeneration),
+    });
     applyCommittedEntryTransaction({
       store: group.store,
       groupId: group.groupId,
       entry,
       confState: resolvedConfState.value,
       membershipGenerationIndex: String(nextMembershipGeneration),
+      committedConfiguration,
       applyCommittedEntry: group.applyCommittedEntry,
       admitted,
       committedMembershipContext: resolvedConfState.membershipContext || null,
@@ -1187,6 +1202,7 @@ function readGroupObservation(group, expectedGeneration, rawStatus = null) {
   // may run ahead of it), never the core's status.applied.
   return {ok: true, value: {status: status.value, confState: conf.value,
     ...observedParticipation(group),
+    lastIndex: group.persistedLastIndex,
     configurationKey: raftRsConfStateKey(conf.value),
     membershipGenerationIndex: group.membershipGenerationKnown ?
       Number(group.membershipGenerationIndex) : null,
@@ -1444,7 +1460,7 @@ const COMMAND_OPERATION = Object.freeze({
 });
 const PROPOSE_CONF_CHANGE = 'propose-conf-change';
 const TICK_COMMAND = 'tick';
-const PROPOSAL_COMMANDS = new Set(['propose', PROPOSE_CONF_CHANGE]);
+const PROPOSAL_COMMANDS = new Set([RUNTIME_COMMAND.PROPOSE, PROPOSE_CONF_CHANGE]);
 
 // What the closed participation gate refuses (O1: a replica not yet
 // admitted may not campaign or serve): every proposal, and a tick that could
@@ -1483,7 +1499,7 @@ function performCommand(group, command, expectedGeneration) {
   }
   const primitive = {
     'tick': ['tick', []],
-    'propose': ['propose', [command.bytes]],
+    [RUNTIME_COMMAND.PROPOSE]: ['propose', [command.bytes]],
     [PROPOSE_CONF_CHANGE]: ['propose_conf_change_v2', [command.change]],
   }[command.type];
   if (primitive && !group.gateOpen) {
@@ -1503,6 +1519,18 @@ function performCommand(group, command, expectedGeneration) {
     refusedConfChange(group, expectedGeneration, command.change) : null;
   if (refused !== null) {
     return refused;
+  }
+  if (command.type === RUNTIME_COMMAND.PROPOSE) {
+    const admission = group.admitProposalDispatch(command.bytes);
+    if (admission?.admitted === false) {
+      return outcome(CORE_REFUSED, {
+        reason: admission.reason,
+        phase: RUNTIME_PHASE.DISPATCH,
+        retryable: admission.retryable === true,
+        recoveryRequired: admission.recoveryRequired === true,
+        ...(admission.detail === undefined ? {} : {detail: admission.detail}),
+      });
+    }
   }
   const invoked = invokeCoreAt(
     group, expectedGeneration, primitive[0], ...primitive[1]);
@@ -1674,6 +1702,8 @@ function createRuntimeDispatcher(request) {
     resolvePeerAddress: request.resolvePeerAddress,
     resolvePeerIdentity: request.resolvePeerIdentity,
     applyCommittedEntry: request.applyCommittedEntry,
+    admitProposalDispatch: typeof request.admitProposalDispatch === 'function' ?
+      request.admitProposalDispatch : () => null,
     applyCommittedMembershipContext: request.applyCommittedMembershipContext,
     readLearnerOriginEvidence: request.readLearnerOriginEvidence,
     applyTransactionRolledBack: request.applyTransactionRolledBack,

@@ -52,6 +52,7 @@ const RUNTIME_COMMAND = Object.freeze({
   // through the core and nothing else - it is not a tick, so a replica whose
   // scheduling is stopped never campaigns from it.
   DRAIN_INBOUND: 'drain-inbound',
+  PROPOSE: 'propose',
   PROBE_PEER_PROGRESS: 'probe-peer-progress',
   // Leadership moved to one voter through the core's own MsgTransferLeader,
   // validated against the core's status and configuration in the same turn.

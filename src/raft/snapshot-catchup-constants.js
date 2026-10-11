@@ -37,6 +37,7 @@ const RAFT_SNAPSHOT_CATCHUP_DISPATCH_OUTCOME = Object.freeze({
 const RAFT_SNAPSHOT_CATCHUP_INSTALL_OUTCOME = Object.freeze({
   INSTALLED_AND_RECREATED: 'installed_and_recreated',
   RECEIVE_FAILED: 'receive_failed',
+  RETIREMENT_FAILED: 'retirement_failed',
   SHUTDOWN_FAILED: 'shutdown_failed',
   INSTALL_REJECTED: 'install_rejected',
   RECREATE_FAILED: 'recreate_failed',
