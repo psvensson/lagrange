@@ -24,6 +24,14 @@
 // an idempotent repeat answered from the row, RESERVED_REFUSED for a PREPARE
 // that met another transaction's reservation, RECORDED_ONLY for a typed
 // refusal consumed without a write (and a legacy marker that records nothing).
+//
+// Every PREPARE and decision first compares its carried execution envelope
+// with this replica's build and applies as carried either way (a mismatch is
+// a counted diagnostic, design 2.3 step 0). A decision that moves a PREPARED
+// row re-admits, after its commit, the writes the leader parked while the
+// partition was reserved (design 7, decision X); a write this leader
+// proposed that meets the reservation at apply is parked again under its
+// entryId instead of answered.
 
 import {ERRORS} from '../constants/errors.js';
 import {
@@ -44,6 +52,11 @@ import {
   statementEnvironmentFailure,
 } from './partition-committed-statement-outcome.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from './partition-write-kernel.js';
+import {
+  readmitReservedWrites,
+  reparkReservedWrite,
+} from './partition-service-raft-write-commit.js';
+import {noteExecutionEnvelope} from './partition-transaction-execution-envelope.js';
 import {
   carriedOriginIndexOf,
   decisionBindingRefusalOf,
@@ -378,10 +391,17 @@ function scheduleCommitEffects(service, committed, operations, results) {
   });
 }
 
+// The reservation is released with the row's move out of PREPARED: the
+// writes the leader parked meanwhile are re-admitted after the commit.
+function releaseReservation(service, committed) {
+  committed.afterCommit(() => readmitReservedWrites(service));
+}
+
 // An atomicity alarm: the row is settled REFUSED alike on every replica.
 function refuseCommit(service, committed, refusal) {
   updateParticipantTransactionDecided(service.db,
     decidedOf(committed, STATE.REFUSED, refusal));
+  releaseReservation(service, committed);
   alarmRefusal(service, committed, CODE.COMMIT_REFUSED,
     rowAnswer(service, committed.command));
   return OUTCOME.APPLIED;
@@ -420,6 +440,7 @@ function commitPrepared(service, committed, row) {
   }
   updateParticipantTransactionDecided(service.db,
     decidedOf(committed, STATE.COMMITTED));
+  releaseReservation(service, committed);
   if (operations.length > 0) {
     advancePartitionWriteGeneration(service.db);
   }
@@ -440,6 +461,7 @@ function decideOverPrepared(service, committed, row) {
   }
   updateParticipantTransactionDecided(service.db,
     decidedOf(committed, STATE.ROLLED_BACK));
+  releaseReservation(service, committed);
   answerProposer(service, committed, {success: true,
     ...rowAnswer(service, command)});
   return OUTCOME.APPLIED;
@@ -585,6 +607,9 @@ const PARTICIPANT_COMMAND_APPLIERS = Object.freeze({
 function applyParticipantCommand(service, committed) {
   const {command} = committed;
   try {
+    if (command.type !== COMMAND.GENERATION_ORIGIN) {
+      noteExecutionEnvelope(service, committed);
+    }
     return PARTICIPANT_COMMAND_APPLIERS[command.type](service, committed);
   } catch (failure) {
     committed.afterRollback(() =>
@@ -620,10 +645,11 @@ function applyCommittedTransactionCommand(service, committed) {
  * The reservation's disposition of a committed SQL statement on a reserved
  * partition (isPartitionReserved; design 4): while some transaction is
  * PREPARED here no other committed statement runs - no statement, no outcome
- * row, g unchanged, the applied index advances - and its proposer is answered
- * PARTITION_WRITE_LEADERSHIP_REFUSAL.RESERVED, a retryable deferral: the
- * entry key stays unsettled, so a retry is proposed again and applies once
- * the decision has applied.
+ * row, g unchanged, the applied index advances. The entry key stays
+ * unsettled: when this replica proposed the write it parks it again under
+ * the same entryId, re-proposed after the decision; any other proposer
+ * waiting here is answered PARTITION_WRITE_LEADERSHIP_REFUSAL.RESERVED, a
+ * retryable deferral, so its retry applies once the decision has applied.
  * @param {Object} service - The partition.
  * @param {{command: Object, afterCommit: Function}} committed - The command.
  * @return {string} RESERVED_REFUSED.
@@ -634,16 +660,17 @@ function settleReservedCommittedStatement(service, {command, afterCommit}) {
     entryId: command.entryId,
     commandType: command.type,
   });
-  afterCommit(() => service.resolveCommittedWrite(command.entryId, {
-    success: false,
-    error: `${ERRORS.WRITE_RESERVED}${MESSAGE.CODE_SEPARATOR}` +
-      MESSAGE.WRITE_RESERVED_DETAIL,
-    failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.RESERVED,
-    deferRetry: true,
-    outcome: OUTCOME.RESERVED_REFUSED,
-    entryId: command.entryId,
-    partitionId: service.partitionId,
-  }));
+  afterCommit(() => reparkReservedWrite(service, command.entryId) ||
+    service.resolveCommittedWrite(command.entryId, {
+      success: false,
+      error: `${ERRORS.WRITE_RESERVED}${MESSAGE.CODE_SEPARATOR}` +
+        MESSAGE.WRITE_RESERVED_DETAIL,
+      failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.RESERVED,
+      deferRetry: true,
+      outcome: OUTCOME.RESERVED_REFUSED,
+      entryId: command.entryId,
+      partitionId: service.partitionId,
+    }));
   return OUTCOME.RESERVED_REFUSED;
 }
 

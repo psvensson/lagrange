@@ -13,6 +13,7 @@
 // the participant never adds a second decision lookup during committed apply.
 
 import {createHash} from 'node:crypto';
+import {isExecutionEnvelope} from './partition-transaction-execution-envelope.js';
 import {
   PARTICIPANT_TRANSACTION_BYTES as BYTES,
   PARTICIPANT_TRANSACTION_COMMAND as COMMAND,
@@ -214,7 +215,8 @@ function identityFieldsOf(identity) {
  * The PARTICIPANT_PREPARE command the leader proposes (design 2.3).
  * @param {Object} identity - The request's identity fields.
  * @param {Object} carried - {operationsText, validationText}.
- * @param {Object} stamp - {timestamp, proposedBy, proposedAt}.
+ * @param {Object} stamp - {executionEnvelope, timestamp, proposedBy,
+ *   proposedAt}.
  * @return {Object} The command.
  */
 function buildPrepareCommand(identity, {operationsText, validationText},
@@ -236,7 +238,8 @@ function buildPrepareCommand(identity, {operationsText, validationText},
  * @param {Object} identity - The request's identity fields.
  * @param {Object} binding - {decision, preparedDigest, decisionText,
  *   decisionDigest}.
- * @param {Object} stamp - {timestamp, proposedBy, proposedAt}.
+ * @param {Object} stamp - {executionEnvelope, timestamp, proposedBy,
+ *   proposedAt}.
  * @return {Object} The command.
  */
 function buildDecisionCommand(identity, binding, stamp) {
@@ -282,16 +285,18 @@ function carriesPinnedIdentity(command) {
 }
 
 function isPinnedPrepare(command) {
-  return typeof command.operationsText === 'string' &&
+  return isExecutionEnvelope(command.executionEnvelope) &&
+    typeof command.operationsText === 'string' &&
     typeof command.validationText === 'string' &&
     command.preparedDigest ===
       preparedDigestOf(command.operationsText, command.validationText) &&
     command.entryId === prepareEntryIdOf(command.participantId);
 }
 
-// A decision carries its binding and no operations.
+// A decision carries its binding, the leader's envelope and no operations.
 function isPinnedDecision(command) {
-  return decisionBindingRefusalOf(command) === null &&
+  return isExecutionEnvelope(command.executionEnvelope) &&
+    decisionBindingRefusalOf(command) === null &&
     command.entryId ===
       decisionEntryIdOf(command.participantId, command.decisionDigest) &&
     command.operationsText === undefined && command.operations === undefined;

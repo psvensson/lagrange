@@ -7,16 +7,36 @@
 // application's callback, raft-rs-application-transaction-owner.js), so a
 // row, g and the applied index move together or not at all; the tables are
 // created with the partition, outside any command, identically on every
-// replica.
+// replica, by the open hook the lifecycle owner runs on each connection.
 
 import {PARTICIPANT_COMMIT_OUTCOME} from '../constants/transactions.js';
+import {stampParticipantConnection} from './partition-participant-transaction-connection.js';
 import {
+  PARTICIPANT_TRANSACTION_GENERATION_ORIGIN_COLUMNS as ORIGIN_COLUMNS,
   PARTICIPANT_TRANSACTION_SQL as SQL,
   PARTICIPANT_TRANSACTION_STATE as STATE,
   PARTICIPANT_TRANSACTION_STORE_ERROR as STORE_ERROR,
 } from './partition-participant-transaction-constants.js';
 
 const ONE_ROW = 1;
+// Per connection: the store's own read statements, prepared once (the
+// reservation read runs on every committed statement and on the leader's
+// request path).
+const READ_STATEMENTS = new WeakMap();
+
+function readStatementOf(db, sql) {
+  let statements = READ_STATEMENTS.get(db);
+  if (statements === undefined) {
+    statements = new Map();
+    READ_STATEMENTS.set(db, statements);
+  }
+  let statement = statements.get(sql);
+  if (statement === undefined) {
+    statement = db.prepare(sql);
+    statements.set(sql, statement);
+  }
+  return statement;
+}
 
 // What a durable state answers (design 5.2): a terminal row is the only
 // authority for COMMITTED or NOT_COMMITTED; PREPARED and absence are UNKNOWN.
@@ -30,17 +50,36 @@ const OUTCOME_OF_STATE = Object.freeze({
 /**
  * Create the participant transaction table and the write generation row
  * (1, 0) when the partition opens (DDL; idempotent over an existing image).
+ * A generation table created before the origin columns existed (an earlier
+ * increment-3 build) gets them here, empty, as the outcome table gets its
+ * result columns: its origin is then not recorded, so BEGIN stays refused
+ * until the origin command applies.
  * @param {Object} db - The partition's connection.
  */
-function createParticipantTransactionTables(db) {
+/**
+ * The participant store's open hook, run by the lifecycle owner on every
+ * connection it opens: the transaction table, the generation row (its
+ * origin columns added to an older table), and the connection's stamp
+ * (partition-participant-transaction-connection.js).
+ * @param {Object} db - The partition's newly opened connection.
+ */
+function openParticipantTransactionStore(db) {
+  stampParticipantConnection(db);
   db.exec(SQL.CREATE_TABLE);
   db.exec(SQL.CREATE_STATE_INDEX);
   db.exec(SQL.CREATE_GENERATION_TABLE);
+  const present = new Set(db.prepare(SQL.GENERATION_TABLE_COLUMNS).all()
+    .map((column) => column.name));
+  for (const [column, addColumn] of Object.entries(ORIGIN_COLUMNS)) {
+    if (!present.has(column)) {
+      db.exec(addColumn);
+    }
+  }
   db.prepare(SQL.INSERT_INITIAL_GENERATION).run();
 }
 
 function generationRowOf(db) {
-  const row = db.prepare(SQL.SELECT_GENERATION).get();
+  const row = readStatementOf(db, SQL.SELECT_GENERATION).get();
   if (row === undefined) {
     throw new Error(STORE_ERROR.GENERATION_ROW_MISSING);
   }
@@ -99,7 +138,41 @@ function advancePartitionWriteGeneration(db) {
  * @return {boolean} Whether some transaction is PREPARED here.
  */
 function isPartitionReserved(db) {
-  return db.prepare(SQL.SELECT_RESERVATION).get(STATE.PREPARED) !== undefined;
+  return readStatementOf(db, SQL.SELECT_RESERVATION).get(STATE.PREPARED) !== undefined;
+}
+
+/**
+ * Whether some participant transaction row carries this routing sessionId
+ * (a sessionId-only outcome read never answers NOT_COMMITTED from absence
+ * for it).
+ * @param {Object} db - The partition's connection.
+ * @param {string} sessionId - The routing sessionId.
+ * @return {boolean} Whether a row names it.
+ */
+function isParticipantSessionKnown(db, sessionId) {
+  return readStatementOf(db, SQL.SELECT_SESSION_KNOWN).get(sessionId) !== undefined;
+}
+
+/**
+ * Whether a PREPARED row carries this routing sessionId (the L6 fence
+ * refuses a sessionId-only request naming it).
+ * @param {Object} db - The partition's connection.
+ * @param {string} sessionId - The routing sessionId.
+ * @return {boolean} Whether a PREPARED row names it.
+ */
+function isParticipantSessionPrepared(db, sessionId) {
+  return readStatementOf(db, SQL.SELECT_SESSION_PREPARED).get(sessionId, STATE.PREPARED) !==
+    undefined;
+}
+
+/**
+ * The participants PREPARED here (the hold sweep reports them).
+ * @param {Object} db - The partition's connection.
+ * @return {Array<string>} Their participantIds.
+ */
+function readPreparedParticipantIds(db) {
+  return readStatementOf(db, SQL.SELECT_PREPARED_PARTICIPANTS).all(STATE.PREPARED)
+    .map((row) => row.participantId);
 }
 
 /**
@@ -109,7 +182,7 @@ function isPartitionReserved(db) {
  * @return {Object|null} The frozen row, in the command's field names.
  */
 function readParticipantTransactionRow(db, {transactionId, participantId}) {
-  const row = db.prepare(SQL.SELECT_ROW).get(transactionId, participantId);
+  const row = readStatementOf(db, SQL.SELECT_ROW).get(transactionId, participantId);
   if (row === undefined) {
     return null;
   }
@@ -225,11 +298,14 @@ function participantOutcomeOf(row, volatileState = STATE.ABSENT) {
 
 export {
   advancePartitionWriteGeneration,
-  createParticipantTransactionTables,
   insertParticipantTransactionRow,
+  isParticipantSessionKnown,
+  isParticipantSessionPrepared,
   isPartitionReserved,
+  openParticipantTransactionStore,
   participantOutcomeOf,
   readParticipantTransactionRow,
+  readPreparedParticipantIds,
   readPartitionWriteGeneration,
   readPartitionWriteOrigin,
   recordPartitionWriteOrigin,

@@ -48,6 +48,16 @@ import {
 import {
 } from '../../src/control-plane/pressure-governor.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
+import {enableParticipantTransactionAdmission} from
+  '../../src/partition/partition-participant-transaction-request.js';
+import {
+  commitMessage,
+  identityOf,
+  prepareMessage,
+  send,
+  txMessage,
+  beginMessage,
+} from '../test-helpers/participant-transaction-fixture.js';
 
 const TEST_PARTITION_ID = 'partition-1';
 const TEST_OWNER_NODE_ID = 'node-owner';
@@ -362,59 +372,68 @@ test('PartitionService - repairs legacy sql_transactions replicas by adding tran
     }
   });
 
-test('PartitionService - persists one-phase commit outcome atomically across restart',
-  async (t) => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'partition-outcome-'));
-    const dbPath = path.join(tempDir, 'outcome.db');
-    const buildPartition = () => new PartitionService(withFoundingStamp({
-      partitionId: 'outcome-p1',
-      tableId: 'outcome_rows',
+// Superseded by TX1 design revision 10, section 9.2: a COMMIT requires a
+// PREPARED row (no one-phase COMMIT without PREPARE), absence answers
+// UNKNOWN (never NOT_COMMITTED), and outcomes are keyed by (transactionId,
+// participantId), not by session and epoch.
+test('PartitionService - persists a participant commit outcome across restart, keyed by ' +
+  'its identity; COMMIT requires PREPARED and absence is UNKNOWN', async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'partition-outcome-'));
+  const dbPath = path.join(tempDir, 'outcome.db');
+  const buildPartition = () => new PartitionService(withFoundingStamp({
+    partitionId: 'outcome-p1',
+    tableId: 'outcome_rows',
+    tableName: 'outcome_rows',
+    schema: {
       tableName: 'outcome_rows',
-      schema: {
-        tableName: 'outcome_rows',
-        columns: [{name: 'id', type: 'TEXT', primaryKey: true}],
-      },
-      replicaId: 'outcome-p1-r1',
-      nodeId: 'node-1',
-      dbPath,
-    }));
-    const first = buildPartition();
-    await first.initialize();
-    await first.beginTransaction('committed-session', 7);
-    await first.commitTransaction('committed-session');
-    await first.shutdown();
+      columns: [{name: 'id', type: 'TEXT', primaryKey: true}],
+    },
+    replicaId: 'outcome-p1-r1',
+    nodeId: 'node-1',
+    dbPath,
+  }));
+  const transaction = (transactionId, transactionEpoch) => identityOf(transactionId,
+    {partitionId: 'outcome-p1', sessionId: 'committed-session', transactionEpoch});
+  const outcomeOf = async (partition, identity) => {
+    const answer = await send(partition,
+      txMessage(PARTITION_SERVICE_OPERATION.TRANSACTION_OUTCOME, identity));
+    return {outcome: answer.outcome, state: answer.state};
+  };
+  const committed = transaction('outcome-committed', 7);
+  const first = buildPartition();
+  await first.initialize();
+  await enableParticipantTransactionAdmission(first);
+  await send(first, beginMessage(committed));
+  const unprepared = await send(first, commitMessage(committed, 'f'.repeat(64)));
+  const prepared = await send(first, prepareMessage(committed));
+  const decided = await send(first, commitMessage(committed, prepared.preparedDigest));
+  await first.shutdown();
 
-    const restarted = buildPartition();
-    try {
-      await restarted.initialize();
-      t.equal(
-        restarted.resolveTransactionCommitOutcome('committed-session', 7),
-        PARTICIPANT_COMMIT_OUTCOME.COMMITTED,
-      );
-      t.equal(
-        restarted.resolveTransactionCommitOutcome(
-          'never-delivered-session',
-          7,
-        ),
-        PARTICIPANT_COMMIT_OUTCOME.NOT_COMMITTED,
-      );
-      await restarted.beginTransaction('committed-session', 8);
-      t.equal(
-        restarted.resolveTransactionCommitOutcome('committed-session', 8),
-        PARTICIPANT_COMMIT_OUTCOME.UNKNOWN,
-        'a committed prior epoch must not satisfy a new open transaction',
-      );
-      t.equal(
-        restarted.resolveTransactionCommitOutcome('committed-session', 7),
-        PARTICIPANT_COMMIT_OUTCOME.COMMITTED,
-        'the prior committed epoch remains independently queryable',
-      );
-      await restarted.rollbackTransaction('committed-session');
-    } finally {
-      await restarted.shutdown();
-      fs.rmSync(tempDir, {recursive: true, force: true});
-    }
-  });
+  const restarted = buildPartition();
+  try {
+    await restarted.initialize();
+    t.strictSame({unprepared: unprepared.failureCode, prepared: prepared.state,
+      decided: decided.state}, {unprepared: 'participant_transaction_not_prepared',
+      prepared: 'PREPARED', decided: 'COMMITTED'}, 'a COMMIT applies only to PREPARED');
+    t.strictSame(await outcomeOf(restarted, committed),
+      {outcome: PARTICIPANT_COMMIT_OUTCOME.COMMITTED, state: 'COMMITTED'});
+    t.strictSame(await outcomeOf(restarted, transaction('never-delivered', 7)),
+      {outcome: PARTICIPANT_COMMIT_OUTCOME.UNKNOWN, state: 'ABSENT'},
+      'absence is never NOT_COMMITTED');
+    const next = transaction('outcome-next', 8);
+    await send(restarted, beginMessage(next));
+    t.strictSame(await outcomeOf(restarted, next),
+      {outcome: PARTICIPANT_COMMIT_OUTCOME.UNKNOWN, state: 'ACTIVE'},
+      'a committed transaction of the same session must not satisfy a new one');
+    t.strictSame(await outcomeOf(restarted, committed),
+      {outcome: PARTICIPANT_COMMIT_OUTCOME.COMMITTED, state: 'COMMITTED'},
+      'the prior transaction remains independently queryable by its identity');
+    await send(restarted, txMessage(PARTITION_SERVICE_OPERATION.ROLLBACK, next));
+  } finally {
+    await restarted.shutdown();
+    fs.rmSync(tempDir, {recursive: true, force: true});
+  }
+});
 
 test('PartitionService - suppresses lifecycle logs and emits stage callbacks', async (t) => {
   const stageEvents = [];

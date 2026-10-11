@@ -537,7 +537,8 @@
         "src/partition/partition-participant-transaction-apply.js",
         "src/partition/partition-participant-transaction-bytes.js",
         "src/partition/partition-participant-transaction-constants.js",
-        "src/partition/partition-participant-transaction-store.js"
+        "src/partition/partition-participant-transaction-store.js",
+        "src/partition/partition-transaction-execution-envelope.js"
       ],
       "tests": [
         "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
@@ -545,7 +546,8 @@
         "test/partition/committed-statement-outcome.test.js",
         "test/partition/partition-runtime-reconstruction-leadership.test.js",
         "test/partition/partition-unreadable-durable-record.test.js",
-        "test/partition/partition-participant-transaction-apply.test.js"
+        "test/partition/partition-participant-transaction-apply.test.js",
+        "test/partition/partition-participant-transaction-staging.test.js"
       ]
     },
     "partition-raft-operation-port": {
@@ -568,19 +570,30 @@
       ]
     },
     "partition-session-transaction-persistence-admission": {
-      "description": "A user session's SQLite transaction and the rs-raft store share the partition's one connection: the transaction owner ends its session (COMMIT or ROLLBACK) before it proposes a transaction marker and proposes none while staging; the store refuses every durable consensus write inside a transaction it did not open; the runtime asks that admission before it enters the core and before every Ready, and the write path turns the refusal into a bounded deferral, so no consensus row is ever written inside, or erased by, a user session.",
+      "description": "A participant staging session never holds a SQLite transaction on the partition's shared connection (TX1 design revision 10, 3.1 and 9.2: the earlier rule, that the transaction owner ends its session before it proposes a marker, is superseded): the leader classifies each session statement with its staging classifier and validates it inside one synchronous transaction that replays the staged operations and always rolls back, so the rs-raft store's persistence admission never defers consensus because of a session and no session ending can erase a consensus row; PREPARE and the decision are committed participant commands proposed outside any session. The store still refuses every durable consensus write inside a transaction it did not open (the legacy sessionId-only session path, fenced from participant transactions until the cutover's drain, and a raw foreign BEGIN), and every legacy session statement is admitted by the statement-admission owner before anything is prepared, so no session leaves a PRAGMA or TEMP object on the shared connection, and admission is enabled only on a connection that served no legacy session since its open; the runtime asks that admission before it enters the core and before every Ready, and the write path turns the refusal into a bounded deferral.",
       "owners": [
         "src/partition/partition-service-transaction-base.js",
         "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-service-raft-write-commit.js",
         "src/raft/raft-rs-durable-store.js",
         "src/raft/raft-rs-persistence-admission.js",
-        "src/raft/raft-rs-runtime-owner.js"
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/partition/partition-participant-transaction-staging.js",
+        "src/partition/partition-participant-transaction-session.js",
+        "src/partition/partition-participant-transaction-legacy-fence.js",
+        "src/partition/partition-participant-transaction-self-check.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-statement-admission.js",
+        "src/partition/partition-participant-transaction-connection.js"
       ],
       "tests": [
         "test/transaction/session-transaction-isolation.test.js",
         "test/raft/raft-rs-backend/persistence-admission.test.js",
-        "test/partition/partition-participant-transaction-apply.test.js"
+        "test/partition/partition-participant-transaction-apply.test.js",
+        "test/partition/partition-participant-transaction-staging.test.js",
+        "test/partition/partition-legacy-session-statement-admission.test.js",
+        "test/partition/partition-transaction-determinism.test.js"
       ]
     },
     "spread-cure-transition-authorization": {
@@ -1295,7 +1308,8 @@
             "src/partition/partition-committed-command-admission.js",
             "src/partition/partition-service-write-metrics-base.js",
             "src/partition/partition-participant-transaction-apply.js",
-            "src/partition/partition-participant-transaction-store.js"
+            "src/partition/partition-participant-transaction-store.js",
+            "src/partition/partition-transaction-execution-envelope.js"
           ]
         }
       ],
@@ -1306,7 +1320,8 @@
         "test/partition/committed-statement-outcome.test.js",
         "test/partition/partition-runtime-reconstruction-leadership.test.js",
         "test/partition/partition-unreadable-durable-record.test.js",
-        "test/partition/partition-participant-transaction-apply.test.js"
+        "test/partition/partition-participant-transaction-apply.test.js",
+        "test/partition/partition-participant-transaction-staging.test.js"
       ]
     },
     "partition-raft-operation-port": {
@@ -1368,13 +1383,18 @@
       ]
     },
     "partition-session-transaction-store-persistence-admission": {
-      "description": "The transaction owner ends a user session before proposing its marker exactly when the rs-raft store's persistence admission would refuse a consensus write inside that session.",
+      "description": "The participant's staging owner holds no SQLite transaction across requests - each validation is one synchronous transaction that rolls back - exactly so the rs-raft store's persistence admission never refuses a consensus write because of a participant session; the legacy session path, until the cutover's drain, still ends its session before it proposes its marker.",
       "endpoints": [
         {
           "id": "session-transaction",
           "owners": [
             "src/partition/partition-service-transaction-base.js",
-            "src/partition/partition-participant-transaction-request.js"
+            "src/partition/partition-participant-transaction-request.js",
+            "src/partition/partition-participant-transaction-staging.js",
+            "src/partition/partition-participant-transaction-session.js",
+            "src/partition/partition-transaction-determinism.js",
+            "src/partition/partition-statement-admission.js",
+            "src/partition/partition-participant-transaction-connection.js"
           ]
         },
         {
@@ -1390,7 +1410,10 @@
       "witnessTests": [
         "test/transaction/session-transaction-isolation.test.js",
         "test/raft/raft-rs-backend/persistence-admission.test.js",
-        "test/partition/partition-participant-transaction-apply.test.js"
+        "test/partition/partition-participant-transaction-apply.test.js",
+        "test/partition/partition-participant-transaction-staging.test.js",
+        "test/partition/partition-legacy-session-statement-admission.test.js",
+        "test/partition/partition-transaction-determinism.test.js"
       ]
     },
     "partition-write-answer-retry-classification": {

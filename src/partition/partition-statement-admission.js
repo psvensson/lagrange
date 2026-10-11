@@ -2,8 +2,9 @@
 // text may be prepared on a partition's shared SQLite connection (TX1 design
 // revision 10, section 3.3; owner rowid conditions 1-5). Every site that
 // prepares caller-supplied text routes through it:
-// - the sessionless executeQuery (the query wire and every internal caller)
-//   and executeLocalQuery (the unreplicated bootstrap path);
+// - executeQuery (the query wire and every internal caller), sessionless and
+//   legacy sessionId-only session statements alike, and executeLocalQuery
+//   (the unreplicated bootstrap path);
 // - the CDC bootstrap direct path's head check, and the local system-table
 //   read (its raw-prepare fallback);
 // - the committed SQL apply, where an offending committed statement is
@@ -22,12 +23,17 @@
 // writes the rowid rules R1-R3 then apply
 // (partition-statement-admission-rowid-rules.js), the ceiling R3 also after
 // the statement, inside a savepoint that rolls the statement back.
-// The session path keeps its existing preparation until the session
-// classifier (a later TX1 increment) takes it over: prepareSessionStatement.
+// A legacy session statement (staged on the shared connection until the
+// cutover) gets the sessionless admission: a PRAGMA or TEMP DDL set there
+// would outlive the session and change what later committed statements do on
+// this replica only (owner condition 4). A participant session statement is
+// classified by the staging classifier (partition-transaction-determinism.js),
+// which asks this owner's lexer, name and rowid rules as its first layers.
 // The partition's own storage initialization stays explicit and separate.
 import {preparePartitionReadStatement} from './partition-read-statement-owner.js';
 import {asciiLower, lexPartitionStatement} from './partition-statement-admission-lexer.js';
 import {
+  hasDoUpdateClause,
   hasUnadmittedRowidAlias,
   isAtRowidCeiling,
   readIndexTable,
@@ -223,12 +229,13 @@ function admitIndexDdl(service, lexed, sql) {
 // --- writes: R1, R2 and the R3 pre-check ---
 
 // The leader's ceiling check before a proposal is an early refusal from
-// committed state only. While a user session holds a SQLite transaction open
-// on the shared connection (HEAD's session staging keeps BEGIN across
-// requests), that connection also reads the session's uncommitted rows, so
-// the check is left to the apply: its checks before and after the statement
-// are the authority on every replica. Every other path runs the statement
-// here (or is the apply), and always checks.
+// committed state only. While a legacy session holds a SQLite transaction
+// open on the shared connection (its staging keeps BEGIN across requests),
+// that connection also reads the session's uncommitted rows, so the check is
+// left to the apply: its checks before and after the statement are the
+// authority on every replica. A participant session never holds one (c').
+// Every other path runs the statement here (or is the apply), and always
+// checks.
 function checksCeilingBeforeRun(service, path) {
   return path !== PATH.SESSIONLESS || !service.db.inTransaction;
 }
@@ -252,7 +259,8 @@ function admitWrite(service, lexed, params, statement, path) {
     return refusal(LAYER.ROWID_CEILING);
   }
   return {admitted: true, kind: KIND.WRITE, statement, ceilingChecked: allocating,
-    ownShape, insertsRows: INSERTING_VERBS.has(mainVerb(lexed))};
+    ownShape, retainsInsertRowid: INSERTING_VERBS.has(mainVerb(lexed)) &&
+      !hasDoUpdateClause(lexed.tokens)};
 }
 
 // The text rules that refuse before anything is prepared, whatever the kind:
@@ -309,20 +317,6 @@ function admitPartitionStatement(service, sql, params = [], path = PATH.SESSIONL
   return admitWrite(service, lexed, params, statement, path);
 }
 
-/**
- * Prepare one session statement exactly as the session path always has
- * (SELECT-headed text as a read, anything else as a write). The session
- * classifier of a later TX1 increment replaces this rule; until then the
- * sessionless paths alone are closed by the kind rule.
- * @param {Object} db - The partition's connection.
- * @param {string} sql - The statement.
- * @return {{admitted: true, kind: string, statement: Object}} The admission.
- */
-function prepareSessionStatement(db, sql) {
-  const read = String(sql).trim().toUpperCase().startsWith(KEYWORD.SELECT);
-  const kind = read ? KIND.READ : KIND.WRITE;
-  return {admitted: true, kind, statement: prepareByKind(db, sql, kind)};
-}
 
 function statementRefusalError(refused) {
   const error = new Error(refused.reason);
@@ -373,7 +367,7 @@ function runAdmittedPartitionStatement(service, admission, params = []) {
  * owner records STATEMENT_FAILED; any other throw is the statement's own.
  * An applied statement's result is the one the outcome owner retains and
  * answers (committedStatementResult): its last insert rowid only when it is
- * of an inserting kind and inserted rows.
+ * an INSERT or REPLACE without a DO UPDATE clause and changed rows.
  * @param {Object} service - The partition.
  * @param {Object} command - The committed command ({type, sql, params}).
  * @return {{changes: number, lastInsertRowid: *}} The statement's result.
@@ -389,7 +383,7 @@ function runCommittedPartitionStatement(service, command) {
     throw statementRefusalError(outcome);
   }
   return committedStatementResult(outcome.info,
-    {insertsRows: admission.insertsRows === true});
+    {retainsInsertRowid: admission.retainsInsertRowid === true});
 }
 
 /**
@@ -430,7 +424,6 @@ export {
   admitPartitionStatement,
   classifyPartitionStatementHead,
   partitionStatementRefusalAnswer,
-  prepareSessionStatement,
   readAdmittedPartitionRows,
   runAdmittedPartitionStatement,
   runCommittedPartitionStatement,

@@ -93,11 +93,15 @@ async function leaderAnswer(leader, [entryId, sql, params]) {
     pick(answer.value, ['failureCode', 'refusalLayer']) : 'proposed';
 }
 
-test('TX1 admission A1: while a session holds staged rows at 2^62 and 2^63-1 on the ' +
-  'leader\'s connection, sessionless allocating writes are proposed (the leader-side ' +
-  'ceiling check reads committed state only) and the text rules still refuse; the ' +
-  'apply-side checks refuse an allocating statement at the ceiling on every replica',
-async () => {
+// Increment 4 supersedes the session half (design 3.1, 3.3): a participant
+// session never holds staged rows on the connection (c'), and its keys at
+// 2^62 and 2^63-1 are refused at staging (`implicit_key`, the session key
+// range); the leader-side ceiling check still reads committed state only.
+test('TX1 admission A1: a session\'s keys at 2^62 and 2^63-1 never reach the leader\'s ' +
+  'connection (refused at staging, no transaction held), sessionless allocating writes are ' +
+  'proposed (the leader-side ceiling check reads committed state only) and the text rules ' +
+  'still refuse; the apply-side checks refuse an allocating statement at the ceiling on ' +
+  'every replica', async () => {
   // The last proposal would fail its own key constraint if it ran: at a
   // committed ceiling the apply refuses it before it runs.
   const writes = [['adm-a1-replace', KEYED_REPLACE, [8, 'eight']],
@@ -144,7 +148,7 @@ async () => {
   }
   const atApply = {applies: [null, null, null, null], rowids: ['8', String(CEILING)],
     outcomes: [APPLIED, REFUSED_AT_APPLY, REFUSED_AT_APPLY, REFUSED_AT_APPLY]};
-  assert.deepEqual(facts, {staged: [true, true], sessionHoldsConnection: true,
+  assert.deepEqual(facts, {staged: [false, false], sessionHoldsConnection: false,
     wire: ['proposed', 'proposed', 'proposed', 'proposed', {
       failureCode: V3.CODE.WRITE_STATEMENT_REFUSED,
       refusalLayer: LAYER.ROWID_ALLOCATION}],

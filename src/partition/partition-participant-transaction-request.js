@@ -1,46 +1,42 @@
 // The participant's transaction requests (TX1 design revision 10, sections
-// 2.2, 4 and 7): the one owner of how a TRANSACTION or QUERY request that
-// carries a transactionId is answered. BEGIN records the transaction's
-// identity and its BEGIN-time write generation beside the session; PREPARE
-// seals the session's staged operations into a PARTICIPANT_PREPARE; COMMIT
-// and a bound ROLLBACK propose the PARTICIPANT_DECISION bound to the
+// 2.2, 3.1, 4 and 7): the one owner of how a TRANSACTION or QUERY request that
+// carries a transactionId is answered. BEGIN opens a volatile staging session
+// on the leader (partition-participant-transaction-session.js) with the
+// BEGIN-time write generation, and opens no SQLite transaction; a session
+// statement stages under c' (partition-participant-transaction-staging.js);
+// PREPARE seals the session's staged operations into a PARTICIPANT_PREPARE;
+// COMMIT and a bound ROLLBACK propose the PARTICIPANT_DECISION bound to the
 // coordinator's decision record; an unbound ROLLBACK only discards volatile
 // staging; an outcome read answers from the durable row, on any replica; and
-// a session statement for a sealed, prepared or decided transaction is
-// refused, typed, never run as a sessionless write. Transaction admission is
-// enabled on a partition once, by the leader proposing the generation origin
-// (design 0.0.13); until that origin has applied here, BEGIN is refused,
-// typed, so every base a transaction reads counts from a committed origin.
+// a statement for a sealed, prepared or decided transaction is refused,
+// typed, never run as a sessionless write. Transaction admission is enabled
+// on a partition once, by the leader proposing the generation origin (design
+// 0.0.13); until that origin has applied here, BEGIN is refused, typed, so
+// every base a transaction reads counts from a committed origin. A leader
+// whose determinism self-check failed refuses every BEGIN.
 //
 // Each command is proposed under its own deterministic entryId through the
 // write commit owner (startPartitionRaftWriteCommit: the pending commit is
 // registered before the proposal, a retry joins it, and its deadline and the
-// leader-loss release answer a proposed command as an unknown outcome).
+// leader-loss release answer a proposed command as an unknown outcome), and
+// the leader stamps PREPARE and decision commands with its execution
+// envelope (partition-transaction-execution-envelope.js).
 //
 // The two identity classes have one outcome authority each, until the
 // cutover's drain (the L6 window): a request carrying a transactionId is
 // answered from `_participant_transactions` here; a sessionId-only request
-// keeps the legacy session path and its `_transaction_outcomes` row. No
-// request reads both.
-//
-// Staging is still the session path's (BEGIN IMMEDIATE held on the shared
-// connection across requests; a later TX1 increment replaces it with c').
-// PREPARE therefore ends that staging transaction before it proposes: the
-// rs-raft store admits no write inside it, and the staged effects were only
-// speculative - the PREPARE's dry run and its COMMIT apply the operations as
-// carried. While a participant transaction is in flight (PREPARING on this
-// leader) or PREPARED here, no BEGIN opens another staging transaction on the
-// connection (one non-terminal transaction per partition).
+// keeps the legacy session path, behind the fences of
+// partition-participant-transaction-legacy-fence.js.
 
 import {PARTICIPANT_COMMIT_OUTCOME} from '../constants/transactions.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
-import {startPartitionRaftWriteCommit} from
-  './partition-service-raft-write-commit.js';
 import {
-  PARTITION_WRITE_COMMIT_MODE,
-  buildPartitionWriteLeadershipRefusal,
+  partitionWriteLeadershipRefusalOf,
+  startPartitionRaftWriteCommit,
+} from './partition-service-raft-write-commit.js';
+import {
+  isRetryableWriteFailureCode,
   isWriteOutcomeUnknown,
-  resolvePartitionWriteCommitMode,
 } from './partition-write-kernel.js';
 import {
   PARTITION_COMMITTED_COMMAND_ORIGIN,
@@ -67,32 +63,38 @@ import {
 } from './partition-participant-transaction-store.js';
 import {operationResultsOf} from './partition-participant-transaction-apply.js';
 import {
+  endParticipantSession,
+  findParticipantSession,
+  openParticipantSession,
+} from './partition-participant-transaction-session.js';
+import {runParticipantSessionStatement} from
+  './partition-participant-transaction-staging.js';
+import {
+  fenceLegacySessionQuery,
+  fenceLegacyTransactionRequest,
+  participantTransactionActive,
+} from './partition-participant-transaction-legacy-fence.js';
+import {participantDeterminismSelfCheckOf} from
+  './partition-participant-transaction-self-check.js';
+import {participantConnectionStampOf} from
+  './partition-participant-transaction-connection.js';
+import {executionEnvelopeOf} from './partition-transaction-execution-envelope.js';
+import {transactionStatementKindOf} from './partition-transaction-determinism.js';
+import {TRANSACTION_STATEMENT_KIND} from './partition-transaction-determinism-constants.js';
+import {
   PARTICIPANT_TRANSACTION_DECISION as DECISION,
   PARTICIPANT_TRANSACTION_FAILURE_CODE as CODE,
   PARTICIPANT_TRANSACTION_MESSAGE as MESSAGE,
   PARTICIPANT_TRANSACTION_REFUSAL_CAUSE as CAUSE,
+  PARTICIPANT_TRANSACTION_SESSION_PHASE as PHASE,
   PARTICIPANT_TRANSACTION_STATE as STATE,
 } from './partition-participant-transaction-constants.js';
 
 const {
-  PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_LITERAL,
   PARTITION_SERVICE_OPERATION,
-  PARTITION_SERVICE_SQL,
-  RaftRole,
 } = PARTITION_SERVICE_SHARED;
 
-// A session's participant identity and BEGIN-time write generation, kept
-// beside the session the session path owns (keyed by its state object, so it
-// ends with the session).
-const PARTICIPANT_SESSIONS = new WeakMap();
-// Per partition service: the participants whose PREPARE this leader proposed
-// and has not yet answered (PREPARING).
-const PREPARING = new WeakMap();
-const BEGIN_OPERATIONS = Object.freeze([
-  PARTITION_SERVICE_OPERATION.BEGIN_TRANSACTION,
-  PARTITION_SERVICE_LITERAL.BEGIN,
-]);
 // What a decision request does when the durable row and the session leave it
 // to the log: it is proposed, and its apply decides.
 const PROPOSE_DECISION = Object.freeze({proposeDecision: true});
@@ -141,69 +143,18 @@ function identityOf(payload) {
   };
 }
 
-function preparingOf(service) {
-  let preparing = PREPARING.get(service);
-  if (preparing === undefined) {
-    preparing = new Set();
-    PREPARING.set(service, preparing);
-  }
-  return preparing;
-}
-
-function isPreparing(service, participantId) {
-  return PREPARING.get(service)?.has(participantId) === true;
-}
-
-function participantTransactionInFlight(service) {
-  return (PREPARING.get(service)?.size ?? 0) > 0 ||
-    isPartitionReserved(service.db);
-}
-
-// The session this transaction stages in, or null: the session path keys a
-// session by its sessionId (routing context); the transactionId recorded at
-// BEGIN must be the request's.
-function participantSessionOf(service, payload) {
-  const sessionId = service.normalizeTransactionSessionId(
-    payload.sessionId ?? null);
-  const state = service.activeTransactions.get(sessionId);
-  const participant = state === undefined ? undefined :
-    PARTICIPANT_SESSIONS.get(state);
-  return participant?.transactionId === payload.transactionId ?
-    {sessionId, state, participant} : null;
-}
-
-// End the session's staging transaction and forget the session (its staged
-// effects were speculative: nothing it staged is visible or proposed).
-function endSessionStaging(service, session) {
-  if (service.db.inTransaction) {
-    service.db.exec(PARTITION_SERVICE_SQL.ROLLBACK);
-  }
-  service.activeTransactions.delete(session.sessionId);
-  service.preparedStateLostSessions.delete(session.sessionId);
-  service.syncLegacyTransactionAliases();
-}
-
-// Only the consensus leader proposes (the write kernel's rule, as applyWrite
-// asks it).
-function leadershipRefusalOf(service) {
-  const consensusStatus = service.raft.readStatus();
-  const commitMode = resolvePartitionWriteCommitMode({
-    replicaIds: service.replicaIds,
-    raftState: consensusStatus.role,
-    raftLeaderState: RaftRole.LEADER,
-    hasKnownRemoteLeader: service.hasKnownRemoteLeaderWitness(),
-  });
-  return commitMode === PARTITION_WRITE_COMMIT_MODE.REJECTED ?
-    buildPartitionWriteLeadershipRefusal(consensusStatus,
-      service.partitionId) : null;
-}
-
 function stampOf(service) {
   return {
     timestamp: service.hlcClock.now().toString(),
     proposedBy: service.replicaId,
     proposedAt: service.timeSource.now(),
   };
+}
+
+// A PREPARE's or decision's stamp: the leader's execution envelope, then the
+// proposal stamp (design 2.3's pinned field order).
+function commandStampOf(service) {
+  return {executionEnvelope: executionEnvelopeOf(service.db), ...stampOf(service)};
 }
 
 // The write kernel's answer, typed for the participant: a command that may
@@ -215,7 +166,7 @@ function proposalAnswerOf(service, payload, answer) {
 }
 
 // The admission owner's refusal of a command this owner built, asked before
-// any session is ended for it; null when it may be proposed.
+// any session state changes for it; null when it may be proposed.
 function admissionRefusalOf(service, payload, command) {
   const admission = admitCommittedCommand(command,
     {origin: PARTITION_COMMITTED_COMMAND_ORIGIN.TRANSACTION_OWNER});
@@ -229,106 +180,159 @@ async function proposeAdmitted(service, payload, command) {
       applyStartMs: service.timeSource.now()}));
 }
 
+// The durable row of this transaction, which ends any session left of it (a
+// PREPARE that applied while its answer was lost): the row is the authority.
+function rowEndingSession(service, payload) {
+  const row = readParticipantTransactionRow(service.db, payload);
+  const session = findParticipantSession(service, payload);
+  if (row !== null && session !== null) {
+    endParticipantSession(service, session);
+  }
+  return {row, session: row === null ? session : null};
+}
+
+// A session's own refusal before it may serve a request: another epoch for
+// this transactionId, or a doomed session's code.
+function sessionRefusalOf(service, payload, session) {
+  if (session.identity.transactionEpoch !== payload.transactionEpoch) {
+    return refusalOf(service, payload, CODE.IDENTITY_MISMATCH);
+  }
+  return session.phase === PHASE.DOOMED ?
+    refusalOf(service, payload, session.doomCode) : null;
+}
+
+function volatileStateOf(session) {
+  return session.phase === PHASE.PREPARING ? STATE.PREPARING : STATE.ACTIVE;
+}
+
 // --- BEGIN ---
 
-async function beginParticipantSession(service, payload) {
+// What refuses a BEGIN before any session is looked up: leadership (a
+// session stages on the leader only), the generation origin, the leader's
+// self-check, the removal fence.
+function beginRefusalOf(service, payload) {
+  const leadership = partitionWriteLeadershipRefusalOf(service);
+  if (leadership !== null) {
+    return answerOf(service, payload, leadership);
+  }
   const origin = readPartitionWriteOrigin(service.db);
   if (origin === null) {
     return refusalOf(service, payload, CODE.GENERATION_ORIGIN_PENDING,
       participantOutcomeOf(null));
   }
-  const row = readParticipantTransactionRow(service.db, payload);
+  if (participantDeterminismSelfCheckOf(service)?.passed !== true) {
+    return refusalOf(service, payload, CODE.DETERMINISM_SELF_CHECK_FAILED);
+  }
+  return service.removalServingAdmissionFenced === true ?
+    refusalOf(service, payload, CODE.REMOVAL_FENCED, {deferRetry: true}) : null;
+}
+
+function existingSessionAnswer(service, payload, session) {
+  const refused = sessionRefusalOf(service, payload, session);
+  if (refused !== null) {
+    return refused;
+  }
+  return session.phase === PHASE.PREPARING ?
+    refusalOf(service, payload, CODE.PREPARING, participantOutcomeOf(null,
+      STATE.PREPARING)) :
+    answerOf(service, payload, {success: true, idempotent: true,
+      ...participantOutcomeOf(null, STATE.ACTIVE)});
+}
+
+function beginParticipantSession(service, payload) {
+  const refused = beginRefusalOf(service, payload);
+  if (refused !== null) {
+    return refused;
+  }
+  const {row, session} = rowEndingSession(service, payload);
   if (row !== null) {
     return refusalOf(service, payload, row.state === STATE.PREPARED ?
       CODE.SEALED : CODE.TERMINAL, participantOutcomeOf(row));
   }
-  const sessionId = service.normalizeTransactionSessionId(
-    payload.sessionId ?? null);
-  const open = service.activeTransactions.get(sessionId);
-  if (open !== undefined) {
-    return PARTICIPANT_SESSIONS.get(open)?.transactionId ===
-      payload.transactionId ?
-      answerOf(service, payload, {success: true, idempotent: true,
-        ...participantOutcomeOf(null, STATE.ACTIVE)}) :
-      refusalOf(service, payload, CODE.ALREADY_ACTIVE);
+  if (session !== null) {
+    return existingSessionAnswer(service, payload, session);
   }
-  // One non-terminal transaction per partition: another session staging, or
-  // a participant transaction PREPARING or PREPARED here.
-  if (service.isInTransaction() || participantTransactionInFlight(service)) {
+  // One non-terminal transaction per partition: another participant
+  // transaction staging, preparing or PREPARED here, or a legacy session.
+  if (participantTransactionActive(service) || service.isInTransaction()) {
     return refusalOf(service, payload, CODE.ALREADY_ACTIVE);
   }
-  const begun = await service.beginTransaction(sessionId,
-    payload.transactionEpoch);
-  const state = service.activeTransactions.get(sessionId);
-  if (state !== undefined) {
-    PARTICIPANT_SESSIONS.set(state, {
-      transactionId: payload.transactionId,
-      transactionEpoch: payload.transactionEpoch,
-      // The conflict base (design 3.2): read at BEGIN, carried unchanged,
-      // with the origin it counts from (design 0.0.13).
-      generationBase: readPartitionWriteGeneration(service.db),
-      originIndex: origin.originIndex,
-    });
-  }
-  return answerOf(service, payload, {...begun,
+  // The conflict base (design 3.2): read at BEGIN, carried unchanged, with
+  // the origin it counts from (design 0.0.13).
+  openParticipantSession(service, identityOf(payload), {
+    generationBase: readPartitionWriteGeneration(service.db),
+    originIndex: readPartitionWriteOrigin(service.db).originIndex,
+  });
+  return answerOf(service, payload, {success: true,
+    sessionId: payload.sessionId ?? null,
+    transactionEpoch: payload.transactionEpoch,
     ...participantOutcomeOf(null, STATE.ACTIVE)});
 }
 
 // --- PREPARE ---
 
-function stagedOperationsTextOf(sessionState) {
-  try {
-    return JSON.stringify(sessionState.operations.map((operation) => ({
-      entryId: operation.entryId,
-      sql: operation.sql,
-      params: Array.isArray(operation.params) ? operation.params : [],
-    })));
-  } catch (_unencodable) {
-    // A param the proposal codec cannot carry (a BigInt) is refused, typed.
-    return null;
-  }
+// What a PREPARE answer leaves of its sealed session: a refusal that settled
+// nothing (the reservation's, a retryable kernel refusal, an unknown
+// outcome) keeps it sealed for the coordinator's retry, which re-proposes the
+// same bytes; any other answer ends it (PREPARED: the row is the authority).
+function keepsSealedSession(answer) {
+  return answer?.success !== true && (answer?.failureCode === CODE.RESERVED ||
+    isRetryableWriteFailureCode(answer?.failureCode));
 }
 
-async function proposeSealedPrepare(service, payload, command) {
-  const preparing = preparingOf(service);
-  preparing.add(payload.participantId);
+async function proposeSealedPrepare(service, payload, session) {
+  session.inFlight = true;
+  let answer;
   try {
-    return await proposeAdmitted(service, payload, command);
+    answer = await proposeAdmitted(service, payload, session.sealed);
   } finally {
-    preparing.delete(payload.participantId);
+    session.inFlight = false;
   }
+  if (!keepsSealedSession(answer)) {
+    endParticipantSession(service, session);
+  }
+  return answer;
 }
 
-async function sealAndPrepare(service, payload, session) {
-  const operationsText = stagedOperationsTextOf(session.state);
-  if (operationsText === null) {
-    return refusalOf(service, payload, CODE.SESSION_WRITE_PARAM_UNSUPPORTED);
-  }
-  if (isPartitionReserved(service.db)) {
-    return refusalOf(service, payload, CODE.RESERVED,
-      {deferRetry: true, ...participantOutcomeOf(null)});
-  }
+function sealSession(service, payload, session) {
   // Advisory: the apply is the authority over the carried base.
-  if (readPartitionWriteGeneration(service.db) !==
-      session.participant.generationBase) {
-    endSessionStaging(service, session);
+  if (readPartitionWriteGeneration(service.db) !== session.generationBase) {
+    endParticipantSession(service, session);
     return refusalOf(service, payload, CODE.PREPARE_REFUSED,
       {refusalCause: CAUSE.CONFLICT, ...participantOutcomeOf(null)});
   }
-  const command = buildPrepareCommand(identityOf(payload), {operationsText,
-    validationText: validationTextOf(session.participant.generationBase,
-      service.partitionId, session.participant.originIndex)},
-  stampOf(service));
+  const command = buildPrepareCommand(identityOf(payload), {
+    operationsText: JSON.stringify(session.operations),
+    validationText: validationTextOf(session.generationBase, service.partitionId,
+      session.originIndex)}, commandStampOf(service));
   const refused = admissionRefusalOf(service, payload, command);
   if (refused !== null) {
     return refused;
   }
-  endSessionStaging(service, session);
-  return proposeSealedPrepare(service, payload, command);
+  session.phase = PHASE.PREPARING;
+  session.sealed = command;
+  return null;
+}
+
+async function prepareSession(service, payload, session) {
+  const refused = sessionRefusalOf(service, payload, session);
+  if (refused !== null) {
+    return refused;
+  }
+  if (session.sealed !== null && session.sealed.commitMode !== payload.commitMode) {
+    return refusalOf(service, payload, CODE.IDENTITY_MISMATCH);
+  }
+  if (isPartitionReserved(service.db)) {
+    return refusalOf(service, payload, CODE.RESERVED,
+      {deferRetry: true, ...participantOutcomeOf(null, volatileStateOf(session))});
+  }
+  const sealRefusal = session.sealed === null ?
+    sealSession(service, payload, session) : null;
+  return sealRefusal ?? proposeSealedPrepare(service, payload, session);
 }
 
 async function prepareParticipant(service, payload) {
-  const leadership = leadershipRefusalOf(service);
+  const leadership = partitionWriteLeadershipRefusalOf(service);
   if (leadership !== null) {
     return answerOf(service, payload, leadership);
   }
@@ -337,22 +341,15 @@ async function prepareParticipant(service, payload) {
   if (pending !== null) {
     return proposalAnswerOf(service, payload, await pending);
   }
-  const row = readParticipantTransactionRow(service.db, payload);
+  const {row, session} = rowEndingSession(service, payload);
   if (row !== null) {
     return row.state === STATE.PREPARED ?
       answerOf(service, payload, {success: true,
         ...participantOutcomeOf(row)}) :
       refusalOf(service, payload, CODE.TERMINAL, participantOutcomeOf(row));
   }
-  const session = participantSessionOf(service, payload);
-  if (session === null) {
-    return refusalOf(service, payload, CODE.NOT_ACTIVE,
-      participantOutcomeOf(null));
-  }
-  if (session.participant.transactionEpoch !== payload.transactionEpoch) {
-    return refusalOf(service, payload, CODE.IDENTITY_MISMATCH);
-  }
-  return sealAndPrepare(service, payload, session);
+  return session === null ? refusalOf(service, payload, CODE.NOT_ACTIVE,
+    participantOutcomeOf(null)) : prepareSession(service, payload, session);
 }
 
 // --- COMMIT and bound ROLLBACK ---
@@ -409,14 +406,13 @@ function decisionOverRow(service, payload, binding, row) {
 // With no row: a staging session is never prepared - a COMMIT of it is
 // refused, a ROLLBACK discards it and proposes its TOMBSTONE; with no session
 // the decision is proposed and its apply decides.
-function decisionOverSession(service, payload, binding) {
-  const session = participantSessionOf(service, payload);
+function decisionOverSession(service, payload, binding, session) {
   if (session !== null && binding.decision === DECISION.COMMIT) {
     return refusalOf(service, payload, CODE.NOT_PREPARED,
-      participantOutcomeOf(null, STATE.ACTIVE));
+      participantOutcomeOf(null, volatileStateOf(session)));
   }
   if (session !== null) {
-    endSessionStaging(service, session);
+    endParticipantSession(service, session);
   }
   return PROPOSE_DECISION;
 }
@@ -430,7 +426,7 @@ function decisionRequestRefusalOf(binding, decision) {
 }
 
 async function decideParticipant(service, payload, decision) {
-  const leadership = leadershipRefusalOf(service);
+  const leadership = partitionWriteLeadershipRefusalOf(service);
   if (leadership !== null) {
     return answerOf(service, payload, leadership);
   }
@@ -444,19 +440,18 @@ async function decideParticipant(service, payload, decision) {
   if (pending !== null) {
     return proposalAnswerOf(service, payload, await pending);
   }
-  if (decision === DECISION.COMMIT &&
-      isPreparing(service, payload.participantId)) {
+  const {row, session} = rowEndingSession(service, payload);
+  if (decision === DECISION.COMMIT && session?.phase === PHASE.PREPARING) {
     return refusalOf(service, payload, CODE.PREPARING, {deferRetry: true});
   }
   const command = buildDecisionCommand(identityOf(payload), binding,
-    stampOf(service));
+    commandStampOf(service));
   const refused = admissionRefusalOf(service, payload, command);
   if (refused !== null) {
     return refused;
   }
-  const row = readParticipantTransactionRow(service.db, payload);
   const answered = row === null ?
-    decisionOverSession(service, payload, binding) :
+    decisionOverSession(service, payload, binding, session) :
     decisionOverRow(service, payload, binding, row);
   return answered === PROPOSE_DECISION ?
     proposeAdmitted(service, payload, command) : answered;
@@ -465,10 +460,7 @@ async function decideParticipant(service, payload, decision) {
 // --- unbound ROLLBACK: volatile staging only (design 2.4) ---
 
 function unboundRollback(service, payload) {
-  if (isPreparing(service, payload.participantId)) {
-    return refusalOf(service, payload, CODE.PREPARING, {deferRetry: true});
-  }
-  const row = readParticipantTransactionRow(service.db, payload);
+  const {row, session} = rowEndingSession(service, payload);
   if (row !== null) {
     if (row.state === STATE.PREPARED) {
       return refusalOf(service, payload, CODE.DECISION_BINDING_REQUIRED,
@@ -480,9 +472,12 @@ function unboundRollback(service, payload) {
       answerOf(service, payload, {success: true, durable: true,
         ...participantOutcomeOf(row)});
   }
-  const session = participantSessionOf(service, payload);
+  // A PREPARE was sent: only a bound decision may end it (seam C).
+  if (session?.phase === PHASE.PREPARING) {
+    return refusalOf(service, payload, CODE.PREPARING, {deferRetry: true});
+  }
   if (session !== null) {
-    endSessionStaging(service, session);
+    endParticipantSession(service, session);
   }
   return answerOf(service, payload, {success: true, durable: false,
     ...participantOutcomeOf(null)});
@@ -496,20 +491,12 @@ function rollbackParticipant(service, payload) {
 
 // --- outcome read (design 5.2), any replica ---
 
-// The volatile state of a transaction with no durable row here.
-function volatileStateOf(service, payload) {
-  if (isPreparing(service, payload.participantId)) {
-    return STATE.PREPARING;
-  }
-  return participantSessionOf(service, payload) === null ?
-    STATE.ABSENT : STATE.ACTIVE;
-}
-
 function participantOutcomeAnswer(service, payload) {
   const row = readParticipantTransactionRow(service.db, payload);
+  const session = row === null ? findParticipantSession(service, payload) : null;
   return answerOf(service, payload, {success: true,
-    ...participantOutcomeOf(row, row === null ?
-      volatileStateOf(service, payload) : STATE.ABSENT)});
+    ...participantOutcomeOf(row, session === null ? STATE.ABSENT :
+      volatileStateOf(session))});
 }
 
 function answerParticipantRequest(service, payload) {
@@ -533,9 +520,9 @@ function answerParticipantRequest(service, payload) {
 
 /**
  * Route one TRANSACTION request: a request carrying a transactionId is
- * answered here (null for an operation this owner does not know); a legacy
- * BEGIN while a participant transaction is in flight or PREPARED here is
- * refused, typed; any other request is the legacy session path's (undefined).
+ * answered here (null for an operation this owner does not know); a
+ * sessionId-only request the L6 fences refuse is answered by them; any other
+ * request is the legacy session path's (undefined).
  * @param {Object} service - The partition.
  * @param {Object} payload - The TRANSACTION request.
  * @return {(Promise<Object|null>|undefined)} The answer, or undefined.
@@ -547,33 +534,60 @@ function routeParticipantTransactionRequest(service, payload) {
       answerParticipantRequest(service, payload) :
       refusalOf(service, payload, identityRefusal));
   }
-  if (BEGIN_OPERATIONS.includes(payload?.operation) &&
-      participantTransactionInFlight(service)) {
-    return Promise.resolve(answerOf(service, payload, {success: false,
-      error: PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
-      failureCode: CODE.ALREADY_ACTIVE}));
-  }
-  return undefined;
+  const fenced = fenceLegacyTransactionRequest(service, payload);
+  return fenced === undefined ? undefined : Promise.resolve(fenced);
 }
 
-// The answer to a session statement of a transaction that does not stage
-// here now; null when it does (the session path runs it).
-function sessionQueryRefusalOf(service, payload) {
+// --- session statements (QUERY) ---
+
+function sessionStatementAnswer(service, payload) {
   const identityRefusal = identityRefusalOf(payload, service.partitionId);
   if (identityRefusal !== null) {
     return refusalOf(service, payload, identityRefusal);
   }
-  const row = readParticipantTransactionRow(service.db, payload);
+  const {row, session} = rowEndingSession(service, payload);
   if (row !== null) {
     return refusalOf(service, payload, row.state === STATE.PREPARED ?
       CODE.SEALED : CODE.TERMINAL, participantOutcomeOf(row));
   }
-  if (isPreparing(service, payload.participantId)) {
+  if (session === null) {
+    return refusalOf(service, payload, CODE.NOT_ACTIVE, participantOutcomeOf(null));
+  }
+  const refused = sessionRefusalOf(service, payload, session);
+  if (refused !== null) {
+    return refused;
+  }
+  // A sealed session stages no write; it still reads its sealed operations.
+  if (session.phase === PHASE.PREPARING &&
+      transactionStatementKindOf(payload.sql) === TRANSACTION_STATEMENT_KIND.WRITE) {
     return refusalOf(service, payload, CODE.PREPARING);
   }
-  return participantSessionOf(service, payload) === null ?
-    refusalOf(service, payload, CODE.NOT_ACTIVE, participantOutcomeOf(null)) :
-    null;
+  return answerOf(service, payload,
+    runParticipantSessionStatement(service, session, payload));
+}
+
+/**
+ * Answer a QUERY carrying a transactionId: a statement of the transaction
+ * staging on this leader is staged or read under c'; one for a transaction
+ * not staging here now (PREPARING for a write, PREPARED, decided, or unknown
+ * here) is refused, typed, never run as a sessionless write. A sessionId-only
+ * QUERY that names a participant transaction's session is refused by the L6
+ * fence. Null for every other QUERY (the sessionless and legacy paths).
+ * @param {Object} service - The partition.
+ * @param {Object} payload - The QUERY request.
+ * @return {Object|null} The acknowledged answer, or null.
+ */
+function answerParticipantSessionQuery(service, payload) {
+  if (!isParticipantTransactionRequest(payload)) {
+    return fenceLegacySessionQuery(service, payload);
+  }
+  try {
+    return {acknowledged: true, ...sessionStatementAnswer(service, payload)};
+  } catch (statementError) {
+    // An unexpected failure answers this request; nothing staged changed.
+    return {acknowledged: true, success: false, error: statementError?.message,
+      errorCode: statementError?.code ?? null, partitionId: service.partitionId};
+  }
 }
 
 /**
@@ -582,10 +596,13 @@ function sessionQueryRefusalOf(service, payload) {
  * under its deterministic entryId, after the release owner's L6 drain; an
  * origin already applied here is answered from the generation row and nothing
  * is proposed. Until the origin has applied, BEGIN is refused
- * GENERATION_ORIGIN_PENDING.
+ * GENERATION_ORIGIN_PENDING. The leader's connection must have served no
+ * legacy session since its open (0.0.14, the L6 clause): one that did is
+ * refused CONNECTION_SERVED_LEGACY, and the cutover reopens it through the
+ * lifecycle owner first (partition-participant-transaction-connection.js).
  * @param {Object} service - The partition (its leader).
  * @return {Promise<Object>} The origin's answer ({success, originIndex,
- *   originTerm}), or the write kernel's typed refusal.
+ *   originTerm}), or a typed refusal.
  */
 async function enableParticipantTransactionAdmission(service) {
   const recorded = readPartitionWriteOrigin(service.db);
@@ -593,13 +610,18 @@ async function enableParticipantTransactionAdmission(service) {
     return {success: true, alreadyEnabled: true,
       partitionId: service.partitionId, ...recorded};
   }
-  const leadership = leadershipRefusalOf(service);
+  const leadership = partitionWriteLeadershipRefusalOf(service);
   if (leadership !== null) {
     return leadership;
   }
+  const payload = {partitionId: service.partitionId};
+  const connection = participantConnectionStampOf(service.db);
+  if (connection.servedLegacy) {
+    return refusalOf(service, payload, CODE.CONNECTION_SERVED_LEGACY,
+      {connectionGeneration: connection.generation});
+  }
   const command = buildGenerationOriginCommand(service.partitionId,
     stampOf(service));
-  const payload = {partitionId: service.partitionId};
   const pending = service.getPendingCommittedWriteOutcome(command.entryId);
   if (pending !== null) {
     return answerOf(service, payload, await pending);
@@ -610,24 +632,8 @@ async function enableParticipantTransactionAdmission(service) {
         applyStartMs: service.timeSource.now()}));
 }
 
-/**
- * Refuse a QUERY carrying a transactionId whose transaction is not staging on
- * this replica now (PREPARING, PREPARED, decided, or unknown here), so it is
- * never run as a sessionless write; null for every other QUERY.
- * @param {Object} service - The partition.
- * @param {Object} payload - The QUERY request.
- * @return {Object|null} The acknowledged refusal, or null.
- */
-function refuseParticipantSessionQuery(service, payload) {
-  if (!isParticipantTransactionRequest(payload)) {
-    return null;
-  }
-  const refused = sessionQueryRefusalOf(service, payload);
-  return refused === null ? null : {acknowledged: true, ...refused};
-}
-
 export {
+  answerParticipantSessionQuery,
   enableParticipantTransactionAdmission,
-  refuseParticipantSessionQuery,
   routeParticipantTransactionRequest,
 };

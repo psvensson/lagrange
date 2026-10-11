@@ -12,8 +12,20 @@ import {createPartitionServiceSplitMirrorQueueMethods} from './partition-service
 import {PartitionServiceSplitAccessorBase} from './partition-service-split-accessor-base.js';
 import {createPartitionServiceSourceReplicationStartMethods} from
   './partition-service-source-replication-start-methods.js';
+import {configureParticipantDeterminismSelfCheck} from
+  './partition-participant-transaction-self-check.js';
+import {TRANSACTION_ENVELOPE_SERVICE_METHODS} from
+  './partition-transaction-execution-envelope.js';
 
-class PartitionService extends PartitionServiceSplitAccessorBase {}
+class PartitionService extends PartitionServiceSplitAccessorBase {
+  constructor(options = {}) {
+    super(options);
+    // The leader's determinism self-check (TX1 design 3.3): the construction
+    // option transactionDeterminismSelfCheck, else the classifier owner's.
+    configureParticipantDeterminismSelfCheck(this,
+      options.transactionDeterminismSelfCheck);
+  }
+}
 
 Object.assign(
   PartitionService.prototype,
@@ -29,6 +41,7 @@ Object.assign(
   createPartitionServiceMergeReplicationResumptionMethods(),
   createPartitionServiceSplitMirrorQueueMethods(),
   createPartitionServiceSourceReplicationStartMethods(),
+  TRANSACTION_ENVELOPE_SERVICE_METHODS,
 );
 
 export {PartitionService};

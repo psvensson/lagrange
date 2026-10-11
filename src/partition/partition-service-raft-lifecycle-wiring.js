@@ -5,6 +5,10 @@ import {
   PARTITION_WRITE_RELEASE_CAUSE,
   buildReleasedPendingWriteAnswer,
 } from './partition-write-kernel.js';
+import {discardParticipantSessions} from
+  './partition-participant-transaction-session.js';
+import {runLeaderDeterminismSelfCheck} from
+  './partition-participant-transaction-self-check.js';
 
 const {
   PARTITION_SERVICE_EVENT,
@@ -34,10 +38,16 @@ function wirePartitionRaftLifecycleEvents(
   // A replica that stops leading releases every pending write at once, each
   // answered with what this replica knows of it (the write kernel's typed
   // answer): one handed to consensus has an outcome this replica cannot know;
-  // one never handed to it was not proposed, and this replica does not lead.
-  const releasePendingWrites = () => service.releasePendingCommittedWrites(
-    (pending) => buildReleasedPendingWriteAnswer(pending, service.partitionId,
-      {cause: PARTITION_WRITE_RELEASE_CAUSE.LEADERSHIP_LOST}));
+  // one never handed to it (a write parked while the partition was reserved
+  // among them) was not proposed, and this replica does not lead. Its
+  // participant staging sessions are discarded with it (TX1 design 7: they
+  // hold nothing durable and no connection state).
+  const releasePendingWrites = () => {
+    service.releasePendingCommittedWrites(
+      (pending) => buildReleasedPendingWriteAnswer(pending, service.partitionId,
+        {cause: PARTITION_WRITE_RELEASE_CAUSE.LEADERSHIP_LOST}));
+    discardParticipantSessions(service);
+  };
   // Every announcement is also where the partition sees its group held (the
   // port announces a held group without a role) and serving again.
   const observeConsensusHold = createConsensusHoldLog(service);
@@ -65,6 +75,9 @@ function wirePartitionRaftLifecycleEvents(
         term,
       });
       service.scheduleLeaderOwnedActivation(term);
+      // The leader's determinism self-check (TX1 design 3.3), once per
+      // connection, before it stages any transaction.
+      runLeaderDeterminismSelfCheck(service);
       observeConsensusHold();
     },
     onFollower: ({term, demotedByLeaderChange}) => {

@@ -13,6 +13,7 @@ import {
   PARTITION_TRANSACTION_PREPARED_STATE,
 } from './partition-service-constants.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {sweepParticipantTransactionHolds} from './partition-participant-transaction-session.js';
 
 const TRANSACTION_HOLD_WAIT = Object.freeze({
   wait: 'TIMEOUT_BUDGET_DEFAULT.PREPARED_HOLD_TIMEOUT_MS',
@@ -398,10 +399,9 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
   enforcePreparedStateHoldTimeouts(nowMs = Date.now()) {
     // Sync-section attribution (instrumentation-only): this synchronous sweep
     // (and its heal-deferred warn path) runs continuously on the seed; tag it
-    // for the gap watchdog. See raft-churn-sync-sections.js.
-    return trackStuckTransactionHeal(
-      () => this.runPreparedStateHoldTimeoutSweep(nowMs),
-    );
+    // for the gap watchdog (raft-churn-sync-sections.js); plus participant holds.
+    return trackStuckTransactionHeal(() => this.runPreparedStateHoldTimeoutSweep(nowMs) +
+      sweepParticipantTransactionHolds(this, nowMs));
   }
 
   /**

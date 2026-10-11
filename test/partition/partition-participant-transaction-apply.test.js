@@ -30,6 +30,8 @@ import {
 } from '../../src/partition/partition-write-kernel.js';
 import {enableParticipantTransactionAdmission} from
   '../../src/partition/partition-participant-transaction-request.js';
+import {PARTICIPANT_TRANSACTION_COMMAND_TYPES} from
+  '../../src/partition/partition-participant-transaction-constants.js';
 import {PARTICIPANT_COMMIT_OUTCOME} from '../../src/constants/transactions.js';
 import {
   COMMITTED, GENERATION_ORIGIN_INDEX, INSERT_SQL, INT64_MAX, IPK_SCHEMA, OTHER_ROW, PREPARED,
@@ -132,20 +134,30 @@ test('TX1 inc3: the participant row and the write generation are application sta
   }
 });
 
-test('TX1 inc3: the admission owner admits the two commands only from the transaction owner ' +
-  'and only in their pinned byte form; a forwarded write carrying one proposes nothing',
-async () => {
+// Increment 4 (the verifier's F1 gap): every participant command type, the
+// generation origin included, is iterated from the constants owner, and the
+// leader's execution envelope is part of the pinned form.
+test('TX1 inc3: the admission owner admits every participant command type only from the ' +
+  'transaction owner and only in its pinned byte form; a forwarded write carrying one ' +
+  'proposes nothing', async () => {
   const tx = identityOf('i3-admit');
   const prepare = prepareCommandOf(tx, [operationOf(ROW)], 0);
   const decision = commitDecision(tx, prepare);
+  const pinnedOfType = {[V3.PREPARE_COMMAND]: prepare, [V3.DECISION_COMMAND]: decision,
+    [V3.GENERATION_ORIGIN_COMMAND]: originCommandOf()};
   const owner = {origin: PARTITION_COMMITTED_COMMAND_ORIGIN.TRANSACTION_OWNER};
   const codeOf = (command, options = owner) => {
     const admission = admitCommittedCommand(command, options);
     return admission.admitted ? 'admitted' : admission.code;
   };
+  const types = PARTICIPANT_TRANSACTION_COMMAND_TYPES;
   const facts = {
-    pinned: [codeOf(prepare), codeOf(decision)],
-    writePath: codeOf(prepare, {origin: PARTITION_COMMITTED_COMMAND_ORIGIN.WRITE_PATH}),
+    pinned: types.map((type) => codeOf(pinnedOfType[type])),
+    writePath: types.map((type) => codeOf(pinnedOfType[type],
+      {origin: PARTITION_COMMITTED_COMMAND_ORIGIN.WRITE_PATH})),
+    envelopeMissing: [codeOf({...prepare, executionEnvelope: undefined}),
+      codeOf({...decision, executionEnvelope: {...decision.executionEnvelope,
+        sqliteVersion: ''}})],
     digest: codeOf({...prepare, preparedDigest: sha256('other bytes')}),
     entryId: codeOf({...prepare, entryId: 'i3-admit:tx1-v3:other'}),
     identity: codeOf({...prepare, participantId: 'i3-other:tx1-v3'}),
@@ -161,7 +173,8 @@ async () => {
   } finally {
     await shutdownAll(leader);
   }
-  assert.deepEqual(facts, {pinned: ['admitted', 'admitted'], writePath: ORIGIN_REFUSED,
+  assert.deepEqual(facts, {pinned: types.map(() => 'admitted'),
+    writePath: types.map(() => ORIGIN_REFUSED), envelopeMissing: [BYTES_INVALID, BYTES_INVALID],
     digest: BYTES_INVALID, entryId: BYTES_INVALID, identity: BYTES_INVALID,
     epoch: BYTES_INVALID, decisionText: BYTES_INVALID, operations: BYTES_INVALID,
     unboundCommit: BYTES_INVALID, forwarded: {success: false, failureCode: ORIGIN_REFUSED},
@@ -230,23 +243,28 @@ test('TX1 inc3: transition-table cells the W-series leaves out are consumed alik
   'only the bound decision of the PREPARED content moves the row; nothing else writes');
 });
 
-test('TX1 inc3: a write the leader proposed that meets the reservation is answered typed and ' +
-  'retryable with its entry key unsettled, and the same entryId applies after the decision; ' +
-  'BEGIN and an unknown transaction\'s statement are refused while nothing is proposed',
-async () => {
+// Increment 4 supersedes this witness's answer (design 7, decision X): the
+// leader no longer answers its own raced write RESERVED; it parks it again
+// under its entryId and re-proposes it after the decision. The typed
+// RESERVED answer stays the kernel's retryable code for any other proposer.
+test('TX1 inc3: a write the leader proposed that meets the reservation at apply is parked ' +
+  'again with its entry key unsettled and re-proposed under the same entryId once the ' +
+  'decision applies; BEGIN and an unknown transaction\'s statement are refused while nothing ' +
+  'is proposed', async () => {
   const tx = identityOf('i3-reserved');
   const {leader, proposed} = await startLeader();
   try {
-    const prepareCommand = prepareCommandOf(tx, [operationOf(ROW)], generationOf(leader));
-    const facts = {prepareApply: applyCommitted(leader, prepareCommand)};
+    // Proposed before the reservation exists, applied after it.
     const write = track(leader.executeQuery(INSERT_SQL, [OTHER_ROW.id, OTHER_ROW.value],
       {entryId: 'i3-reserved-write'}));
     const entry = await awaitProposal(proposed, hasEntryId('i3-reserved-write'));
+    const prepareCommand = prepareCommandOf(tx, [operationOf(ROW)], generationOf(leader));
+    const facts = {prepareApply: applyCommitted(leader, prepareCommand)};
     facts.reservedApply = entry ? applyCommitted(leader, entry) : 'not proposed';
     await settleTicks();
     facts.answer = write.settled ? pick(write.value, ['success', 'failureCode', 'deferRetry']) :
       'pending';
-    facts.retryable = isRetryableWriteFailureCode(facts.answer?.failureCode);
+    facts.retryable = isRetryableWriteFailureCode(CODE.WRITE_RESERVED);
     facts.unsettled = statementState(leader, 'i3-reserved-write');
     const proposedBefore = proposed.length;
     facts.begin = pick(await send(leader, beginMessage(identityOf('i3-other'))),
@@ -261,16 +279,22 @@ async () => {
     ['success', 'failureCode']);
     facts.proposedByRefusals = proposed.length - proposedBefore;
     facts.decisionApply = applyCommitted(leader, commitDecision(tx, prepareCommand));
-    facts.retried = entry ? applyCommitted(leader, entry) : 'not proposed';
+    await settleTicks();
+    const reproposed = proposed.filter(hasEntryId('i3-reserved-write'));
+    facts.reproposals = reproposed.length;
+    facts.retried = reproposed.length === 2 ? applyCommitted(leader, reproposed[1]) :
+      'not re-proposed';
+    await settleTicks();
+    facts.writeAnswer = write.settled ? write.value?.success === true : 'pending';
     facts.final = {...(await outcomeOf(leader, tx)), rows: rowCount(leader, OTHER_ROW.id),
       statement: statementState(leader, 'i3-reserved-write')};
-    assert.deepEqual(facts, {prepareApply: null, reservedApply: null,
-      answer: {success: false, failureCode: CODE.WRITE_RESERVED, deferRetry: true}, retryable: true, unsettled: 'unsettled',
+    assert.deepEqual(facts, {prepareApply: null, reservedApply: null, answer: 'pending',
+      retryable: true, unsettled: 'unsettled',
       begin: {success: false, failureCode: CODE.ALREADY_ACTIVE},
       legacyBegin: {success: false, failureCode: CODE.ALREADY_ACTIVE},
       unknownStatement: {success: false, failureCode: CODE.NOT_ACTIVE},
       mismatch: {success: false, failureCode: CODE.IDENTITY_MISMATCH}, proposedByRefusals: 0,
-      decisionApply: null, retried: null,
+      decisionApply: null, reproposals: 2, retried: null, writeAnswer: true,
       final: {...COMMITTED, rows: 1, statement: 'settled'}},
     'the reservation defers other writers; it never settles or loses them');
   } finally {
@@ -297,9 +321,11 @@ test('TX1 inc3: an outcome read answers from the durable row on any replica, PRE
     digestIsCarried: true}}, 'PREPARED is UNKNOWN, never a commit or a non-commit');
 });
 
-test('TX1 inc3: a PREPARE ends the session\'s staging transaction before it proposes, so its ' +
-  'command is applied on the leader\'s own connection and a session statement after it is ' +
-  'refused, never run as a sessionless write', async () => {
+// Increment 4 supersedes `stagingOpen` (design 3.1, F6 c'): a session never
+// holds a SQLite transaction, so the connection is free after staging too.
+test('TX1 inc3: no staging transaction is ever open on the leader\'s connection, so a ' +
+  'PREPARE\'s command is applied on it, and a session statement after it is refused, never ' +
+  'run as a sessionless write', async () => {
   const tx = identityOf('i3-seal');
   const {leader, proposed} = await startLeader();
   try {
@@ -319,7 +345,7 @@ test('TX1 inc3: a PREPARE ends the session\'s staging transaction before it prop
     facts.answer = pick(await prepare.promise, ['success', 'state']);
     facts.proposed = proposed.map((entry) => entry.type);
     assert.deepEqual(facts, {begun: {success: true, state: ACTIVE}, staged: true,
-      stagingOpen: true, atProposal: {stagingOpen: false, rows: 0,
+      stagingOpen: false, atProposal: {stagingOpen: false, rows: 0,
         type: V3.PREPARE_COMMAND}, late: {success: false,
         failureCode: 'participant_transaction_preparing'}, apply: null,
       answer: {success: true, state: V3.STATE.PREPARED}, proposed: [V3.PREPARE_COMMAND]},
@@ -714,3 +740,50 @@ test('TX1 inc3 G13: a replayed COMMIT request answers the operations\' recorded 
     decisions: proposed.filter(isDecisionCommand).length}, {apply: null, first: results,
     replay: {results, replayed: true}, decisions: 1}, 'per-operation results are retained');
 }));
+
+// --- increment 4: the origin witness gaps the increment-3 verification left (its F1) ---
+
+test('TX1 inc3 F1: enabling transactions on a non-leader is refused NOT_LEADER, proposes ' +
+  'nothing and records no origin', () => onReplica(async (follower) => {
+  const proposed = [];
+  follower.controllablePort.setProposeHandler(async (entry) => {
+    proposed.push({...entry});
+  });
+  assert.deepEqual({enabled: pick(await enableParticipantTransactionAdmission(follower),
+    ['success', 'failureCode']), proposed: proposed.length, origin: originOf(follower)},
+  {enabled: {success: false, failureCode: 'partition_write_not_leader'}, proposed: 0,
+    origin: null}, 'only the leader proposes the origin');
+}, {generationOrigin: false}));
+
+test('TX1 inc3 F1: a second enable while the origin is in flight joins its proposal: one ' +
+  'origin is proposed and both callers are answered by its apply', () => onLeader(
+  async (leader, proposed) => {
+    const first = track(enableParticipantTransactionAdmission(leader));
+    const second = track(enableParticipantTransactionAdmission(leader));
+    const origin = await awaitProposal(proposed,
+      (entry) => entry.type === V3.GENERATION_ORIGIN_COMMAND);
+    const facts = {proposedBeforeApply: proposed.length,
+      apply: origin ? applyCommitted(leader, origin) : 'not proposed'};
+    await settleTicks();
+    facts.answers = [first, second].map((enabling) => enabling.settled ?
+      pick(enabling.value, ['success', 'originIndex']) : 'pending');
+    assert.deepEqual(facts, {proposedBeforeApply: 1, apply: null,
+      answers: [{success: true, originIndex: 1}, {success: true, originIndex: 1}]},
+    'the origin\'s deterministic entryId joins concurrent enables');
+  }, {generationOrigin: false}));
+
+test('TX1 inc3 F1: an origin naming another partition is consumed without recording any ' +
+  'origin, and this partition\'s own origin then records its index', () => onReplica(
+  async (replica) => {
+    const appliedBefore = durableAppliedIndex(replica);
+    replica.controllablePort.committedIndex = appliedBefore;
+    const facts = {foreign: applyCommitted(replica, originCommandOf('other-partition'))};
+    facts.afterForeign = {origin: originOf(replica), generation: generationOf(replica),
+      appliedAdvance: durableAppliedIndex(replica) - appliedBefore};
+    facts.own = applyCommitted(replica, originCommandOf());
+    facts.afterOwn = {origin: originOf(replica), generation: generationOf(replica)};
+    assert.deepEqual(facts, {foreign: null,
+      afterForeign: {origin: null, generation: 0, appliedAdvance: 1}, own: null,
+      afterOwn: {origin: appliedBefore + 2, generation: 0}},
+    'an origin is this partition\'s own or nothing');
+  }, {generationOrigin: false}));
