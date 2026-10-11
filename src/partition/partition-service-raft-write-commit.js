@@ -21,6 +21,7 @@ import {PARTITION_LEADERSHIP_TRANSFER_MESSAGE} from
 import {isPartitionReserved} from './partition-participant-transaction-store.js';
 import {PARTICIPANT_TRANSACTION_LOG_MSG} from
   './partition-participant-transaction-constants.js';
+import {pausedWriteAnswerOf} from './partition-participant-transaction-pause.js';
 
 const {
   PARTITION_SERVICE_DEFAULT,
@@ -426,16 +427,24 @@ function partitionWriteLeadershipRefusalOf(service) {
 
 /**
  * Commit an admitted write on the leader's request path (applyWrite, after
- * its settled-answer check): while a prepared participant transaction
- * reserves the partition the write is parked unproposed under its own commit
- * deadline and re-admitted by the decision's apply (design 7, decision X);
- * otherwise a write this replica may not propose is refused, typed, and any
- * other is proposed once through the port.
+ * its settled-answer check): while the participant transaction cutover pauses
+ * new mutation admission on this partition the write is refused, typed and
+ * retryable, nothing proposed (TX1 design 0.0.15); while a prepared
+ * participant transaction reserves the partition the write is parked
+ * unproposed under its own commit deadline and re-admitted by the decision's
+ * apply (design 7, decision X); otherwise a write this replica may not
+ * propose is refused, typed, and any other is proposed once through the port.
  * @param {Object} service - The partition.
  * @param {Object} options - {entry, phaseTimings, applyStartMs}.
  * @return {Promise<Object>} The write's answer.
  */
 function startAdmittedPartitionWrite(service, options) {
+  const paused = pausedWriteAnswerOf(service);
+  if (paused !== null) {
+    service.recordWritePhaseDuration(options.phaseTimings,
+      WRITE_PHASE_FIELD_APPLY_WRITE_MS, options.applyStartMs);
+    return paused;
+  }
   if (isPartitionReserved(service.db)) {
     return startPartitionRaftWriteCommit(service, {...options, park: true});
   }
