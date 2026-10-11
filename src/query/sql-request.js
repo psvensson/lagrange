@@ -13,6 +13,8 @@ import {
   DEFAULT_SESSION_ID,
   ADAPTER_ERROR_MSG,
 } from './sql-adapter-constants.js';
+import {copyDistributedBeginConsumer} from
+  './distributed/distributed-begin-consumer.js';
 
 function isCanonicalSecurityContext(context) {
   return typeof context?.tenantId === 'string' &&
@@ -165,6 +167,8 @@ function createSqlRequest(fields) {
       {cancellationToken: fields.cancellationToken} : {}),
     ...securityFields.requestFields,
   };
+
+  copyDistributedBeginConsumer(fields, request);
 
   return Object.freeze(request);
 }

@@ -13,7 +13,7 @@
     "examples-e2e": 7,
     "pgwire-compat": 21,
     "placement-rebalance": 269,
-    "query-sql": 179,
+    "query-sql": 181,
     "release-packaging": 15,
     "runtime-primitives": 22,
     "services-runtime": 146,
@@ -25,10 +25,10 @@
     "transport-messaging": 95,
     "wasm-toolchain": 57
   },
-  "censusSize": 2353,
-  "digest": "fnv1a32-0dd7960d",
+  "censusSize": 2355,
+  "digest": "fnv1a32-92972f93",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-8ae5250c",
+  "observationDigest": "fnv1a32-9c2d8fc7",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1517,6 +1517,8 @@
     "test/query/strategy-selector.test.js": "query-sql",
     "test/query/streaming-aggregation.property.test.js": "query-sql",
     "test/query/table-creation-service.test.js": "query-sql",
+    "test/query/transaction-begin-source-adversarial.test.js": "query-sql",
+    "test/query/transaction-begin-uncertain-handoff.test.js": "query-sql",
     "test/query/transaction-coordinator-participant-protocol.test.js": "query-sql",
     "test/query/transaction-coordinator-settlement.test.js": "query-sql",
     "test/query/transaction-evidence-binding-production.test.js": "query-sql",
@@ -9785,6 +9787,24 @@
         "test/test-helpers/participant-protocol-double.js"
       ]
     },
+    "test/query/transaction-begin-source-adversarial.test.js": {
+      "files": [
+        "src/query/distributed/distributed-transaction-coordinator.js",
+        "src/query/pg/postgres-wire-adapter.js",
+        "src/runtime/pgwire-protocol-handler.js"
+      ]
+    },
+    "test/query/transaction-begin-uncertain-handoff.test.js": {
+      "files": [
+        "src/query/application-database.js",
+        "src/query/distributed/distributed-transaction-coordinator.js",
+        "src/query/pg/postgres-wire-adapter.js",
+        "src/runtime/pgwire-protocol-constants.js",
+        "src/runtime/pgwire-protocol-handler.js",
+        "src/runtime/pgwire-runtime-module.js",
+        "src/runtime/runtime-startup-wiring.js"
+      ]
+    },
     "test/query/transaction-coordinator-participant-protocol.test.js": {
       "files": [
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
@@ -9848,6 +9868,7 @@
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/partition/partition-participant-transaction-constants.js",
         "src/query/distributed/distributed-transaction-participant-manifest.js",
+        "src/query/distributed/distributed-transaction-recovery-authority.js",
         "test/test-helpers/participant-protocol-double.js"
       ]
     },

@@ -26,7 +26,11 @@ import {AST_TYPE} from '../query/parser-constants.js';
 import {QUERY_ERROR_CODE} from '../query/query-constants.js';
 import {COMMIT_POINT_REACHED_FIELD} from
   '../query/distributed/distributed-transaction-commit-point.js';
-import {SESSION_TRANSACTION_ACTIVE_FIELD} from
+import {
+  SESSION_TRANSACTION_ACTIVE_FIELD,
+  SESSION_TRANSACTION_STATE,
+  SESSION_TRANSACTION_STATE_FIELD,
+} from
   '../query/sql-query-engine-statement-admission.js';
 import {
   buildCommandComplete,
@@ -158,6 +162,10 @@ function resolveFailedStatementOutcome({
   const idle = stateBefore === PG_TRANSACTION_STATE.IDLE;
   const noTransaction =
     failure?.errorCode === QUERY_ERROR_CODE.NO_TRANSACTION;
+  if (failure?.[SESSION_TRANSACTION_STATE_FIELD] ===
+      SESSION_TRANSACTION_STATE.CREATION_PENDING) {
+    return engineError(PG_TRANSACTION_STATE.IDLE);
+  }
   if (TAG_BY_TRANSACTION_END.has(statementType)) {
     return failedTransactionEndOutcome({idle, noTransaction, statementType,
       failure, engineHoldsTransaction});
