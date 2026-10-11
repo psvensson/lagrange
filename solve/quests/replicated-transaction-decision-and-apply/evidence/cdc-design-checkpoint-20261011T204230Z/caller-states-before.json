@@ -1,0 +1,18 @@
+{
+  "tx1-owner-wip": {
+    "head": "e7c89f4b5114c0238312d3831b65889a4622f4e9",
+    "branch": "refs/heads/tx1/work-20261010",
+    "indexSha256": "775ee49801a0c92172acb5193f4bc0f20a1e130ff472696e391d53e944109e67",
+    "statusSha256": "be4c1462ded2ffc974472f787891646c459e115598df974cb636d1cab8bdf36a",
+    "dirtyContentSha256": "8ce8920cbdbf8f9ec12a247dde6ce41331eb375735ec0cf6a3ff290bb133df3f",
+    "dirtyPathCount": 584
+  },
+  "cdc-wip": {
+    "head": "e7c89f4b5114c0238312d3831b65889a4622f4e9",
+    "branch": "refs/heads/tx1/cdc-receipt8-20261011",
+    "indexSha256": "1acd788a3d7a443b40191af97ace7c7ed0f8827375cb850b5dded7d12a5bf1e7",
+    "statusSha256": "83eda5e9fdc7693b8c91b1e3f5a4e53e182bb8dd1d2578c0d650b9bb6b6bb9ce",
+    "dirtyContentSha256": "d31a1a8da82b814a1f730a69f3eca6d38e3cfca21f511f88fdc0f6f131a70b64",
+    "dirtyPathCount": 137
+  }
+}

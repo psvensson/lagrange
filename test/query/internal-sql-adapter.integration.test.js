@@ -11,6 +11,12 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {InternalSqlAdapter} from '../../src/query/internal-sql-adapter.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
+// Engines persist transaction state (TX1 seam S4b) and their partitions
+// answer the participant transaction protocol.
+import {createTransactionPersistenceGateway} from
+  '../test-helpers/transaction-persistence-gateway.js';
+import {answerParticipantTransactionRequest} from
+  '../test-helpers/participant-protocol-double.js';
 import {isSqlRequest} from '../../src/query/sql-request.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {
@@ -51,8 +57,10 @@ function createMockMessageRouter() {
           changes: 0,
         };
       }
+      // A participant answers the transaction protocol (TX1 design 2.2): a
+      // PREPARE names its state and digest, a COMMIT its outcome.
       if (message.type === 'TRANSACTION') {
-        return {acknowledged: true, success: true};
+        return answerParticipantTransactionRequest(message);
       }
       return {acknowledged: true, success: true};
     },
@@ -128,6 +136,7 @@ function createAdapterWithEngine(cacheOverride) {
   const engine = new SQLQueryEngine({
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
+    controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
   });
 
   const adapter = new InternalSqlAdapter({sqlCore: engine});
@@ -310,6 +319,7 @@ test('integration: adapter preserves system-cache-unavailable error',
     const engine = new SQLQueryEngine({
       systemCache: null,
       messageRouter: createMockMessageRouter(),
+      controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
     });
     const adapter = new InternalSqlAdapter({sqlCore: engine});
 
@@ -407,10 +417,12 @@ test('integration: adapter result matches direct engine result for INSERT',
     const engine1 = new SQLQueryEngine({
       systemCache: cache,
       messageRouter: createMockMessageRouter(),
+      controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
     });
     const engine2 = new SQLQueryEngine({
       systemCache: cache,
       messageRouter: createMockMessageRouter(),
+      controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
     });
 
     const adapter = new InternalSqlAdapter({sqlCore: engine1});
@@ -433,10 +445,12 @@ test('integration: adapter result matches direct engine for error cases',
     const engine1 = new SQLQueryEngine({
       systemCache: cache,
       messageRouter: createMockMessageRouter(),
+      controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
     });
     const engine2 = new SQLQueryEngine({
       systemCache: cache,
       messageRouter: createMockMessageRouter(),
+      controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
     });
 
     const adapter = new InternalSqlAdapter({sqlCore: engine1});

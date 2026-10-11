@@ -1,0 +1,76 @@
+{
+  "utc": "2026-10-11T21:24:06.678194+00:00",
+  "namespace": "refs/heads/checkpoint/rs-raft-preservation-20261011T212406Z",
+  "mainBefore": "878eb8ac059dab71deae5feb0fa88e0c5c610c93",
+  "newRefs": {
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T212406Z/startup-wip": "bcfc5811f37f0dc3a558fd3ee8725227596d4d3b",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T212406Z/tx1-owner-wip": "c2db6a87bd5d3b5e4954dc8ebcf27285cdccd789",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T212406Z/freshmg-wip": "0bb7ec53115263dcf90e6958cda08ca4c81956be",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T212406Z/cdc-wip": "71be41b665830c0cfd2b1aaf6f2db22ffad83822"
+  },
+  "coverage": {
+    "startup-wip": {
+      "status": "NEW_SNAPSHOT_PENDING_PUSH",
+      "sha": "bcfc5811f37f0dc3a558fd3ee8725227596d4d3b",
+      "ref": "refs/heads/checkpoint/rs-raft-preservation-20261011T212406Z/startup-wip",
+      "changedSinceRemote": "86af2cab8b361f777ae7ec1f96793f996043de59",
+      "changedPaths": [
+        "solve/quests/replicated-transaction-decision-and-apply/design-query-begin-uncertain-insert-resolution-2026-10-11.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/design-query-begin-uncertain-insert-resolution-round7-3679b87f.md",
+        "test/query/transaction-begin-source-adversarial.test.js"
+      ]
+    },
+    "tx1-owner-wip": {
+      "status": "NEW_SNAPSHOT_PENDING_PUSH",
+      "sha": "c2db6a87bd5d3b5e4954dc8ebcf27285cdccd789",
+      "ref": "refs/heads/checkpoint/rs-raft-preservation-20261011T212406Z/tx1-owner-wip",
+      "changedSinceRemote": "3cb65e2065d625177b16c76378f775616e106714",
+      "changedPaths": [
+        "solve/quests/replicated-transaction-decision-and-apply/cdc-coverage-response-resource-handoff-amendment-20261011.md",
+        "solve/quests/replicated-transaction-decision-and-apply/design-query-begin-uncertain-insert-resolution-2026-10-11.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/begin-resource-design-round8-56b96438/retention.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/begin-resource-design-round8-56b96438/subject.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-adrop-native-layout-20261011.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-resource-round10-0d725dc4/cdc-adrop-native-layout-20261011.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-resource-round10-0d725dc4/delta.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-resource-round10-0d725dc4/retention.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-resource-round10-0d725dc4/subject.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/design-query-begin-uncertain-insert-resolution-round7-3679b87f.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/pgwire-10b485de-post-startup-red/classification-pending.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/pgwire-10b485de-post-startup-red/oracle.log.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/startup-evidence-checkpoint-20261011T212006Z/caller-states-after-capture.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/startup-evidence-checkpoint-20261011T212006Z/caller-states-after-push.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/startup-evidence-checkpoint-20261011T212006Z/caller-states-before.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/startup-evidence-checkpoint-20261011T212006Z/freshmg-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/startup-evidence-checkpoint-20261011T212006Z/push-attempt.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/startup-evidence-checkpoint-20261011T212006Z/push-plan.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/startup-evidence-checkpoint-20261011T212006Z/remote-receipt.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/startup-evidence-checkpoint-20261011T212006Z/remote-refs.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/startup-evidence-checkpoint-20261011T212006Z/tx1-owner-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/log.ndjson"
+      ]
+    },
+    "freshmg-wip": {
+      "status": "NEW_SNAPSHOT_PENDING_PUSH",
+      "sha": "0bb7ec53115263dcf90e6958cda08ca4c81956be",
+      "ref": "refs/heads/checkpoint/rs-raft-preservation-20261011T212406Z/freshmg-wip",
+      "changedSinceRemote": "5541093886a5b8e64d8060f5b6772bb0c588ad22",
+      "changedPaths": [
+        "solve/quests/message-group-fresh-identity-membership/evidence/pgwire-10b485de-post-startup-red/classification-pending.json",
+        "solve/quests/message-group-fresh-identity-membership/evidence/pgwire-10b485de-post-startup-red/oracle.log.txt"
+      ]
+    },
+    "cdc-wip": {
+      "status": "NEW_SNAPSHOT_PENDING_PUSH",
+      "sha": "71be41b665830c0cfd2b1aaf6f2db22ffad83822",
+      "ref": "refs/heads/checkpoint/rs-raft-preservation-20261011T212406Z/cdc-wip",
+      "changedSinceRemote": "3af73b1f1ae473c2bf04aaebea6cce4bbc1f140b",
+      "changedPaths": [
+        "solve/quests/replicated-transaction-decision-and-apply/cdc-coverage-response-resource-handoff-amendment-20261011.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-adrop-native-layout-20261011.md"
+      ]
+    }
+  },
+  "callerStatesVerified": true,
+  "preservationOnly": true
+}

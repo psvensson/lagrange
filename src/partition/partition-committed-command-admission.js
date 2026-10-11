@@ -45,14 +45,28 @@ import {
 } from './partition-participant-transaction-constants.js';
 import {isPinnedParticipantCommand} from
   './partition-participant-transaction-bytes.js';
+import {
+  PARTITION_CDC_COMMAND_TYPES,
+  PARTITION_CDC_OBLIGATION_FAILURE_CODE,
+  PARTITION_CDC_OBLIGATION_MESSAGE,
+  PARTITION_CDC_OBLIGATION_ORIGIN,
+} from './partition-cdc-obligation-constants.js';
+import {isPinnedCdcAcknowledgementCommand} from
+  './partition-cdc-obligation-ledger.js';
+import {isPinnedCoordinatorSettlementCommand} from './partition-coordinator-settlement-command.js';
+import {COORDINATOR_SETTLEMENT_TYPE, COORDINATOR_SETTLEMENT_ERROR} from
+  './partition-coordinator-settlement-constants.js';
 
 // Who asks to propose a committed command. A transaction marker enters
 // consensus only from the transaction owner, after its local COMMIT or
-// ROLLBACK; every other command comes through the write path (applyWrite,
-// including a forwarded write).
+// ROLLBACK; a CDC_DELIVERED only from the CDC delivery owner, after every
+// subscriber acknowledged the events it names; every other command comes
+// through the write path (applyWrite, including a forwarded write).
 const PARTITION_COMMITTED_COMMAND_ORIGIN = Object.freeze({
   WRITE_PATH: 'write-path',
   TRANSACTION_OWNER: 'transaction-owner',
+  CDC_DELIVERY_OWNER: PARTITION_CDC_OBLIGATION_ORIGIN.CDC_DELIVERY_OWNER,
+  COORDINATOR_OWNER: 'coordinator-owner',
 });
 
 // What a refused write is answered with.
@@ -131,9 +145,31 @@ function participantCommandRefusal(command, origin) {
       PARTICIPANT_TRANSACTION_MESSAGE.BYTES_INVALID);
 }
 
+// A CDC_DELIVERED enters consensus only from the CDC delivery owner and only
+// in the pinned form it builds (partition-cdc-obligation-ledger.js).
+function cdcCommandRefusal(command, origin) {
+  if (origin !== PARTITION_COMMITTED_COMMAND_ORIGIN.CDC_DELIVERY_OWNER) {
+    return refused(PARTITION_CDC_OBLIGATION_FAILURE_CODE.ORIGIN_REFUSED,
+      PARTITION_CDC_OBLIGATION_MESSAGE.ORIGIN_REFUSED);
+  }
+  return isPinnedCdcAcknowledgementCommand(command) ? ADMITTED :
+    refused(PARTITION_CDC_OBLIGATION_FAILURE_CODE.BYTES_INVALID,
+      PARTITION_CDC_OBLIGATION_MESSAGE.BYTES_INVALID);
+}
+
 function commandRefusalByKind(command, origin) {
+  if (command.type === COORDINATOR_SETTLEMENT_TYPE) {
+    if (origin !== PARTITION_COMMITTED_COMMAND_ORIGIN.COORDINATOR_OWNER) {
+      return refused(COORDINATOR_SETTLEMENT_ERROR.ORIGIN, COORDINATOR_SETTLEMENT_ERROR.ORIGIN);
+    }
+    return isPinnedCoordinatorSettlementCommand(command) ? ADMITTED :
+      refused(COORDINATOR_SETTLEMENT_ERROR.BYTES, COORDINATOR_SETTLEMENT_ERROR.BYTES);
+  }
   if (PARTITION_COMMITTED_MARKER_COMMAND_TYPES.includes(command.type)) {
     return markerRefusal(command, origin);
+  }
+  if (PARTITION_CDC_COMMAND_TYPES.includes(command.type)) {
+    return cdcCommandRefusal(command, origin);
   }
   return PARTICIPANT_TRANSACTION_COMMAND_TYPES.includes(command.type) ?
     participantCommandRefusal(command, origin) : sqlCommandRefusal(command);

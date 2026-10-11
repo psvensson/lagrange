@@ -33,10 +33,8 @@ import {
 } from '../../src/constants/index.js';
 import {COMMIT_MODE} from '../../src/constants/transactions.js';
 import {MIGRATION_STATUS} from '../../src/migration/migration-constants.js';
-import {NodeService} from '../../src/node/node-service.js';
 import {TRANSACTION_STATUS} from
   '../../src/query/distributed/distributed-transaction-coordinator.js';
-import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {
   TEST_CONFIG,
   cleanupTestEnvironment,
@@ -48,6 +46,7 @@ import {
   initializeTestEnvironment,
   waitFor,
 } from './helpers/cluster-test-helpers.js';
+import {createSeedQuerySurface} from './helpers/seed-query-surface.js';
 
 const SEED_NODE_ID = 'tx1-m1-seed';
 const USER_TABLE = 'tx1_m1_cutover_rows';
@@ -98,6 +97,7 @@ async () => {
     nodeAddress: `ws://localhost:${wsPort}`, wsPort, config: TEST_CONFIG.bootstrap});
   let bootstrapResult = null;
   let setupEngine = null;
+  let seedApi = null;
   try {
     bootstrapResult = await bootstrapService.bootstrap();
     assert.equal(bootstrapResult.success, true, 'the seed must bootstrap');
@@ -109,13 +109,12 @@ async () => {
     const cdcIntegrationService = bootstrapService.cdcIntegrationService;
     // The engine the seed phase built, handed to the CDC service and published.
     const seedEngine = cdcIntegrationService.sqlQueryEngine;
-    const systemTableCache = NodeService.getInstance().getSystemTableCache();
-
-    setupEngine = new SQLQueryEngine({systemCache: systemTableCache,
-      messageRouter: bootstrapResult.messageRouter, cdcIntegrationService,
-      nodeId: SEED_NODE_ID, rebalanceCoordinator: bootstrapService.rebalanceCoordinator,
-      migrationAutoWire: false, autoStartDistributedTransactionRecovery: false,
-      unrefRetryDelayTimers: true});
+    const seedSurface = createSeedQuerySurface(bootstrapService, bootstrapResult,
+      {seedNodeId: SEED_NODE_ID, seedWsPort: wsPort});
+    seedApi = seedSurface.seedApi;
+    await seedSurface.start();
+    const systemTableCache = seedSurface.systemTableCache;
+    setupEngine = seedSurface.sqlQueryEngine;
     const created = await setupEngine.executeQuery(M1_SQL.CREATE_TABLE);
     assert.equal(created.success, true, `setup CREATE TABLE: ${created.error}`);
     assert.equal(await waitFor(() => userTableRoutable(systemTableCache), ROUTABLE_WAIT_MS,
@@ -144,6 +143,19 @@ async () => {
     const facts = {
       seedEngineIsPublished: localReplica(PARTITION_OF.tables)?.sqlQueryEngine === seedEngine &&
         localReplica(PARTITION_OF.migrationPartitions)?.sqlQueryEngine === seedEngine,
+      seedRuntimeOwnership: {
+        bootstrapOwner: bootstrapService.sqlQueryEngine === seedEngine,
+        cdcOwner: bootstrapService.cdcIntegrationService.sqlQueryEngine === seedEngine,
+        querySurface: setupEngine === seedEngine,
+        currentCache: seedEngine.systemCache === systemTableCache &&
+          seedEngine.partitionResolver.systemCache === systemTableCache &&
+          seedEngine.queryExecutor.systemCache === systemTableCache &&
+          seedEngine.tableCreationService.systemCache === systemTableCache,
+        finalRebalanceOwner:
+          seedEngine.rebalanceCoordinator === bootstrapService.rebalanceCoordinator,
+        partitionProvisioner:
+          typeof seedEngine.tableCreationService.partitionProvisioner === 'function',
+      },
       migrationStatus: advanced?.status ?? null,
       cutoverApplied: {
         schemaColumns: (JSON.parse(tableRow?.schema_definition || '{}').columns || [])
@@ -156,6 +168,14 @@ async () => {
     };
     assert.deepEqual(facts, {
       seedEngineIsPublished: true,
+      seedRuntimeOwnership: {
+        bootstrapOwner: true,
+        cdcOwner: true,
+        querySurface: true,
+        currentCache: true,
+        finalRebalanceOwner: true,
+        partitionProvisioner: true,
+      },
       migrationStatus: MIGRATION_STATUS.COMPLETED,
       cutoverApplied: {schemaColumns: ['id', 'payload', ADDED_COLUMN],
         partitionRowStatuses: [MIGRATION_STATUS.COMPLETED], oneCutoverStamp: true},
@@ -167,7 +187,7 @@ async () => {
       '(sql-query-engine.js:115-117)');
   } finally {
     await setupEngine?.shutdown();
-    await gracefulShutdown(bootstrapService, bootstrapResult, null);
+    await gracefulShutdown(bootstrapService, bootstrapResult, seedApi);
     await cleanupTestEnvironment();
   }
 });
