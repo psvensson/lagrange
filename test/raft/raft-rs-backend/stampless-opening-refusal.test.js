@@ -18,10 +18,8 @@ import {test} from 'node:test';
 
 import {PartitionNodeCluster} from './partition-node-cluster.js';
 import {
+  committedOracleStamp,
   durableAppliedState,
-  foldAt,
-  logFold,
-  reservedIdentities,
 } from './committed-membership-oracles.js';
 import {ConfigurationManager} from
   '../../../src/config/configuration-manager.js';
@@ -32,7 +30,6 @@ import {PARTITION_CONSENSUS_STARTUP_OUTCOME} from
 import {
   COMMITTED_MEMBERSHIP_REFUSAL,
   COMMITTED_MEMBERSHIP_STAMP_DEFECT,
-  COMMITTED_MEMBERSHIP_STAMP_KIND,
 } from '../../../src/raft/raft-committed-membership-constants.js';
 import {
   RAFT_MEMBERSHIP_OPERATION,
@@ -40,8 +37,6 @@ import {
 } from '../../../src/raft/raft-operation-port-constants.js';
 import {RAFT_OPERATION_PORT_REQUEST} from
   '../../../src/raft/raft-operation-port-request.js';
-import {raftRsConfStateKey} from
-  '../../../src/raft/raft-rs-conf-state-key.js';
 
 const PARTITION_ID = 'v1a-seed';
 const FOUNDER = 'v1a-seed-a';
@@ -60,27 +55,8 @@ function leads(cluster, replicaId) {
 
 // The COMMITTED stamp a correct leader answers, folded from its durable log.
 function oracleStamp(cluster, leader, genesisPeerIds) {
-  const dbFile = cluster.replica(leader).dbFile;
-  const applied = durableAppliedState(dbFile, PARTITION_ID);
-  const voters = foldAt(logFold(dbFile, PARTITION_ID, genesisPeerIds),
-    applied.appliedIndex).voters;
-  const reserved = reservedIdentities(dbFile);
-  return {
-    kind: COMMITTED_MEMBERSHIP_STAMP_KIND.COMMITTED,
-    voters,
-    votersOutgoing: [],
-    learners: [],
-    learnersNext: [],
-    appliedIndex: applied.appliedIndex,
-    configurationKey: raftRsConfStateKey({voters}),
-    membershipGenerationIndex: applied.membershipGenerationIndex,
-    commitIndex: applied.appliedIndex,
-    term: 1,
-    leaderId: leader,
-    gateOpen: true,
-    identities: Object.fromEntries(voters.map((peerId) =>
-      [peerId, reserved.get(peerId)])),
-  };
+  return committedOracleStamp(cluster.replica(leader).dbFile, PARTITION_ID,
+    {genesisPeerIds, leaderId: leader});
 }
 
 function consensusOf(error) {
