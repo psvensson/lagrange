@@ -14,9 +14,11 @@
 import * as esbuild from 'esbuild';
 import {fileURLToPath} from 'url';
 import {dirname, join} from 'path';
-import {cpSync, existsSync, mkdirSync, rmSync} from 'fs';
+import {cpSync, existsSync, mkdirSync, rmSync, writeFileSync} from 'fs';
 
 import {RAFT_RS_BINDING_LAYOUT} from '../src/raft/raft-rs-core-constants.js';
+import {RUNTIME_BUILD_MANIFEST, measureRuntimeContent} from
+  '../src/diagnostics/runtime-content-fingerprint.js';
 
 const LOCAL_STR_NODE = 'node';
 const LOCAL_STR_NODE22 = 'node22';
@@ -212,6 +214,8 @@ async function main() {
 
     console.log(LOCAL_STR_STAGING_RUNTIME_DEPENDENCIES);
     stageRuntimePackages();
+    writeFileSync(join(distDir, RUNTIME_BUILD_MANIFEST),
+      JSON.stringify(await measureRuntimeContent(projectRoot)) + '\n');
 
     console.log(LOCAL_STR_BUILD_COMPLETE);
     console.log(LOCAL_STR_BUNDLES_CREATED_IN_DIST);

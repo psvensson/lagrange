@@ -162,6 +162,9 @@ class PartitionCDCGenerator {
    * @param {Object} entry - Write entry.
    * @param {Object} options - Envelope build options.
    * @param {boolean} options.suppressNoOpWrite - Skip zero-change mutations.
+   * @param {string} [options.sourceReplica] - The replica the event names as
+   *   its source instead of this one (the committed-entry CDC hook names the
+   *   proposer, so every replica records the same obligation).
    * @return {Object} Explicit build outcome.
    */
   resolveEventEnvelope(entry, options = {}) {
@@ -199,7 +202,7 @@ class PartitionCDCGenerator {
         operation,
         timestamp: entry.timestamp,
         sourcePartition: this.partitionId,
-        sourceReplica: this.replicaId,
+        sourceReplica: options.sourceReplica ?? this.replicaId,
       }),
     });
   }

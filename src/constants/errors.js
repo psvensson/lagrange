@@ -40,6 +40,12 @@ const ERRORS = Object.freeze({
   WRITE_RESERVED:
     'The write met a prepared transaction reserving the partition and was ' +
     'applied without effect; it may be retried',
+  // A write that arrived while the participant transaction cutover paused
+  // new mutation admission on its partition: not proposed, retried once the
+  // pause lifts.
+  WRITE_CUTOVER_PAUSED:
+    'The partition paused mutation admission for its participant ' +
+    'transaction cutover; the write was not proposed and may be retried',
   PARTITION_SERVICE_NOT_FOUND: 'Partition service not found',
   NO_HANDLER_FOR_ADDRESS: 'No handler registered for address',
 });
@@ -62,6 +68,7 @@ const REROUTABLE_WRITE_ERROR_FRAGMENTS = Object.freeze([
   ERRORS.WRITE_CONSENSUS_REFUSED,
   ERRORS.WRITE_COMMIT_DEADLINE_EXCEEDED,
   ERRORS.WRITE_RESERVED,
+  ERRORS.WRITE_CUTOVER_PAUSED,
 ]);
 
 /**
