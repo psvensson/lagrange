@@ -118,7 +118,7 @@ const DECODE_CONSUMERS = Object.freeze([
   'src/rebalancer/rebalance-coordinator-operation-creation-admission.js',
   'src/rebalancer/storage-reservation-authority.js',
   // Superseded (R09, 2026-10-11) for a8686b37c "preserve reservation identity
-  // in dispatch projection" (quest zero-liferaft-active-runtime, independently
+  // in dispatch projection" (independently
   // verified 2026-10-07T11:44Z): the dispatch service's row-to-operation
   // projection binds the durable epoch through the decode owner and leaves
   // the field off the operation when unbound.
@@ -143,8 +143,7 @@ const ENCODE_OR_SCHEMA_PASSTHROUGH = Object.freeze([
   'src/bootstrap/system-table-runtime-schema-definitions.js',
   'src/partition/partition-service-constants.js',
   'src/partition/partition-service-entry-apply-base.js',
-  // Superseded (R09, 2026-10-11) for f13f7f37a "zero-liferaft-active-runtime:
-  // preserve remote handoff identity" (independently verified
+  // Superseded (R09, 2026-10-11) for f13f7f37a (remote handoff identity) (independently verified
   // 2026-10-07T13:09Z): the coordinator-created remote handoff projects the
   // operation's already-decoded epoch onto the delivered row (`?? null`) and
   // interprets nothing.

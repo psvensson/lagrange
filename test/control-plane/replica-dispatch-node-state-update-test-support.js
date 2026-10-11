@@ -213,7 +213,7 @@ export function createService(options = {}) {
  *
  * Supersedes (R09, 2026-10-11) the literal expected rows these suites held
  * from before a8686b37c "preserve reservation identity in dispatch
- * projection" (quest zero-liferaft-active-runtime; independently verified
+ * projection" (independently verified
  * 2026-10-07T11:44Z, witness
  * test/control-plane/replica-dispatch-reservation-identity.test.js) added
  * `target_claim_key` and `membership_publication_epoch` to the projection.
