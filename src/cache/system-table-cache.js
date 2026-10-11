@@ -53,6 +53,10 @@ import {
 import {
   updateSystemTableCacheCdcObservation,
 } from './system-table-cache-cdc-observation.js';
+import {
+  installCompleteCdcCoverage,
+  readCdcSourceOrderStats,
+} from './system-table-cache-cdc-source-order.js';
 
 /**
  * System table names that are cached.
@@ -169,6 +173,10 @@ class SystemTableCache {
       typeof options.scheduleCacheChangeNotification === 'function' ?
         options.scheduleCacheChangeNotification :
         defaultCacheChangeNotificationSchedule;
+    this.cdcCoverageAtomCapacity = Object.freeze({
+      maxAtoms: options.cdcCoverageAtomCapacity?.maxAtoms,
+      maxBytes: options.cdcCoverageAtomCapacity?.maxBytes,
+    });
     this.tables = new Map();
     this.appliedSchemaVersions = new Map();
     this.lastAppliedAtMsByTableName = new Map();
@@ -229,6 +237,14 @@ class SystemTableCache {
         }
       },
     });
+  }
+
+  installCompleteCdcCoverage(read) {
+    return installCompleteCdcCoverage(this, read);
+  }
+
+  getCdcSourceOrderStats() {
+    return readCdcSourceOrderStats(this);
   }
 
   /**
@@ -530,18 +546,16 @@ class SystemTableCache {
         causeId,
         tableMutationRevision,
       });
-      this.notifyApplyListeners(
-        tableName,
-        operation,
-        appliedChangeRecord,
-        appliedChangeMetadata,
-      );
-      this.notifyListeners(
-        tableName,
-        operation,
-        appliedChangeRecord,
-        appliedChangeMetadata,
-      );
+      const deferred = options?.deferredCdcSourcePublications;
+      if (Array.isArray(deferred)) {
+        deferred.push({tableName, operation, record: appliedChangeRecord,
+          metadata: appliedChangeMetadata});
+      } else {
+        this.notifyApplyListeners(
+          tableName, operation, appliedChangeRecord, appliedChangeMetadata);
+        this.notifyListeners(
+          tableName, operation, appliedChangeRecord, appliedChangeMetadata);
+      }
     }
   }
 

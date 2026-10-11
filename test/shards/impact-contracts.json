@@ -352,7 +352,7 @@
       ]
     },
     "CL-041": {
-      "description": "A follower grants its vote to at most one candidate per term, so at most one leader can be elected per term (Raft \u00a75.2 Election Safety).",
+      "description": "A follower grants its vote to at most one candidate per term, so at most one leader can be elected per term (Raft §5.2 Election Safety).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -363,7 +363,7 @@
       ]
     },
     "CL-040": {
-      "description": "A committed Raft log entry is identical cluster-wide at its index; a follower never stale-commits its own same-index/different-term entry on catch-up (Raft \u00a75.3 Log Matching).",
+      "description": "A committed Raft log entry is identical cluster-wide at its index; a follower never stale-commits its own same-index/different-term entry on catch-up (Raft §5.3 Log Matching).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -374,7 +374,7 @@
       ]
     },
     "CL-042": {
-      "description": "An empty raft log's last-log-term is 0 (Raft \u00a75.4.1): the consensus core never masquerades an empty log as up-to-date, so a voter holding committed entries denies an empty-log candidate regardless of the candidate's election term (CL-042).",
+      "description": "An empty raft log's last-log-term is 0 (Raft §5.4.1): the consensus core never masquerades an empty log as up-to-date, so a voter holding committed entries denies an empty-log candidate regardless of the candidate's election term (CL-042).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -889,6 +889,29 @@
         "test/integration/message-group-learner-recipient.integration.test.js",
         "test/integration/message-group-learner-discovery.integration.test.js",
         "test/rebalancer/coordinator-timeout-check-serialization.test.js"
+      ]
+    },
+    "cdc-source-coverage-reconcile-publication": {
+      "description": "Source-owned CDC descriptor, applied-prefix coverage and exact recipient cache publication contract.",
+      "owners": [
+        "src/cdc/cdc-coverage-domain.js",
+        "src/cdc/cdc-coverage-lifecycle-owner.js",
+        "src/cdc/cdc-coverage-protocol.js",
+        "src/cdc/cdc-coverage-reconcile-owner.js",
+        "src/cdc/cdc-source-scope-evidence.js",
+        "src/cdc/cdc-source-scope-reconciliation.js",
+        "src/cdc/cdc-complete-coverage-reconcile.js",
+        "src/partition/partition-cdc-source-coverage.js",
+        "src/partition/partition-service-cdc-coverage-methods.js",
+        "src/cache/system-table-cache-cdc-cover.js",
+        "src/cache/system-table-cache-cdc-source-order.js"
+      ],
+      "tests": [
+        "test/partition/partition-cdc-source-coverage.test.js",
+        "test/cache/system-table-cache-cdc-source-order.test.js",
+        "test/cdc/cdc-authoritative-coverage-reconciliation.test.js",
+        "test/cdc/cdc-coverage-lifecycle-owner.test.js",
+        "test/cdc/cdc-coverage-reconcile-owner.test.js"
       ]
     }
   },
@@ -1742,6 +1765,39 @@
         "test/integration/message-group-learner-recipient.integration.test.js",
         "test/integration/message-group-learner-discovery.integration.test.js",
         "test/rebalancer/coordinator-timeout-check-serialization.test.js"
+      ]
+    },
+    "cdc-source-coverage-reconcile-publication": {
+      "description": "An exact source scope and same-view applied prefix produce bounded BINARY coverage cells; one lifecycle-owned reconcile generation installs only exact validated cells and retained suffix into the bound cache target.",
+      "endpoints": [
+        {
+          "id": "source-scope-prefix-capture",
+          "owners": [
+            "src/cdc/cdc-coverage-domain.js",
+            "src/cdc/cdc-source-scope-evidence.js",
+            "src/partition/partition-cdc-source-coverage.js",
+            "src/partition/partition-service-cdc-coverage-methods.js"
+          ]
+        },
+        {
+          "id": "reconcile-cache-publication",
+          "owners": [
+            "src/cdc/cdc-coverage-lifecycle-owner.js",
+            "src/cdc/cdc-coverage-protocol.js",
+            "src/cdc/cdc-coverage-reconcile-owner.js",
+            "src/cdc/cdc-source-scope-reconciliation.js",
+            "src/cdc/cdc-complete-coverage-reconcile.js",
+            "src/cache/system-table-cache-cdc-cover.js",
+            "src/cache/system-table-cache-cdc-source-order.js"
+          ]
+        }
+      ],
+      "contract": "cdc-source-coverage-reconcile-publication",
+      "witnessTests": [
+        "test/partition/partition-cdc-source-coverage.test.js",
+        "test/cache/system-table-cache-cdc-source-order.test.js",
+        "test/cdc/cdc-authoritative-coverage-reconciliation.test.js",
+        "test/cdc/cdc-coverage-reconcile-owner.test.js"
       ]
     }
   }

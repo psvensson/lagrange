@@ -46,9 +46,14 @@ import {
   resolveSystemCacheRowKey,
 } from '../cache/system-cache-key-descriptor.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {CDC_COVERAGE_QUERY_FIELD, CDC_COVERAGE_RESPONSE_STATE} from
+  './cdc-coverage-protocol.js';
+
+const CDC_COVERAGE_PAGE_BOUND_SPENT = 'cdc_coverage_page_bound_spent';
 
 const CATCHUP_DEFAULT = Object.freeze({
   MAX_ATTEMPTS_PER_TABLE: 3,
+  MAX_COVERAGE_PAGES_PER_TABLE: 10000,
   RETRY_FALLBACK_DELAY_MS: 500,
   UPSERT_OPERATION: 'UPSERT',
 });
@@ -150,6 +155,57 @@ function authoritativeReadFailure(readResult) {
     readResult?.error || CATCHUP_FAILURE_MSG.UNAVAILABLE;
 }
 
+function completeCoverageInstallTarget(service) {
+  return service.cacheMutationTarget || service.systemTableCache;
+}
+
+function stoppedCoverageInstall() {
+  return {installed: false, reason: CDC_ERROR_CODE.SHUT_DOWN};
+}
+
+function invalidCoverageInstall(page) {
+  return {installed: false, reason: authoritativeReadFailure(page)};
+}
+
+function completedCoverageInstall(changes) {
+  return {installed: true, changes};
+}
+
+async function installCompleteCoveragePages(service, tableName, firstPage,
+  readOptions, isTerminal) {
+  const target = completeCoverageInstallTarget(service);
+  if (typeof target?.installCompleteCdcCoverage !== 'function' ||
+      !readIsFromWitnessedLeader(tableName, firstPage)) return null;
+  let page = firstPage;
+  let changes = 0;
+  for (let pageCount = 1;
+    pageCount <= CATCHUP_DEFAULT.MAX_COVERAGE_PAGES_PER_TABLE;
+    pageCount += 1) {
+    if (isTerminal()) return stoppedCoverageInstall();
+    if (page?.state !== CDC_COVERAGE_RESPONSE_STATE.COMPLETE ||
+        !Array.isArray(page.rows) ||
+        !readIsFromWitnessedLeader(tableName, page)) {
+      return invalidCoverageInstall(page);
+    }
+    const installed = target.installCompleteCdcCoverage(page);
+    if (installed.installed !== true) return installed;
+    changes += installed.changes;
+    if (page.nextPageStart === null || page.nextPageStart === undefined) {
+      return completedCoverageInstall(changes);
+    }
+    page = await service.executeAuthoritativeSystemTableRead(
+      tableName,
+      `SELECT * FROM ${tableName}`,
+      [],
+      {...readOptions, queryOptions: {...readOptions.queryOptions,
+        [CDC_COVERAGE_QUERY_FIELD.EXPECTED_SCOPE_ID]:
+          page.sourceScope.scopeId,
+        [CDC_COVERAGE_QUERY_FIELD.PAGE_START]: page.nextPageStart}},
+    );
+  }
+  return {installed: false, reason: CDC_COVERAGE_PAGE_BOUND_SPENT};
+}
+
 /**
  * Re-read every CDC-propagated system table from the authoritative owner
  * path and apply the rows into the local cache.
@@ -219,6 +275,7 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options = {}) {
         CONTROL_PLANE_AUTHORITATIVE_READ_MODE
           .OWNER_LOCAL_PREFERRED_OWNER_RPC_FALLBACK,
     }),
+    queryOptions: {[CDC_COVERAGE_QUERY_FIELD.COMPLETE]: true},
   };
   const summary = {
     tablesAttempted: 0,
@@ -278,6 +335,20 @@ async function hydrateCdcPropagatedTablesFromAuthority(service, options = {}) {
         successfulAuthoritativeRows(readResult) :
         null;
       if (rows) {
+        if (readResult.state === CDC_COVERAGE_RESPONSE_STATE.COMPLETE) {
+          const installed = await installCompleteCoveragePages(
+            service, tableName, readResult, readOptions, isTerminal);
+          if (installed !== null) {
+            if (installed.installed !== true) {
+              lastFailure = installed.reason;
+              break;
+            }
+            summary.rowsApplied += installed.changes;
+            hydrated = !isTerminal();
+            summary.tablesHydrated += hydrated ? 1 : 0;
+            break;
+          }
+        }
         const repairOptions = readFromLeader ?
           {
             mutationMode:
