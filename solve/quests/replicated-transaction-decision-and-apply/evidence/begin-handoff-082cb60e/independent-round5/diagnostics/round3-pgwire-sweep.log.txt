@@ -1,0 +1,111 @@
+RESULTS_START
+Protocol session mapped to tenant/policy { sessionId: 'queued-sweep', tenantId: 'default' }
+Executing SqlRequest via SqlCore {
+  sessionId: 'queued-sweep',
+  tenantId: 'default',
+  executionMode: 'sql_statement'
+}
+SqlCore.executeRequest dispatching {
+  executionMode: 'sql_statement',
+  statement: 'BEGIN',
+  sessionId: 'queued-sweep'
+}
+Executing SQL query { sql: 'BEGIN', paramCount: 0, sessionId: 'queued-sweep' }
+BEGIN TRANSACTION { sessionId: 'queued-sweep' }
+SqlCore.executeRequest complete { executionMode: 'sql_statement', success: true }
+metrics.query.dispatch {
+  executionMode: 'sql_statement',
+  totalDurationMs: 5,
+  success: true,
+  sessionId: 'queued-sweep'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'queued-sweep',
+  tenantId: 'default',
+  executionMode: 'sql_statement'
+}
+SqlCore.executeRequest dispatching {
+  executionMode: 'sql_statement',
+  statement: 'ROLLBACK',
+  sessionId: 'queued-sweep'
+}
+Executing SQL query { sql: 'ROLLBACK', paramCount: 0, sessionId: 'queued-sweep' }
+Reconcile queue shutdown { queue: 'runtime-replica-state-projection-owner' }
+ROLLBACK { sessionId: 'queued-sweep', participants: [] }
+{
+  "writes": 1,
+  "sweep": {
+    "swept": 1,
+    "resolved": 0,
+    "failed": 0,
+    "deferred": 1,
+    "deferredUntilMs": 1791752043919,
+    "skipped": false,
+    "results": [
+      {
+        "transactionId": "d995f5fee43143ab21d605f637f8796f",
+        "sessionId": "queued-sweep",
+        "sweepPath": "BEGIN_TRANSACTION",
+        "statusAfter": "ACTIVE",
+        "success": false,
+        "deferred": true,
+        "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session"
+      }
+    ]
+  },
+  "messageTypes": [
+    "C",
+    "Z"
+  ],
+  "frames": [
+    "C\u0000\u0000\u0000\nBEGIN\u0000",
+    "Z\u0000\u0000\u0000\u0005T"
+  ],
+  "txState": "ENTERED_ACTIVE",
+  "diagnostics": {
+    "attachmentCount": 0,
+    "operationCount": 0,
+    "recordBytes": 0,
+    "recordCount": 0,
+    "roles": {},
+    "sweep": {
+      "deferredAttempts": 1,
+      "deferredUntilMs": 1791752043919,
+      "oldestDeadlineAtMs": null,
+      "reservedBytes": 0,
+      "retainedCount": 0,
+      "selectedCount": 1,
+      "stopReason": "deferred"
+    },
+    "totalBytes": 0
+  }
+}
+metrics.query.lifecycle {
+  sessionId: 'queued-sweep',
+  statementType: 'ROLLBACK',
+  parseDurationMs: 0,
+  executionDurationMs: 0,
+  totalDurationMs: 0,
+  partitionCount: 0,
+  rowCount: 0,
+  success: false
+}
+Query execution failed {
+  sql: 'ROLLBACK',
+  error: 'Transaction recovery state is incomplete or incompatible',
+  errorCode: 'TRANSACTION_RECOVERY_INCOMPLETE',
+  retryAfterMs: null,
+  deferRetry: false,
+  stack: null
+}
+SqlCore.executeRequest complete { executionMode: 'sql_statement', success: false }
+metrics.query.dispatch {
+  executionMode: 'sql_statement',
+  totalDurationMs: 2,
+  success: false,
+  sessionId: 'queued-sweep'
+}
+Rollback of a closed protocol session's open transaction failed (the transaction budget sweep remains the backstop) {
+  sessionId: 'queued-sweep',
+  error: 'Transaction recovery state is incomplete or incompatible'
+}

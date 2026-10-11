@@ -9,6 +9,8 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
+import {createTransactionPersistenceGateway} from
+  '../test-helpers/transaction-persistence-gateway.js';
 import {createSqlRequest} from '../../src/query/sql-request.js';
 import {PARSER_DIALECT} from '../../src/query/pg/pg-compat-constants.js';
 import {
@@ -174,6 +176,8 @@ function createRecordingEngine() {
     if (message.type === 'QUERY') delivered.push(message.sql);
     return deliver(address, message);
   };
+  // Transactions BEGIN on an engine that persists their state (TX1 seam
+  // S4b).
   const engine = new SQLQueryEngine({
     systemCache: createMockSystemCache(
       [{table_name: 'users', primaryKey: 'id'}],
@@ -181,6 +185,7 @@ function createRecordingEngine() {
         partition_key_end: null}],
     ),
     messageRouter: router,
+    controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
   });
   return {engine, delivered};
 }
