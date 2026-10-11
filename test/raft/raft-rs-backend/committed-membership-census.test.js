@@ -53,9 +53,9 @@ function filesMatching(pattern, {outsideRaft = false} = {}) {
     pattern.test(code)).map(({relative}) => relative).sort();
 }
 
-test('T7: the committed-membership read has exactly three callers outside ' +
+test('T7: the committed-membership read has exactly four callers outside ' +
   'src/raft - the bootstrap read, the REPLACE completion witness and the ' +
-  'message-group consensus port\'s one reader of any purpose', () => {
+  'message-group consensus port and recipient readers', () => {
   assert.deepEqual(filesMatching(
     /RAFT_OPERATION\.READ_COMMITTED_MEMBERSHIP|\.readCommittedMembership\(/u,
     {outsideRaft: true}), [
@@ -64,6 +64,9 @@ test('T7: the committed-membership read has exactly three callers outside ' +
     // leader replica's BOOTSTRAP-purpose answer to the learner-join
     // descriptor producer, and a joining learner's witness of itself.
     'src/message-group/message-group-consensus-port.js',
+    // FreshMG C1/C2: the registered recipient asks its hosted group for the
+    // exact managed ADD_LEARNER or PROMOTE action named by the workflow.
+    'src/node/message-group-membership-recipient.js',
     'src/node/replica-handler-committed-membership-methods.js',
     'src/partition/partition-service-raft-membership-administration.js',
   ]);
@@ -112,6 +115,9 @@ test('T7: the stamp origins - the leader\'s COMMITTED answer at creation, ' +
     // leader's committed answer, never produces a stamp.
     'src/raft/learner-catch-up-acknowledgement.js',
     'src/rebalancer/committed-membership-bootstrap-read.js',
+    // The authorization decoder accepts only an actual committed stamp in
+    // the repository observation that binds the recipient turn.
+    'src/rebalancer/replica-operation-message-group-membership-authorization.js',
     // FreshMG 6.C C2: the promotion selection validates the learner's own
     // committed answer, and the voter recorder records the witness's
     // same-read COMMITTED answer as the voter stamp (re-validated, never

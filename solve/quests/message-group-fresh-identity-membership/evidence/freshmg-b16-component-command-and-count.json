@@ -1,0 +1,98 @@
+{
+  "subject": "b16e932497d123c982a13f864503dd9ad668ec75",
+  "tree": "aaedf7c796070b43d8105e7f8de6615404d13c0f",
+  "remoteRef": "refs/heads/checkpoint/rs-raft-preservation-20261011T182115Z/proof-freshmg-component-399",
+  "host": "tv-dator",
+  "lane": "ordinary",
+  "files": [
+    {
+      "file": "test/raft/raft-rs-backend/snapshot-staging-lifecycle-operation.test.js",
+      "attempt": 1,
+      "ok": true,
+      "assertions": 7,
+      "durationMs": 537,
+      "retriedOnce": false,
+      "firstFailureLine": null
+    },
+    {
+      "file": "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js",
+      "attempt": 1,
+      "ok": true,
+      "assertions": 116,
+      "durationMs": 1699,
+      "retriedOnce": false,
+      "firstFailureLine": null
+    },
+    {
+      "file": "test/message-group/message-group-fresh-learner-snapshot.test.js",
+      "attempt": 1,
+      "ok": true,
+      "assertions": 1,
+      "durationMs": 1879,
+      "retriedOnce": false,
+      "firstFailureLine": null
+    },
+    {
+      "file": "test/node/replica-lifecycle-durable-generation.test.js",
+      "attempt": 1,
+      "ok": true,
+      "assertions": 191,
+      "durationMs": 1995,
+      "retriedOnce": false,
+      "firstFailureLine": null
+    },
+    {
+      "file": "test/raft/raft-rs-backend/operation-port-lifecycle.test.js",
+      "attempt": 1,
+      "ok": true,
+      "assertions": 6,
+      "durationMs": 737,
+      "retriedOnce": false,
+      "firstFailureLine": null
+    },
+    {
+      "file": "test/raft/snapshot-install-transition.test.js",
+      "attempt": 1,
+      "ok": true,
+      "assertions": 36,
+      "durationMs": 1981,
+      "retriedOnce": false,
+      "firstFailureLine": null
+    },
+    {
+      "file": "test/raft/snapshot-install-restart-states.test.js",
+      "attempt": 1,
+      "ok": true,
+      "assertions": 35,
+      "durationMs": 1753,
+      "retriedOnce": false,
+      "firstFailureLine": null
+    },
+    {
+      "file": "test/raft/raft-rs-backend/operation-port-boundary.test.js",
+      "attempt": 1,
+      "ok": true,
+      "assertions": 7,
+      "durationMs": 4667,
+      "retriedOnce": false,
+      "firstFailureLine": null
+    }
+  ],
+  "reportedAssertionCount": 399,
+  "countClarification": "Canonical runner reports399 entries. The retained local same-composition TAP summary has353 tests and46 suites (353+46=399); do not relabel399 as independent leaf assertions.",
+  "hashes": {
+    "freshmg-lifecycle-composed-snapshot.json": "b624dc3f040d353abe5d9d75ca26e836e5ed5f61dbc0f82cb7ec3327ffbe6b82",
+    "freshmg-lifecycle-composed-lab-b16e932.log": "a815f2ed9103dc3338d7d3a7126ec313aa3dd51076213c26d1a396253b0e6b34",
+    "freshmg-lifecycle-composed-lab-b16e932.ndjson": "239c5258d90a3542b8dd787168c400aa293596f953eafd207cb6e382174e57cb",
+    "freshmg-lifecycle-composed-local-focused.log": "3731ad093562836af1388e057b1367894864506c235c4a4c140f805eac8294a5",
+    "cdc-proof/run-lab-files.mjs": "6d3a3599a2aea9bdadafb918f85d1c8059e466bc595817eae3c051b23819ec36"
+  },
+  "reproductionCommand": "node /mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/cdc-proof/run-lab-files.mjs /mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011 b16e932497d123c982a13f864503dd9ad668ec75 tv-dator test/raft/raft-rs-backend/snapshot-staging-lifecycle-operation.test.js test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js test/message-group/message-group-fresh-learner-snapshot.test.js test/node/replica-lifecycle-durable-generation.test.js test/raft/raft-rs-backend/operation-port-lifecycle.test.js test/raft/snapshot-install-transition.test.js test/raft/snapshot-install-restart-states.test.js test/raft/raft-rs-backend/operation-port-boundary.test.js",
+  "commandProvenance": "Reconstructed exact-subject/file-list command using retained canonical lab helper; original controller shell argv was not located in the retained dossier/log. This command was not rerun during this audit.",
+  "helperSource": "import {pathToFileURL} from 'node:url';\nimport path from 'node:path';\nconst [root, sha, on, ...files] = process.argv.slice(2);\nconst {labTestCommit, labTestDeps, runLabTest} = await import(pathToFileURL(path.join(root, 'scripts/lab/probe.js')));\nconst {planClassifiedTestFiles, estimateFileCosts} = await import(pathToFileURL(path.join(root, 'scripts/run-classified-test-files.js')));\nconst commit = labTestCommit({root, sha});\ntry {\n  const plan = planClassifiedTestFiles(commit.gitRoot, files);\n  process.exitCode = await runLabTest({plan, costs: estimateFileCosts(plan, [root]), commit, on, root}, labTestDeps({root}));\n} finally {\n  commit.release();\n}\n",
+  "limits": [
+    "Historical component execution only; marker correction is a separate later subject.",
+    "Does not prove normal startup, two serial production replacements, or seed-storage-loss SQL/CDC/cache recovery.",
+    "Does not supersede source reviews or current candidate gates."
+  ]
+}
