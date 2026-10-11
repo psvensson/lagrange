@@ -519,7 +519,8 @@ function validatePayloadAgainstDescriptor(checkpointDir, descriptor) {
         (reservation, index) =>
           reservation.replicaIdentity !== described[index].replicaIdentity ||
           reservation.peerId !== described[index].peerId ||
-          reservation.learnerAdmission !== described[index].learnerAdmission)) {
+          reservation.learnerAdmission !== described[index].learnerAdmission ||
+          reservation.promotionAdmission !== described[index].promotionAdmission)) {
         return checkpointResult(VALIDATION.CORRUPT_PAYLOAD,
           [RAFT_RS_CHECKPOINT_REASON.PEER_RESERVATIONS]);
       }
