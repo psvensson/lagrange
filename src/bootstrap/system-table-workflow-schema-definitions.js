@@ -9,7 +9,10 @@ import {
 
 /**
  * SQL transactions system table schema.
- * Stores distributed transaction coordinator state for restart recovery.
+ * Stores distributed transaction coordinator state for restart recovery. The
+ * row is inserted once at BEGIN; decision, decision_text and decision_digest
+ * hold the coordinator's insert-once decision record (TX1 seam C), written
+ * once by an update guarded on `decision IS NULL` and never rewritten.
  */
 const SQL_TRANSACTIONS_SCHEMA = {
   tableName: SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
@@ -21,8 +24,13 @@ const SQL_TRANSACTIONS_SCHEMA = {
     {name: 'timeout_deadline', type: COLUMN_TYPE.INTEGER},
     {name: 'transaction_mode', type: COLUMN_TYPE.TEXT, notNull: true},
     {name: 'participant_set_state', type: COLUMN_TYPE.TEXT, notNull: true},
+    // NULL retains unknown legacy authority; only a new BEGIN may insert [].
+    {name: 'participant_set_text', type: COLUMN_TYPE.TEXT},
     {name: 'commit_mode', type: COLUMN_TYPE.TEXT, notNull: true},
     {name: 'frozen_participant_count', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'decision', type: COLUMN_TYPE.TEXT},
+    {name: 'decision_text', type: COLUMN_TYPE.TEXT},
+    {name: 'decision_digest', type: COLUMN_TYPE.TEXT},
     {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
     {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},
   ],
@@ -34,7 +42,9 @@ const SQL_TRANSACTIONS_SCHEMA = {
 
 /**
  * SQL transaction participants system table schema.
- * Stores participant partition state for distributed transactions.
+ * Stores participant partition state for distributed transactions, with the
+ * participant's PREPARE evidence (prepared_digest, prepare_index,
+ * prepare_term) retained before the transaction's decision (TX1 seam E).
  */
 const SQL_TRANSACTION_PARTICIPANTS_SCHEMA = {
   tableName: SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS,
@@ -44,6 +54,9 @@ const SQL_TRANSACTION_PARTICIPANTS_SCHEMA = {
     {name: 'partition_id', type: COLUMN_TYPE.TEXT, notNull: true},
     {name: 'status', type: COLUMN_TYPE.TEXT, notNull: true},
     {name: 'last_error', type: COLUMN_TYPE.TEXT},
+    {name: 'prepared_digest', type: COLUMN_TYPE.TEXT},
+    {name: 'prepare_index', type: COLUMN_TYPE.INTEGER},
+    {name: 'prepare_term', type: COLUMN_TYPE.INTEGER},
     {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
     {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},
   ],

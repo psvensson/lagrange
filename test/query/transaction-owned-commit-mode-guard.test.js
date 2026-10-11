@@ -8,6 +8,10 @@ const SOURCE = Object.freeze({
     'src/query/distributed/distributed-transaction-protocol.js',
   RECOVERY:
     'src/query/distributed/distributed-transaction-recovery.js',
+  // Recovery's row validation, extracted from the recovery owner (TX1
+  // increment: it would otherwise exceed the source size ceiling).
+  RECOVERY_VALIDATION:
+    'src/query/distributed/distributed-transaction-recovery-validation.js',
   SQL_WRITE: 'src/query/sql-query-engine-write-execution.js',
   TRANSITION:
     'src/rebalancer/operation-workflow-transition-orchestration.js',
@@ -25,6 +29,7 @@ test('transaction commit mode remains owned after the final participant plan',
     const coordinator = read(SOURCE.COORDINATOR);
     const protocol = read(SOURCE.PROTOCOL);
     const recovery = read(SOURCE.RECOVERY);
+    const recoveryValidation = read(SOURCE.RECOVERY_VALIDATION);
     const sqlWrite = read(SOURCE.SQL_WRITE);
     const transition = read(SOURCE.TRANSITION);
     const transitionOptions = read(SOURCE.TRANSITION_OPTIONS);
@@ -33,6 +38,7 @@ test('transaction commit mode remains owned after the final participant plan',
       coordinator,
       protocol,
       recovery,
+      recoveryValidation,
       sqlWrite,
       transition,
       transitionOptions,
@@ -51,7 +57,10 @@ test('transaction commit mode remains owned after the final participant plan',
     t.match(coordinator,
       /Object\.assign\(tx, decision\)[\s\S]*persistTransactionRecord\(tx\)[\s\S]*runCommitProtocol/u,
       'freeze and mode selection persist before protocol dispatch');
-    t.match(recovery, /frozenParticipantCount === tx\.participants\.size/u);
+    t.match(recoveryValidation,
+      /frozenParticipantCount === tx\.participants\.size/u);
+    t.match(recovery, /validateRecoveredTransactionDecision/u,
+      'recovery validates every restored transaction decision');
     t.match(protocol, /resolveParticipantCommitOutcome/u);
     t.notMatch(sqlWrite, /queryOptions\?\.(transactionMode|commitMode)/u,
       'caller-provided modes do not participate in owner selection');
