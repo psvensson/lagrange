@@ -37,6 +37,7 @@ import {createHash} from 'node:crypto';
 
 import {
   RAFT_RS_LEARNER_ADMISSION_COLUMN,
+  RAFT_RS_PROMOTION_ADMISSION_COLUMN,
   RAFT_RS_LEARNER_ORIGIN_COVERAGE,
   RAFT_RS_PEER_IDENTITY_ERROR_MSG,
   RAFT_RS_PEER_IDENTITY_RESOLUTION,
@@ -62,27 +63,40 @@ function validatedRaftRsPeerIdentityReservations(reservations) {
   }
   const identities = new Set();
   const peerIds = new Set();
-  return Object.freeze(reservations.map((reservation) => {
-    const replicaIdentity = reservation?.replicaIdentity;
-    const peerId = reservation?.peerId;
-    const expectedPeerId = deriveRaftRsPeerId(replicaIdentity);
-    if (typeof peerId !== TYPE_STRING || peerId !== expectedPeerId) {
-      throw new Error(RAFT_RS_PEER_IDENTITY_ERROR_MSG.bindingMismatch(
-        replicaIdentity, peerId, expectedPeerId));
-    }
-    if (identities.has(replicaIdentity) || peerIds.has(peerId)) {
-      throw new Error(RAFT_RS_PEER_IDENTITY_ERROR_MSG.duplicateReservation(
-        replicaIdentity, peerId));
-    }
-    identities.add(replicaIdentity);
-    peerIds.add(peerId);
-    const learnerAdmission = reservation.learnerAdmission ?? null;
-    if (learnerAdmission !== null && typeof learnerAdmission !== TYPE_STRING) {
-      throw new TypeError(RAFT_RS_PEER_IDENTITY_ERROR_MSG.LEARNER_ADMISSION_CONFLICT);
-    }
-    return Object.freeze({replicaIdentity, peerId,
-      ...(learnerAdmission === null ? {} : {learnerAdmission})});
-  }));
+  return Object.freeze(reservations.map((reservation) =>
+    validatedReservation(reservation, identities, peerIds)));
+}
+
+function validatedAdmissionFields(reservation) {
+  const learnerAdmission = reservation.learnerAdmission ?? null;
+  const promotionAdmission = reservation.promotionAdmission ?? null;
+  if (learnerAdmission !== null && typeof learnerAdmission !== TYPE_STRING) {
+    throw new TypeError(RAFT_RS_PEER_IDENTITY_ERROR_MSG.LEARNER_ADMISSION_CONFLICT);
+  }
+  if (promotionAdmission !== null && typeof promotionAdmission !== TYPE_STRING) {
+    throw new TypeError(RAFT_RS_PEER_IDENTITY_ERROR_MSG.PROMOTION_ADMISSION_CONFLICT);
+  }
+  return {learnerAdmission, promotionAdmission};
+}
+
+function validatedReservation(reservation, identities, peerIds) {
+  const replicaIdentity = reservation?.replicaIdentity;
+  const peerId = reservation?.peerId;
+  const expectedPeerId = deriveRaftRsPeerId(replicaIdentity);
+  if (typeof peerId !== TYPE_STRING || peerId !== expectedPeerId) {
+    throw new Error(RAFT_RS_PEER_IDENTITY_ERROR_MSG.bindingMismatch(
+      replicaIdentity, peerId, expectedPeerId));
+  }
+  if (identities.has(replicaIdentity) || peerIds.has(peerId)) {
+    throw new Error(RAFT_RS_PEER_IDENTITY_ERROR_MSG.duplicateReservation(
+      replicaIdentity, peerId));
+  }
+  identities.add(replicaIdentity);
+  peerIds.add(peerId);
+  const {learnerAdmission, promotionAdmission} = validatedAdmissionFields(reservation);
+  return Object.freeze({replicaIdentity, peerId,
+    ...(learnerAdmission === null ? {} : {learnerAdmission}),
+    ...(promotionAdmission === null ? {} : {promotionAdmission})});
 }
 
 function readRaftRsPeerIdentityReservations(db) {
@@ -91,6 +105,7 @@ function readRaftRsPeerIdentityReservations(db) {
       replicaIdentity: row.replica_identity,
       peerId: row.raft_peer_id,
       learnerAdmission: row.learner_admission,
+      promotionAdmission: row.promotion_admission,
     })));
 }
 
@@ -126,6 +141,10 @@ class RaftRsPeerIdentityRegistry {
     if (!columns.some(({name}) => name === RAFT_RS_LEARNER_ADMISSION_COLUMN)) {
       // No evidence is fabricated for an older reservation. Null stays unknown.
       this.db.exec(RAFT_RS_PEER_IDENTITY_SQL.ADD_LEARNER_ADMISSION);
+    }
+    if (!columns.some(({name}) => name === RAFT_RS_PROMOTION_ADMISSION_COLUMN)) {
+      // An old voter reservation is not proof of which managed promotion made it so.
+      this.db.exec(RAFT_RS_PEER_IDENTITY_SQL.ADD_PROMOTION_ADMISSION);
     }
   }
 
@@ -165,7 +184,7 @@ class RaftRsPeerIdentityRegistry {
   /**
    * Reserve the exact logical identity carried by a committed configuration
    * entry. The peer id is still checked against this registry's deterministic
-   * derivation, so committed context cannot authorize address-as-identity or
+   * derivation, so committed context cannot authorize placement-derived identity or
    * remap one logical replica to another peer id.
    * @param {string} replicaIdentity - The logical replica.
    * @param {string} raftPeerId - The committed raft peer id.
@@ -236,6 +255,27 @@ class RaftRsPeerIdentityRegistry {
   /** Raw stored evidence, decoded only by the native committed-context owner. */
   committedLearnerAdmission(replicaIdentity) {
     return this.reservationFor(replicaIdentity)?.learner_admission ?? null;
+  }
+
+  /** Persist one immutable native promotion fact in the committed apply transaction. */
+  recordCommittedPromotionAdmission(replicaIdentity, encoded) {
+    if (!this.db.inTransaction) {
+      throw new Error(RAFT_RS_PEER_IDENTITY_ERROR_MSG.PROMOTION_ADMISSION_TRANSACTION);
+    }
+    const row = this.reservationFor(replicaIdentity);
+    if (!row || typeof encoded !== TYPE_STRING || encoded.length === EMPTY ||
+        (row.promotion_admission !== null && row.promotion_admission !== encoded)) {
+      throw new Error(RAFT_RS_PEER_IDENTITY_ERROR_MSG.PROMOTION_ADMISSION_CONFLICT);
+    }
+    if (row.promotion_admission === null) {
+      this.db.prepare(RAFT_RS_PEER_IDENTITY_SQL.RECORD_PROMOTION_ADMISSION)
+        .run(encoded, replicaIdentity);
+    }
+  }
+
+  /** Raw stored promotion fact, decoded only by the committed-context owner. */
+  committedPromotionAdmission(replicaIdentity) {
+    return this.reservationFor(replicaIdentity)?.promotion_admission ?? null;
   }
 
   /**
