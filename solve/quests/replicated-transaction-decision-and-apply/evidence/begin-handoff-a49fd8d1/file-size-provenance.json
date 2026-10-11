@@ -1,0 +1,506 @@
+{
+  "counts": {
+    "baseC6": 30,
+    "proof292": 29,
+    "wip5a": 30,
+    "current": 29
+  },
+  "differences": {
+    "currentAddedVsBase": [],
+    "currentRemovedVsBase": [
+      "src/query/sql-query-engine-lifecycle-and-callback-dispatch.js"
+    ],
+    "proofAddedVsBase": [],
+    "proofRemovedVsBase": [
+      "src/query/sql-query-engine-lifecycle-and-callback-dispatch.js"
+    ],
+    "currentAddedVsProof": [],
+    "currentRemovedVsProof": [],
+    "wipAddedVsProof": [
+      "src/runtime/pgwire-protocol-handler.js"
+    ],
+    "wipRemovedVsProof": []
+  },
+  "sets": {
+    "baseC6": [
+      {
+        "file": "src/admin/admin-control-snapshot-local-build-base.js",
+        "lines": 921
+      },
+      {
+        "file": "src/admin/admin-control-snapshot-membership-publication-reconcile.js",
+        "lines": 820
+      },
+      {
+        "file": "src/bootstrap/node-joining-admission-readiness.js",
+        "lines": 853
+      },
+      {
+        "file": "src/bootstrap/node-joining-owner-construction.js",
+        "lines": 817
+      },
+      {
+        "file": "src/control-plane/control-plane-readiness-priority-recovery-planning.js",
+        "lines": 1068
+      },
+      {
+        "file": "src/control-plane/membership-publication-active-gate-reconcile.js",
+        "lines": 932
+      },
+      {
+        "file": "src/control-plane/membership-publication-coordinator-reconcile.js",
+        "lines": 1009
+      },
+      {
+        "file": "src/control-plane/projection-readiness-evidence.js",
+        "lines": 803
+      },
+      {
+        "file": "src/diagnostics/topology-convergence-edge-resolvers.js",
+        "lines": 807
+      },
+      {
+        "file": "src/node/runtime-service-handler.js",
+        "lines": 883
+      },
+      {
+        "file": "src/partition/partition-service-cdc-stream-base.js",
+        "lines": 801
+      },
+      {
+        "file": "src/partition/partition-service-constants.js",
+        "lines": 806
+      },
+      {
+        "file": "src/partition/partition-service-core-base.js",
+        "lines": 865
+      },
+      {
+        "file": "src/partition/partition-service-entry-apply-base.js",
+        "lines": 1127
+      },
+      {
+        "file": "src/partition/partition-service-transaction-base.js",
+        "lines": 1025
+      },
+      {
+        "file": "src/partition/partition-service-write-metrics-base.js",
+        "lines": 801
+      },
+      {
+        "file": "src/query/query-executor-partition-delivery.js",
+        "lines": 889
+      },
+      {
+        "file": "src/query/sql-query-engine-lifecycle-and-callback-dispatch.js",
+        "lines": 861
+      },
+      {
+        "file": "src/raft/raft-rs-runtime-owner.js",
+        "lines": 1810
+      },
+      {
+        "file": "src/rebalancer/move-planner-move-calculation-methods.js",
+        "lines": 1068
+      },
+      {
+        "file": "src/rebalancer/move-planner-state-methods.js",
+        "lines": 872
+      },
+      {
+        "file": "src/rebalancer/operation-workflow-dispatch-response-reconcile.js",
+        "lines": 1264
+      },
+      {
+        "file": "src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js",
+        "lines": 834
+      },
+      {
+        "file": "src/rebalancer/operation-workflow-owner-ports.js",
+        "lines": 947
+      },
+      {
+        "file": "src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js",
+        "lines": 1000
+      },
+      {
+        "file": "src/rebalancer/operation-workflow-recovery-timeout.js",
+        "lines": 1009
+      },
+      {
+        "file": "src/rebalancer/rebalance-coordinator-operation-creation.js",
+        "lines": 927
+      },
+      {
+        "file": "src/rebalancer/rebalance-coordinator-priority-budget-admission.js",
+        "lines": 935
+      },
+      {
+        "file": "src/rebalancer/replica-operation-repository-visibility-methods.js",
+        "lines": 809
+      },
+      {
+        "file": "src/service/installable-service-artifact-resolver.js",
+        "lines": 818
+      }
+    ],
+    "proof292": [
+      {
+        "file": "src/admin/admin-control-snapshot-local-build-base.js",
+        "lines": 921
+      },
+      {
+        "file": "src/admin/admin-control-snapshot-membership-publication-reconcile.js",
+        "lines": 820
+      },
+      {
+        "file": "src/bootstrap/node-joining-admission-readiness.js",
+        "lines": 853
+      },
+      {
+        "file": "src/bootstrap/node-joining-owner-construction.js",
+        "lines": 817
+      },
+      {
+        "file": "src/control-plane/control-plane-readiness-priority-recovery-planning.js",
+        "lines": 1068
+      },
+      {
+        "file": "src/control-plane/membership-publication-active-gate-reconcile.js",
+        "lines": 932
+      },
+      {
+        "file": "src/control-plane/membership-publication-coordinator-reconcile.js",
+        "lines": 1009
+      },
+      {
+        "file": "src/control-plane/projection-readiness-evidence.js",
+        "lines": 803
+      },
+      {
+        "file": "src/diagnostics/topology-convergence-edge-resolvers.js",
+        "lines": 807
+      },
+      {
+        "file": "src/node/runtime-service-handler.js",
+        "lines": 883
+      },
+      {
+        "file": "src/partition/partition-service-cdc-stream-base.js",
+        "lines": 801
+      },
+      {
+        "file": "src/partition/partition-service-constants.js",
+        "lines": 806
+      },
+      {
+        "file": "src/partition/partition-service-core-base.js",
+        "lines": 865
+      },
+      {
+        "file": "src/partition/partition-service-entry-apply-base.js",
+        "lines": 1127
+      },
+      {
+        "file": "src/partition/partition-service-transaction-base.js",
+        "lines": 1025
+      },
+      {
+        "file": "src/partition/partition-service-write-metrics-base.js",
+        "lines": 801
+      },
+      {
+        "file": "src/query/query-executor-partition-delivery.js",
+        "lines": 889
+      },
+      {
+        "file": "src/raft/raft-rs-runtime-owner.js",
+        "lines": 1810
+      },
+      {
+        "file": "src/rebalancer/move-planner-move-calculation-methods.js",
+        "lines": 1068
+      },
+      {
+        "file": "src/rebalancer/move-planner-state-methods.js",
+        "lines": 872
+      },
+      {
+        "file": "src/rebalancer/operation-workflow-dispatch-response-reconcile.js",
+        "lines": 1264
+      },
+      {
+        "file": "src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js",
+        "lines": 834
+      },
+      {
+        "file": "src/rebalancer/operation-workflow-owner-ports.js",
+        "lines": 947
+      },
+      {
+        "file": "src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js",
+        "lines": 1000
+      },
+      {
+        "file": "src/rebalancer/operation-workflow-recovery-timeout.js",
+        "lines": 1009
+      },
+      {
+        "file": "src/rebalancer/rebalance-coordinator-operation-creation.js",
+        "lines": 927
+      },
+      {
+        "file": "src/rebalancer/rebalance-coordinator-priority-budget-admission.js",
+        "lines": 935
+      },
+      {
+        "file": "src/rebalancer/replica-operation-repository-visibility-methods.js",
+        "lines": 809
+      },
+      {
+        "file": "src/service/installable-service-artifact-resolver.js",
+        "lines": 818
+      }
+    ],
+    "wip5a": [
+      {
+        "file": "src/admin/admin-control-snapshot-local-build-base.js",
+        "lines": 921
+      },
+      {
+        "file": "src/admin/admin-control-snapshot-membership-publication-reconcile.js",
+        "lines": 820
+      },
+      {
+        "file": "src/bootstrap/node-joining-admission-readiness.js",
+        "lines": 853
+      },
+      {
+        "file": "src/bootstrap/node-joining-owner-construction.js",
+        "lines": 817
+      },
+      {
+        "file": "src/control-plane/control-plane-readiness-priority-recovery-planning.js",
+        "lines": 1068
+      },
+      {
+        "file": "src/control-plane/membership-publication-active-gate-reconcile.js",
+        "lines": 932
+      },
+      {
+        "file": "src/control-plane/membership-publication-coordinator-reconcile.js",
+        "lines": 1009
+      },
+      {
+        "file": "src/control-plane/projection-readiness-evidence.js",
+        "lines": 803
+      },
+      {
+        "file": "src/diagnostics/topology-convergence-edge-resolvers.js",
+        "lines": 807
+      },
+      {
+        "file": "src/node/runtime-service-handler.js",
+        "lines": 883
+      },
+      {
+        "file": "src/partition/partition-service-cdc-stream-base.js",
+        "lines": 801
+      },
+      {
+        "file": "src/partition/partition-service-constants.js",
+        "lines": 806
+      },
+      {
+        "file": "src/partition/partition-service-core-base.js",
+        "lines": 865
+      },
+      {
+        "file": "src/partition/partition-service-entry-apply-base.js",
+        "lines": 1127
+      },
+      {
+        "file": "src/partition/partition-service-transaction-base.js",
+        "lines": 1025
+      },
+      {
+        "file": "src/partition/partition-service-write-metrics-base.js",
+        "lines": 801
+      },
+      {
+        "file": "src/query/query-executor-partition-delivery.js",
+        "lines": 889
+      },
+      {
+        "file": "src/raft/raft-rs-runtime-owner.js",
+        "lines": 1810
+      },
+      {
+        "file": "src/rebalancer/move-planner-move-calculation-methods.js",
+        "lines": 1068
+      },
+      {
+        "file": "src/rebalancer/move-planner-state-methods.js",
+        "lines": 872
+      },
+      {
+        "file": "src/rebalancer/operation-workflow-dispatch-response-reconcile.js",
+        "lines": 1264
+      },
+      {
+        "file": "src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js",
+        "lines": 834
+      },
+      {
+        "file": "src/rebalancer/operation-workflow-owner-ports.js",
+        "lines": 947
+      },
+      {
+        "file": "src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js",
+        "lines": 1000
+      },
+      {
+        "file": "src/rebalancer/operation-workflow-recovery-timeout.js",
+        "lines": 1009
+      },
+      {
+        "file": "src/rebalancer/rebalance-coordinator-operation-creation.js",
+        "lines": 927
+      },
+      {
+        "file": "src/rebalancer/rebalance-coordinator-priority-budget-admission.js",
+        "lines": 935
+      },
+      {
+        "file": "src/rebalancer/replica-operation-repository-visibility-methods.js",
+        "lines": 809
+      },
+      {
+        "file": "src/runtime/pgwire-protocol-handler.js",
+        "lines": 815
+      },
+      {
+        "file": "src/service/installable-service-artifact-resolver.js",
+        "lines": 818
+      }
+    ],
+    "current": [
+      {
+        "file": "src/admin/admin-control-snapshot-local-build-base.js",
+        "lines": 921
+      },
+      {
+        "file": "src/admin/admin-control-snapshot-membership-publication-reconcile.js",
+        "lines": 820
+      },
+      {
+        "file": "src/bootstrap/node-joining-admission-readiness.js",
+        "lines": 853
+      },
+      {
+        "file": "src/bootstrap/node-joining-owner-construction.js",
+        "lines": 817
+      },
+      {
+        "file": "src/control-plane/control-plane-readiness-priority-recovery-planning.js",
+        "lines": 1068
+      },
+      {
+        "file": "src/control-plane/membership-publication-active-gate-reconcile.js",
+        "lines": 932
+      },
+      {
+        "file": "src/control-plane/membership-publication-coordinator-reconcile.js",
+        "lines": 1009
+      },
+      {
+        "file": "src/control-plane/projection-readiness-evidence.js",
+        "lines": 803
+      },
+      {
+        "file": "src/diagnostics/topology-convergence-edge-resolvers.js",
+        "lines": 807
+      },
+      {
+        "file": "src/node/runtime-service-handler.js",
+        "lines": 883
+      },
+      {
+        "file": "src/partition/partition-service-cdc-stream-base.js",
+        "lines": 801
+      },
+      {
+        "file": "src/partition/partition-service-constants.js",
+        "lines": 806
+      },
+      {
+        "file": "src/partition/partition-service-core-base.js",
+        "lines": 865
+      },
+      {
+        "file": "src/partition/partition-service-entry-apply-base.js",
+        "lines": 1127
+      },
+      {
+        "file": "src/partition/partition-service-transaction-base.js",
+        "lines": 1025
+      },
+      {
+        "file": "src/partition/partition-service-write-metrics-base.js",
+        "lines": 801
+      },
+      {
+        "file": "src/query/query-executor-partition-delivery.js",
+        "lines": 889
+      },
+      {
+        "file": "src/raft/raft-rs-runtime-owner.js",
+        "lines": 1810
+      },
+      {
+        "file": "src/rebalancer/move-planner-move-calculation-methods.js",
+        "lines": 1068
+      },
+      {
+        "file": "src/rebalancer/move-planner-state-methods.js",
+        "lines": 872
+      },
+      {
+        "file": "src/rebalancer/operation-workflow-dispatch-response-reconcile.js",
+        "lines": 1264
+      },
+      {
+        "file": "src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js",
+        "lines": 834
+      },
+      {
+        "file": "src/rebalancer/operation-workflow-owner-ports.js",
+        "lines": 947
+      },
+      {
+        "file": "src/rebalancer/operation-workflow-recovery-reconcile-dispatch-pending.js",
+        "lines": 1000
+      },
+      {
+        "file": "src/rebalancer/operation-workflow-recovery-timeout.js",
+        "lines": 1009
+      },
+      {
+        "file": "src/rebalancer/rebalance-coordinator-operation-creation.js",
+        "lines": 927
+      },
+      {
+        "file": "src/rebalancer/rebalance-coordinator-priority-budget-admission.js",
+        "lines": 935
+      },
+      {
+        "file": "src/rebalancer/replica-operation-repository-visibility-methods.js",
+        "lines": 809
+      },
+      {
+        "file": "src/service/installable-service-artifact-resolver.js",
+        "lines": 818
+      }
+    ]
+  }
+}

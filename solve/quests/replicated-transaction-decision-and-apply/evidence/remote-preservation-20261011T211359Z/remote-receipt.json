@@ -1,0 +1,155 @@
+{
+  "utc": "2026-10-11T21:13:59.657216+00:00",
+  "namespace": "refs/heads/checkpoint/rs-raft-preservation-20261011T211359Z",
+  "mainBefore": "878eb8ac059dab71deae5feb0fa88e0c5c610c93",
+  "newRefs": {
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T211359Z/startup-wip": "86af2cab8b361f777ae7ec1f96793f996043de59",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T211359Z/activation-startup-wip": "10b485de2599f9d528a2dc27d2048a39755583e8",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T211359Z/tx1-owner-wip": "959634fd19f2feff4bd94382491013f3836d5410",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T211359Z/freshmg-wip": "f4b0b9136b52d366c954ae453fbd2daa1229b489",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T211359Z/cdc-wip": "3af73b1f1ae473c2bf04aaebea6cce4bbc1f140b"
+  },
+  "coverage": {
+    "original-staged": {
+      "status": "UNCHANGED_ALREADY_PUSHED",
+      "sha": "7443703c330c4c1088e7fdb768243baec8a692ef"
+    },
+    "candidate": {
+      "status": "UNCHANGED_ALREADY_PUSHED",
+      "sha": "99ca733aefa5366fe0fcae6953ec9404b32c92b6"
+    },
+    "recovery-foundation": {
+      "status": "UNCHANGED_ALREADY_PUSHED",
+      "sha": "4923e322f24406e0d161a003f1125993752b95fe"
+    },
+    "startup-wip": {
+      "status": "VERIFIED_PUSHED",
+      "sha": "86af2cab8b361f777ae7ec1f96793f996043de59",
+      "ref": "refs/heads/checkpoint/rs-raft-preservation-20261011T211359Z/startup-wip",
+      "changedSinceRemote": "082cb60e6d96f17d05f03477c24de247a22be239",
+      "changedPaths": [
+        "src/query/distributed/distributed-transaction-creation-resources.js",
+        "test/query/transaction-begin-source-adversarial.test.js"
+      ]
+    },
+    "activation-startup-wip": {
+      "status": "VERIFIED_PUSHED",
+      "sha": "10b485de2599f9d528a2dc27d2048a39755583e8",
+      "ref": "refs/heads/checkpoint/rs-raft-preservation-20261011T211359Z/activation-startup-wip",
+      "changedSinceRemote": "219dd71b87a58b5e92f52dd029146d02e2206414",
+      "changedPaths": [
+        "src/bootstrap/bootstrap-service-seed-workflow.js",
+        "src/node/replica-handler-participant-cutover.js",
+        "src/node/replica-handler-participant-release.js",
+        "src/partition/partition-participant-release-apply.js",
+        "src/partition/partition-participant-release-command.js",
+        "src/partition/partition-participant-release-request.js",
+        "src/partition/partition-participant-transaction-pause.js"
+      ]
+    },
+    "tx1-owner-wip": {
+      "status": "VERIFIED_PUSHED",
+      "sha": "959634fd19f2feff4bd94382491013f3836d5410",
+      "ref": "refs/heads/checkpoint/rs-raft-preservation-20261011T211359Z/tx1-owner-wip",
+      "changedSinceRemote": "22ca9251732cafe63e7d7e4c5b2ad6581cdf14b1",
+      "changedPaths": [
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/review-checkpoint-20261011T211029Z/caller-state-after-push.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/review-checkpoint-20261011T211029Z/caller-state-before.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/review-checkpoint-20261011T211029Z/push-attempt.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/review-checkpoint-20261011T211029Z/push-plan.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/review-checkpoint-20261011T211029Z/remote-receipt.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/review-checkpoint-20261011T211029Z/tx1-owner-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/log.ndjson"
+      ]
+    },
+    "freshmg-wip": {
+      "status": "VERIFIED_PUSHED",
+      "sha": "f4b0b9136b52d366c954ae453fbd2daa1229b489",
+      "ref": "refs/heads/checkpoint/rs-raft-preservation-20261011T211359Z/freshmg-wip",
+      "changedSinceRemote": "f1644152000d3cbf28ffdfeb85f4a9f9ac06297a",
+      "changedPaths": [
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-share-replay-219dd71b/diagnostic.json",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-share-replay-219dd71b/retention.json",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-share-replay-219dd71b/startdiag-after-stable-seed-authorization.log.txt",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-share-replay-219dd71b/startdiag.mjs.txt",
+        "solve/quests/message-group-fresh-identity-membership/log.ndjson"
+      ]
+    },
+    "query-wip": {
+      "status": "UNCHANGED_ALREADY_PUSHED",
+      "sha": "41a054f9fc20969a375afce5a555152dc197518b"
+    },
+    "cdc-wip": {
+      "status": "VERIFIED_PUSHED",
+      "sha": "3af73b1f1ae473c2bf04aaebea6cce4bbc1f140b",
+      "ref": "refs/heads/checkpoint/rs-raft-preservation-20261011T211359Z/cdc-wip",
+      "changedSinceRemote": "9aa8d38543bd208158ef9208402086f83f3ed651",
+      "changedPaths": [
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/README.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/adrop-runtime-probe.cjs",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/adrop-runtime-probe.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/approved-allocation-ledger.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/capture-production-image.sh",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/capture-production-release-source.sh",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/capture-upstream-native-sources.sh",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/certification-report.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/compute-approved-ledger.mjs",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/node-v22.22.0-libuv-v1.51.0/SHA256SUMS",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/node-v22.22.0-libuv-v1.51.0/libuv-LICENSE.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/node-v22.22.0-libuv-v1.51.0/libuv-unix-core.c.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/node-v22.22.0-libuv-v1.51.0/libuv-unix-linux.c.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/node-v22.22.0-libuv-v1.51.0/libuv-unix-stream.c.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/node-v22.22.0-libuv-v1.51.0/libuv-unix-tcp.c.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/node-v22.22.0-libuv-v1.51.0/node-LICENSE.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/node-v22.22.0-libuv-v1.51.0/node-env.cc.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/node-v22.22.0-libuv-v1.51.0/node-http-parser.cc.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/node-v22.22.0-libuv-v1.51.0/node-lib-http-common.js.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/node-v22.22.0-libuv-v1.51.0/node-lib-http-server.js.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/node-v22.22.0-libuv-v1.51.0/node-lib-internal-streams-readable.js.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/node-v22.22.0-libuv-v1.51.0/node-lib-internal-streams-writable.js.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/node-v22.22.0-libuv-v1.51.0/node-lib-net.js.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/node-v22.22.0-libuv-v1.51.0/node-src-connection-wrap.cc.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/node-v22.22.0-libuv-v1.51.0/node-src-connection-wrap.h.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/node-v22.22.0-libuv-v1.51.0/node-src-handle-wrap.cc.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/node-v22.22.0-libuv-v1.51.0/node-src-tcp-wrap.cc.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/node-v22.22.0-libuv-v1.51.0/node-stream-base.cc.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/node-v22.22.0-libuv-v1.51.0/node-stream-wrap.cc.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/packet-sha256.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/production-capture-sha256.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/production-image-inspect.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/production-image-inventory.mjs",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/production-image-manifest.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/production-image-pull.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/production-release-source-0d66b0cb67e7778500e33e65dcd9155163070458/Dockerfile",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/production-release-source-0d66b0cb67e7778500e33e65dcd9155163070458/SHA256SUMS",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/production-release-source-0d66b0cb67e7778500e33e65dcd9155163070458/package-lock.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/production-release-source-0d66b0cb67e7778500e33e65dcd9155163070458/package.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/production-release-source-0d66b0cb67e7778500e33e65dcd9155163070458/release.yml",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/production-runtime-inventory.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/refresh-packet-manifest.sh",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/run-adrop-runtime-probe.sh",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/run-approved-ledger.sh",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/run-ws-fragment-root-probe.sh",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/ws-fragment-root-probe.cjs",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/ws-fragment-root-probe.json"
+      ]
+    },
+    "coordinator-fixtures-wip": {
+      "status": "UNCHANGED_ALREADY_PUSHED",
+      "sha": "01b32220853dc266e61e0a79e0acf95889b3b863"
+    }
+  },
+  "callerStatesVerified": true,
+  "preservationOnly": true,
+  "remoteRefs": {
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T211359Z/activation-startup-wip": "10b485de2599f9d528a2dc27d2048a39755583e8",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T211359Z/cdc-wip": "3af73b1f1ae473c2bf04aaebea6cce4bbc1f140b",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T211359Z/freshmg-wip": "f4b0b9136b52d366c954ae453fbd2daa1229b489",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T211359Z/startup-wip": "86af2cab8b361f777ae7ec1f96793f996043de59",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T211359Z/tx1-owner-wip": "959634fd19f2feff4bd94382491013f3836d5410",
+    "refs/heads/main": "878eb8ac059dab71deae5feb0fa88e0c5c610c93"
+  },
+  "verified": true,
+  "mainUnchanged": true,
+  "callerStatesVerifiedAfterPush": true
+}

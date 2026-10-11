@@ -1,0 +1,31 @@
+{
+  "snapshot": {
+    "worktree": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011",
+    "worktreeHead": "c6d71665e98be03de916705f272a9d6340e4a842",
+    "base": "c6d71665e98be03de916705f272a9d6340e4a842",
+    "snapshot": "d1ea7302fcf51b2c4be21b8d47db6295bef3d555",
+    "tree": "16798fc8c36dca54a1d06f8ba8f599c39e4ff4ca"
+  },
+  "counts": {
+    "source-manifest.sha256": 40,
+    "evidence-manifest.sha256": 45
+  },
+  "changedSinceRound3": [
+    "src/query/distributed/distributed-transaction-creation-resources.js",
+    "src/query/distributed/distributed-transaction-creation.js",
+    "src/query/distributed/distributed-transaction-recovery.js",
+    "src/query/sql-query-engine-transaction-persistence-methods.js",
+    "test/query/transaction-begin-source-adversarial.test.js",
+    "test/query/transaction-begin-uncertain-handoff.test.js"
+  ],
+  "callerStateUnchanged": {
+    "head": "c6d71665e98be03de916705f272a9d6340e4a842",
+    "indexSha256": "ca384aaa12984178960158d793b549a2ef63b75f6d5452f7d21c7487d7e5c25c",
+    "statusSha256": "e8c898508bd02d9352b7ca3273cdb764e0d27b0c870ac703418779f2f21a931b"
+  },
+  "packetHashes": {
+    "source-manifest.sha256": "0ebfe26ac040a33e3d4c6766d579adfb77b86a9735561b120b1533209facf808",
+    "freeze-summary.json": "6f98426f839074ae70e1d2d5c10d6728a6ed50385d13693b0d414b5cfde2e83b",
+    "evidence-manifest.sha256": "2fb5549b89eb5c541e85cc6ef4018af64b746cb1f54815276b931646882c82f9"
+  }
+}

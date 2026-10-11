@@ -30,12 +30,24 @@ import {
   pickTypedWriteAnswer,
 } from './partition-write-kernel.js';
 import {runCommittedPartitionStatement} from './partition-statement-admission.js';
-import {advancePartitionWriteGeneration, isPartitionReserved} from
+import {advancePartitionWriteGeneration, isPartitionReserved, readPartitionWriteOrigin} from
   './partition-participant-transaction-store.js';
+import {assertTransactionSchemaWriteEnforced, coordinatorTableSchemaRefusal} from
+  '../query/distributed/distributed-transaction-schema-enforcement.js';
 import {applyCommittedTransactionCommand, settleReservedCommittedStatement} from
   './partition-participant-transaction-apply.js';
+import {requestCoordinatorSettlement, applyCoordinatorSettlement} from
+  './partition-coordinator-settlement.js';
+import {COORDINATOR_SETTLEMENT_TYPE} from './partition-coordinator-settlement-constants.js';
+import {ensureSqlTransactionsDecisionColumns} from
+  './partition-coordinator-table-columns.js';
 import {answerParticipantSessionQuery, routeParticipantTransactionRequest} from
   './partition-participant-transaction-request.js';
+import {
+  applyCdcAcknowledgementCommand,
+  isCdcCommandType,
+  recordCommittedStatementCdc,
+} from './partition-cdc-obligation.js';
 import {QUERY_RESULT_REQUEST_FIELD} from '../query/query-result-budget.js';
 import {findParticipantSession} from './partition-participant-transaction-session.js';
 const READ_AUTHORITY_WITNESS_STATE = Object.freeze({
@@ -244,6 +256,9 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         {tableName: this.tableName, partitionId: this.partitionId},
       );
     }
+    // The coordinator's insert-once decision record (TX1 seam C): the
+    // participant vocabulary names the columns and their DDL.
+    ensureSqlTransactionsDecisionColumns(this);
   }
   /**
    * Handle incoming transport message.
@@ -315,7 +330,8 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
     if (!servingRequest || this.removalServingAdmissionFenced !== true) {
       return {allowed: true, servingRequest};
     }
-    if (payload.type === PARTITION_SERVICE_MESSAGE_TYPE.TRANSACTION) {
+    if (payload.type === PARTITION_SERVICE_MESSAGE_TYPE.TRANSACTION ||
+        payload.type === COORDINATOR_SETTLEMENT_TYPE) {
       return {allowed: true, servingRequest};
     }
     const sessionId =
@@ -339,6 +355,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
     case PARTITION_SERVICE_MESSAGE_TYPE.SYSTEM_TABLE_WRITE:
     case PARTITION_SERVICE_MESSAGE_TYPE.QUERY:
     case PARTITION_SERVICE_MESSAGE_TYPE.TRANSACTION:
+    case COORDINATOR_SETTLEMENT_TYPE:
       return true;
     default:
       return false;
@@ -369,6 +386,8 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       return this.handleRemoteQuery(payload);
     case PARTITION_SERVICE_MESSAGE_TYPE.TRANSACTION:
       return this.handleTransactionMessage(payload);
+    case COORDINATOR_SETTLEMENT_TYPE:
+      return requestCoordinatorSettlement(this, payload);
     case PARTITION_SERVICE_MESSAGE_TYPE.START_SPLIT_REPLICATION:
       return this.handleStartSplitReplication(payload);
     case PARTITION_SERVICE_MESSAGE_TYPE.START_MERGE_REPLICATION:
@@ -823,6 +842,10 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
     if (!sql) {
       throw new Error(PARTITION_SERVICE_ERROR_MSG.MIGRATION_ALTER_MISSING_SQL);
     }
+    const protectedSchema = coordinatorTableSchemaRefusal(this.tableName);
+    if (protectedSchema !== null) {
+      return {...protectedSchema, partitionId: this.partitionId};
+    }
     this.registerMigrationDefaultFromAlterSql(sql);
     return this.proposeWrite({
       type: PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE,
@@ -1015,8 +1038,15 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       partitionId: this.partitionId,
       commandType,
     });
+    if (commandType === COORDINATOR_SETTLEMENT_TYPE) {
+      return applyCoordinatorSettlement(this, {command, index, term,
+        afterCommit: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, effect),
+        afterRollback: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, effect)});
+    }
     if (isCommittedSqlCommandType(commandType)) {
       if (command.sql) {
+        assertTransactionSchemaWriteEnforced(this.db, this.tableName,
+          readPartitionWriteOrigin(this.db) !== null);
         const entryKey = this.getCommittedEntryKey(command);
         const identity = this.buildCommittedWriteIdentity(command, index, term);
         const afterCommit = (effect) =>
@@ -1051,6 +1081,8 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
           term,
           result: info,
         });
+        recordCommittedStatementCdc(this, {command, index, term, afterCommit},
+          {entryKey, result: info});
         advancePartitionWriteGeneration(this.db);
         if (command.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE) {
           afterCommit(() => this.registerMigrationDefaultFromAlterSql(command.sql));
@@ -1062,24 +1094,13 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
             lastInsertRowid: info.lastInsertRowid,
             ...identity,
           });
-          if (this.isLeader) {
-            this.trackPendingCDCEvent(
-              this.generateCDCEvent({
-                ...command,
-                changes: info.changes,
-              }).catch((err) => {
-                if (this.isShutdown) {
-                  return;
-                }
-                this.logger.error(
-                  PARTITION_SERVICE_ERROR_MSG.CDC_EVENT_FAILED,
-                  {partitionId: this.partitionId, error: err.message},
-                );
-              }),
-            );
-          }
         });
       }
+    } else if (isCdcCommandType(commandType)) {
+      // The CDC delivery owner's committed acknowledgement: its owner.
+      return applyCdcAcknowledgementCommand(this, {command, index, term,
+        afterCommit: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, effect),
+        afterRollback: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, effect)});
     } else {
       // A transaction command (participant, or a legacy marker): its owner.
       return applyCommittedTransactionCommand(this, {command, index, term,

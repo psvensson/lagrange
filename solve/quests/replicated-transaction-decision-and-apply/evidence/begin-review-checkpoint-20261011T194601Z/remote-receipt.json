@@ -1,0 +1,23 @@
+{
+  "utc": "2026-10-11T19:46:07.807840+00:00",
+  "verified": true,
+  "remoteRefs": {
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T194601Z/proof-begin-round3": "96f0bdc34bd4702e4e365ff329c77aa997648ff0",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T194601Z/tx1-owner-evidence-wip": "a331b3a48030201b89077b4674786dba7569111f",
+    "refs/heads/main": "878eb8ac059dab71deae5feb0fa88e0c5c610c93"
+  },
+  "mainUnchanged": true,
+  "callerBefore": {
+    "head": "e7c89f4b5114c0238312d3831b65889a4622f4e9",
+    "branch": "refs/heads/tx1/work-20261010",
+    "indexSha256": "775ee49801a0c92172acb5193f4bc0f20a1e130ff472696e391d53e944109e67",
+    "statusSha256": "3ff9e8181bdc694779d5d0566f62e8677791084f22a0c1968880e6e8cd65c170"
+  },
+  "callerAfter": {
+    "head": "e7c89f4b5114c0238312d3831b65889a4622f4e9",
+    "branch": "refs/heads/tx1/work-20261010",
+    "indexSha256": "775ee49801a0c92172acb5193f4bc0f20a1e130ff472696e391d53e944109e67",
+    "statusSha256": "3ff9e8181bdc694779d5d0566f62e8677791084f22a0c1968880e6e8cd65c170"
+  },
+  "scope": "Frozen BEGIN round3 source and retained owner evidence; WIP preservation only, pending independent source verdict. Other active worktrees remain covered by 192628Z plus subsequent working changes."
+}

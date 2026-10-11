@@ -282,9 +282,11 @@ function updateParticipantTransactionDecided(db, decided) {
  */
 function participantOutcomeOf(row, volatileState = STATE.ABSENT) {
   if (row === null) {
-    return {state: volatileState, outcome: PARTICIPANT_COMMIT_OUTCOME.UNKNOWN};
+    return {durable: false, state: volatileState,
+      outcome: PARTICIPANT_COMMIT_OUTCOME.UNKNOWN};
   }
   return {
+    durable: true,
     state: row.state,
     outcome: OUTCOME_OF_STATE[row.state] ?? PARTICIPANT_COMMIT_OUTCOME.UNKNOWN,
     preparedDigest: row.preparedDigest,

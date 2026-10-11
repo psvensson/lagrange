@@ -1,0 +1,20 @@
+from pathlib import Path
+import json, sys
+p=Path(__file__).resolve().parent
+log=(p/'round5-readback-descriptor-probe.log').read_text()
+x=json.loads(log.split('ROUND5_COPY_CENSUS ')[-1])
+(p/'round5-readback-descriptor-probe.json').write_text(json.dumps(x,indent=2)+'\n')
+projection=next(v['observation']['projection'] for v in x['pauses'] if v['functionName']=='insertDistributedTransactionRowOnce')
+v=next(v for v in x['pauses'] if v['functionName']=='copyStrictOwnDataRecord')
+o=v['observation']
+base=sum(q['bytes'] if isinstance(q,dict) else q for q in v['base'].values())+projection['bytes']
+before=base+o['input']['bytes']+o['partialCopyBeforeAssignment']['bytes']+o['descriptor']['bytes']
+result={'baseRootBytes':base,'rawAuthorityRowBytes':o['input']['bytes'],'partialCapturedRowBeforeAssignmentBytes':o['partialCopyBeforeAssignment']['bytes'],'ownDescriptorBytes':o['descriptor']['bytes'],'capturedSessionFieldAddedAtSourceLine85Bytes':o['valueBytes'],'beforeAssignmentLowerBound':before,'afterAssignmentCanonicalLowerBound':before+o['valueBytes'],'recordEnvelopeCharge':v['diagnostics']['recordBytes'],'shortfall':before+o['valueBytes']-v['diagnostics']['recordBytes'],'exclusions':['built gateway row','operation and attachment envelope','other callback/index/mutation options roots','null fields','object headers and VM heap overhead'],'sourceTrace':['distributed-transaction-coordinator.js:198-217','sql-query-engine-transaction-persistence-methods.js:276-311','strict-own-data.js:78-85'],'observedFacts':'inspector records own descriptor and raw/partial copied rows immediately before line85; addition is the exact next property assignment, not a heap sample'}
+(p/'round5-resource-census-result.json').write_text(json.dumps(result,indent=2)+'\n')
+assert o['key']=='session_id' and o['allDistinct'] and o['copyHasKey'] is False
+assert x['writes']==1 and x['reads']==1 and x['first']['success'] is True
+print('PASS real SQLQueryEngine initial INSERT/readback and successful result control')
+print('PASS distinct raw row, captured row and own session descriptor observed before actual copy assignment')
+ok=result['recordEnvelopeCharge']>=result['afterAssignmentCanonicalLowerBound']
+print(('PASS' if ok else 'FAIL')+' B5-1 declared role-neutral record envelope covers strict own-data capture scratch: charge='+str(result['recordEnvelopeCharge'])+' lower_bound='+str(result['afterAssignmentCanonicalLowerBound'])+' shortfall='+str(result['shortfall']))
+sys.exit(0 if ok else 1)
