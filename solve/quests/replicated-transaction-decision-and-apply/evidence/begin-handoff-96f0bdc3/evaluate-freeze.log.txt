@@ -1,0 +1,23 @@
+PASS [prior] malformed row retains debt
+PASS [prior] array accessor never executes
+PASS [prior] original expiry refuses ACTIVE
+PASS [prior] rotation reaches seventeenth after owned backoff
+PASS [prior] post-tag failure closes with only CommandComplete
+PASS [prior] configuration getter refused
+PASS [prior] direct shutdown refuses success and releases exact resources
+PASS [prior] close leaves server-only debt and no Ready
+PASS [B2-1] advanced transient readback rereads after availability
+PASS [B2-2] advanced handoff retains exact live disposition
+PASS [B2-3] long identity pressure precedes delivery
+PASS [B2-3] UTF8 charge covers raw, normalized, row, buffer, consumer aliases
+PASS [B2-4] exact admitted capacity supports same-id reentry
+PASS [B2-5] injected spent control turn cannot publish or accept
+PASS [B2-5] real-clock spent control turn cannot accept
+PASS [B2-6] shutdown fences census and late insert
+PASS [B2-7] typed uncertainty enters one folded backoff
+PASS [B2-7] selected expired cohort stays bounded
+PASS [B2-8] SQLQueryEngine refuses accessor options without calling them
+PASS [B2-1] expired claimed success reenters recovery
+PASS [B2-2/SR4] retry-first preserves exact record and COMMIT-only then consumes terminal disposition
+PASS [B2-2/SR4] sweep-first preserves exact record and COMMIT-only then consumes terminal disposition
+22/22 assertions passed

@@ -1,0 +1,8 @@
+{
+  "refs/heads/checkpoint/rs-raft-preservation-20261011T211359Z/activation-startup-wip": "10b485de2599f9d528a2dc27d2048a39755583e8",
+  "refs/heads/checkpoint/rs-raft-preservation-20261011T211359Z/cdc-wip": "3af73b1f1ae473c2bf04aaebea6cce4bbc1f140b",
+  "refs/heads/checkpoint/rs-raft-preservation-20261011T211359Z/freshmg-wip": "f4b0b9136b52d366c954ae453fbd2daa1229b489",
+  "refs/heads/checkpoint/rs-raft-preservation-20261011T211359Z/startup-wip": "86af2cab8b361f777ae7ec1f96793f996043de59",
+  "refs/heads/checkpoint/rs-raft-preservation-20261011T211359Z/tx1-owner-wip": "959634fd19f2feff4bd94382491013f3836d5410",
+  "refs/heads/main": "878eb8ac059dab71deae5feb0fa88e0c5c610c93"
+}

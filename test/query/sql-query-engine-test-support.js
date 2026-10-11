@@ -7,6 +7,8 @@
  */
 
 import {COLUMN} from '../../src/constants/index.js';
+import {answerParticipantTransactionRequest} from
+  '../test-helpers/participant-protocol-double.js';
 
 // Mock partition data for routing
 export const mockPartitionData = new Map();
@@ -27,6 +29,11 @@ export function createMockMessageRouter() {
           rows: data,
           changes: 0,
         };
+      }
+      // A participant answers the transaction protocol (TX1 design 2.2): a
+      // PREPARE names its state and digest, a COMMIT its outcome.
+      if (message.type === 'TRANSACTION') {
+        return answerParticipantTransactionRequest(message);
       }
       return {acknowledged: true, success: true};
     },

@@ -1,0 +1,207 @@
+Executing SQL query { sql: 'BEGIN', paramCount: 0, sessionId: 'known-advanced-applied' }
+BEGIN TRANSACTION { sessionId: 'known-advanced-applied' }
+Reconcile queue shutdown { queue: 'runtime-replica-state-projection-owner' }
+RESULTS_START
+{
+  "root": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011",
+  "results": [
+    {
+      "name": "known-advanced-disconnect-then-insert-applied-replay",
+      "first": {
+        "success": false,
+        "error": "Transaction recovery state is incomplete or incompatible",
+        "errorCode": "TRANSACTION_RECOVERY_INCOMPLETE",
+        "transactionId": "9d8ce05b82e02f07850c2dbcfac753f6",
+        "deferRetry": true,
+        "statementType": "BEGIN_TRANSACTION"
+      },
+      "before": {
+        "state": "RECOVERY_PENDING",
+        "status": "ACTIVE",
+        "diagnostics": {
+          "attachmentCount": 0,
+          "operationCount": 0,
+          "recordBytes": 1195,
+          "recordCount": 1,
+          "roles": {
+            "RECOVERY_PENDING": 1
+          },
+          "totalBytes": 1195
+        },
+        "durable": {
+          "transaction_id": "9d8ce05b82e02f07850c2dbcfac753f6",
+          "session_id": "known-advanced-applied",
+          "status": "COMMITTING",
+          "transaction_epoch": 1791749931042,
+          "timeout_deadline": 1791749991044,
+          "transaction_mode": "EXPLICIT",
+          "participant_set_state": "FROZEN",
+          "participant_set_text": "[[\"9d8ce05b82e02f07850c2dbcfac753f6:p-known\",\"p-known\"]]",
+          "commit_mode": "TWO_PHASE_COMMIT",
+          "frozen_participant_count": 1,
+          "updated_at": 1791749931045,
+          "decision": "COMMIT",
+          "decision_text": "{\"transactionId\":\"9d8ce05b82e02f07850c2dbcfac753f6\",\"decision\":\"COMMIT\",\"participants\":[[\"9d8ce05b82e02f07850c2dbcfac753f6:p-known\",\"digest-known\"]]}",
+          "decision_digest": "ff4a089865905b9d8e23e4edcdb503b0b1869ea35bd9b4f2f3c3b3ec1fec9fcb",
+          "created_at": 1791749931045
+        },
+        "reads": 2,
+        "writes": 1
+      },
+      "afterRetire": {
+        "state": "SERVER_RECOVERY_ONLY",
+        "advancedObserved": true,
+        "consumerRetained": false,
+        "diagnostics": {
+          "attachmentCount": 0,
+          "operationCount": 0,
+          "recordBytes": 1195,
+          "recordCount": 1,
+          "roles": {
+            "SERVER_RECOVERY_ONLY": 1
+          },
+          "totalBytes": 1195
+        }
+      },
+      "retry": {
+        "swept": 1,
+        "resolved": 0,
+        "failed": 0,
+        "deferred": 1,
+        "deferredUntilMs": 1791749932048,
+        "skipped": false,
+        "results": [
+          {
+            "transactionId": "9d8ce05b82e02f07850c2dbcfac753f6",
+            "sessionId": "known-advanced-applied",
+            "sweepPath": "BEGIN_TRANSACTION",
+            "statusAfter": "ACTIVE",
+            "success": false,
+            "deferred": true,
+            "error": "Transaction recovery state is incomplete or incompatible"
+          }
+        ]
+      },
+      "accepted": false,
+      "after": {
+        "state": "ENTERED_ACTIVE",
+        "advancedObserved": null,
+        "advancedHandoff": false,
+        "recoveryDiscovered": true,
+        "status": "ACTIVE",
+        "active": {
+          "sessionId": "known-advanced-applied",
+          "transactionId": "9d8ce05b82e02f07850c2dbcfac753f6",
+          "status": "ACTIVE",
+          "transactionEpoch": 1791749931042,
+          "timeoutDeadline": 1791749991044,
+          "transactionMode": "EXPLICIT",
+          "participantSetState": "OPEN",
+          "commitMode": "NOT_SELECTED",
+          "frozenParticipantCount": 0,
+          "participantSetFrozenAt": 0,
+          "decisionTrace": [],
+          "participants": [],
+          "participantDetails": [],
+          "writeOperations": [],
+          "createdAt": 1791749931045,
+          "updatedAt": 1791749931045
+        },
+        "diagnostics": {
+          "attachmentCount": 0,
+          "operationCount": 0,
+          "recordBytes": 0,
+          "recordCount": 0,
+          "roles": {},
+          "sweep": {
+            "deferredAttempts": 1,
+            "deferredUntilMs": 1791749932048,
+            "oldestDeadlineAtMs": null,
+            "reservedBytes": 0,
+            "retainedCount": 0,
+            "selectedCount": 1,
+            "stopReason": "deferred"
+          },
+          "totalBytes": 0
+        },
+        "durable": {
+          "transaction_id": "9d8ce05b82e02f07850c2dbcfac753f6",
+          "session_id": "known-advanced-applied",
+          "status": "COMMITTING",
+          "transaction_epoch": 1791749931042,
+          "timeout_deadline": 1791749991044,
+          "transaction_mode": "EXPLICIT",
+          "participant_set_state": "FROZEN",
+          "participant_set_text": "[[\"9d8ce05b82e02f07850c2dbcfac753f6:p-known\",\"p-known\"]]",
+          "commit_mode": "TWO_PHASE_COMMIT",
+          "frozen_participant_count": 1,
+          "updated_at": 1791749931045,
+          "decision": "COMMIT",
+          "decision_text": "{\"transactionId\":\"9d8ce05b82e02f07850c2dbcfac753f6\",\"decision\":\"COMMIT\",\"participants\":[[\"9d8ce05b82e02f07850c2dbcfac753f6:p-known\",\"digest-known\"]]}",
+          "decision_digest": "ff4a089865905b9d8e23e4edcdb503b0b1869ea35bd9b4f2f3c3b3ec1fec9fcb",
+          "created_at": 1791749931045
+        },
+        "reads": 2,
+        "writes": 2
+      },
+      "writeTrace": [
+        {
+          "mutation": {
+            "operation": "insert",
+            "tableName": "sql_transactions",
+            "row": {
+              "transaction_id": "9d8ce05b82e02f07850c2dbcfac753f6",
+              "session_id": "known-advanced-applied",
+              "status": "ACTIVE",
+              "transaction_epoch": 1791749931042,
+              "timeout_deadline": 1791749991044,
+              "transaction_mode": "EXPLICIT",
+              "participant_set_state": "OPEN",
+              "participant_set_text": "[]",
+              "commit_mode": "NOT_SELECTED",
+              "frozen_participant_count": 0,
+              "updated_at": 1791749931045,
+              "decision": null,
+              "decision_text": null,
+              "decision_digest": null,
+              "created_at": 1791749931045
+            }
+          },
+          "idempotencyKey": "969600f60a1e5aa9c70c79ddc74652509b395c6cc3b0981fa16b3eabad2fddb6",
+          "answer": {
+            "success": false,
+            "error": "Message timeout"
+          }
+        },
+        {
+          "mutation": {
+            "operation": "insert",
+            "tableName": "sql_transactions",
+            "row": {
+              "transaction_id": "9d8ce05b82e02f07850c2dbcfac753f6",
+              "session_id": "known-advanced-applied",
+              "status": "ACTIVE",
+              "transaction_epoch": 1791749931042,
+              "timeout_deadline": 1791749991044,
+              "transaction_mode": "EXPLICIT",
+              "participant_set_state": "OPEN",
+              "participant_set_text": "[]",
+              "commit_mode": "NOT_SELECTED",
+              "frozen_participant_count": 0,
+              "updated_at": 1791749931045,
+              "decision": null,
+              "decision_text": null,
+              "decision_digest": null,
+              "created_at": 1791749931045
+            }
+          },
+          "idempotencyKey": "969600f60a1e5aa9c70c79ddc74652509b395c6cc3b0981fa16b3eabad2fddb6",
+          "answer": {
+            "success": true,
+            "completionState": "applied"
+          }
+        }
+      ]
+    }
+  ]
+}

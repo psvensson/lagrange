@@ -1,0 +1,8 @@
+{
+  "utc": "2026-10-11T21:21:46.119248+00:00",
+  "subjectSha256": "0d725dc43b55eaaa4af10fe1b3eae809f96bbfabfeebef0d25e053be5cf06399",
+  "prefixSha256": "0c44f474493dc001385fe623eb7fb8eeed4d445fb84f075fa498887f2da2a130",
+  "deltaSha256": "1c6be8ac0b10f6ef229dcea92d08516fc512c2907ca9343d5ee57a79cad6bd60",
+  "nativeEvidenceSha256": "229cc51ac92c86f9563d52d35cd7b921f04512c64dc434c57d9d74f6b19251dc",
+  "scope": "D21 design-only scoped supersession; source and profile policy held for review"
+}

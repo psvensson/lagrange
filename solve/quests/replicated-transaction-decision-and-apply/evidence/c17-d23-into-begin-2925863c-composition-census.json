@@ -1,0 +1,207 @@
+{
+  "base": "e7c89f4b5114c0238312d3831b65889a4622f4e9",
+  "target": "2925863c3e72a17854413fa2c850ce4ff76f6aff",
+  "source": "d23a0746bf5ee6c9b659d43abe27630d86d38397",
+  "scope": "Read-only composition census; no source approval or application",
+  "paths": [
+    {
+      "path": "src/bootstrap/node-joining-ready-signal-readiness.js",
+      "classification": "already-identical"
+    },
+    {
+      "path": "src/cache/system-table-cache-cdc-cover.js",
+      "classification": "source-only-delta"
+    },
+    {
+      "path": "src/cache/system-table-cache-cdc-source-order.js",
+      "classification": "source-only-delta"
+    },
+    {
+      "path": "src/cache/system-table-cache.js",
+      "classification": "source-only-delta"
+    },
+    {
+      "path": "src/cdc/cdc-complete-coverage-reconcile.js",
+      "classification": "source-only-delta"
+    },
+    {
+      "path": "src/cdc/cdc-coverage-domain.js",
+      "classification": "source-only-delta"
+    },
+    {
+      "path": "src/cdc/cdc-coverage-fragment-consumer.js",
+      "classification": "source-only-delta"
+    },
+    {
+      "path": "src/cdc/cdc-coverage-lifecycle-owner.js",
+      "classification": "source-only-delta"
+    },
+    {
+      "path": "src/cdc/cdc-coverage-protocol.js",
+      "classification": "source-only-delta"
+    },
+    {
+      "path": "src/cdc/cdc-coverage-reconcile-owner.js",
+      "classification": "source-only-delta"
+    },
+    {
+      "path": "src/cdc/cdc-coverage-transfer-owner.js",
+      "classification": "source-only-delta"
+    },
+    {
+      "path": "src/cdc/cdc-integration-service-authoritative-catchup.js",
+      "classification": "source-only-delta"
+    },
+    {
+      "path": "src/cdc/cdc-integration-service-authoritative-read-flow.js",
+      "classification": "source-only-delta"
+    },
+    {
+      "path": "src/cdc/cdc-integration-service-cdc-event-delegates.js",
+      "classification": "source-only-delta"
+    },
+    {
+      "path": "src/cdc/cdc-integration-service-lifecycle.js",
+      "classification": "source-only-delta"
+    },
+    {
+      "path": "src/cdc/cdc-integration-service-local-system-table-routing.js",
+      "classification": "already-identical"
+    },
+    {
+      "path": "src/cdc/cdc-integration-service-mutation-operations.js",
+      "classification": "source-only-delta"
+    },
+    {
+      "path": "src/cdc/cdc-integration-service-owner-rpc-read-execution.js",
+      "classification": "already-identical"
+    },
+    {
+      "path": "src/cdc/cdc-integration-service.js",
+      "classification": "source-only-delta"
+    },
+    {
+      "path": "src/cdc/cdc-source-scope-evidence.js",
+      "classification": "independent-add-conflict"
+    },
+    {
+      "path": "src/cdc/cdc-source-scope-reconciliation.js",
+      "classification": "source-only-delta"
+    },
+    {
+      "path": "src/constants/cdc-lifecycle-constants.js",
+      "classification": "already-identical"
+    },
+    {
+      "path": "src/control-plane/control-plane-system-table-gateway.js",
+      "classification": "already-identical"
+    },
+    {
+      "path": "src/control-plane/membership-publication-coordinator-reconcile.js",
+      "classification": "already-identical"
+    },
+    {
+      "path": "src/partition/partition-cdc-coverage-transfer.js",
+      "classification": "source-only-delta"
+    },
+    {
+      "path": "src/partition/partition-cdc-source-coverage.js",
+      "classification": "source-only-delta"
+    },
+    {
+      "path": "src/partition/partition-service-assembly.js",
+      "classification": "source-only-delta"
+    },
+    {
+      "path": "src/partition/partition-service-cdc-coverage-methods.js",
+      "classification": "source-only-delta"
+    },
+    {
+      "path": "src/partition/partition-service-core-base.js",
+      "classification": "source-only-delta"
+    },
+    {
+      "path": "src/partition/partition-service-entry-apply-base.js",
+      "classification": "overlap-clean-text-merge"
+    },
+    {
+      "path": "src/partition/partition-service-lifecycle-methods.js",
+      "classification": "source-only-delta"
+    },
+    {
+      "path": "src/partition/partition-service.js",
+      "classification": "already-identical"
+    },
+    {
+      "path": "src/query/query-executor-partition-request-builders.js",
+      "classification": "overlap-conflict"
+    },
+    {
+      "path": "src/query/query-executor.js",
+      "classification": "already-identical"
+    },
+    {
+      "path": "src/transport/message-router.js",
+      "classification": "already-identical"
+    },
+    {
+      "path": "test/cache/system-table-cache-cdc-source-order.test.js",
+      "classification": "source-only-delta"
+    },
+    {
+      "path": "test/cdc/cdc-authoritative-catchup-hydration.test.js",
+      "classification": "source-only-delta"
+    },
+    {
+      "path": "test/cdc/cdc-authoritative-catchup-terminal.test.js",
+      "classification": "source-only-delta"
+    },
+    {
+      "path": "test/cdc/cdc-authoritative-coverage-reconciliation.test.js",
+      "classification": "source-only-delta"
+    },
+    {
+      "path": "test/cdc/cdc-coverage-lifecycle-owner.test.js",
+      "classification": "source-only-delta"
+    },
+    {
+      "path": "test/cdc/cdc-coverage-reconcile-owner.test.js",
+      "classification": "source-only-delta"
+    },
+    {
+      "path": "test/integration/cdc-coverage-rejoin-formation.integration.test.js",
+      "classification": "source-only-delta"
+    },
+    {
+      "path": "test/partition/partition-cdc-source-coverage.test.js",
+      "classification": "source-only-delta"
+    },
+    {
+      "path": "test/shards/impact-contracts.json",
+      "classification": "overlap-conflict"
+    },
+    {
+      "path": "test/shards/impact-graph-seal.json",
+      "classification": "overlap-conflict"
+    },
+    {
+      "path": "test/shards/primary-classes.json",
+      "classification": "overlap-conflict"
+    },
+    {
+      "path": "test/shards/resource-classes.json",
+      "classification": "overlap-conflict"
+    },
+    {
+      "path": "test/shards/subsystem-classes.json",
+      "classification": "overlap-conflict"
+    }
+  ],
+  "counts": {
+    "already-identical": 9,
+    "independent-add-conflict": 1,
+    "overlap-clean-text-merge": 1,
+    "overlap-conflict": 6,
+    "source-only-delta": 31
+  }
+}

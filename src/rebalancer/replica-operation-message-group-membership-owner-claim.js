@@ -32,14 +32,20 @@ function sourceClaimMatches(encoded, identity) {
     return false;
   }
 }
-function membershipRowIdentityMatches(row, identity, encodedIdentity,
-  laneKey = identity.membershipLaneKey) {
+function membershipRowOperationMatches(row, identity) {
   return row?.operationId === identity.operationId && row.type === OperationType.REPLACE &&
     row.partitionId === identity.groupId && row.entityId === identity.groupId &&
-    row.entityType === SERVICE_TYPE.MESSAGE_GROUP &&
-    row.sourceReplicaId === identity.sourceReplicaId &&
-    row.replicaId === identity.targetReplicaId &&
-    row.sourceNodeId === identity.sourceNodeId && row.targetNodeId === identity.targetNodeId &&
+    row.entityType === SERVICE_TYPE.MESSAGE_GROUP;
+}
+function membershipRowPlacementMatches(row, identity) {
+  return row.sourceReplicaId === identity.sourceReplicaId &&
+    row.replicaId === identity.targetReplicaId && row.sourceNodeId === identity.sourceNodeId &&
+    row.targetNodeId === identity.targetNodeId;
+}
+function membershipRowIdentityMatches(row, identity, encodedIdentity,
+  laneKey = identity.membershipLaneKey) {
+  return membershipRowOperationMatches(row, identity) &&
+    membershipRowPlacementMatches(row, identity) &&
     row.messageGroupMembershipLaneKey === laneKey &&
     row.messageGroupMembershipIdentity === encodedIdentity &&
     sourceClaimMatches(row.messageGroupSourceLifecycleClaim, identity);
@@ -89,25 +95,26 @@ function initialClaimAllowed(repository, row) {
     row.messageGroupLearnerStamp === null && row.messageGroupVoterStamp === null &&
     row.messageGroupRemovalStamp === null;
 }
+function renewedClaimGeneration(repository, identity, expectedClaim, now, expiry) {
+  const old = decodeMembershipOwnerClaim(expectedClaim);
+  if (!old || old.operationId !== identity.operationId ||
+      old.transitionIdentity !== identity.transitionIdentity ||
+      (old.expiresAt > now && !membershipClaimIsLocalAndLive(repository, old, identity))) {
+    return null;
+  }
+  const generation = old.generation + 1;
+  return Number.isSafeInteger(generation) && expiry > old.expiresAt ? generation : null;
+}
 function claimCandidate(repository, row, identity, expectedClaim) {
   if (row.messageGroupMembershipOwnerClaim !== expectedClaim) return null;
   const now = repository.timeSource.now();
   const expiry = now + REPLICA_OPERATION_OWNER_LEASE_TTL_MS;
   if (!Number.isSafeInteger(now) || now < 0 || Object.is(now, -0) ||
     !Number.isSafeInteger(expiry) || expiry <= now) return null;
-  let generation = 1;
-  if (expectedClaim === null) {
-    if (!initialClaimAllowed(repository, row)) return null;
-  } else {
-    const old = decodeMembershipOwnerClaim(expectedClaim);
-    if (!old || old.operationId !== identity.operationId ||
-      old.transitionIdentity !== identity.transitionIdentity ||
-      (old.expiresAt > now && !membershipClaimIsLocalAndLive(repository, old, identity))) {
-      return null;
-    }
-    generation = old.generation + 1;
-    if (!Number.isSafeInteger(generation) || expiry <= old.expiresAt) return null;
-  }
+  const generation = expectedClaim === null ? 1 :
+    renewedClaimGeneration(repository, identity, expectedClaim, now, expiry);
+  if ((expectedClaim === null && !initialClaimAllowed(repository, row)) ||
+      generation === null) return null;
   return JSON.stringify({version: 1, operationId: identity.operationId,
     transitionIdentity: identity.transitionIdentity, ownerNodeId: repository.nodeId,
     ownerBootIncarnation: repository.membershipOwnerBootIncarnation,

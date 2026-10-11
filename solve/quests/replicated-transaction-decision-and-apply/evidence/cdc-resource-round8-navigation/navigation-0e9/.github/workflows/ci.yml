@@ -1,0 +1,258 @@
+# GitHub Actions CI - the required pull-request and main-branch gate, and
+# (on main only, never gating) the repository's structural analysis.
+#
+# The workflow supplies IDENTITY AND ENVIRONMENT; repository code decides what
+# must be proved. That is the whole design:
+#
+#   this workflow        which commits are in this change, and a machine to run on
+#   npm run check        what that change obliges us to prove
+#
+# There is deliberately no path classifier here. One used to live in a
+# `changes` job deciding whether the gate should run at all. It was a SECOND
+# AUTHORITY on what a change means, competing with the source taxonomy in
+# scripts/checks/change-selection-constants.js, and two authorities on one
+# question eventually disagree. The taxonomy is exhaustive and fails closed; a
+# YAML case statement cannot be either.
+#
+# Runner selection for pushes: GitHub-hosted by default; '[ci:self-hosted]' in
+# the head commit message routes that push to the maintainer's box. Pull
+# requests always run GitHub-hosted regardless of any marker, because fork code
+# on a public repo must never reach a self-hosted runner.
+#
+# The statistical rolling-restart convergence gate is deliberately not run
+# here: its pass rate is variance-bounded and is promoted only through the
+# sealed Wilson-95 rule documented in docs/convergence-donewhen-metric.md.
+name: ci
+run-name: "change-gate: ${{ github.event.head_commit.message || github.ref_name }}"
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+# Lane-scoped tap budget: the hosted 2-vCPU VM is ~3x slower than the dev
+# corpus was tuned on, and single tests near tap's 30s default cross it
+# there with green assertions (see the release.yml note). The 600s per-file
+# kill still bounds hangs.
+# A FLOOR, not a cap: the runner (run-test-files.js) lifts undeclared files
+# to it and keeps a file's own larger `{timeout}` declaration, so a 300s
+# integration test is never cut to 120s. An explicit TAP_TIMEOUT would win
+# outright and clobber declarations - that is exactly how
+# critical-replica-placement-causal-trace (300s declared, ~150s) died at
+# 120s on main 8fe278fe5.
+# One proof per ref in flight. A superseded pull-request push has nothing to
+# prove, so it is cancelled; a push to main is never cancelled, because its
+# run is the exact-sha proof the publisher and the red-main guard read.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  TAP_TIMEOUT_FLOOR: '120'
+  # Retry-failed-once (owner policy 2026-08-23): a failed file is rerun
+  # standalone once by run-test-files.js; a standalone pass is a reported,
+  # census-classified intermittent, a standalone fail stays red. Capped at
+  # 5 files so breakage never masquerades as flakes.
+  LAGRANGE_RETRY_FAILED_ONCE: '1'
+  # Hardware-relative work-bound budget scaling for SLO-style tests
+  # (doctrine: hardware-relative-convergence-budget). CI VMs are ~2-3x
+  # slower than the reference dev box for single-threaded election paths.
+  LAGRANGE_TEST_MACHINE_FACTOR: '3'
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: gate
+    # Expression rather than a preceding job: routing needs only the head
+    # commit message, which is already on the event, so a whole extra job and
+    # checkout would buy nothing. `github.event.head_commit` exists for push
+    # events only, which is exactly the restriction we want.
+    runs-on: ${{ (github.event_name == 'push' && contains(github.event.head_commit.message, '[ci:self-hosted]')) && 'self-hosted' || 'ubuntu-24.04' }}
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          # The PR HEAD, not the synthetic merge commit: the proof range is
+          # base.sha..head.sha, and diffing a merge commit would attribute
+          # base-branch commits to this change.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          # Full history: the proof range reaches back to the base SHA, and
+          # solver historical-artifact tests read older commits via git show,
+          # which a shallow clone cannot serve.
+          fetch-depth: 0
+
+      - name: Resolve the proof range
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+
+          # A pull request proves base..head, so every commit on the branch
+          # participates - not merely the tip. A push proves the range the
+          # remote did not have, which is `before`..HEAD.
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            base="$PR_BASE_SHA"
+          else
+            base="$PUSH_BEFORE_SHA"
+          fi
+
+          # A new branch reports the zero SHA, and a force-push or an expired
+          # object can leave `before` unreachable. Fall back to the single
+          # preceding commit and SAY SO, rather than resolving to an empty base
+          # that would quietly prove the working tree alone.
+          if [ -z "$base" ] || [[ "$base" =~ ^0+$ ]] ||
+            ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            echo "proof range: base '$base' unavailable, falling back to HEAD^"
+            base="$(git rev-parse HEAD^)"
+          fi
+
+          echo "proof range: $base..$(git rev-parse HEAD)"
+          echo "LAGRANGE_CHECK_BASE=$base" >> "$GITHUB_ENV"
+
+      - name: Set up Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install gate CLI tools
+        if: runner.environment == 'github-hosted'
+        # Bounds a HANG, not the normal duration. Measured on hosted runners:
+        # 115s, and 1252s on a run that succeeded, and once 62 minutes hung
+        # until cancelled by hand. The spread is wide, so this sits well above
+        # the slowest success and well below the 120-minute job backstop; the
+        # per-download --max-time values are the tighter bound.
+        timeout-minutes: 30
+        run: |
+          set -euo pipefail
+          sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::Retries=2 update
+          sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::Retries=2 install -y --no-install-recommends \
+            ripgrep jq default-jre-headless postgresql-client curl
+          HELM_VERSION=v3.16.3
+          HELM_ARCHIVE="helm-${HELM_VERSION}-linux-amd64.tar.gz"
+          cd "$RUNNER_TEMP"
+          curl -fsSLO --connect-timeout 20 --max-time 300 --retry 2 --retry-max-time 120 "https://get.helm.sh/${HELM_ARCHIVE}"
+          curl -fsSLO --connect-timeout 20 --max-time 300 --retry 2 --retry-max-time 120 "https://get.helm.sh/${HELM_ARCHIVE}.sha256sum"
+          sha256sum --check "${HELM_ARCHIVE}.sha256sum"
+          tar -xzf "$HELM_ARCHIVE"
+          sudo install linux-amd64/helm /usr/local/bin/helm
+          helm version --short
+          # Component tests spawn a bare `wasm-tools`; on the maintainer's box
+          # that is a cargo install, so a GitHub-hosted runner has no way to
+          # get it and the spawn fails ENOENT. Upstream publishes no checksum
+          # file for the release asset, so pin the digest inline and fail
+          # closed on drift, exactly as the MovieLens dataset step does.
+          WASM_TOOLS_VERSION=1.236.0
+          WASM_TOOLS_DIR="wasm-tools-${WASM_TOOLS_VERSION}-x86_64-linux"
+          WASM_TOOLS_ARCHIVE="${WASM_TOOLS_DIR}.tar.gz"
+          curl -fsSLO --connect-timeout 20 --max-time 300 --retry 2 --retry-max-time 120 "https://github.com/bytecodealliance/wasm-tools/releases/download/v${WASM_TOOLS_VERSION}/${WASM_TOOLS_ARCHIVE}"
+          echo "a4fe8101d98f4efeb4854fde05d7c6a36a9a61e8249d4c72afcda4a4944723fb  ${WASM_TOOLS_ARCHIVE}" | sha256sum --check
+          tar -xzf "$WASM_TOOLS_ARCHIVE"
+          sudo install "${WASM_TOOLS_DIR}/wasm-tools" /usr/local/bin/wasm-tools
+          wasm-tools --version
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The MovieLens evidence tests read the real 100k ratings file; data/ is
+      # gitignored, so fetch it and fail closed on any digest drift (the same
+      # sha256 the tests pin).
+      - name: Fetch MovieLens dataset (digest-pinned)
+        run: |
+          node examples/service-data-affinity/download-movielens.js
+          echo "06416e597f82b7342361e41163890c81036900f418ad91315590814211dca490  data/examples/movielens-100k/u.data" | sha256sum --check
+
+      # The change proof selects the import closure of changed test support
+      # code from the sealed import graph, a generated artefact a fresh
+      # checkout does not have; without it such a change refuses rather than
+      # guesses. Regenerate it (seconds) with the command the push gate runs.
+      # The command also rewrites the committed seal; a stale seal is a push
+      # that skipped the gate's inventory refresh, and it must fail HERE with
+      # its name rather than silently widen the proof (the seal would appear
+      # as a changed path).
+      - name: Prepare generated test metadata
+        run: |
+          npm run -s test:metadata:refresh
+          git diff --exit-code -- \
+            test/shards/primary-classes.json \
+            test/shards/resource-classes.json \
+            test/shards/subsystem-classes.json \
+            test/shards/impact-graph-seal.json || {
+            echo "::error::generated test metadata is stale; run 'npm run test:metadata:refresh' and commit all four derived artifacts"
+            exit 1
+          }
+
+      # The ordinary proof: fast static over the changed paths, then the
+      # safety spine plus whatever this change's subsystems oblige. It fails
+      # closed - an unclassifiable change refuses with MODULAR PROOF NOT SAFE
+      # and a reason code rather than proving a convenient subset.
+      - name: Ordinary proof
+        run: npm run check
+
+      # The proof writes test-output/proof-scope.json itself, saying which sha
+      # it proved and whether it ran the whole corpus; the canary reads it
+      # rather than inferring the scope from this job's log.
+      - name: Upload the proof scope
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: proof-scope
+          path: test-output/proof-scope.json
+          retention-days: 7
+          if-no-files-found: warn
+
+      # `npm run check` prints its failures directly, so there is no receipt to
+      # decode here. The artifacts still carry per-test detail that a bounded
+      # console log cannot.
+      - name: Upload proof failure evidence
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: proof-failure-evidence
+          path: |
+            test-output/
+            .tap/test-results/
+          retention-days: 14
+          if-no-files-found: warn
+
+      # Structural analysis, coalesced out of the former repository-health
+      # workflow (gate-work-consolidation), which ran the same checkers over
+      # the same sha on a second checkout and install. Its LANE survives as
+      # continue-on-error: red here is debt to pay down, red above is a change
+      # that must not land, and the red-main guard reads only this workflow's
+      # conclusion, which these steps never decide. Main pushes only. The
+      # inventory runs first: the analyses read its generated inputs; the last
+      # line holds the nightly workflow's token to one inert data file.
+      - name: Whole-repository structural analysis
+        if: github.event_name != 'pull_request'
+        # Its own bound, because continue-on-error absorbs a failing step but
+        # not a job timeout: analysis that overran would otherwise kill the
+        # required run and block every later push.
+        timeout-minutes: 45
+        continue-on-error: true
+        run: |
+          npm run test:owner-debt:prepare
+          npm run test:static
+          npm run model:contracts
+          node scripts/checks/formation-health.js --bot-commits
+
+      - name: Upload health evidence
+        if: always() && github.event_name != 'pull_request'
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: repository-health-evidence
+          path: |
+            test-output/analysis/
+            test-output/reports/
+          retention-days: 14
+          if-no-files-found: ignore

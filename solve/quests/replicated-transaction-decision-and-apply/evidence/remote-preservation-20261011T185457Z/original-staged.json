@@ -1,0 +1,13 @@
+{
+  "worktree": "/mnt/data/peter/projects/lagrange",
+  "worktreeHead": "0996d7576516af24f5f4d3e1e9aee37c775aabae",
+  "base": "0996d7576516af24f5f4d3e1e9aee37c775aabae",
+  "snapshot": "5cedab607db0cf249e52f17c2ed388864c84d5fa",
+  "tree": "94710f002878b682bd1766ac72ffae0a2f679a66",
+  "preservedCallerState": {
+    "head": "0996d7576516af24f5f4d3e1e9aee37c775aabae",
+    "branch": "refs/heads/integrate/rs-raft-2026-09-30",
+    "indexSha256": "3a3d1cb10179d14f124a5ba92b067eb6d36896541c19fb88e8a93a2255b9d7ad",
+    "status": "A  lagrange-handoff-20260930T162452Z.txt\nM  solve/changes/global-owner-debt-inventory/inventory.json\nM  src/diagnostics/formation-turn-attribution.js\nM  src/diagnostics/raft-formation-attribution.js\nM  src/node/replica-state-machine-serialization.js\nM  src/node/replica-transport-handler-identity.js\nM  src/raft/liferaft-timing-api.js\nM  src/raft/liferaft.js\nM  src/raft/raft-replica-base-runtime-helpers.js\nM  src/rebalancer/operation-workflow-owner-handoff-state.js\nM  src/rebalancer/operation-workflow-recovery-reconcile.js\nM  src/rebalancer/operation-workflow-replace-owner-recovery.js\nM  test/admin/admin-control-snapshot-publication-convergence-membership-observation-test-cases.js\nM  test/admin/admin-control-snapshot-tail-test-cases.js\nM  test/integration/replica-handler-metadata-propagation.integration.test.js\nM  test/shards/impact-graph-seal.json\nM  test/shards/subsystem-classes.json\nM  test/simulation/formation-sim-raft-cohort.js"
+  }
+}

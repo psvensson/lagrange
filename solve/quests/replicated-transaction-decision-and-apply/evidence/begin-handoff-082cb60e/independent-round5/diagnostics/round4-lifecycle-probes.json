@@ -1,0 +1,202 @@
+{
+  "root": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011",
+  "results": [
+    {
+      "name": "advanced-recovery-after-original-control-expiry",
+      "error": "TypeError: Cannot read properties of undefined (reading 'transaction_id')\n    at Object.submitMutation (file:///mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-source-round5-independent/round4-lifecycle-probes.mjs:14:243)\n    at SQLQueryEngine.persistDistributedTransactionRow (file:///mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/src/query/sql-query-engine-transaction-persistence-methods.js:179:67)\n    at DistributedTransactionCoordinator.persistTransaction (file:///mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/src/query/sql-query-engine-instance-initializer.js:255:16)\n    at DurableWorkflowCoordinator.persistWorkflow (file:///mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/src/query/distributed/distributed-transaction-coordinator.js:198:24)\n    at DurableWorkflowCoordinator.persistWorkflowState (file:///mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/src/workflow/durable-workflow-coordinator.js:215:16)\n    at DistributedTransactionCoordinator.persistTransactionRecord (file:///mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/src/query/distributed/distributed-transaction-records.js:13:36)\n    at DistributedTransactionCoordinator.persistTransactionRecord (file:///mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/src/query/distributed/distributed-transaction-coordinator.js:662:37)\n    at DistributedTransactionCoordinator.setTransactionStatus (file:///mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/src/query/distributed/distributed-transaction-protocol.js:259:18)\n    at DistributedTransactionCoordinator.setTransactionStatus (file:///mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/src/query/distributed/distributed-transaction-coordinator.js:564:33)\n    at DistributedTransactionCoordinator.completeCommitDecision (file:///mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/src/query/distributed/distributed-transaction-decision-protocol.js:244:18)"
+    },
+    {
+      "name": "live-unresolved-creation-background-visibility",
+      "first": {
+        "success": false,
+        "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session",
+        "errorCode": "TRANSACTION_CREATION_UNCERTAIN",
+        "transactionId": "51509ea760651d8a58c7e2b4399eaf3f",
+        "timeoutDeadline": 1000000,
+        "deferRetry": true,
+        "retryable": true,
+        "statementType": "BEGIN_TRANSACTION"
+      },
+      "before": {
+        "writes": 1,
+        "reads": 1,
+        "state": "UNCERTAIN_ANSWERED",
+        "rowInserted": false
+      },
+      "sweeps": [
+        {
+          "swept": 1,
+          "resolved": 1,
+          "failed": 0,
+          "deferred": 0,
+          "deferredUntilMs": 0,
+          "skipped": false,
+          "results": [
+            {
+              "transactionId": "51509ea760651d8a58c7e2b4399eaf3f",
+              "sessionId": "live-background",
+              "sweepPath": "BEGIN_TRANSACTION",
+              "statusAfter": "ACTIVE",
+              "success": true,
+              "error": null
+            }
+          ]
+        },
+        {
+          "swept": 1,
+          "resolved": 1,
+          "failed": 0,
+          "deferred": 0,
+          "deferredUntilMs": 0,
+          "skipped": false,
+          "results": [
+            {
+              "transactionId": "51509ea760651d8a58c7e2b4399eaf3f",
+              "sessionId": "live-background",
+              "sweepPath": "BEGIN_TRANSACTION",
+              "statusAfter": "ACTIVE",
+              "success": true,
+              "error": null
+            }
+          ]
+        }
+      ],
+      "beforeRetry": {
+        "writes": 2,
+        "reads": 2,
+        "state": "UNCERTAIN_ANSWERED",
+        "rowInserted": true,
+        "consumerRetained": true,
+        "diagnostics": {
+          "attachmentCount": 0,
+          "operationCount": 0,
+          "recordBytes": 1737,
+          "recordCount": 1,
+          "roles": {
+            "UNCERTAIN_ANSWERED": 1
+          },
+          "sweep": {
+            "deferredAttempts": 0,
+            "deferredUntilMs": 0,
+            "oldestDeadlineAtMs": 1000000,
+            "reservedBytes": 1737,
+            "retainedCount": 1,
+            "selectedCount": 1,
+            "stopReason": "turn_complete"
+          },
+          "totalBytes": 1737
+        }
+      },
+      "retry": {
+        "success": true,
+        "operation": "BEGIN_TRANSACTION",
+        "sessionId": "live-background",
+        "transactionId": "51509ea760651d8a58c7e2b4399eaf3f",
+        "transactionEpoch": 1,
+        "transactionMode": "EXPLICIT",
+        "statementType": "BEGIN_TRANSACTION"
+      },
+      "accepted": true,
+      "after": {
+        "writes": 2,
+        "reads": 2,
+        "diagnostics": {
+          "attachmentCount": 0,
+          "operationCount": 0,
+          "recordBytes": 0,
+          "recordCount": 0,
+          "roles": {},
+          "sweep": {
+            "deferredAttempts": 0,
+            "deferredUntilMs": 0,
+            "oldestDeadlineAtMs": 1000000,
+            "reservedBytes": 1737,
+            "retainedCount": 1,
+            "selectedCount": 1,
+            "stopReason": "turn_complete"
+          },
+          "totalBytes": 0
+        }
+      },
+      "durable": {
+        "transaction_id": "51509ea760651d8a58c7e2b4399eaf3f",
+        "session_id": "live-background",
+        "status": "ACTIVE",
+        "transaction_epoch": 1,
+        "timeout_deadline": 1000000,
+        "transaction_mode": "EXPLICIT",
+        "participant_set_state": "OPEN",
+        "participant_set_text": "[]",
+        "commit_mode": "NOT_SELECTED",
+        "frozen_participant_count": 0,
+        "updated_at": 0,
+        "decision": null,
+        "decision_text": null,
+        "decision_digest": null,
+        "created_at": 0
+      }
+    },
+    {
+      "name": "timer-expiry-then-uncertain-completion-live-consumer",
+      "first": {
+        "success": false,
+        "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session",
+        "errorCode": "TRANSACTION_CREATION_UNCERTAIN",
+        "transactionId": "7948f74f344fd3b6c446e0ba8eb1456b",
+        "timeoutDeadline": 1791752143325,
+        "deferRetry": true,
+        "retryable": true
+      },
+      "afterTimer": {
+        "consumerRetained": true,
+        "state": "INSERTING",
+        "diagnostics": {
+          "attachmentCount": 0,
+          "operationCount": 1,
+          "recordBytes": 1829,
+          "recordCount": 1,
+          "roles": {
+            "INSERTING": 1
+          },
+          "totalBytes": 2000
+        }
+      },
+      "afterCompletion": {
+        "consumerRetained": true,
+        "state": "UNCERTAIN_ANSWERED",
+        "diagnostics": {
+          "attachmentCount": 0,
+          "operationCount": 0,
+          "recordBytes": 1829,
+          "recordCount": 1,
+          "roles": {
+            "UNCERTAIN_ANSWERED": 1
+          },
+          "totalBytes": 1829
+        }
+      },
+      "retry": {
+        "success": true,
+        "operation": "BEGIN_TRANSACTION",
+        "sessionId": "timer-late-uncertain",
+        "transactionId": "7948f74f344fd3b6c446e0ba8eb1456b",
+        "transactionEpoch": 1791752043326,
+        "transactionMode": "EXPLICIT"
+      },
+      "accepted": true,
+      "writes": 2,
+      "final": {
+        "state": "ENTERED_ACTIVE",
+        "consumerRetained": false,
+        "diagnostics": {
+          "attachmentCount": 0,
+          "operationCount": 0,
+          "recordBytes": 0,
+          "recordCount": 0,
+          "roles": {},
+          "totalBytes": 0
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "utc": "2026-10-11T21:40:30.876188+00:00",
+  "namespace": "refs/heads/checkpoint/rs-raft-preservation-20261011T214030Z",
+  "mainBefore": "878eb8ac059dab71deae5feb0fa88e0c5c610c93",
+  "newRefs": {
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T214030Z/tx1-owner-wip": "5d2bc896fe24c3153b163d49ad19c5b78de8258f"
+  },
+  "coverage": {
+    "tx1-owner-wip": {
+      "status": "VERIFIED_PUSHED",
+      "sha": "5d2bc896fe24c3153b163d49ad19c5b78de8258f",
+      "ref": "refs/heads/checkpoint/rs-raft-preservation-20261011T214030Z/tx1-owner-wip",
+      "changedSinceRemote": "29b9072f7d244f63787b8cdff5a4bd29f923fbdb",
+      "changedPaths": [
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/begin-resource-round8-independent-1c9089a8/diagnostics-manifest.sha256",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/begin-resource-round8-independent-1c9089a8/diagnostics.tar.gz",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/begin-resource-round8-independent-1c9089a8/retention.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/begin-resource-round8-independent-1c9089a8/review-begin-uncertain-design-round8-independent.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T213737Z/activation-startup-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T213737Z/caller-states-after-capture.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T213737Z/caller-states-after-push.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T213737Z/caller-states-before.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T213737Z/candidate.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T213737Z/cdc-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T213737Z/coordinator-fixtures-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T213737Z/freshmg-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T213737Z/original-staged.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T213737Z/push-attempt.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T213737Z/push-plan.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T213737Z/query-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T213737Z/recovery-foundation.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T213737Z/remote-receipt.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T213737Z/remote-refs.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T213737Z/startup-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T213737Z/tx1-owner-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/log.ndjson"
+      ]
+    }
+  },
+  "callerStatesVerified": true,
+  "preservationOnly": true,
+  "remoteRefs": {
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T214030Z/tx1-owner-wip": "5d2bc896fe24c3153b163d49ad19c5b78de8258f",
+    "refs/heads/main": "878eb8ac059dab71deae5feb0fa88e0c5c610c93"
+  },
+  "verified": true,
+  "mainUnchanged": true,
+  "callerStatesVerifiedAfterPush": true
+}
