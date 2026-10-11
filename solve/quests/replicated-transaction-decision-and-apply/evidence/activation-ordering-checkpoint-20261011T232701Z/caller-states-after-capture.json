@@ -1,0 +1,29 @@
+{
+  "activation-startup-wip": {
+    "head": "c6d71665e98be03de916705f272a9d6340e4a842",
+    "branch": "refs/heads/fix/rs-raft-startup-activation-20261011",
+    "indexSha256": "8c876002f9122ad2b55b5cfb7818294bf70459048334454d9f127e497a896ee1",
+    "statusSha256": "269318753716ad7b5174ff2036e986e490d417a8b2a8dce3be5175ea78141764",
+    "dirtyContentSha256": "47bd17f669608524377279ec81e04989541f7085234a1e488425e47317c68dea",
+    "dirtyPathCount": 73,
+    "oversized": []
+  },
+  "tx1-owner-wip": {
+    "head": "e7c89f4b5114c0238312d3831b65889a4622f4e9",
+    "branch": "refs/heads/tx1/work-20261010",
+    "indexSha256": "775ee49801a0c92172acb5193f4bc0f20a1e130ff472696e391d53e944109e67",
+    "statusSha256": "d7fa21aed07e5ac759ba99ea5a7dce07b80ab9457e05e002522a47978f1b87e0",
+    "dirtyContentSha256": "58a089ce48fd8472ac88b0a1f6d493b1be49b1d74db3e95d52d491167d971fb6",
+    "dirtyPathCount": 1238,
+    "oversized": []
+  },
+  "freshmg-wip": {
+    "head": "50a003b86e4d2f0017d6772d11446c027339151e",
+    "branch": "refs/heads/freshmg/integration-20261010",
+    "indexSha256": "8137a11d3a20b082df7c142a3238fec5aba8c9123100b120305c30503340c399",
+    "statusSha256": "a0a43cee057440b16297201cbc6db7105e769a766ce303b59b11f72865d151bf",
+    "dirtyContentSha256": "1817271edbe736afbff484673d9ae0973872d3a5dc9c06bb66061b805d13e355",
+    "dirtyPathCount": 134,
+    "oversized": []
+  }
+}

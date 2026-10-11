@@ -18,6 +18,8 @@ import {
   classifyServiceLifecycleSql,
 } from '../../src/query/service-lifecycle-sql-contract.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
+import {createTransactionPersistenceGateway} from
+  '../test-helpers/transaction-persistence-gateway.js';
 import {createSqlRequest} from '../../src/query/sql-request.js';
 import {
   PGWIRE_AUTH_ACTION,
@@ -243,9 +245,12 @@ function createEngineFixture(options = {}) {
     runtimeAccessPolicyOwner: systemMetadataOwners.runtimeAccessPolicyOwner,
     signaturePolicy: SERVICE_LIFECYCLE_DEFAULT_SIGNATURE_POLICY,
   });
+  // A BEGIN persists transaction state first (TX1 seam S4b): the engine
+  // holds a persistence gateway.
   const engine = new SQLQueryEngine({
     systemCache: createSystemCache(),
     messageRouter: {deliver: async () => ({success: true})},
+    controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
     autoStartDistributedTransactionRecovery: false,
   });
   engine.setServiceLifecycleCommandOwner(commandOwner);

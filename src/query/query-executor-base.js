@@ -424,6 +424,8 @@ class QueryExecutorBase {
       options.preferLeader || false,
       options.preferSameLatencyGroup === true,
       {
+        sessionId: options.sessionId,
+        transactionIdentity: options.transactionIdentity,
         deliveryPriority: options.deliveryPriority,
         routingReadinessDimension: options.routingReadinessDimension,
         timeoutMs: options.timeoutMs,

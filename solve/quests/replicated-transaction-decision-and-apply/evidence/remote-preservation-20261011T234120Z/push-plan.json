@@ -1,0 +1,127 @@
+{
+  "utc": "2026-10-11T23:41:20.372747+00:00",
+  "namespace": "refs/heads/checkpoint/rs-raft-preservation-20261011T234120Z",
+  "mainBefore": "878eb8ac059dab71deae5feb0fa88e0c5c610c93",
+  "newRefs": {
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T234120Z/startup-wip": "3afd325191fd37bfa29c7e1e6db665e2d8aa32ff",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T234120Z/activation-startup-wip": "34ea6784c2ec00ee8b4b44cc0026368a0ffd4b55",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T234120Z/tx1-owner-wip": "8358618be4cc1ea32cef88ccb86139467bf41e32",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T234120Z/cdc-wip": "92579c6ccc1804466ea15f8c6ae44c3e5d11cdfc"
+  },
+  "coverage": {
+    "original-staged": {
+      "status": "UNCHANGED_ALREADY_PUSHED",
+      "sha": "7443703c330c4c1088e7fdb768243baec8a692ef"
+    },
+    "candidate": {
+      "status": "UNCHANGED_ALREADY_PUSHED",
+      "sha": "99ca733aefa5366fe0fcae6953ec9404b32c92b6"
+    },
+    "recovery-foundation": {
+      "status": "UNCHANGED_ALREADY_PUSHED",
+      "sha": "4923e322f24406e0d161a003f1125993752b95fe"
+    },
+    "startup-wip": {
+      "status": "NEW_SNAPSHOT_PENDING_PUSH",
+      "sha": "3afd325191fd37bfa29c7e1e6db665e2d8aa32ff",
+      "ref": "refs/heads/checkpoint/rs-raft-preservation-20261011T234120Z/startup-wip",
+      "changedSinceRemote": "f1b6d4de6dde8481b7d34d8519975d1891c9128a",
+      "changedPaths": [
+        "solve/quests/replicated-transaction-decision-and-apply/design-query-begin-uncertain-insert-resolution-2026-10-11.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/begin-round13-router-native-feasibility.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/begin-round13-router-native-feasibility.mjs",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/design-query-begin-uncertain-insert-resolution-round12-e7a1a4cf.md"
+      ]
+    },
+    "activation-startup-wip": {
+      "status": "NEW_SNAPSHOT_PENDING_PUSH",
+      "sha": "34ea6784c2ec00ee8b4b44cc0026368a0ffd4b55",
+      "ref": "refs/heads/checkpoint/rs-raft-preservation-20261011T234120Z/activation-startup-wip",
+      "changedSinceRemote": "b000ae6eea12ce6413e2f6441dd0c49982f109de",
+      "changedPaths": [
+        "solve/quests/replicated-transaction-decision-and-apply/design-participant-release-activation-authority-2026-10-11.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-cycle-round13-feasibility-result.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-cycle-round13-feasibility.mjs",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/design-participant-release-activation-authority-cycle-round13-predecessor-3aeadfe3.md"
+      ]
+    },
+    "tx1-owner-wip": {
+      "status": "NEW_SNAPSHOT_PENDING_PUSH",
+      "sha": "8358618be4cc1ea32cef88ccb86139467bf41e32",
+      "ref": "refs/heads/checkpoint/rs-raft-preservation-20261011T234120Z/tx1-owner-wip",
+      "changedSinceRemote": "7a67195bdb94f2bf7480d48bab76133e9da2d445",
+      "changedPaths": [
+        "solve/quests/replicated-transaction-decision-and-apply/design-query-begin-uncertain-insert-resolution-2026-10-11.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-ordering-checkpoint-20261011T232701Z/activation-startup-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-ordering-checkpoint-20261011T232701Z/caller-states-after-capture.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-ordering-checkpoint-20261011T232701Z/caller-states-after-push.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-ordering-checkpoint-20261011T232701Z/caller-states-before.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-ordering-checkpoint-20261011T232701Z/freshmg-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-ordering-checkpoint-20261011T232701Z/push-attempt.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-ordering-checkpoint-20261011T232701Z/push-plan.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-ordering-checkpoint-20261011T232701Z/remote-receipt.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-ordering-checkpoint-20261011T232701Z/remote-refs.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-ordering-checkpoint-20261011T232701Z/tx1-owner-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/begin-round13-router-native-feasibility.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/begin-round13-router-native-feasibility.mjs",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/design-query-begin-uncertain-insert-resolution-round12-e7a1a4cf.md",
+        "solve/quests/replicated-transaction-decision-and-apply/log.ndjson"
+      ]
+    },
+    "freshmg-wip": {
+      "status": "UNCHANGED_ALREADY_PUSHED",
+      "sha": "0ce16cfd0cd2d27da820aaf02474b74ae64f5ba7"
+    },
+    "query-wip": {
+      "status": "UNCHANGED_ALREADY_PUSHED",
+      "sha": "41a054f9fc20969a375afce5a555152dc197518b"
+    },
+    "cdc-wip": {
+      "status": "NEW_SNAPSHOT_PENDING_PUSH",
+      "sha": "92579c6ccc1804466ea15f8c6ae44c3e5d11cdfc",
+      "ref": "refs/heads/checkpoint/rs-raft-preservation-20261011T234120Z/cdc-wip",
+      "changedSinceRemote": "7a8dfa2822c15dd6ee497933669d835da832c561",
+      "changedPaths": [
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-round3-20261012T2315/capture-reentry.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-round3-20261012T2315/capture-reentry.mjs",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-round3-20261012T2315/capture-reentry.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-round3-20261012T2315/commands-and-results.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-round3-20261012T2315/counterexamples.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-round3-20261012T2315/counterexamples.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-round3-20261012T2315/cumulative-owner-tests.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-round3-20261012T2315/descriptor-boundaries.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-round3-20261012T2315/descriptor-boundaries.mjs",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-round3-20261012T2315/descriptor-boundaries.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-round3-20261012T2315/diff-check.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-round3-20261012T2315/eslint.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-round3-20261012T2315/impact-contracts.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-round3-20261012T2315/implementation-report.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-round3-20261012T2315/metadata-evidence-clarification.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-round3-20261012T2315/owner-counterexamples.mjs",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-round3-20261012T2315/packet-sha256.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-round3-20261012T2315/selected-runtime-sha256.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-round3-20261012T2315/selected-runtime-test.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-round3-20261012T2315/selected-runtime.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-round3-20261012T2315/shards.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-round3-20261012T2315/source-review-delta.patch",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-round3-20261012T2315/source-sha256.txt",
+        "src/cdc/cdc-coverage-transfer-owner.js",
+        "src/constants/transport.js",
+        "src/raft/bulk-connection-transfer-socket.js",
+        "src/transport/bulk-transfer-channel.js",
+        "src/transport/inproc-transport.js",
+        "test/cdc/cdc-coverage-lifecycle-owner.test.js",
+        "test/raft/bulk-transfer-socket-adapter.test.js",
+        "test/raft/snapshot-recorded-gaps.test.js",
+        "test/transport/bulk-channel-identify-incarnation.test.js",
+        "test/transport/bulk-transfer-lane-isolation.test.js"
+      ]
+    },
+    "coordinator-fixtures-wip": {
+      "status": "UNCHANGED_ALREADY_PUSHED",
+      "sha": "01b32220853dc266e61e0a79e0acf95889b3b863"
+    }
+  },
+  "callerStatesVerified": true,
+  "preservationOnly": true
+}

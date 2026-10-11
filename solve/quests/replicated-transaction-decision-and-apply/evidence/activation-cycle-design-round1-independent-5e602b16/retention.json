@@ -1,0 +1,10 @@
+{
+  "utc": "2026-10-11T23:18:29.901399+00:00",
+  "scope": "REJECT AC1-3; design only; source14fac held",
+  "reportSha256": "5e602b16fac568165bacf2269eb2216108769ee443b57ef1f1bc5815f77148a2",
+  "manifestSha256": "6958b1cebc7340ad6c13eb7e92d09e531171ee70c0f547c3c16685aed9f8fceb",
+  "archiveName": "activation-cycle-design-round1-independent-5e602b16.tar.gz",
+  "archiveSha256": "f7e5f796cf8f50db5080bc2f4df8f3f08c2451e8b7e301d6fecb9898171901ba",
+  "diagnosticFileCount": 17,
+  "archiveDisposition": "Awaiting canonical solve evidence upload; local archive is outside solve tree"
+}

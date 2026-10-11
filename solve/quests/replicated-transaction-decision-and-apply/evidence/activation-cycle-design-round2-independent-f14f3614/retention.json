@@ -1,0 +1,10 @@
+{
+  "utc": "2026-10-11T23:41:59.742611+00:00",
+  "scope": "REVISE AC12-1/2/3, design only; source 14fac remains HOLD",
+  "reportSha256": "f14f361452a8240db6275a72de18073eb27d82021f9cd700b51b7a54e9b87d1a",
+  "manifestSha256": "3696fb9b0f39ac06bc2824203512a63960f62f1daa3bf3b8227b29310b62b390",
+  "archiveName": "activation-cycle-design-round2-independent-f14f3614.tar.gz",
+  "archiveSha256": "691d6e454ca1f0599a9e91324d62ff13c10f6a1844b71df1d6142cd49815afd1",
+  "diagnosticFileCount": 47,
+  "archiveDisposition": "Awaiting canonical solve evidence upload; local archive is outside solve tree"
+}

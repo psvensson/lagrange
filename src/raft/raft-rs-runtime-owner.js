@@ -1,22 +1,5 @@
 import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from './raft-committed-membership-constants.js';
-import {createHash} from 'node:crypto';
-import fs from 'node:fs';
-import {createRequire} from 'node:module';
-import path from 'node:path';
-
-import {resolveModuleDirectory, resolvePackagedRuntimeFile} from
-  '../sea/runtime-file-resolution.js';
-import {
-  RAFT_RS_BINDING_LAYOUT,
-  RAFT_RS_BINDING_STATE,
-  RAFT_RS_CORE_ERROR_MSG,
-  RAFT_RS_CORE_PRIMITIVES,
-  RAFT_RS_DIGEST_ALGORITHM,
-  RAFT_RS_DIGEST_ENCODING,
-  RAFT_RS_DIGEST_KEY,
-  RAFT_RS_FORBIDDEN_CONVENIENCE,
-  RAFT_RS_WASM_FILE,
-} from './raft-rs-core-constants.js';
+import {instantiateRaftRsCore, verifyRaftRsBinding} from './raft-rs-binding-owner.js';
 import {RaftRsDurableStore} from './raft-rs-durable-store.js';
 import {
   RAFT_RS_RECORD_COMPATIBILITY,
@@ -120,77 +103,6 @@ import {proposeMembershipTransition} from
 const {CORE_OK, CORE_REFUSED, CORE_FATAL, HOST_FAILURE} = RAFT_OPERATION_OUTCOME;
 const ENTRY_APPLY_DURABLE_OK = Object.freeze({ok: true});
 
-// Resolved when the core is first needed, never at module load: the resolver
-// owns where source, the dist bundle and the SEA executable keep the binding.
-function bindingFiles() {
-  const {DIGEST_FROM_ROOT, SOURCE_ROOT_FROM_OWNER} = RAFT_RS_BINDING_LAYOUT;
-  const digest = resolvePackagedRuntimeFile({
-    moduleDir: resolveModuleDirectory(resolveModuleDirectory),
-    sourceFileName: path.join(...SOURCE_ROOT_FROM_OWNER, ...DIGEST_FROM_ROOT),
-    bundledFileName: path.join(...DIGEST_FROM_ROOT),
-  });
-  const pkg = path.join(path.dirname(digest), RAFT_RS_WASM_FILE.PACKAGE_DIRECTORY);
-  return {digest, glue: path.join(pkg, RAFT_RS_WASM_FILE.GLUE),
-    wasm: path.join(pkg, RAFT_RS_WASM_FILE.WASM)};
-}
-
-function fileDigest(file) {
-  return createHash(RAFT_RS_DIGEST_ALGORITHM)
-    .update(fs.readFileSync(file))
-    .digest(RAFT_RS_DIGEST_ENCODING);
-}
-
-function assertArtifactIntegrity(binding) {
-  const digest = JSON.parse(fs.readFileSync(binding.digest, 'utf8'));
-  const files = [
-    [RAFT_RS_WASM_FILE.WASM, binding.wasm, digest[RAFT_RS_DIGEST_KEY.WASM]],
-    [RAFT_RS_WASM_FILE.GLUE, binding.glue, digest[RAFT_RS_DIGEST_KEY.GLUE]],
-  ];
-  for (const [name, file, recorded] of files) {
-    const actual = fileDigest(file);
-    if (actual !== recorded) {
-      throw new Error(
-        RAFT_RS_CORE_ERROR_MSG.digestMismatch(name, recorded, actual));
-    }
-  }
-}
-
-function facadeOf(binding) {
-  for (const name of RAFT_RS_FORBIDDEN_CONVENIENCE) {
-    if (name in binding) {
-      throw new Error(RAFT_RS_CORE_ERROR_MSG.forbiddenConvenience(name));
-    }
-  }
-  const facade = {};
-  for (const name of RAFT_RS_CORE_PRIMITIVES) {
-    if (typeof binding[name] !== 'function') {
-      throw new Error(RAFT_RS_CORE_ERROR_MSG.missingPrimitive(name));
-    }
-    facade[name] = (...args) => binding[name](...args);
-  }
-  return Object.freeze(facade);
-}
-
-function instantiateRaftRsCore(binding = bindingFiles()) {
-  assertArtifactIntegrity(binding);
-  const requireBinding = createRequire(binding.glue);
-  delete requireBinding.cache[requireBinding.resolve(binding.glue)];
-  return facadeOf(requireBinding(binding.glue));
-}
-
-// The core's own integrity check and load, answered as a state for the dry
-// run; the loaded facade is discarded and never entered.
-function verifyRaftRsBinding() {
-  const binding = bindingFiles();
-  const found = {digestFile: binding.digest};
-  try {
-    instantiateRaftRsCore(binding);
-    return deepFreeze({state: RAFT_RS_BINDING_STATE.VERIFIED, ...found});
-  } catch (error) {
-    return deepFreeze({state: RAFT_RS_BINDING_STATE.UNAVAILABLE, ...found,
-      reason: String(error?.message || error)});
-  }
-}
 
 let core = null;
 let runtimeHealth = HEALTHY;
@@ -877,6 +789,11 @@ function resolveCommittedEntryConfState(group, expectedGeneration, entry) {
       return {...invokeCoreAt(group, expectedGeneration, CORE_OPERATION.CONF_STATE),
         membershipContext};
     }
+    const before = invokeCoreAt(
+      group, expectedGeneration, CORE_OPERATION.CONF_STATE);
+    if (!before.ok) {
+      return before;
+    }
     const applied = invokeCoreAt(
       group, expectedGeneration, 'apply_conf_change', decoded.value);
     if (!applied.ok) {
@@ -887,7 +804,8 @@ function resolveCommittedEntryConfState(group, expectedGeneration, entry) {
     if (!set.ok) {
       return set;
     }
-    return {...applied, decoded: decoded.value, membershipContext};
+    return {...applied, decoded: decoded.value, membershipContext,
+      membershipBeforeConfState: before.value};
   }
   return invokeCoreAt(
     group, expectedGeneration, CORE_OPERATION.CONF_STATE);
@@ -929,6 +847,13 @@ function applyEntryDurablyOrFailure({group, entry, resolvedConfState,
       applyCommittedEntry: group.applyCommittedEntry,
       admitted,
       committedMembershipContext: resolvedConfState.membershipContext || null,
+      committedMembershipApplication:
+        resolvedConfState.membershipBeforeConfState === undefined ? null : Object.freeze({
+          beforeConfState: resolvedConfState.membershipBeforeConfState,
+          beforeMembershipGenerationIndex: String(group.membershipGenerationIndex),
+          afterConfState: resolvedConfState.value,
+          afterMembershipGenerationIndex: String(nextMembershipGeneration),
+        }),
       applyCommittedMembershipContext:
         group.applyCommittedMembershipContext,
       runApplySlice: group.runApplySlice,
@@ -1187,6 +1112,10 @@ function readGroupObservation(group, expectedGeneration, rawStatus = null) {
   // may run ahead of it), never the core's status.applied.
   return {ok: true, value: {status: status.value, confState: conf.value,
     ...observedParticipation(group),
+    // The persisted last index of this same observation (the last entry or
+    // snapshot the store wrote), so a reader can tell an applied log from
+    // one with entries still to apply.
+    lastIndex: group.persistedLastIndex,
     configurationKey: raftRsConfStateKey(conf.value),
     membershipGenerationIndex: group.membershipGenerationKnown ?
       Number(group.membershipGenerationIndex) : null,
@@ -1675,7 +1604,8 @@ function createRuntimeDispatcher(request) {
     resolvePeerIdentity: request.resolvePeerIdentity,
     applyCommittedEntry: request.applyCommittedEntry,
     applyCommittedMembershipContext: request.applyCommittedMembershipContext,
-    readCommittedLearnerAdmission: request.readCommittedLearnerAdmission,
+    readLearnerOriginEvidence: request.readLearnerOriginEvidence,
+    readPromotionAdmission: request.readPromotionAdmission,
     applyTransactionRolledBack: request.applyTransactionRolledBack,
     runApplySlice: request.runApplySlice,
     admitScheduledEntry: request.admitScheduledEntry,

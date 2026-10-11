@@ -1,0 +1,247 @@
+Executing SQL query { sql: 'BEGIN', paramCount: 0, sessionId: 'advanced-held' }
+BEGIN TRANSACTION { sessionId: 'advanced-held' }
+Executing SQL query { sql: 'BEGIN', paramCount: 0, sessionId: 'advanced-held' }
+BEGIN TRANSACTION { sessionId: 'advanced-held' }
+Reconcile queue shutdown { queue: 'runtime-replica-state-projection-owner' }
+Executing SQL query { sql: 'BEGIN', paramCount: 0, sessionId: 'advanced-live' }
+BEGIN TRANSACTION { sessionId: 'advanced-live' }
+Executing SQL query { sql: 'BEGIN', paramCount: 0, sessionId: 'advanced-live' }
+BEGIN TRANSACTION { sessionId: 'advanced-live' }
+Reconcile queue shutdown { queue: 'runtime-replica-state-projection-owner' }
+Reconcile queue shutdown { queue: 'runtime-replica-state-projection-owner' }
+{
+  "root": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011",
+  "results": [
+    {
+      "name": "advanced-unavailable-then-readable",
+      "first": {
+        "success": false,
+        "error": "Transaction recovery state is incomplete or incompatible",
+        "errorCode": "TRANSACTION_RECOVERY_INCOMPLETE",
+        "transactionId": "cd9783d4b25b33164aba36cb31bf88ff",
+        "statementType": "BEGIN_TRANSACTION"
+      },
+      "retry": {
+        "success": false,
+        "error": "Transaction recovery state is incomplete or incompatible",
+        "errorCode": "TRANSACTION_RECOVERY_INCOMPLETE",
+        "transactionId": "cd9783d4b25b33164aba36cb31bf88ff",
+        "statementType": "BEGIN_TRANSACTION"
+      },
+      "readsBeforeAvailability": 2,
+      "readsAfterAvailability": 0,
+      "writes": 1,
+      "state": "RECOVERY_PENDING",
+      "diagnostics": {
+        "attachmentCount": 0,
+        "operationCount": 0,
+        "recordBytes": 1341,
+        "recordCount": 1,
+        "roles": {
+          "RECOVERY_PENDING": 1
+        },
+        "sweep": {
+          "deferredAttempts": 0,
+          "deferredUntilMs": 0,
+          "oldestDeadlineAtMs": 1791745440432,
+          "reservedBytes": 1341,
+          "retainedCount": 1,
+          "selectedCount": 1,
+          "stopReason": "failed"
+        },
+        "totalBytes": 1341
+      },
+      "sweeps": [
+        {
+          "swept": 1,
+          "resolved": 0,
+          "failed": 1,
+          "deferred": 0,
+          "deferredUntilMs": 0,
+          "skipped": false,
+          "results": [
+            {
+              "transactionId": "cd9783d4b25b33164aba36cb31bf88ff",
+              "sessionId": "advanced-held",
+              "sweepPath": "BEGIN_TRANSACTION",
+              "statusAfter": "ACTIVE",
+              "success": false,
+              "error": "Transaction recovery state is incomplete or incompatible"
+            }
+          ]
+        },
+        {
+          "swept": 1,
+          "resolved": 0,
+          "failed": 1,
+          "deferred": 0,
+          "deferredUntilMs": 0,
+          "skipped": false,
+          "results": [
+            {
+              "transactionId": "cd9783d4b25b33164aba36cb31bf88ff",
+              "sessionId": "advanced-held",
+              "sweepPath": "BEGIN_TRANSACTION",
+              "statusAfter": "ACTIVE",
+              "success": false,
+              "error": "Transaction recovery state is incomplete or incompatible"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "advanced-live-consumer-and-manifest-handoff",
+      "first": {
+        "success": false,
+        "error": "Transaction recovery state is incomplete or incompatible",
+        "errorCode": "TRANSACTION_RECOVERY_INCOMPLETE",
+        "transactionId": "b242cf0dc4280523f1cb8502001ac56d",
+        "statementType": "BEGIN_TRANSACTION"
+      },
+      "before": {
+        "creationState": null,
+        "consumerRetained": false,
+        "participantIds": [],
+        "decision": null,
+        "admission": null,
+        "recordCount": 0
+      },
+      "retry": {
+        "success": false,
+        "error": "Transaction already active for this session",
+        "errorCode": "TRANSACTION_ACTIVE",
+        "statementType": "BEGIN_TRANSACTION"
+      },
+      "replay": {
+        "totalRecovered": 1,
+        "resumed": 1,
+        "failed": 0,
+        "results": [
+          {
+            "transactionId": "b242cf0dc4280523f1cb8502001ac56d",
+            "sessionId": "advanced-live",
+            "statusBefore": "COMMITTING",
+            "statusAfter": "COMMITTED",
+            "replayPath": "COMMIT",
+            "skipped": false,
+            "success": true,
+            "error": null,
+            "decisionReadState": null,
+            "failedParticipants": []
+          }
+        ]
+      },
+      "commits": [
+        {
+          "session": "advanced-live",
+          "partition": "partition-x",
+          "identity": {
+            "sessionId": "advanced-live",
+            "transactionId": "b242cf0dc4280523f1cb8502001ac56d",
+            "participantId": "b242cf0dc4280523f1cb8502001ac56d:partition-x",
+            "commitMode": "TWO_PHASE_COMMIT",
+            "transactionEpoch": 1791745380436,
+            "decision": "COMMIT",
+            "preparedDigest": "digest-x",
+            "decisionText": "{\"transactionId\":\"b242cf0dc4280523f1cb8502001ac56d\",\"decision\":\"COMMIT\",\"participants\":[[\"b242cf0dc4280523f1cb8502001ac56d:partition-x\",\"digest-x\"]]}",
+            "decisionDigest": "4000921232e1e00d0ec1aa16088a360f3a400e89dbcff12e2f0ff48fa5aaab4d"
+          }
+        }
+      ],
+      "reads": 7,
+      "writes": 5,
+      "after": null
+    },
+    {
+      "name": "exact-envelope-charge",
+      "error": "TypeError: Cannot read properties of undefined (reading 'transactionCreationInitialRow')\n    at file:///mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-source-round2-independent/semantic-probes.mjs:33:280\n    at async probe (file:///mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-source-round2-independent/semantic-probes.mjs:13:56)\n    at async file:///mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-source-round2-independent/semantic-probes.mjs:32:1"
+    },
+    {
+      "name": "typed-uncertainty-sweep-backoff",
+      "first": {
+        "swept": 1,
+        "resolved": 0,
+        "failed": 1,
+        "deferred": 0,
+        "deferredUntilMs": 0,
+        "skipped": false,
+        "results": [
+          {
+            "transactionId": "8d1fdcc803f10ad1b21d6ae2928f976c",
+            "sessionId": "retry-defer",
+            "sweepPath": "BEGIN_TRANSACTION",
+            "statusAfter": "ACTIVE",
+            "success": false,
+            "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session"
+          }
+        ]
+      },
+      "second": {
+        "swept": 1,
+        "resolved": 0,
+        "failed": 1,
+        "deferred": 0,
+        "deferredUntilMs": 0,
+        "skipped": false,
+        "results": [
+          {
+            "transactionId": "8d1fdcc803f10ad1b21d6ae2928f976c",
+            "sessionId": "retry-defer",
+            "sweepPath": "BEGIN_TRANSACTION",
+            "statusAfter": "ACTIVE",
+            "success": false,
+            "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session"
+          }
+        ]
+      },
+      "writes": 3,
+      "diagnostic": {
+        "deferredAttempts": 0,
+        "deferredUntilMs": 0,
+        "oldestDeadlineAtMs": 1791745440439,
+        "reservedBytes": 1337,
+        "retainedCount": 1,
+        "selectedCount": 1,
+        "stopReason": "failed"
+      }
+    },
+    {
+      "name": "engine-accessor-configuration",
+      "getterCalls": 1,
+      "accepted": true
+    },
+    {
+      "name": "control-deadline-completion-before-timer",
+      "now": 20,
+      "first": {
+        "success": true,
+        "operation": "BEGIN_TRANSACTION",
+        "sessionId": "spent-turn",
+        "transactionId": "97f6ae4540596bbc20c949483f9af9dd",
+        "transactionEpoch": 1,
+        "transactionMode": "EXPLICIT"
+      },
+      "canAccept": true,
+      "accepted": true,
+      "active": {
+        "sessionId": "spent-turn",
+        "transactionId": "97f6ae4540596bbc20c949483f9af9dd",
+        "status": "ACTIVE",
+        "transactionEpoch": 1,
+        "timeoutDeadline": 1000,
+        "transactionMode": "EXPLICIT",
+        "participantSetState": "OPEN",
+        "commitMode": "NOT_SELECTED",
+        "frozenParticipantCount": 0,
+        "participantSetFrozenAt": 0,
+        "decisionTrace": [],
+        "participants": [],
+        "participantDetails": [],
+        "writeOperations": [],
+        "createdAt": 0,
+        "updatedAt": 0
+      }
+    }
+  ]
+}
