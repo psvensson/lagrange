@@ -110,9 +110,10 @@ const LOAD_AVERAGE_ONE_MINUTE = 0;
 const LOAD_DECIMALS = 2;
 // Hardware-relative budget scaling (hardware-relative-convergence-budget
 // epic): CI lanes and placed lab runs export LAGRANGE_TEST_MACHINE_FACTOR; the
-// reference machine is 1, and non-numeric, absent or below 1 means 1. This is
-// its one reader: the runner records it on a timeout, and the integration
-// budget helper (test/integration/helpers/test-machine-factor.js) scales by it.
+// reference machine is 1, and non-numeric, absent or below 1 means 1. The
+// runner scales each file's TAP root budget by it and records it on a timeout;
+// the integration budget helper (test/integration/helpers/test-machine-factor.js)
+// scales in-test budgets by it.
 const MACHINE_FACTOR_ENV = 'LAGRANGE_TEST_MACHINE_FACTOR';
 const REFERENCE_MACHINE_FACTOR = 1;
 
@@ -309,33 +310,32 @@ function prepareTestRun(file, options) {
     TAP_FAIL_TODO: '1',
     _TAPJS_PROCESSINFO_COVERAGE_: '0',
   };
-  // Honor per-test {timeout: N} options written in the file: this tap
-  // version silently CAPS every test at the 30s default - neither the
-  // test option nor t.setTimeout() can extend past it (verified
-  // empirically 2026-08-04; ten test files carried inert 45s-360s
-  // options and passed only while faster than 30s, then flaked on the
-  // slower CI runner). Only the TAP_TIMEOUT env genuinely extends the
-  // cap, so lift it to the LARGEST option declared in the file. An
-  // explicit caller TAP_TIMEOUT still wins outright; a caller that only
-  // wants a minimum (for example the classified exclusive lane) passes
-  // TAP_TIMEOUT_FLOOR instead, which raises undeclared files without
-  // cutting a file below its own declaration — clobbering declarations
-  // is exactly how a 480s formation test came to die at 120s while its
-  // declared budget said otherwise. The per-file kill (--timeout-ms,
-  // default 600s) still bounds the whole process.
-  if (env.TAP_TIMEOUT === undefined) {
-    const declaredTimeoutSeconds = largestDeclaredTimeoutSeconds(absoluteFile);
-    const resolvedTimeoutSeconds = Math.max(
-      declaredTimeoutSeconds ?? 0,
-      parsedTimeoutFloorSeconds(env.TAP_TIMEOUT_FLOOR),
-    );
-    if (resolvedTimeoutSeconds > 0) {
-      env.TAP_TIMEOUT = String(resolvedTimeoutSeconds);
-    }
-  }
+  // tap arms ONE root timer per file: TAP_TIMEOUT seconds (30 by default),
+  // started when the root test starts. A top-level test's {timeout: N} arms
+  // a second timer for that test alone and cannot extend the root's: when
+  // the root timer fires, whichever test is running dies with `expired:
+  // TAP` (two 700 ms tests under TAP_TIMEOUT=1: the second dies at 1.0 s,
+  // 2026-10-11). So the root budget a file needs is the SUM of its
+  // top-level declarations, not the largest - lifting to the largest is
+  // how three 120 s tests came to share one 120 s root timer and die at
+  // 167 s on the slowest lab host (ledger S1). The root timer is wall
+  // clock, so the sum is scaled by LAGRANGE_TEST_MACHINE_FACTOR (S2: the
+  // bootstrap-heavy files expired only on the x2.1 host), never falls
+  // below a file-level t.setTimeout (tap honours that call as its root
+  // timer; the export keeps the two in step), and stays below the per-file
+  // kill (--timeout-ms, default 600 s) so tap reports the expiry before
+  // the runner kills. An explicit caller TAP_TIMEOUT still wins outright;
+  // a caller that only wants a minimum (for example the classified
+  // exclusive lane) passes TAP_TIMEOUT_FLOOR instead, which raises
+  // undeclared files without cutting a file below its own declaration —
+  // clobbering declarations is exactly how a 480 s formation test came to
+  // die at 120 s while its declared budget said otherwise.
+  const budgetMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const tapTimeout = resolveTapTimeout(absoluteFile, env, budgetMs);
+  if (tapTimeout !== undefined) env.TAP_TIMEOUT = tapTimeout;
   return {
     absoluteFile,
-    budgetMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    budgetMs,
     cwd,
     env,
     file,
@@ -349,11 +349,17 @@ function prepareTestRun(file, options) {
 
 const MILLISECONDS_PER_SECOND = 1000;
 const TAP_DEFAULT_TIMEOUT_SECONDS = 30;
+// tap arms the root timer only once the file's modules have loaded, and a
+// process that will not exit after the timer fires is given 10 s before tap
+// kills it itself (SIGALRM, then SIGKILL 500 ms later). The exported budget
+// leaves one tenth of the kill budget for both - 60 s of the default 600 s -
+// so tap's own expiry report always lands before the runner's kill.
+const KILL_BUDGET_MARGIN_DIVISOR = 10;
 const PROBLEM_INDENT = '\n  ';
 const UNRESOLVED_TIMEOUT_ERROR =
   'run-test-files: unresolved timeout declaration — refusing to fall back to ' +
   `tap's ${TAP_DEFAULT_TIMEOUT_SECONDS}s default, which would silently cap ` +
-  'the test:';
+  'the file:';
 
 // Declarations are parsed, not pattern-matched, and an unresolvable one is a
 // hard error. Falling back to the default cap is exactly how 18 files came to
@@ -366,22 +372,62 @@ function parsedTimeoutFloorSeconds(value) {
   return Number.isInteger(seconds) && seconds > 0 ? seconds : 0;
 }
 
-function largestDeclaredTimeoutSeconds(absoluteFile) {
+// What the file's source declares, or null when it cannot be read (the spawn
+// reports that itself).
+function declaredTimeouts(absoluteFile) {
   let source;
   try {
     source = readFileSync(absoluteFile, TEXT_ENCODING);
   } catch {
     return null;
   }
-  const {milliseconds, problems} =
-    extractTimeoutDeclarations(source, absoluteFile);
-  if (problems.length > 0) {
+  const declared = extractTimeoutDeclarations(source, absoluteFile);
+  if (declared.problems.length > 0) {
     throw new Error(
       `${UNRESOLVED_TIMEOUT_ERROR}${PROBLEM_INDENT}` +
-      `${problems.join(PROBLEM_INDENT)}`);
+      `${declared.problems.join(PROBLEM_INDENT)}`);
   }
-  const seconds = Math.ceil(milliseconds / MILLISECONDS_PER_SECOND);
+  return declared;
+}
+
+// The root budget the declarations call for on this machine, in whole
+// seconds, or null when tap's own default already covers them: the top-level
+// sum, never below the largest declaration anywhere (a subtest may declare
+// more than its parent) nor below a file-level t.setTimeout, scaled by the
+// machine factor, and bounded so the kill cannot pre-empt tap's report.
+function deriveRootTimeoutSeconds(declared, machineFactor, budgetMs) {
+  if (declared === null) return null;
+  const declaredMs = Math.max(declared.topLevelMilliseconds,
+    declared.milliseconds, declared.fileMilliseconds);
+  // Whole milliseconds first: 80000 * 2.1 is 168000.00000000003 in binary
+  // floating point, and a ceiling taken on that charges a whole second.
+  const scaledSeconds = Math.ceil(
+    Math.round(declaredMs * machineFactor) / MILLISECONDS_PER_SECOND);
+  const boundSeconds = Math.floor(
+    (budgetMs - budgetMs / KILL_BUDGET_MARGIN_DIVISOR) / MILLISECONDS_PER_SECOND);
+  const seconds = Math.min(scaledSeconds, boundSeconds);
   return seconds > TAP_DEFAULT_TIMEOUT_SECONDS ? seconds : null;
+}
+
+/**
+ * The TAP_TIMEOUT a test file runs under: the caller's own when it set one,
+ * else the budget derived from the file's declarations and the lane floor,
+ * as the string the child's environment carries - or undefined when tap's
+ * default stands.
+ * @param {string} absoluteFile the test file
+ * @param {object} env the child's environment so far
+ * @param {number} budgetMs the per-file kill budget
+ * @return {string|undefined}
+ */
+function resolveTapTimeout(absoluteFile, env, budgetMs) {
+  if (env.TAP_TIMEOUT !== undefined) return env.TAP_TIMEOUT;
+  const derivedSeconds = deriveRootTimeoutSeconds(
+    declaredTimeouts(absoluteFile), resolveTestMachineFactor(env), budgetMs);
+  const resolvedSeconds = Math.max(
+    derivedSeconds ?? 0,
+    parsedTimeoutFloorSeconds(env.TAP_TIMEOUT_FLOOR),
+  );
+  return resolvedSeconds > 0 ? String(resolvedSeconds) : undefined;
 }
 
 /**
@@ -944,6 +990,7 @@ export {
   TEST_NODE_ARGS,
   TEST_RESULTS_LEDGER_ROTATE_BYTES,
   resolveTestMachineFactor,
+  resolveTapTimeout,
   analyzeTapOutput,
   filterTestFiles,
   formatBatchSignalLine,

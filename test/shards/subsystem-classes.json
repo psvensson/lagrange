@@ -28,7 +28,7 @@
   "censusSize": 2341,
   "digest": "fnv1a32-ff033146",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-490e3835",
+  "observationDigest": "fnv1a32-1f55fc1d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -14461,6 +14461,7 @@
         "scripts/run-test-files.js"
       ],
       "env": [
+        "LAGRANGE_TEST_MACHINE_FACTOR",
         "TAP_TIMEOUT",
         "TAP_TIMEOUT_FLOOR"
       ]

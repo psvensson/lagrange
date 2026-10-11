@@ -1,11 +1,12 @@
 // Timeout-declaration extraction for the test harness.
 //
-// tap silently caps every test at its 30s default and only the TAP_TIMEOUT env
-// genuinely lifts it, so run-test-files.js must read each file's declared
-// timeout and export it. That extraction used to be a regex over raw source
-// matching only literal digits — but system-guidelines forbids magic numbers,
-// so the guideline-compliant form `{timeout: TOOLCHAIN_TIMEOUT_MS}` was INERT
-// and 18 files silently ran under the 30s cap while declaring 45s-300s.
+// tap arms ONE root timer per file - TAP_TIMEOUT seconds, 30 by default - and
+// a test's own `{timeout: N}` cannot extend it, so run-test-files.js must read
+// each file's declarations and export the root budget they add up to. That
+// extraction used to be a regex over raw source matching only literal digits
+// — but system-guidelines forbids magic numbers, so the guideline-compliant
+// form `{timeout: TOOLCHAIN_TIMEOUT_MS}` was INERT and 18 files silently ran
+// under the 30s root timer while declaring 45s-300s.
 //
 // This module parses instead of pattern-matching, for three reasons a wider
 // regex could not satisfy: comments and string literals can never be mistaken
@@ -35,10 +36,13 @@ const TEST_ROOT_NAMES = Object.freeze(new Set([
   'test', 't', 'tap', 'it', 'describe', 'suite',
 ]));
 const TEST_MODIFIER_NAMES = Object.freeze(new Set(['only', 'skip', 'todo']));
+const SET_TIMEOUT_METHOD = 'setTimeout';
 const NODE_TYPE = Object.freeze({
   ASSIGNMENT: 'AssignmentExpression',
+  AWAIT: 'AwaitExpression',
   BINARY: 'BinaryExpression',
   CALL: 'CallExpression',
+  EXPRESSION_STATEMENT: 'ExpressionStatement',
   SPREAD: 'SpreadElement',
   VARIABLE_DECLARATION: 'VariableDeclaration',
   IMPORT_DECLARATION: 'ImportDeclaration',
@@ -273,10 +277,97 @@ function resolveTimeoutValue(valueNode, bindings, context, problems) {
   return null;
 }
 
-// Returns {milliseconds, problems}. `milliseconds` is the largest resolvable
-// declaration (0 when there is none); `problems` is non-empty when a
-// declaration exists but could not be resolved — callers must fail closed on
-// it rather than fall back to the default cap.
+// The call a top-level statement makes, if it is one: `t.test(...)`,
+// `await t.test(...)` or `t.setTimeout(...)` written at the file's top level.
+// Only these are known to run exactly once, directly under the root test; a
+// call inside a loop, a function or a subtest body is not top-level.
+function topLevelCall(statement) {
+  if (statement.type !== NODE_TYPE.EXPRESSION_STATEMENT) return null;
+  const expression = statement.expression?.type === NODE_TYPE.AWAIT ?
+    statement.expression.argument : statement.expression;
+  return expression?.type === NODE_TYPE.CALL ? expression : null;
+}
+
+function collectTopLevelCalls(ast) {
+  const calls = new Set();
+  for (const statement of ast.body) {
+    const call = topLevelCall(statement);
+    if (call !== null) calls.add(call);
+  }
+  return calls;
+}
+
+// `t.setTimeout(N)` / `tap.setTimeout(N)` on a test root: the file's own
+// declaration of its whole root budget.
+function isRootSetTimeoutCallee(callee) {
+  return callee?.type === NODE_TYPE.MEMBER && !callee.computed &&
+    callee.property?.type === NODE_TYPE.IDENTIFIER &&
+    callee.property.name === SET_TIMEOUT_METHOD &&
+    callee.object?.type === NODE_TYPE.IDENTIFIER &&
+    TEST_ROOT_NAMES.has(callee.object.name);
+}
+
+// One property of a test call's options object: its resolved `timeout:`, or
+// null when it is not a resolvable timeout declaration (a spread or a
+// computed key is reported, like an unresolvable value).
+function declaredPropertyTimeout(property, bindings, filePath, problems) {
+  const line = property.loc?.start?.line ?? 0;
+  const location = `${filePath}:${line}`;
+  // An options object assembled by spread may carry a timeout this module
+  // cannot see; staying silent would reinstate the 30s cap.
+  if (property.type === NODE_TYPE.SPREAD) {
+    problems.push(`${SPREAD_OPTIONS_PROBLEM} at ${location}`);
+    return null;
+  }
+  if (!isTimeoutKey(property)) return null;
+  if (property.computed) {
+    problems.push(`${COMPUTED_KEY_PROBLEM} at ${location}`);
+    return null;
+  }
+  return resolveTimeoutValue(property.value, bindings, {
+    fromFile: filePath,
+    location,
+  }, problems);
+}
+
+// The largest resolvable `timeout:` among one test call's options objects, or
+// null when the call declares none.
+function declaredCallTimeout(node, bindings, filePath, problems) {
+  let declared = null;
+  for (const argument of node.arguments) {
+    if (argument?.type !== NODE_TYPE.OBJECT) continue;
+    for (const property of argument.properties) {
+      const value =
+        declaredPropertyTimeout(property, bindings, filePath, problems);
+      if (value !== null && (declared === null || value > declared)) {
+        declared = value;
+      }
+    }
+  }
+  return declared;
+}
+
+// The budget a top-level `t.setTimeout(N)` declares, or null when the call is
+// not one or its argument does not resolve (reported, like any declaration).
+function declaredRootTimeout(call, bindings, filePath, problems) {
+  if (!isRootSetTimeoutCallee(call.callee)) return null;
+  const [budget] = call.arguments;
+  if (budget === undefined) return null;
+  const line = budget.loc?.start?.line ?? 0;
+  return resolveTimeoutValue(budget, bindings, {
+    fromFile: filePath,
+    location: `${filePath}:${line}`,
+  }, problems);
+}
+
+// Returns {milliseconds, topLevelMilliseconds, fileMilliseconds, problems}.
+// `milliseconds` is the largest resolvable declaration anywhere in the file
+// (0 when there is none); `topLevelMilliseconds` is the SUM of the
+// declarations on top-level test calls, which share tap's one root timer;
+// `fileMilliseconds` is the largest top-level `t.setTimeout(N)`, the file's
+// own root budget. `problems` is non-empty when a declaration exists but
+// could not be resolved — callers must fail closed on it rather than fall
+// back to the default cap.
 export function extractTimeoutDeclarations(source, filePath) {
   const problems = [];
   let ast;
@@ -284,38 +375,33 @@ export function extractTimeoutDeclarations(source, filePath) {
     ast = espree.parse(source, PARSE_OPTIONS);
   } catch (error) {
     return {
+      fileMilliseconds: 0,
       milliseconds: 0,
       problems: [`${filePath} ${PARSE_FAILURE_PROBLEM}: ${error.message}`],
+      topLevelMilliseconds: 0,
     };
   }
   const bindings = collectNumericConstants(ast);
   bindings.imports = collectImportBindings(ast);
+  const topLevelCalls = collectTopLevelCalls(ast);
   let largest = 0;
+  let topLevelSum = 0;
+  let fileBudget = 0;
   walk(ast, (node) => {
     if (node.type !== NODE_TYPE.CALL || !isTestCallee(node.callee)) return;
-    for (const argument of node.arguments) {
-      if (argument?.type !== NODE_TYPE.OBJECT) continue;
-      for (const property of argument.properties) {
-        const line = property.loc?.start?.line ?? 0;
-        const location = `${filePath}:${line}`;
-        // An options object assembled by spread may carry a timeout this
-        // module cannot see; staying silent would reinstate the 30s cap.
-        if (property.type === NODE_TYPE.SPREAD) {
-          problems.push(`${SPREAD_OPTIONS_PROBLEM} at ${location}`);
-          continue;
-        }
-        if (!isTimeoutKey(property)) continue;
-        if (property.computed) {
-          problems.push(`${COMPUTED_KEY_PROBLEM} at ${location}`);
-          continue;
-        }
-        const value = resolveTimeoutValue(property.value, bindings, {
-          fromFile: filePath,
-          location,
-        }, problems);
-        if (value !== null && value > largest) largest = value;
-      }
-    }
+    const declared = declaredCallTimeout(node, bindings, filePath, problems);
+    if (declared === null) return;
+    if (declared > largest) largest = declared;
+    if (topLevelCalls.has(node)) topLevelSum += declared;
   });
-  return {milliseconds: largest, problems};
+  for (const call of topLevelCalls) {
+    const declared = declaredRootTimeout(call, bindings, filePath, problems);
+    if (declared !== null && declared > fileBudget) fileBudget = declared;
+  }
+  return {
+    fileMilliseconds: fileBudget,
+    milliseconds: largest,
+    problems,
+    topLevelMilliseconds: topLevelSum,
+  };
 }
