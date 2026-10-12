@@ -19,16 +19,16 @@
     "services-runtime": 146,
     "solver-tooling": 7,
     "storage-partition": 182,
-    "storage-raft": 123,
+    "storage-raft": 124,
     "test-infrastructure": 143,
     "transactions": 18,
     "transport-messaging": 95,
     "wasm-toolchain": 57
   },
-  "censusSize": 2362,
-  "digest": "fnv1a32-893ed0e0",
+  "censusSize": 2363,
+  "digest": "fnv1a32-4e6185f8",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-82b845f4",
+  "observationDigest": "fnv1a32-aab2c089",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1644,6 +1644,7 @@
     "test/raft/snapshot-gated-compaction-contract.test.js": "storage-raft",
     "test/raft/snapshot-install-restart-states.test.js": "storage-raft",
     "test/raft/snapshot-install-transition.test.js": "storage-raft",
+    "test/raft/snapshot-lifecycle-staging.test.js": "storage-raft",
     "test/raft/snapshot-multichunk-transfer.test.js": "storage-raft",
     "test/raft/snapshot-offer-router.test.js": "storage-raft",
     "test/raft/snapshot-proof-gated-compaction.test.js": "storage-raft",
@@ -10521,6 +10522,7 @@
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-replica-lifecycle-owner.js",
         "src/raft/raft-rs-runtime-owner.js",
+        "src/raft/snapshot-install.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
       ],
       "directories": [
@@ -10965,6 +10967,24 @@
     "test/raft/snapshot-gated-compaction-contract.test.js": {
       "files": [
         "src/partition/partition-raft-storage.js"
+      ]
+    },
+    "test/raft/snapshot-lifecycle-staging.test.js": {
+      "files": [
+        "src/node/replica-handler-remove-execution-methods.js",
+        "src/raft/raft-rs-binding-owner.js",
+        "src/raft/raft-rs-core-constants.js",
+        "src/raft/raft-rs-group-membership-admission.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-membership-administration.js",
+        "src/raft/raft-rs-operation-port.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/raft/snapshot-install.js"
+      ],
+      "directories": [
+        "src",
+        "src/raft"
       ]
     },
     "test/raft/snapshot-proof-gated-compaction.test.js": {

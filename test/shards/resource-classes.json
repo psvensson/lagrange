@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2345,
+    "ordinary": 2346,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2362,
-  "digest": "fnv1a32-b4bb3330",
+  "censusSize": 2363,
+  "digest": "fnv1a32-84bea64d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1624,6 +1624,7 @@
     "test/raft/snapshot-gated-compaction-contract.test.js": "ordinary",
     "test/raft/snapshot-install-restart-states.test.js": "ordinary",
     "test/raft/snapshot-install-transition.test.js": "ordinary",
+    "test/raft/snapshot-lifecycle-staging.test.js": "ordinary",
     "test/raft/snapshot-multichunk-transfer.test.js": "ordinary",
     "test/raft/snapshot-offer-router.test.js": "ordinary",
     "test/raft/snapshot-proof-gated-compaction.test.js": "ordinary",

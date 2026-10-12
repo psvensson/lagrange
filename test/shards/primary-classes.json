@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2062,
+    "unit": 2063,
     "integration": 91,
     "bootstrap": 202,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2362,
-  "digest": "fnv1a32-08fb5290",
+  "censusSize": 2363,
+  "digest": "fnv1a32-866879fb",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1625,6 +1625,7 @@
     "test/raft/snapshot-gated-compaction-contract.test.js": "unit",
     "test/raft/snapshot-install-restart-states.test.js": "unit",
     "test/raft/snapshot-install-transition.test.js": "unit",
+    "test/raft/snapshot-lifecycle-staging.test.js": "unit",
     "test/raft/snapshot-multichunk-transfer.test.js": "unit",
     "test/raft/snapshot-offer-router.test.js": "unit",
     "test/raft/snapshot-proof-gated-compaction.test.js": "unit",

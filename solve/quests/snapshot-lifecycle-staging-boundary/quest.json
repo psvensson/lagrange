@@ -24,5 +24,6 @@
       "id": "preserve-history",
       "statement": "Keep prior audits and native failures; no merge without independent review and exact candidate gates."
     }
-  ]
+  ],
+  "sealedAt": "ba4e497581afb9cab2743d3263a9f19245a1b126"
 }

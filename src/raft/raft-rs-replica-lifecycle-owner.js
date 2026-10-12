@@ -41,6 +41,7 @@ const RUNTIME_LIFECYCLE_OWNERS = new WeakMap();
 const LIFECYCLE_ADMIN_OUTCOME = Object.freeze({NOT_MANAGED: 'NOT_MANAGED'});
 const LIFECYCLE_REASON = Object.freeze({
   MISSING: 'lifecycle-record-missing',
+  STAGING_PREPARED: 'snapshot-lifecycle-prepared',
   IDENTITY_MISMATCH: 'lifecycle-identity-mismatch',
   RETIRED: 'retired',
   STALE_RUNTIME_GENERATION: 'runtime-generation-not-registered',
@@ -284,6 +285,23 @@ class RaftRsReplicaLifecycleOwner {
 }
 
 /**
+ * Prepare only the receiver-local lifecycle record in a validated snapshot's
+ * private staging database. The snapshot owner retains CREATE authorization,
+ * staging-file custody and atomic installation; this owner retains identity,
+ * incarnation creation and the refusal of retired/conflicting generations.
+ * No owner, runtime handle, registration or retirement capability is returned.
+ * An exact active row is idempotent and keeps its incarnation.
+ * @param {Object} request - {db, groupId, peerId, replicaIdentity}.
+ * @return {Object} Immutable lifecycle outcome, never install permission.
+ */
+function prepareReplicaLifecycleForSnapshot(request) {
+  const owner = new RaftRsReplicaLifecycleOwner(request);
+  return owner.execute(() => frozenResult(RAFT_OPERATION_OUTCOME.CORE_OK,
+    LIFECYCLE_REASON.STAGING_PREPARED,
+    Object.freeze({incarnation: owner.incarnation})));
+}
+
+/**
  * Register one opened runtime's lifecycle owner under that exact runtime.
  * @param {Object} runtime - The operation port the generation opened.
  * @param {RaftRsReplicaLifecycleOwner} owner
@@ -408,6 +426,7 @@ export {
   LIFECYCLE_STATE,
   RaftRsReplicaLifecycleOwner,
   readDurableReplicaLifecycle,
+  prepareReplicaLifecycleForSnapshot,
   registerRuntimeLifecycle,
   retireReplicaLifecycle,
   unregisterRuntimeLifecycle,

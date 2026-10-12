@@ -943,6 +943,18 @@
         "test/integration/message-group-learner-discovery.integration.test.js",
         "test/rebalancer/coordinator-timeout-check-serialization.test.js"
       ]
+    },
+    "snapshot-receiver-lifecycle-staging": {
+      "description": "Validated snapshot installation consumes a narrow, immutable receiver-local staging result from the existing replica lifecycle owner; it neither constructs that owner nor acquires runtime/retirement authority. The lifecycle owner preserves an exact active incarnation and refuses conflicting, retired or lifecycle-less surviving native history. Snapshot installation retains validation, CREATE authorization, staged-file custody, native reconstruction and atomic publication.",
+      "owners": [
+        "src/raft/snapshot-install.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js"
+      ],
+      "tests": [
+        "test/raft/snapshot-lifecycle-staging.test.js",
+        "test/integration/message-group-learner-runtime-authorization.integration.test.js",
+        "test/raft/raft-rs-backend/operation-port-boundary.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -1870,6 +1882,29 @@
         "test/integration/message-group-learner-recipient.integration.test.js",
         "test/integration/message-group-learner-discovery.integration.test.js",
         "test/rebalancer/coordinator-timeout-check-serialization.test.js"
+      ]
+    },
+    "snapshot-receiver-lifecycle-staging": {
+      "description": "Snapshot staging consumes a lifecycle-owned preparation answer without being allowed to mint or retire live runtime authority.",
+      "endpoints": [
+        {
+          "id": "validated-snapshot-installation",
+          "owners": [
+            "src/raft/snapshot-install.js"
+          ]
+        },
+        {
+          "id": "receiver-lifecycle-preparation",
+          "owners": [
+            "src/raft/raft-rs-replica-lifecycle-owner.js"
+          ]
+        }
+      ],
+      "contract": "snapshot-receiver-lifecycle-staging",
+      "witnessTests": [
+        "test/raft/snapshot-lifecycle-staging.test.js",
+        "test/integration/message-group-learner-runtime-authorization.integration.test.js",
+        "test/raft/raft-rs-backend/operation-port-boundary.test.js"
       ]
     }
   }

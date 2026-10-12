@@ -36,8 +36,9 @@ import {
 import {RaftRsDurableStore} from './raft-rs-durable-store.js';
 import {RAFT_RS_ZERO_INDEX} from './raft-rs-durable-store-constants.js';
 import {raftRsConfStateKey} from './raft-rs-conf-state-key.js';
-import {RaftRsReplicaLifecycleOwner} from
+import {prepareReplicaLifecycleForSnapshot} from
   './raft-rs-replica-lifecycle-owner.js';
+import {RAFT_OPERATION_OUTCOME} from './raft-operation-port-constants.js';
 import {readRaftRsPeerIdentityReservations} from
   './raft-rs-peer-identity.js';
 import {readCheckpoint} from './snapshot-checkpoint-store.js';
@@ -343,9 +344,12 @@ function reconstructStagedRaftRsState(stagingDb, descriptor, receiver) {
   // This row is receiver-local and is minted only in the throwaway staging
   // file. The lifecycle owner must run before the durable Raft record exists;
   // seeing a record without a lifecycle row is intentionally a hard refusal.
-  new RaftRsReplicaLifecycleOwner({db: stagingDb, groupId: raftRs.groupId,
-    peerId: String(receiver.peerId),
+  const lifecycle = prepareReplicaLifecycleForSnapshot({db: stagingDb,
+    groupId: raftRs.groupId, peerId: String(receiver.peerId),
     replicaIdentity: receiver.replicaIdentity});
+  if (lifecycle.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
+    throw Object.assign(new Error(lifecycle.reason), {consensus: lifecycle});
+  }
   const store = new RaftRsDurableStore(stagingDb);
   store.transaction(() => {
     store.putAppliedState(raftRs.groupId, raftRs.appliedIndex,
