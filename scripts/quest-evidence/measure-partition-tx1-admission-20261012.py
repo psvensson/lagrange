@@ -160,7 +160,7 @@ summary = {'candidate': candidate, 'publishedInput': BASE, 'productionSourceTree
            'guidelineExit': code, 'independentApproval': False, 'mergeReady': False,
            'negativeSource': {'path': FENCE, 'originalSha256': digest(original), 'mutantSha256': digest(mutant), 'restored': p.read_bytes() == original},
            'scope': 'Actual three-replica participant Raft/SQLite and real release-owner requests; six engaged storage faults; SQL engine recovery over a local coordinator gateway double. No replicated coordinator-store, coordinator process-kill, historical legacy-session migration, downstream CDC delivery, split/merge or physical multi-host certification.'}
-summary['focusedProofPassed'] = all(value for key, value in checks.items() if key not in ['whitespace'])
+summary['focusedProofPassed'] = all(checks.values())
 summary['allRunGatesPassed'] = all(checks.values()) and wider['exit'] == 0 and totals(wider)['fail'] == 0 and code == 0
 (OUT / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
 (OUT / 'final-status.txt').write_text(git('status', '--porcelain') + '\n')
