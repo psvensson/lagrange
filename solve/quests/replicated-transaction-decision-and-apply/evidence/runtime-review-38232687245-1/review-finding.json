@@ -1,0 +1,8 @@
+{
+  "id": "replicated-transaction-decision-and-apply",
+  "entry": {
+    "ts": "2026-10-12T09:53:39.260Z",
+    "type": "finding",
+    "text": "External independent Copilot PR117 review 5488915088 recommends changes: incomplete shared restoration, cross-group callback reentrancy, reload retry amplification and missing impact witness registration. This partial automated review is not a direct subagent or approving Solver verification. Candidate remains held."
+  }
+}
