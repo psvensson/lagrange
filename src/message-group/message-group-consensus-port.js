@@ -6,6 +6,7 @@
 // handles. The port's runtime owner makes every Raft decision; nothing here
 // reproduces one.
 
+import {isRaftOpeningFailure} from '../raft/raft-operation-port.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
@@ -152,7 +153,7 @@ function openMessageGroupConsensusPort(service) {
     service.raft = service.createOperationPort(
       messageGroupConsensusRequest(service));
   } catch (error) {
-    if (error?.consensus?.outcome !== RAFT_OPERATION_OUTCOME.CORE_REFUSED) {
+    if (!isRaftOpeningFailure(error)) {
       throw error;
     }
     throw consensusInitRefusedError(service, error.consensus);

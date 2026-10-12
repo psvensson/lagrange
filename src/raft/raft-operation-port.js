@@ -54,6 +54,16 @@ function createRaftOperationPort(operations) {
   return Object.freeze(port);
 }
 
+// A constructor can refuse semantically, lose the shared core, or fail at
+// its host boundary. Every service kind consumes the same failure vocabulary
+// and retains the exact consensus answer; unrelated throws are not relabeled.
+function isRaftOpeningFailure(error) {
+  const result = error?.consensus?.outcome;
+  return result === RAFT_OPERATION_OUTCOME.CORE_REFUSED ||
+    result === RAFT_OPERATION_OUTCOME.CORE_FATAL ||
+    result === RAFT_OPERATION_OUTCOME.HOST_FAILURE;
+}
+
 function assertRaftOperationSucceeded(result) {
   if (result && typeof result === 'object' &&
       typeof result.outcome === 'string' &&
@@ -72,4 +82,5 @@ export {
   assertRaftOperationSucceeded,
   createRaftOperationPort,
   deepFreeze,
+  isRaftOpeningFailure,
 };

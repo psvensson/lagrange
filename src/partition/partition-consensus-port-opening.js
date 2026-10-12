@@ -5,7 +5,7 @@
 // holds no durable record. Every refusal releases what initialization
 // acquired (R11) before it is thrown.
 
-import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
+import {isRaftOpeningFailure} from '../raft/raft-operation-port.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {PARTITION_CONSENSUS_STARTUP_OUTCOME} from
   './partition-service-constants.js';
@@ -41,7 +41,7 @@ async function openPartitionConsensusPort(service, request) {
   try {
     return service.createOperationPort(request);
   } catch (error) {
-    if (error?.consensus?.outcome !== RAFT_OPERATION_OUTCOME.CORE_REFUSED) {
+    if (!isRaftOpeningFailure(error)) {
       throw error;
     }
     await service.shutdown();

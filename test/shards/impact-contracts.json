@@ -548,16 +548,22 @@
       ]
     },
     "raft-rs-runtime-lifecycle-entry": {
-      "description": "The replica lifecycle owner admits each semantic operation before the runtime owner can enter the raft-rs core, and durable retirement waits for admitted operations before becoming terminal.",
+      "description": "The replica lifecycle owner admits each semantic operation before the runtime owner can enter the raft-rs core, and durable retirement waits for admitted operations before becoming terminal. A constructor refused before runtime admission publishes no membership reservation owner or native handle; each service initialization retains the exact named consensus failure and releases its own opening resources before reporting refusal.",
       "owners": [
         "src/raft/raft-rs-replica-lifecycle-owner.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-operation-port.js",
-        "src/raft/raft-rs-runtime-owner.js"
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/raft/raft-operation-port.js",
+        "src/raft/raft-rs-membership-administration.js",
+        "src/partition/partition-consensus-port-opening.js",
+        "src/message-group/message-group-consensus-port.js",
+        "src/wasm-service/wasm-service-consensus-port.js"
       ],
       "tests": [
         "test/raft/raft-rs-backend/operation-port-lifecycle.test.js",
-        "test/raft/raft-rs-backend/operation-port-boundary.test.js"
+        "test/raft/raft-rs-backend/operation-port-boundary.test.js",
+        "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js"
       ]
     },
     "raft-rs-runtime-application-transaction": {
@@ -591,7 +597,8 @@
         "test/partition/partition-participant-transaction-apply.test.js",
         "test/partition/partition-participant-transaction-staging.test.js",
         "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js",
-        "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js"
+        "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js",
+        "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js"
       ]
     },
     "partition-raft-operation-port": {
@@ -603,14 +610,16 @@
         "src/partition/partition-service-raft-init-base.js",
         "src/partition/partition-service-raft-lifecycle-wiring.js",
         "src/partition/partition-service-raft-membership-administration.js",
-        "src/partition/partition-consensus-hold-log.js"
+        "src/partition/partition-consensus-hold-log.js",
+        "src/partition/partition-consensus-port-opening.js"
       ],
       "tests": [
         "test/raft/raft-rs-backend/partition-construction-seam.test.js",
         "test/raft/raft-rs-backend/operation-port-boundary.test.js",
         "test/partition/partition-port-refusal-outcomes.test.js",
         "test/partition/partition-write-typed-releases.test.js",
-        "test/partition/partition-consensus-hold-log.test.js"
+        "test/partition/partition-consensus-hold-log.test.js",
+        "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js"
       ]
     },
     "partition-session-transaction-persistence-admission": {
@@ -1369,27 +1378,33 @@
       }
     },
     "raft-rs-runtime-lifecycle-entry": {
-      "description": "Lifecycle admission and core entry must remain one boundary: retirement cannot race an admitted operation, and queued ingress must recheck lifecycle before worker-side core entry.",
+      "description": "Lifecycle admission and core entry must remain one boundary: retirement cannot race an admitted operation, and queued ingress must recheck lifecycle before worker-side core entry. Refused construction leaves earlier exact owners intact and service initialization consumes the canonical failure without bypassing its cleanup.",
       "endpoints": [
         {
           "id": "durable-lifecycle-admission",
           "owners": [
             "src/raft/raft-rs-replica-lifecycle-owner.js",
-            "src/raft/raft-rs-lifecycle-administration.js"
+            "src/raft/raft-rs-lifecycle-administration.js",
+            "src/partition/partition-consensus-port-opening.js",
+            "src/message-group/message-group-consensus-port.js",
+            "src/wasm-service/wasm-service-consensus-port.js"
           ]
         },
         {
           "id": "runtime-core-entry",
           "owners": [
             "src/raft/raft-rs-operation-port.js",
-            "src/raft/raft-rs-runtime-owner.js"
+            "src/raft/raft-rs-runtime-owner.js",
+            "src/raft/raft-operation-port.js",
+            "src/raft/raft-rs-membership-administration.js"
           ]
         }
       ],
       "contract": "raft-rs-runtime-lifecycle-entry",
       "witnessTests": [
         "test/raft/raft-rs-backend/operation-port-lifecycle.test.js",
-        "test/raft/raft-rs-backend/operation-port-boundary.test.js"
+        "test/raft/raft-rs-backend/operation-port-boundary.test.js",
+        "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js"
       ]
     },
     "raft-rs-runtime-application-transaction": {
@@ -1431,7 +1446,8 @@
         "test/partition/partition-participant-transaction-apply.test.js",
         "test/partition/partition-participant-transaction-staging.test.js",
         "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js",
-        "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js"
+        "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js",
+        "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js"
       ]
     },
     "partition-raft-operation-port": {
@@ -1451,7 +1467,8 @@
             "src/partition/partition-service-raft-init-base.js",
             "src/partition/partition-service-raft-lifecycle-wiring.js",
             "src/partition/partition-service-raft-membership-administration.js",
-            "src/partition/partition-consensus-hold-log.js"
+            "src/partition/partition-consensus-hold-log.js",
+            "src/partition/partition-consensus-port-opening.js"
           ]
         }
       ],
@@ -1461,7 +1478,8 @@
         "test/raft/raft-rs-backend/operation-port-boundary.test.js",
         "test/partition/partition-port-refusal-outcomes.test.js",
         "test/partition/partition-write-typed-releases.test.js",
-        "test/partition/partition-consensus-hold-log.test.js"
+        "test/partition/partition-consensus-hold-log.test.js",
+        "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js"
       ]
     },
     "spread-cure-transition-authorization": {

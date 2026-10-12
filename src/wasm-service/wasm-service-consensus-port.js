@@ -5,6 +5,7 @@
 // and both handles are released. The port's runtime owner makes every Raft
 // decision; nothing here reproduces one.
 
+import {isRaftOpeningFailure} from '../raft/raft-operation-port.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
@@ -185,7 +186,7 @@ function openWasmServiceConsensusPort(replica) {
     replica.raft = createRaftRsOperationPort(
       wasmServiceConsensusRequest(replica));
   } catch (error) {
-    if (error?.consensus?.outcome !== RAFT_OPERATION_OUTCOME.CORE_REFUSED) {
+    if (!isRaftOpeningFailure(error)) {
       throw error;
     }
     throw consensusInitRefusedError(replica, error.consensus);

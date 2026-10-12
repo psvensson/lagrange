@@ -95,6 +95,7 @@ const EVENT_ALIAS = Object.freeze({
   'leader-change': RAFT_EVENT.LEADER_CHANGE,
 });
 const HEARTBEAT_TICK_DIVISOR = 3;
+const ALREADY_CLOSED = 'already-closed';
 
 function required(request, field) {
   const value = request?.[field];
@@ -204,12 +205,6 @@ function createRaftRsOperationPort(request) {
   });
   const lifecycle = new RaftRsReplicaLifecycleOwner({
     db: database, groupId, peerId, replicaIdentity,
-  });
-  const unregisterMembershipOwner = registerPeerIdentityReservationOwner({
-    groupId,
-    localReplicaIdentity: replicaIdentity,
-    reserve: (joiningReplicaIdentity) =>
-      registry.registerReplica(joiningReplicaIdentity),
   });
   const listeners = new Map();
   const emit = (eventName, ...args) => {
@@ -446,22 +441,33 @@ function createRaftRsOperationPort(request) {
     }),
     startScheduling,
     stopScheduling,
-    close: () => {
-      if (closed) {
-        return coreOk('already-closed');
-      }
-      closed = true;
-      stopScheduling();
-      listeners.clear();
-      const result = dispatcher === null ?
-        coreOk('closed-without-runtime') : lifecycle.active ?
-          lifecycle.execute(() => dispatcher.close({enterCore: true})) :
-          dispatcher.close({enterCore: false});
-      unregisterRuntimeLifecycle(port, lifecycle);
-      unregisterMembershipOwner();
-      return result;
-    },
+    close,
   });
+  // Publish only after construction succeeds. A refused opening must never
+  // replace a live same-name owner: unregistering after overwrite would lose
+  // that owner's entry rather than restore it. The port's exact close releases
+  // only the callback it actually published.
+  const unregisterMembershipOwner = registerPeerIdentityReservationOwner({
+    groupId,
+    localReplicaIdentity: replicaIdentity,
+    reserve: (joiningReplicaIdentity) =>
+      registry.registerReplica(joiningReplicaIdentity),
+  });
+  function close() {
+    if (closed) {
+      return coreOk(ALREADY_CLOSED);
+    }
+    closed = true;
+    stopScheduling();
+    listeners.clear();
+    const result = dispatcher === null ?
+      coreOk('closed-without-runtime') : lifecycle.active ?
+        lifecycle.execute(() => dispatcher.close({enterCore: true})) :
+        dispatcher.close({enterCore: false});
+    unregisterRuntimeLifecycle(port, lifecycle);
+    unregisterMembershipOwner();
+    return result;
+  }
   registerRuntimeLifecycle(port, lifecycle);
   // The release of a pending identity record is its acknowledgement alone:
   // resolved, the gate may open; rejected (the fact never became durable),
