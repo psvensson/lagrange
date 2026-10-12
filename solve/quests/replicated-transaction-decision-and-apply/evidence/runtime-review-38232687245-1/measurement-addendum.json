@@ -1,0 +1,65 @@
+{
+  "kind": "additive-measurement-classification-correction",
+  "candidate": "8bc42532f99770e852310b3785f95c038d657dda",
+  "publishedEvidenceHead": "3c4db94e9fa7b6f412b6b30a8ee3059cdace1f25",
+  "originalSummaryRetained": true,
+  "correction": "The workflow classifier expected CORE_FATAL. The actual binding returns CORE_REFUSED with reason invalid handle at phase status. Both are distinct; only the observed CORE_REFUSED path is claimed here. The child still expects CORE_OK, and its behavioral assertion failed after one middle-group create refusal and before any recreation of the third group.",
+  "artifactId": 11739177023,
+  "artifactSha256": "700388ede9dffd3cf203d8bf5951dc8e3e940783f056287bec07cf4491ad1a91",
+  "sourceSha256": "6510a4305d6ff45f1223015a2fbb6f1e9a99229428cc55b70538c8d77968619d",
+  "checks": {
+    "control": true,
+    "partial-restore": true,
+    "reentrant-restore": true,
+    "reload-backoff": true,
+    "partial-engaged": true,
+    "reentrancy-engaged": true,
+    "amplification-engaged": true,
+    "native-runner-red": true,
+    "existing-regressions": true,
+    "unchanged-two-second-bar": true,
+    "clock-negative": true
+  },
+  "measurementComplete": true,
+  "partialRestore": {
+    "refusals": 1,
+    "thirdGroupRecreated": false,
+    "outcome": {
+      "outcome": "CORE_REFUSED",
+      "reason": "invalid handle",
+      "phase": "status",
+      "retryable": false,
+      "recoveryRequired": false
+    }
+  },
+  "reentrancy": {
+    "callbacks": 1,
+    "nativeEntriesDuringCallback": 1,
+    "outcome": {
+      "outcome": "CORE_REFUSED",
+      "reason": "invalid handle",
+      "phase": "status",
+      "retryable": false,
+      "recoveryRequired": false
+    }
+  },
+  "retryAmplification": {
+    "callsWithoutClockAdvance": 25,
+    "actualManifestReads": 25
+  },
+  "scheduledCaseDurationMs": 96.886545,
+  "scheduledSimulationMs": 2000,
+  "existingBehavioralTestsPassed": 16,
+  "newNativeSafetyTestsPassed": 1,
+  "newNativeSafetyTestsFailed": 3,
+  "productionSourceChanged": false,
+  "independentApproval": false,
+  "mergeReady": false,
+  "notClaimed": [
+    "directly spawned subagent",
+    "RF3 or multi-host certification",
+    "cold process restart",
+    "complete static-gate acceptance",
+    "runtime defects fixed"
+  ]
+}
