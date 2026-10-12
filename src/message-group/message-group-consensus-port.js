@@ -6,7 +6,8 @@
 // handles. The port's runtime owner makes every Raft decision; nothing here
 // reproduces one.
 
-import {isRaftOpeningFailure} from '../raft/raft-operation-port.js';
+import {isRaftOpeningFailure, assertRaftOperationSucceeded} from
+  '../raft/raft-operation-port.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
@@ -205,17 +206,37 @@ function readMessageGroupCommittedMembership(service) {
  * @param {Object} service - The message-group replica.
  * @return {Promise<void>}
  */
-async function closeMessageGroupConsensus(service) {
+function closeMessageGroupConsensus(service) {
+  if (service.consensusCloseSettlement) {
+    return service.consensusCloseSettlement;
+  }
+  // Install the in-flight identity before a close callback can re-enter.
+  const {promise, resolve, reject} = Promise.withResolvers();
+  service.consensusCloseSettlement = promise;
   const port = service.raft;
-  service.raft = null;
-  if (port) {
-    await Promise.resolve(port.close());
-  }
   const db = service.db;
-  service.db = null;
-  if (db?.open) {
-    db.close();
-  }
+  const release = async () => {
+    if (port) {
+      assertRaftOperationSucceeded(await port.close());
+    }
+    if (service.raft === port) {
+      service.raft = null;
+    }
+    if (db?.open) {
+      db.close();
+    }
+    if (service.db === db) {
+      service.db = null;
+    }
+  };
+  release().then(() => {
+    service.consensusCloseSettlement = null;
+    resolve();
+  }, (error) => {
+    service.consensusCloseSettlement = null;
+    reject(error);
+  });
+  return promise;
 }
 
 export {

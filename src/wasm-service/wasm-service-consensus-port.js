@@ -5,7 +5,8 @@
 // and both handles are released. The port's runtime owner makes every Raft
 // decision; nothing here reproduces one.
 
-import {isRaftOpeningFailure} from '../raft/raft-operation-port.js';
+import {isRaftOpeningFailure, assertRaftOperationSucceeded} from
+  '../raft/raft-operation-port.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
@@ -204,17 +205,37 @@ function openWasmServiceConsensusPort(replica) {
  * @param {Object} replica - The WASM service replica.
  * @return {Promise<void>}
  */
-async function closeWasmServiceConsensus(replica) {
+function closeWasmServiceConsensus(replica) {
+  if (replica.consensusCloseSettlement) {
+    return replica.consensusCloseSettlement;
+  }
+  // Install the in-flight identity before a close callback can re-enter.
+  const {promise, resolve, reject} = Promise.withResolvers();
+  replica.consensusCloseSettlement = promise;
   const port = replica.raft;
-  replica.raft = null;
-  if (port) {
-    await Promise.resolve(port.close());
-  }
   const db = replica.db;
-  replica.db = null;
-  if (db?.open) {
-    db.close();
-  }
+  const release = async () => {
+    if (port) {
+      assertRaftOperationSucceeded(await port.close());
+    }
+    if (replica.raft === port) {
+      replica.raft = null;
+    }
+    if (db?.open) {
+      db.close();
+    }
+    if (replica.db === db) {
+      replica.db = null;
+    }
+  };
+  release().then(() => {
+    replica.consensusCloseSettlement = null;
+    resolve();
+  }, (error) => {
+    replica.consensusCloseSettlement = null;
+    reject(error);
+  });
+  return promise;
 }
 
 export {

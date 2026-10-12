@@ -48,7 +48,7 @@ import {
   LEGACY_PARTITION_CONSENSUS_OUTCOME,
 } from './partition-legacy-consensus-state-constants.js';
 import {
-  consensusInitRefusedError,
+  refusePartitionConsensusStartup,
   openPartitionConsensusPort,
 } from './partition-consensus-port-opening.js';
 import {createCommittedStatementOutcomeTable} from
@@ -297,6 +297,9 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
    * @return {Promise<void>}
    */
   async initialize() {
+    if (this.startupFailure !== null) {
+      throw this.startupFailure;
+    }
     if (this.initialized) {
       return;
     }
@@ -587,8 +590,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
       // releases what it acquired (R11) instead of reporting a leader.
       const campaign = await this.raft.campaign();
       if (campaign?.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
-        await this.shutdown();
-        throw consensusInitRefusedError(this.partitionId, campaign);
+        await refusePartitionConsensusStartup(this, campaign);
       }
       this.logger.info(PARTITION_SERVICE_LOG_MSG.SINGLE_REPLICA_LEADER, {
         replicaId: this.replicaId,
@@ -644,8 +646,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     if (!isHeldByHostFailure(opened)) {
       return;
     }
-    await this.shutdown();
-    throw consensusInitRefusedError(this.partitionId, opened);
+    await refusePartitionConsensusStartup(this, opened);
   }
   /**
    * Start the Raft election timer.

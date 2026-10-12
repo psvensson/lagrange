@@ -25,6 +25,16 @@ const REPLICA_HANDLER_RETIREMENT_LOG_MSG = Object.freeze({
     'prove handler identity, so retirement was refused',
 });
 
+// Consumers may proceed to dependent releases only after this owner has
+// confirmed exact retirement or absence. Logging a refusal is not settlement.
+function requireReplicaHandlerRetirement(outcome) {
+  if (outcome !== REPLICA_HANDLER_RETIREMENT_OUTCOME.RETIRED &&
+      outcome !== REPLICA_HANDLER_RETIREMENT_OUTCOME.ALREADY_ABSENT) {
+    throw Object.assign(new Error(REPLICA_HANDLER_RETIREMENT_LOG_MSG.LEFT_REGISTERED),
+      {code: outcome});
+  }
+}
+
 function hasHandlerIdentityApi(transport) {
   return typeof transport?.getRegisteredHandler === TYPEOF_FUNCTION &&
     typeof transport?.unregisterExact === TYPEOF_FUNCTION;
@@ -122,5 +132,6 @@ export {
   isExactReplicaHandlerRegistered,
   isReplicaServiceHandlerBound,
   reportReplicaHandlerRetirement,
+  requireReplicaHandlerRetirement,
   retireReplicaTransportHandler,
 };

@@ -5,9 +5,11 @@ import {
 } from './partition-write-kernel.js';
 import {
   reportReplicaHandlerRetirement,
+  requireReplicaHandlerRetirement,
   retireReplicaTransportHandler,
 } from '../node/replica-transport-handler-identity.js';
 import {endReplicaLeadershipTenure} from '../raft/replica-leadership-state.js';
+import {assertRaftOperationSucceeded} from '../raft/raft-operation-port.js';
 
 const {
   PARTITION_SERVICE_DEFAULT,
@@ -17,7 +19,9 @@ const {
   PARTITION_SERVICE_TYPE,
 } = PARTITION_SERVICE_SHARED;
 
-function closePartitionConsensusResources(service) {
+const CONSTRUCTOR_METHOD = 'constructor';
+
+async function closePartitionConsensusResources(service) {
   if (service.learnerPromotionTimer) {
     clearTimeout(service.learnerPromotionTimer);
     service.learnerPromotionTimer = null;
@@ -30,9 +34,12 @@ function closePartitionConsensusResources(service) {
     service.systemTableCache.offCacheChange(
       service.systemTableCacheChangeListener);
   }
-  if (service.raft) {
-    service.raft.close();
-    service.raft = null;
+  const port = service.raft;
+  if (port) {
+    assertRaftOperationSucceeded(await port.close());
+    if (service.raft === port) {
+      service.raft = null;
+    }
   }
 }
 
@@ -66,6 +73,7 @@ async function retirePartitionTransportHandler(service) {
     address: service.unifiedAddress,
     replicaId: service.replicaId,
   }, outcome);
+  requireReplicaHandlerRetirement(outcome);
 }
 
 function closePartitionPersistenceResources(service) {
@@ -160,7 +168,7 @@ class PartitionServiceLifecycleMethods {
     this.clearLocalCanonicalLeaderClaimOnTeardown?.();
     // No reader continues a closed replica's leadership.
     endReplicaLeadershipTenure(this);
-    closePartitionConsensusResources(this);
+    await closePartitionConsensusResources(this);
     this.stopPeriodicSizeUpdates();
     this.stopPreparedStateHoldTimeoutSweep();
     this.roleMutationHelper.shutdown();
@@ -192,6 +200,7 @@ class PartitionServiceLifecycleMethods {
     this.cdcReplayBufferGrowthCount = 0;
     this.cdcReplayRetryDepth = 0;
     this.pendingCDCEventDeliveries.clear();
+    this.startupFailure = null;
     this.emit(PARTITION_SERVICE_EVENT.SHUTDOWN, {
       partitionId: this.partitionId,
       replicaId: this.replicaId,
@@ -202,7 +211,7 @@ class PartitionServiceLifecycleMethods {
 function createPartitionServiceLifecycleMethods() {
   const methods = {};
   for (const name of Object.getOwnPropertyNames(PartitionServiceLifecycleMethods.prototype)) {
-    if (name !== 'constructor') {
+    if (name !== CONSTRUCTOR_METHOD) {
       methods[name] = PartitionServiceLifecycleMethods.prototype[name];
     }
   }

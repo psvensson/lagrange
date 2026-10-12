@@ -12,6 +12,7 @@ import {
   TABLES,
 } from '../constants/index.js';
 import {RAFT_EVENT} from '../raft/raft-operation-port-constants.js';
+import {withRaftOpeningCleanupFailure} from '../raft/raft-operation-port.js';
 import {
   reserveAndAdmitGroupPeer,
   takeGroupAdmissionsInFlight,
@@ -166,6 +167,9 @@ function assignRaftLifecycle(serviceClass) {
      * @return {Promise<void>}
      */
     async initialize() {
+      if (this.startupFailure !== null) {
+        throw this.startupFailure;
+      }
       if (this.initialized) {
         return;
       }
@@ -190,7 +194,14 @@ function assignRaftLifecycle(serviceClass) {
             error: error.message,
           },
         );
-        await closeMessageGroupConsensus(this);
+        this.startupFailure = error;
+        try {
+          await closeMessageGroupConsensus(this);
+        } catch (cleanup) {
+          this.startupFailure = withRaftOpeningCleanupFailure(error, cleanup);
+          throw this.startupFailure;
+        }
+        this.startupFailure = null;
         throw error;
       }
       this.cdcHandler.initialize();
