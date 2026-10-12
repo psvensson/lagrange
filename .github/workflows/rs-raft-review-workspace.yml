@@ -15,28 +15,27 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
           fetch-depth: 1
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
-        with:
-          node-version: '22'
-          package-manager-cache: false
-      - name: Export exact tracked input and locked test dependencies
+      - name: Export exact current tracked source and Git identity
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p /tmp/rs-raft-review-export
-          git rev-parse HEAD > /tmp/rs-raft-review-export/input-sha.txt
-          git ls-tree -r HEAD > /tmp/rs-raft-review-export/tracked-blobs.txt
-          git archive --format=tar.gz HEAD > /tmp/rs-raft-review-export/source.tar.gz
-          npm ci > /tmp/rs-raft-review-export/install.log 2>&1
-          node --version > /tmp/rs-raft-review-export/node-version.txt
-          tar -czf /tmp/rs-raft-review-export/dependencies.tar.gz node_modules
-          cd /tmp/rs-raft-review-export
-          sha256sum source.tar.gz dependencies.tar.gz > SHA256SUMS
+          OUT="$RUNNER_TEMP/rs-raft-review-export"
+          mkdir -p "$OUT"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git diff --exit-code
+          git rev-parse HEAD > "$OUT/input-sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/tree-sha.txt"
+          git cat-file commit HEAD > "$OUT/head-commit.raw"
+          git ls-tree -r HEAD > "$OUT/tracked-blobs.txt"
+          git archive --format=tar.gz HEAD > "$OUT/source.tar.gz"
+          sha256sum package-lock.json > "$OUT/dependency-lock.sha256"
+          cd "$OUT"
+          sha256sum source.tar.gz head-commit.raw tracked-blobs.txt > SHA256SUMS
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: rs-raft-review-workspace-${{ github.run_id }}
-          path: /tmp/rs-raft-review-export/
+          name: rs-raft-review-source-${{ github.run_id }}
+          path: ${{ runner.temp }}/rs-raft-review-export/
           retention-days: 7
           compression-level: 0
           if-no-files-found: error
