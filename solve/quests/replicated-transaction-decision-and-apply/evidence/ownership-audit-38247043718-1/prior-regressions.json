@@ -1,0 +1,254 @@
+{
+  "command": [
+    "npm",
+    "run",
+    "-s",
+    "test:file",
+    "--",
+    "test/raft/raft-rs-backend/operation-port-provenance.test.js",
+    "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+    "test/raft/raft-rs-backend/operation-port-throw-containment.test.js",
+    "test/raft/raft-rs-backend/operation-port-lifecycle.test.js",
+    "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js",
+    "test/raft/raft-rs-backend/durable-rejoin-record-refusal.test.js",
+    "test/raft/raft-rs-backend/restart-from-durable-record.test.js",
+    "test/raft/raft-rs-backend/partition-construction-seam.test.js",
+    "test/raft/raft-rs-backend/participation-gate.test.js",
+    "test/raft/raft-rs-backend/runtime-trap-and-restore.test.js",
+    "test/raft/raft-rs-backend/message-group-on-raft-rs.test.js",
+    "test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js",
+    "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js",
+    "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js",
+    "test/partition/partition-port-refusal-outcomes.test.js"
+  ],
+  "completed": true,
+  "exit": 0,
+  "limitSeconds": 120,
+  "files": [
+    {
+      "file": "test/raft/raft-rs-backend/operation-port-provenance.test.js",
+      "counts": {
+        "tests": 1,
+        "pass": 1,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "maxCaseMs": 228.793174,
+      "durationLimitMs": 2000,
+      "durationsPass": true,
+      "sourceSha256": "b2b2b256e8fd8289d1ac64a73a41d7b08da7ae227a1b4c7e01cbf03e9e94ce85"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+      "counts": {
+        "tests": 7,
+        "pass": 7,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "maxCaseMs": 130.653357,
+      "durationLimitMs": 2000,
+      "durationsPass": true,
+      "sourceSha256": "edd3a9d1d5a1c24a4383c0ecd089babedea65715658668c95313966730f2a22f"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/operation-port-throw-containment.test.js",
+      "counts": {
+        "tests": 4,
+        "pass": 4,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "maxCaseMs": 225.919491,
+      "durationLimitMs": 2000,
+      "durationsPass": true,
+      "sourceSha256": "2aa9ecc13f4019d5c1a96848ef81402aac442eef89730af56d5139f85aa09dfd"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/operation-port-lifecycle.test.js",
+      "counts": {
+        "tests": 5,
+        "pass": 5,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "maxCaseMs": 68.692759,
+      "durationLimitMs": 2000,
+      "durationsPass": true,
+      "sourceSha256": "fec926e2b50ac1dbd720b1900e0f37d8ee973a7ebe724f576ea45dca85d1adbc"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js",
+      "counts": {
+        "tests": 6,
+        "pass": 6,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "maxCaseMs": 193.240307,
+      "durationLimitMs": 2000,
+      "durationsPass": true,
+      "sourceSha256": "63bd77c7d3b92c7965ad95285d83b791028c5ffe3fb44d95c6769cbaead88121"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/durable-rejoin-record-refusal.test.js",
+      "counts": {
+        "tests": 5,
+        "pass": 5,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "maxCaseMs": 135.361342,
+      "durationLimitMs": 2000,
+      "durationsPass": true,
+      "sourceSha256": "32b76814e192abbd9871facf56602d84dcf0ea7e76d685c2491b3b298eade3ca"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/restart-from-durable-record.test.js",
+      "counts": {
+        "tests": 4,
+        "pass": 4,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "maxCaseMs": 487.550129,
+      "durationLimitMs": 2000,
+      "durationsPass": true,
+      "sourceSha256": "4ffe2ca088fd26488b4f492f61ce3c008e22f3648ff876219fd128dfb9fd2f0b"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/partition-construction-seam.test.js",
+      "counts": {
+        "tests": 6,
+        "pass": 6,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "maxCaseMs": 165.354308,
+      "durationLimitMs": 2000,
+      "durationsPass": true,
+      "sourceSha256": "5790304bbbb6d30bd520d06c04c6654e92aba94813f34fbb4a3a65fd4b8f7c1f"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/participation-gate.test.js",
+      "counts": {
+        "tests": 5,
+        "pass": 5,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "maxCaseMs": 514.256605,
+      "durationLimitMs": 2000,
+      "durationsPass": true,
+      "sourceSha256": "ea6162844e1aecbf7cbe2e4d526825fa7e5791d01e4858da5d670adbd8320ea5"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-trap-and-restore.test.js",
+      "counts": {
+        "tests": 1,
+        "pass": 1,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "maxCaseMs": 187.397872,
+      "durationLimitMs": 2000,
+      "durationsPass": true,
+      "sourceSha256": "802bd4c2201c2712daeb6ac191962cb2fc084f7de925968fef2a071dbeb7d7bd"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/message-group-on-raft-rs.test.js",
+      "counts": {
+        "tests": 6,
+        "pass": 6,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "maxCaseMs": 1733.734024,
+      "durationLimitMs": 2000,
+      "durationsPass": true,
+      "sourceSha256": "5117574dfaf2430e13f4699286a6cd718553a11791e0544f7d6a0b29f68fd65c"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js",
+      "counts": {
+        "tests": 4,
+        "pass": 4,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "maxCaseMs": 487.61006,
+      "durationLimitMs": 2000,
+      "durationsPass": true,
+      "sourceSha256": "c1da36748a9db1c874b4f3166edd2ffa1a1389f3b7928417dec5fb4786a0b889"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js",
+      "counts": {
+        "tests": 4,
+        "pass": 4,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "maxCaseMs": 357.945374,
+      "durationLimitMs": 30000,
+      "durationsPass": true,
+      "sourceSha256": "f5d39f0cc01ae49ff2c8d12771763bda913441878b6d578bc7bed4c245f7917f"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js",
+      "counts": {
+        "tests": 8,
+        "pass": 8,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "maxCaseMs": 379.612126,
+      "durationLimitMs": 30000,
+      "durationsPass": true,
+      "sourceSha256": "e741ad627b50333537913e089dc36213bd6cc847299113a1dfc9c9991c5659ec"
+    },
+    {
+      "file": "test/partition/partition-port-refusal-outcomes.test.js",
+      "counts": {
+        "tests": 4,
+        "pass": 4,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "maxCaseMs": 188.470907,
+      "durationLimitMs": 2000,
+      "durationsPass": true,
+      "sourceSha256": "1612b2814d4c4248dc3fcf772753e1255f2e979a73f9f0103d6c939f37988178"
+    }
+  ]
+}

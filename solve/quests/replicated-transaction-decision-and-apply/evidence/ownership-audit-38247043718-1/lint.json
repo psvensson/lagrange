@@ -1,0 +1,15 @@
+{
+  "command": [
+    "npx",
+    "eslint",
+    "src/raft/snapshot-install.js",
+    "src/raft/raft-operation-port.js",
+    "src/raft/raft-rs-replica-lifecycle-owner.js",
+    "scripts/checks/raft-rs-operation-boundary-audit.js",
+    "test/raft/snapshot-lifecycle-staging.test.js",
+    "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js"
+  ],
+  "completed": true,
+  "exit": 0,
+  "limitSeconds": 120
+}

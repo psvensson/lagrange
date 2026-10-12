@@ -1,0 +1,135 @@
+diff --git a/scripts/checks/raft-rs-operation-boundary-audit.js b/scripts/checks/raft-rs-operation-boundary-audit.js
+index 4862457e9..5050f7571 100644
+--- a/scripts/checks/raft-rs-operation-boundary-audit.js
++++ b/scripts/checks/raft-rs-operation-boundary-audit.js
+@@ -17,6 +17,8 @@ const BINDING_OWNER = 'src/raft/raft-rs-binding-owner.js';
+ const CORE_LOADER = 'src/raft/raft-rs-core.js';
+ const LIFECYCLE_OWNER =
+   'src/raft/raft-rs-replica-lifecycle-owner.js';
++const SNAPSHOT_INSTALL = 'src/raft/snapshot-install.js';
++const SNAPSHOT_LIFECYCLE_PREPARE = 'prepareReplicaLifecycleForSnapshot';
+ const LIFECYCLE_ADMIN =
+   'src/raft/raft-rs-lifecycle-administration.js';
+ const LIFECYCLE_COORDINATOR =
+@@ -35,6 +37,7 @@ const AUDIT_AST = Object.freeze({
+   BINARY_EXPRESSION: 'BinaryExpression',
+   TEMPLATE_LITERAL: 'TemplateLiteral',
+   IMPORT_DECLARATION: 'ImportDeclaration',
++  IMPORT_SPECIFIER: 'ImportSpecifier',
+   EXPORT_ALL_DECLARATION: 'ExportAllDeclaration',
+   EXPORT_NAMED_DECLARATION: 'ExportNamedDeclaration',
+   IMPORT_EXPRESSION: 'ImportExpression',
+@@ -243,6 +246,17 @@ function violation(file, code, detail) {
+   return Object.freeze({file, code, detail});
+ }
+ 
++// Symbol-limited boundary, not a file-wide lifecycle allowlist. Snapshot
++// installation can request staging but cannot import the class, registration,
++// retirement or durable inspection controls. Namespace/dynamic/re-exports fail.
++function isSnapshotStagingImport(fileName, node) {
++  return fileName === SNAPSHOT_INSTALL &&
++    node.type === AUDIT_AST.IMPORT_DECLARATION &&
++    node.specifiers.length === 1 &&
++    node.specifiers[0].type === AUDIT_AST.IMPORT_SPECIFIER &&
++    node.specifiers[0].imported.name === SNAPSHOT_LIFECYCLE_PREPARE;
++}
++
+ function auditRaftRsOperationBoundary({root}) {
+   const sourceRoot = path.join(root, 'src');
+   const coreLoader = path.join(root, CORE_LOADER);
+@@ -316,7 +330,7 @@ function auditRaftRsOperationBoundary({root}) {
+         !arrayIncludes(
+           [PORT_CONSTRUCTOR, LIFECYCLE_ADMIN, LIFECYCLE_OWNER],
+           fileName,
+-        )) {
++        ) && !isSnapshotStagingImport(fileName, node)) {
+         violations.push(violation(fileName,
+           AUDIT_VIOLATION.LIFECYCLE_OWNER_IMPORT_BYPASS,
+           String(specifier)));
+diff --git a/src/raft/raft-operation-port.js b/src/raft/raft-operation-port.js
+index f3f7edef5..7d3801114 100644
+--- a/src/raft/raft-operation-port.js
++++ b/src/raft/raft-operation-port.js
+@@ -48,7 +48,7 @@ function createRaftOperationPort(operations) {
+       enumerable: true,
+       configurable: false,
+       writable: false,
+-      value: Object.freeze(operations[methodName]),
++      value: deepFreeze(operations[methodName]),
+     });
+   }
+   return Object.freeze(port);
+diff --git a/src/raft/raft-rs-replica-lifecycle-owner.js b/src/raft/raft-rs-replica-lifecycle-owner.js
+index 1c98cce2f..33364e1c9 100644
+--- a/src/raft/raft-rs-replica-lifecycle-owner.js
++++ b/src/raft/raft-rs-replica-lifecycle-owner.js
+@@ -41,6 +41,7 @@ const RUNTIME_LIFECYCLE_OWNERS = new WeakMap();
+ const LIFECYCLE_ADMIN_OUTCOME = Object.freeze({NOT_MANAGED: 'NOT_MANAGED'});
+ const LIFECYCLE_REASON = Object.freeze({
+   MISSING: 'lifecycle-record-missing',
++  STAGING_PREPARED: 'snapshot-lifecycle-prepared',
+   IDENTITY_MISMATCH: 'lifecycle-identity-mismatch',
+   RETIRED: 'retired',
+   STALE_RUNTIME_GENERATION: 'runtime-generation-not-registered',
+@@ -283,6 +284,23 @@ class RaftRsReplicaLifecycleOwner {
+   }
+ }
+ 
++/**
++ * Prepare only the receiver-local lifecycle record in a validated snapshot's
++ * private staging database. The snapshot owner retains CREATE authorization,
++ * staging-file custody and atomic installation; this owner retains identity,
++ * incarnation creation and the refusal of retired/conflicting generations.
++ * No owner, runtime handle, registration or retirement capability is returned.
++ * An exact active row is idempotent and keeps its incarnation.
++ * @param {Object} request - {db, groupId, peerId, replicaIdentity}.
++ * @return {Object} Immutable lifecycle outcome, never install permission.
++ */
++function prepareReplicaLifecycleForSnapshot(request) {
++  const owner = new RaftRsReplicaLifecycleOwner(request);
++  return owner.execute(() => frozenResult(RAFT_OPERATION_OUTCOME.CORE_OK,
++    LIFECYCLE_REASON.STAGING_PREPARED,
++    Object.freeze({incarnation: owner.incarnation})));
++}
++
+ /**
+  * Register one opened runtime's lifecycle owner under that exact runtime.
+  * @param {Object} runtime - The operation port the generation opened.
+@@ -408,6 +426,7 @@ export {
+   LIFECYCLE_STATE,
+   RaftRsReplicaLifecycleOwner,
+   readDurableReplicaLifecycle,
++  prepareReplicaLifecycleForSnapshot,
+   registerRuntimeLifecycle,
+   retireReplicaLifecycle,
+   unregisterRuntimeLifecycle,
+diff --git a/src/raft/snapshot-install.js b/src/raft/snapshot-install.js
+index 4acb0e465..ee0939821 100644
+--- a/src/raft/snapshot-install.js
++++ b/src/raft/snapshot-install.js
+@@ -36,8 +36,9 @@ import {
+ import {RaftRsDurableStore} from './raft-rs-durable-store.js';
+ import {RAFT_RS_ZERO_INDEX} from './raft-rs-durable-store-constants.js';
+ import {raftRsConfStateKey} from './raft-rs-conf-state-key.js';
+-import {RaftRsReplicaLifecycleOwner} from
++import {prepareReplicaLifecycleForSnapshot} from
+   './raft-rs-replica-lifecycle-owner.js';
++import {RAFT_OPERATION_OUTCOME} from './raft-operation-port-constants.js';
+ import {readRaftRsPeerIdentityReservations} from
+   './raft-rs-peer-identity.js';
+ import {readCheckpoint} from './snapshot-checkpoint-store.js';
+@@ -343,9 +344,12 @@ function reconstructStagedRaftRsState(stagingDb, descriptor, receiver) {
+   // This row is receiver-local and is minted only in the throwaway staging
+   // file. The lifecycle owner must run before the durable Raft record exists;
+   // seeing a record without a lifecycle row is intentionally a hard refusal.
+-  new RaftRsReplicaLifecycleOwner({db: stagingDb, groupId: raftRs.groupId,
+-    peerId: String(receiver.peerId),
++  const lifecycle = prepareReplicaLifecycleForSnapshot({db: stagingDb,
++    groupId: raftRs.groupId, peerId: String(receiver.peerId),
+     replicaIdentity: receiver.replicaIdentity});
++  if (lifecycle.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
++    throw Object.assign(new Error(lifecycle.reason), {consensus: lifecycle});
++  }
+   const store = new RaftRsDurableStore(stagingDb);
+   store.transaction(() => {
+     store.putAppliedState(raftRs.groupId, raftRs.appliedIndex,

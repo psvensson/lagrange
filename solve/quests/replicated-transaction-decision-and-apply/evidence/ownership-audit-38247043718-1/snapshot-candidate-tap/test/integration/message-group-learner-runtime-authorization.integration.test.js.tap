@@ -1,0 +1,340 @@
+TAP version 13
+# Subtest: durable learner intent is consumed only through the bound repository and real runtime
+    # Subtest: valid recorded intent enters native Ready/apply on every surviving voter
+    ok 1 - valid recorded intent enters native Ready/apply on every surviving voter
+      ---
+      duration_ms: 203.843596
+      type: 'test'
+      ...
+    # Subtest: a copied request without its durable intent cannot propose
+    ok 2 - a copied request without its durable intent cannot propose
+      ---
+      duration_ms: 94.902346
+      type: 'test'
+      ...
+    # Subtest: terminal-first non-admission defeats a previously prepared payload
+    ok 3 - terminal-first non-admission defeats a previously prepared payload
+      ---
+      duration_ms: 93.272419
+      type: 'test'
+      ...
+    # Subtest: failure after issue retains the exact admitted action rather than cancelling it
+    ok 4 - failure after issue retains the exact admitted action rather than cancelling it
+      ---
+      duration_ms: 118.992126
+      type: 'test'
+      ...
+    # Subtest: successful replacement and mixed terminal hints cannot add a target
+    ok 5 - successful replacement and mixed terminal hints cannot add a target
+      ---
+      duration_ms: 82.711016
+      type: 'test'
+      ...
+    # Subtest: unavailable operation and boot reads are not absence or permission
+    ok 6 - unavailable operation and boot reads are not absence or permission
+      ---
+      duration_ms: 85.68885
+      type: 'test'
+      ...
+    # Subtest: wrong group, recipient boot, sender and changed payload cannot confer authority
+    ok 7 - wrong group, recipient boot, sender and changed payload cannot confer authority
+      ---
+      duration_ms: 96.975558
+      type: 'test'
+      ...
+    # Subtest: current canonical boot and exact renewed holder defeat stale delivery
+    ok 8 - current canonical boot and exact renewed holder defeat stale delivery
+      ---
+      duration_ms: 81.237868
+      type: 'test'
+      ...
+    # Subtest: takeover preserves original permit but binds delivery to the actual new holder
+    ok 9 - takeover preserves original permit but binds delivery to the actual new holder
+      ---
+      duration_ms: 114.55181
+      type: 'test'
+      ...
+    # Subtest: durable but stale native term, configuration, lifecycle and generation refuse
+        # Subtest: leaderTerm
+        ok 1 - leaderTerm
+          ---
+          duration_ms: 85.036238
+          type: 'test'
+          ...
+        # Subtest: replicaLifecycleIncarnation
+        ok 2 - replicaLifecycleIncarnation
+          ---
+          duration_ms: 82.914561
+          type: 'test'
+          ...
+        # Subtest: runtimeGeneration
+        ok 3 - runtimeGeneration
+          ---
+          duration_ms: 83.623974
+          type: 'test'
+          ...
+        # Subtest: leaderConfigurationStamp
+        ok 4 - leaderConfigurationStamp
+          ---
+          duration_ms: 80.69652
+          type: 'test'
+          ...
+        1..4
+    ok 10 - durable but stale native term, configuration, lifecycle and generation refuse
+      ---
+      duration_ms: 332.862713
+      type: 'test'
+      ...
+    # Subtest: renewal during the boot read defeats the previously observed holder
+    ok 11 - renewal during the boot read defeats the previously observed holder
+      ---
+      duration_ms: 91.415078
+      type: 'test'
+      ...
+    # Subtest: successful settlement during the boot read defeats stale nonterminal state
+    ok 12 - successful settlement during the boot read defeats stale nonterminal state
+      ---
+      duration_ms: 103.621229
+      type: 'test'
+      ...
+    # Subtest: failure during the boot read retains the already-issued exact learner action
+    ok 13 - failure during the boot read retains the already-issued exact learner action
+      ---
+      duration_ms: 89.054382
+      type: 'test'
+      ...
+    # Subtest: unavailable final operation observation is not stale permission
+    ok 14 - unavailable final operation observation is not stale permission
+      ---
+      duration_ms: 77.364471
+      type: 'test'
+      ...
+    # Subtest: actual recipient close during the final read refuses the delayed native action
+    ok 15 - actual recipient close during the final read refuses the delayed native action
+      ---
+      duration_ms: 77.721466
+      type: 'test'
+      ...
+    # Subtest: actual committed configuration drift refuses the delayed original native action
+    ok 16 - actual committed configuration drift refuses the delayed original native action
+      ---
+      duration_ms: 94.289481
+      type: 'test'
+      ...
+    # Subtest: wire copies cannot supply a callable delivery capability
+    ok 17 - wire copies cannot supply a callable delivery capability
+      ---
+      duration_ms: 81.455243
+      type: 'test'
+      ...
+    # Subtest: local delivery refuses after shutdown during the final read
+    ok 18 - local delivery refuses after shutdown during the final read
+      ---
+      duration_ms: 90.870816
+      type: 'test'
+      ...
+    # Subtest: same-boot socket replacement refuses old delivery but preserves exact redelivery
+    ok 19 - same-boot socket replacement refuses old delivery but preserves exact redelivery
+      ---
+      duration_ms: 98.612958
+      type: 'test'
+      ...
+{"level":50,"time":"2026-10-12T12:09:44.104Z","nodeId":"consumer-node","pid":3568,"subsystem":"raft-rs","report":"core-trapped","groupId":"learner-consumer","replicaIdentity":"consumer-a","peerId":"8114374780160035431","operation":"step","reason":"unreachable","runtimeGeneration":1,"from":"8114374780160037000","msgType":3,"term":"2","commit":"2","index":"2","nodeId":"consumer-node","msg":"raft-rs core trapped"}
+    # Subtest: delivery fence is consumed after an actual queued native turn
+    ok 20 - delivery fence is consumed after an actual queued native turn
+      ---
+      duration_ms: 90.177841
+      type: 'test'
+      ...
+    # Subtest: uncommitted learner intent is unresolved, not a historical receipt
+    ok 21 - uncommitted learner intent is unresolved, not a historical receipt
+      ---
+      duration_ms: 101.546063
+      type: 'test'
+      ...
+    # Subtest: lost proposal response is recovered after port and native reconstruction
+    ok 22 - lost proposal response is recovered after port and native reconstruction
+      ---
+      duration_ms: 112.546788
+      type: 'test'
+      ...
+    # Subtest: historical origin survives leader change without refreshing execution fences
+    ok 23 - historical origin survives leader change without refreshing execution fences
+      ---
+      duration_ms: 111.597098
+      type: 'test'
+      ...
+    # Subtest: different action tuples cannot borrow a target historical receipt
+    ok 24 - different action tuples cannot borrow a target historical receipt
+      ---
+      duration_ms: 95.75665
+      type: 'test'
+      ...
+    # Subtest: historical read snapshots exact own-data actions without invoking accessors
+    ok 25 - historical read snapshots exact own-data actions without invoking accessors
+      ---
+      duration_ms: 91.886302
+      type: 'test'
+      ...
+    # Subtest: queued origin read refuses malformed bytes and impossible future terms
+    ok 26 - queued origin read refuses malformed bytes and impossible future terms
+      ---
+      duration_ms: 89.427676
+      type: 'test'
+      ...
+    # Subtest: registry replay is a no-op and conflicting origin rolls back without replacement
+    ok 27 - registry replay is a no-op and conflicting origin rolls back without replacement
+      ---
+      duration_ms: 87.959784
+      type: 'test'
+      ...
+    # Subtest: origin and ConfState roll back together when the actual apply transaction fails
+    ok 28 - origin and ConfState roll back together when the actual apply transaction fails
+      ---
+      duration_ms: 105.267093
+      type: 'test'
+      ...
+{"level":50,"time":"2026-10-12T12:09:44.111Z","nodeId":"consumer-node","pid":3568,"subsystem":"raft-rs","report":"runtime-replaced","groupId":"learner-consumer","replicaIdentity":"consumer-a","peerId":"8114374780160035431","runtimeGeneration":2,"groupsRestored":3,"failure":null,"nodeId":"consumer-node","msg":"raft-rs runtime replaced"}
+    # Subtest: checkpoint scrubs native history but preserves exact learner origin
+    ok 29 - checkpoint scrubs native history but preserves exact learner origin
+      ---
+      duration_ms: 117.043949
+      type: 'test'
+      ...
+    # Subtest: actual origin-bearing image installs and reopens on the exact fresh learner
+    ok 30 - actual origin-bearing image installs and reopens on the exact fresh learner
+      ---
+      duration_ms: 137.316273
+      type: 'test'
+      ...
+    # Subtest: checkpoint validates origin against both payload and applied boundary
+    ok 31 - checkpoint validates origin against both payload and applied boundary
+      ---
+      duration_ms: 106.458395
+      type: 'test'
+      ...
+    # Subtest: request and host binding mutations during the read cannot retarget the proposal
+    ok 32 - request and host binding mutations during the read cannot retarget the proposal
+      ---
+      duration_ms: 88.014303
+      type: 'test'
+      ...
+    1..32
+ok 1 - durable learner intent is consumed only through the bound repository and real runtime
+  ---
+  duration_ms: 3449.666302
+  type: 'test'
+  ...
+# Subtest: recovered learner outcome advances only the exact operation membership fields
+    # Subtest: issued or proposed is not a recorded learner outcome
+    ok 1 - issued or proposed is not a recorded learner outcome
+      ---
+      duration_ms: 81.257424
+      type: 'test'
+      ...
+    # Subtest: committed receipt and same-turn stamp record once without CREATE
+    ok 2 - committed receipt and same-turn stamp record once without CREATE
+      ---
+      duration_ms: 93.726044
+      type: 'test'
+      ...
+    # Subtest: commit before operation recording survives both database and native reopen
+    ok 3 - commit before operation recording survives both database and native reopen
+      ---
+      duration_ms: 90.589069
+      type: 'test'
+      ...
+    # Subtest: leader change recovers the old action without refreshing its permit
+    ok 4 - leader change recovers the old action without refreshing its permit
+      ---
+      duration_ms: 108.86568
+      type: 'test'
+      ...
+    # Subtest: wrong action or inconsistent observation cannot advance the operation
+    ok 5 - wrong action or inconsistent observation cannot advance the operation
+      ---
+      duration_ms: 86.95635
+      type: 'test'
+      ...
+    # Subtest: native refusal classifications retain conflict versus unavailability
+    ok 6 - native refusal classifications retain conflict versus unavailability
+      ---
+      duration_ms: 94.606081
+      type: 'test'
+      ...
+    # Subtest: a joint witness defers recording without classifying historical origin as conflict
+    ok 7 - a joint witness defers recording without classifying historical origin as conflict
+      ---
+      duration_ms: 90.759149
+      type: 'test'
+      ...
+    # Subtest: terminal competition at learner CAS preserves exact terminal history
+    ok 8 - terminal competition at learner CAS preserves exact terminal history
+      ---
+      duration_ms: 200.538756
+      type: 'test'
+      ...
+    # Subtest: holder renewal during native read prevents old-holder recording
+    ok 9 - holder renewal during native read prevents old-holder recording
+      ---
+      duration_ms: 91.546524
+      type: 'test'
+      ...
+    # Subtest: terminal failure during observation retains debt and permits historical recording
+    ok 10 - terminal failure during observation retains debt and permits historical recording
+      ---
+      duration_ms: 83.641306
+      type: 'test'
+      ...
+    # Subtest: ordinary success during observation does not revive membership progress
+    ok 11 - ordinary success during observation does not revive membership progress
+      ---
+      duration_ms: 84.184561
+      type: 'test'
+      ...
+    # Subtest: holder changes at the actual CAS cannot be overwritten
+    ok 12 - holder changes at the actual CAS cannot be overwritten
+      ---
+      duration_ms: 83.129933
+      type: 'test'
+      ...
+    # Subtest: lost mutation answer is resolved from the exact durable row
+    ok 13 - lost mutation answer is resolved from the exact durable row
+      ---
+      duration_ms: 85.627246
+      type: 'test'
+      ...
+    # Subtest: unknown readback keeps debt and exact replay recovers without native redispatch
+    ok 14 - unknown readback keeps debt and exact replay recovers without native redispatch
+      ---
+      duration_ms: 89.433834
+      type: 'test'
+      ...
+    # Subtest: failed write before commit is retriable but never inferred recorded
+    ok 15 - failed write before commit is retriable but never inferred recorded
+      ---
+      duration_ms: 86.55269
+      type: 'test'
+      ...
+    # Subtest: historical ADD after real removal cannot supply a learner stamp
+    ok 16 - historical ADD after real removal cannot supply a learner stamp
+      ---
+      duration_ms: 93.201677
+      type: 'test'
+      ...
+    1..16
+ok 2 - recovered learner outcome advances only the exact operation membership fields
+  ---
+  duration_ms: 1546.531182
+  type: 'test'
+  ...
+1..2
+# tests 54
+# suites 0
+# pass 54
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 5018.901059
+# time=5794ms

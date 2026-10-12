@@ -1,0 +1,12 @@
+{
+  "command": [
+    "git",
+    "diff",
+    "--exit-code",
+    "--",
+    "src"
+  ],
+  "completed": true,
+  "exit": 0,
+  "limitSeconds": 120
+}

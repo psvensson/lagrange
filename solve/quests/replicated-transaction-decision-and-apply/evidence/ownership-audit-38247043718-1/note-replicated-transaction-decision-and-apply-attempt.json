@@ -1,0 +1,15 @@
+{
+  "command": [
+    "node",
+    "scripts/solve.js",
+    "note",
+    "--id",
+    "replicated-transaction-decision-and-apply",
+    "--attempt",
+    "Reuse canonical deepFreeze in the public operation-port factory; unchanged public-value boundary assertion is the discriminator. Add real WASM intact/lost-history tests; the unsafe lost-history case remains intentionally blocking, not skipped or weakened. No transaction or WASM production path is changed.",
+    "--json"
+  ],
+  "completed": true,
+  "exit": 0,
+  "limitSeconds": 120
+}
