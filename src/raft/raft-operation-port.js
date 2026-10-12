@@ -48,7 +48,7 @@ function createRaftOperationPort(operations) {
       enumerable: true,
       configurable: false,
       writable: false,
-      value: Object.freeze(operations[methodName]),
+      value: deepFreeze(operations[methodName]),
     });
   }
   return Object.freeze(port);
