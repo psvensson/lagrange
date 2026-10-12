@@ -28,7 +28,7 @@
   "censusSize": 2367,
   "digest": "fnv1a32-91bb71c9",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-865cc606",
+  "observationDigest": "fnv1a32-7991dba4",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -7624,10 +7624,10 @@
     },
     "test/integration/transaction-coordinator-restart.integration.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/bootstrap/system-table-workflow-schema-definitions.js",
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/constants/transactions.js",
-        "src/diagnostics/runtime-build-provenance.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-service-constants.js",
         "src/partition/partition-service.js",
@@ -9136,7 +9136,11 @@
     },
     "test/partition/partition-unreadable-durable-record.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/bootstrap/system-table-workflow-schema-definitions.js",
         "src/config/configuration-manager.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-write-kernel.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
@@ -9147,6 +9151,7 @@
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/raft/raft-rs-runtime-owner-constants.js",
         "src/raft/raft-rs-runtime-owner.js",
+        "test/partition/partition-service-test-support.js",
         "test/raft/raft-rs-backend/core-trap-envelope.js",
         "test/raft/raft-rs-backend/process-escape-counter.js",
         "test/test-helpers/controllable-consensus-port.js",
@@ -10844,10 +10849,10 @@
     },
     "test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/bootstrap/system-table-workflow-schema-definitions.js",
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/constants/transactions.js",
-        "src/diagnostics/runtime-build-provenance.js",
         "src/partition/partition-cdc-obligation-ledger.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-service.js",
