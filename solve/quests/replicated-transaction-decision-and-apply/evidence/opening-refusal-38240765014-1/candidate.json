@@ -1,0 +1,83 @@
+{
+  "exit": 0,
+  "cases": [
+    {
+      "file": "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+      "name": "native runtime opening: partition unhealthy initialization is typed, cleans up, and can retry",
+      "passed": true,
+      "durationMs": 132.817237,
+      "limitMs": 30000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+      "name": "native runtime opening: partition backoff initialization is typed, cleans up, and can retry",
+      "passed": true,
+      "durationMs": 85.259826,
+      "limitMs": 30000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+      "name": "native runtime opening: message-group unhealthy initialization is typed, cleans up, and can retry",
+      "passed": true,
+      "durationMs": 74.433144,
+      "limitMs": 30000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+      "name": "native runtime opening: message-group backoff initialization is typed, cleans up, and can retry",
+      "passed": true,
+      "durationMs": 65.909547,
+      "limitMs": 30000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+      "name": "native runtime opening: wasm-service unhealthy initialization is typed, cleans up, and can retry",
+      "passed": true,
+      "durationMs": 63.025918,
+      "limitMs": 30000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+      "name": "native runtime opening: wasm-service backoff initialization is typed, cleans up, and can retry",
+      "passed": true,
+      "durationMs": 60.242501,
+      "limitMs": 30000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+      "name": "native runtime opening: unhealthy refusal preserves absence of a reservation owner",
+      "passed": true,
+      "durationMs": 53.953098,
+      "limitMs": 30000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+      "name": "native runtime opening: unhealthy refusal preserves an existing reservation owner",
+      "passed": true,
+      "durationMs": 60.615918,
+      "limitMs": 30000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+      "name": "native runtime opening: replacing refusal preserves absence of a reservation owner",
+      "passed": true,
+      "durationMs": 70.674879,
+      "limitMs": 30000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+      "name": "native runtime opening: replacing refusal preserves an existing reservation owner",
+      "passed": true,
+      "durationMs": 50.919342,
+      "limitMs": 30000
+    }
+  ],
+  "sourceDigests": {
+    "src/raft/raft-operation-port.js": "d7dd5cea4d67e66fcd63e87095b2c06a036dfdbf6796da7eff4469abb6a694c4",
+    "src/raft/raft-rs-operation-port.js": "1656c604b0ef26dd90ba15728f29f5060bc3f0528c8ece6f66369746a6c17468",
+    "src/partition/partition-consensus-port-opening.js": "721c27fa026ea3f91140157c7f128fe78f2ba99636a97d0a9493a7be8cf62c86",
+    "src/message-group/message-group-consensus-port.js": "18950fdf6695f9a03a9bd547d4836a997e0e03ad748b1add7b7ddacea2eecc27",
+    "src/wasm-service/wasm-service-consensus-port.js": "0be950d49580286f494e56a5d0988579f7a08656887d3a883738ac28f1cefa5d"
+  },
+  "testSha256": "08a39cfbc476ad23c1e7dfce1dca97c0a5a367e446a47b1f40d9e13fe17ed900"
+}
