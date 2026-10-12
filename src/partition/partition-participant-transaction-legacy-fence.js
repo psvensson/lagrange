@@ -1,22 +1,33 @@
 // The L6 fences between the two transaction protocols (TX1 design revision
-// 10, section 11.3's mixed-version window; increment-3 verification R17):
-// until the cutover's drain removes it, the legacy sessionId-only path keeps
-// staging with BEGIN IMMEDIATE on the shared connection, and its local COMMIT
-// changes data on the leader only, outside the log and the write generation.
-// So the protocols never touch one partition at once:
+// 10, section 11.3's mixed-version window; 0.0.15, the cutover): until a
+// partition's cutover, the legacy sessionId-only path keeps staging with
+// BEGIN IMMEDIATE on the shared connection, and its local COMMIT changes data
+// on the leader only, outside the log and the write generation. So the
+// protocols never touch one partition at once:
 // - a legacy BEGIN is refused, typed, while a participant transaction is
-//   staging, preparing or PREPARED here (ALREADY_ACTIVE), and once
-//   participant admission is enabled here (its generation origin applied:
-//   LEGACY_SESSION_FENCED) - every later participant transaction would
-//   otherwise prepare over rows its replicas do not share; a legacy BEGIN it
-//   lets through is recorded on the connection's stamp, which then refuses
-//   participant admission on that connection until it is reopened
+//   staging, preparing or PREPARED here (ALREADY_ACTIVE), once participant
+//   admission is enabled here (its generation origin applied:
+//   LEGACY_SESSION_FENCED - every later participant transaction would
+//   otherwise prepare over rows its replicas do not share), and while the
+//   cutover sequence pauses new mutation admission (CUTOVER_PAUSED,
+//   retryable); a legacy BEGIN it lets through is recorded on the
+//   connection's stamp, which then refuses participant admission on that
+//   connection until it is reopened
 //   (partition-participant-transaction-connection.js);
 // - a sessionId-only PREPARE, COMMIT, ROLLBACK or QUERY that names the
 //   routing sessionId of a participant transaction staging here or PREPARED
 //   here (its durable row, read from the store) is refused, typed, never run
 //   against the legacy maps or as a sessionless write; once decided, the
 //   sessionId is the legacy path's again;
+// - once the origin has applied here the legacy path is retired on this
+//   partition: a sessionId-only PREPARE, COMMIT or ROLLBACK for a session
+//   that is not open here is refused LEGACY_SESSION_FENCED (the legacy path
+//   used to answer it from its maps); a session admitted before the origin
+//   still finishes through the legacy path (accepted work). A sessionId-only
+//   QUERY for a session not open here keeps the unknown-session semantics
+//   (an ordinary, fully admitted sessionless write: the engine stamps its
+//   client session on ordinary statements too), and a sessionId-only outcome
+//   read keeps answering from the retained legacy outcome table;
 // - a sessionId-only outcome read answers UNKNOWN, never NOT_COMMITTED from
 //   absence, for a sessionId a participant transaction carries (its outcome
 //   is keyed by transactionId, which the legacy read cannot name).
@@ -35,6 +46,7 @@ import {
   participantSessionNamed,
 } from './partition-participant-transaction-session.js';
 import {noteLegacySessionServed} from './partition-participant-transaction-connection.js';
+import {participantCutoverPauseOf} from './partition-participant-transaction-pause.js';
 import {
   PARTICIPANT_TRANSACTION_FAILURE_CODE as CODE,
   PARTICIPANT_TRANSACTION_MESSAGE as MESSAGE,
@@ -70,6 +82,20 @@ function fenced(service, payload, failureCode, error) {
 function legacyFenceRefusal(service, payload) {
   return fenced(service, payload, CODE.LEGACY_SESSION_FENCED,
     `${MESSAGE.REFUSED}${MESSAGE.CODE_SEPARATOR}${CODE.LEGACY_SESSION_FENCED}`);
+}
+
+// The cutover's pause: a legacy BEGIN is retried, never failed.
+function pausedRefusal(service, payload) {
+  return {...fenced(service, payload, CODE.CUTOVER_PAUSED,
+    `${MESSAGE.REFUSED}${MESSAGE.CODE_SEPARATOR}${CODE.CUTOVER_PAUSED}`),
+  deferRetry: true};
+}
+
+// Whether a legacy session the request names is open here (accepted work the
+// legacy path finishes, whatever the partition's cutover state).
+function legacySessionOpen(service, payload) {
+  return service.resolveOpenTransactionState(
+    service.normalizeTransactionSessionId(payload?.sessionId ?? null)) !== null;
 }
 
 // Whether a sessionId-only request names a participant transaction that is
@@ -114,11 +140,18 @@ function fenceLegacyTransactionRequest(service, payload) {
     if (readPartitionWriteOrigin(service.db) !== null) {
       return legacyFenceRefusal(service, payload);
     }
+    if (participantCutoverPauseOf(service) !== null) {
+      return pausedRefusal(service, payload);
+    }
     noteLegacySessionServed(service.db);
     return undefined;
   }
   if (LEGACY_SESSION_CONTROL.has(operation)) {
-    return namesParticipantSession(service, payload) ?
+    if (namesParticipantSession(service, payload)) {
+      return legacyFenceRefusal(service, payload);
+    }
+    return readPartitionWriteOrigin(service.db) !== null &&
+      !legacySessionOpen(service, payload) ?
       legacyFenceRefusal(service, payload) : undefined;
   }
   const sessionId = service.normalizeTransactionSessionId(payload?.sessionId ?? null);
@@ -141,7 +174,19 @@ function fenceLegacySessionQuery(service, payload) {
     {acknowledged: true, ...legacyFenceRefusal(service, payload)} : null;
 }
 
+// Direct local writes have no replicated outcome. Once the origin exists
+// this execution path is retired permanently, including bootstrap callers.
+// Reads continue through their normal statement owner while release pauses.
+function fenceLegacyLocalMutation(service) {
+  if (readPartitionWriteOrigin(service.db) !== null) {
+    return legacyFenceRefusal(service, {});
+  }
+  return participantCutoverPauseOf(service) !== null ?
+    pausedRefusal(service, {}) : null;
+}
+
 export {
+  fenceLegacyLocalMutation,
   fenceLegacySessionQuery,
   fenceLegacyTransactionRequest,
   participantTransactionActive,

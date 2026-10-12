@@ -1,0 +1,108 @@
+{
+  "utc": "2026-10-11T23:55:29.996491+00:00",
+  "scope": "Read-only producer/consumer routing census; not implementation or profile certification",
+  "sourceRecords": [
+    {
+      "path": "src/diagnostics/runtime-build-provenance.js",
+      "sha256": "15a7f0a526fe01f93d8df638c85d85f3c3463afa81bd3907f22c880fdb7f03aa",
+      "bytes": 3794,
+      "preservedAt": "92579c6ccc1804466ea15f8c6ae44c3e5d11cdfc"
+    },
+    {
+      "path": "src/diagnostics/runtime-content-fingerprint.js",
+      "sha256": "183837faeb41ed76f65d3fac7b27f2b8bba696a6eba15a3a75550bfd781ab0d8",
+      "bytes": 3977,
+      "preservedAt": "92579c6ccc1804466ea15f8c6ae44c3e5d11cdfc"
+    },
+    {
+      "path": "src/entrypoint-runtime-provenance.js",
+      "sha256": "e346a12178762ea0503d8922f8aaa1bbcaf482f337ec7ef924785b1e0bd85f5b",
+      "bytes": 3525,
+      "preservedAt": "92579c6ccc1804466ea15f8c6ae44c3e5d11cdfc"
+    },
+    {
+      "path": "src/partition/partition-participant-release-facts.js",
+      "sha256": "6bafc1af433d3f53c43671ffff2ea1e9a65dfe613457b1b4b5d016c784d736d0",
+      "bytes": 6740,
+      "preservedAt": "92579c6ccc1804466ea15f8c6ae44c3e5d11cdfc"
+    },
+    {
+      "path": "scripts/build-sea.js",
+      "sha256": "6401887c662b5e5108703b454362d865fff96d2d5e6585eb39583316a057c02d",
+      "bytes": 7426,
+      "preservedAt": "92579c6ccc1804466ea15f8c6ae44c3e5d11cdfc"
+    },
+    {
+      "path": "scripts/build-executables.sh",
+      "sha256": "83bd9fdfbbf68565d0c3cbad5ad63f211f4cdc5ae83af07e6611bac0dd4b6e63",
+      "bytes": 3114,
+      "preservedAt": "92579c6ccc1804466ea15f8c6ae44c3e5d11cdfc"
+    },
+    {
+      "path": "Dockerfile",
+      "sha256": "bb5cbb06a85ab66942ffd4abcfcb36b7a13785d0c94cb2f71d237161a764e1a4",
+      "bytes": 2451,
+      "preservedAt": "92579c6ccc1804466ea15f8c6ae44c3e5d11cdfc"
+    },
+    {
+      "path": ".github/workflows/release.yml",
+      "sha256": "54202a54725f89fc73d1b5d840361ad2ac7f4b34f715e468cc05572c6173dc14",
+      "bytes": 23173,
+      "preservedAt": "92579c6ccc1804466ea15f8c6ae44c3e5d11cdfc"
+    },
+    {
+      "path": "scripts/checks/release-publication-receipt.js",
+      "sha256": "b72fc9dc50b254bae092ed624e4ff0bed62384a117c1cb809fe43a21936a72c9",
+      "bytes": 8624,
+      "preservedAt": "92579c6ccc1804466ea15f8c6ae44c3e5d11cdfc"
+    },
+    {
+      "path": "scripts/release-proof-identity.js",
+      "sha256": "953f18da7050832c5a2c2ebb52e84eac74ccefaddbb5d0ad71e4d1d2adf65c72",
+      "bytes": 4760,
+      "preservedAt": "92579c6ccc1804466ea15f8c6ae44c3e5d11cdfc"
+    },
+    {
+      "path": "charts/lagrange-node/values.yaml",
+      "sha256": "2815f88ab73bb202c35602d532094b431eedc095cd23fcf77b66c590fd36a3a3",
+      "bytes": 2244,
+      "preservedAt": "92579c6ccc1804466ea15f8c6ae44c3e5d11cdfc"
+    },
+    {
+      "path": "package.json",
+      "sha256": "0b21e4c76c1c566ecf10f99e71e8307ab178e27efc591082ce33f98c1e3d1e91",
+      "bytes": 19906,
+      "preservedAt": "92579c6ccc1804466ea15f8c6ae44c3e5d11cdfc"
+    }
+  ],
+  "preservedWorkingOverlay": {
+    "path": "scripts/build-sea.js",
+    "sha256": "5acf7af6894d59a6b331764231e07740bdce479dbc88c829ecc36a27e6e22f25",
+    "preservedAt": "b99ed59b3fc4d5b8fecd939b480dd84a23c94f7f",
+    "fact": "W already writes runtime-content-manifest.json after staging SEA runtime dependencies; A/B/C producer lacks this delta. Preserve during owner composition."
+  },
+  "findings": [
+    {
+      "owner": "src/diagnostics/runtime-build-provenance.js",
+      "fact": "Existing cached boot measurement measures executable, native binding, SQLite, source and installed dependency content. It does not yet consume coverage-runtime-profile/1 or attest executable-to-Node/libuv source/native layout."
+    },
+    {
+      "owner": "Dockerfile",
+      "fact": "Current mutable node:22-slim and distroless/nodejs22-debian12 base tags; runtime copies package.json but not package-lock.json. Source-mode runtime measurement requires the lock."
+    },
+    {
+      "owner": ".github/workflows/release.yml",
+      "fact": "Existing release builds SEA on Node22 Ubuntu runner, packages npm and Helm, and builds linux/amd64 OCI. Its published artifact digest receipt is distinct from required native runtime coverage certification."
+    },
+    {
+      "owner": "scripts/build-executables.sh",
+      "fact": "Copies the builder Node binary then injects SEA blobs. A final SEA executable digest differs from original Node; profile composition must retain both exact native-source provenance and final artifact binding."
+    },
+    {
+      "owner": "release/platform policy",
+      "fact": "package.json engines >=22.12.0 is an installation floor, not a certified native-profile matrix. This census makes no support-narrowing or optional-recovery decision."
+    }
+  ],
+  "nextOwnerWork": "Complete profile composition and exact byte verification through existing release/build/provenance owners; preserve all currently required OCI/Helm, SEA, npm/source and canonical lab recovery forms. No dedicated coverage listener activation until its approved prerequisites hold.",
+  "proofCeiling": "No build, runtime test, remote release, signed profile issuance, or independent approval performed by this census."
+}

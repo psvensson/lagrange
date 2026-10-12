@@ -1,0 +1,8 @@
+Complexity violations (threshold: 12):
+
+src/query/distributed/distributed-transaction-recovery.js:359:3 Async method 'resumeRecoveredTransactions' has a complexity of 13. Maximum allowed is 12.
+src/query/distributed/distributed-transaction-recovery.js:560:3 Method 'recoverFromSystemTables' has a complexity of 38. Maximum allowed is 12.
+src/query/distributed/distributed-transaction-recovery.js:589:7 Method 'loadWorkflow' has a complexity of 13. Maximum allowed is 12.
+src/query/distributed/distributed-transaction-recovery.js:646:7 Method 'loadParticipant' has a complexity of 14. Maximum allowed is 12.
+
+4 violation(s) found.

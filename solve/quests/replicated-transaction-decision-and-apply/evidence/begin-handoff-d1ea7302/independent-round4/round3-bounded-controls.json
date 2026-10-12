@@ -1,0 +1,487 @@
+{
+  "root": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011",
+  "exactCap": {
+    "cap": 1244,
+    "calls": 2,
+    "first": {
+      "success": false,
+      "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session",
+      "errorCode": "TRANSACTION_CREATION_UNCERTAIN",
+      "transactionId": "01630cb4c990b8be44798e6e83d52cc3",
+      "timeoutDeadline": 1000,
+      "deferRetry": true,
+      "retryable": true
+    },
+    "retry": {
+      "success": true,
+      "operation": "BEGIN_TRANSACTION",
+      "sessionId": "exact-current",
+      "transactionId": "01630cb4c990b8be44798e6e83d52cc3",
+      "transactionEpoch": 1,
+      "transactionMode": "EXPLICIT"
+    },
+    "turns": [
+      {
+        "attachmentCount": 1,
+        "operationCount": 1,
+        "recordBytes": 1087,
+        "recordCount": 1,
+        "roles": {
+          "INSERTING": 1
+        },
+        "totalBytes": 1244
+      },
+      {
+        "attachmentCount": 1,
+        "operationCount": 1,
+        "recordBytes": 1087,
+        "recordCount": 1,
+        "roles": {
+          "SERVER_RECOVERY_ONLY": 1
+        },
+        "totalBytes": 1244
+      }
+    ],
+    "settled": {
+      "attachmentCount": 0,
+      "operationCount": 0,
+      "recordBytes": 0,
+      "recordCount": 0,
+      "roles": {},
+      "totalBytes": 0
+    }
+  },
+  "preallocation": {
+    "writes": 0,
+    "refused": {
+      "success": false,
+      "error": "Distributed transaction creation capacity is temporarily exhausted",
+      "errorCode": "TRANSACTION_CREATION_PRESSURE"
+    },
+    "diagnostics": {
+      "attachmentCount": 0,
+      "operationCount": 0,
+      "recordBytes": 0,
+      "recordCount": 0,
+      "roles": {},
+      "totalBytes": 0
+    }
+  },
+  "rotation": {
+    "a": {
+      "swept": 16,
+      "resolved": 0,
+      "failed": 0,
+      "deferred": 16,
+      "deferredUntilMs": 1000,
+      "skipped": false,
+      "results": [
+        {
+          "transactionId": "4c93951a5d840f72917c141d13851e5a",
+          "sessionId": "rotate-2",
+          "sweepPath": "BEGIN_TRANSACTION",
+          "statusAfter": "ACTIVE",
+          "success": false,
+          "deferred": true,
+          "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session"
+        },
+        {
+          "transactionId": "509c03193bd438d94bb3e91e31e6dad4",
+          "sessionId": "rotate-16",
+          "sweepPath": "BEGIN_TRANSACTION",
+          "statusAfter": "ACTIVE",
+          "success": false,
+          "deferred": true,
+          "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session"
+        },
+        {
+          "transactionId": "56df178927e7747c4954f6b7ffe1e9a1",
+          "sessionId": "rotate-15",
+          "sweepPath": "BEGIN_TRANSACTION",
+          "statusAfter": "ACTIVE",
+          "success": false,
+          "deferred": true,
+          "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session"
+        },
+        {
+          "transactionId": "5779c5ff4386a4c03e614f0162a0c06c",
+          "sessionId": "rotate-8",
+          "sweepPath": "BEGIN_TRANSACTION",
+          "statusAfter": "ACTIVE",
+          "success": false,
+          "deferred": true,
+          "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session"
+        },
+        {
+          "transactionId": "5951d0f9282016c4deb78617bd464110",
+          "sessionId": "rotate-6",
+          "sweepPath": "BEGIN_TRANSACTION",
+          "statusAfter": "ACTIVE",
+          "success": false,
+          "deferred": true,
+          "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session"
+        },
+        {
+          "transactionId": "621475d832c462ff56867dd4667c8f0a",
+          "sessionId": "rotate-5",
+          "sweepPath": "BEGIN_TRANSACTION",
+          "statusAfter": "ACTIVE",
+          "success": false,
+          "deferred": true,
+          "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session"
+        },
+        {
+          "transactionId": "62d71ef902a91529a3a4503ebc7e1081",
+          "sessionId": "rotate-13",
+          "sweepPath": "BEGIN_TRANSACTION",
+          "statusAfter": "ACTIVE",
+          "success": false,
+          "deferred": true,
+          "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session"
+        },
+        {
+          "transactionId": "64c362998642eecf277ef3350684e91d",
+          "sessionId": "rotate-14",
+          "sweepPath": "BEGIN_TRANSACTION",
+          "statusAfter": "ACTIVE",
+          "success": false,
+          "deferred": true,
+          "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session"
+        },
+        {
+          "transactionId": "6574c09f9df40c6ed5ef2003db23e4ba",
+          "sessionId": "rotate-11",
+          "sweepPath": "BEGIN_TRANSACTION",
+          "statusAfter": "ACTIVE",
+          "success": false,
+          "deferred": true,
+          "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session"
+        },
+        {
+          "transactionId": "6abc7fb324ea102d28756e05ac8458ed",
+          "sessionId": "rotate-4",
+          "sweepPath": "BEGIN_TRANSACTION",
+          "statusAfter": "ACTIVE",
+          "success": false,
+          "deferred": true,
+          "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session"
+        },
+        {
+          "transactionId": "81080db74f7deab45bfa2d2bc06d1532",
+          "sessionId": "rotate-7",
+          "sweepPath": "BEGIN_TRANSACTION",
+          "statusAfter": "ACTIVE",
+          "success": false,
+          "deferred": true,
+          "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session"
+        },
+        {
+          "transactionId": "85ba6304dac250e55e14a9bd006ffa75",
+          "sessionId": "rotate-3",
+          "sweepPath": "BEGIN_TRANSACTION",
+          "statusAfter": "ACTIVE",
+          "success": false,
+          "deferred": true,
+          "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session"
+        },
+        {
+          "transactionId": "9537e7119942b1b456b253bedd4b803a",
+          "sessionId": "rotate-12",
+          "sweepPath": "BEGIN_TRANSACTION",
+          "statusAfter": "ACTIVE",
+          "success": false,
+          "deferred": true,
+          "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session"
+        },
+        {
+          "transactionId": "dd4f6238399925e15c965e7d26ab6601",
+          "sessionId": "rotate-1",
+          "sweepPath": "BEGIN_TRANSACTION",
+          "statusAfter": "ACTIVE",
+          "success": false,
+          "deferred": true,
+          "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session"
+        },
+        {
+          "transactionId": "ebde36300984dcfc7bddc206e72c1884",
+          "sessionId": "rotate-9",
+          "sweepPath": "BEGIN_TRANSACTION",
+          "statusAfter": "ACTIVE",
+          "success": false,
+          "deferred": true,
+          "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session"
+        },
+        {
+          "transactionId": "f5f345b2424cedd7c6b5a0bce1ca8890",
+          "sessionId": "rotate-10",
+          "sweepPath": "BEGIN_TRANSACTION",
+          "statusAfter": "ACTIVE",
+          "success": false,
+          "deferred": true,
+          "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session"
+        }
+      ]
+    },
+    "afterFirst": {
+      "deferredAttempts": 1,
+      "deferredUntilMs": 1000,
+      "oldestDeadlineAtMs": 1000,
+      "reservedBytes": 17924,
+      "retainedCount": 17,
+      "selectedCount": 16,
+      "stopReason": "deferred"
+    },
+    "held": {
+      "swept": 0,
+      "resolved": 0,
+      "failed": 0,
+      "deferred": 1,
+      "results": [],
+      "skipped": false,
+      "deferredUntilMs": 1000
+    },
+    "b": {
+      "swept": 16,
+      "resolved": 0,
+      "failed": 0,
+      "deferred": 16,
+      "deferredUntilMs": 3000,
+      "skipped": false,
+      "results": [
+        {
+          "transactionId": "fb2175365f95dd544bf0e4d2f53faf70",
+          "sessionId": "rotate-0",
+          "sweepPath": "BEGIN_TRANSACTION",
+          "statusAfter": "ACTIVE",
+          "success": false,
+          "deferred": true,
+          "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session"
+        },
+        {
+          "transactionId": "4c93951a5d840f72917c141d13851e5a",
+          "sessionId": "rotate-2",
+          "sweepPath": "BEGIN_TRANSACTION",
+          "statusAfter": "ACTIVE",
+          "success": false,
+          "deferred": true,
+          "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session"
+        },
+        {
+          "transactionId": "509c03193bd438d94bb3e91e31e6dad4",
+          "sessionId": "rotate-16",
+          "sweepPath": "BEGIN_TRANSACTION",
+          "statusAfter": "ACTIVE",
+          "success": false,
+          "deferred": true,
+          "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session"
+        },
+        {
+          "transactionId": "56df178927e7747c4954f6b7ffe1e9a1",
+          "sessionId": "rotate-15",
+          "sweepPath": "BEGIN_TRANSACTION",
+          "statusAfter": "ACTIVE",
+          "success": false,
+          "deferred": true,
+          "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session"
+        },
+        {
+          "transactionId": "5779c5ff4386a4c03e614f0162a0c06c",
+          "sessionId": "rotate-8",
+          "sweepPath": "BEGIN_TRANSACTION",
+          "statusAfter": "ACTIVE",
+          "success": false,
+          "deferred": true,
+          "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session"
+        },
+        {
+          "transactionId": "5951d0f9282016c4deb78617bd464110",
+          "sessionId": "rotate-6",
+          "sweepPath": "BEGIN_TRANSACTION",
+          "statusAfter": "ACTIVE",
+          "success": false,
+          "deferred": true,
+          "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session"
+        },
+        {
+          "transactionId": "621475d832c462ff56867dd4667c8f0a",
+          "sessionId": "rotate-5",
+          "sweepPath": "BEGIN_TRANSACTION",
+          "statusAfter": "ACTIVE",
+          "success": false,
+          "deferred": true,
+          "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session"
+        },
+        {
+          "transactionId": "62d71ef902a91529a3a4503ebc7e1081",
+          "sessionId": "rotate-13",
+          "sweepPath": "BEGIN_TRANSACTION",
+          "statusAfter": "ACTIVE",
+          "success": false,
+          "deferred": true,
+          "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session"
+        },
+        {
+          "transactionId": "64c362998642eecf277ef3350684e91d",
+          "sessionId": "rotate-14",
+          "sweepPath": "BEGIN_TRANSACTION",
+          "statusAfter": "ACTIVE",
+          "success": false,
+          "deferred": true,
+          "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session"
+        },
+        {
+          "transactionId": "6574c09f9df40c6ed5ef2003db23e4ba",
+          "sessionId": "rotate-11",
+          "sweepPath": "BEGIN_TRANSACTION",
+          "statusAfter": "ACTIVE",
+          "success": false,
+          "deferred": true,
+          "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session"
+        },
+        {
+          "transactionId": "6abc7fb324ea102d28756e05ac8458ed",
+          "sessionId": "rotate-4",
+          "sweepPath": "BEGIN_TRANSACTION",
+          "statusAfter": "ACTIVE",
+          "success": false,
+          "deferred": true,
+          "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session"
+        },
+        {
+          "transactionId": "81080db74f7deab45bfa2d2bc06d1532",
+          "sessionId": "rotate-7",
+          "sweepPath": "BEGIN_TRANSACTION",
+          "statusAfter": "ACTIVE",
+          "success": false,
+          "deferred": true,
+          "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session"
+        },
+        {
+          "transactionId": "85ba6304dac250e55e14a9bd006ffa75",
+          "sessionId": "rotate-3",
+          "sweepPath": "BEGIN_TRANSACTION",
+          "statusAfter": "ACTIVE",
+          "success": false,
+          "deferred": true,
+          "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session"
+        },
+        {
+          "transactionId": "9537e7119942b1b456b253bedd4b803a",
+          "sessionId": "rotate-12",
+          "sweepPath": "BEGIN_TRANSACTION",
+          "statusAfter": "ACTIVE",
+          "success": false,
+          "deferred": true,
+          "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session"
+        },
+        {
+          "transactionId": "dd4f6238399925e15c965e7d26ab6601",
+          "sessionId": "rotate-1",
+          "sweepPath": "BEGIN_TRANSACTION",
+          "statusAfter": "ACTIVE",
+          "success": false,
+          "deferred": true,
+          "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session"
+        },
+        {
+          "transactionId": "ebde36300984dcfc7bddc206e72c1884",
+          "sessionId": "rotate-9",
+          "sweepPath": "BEGIN_TRANSACTION",
+          "statusAfter": "ACTIVE",
+          "success": false,
+          "deferred": true,
+          "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session"
+        }
+      ]
+    },
+    "counts": [
+      {
+        "id": "4c93951a5d840f72917c141d13851e5a",
+        "attempts": 3
+      },
+      {
+        "id": "509c03193bd438d94bb3e91e31e6dad4",
+        "attempts": 3
+      },
+      {
+        "id": "56df178927e7747c4954f6b7ffe1e9a1",
+        "attempts": 3
+      },
+      {
+        "id": "5779c5ff4386a4c03e614f0162a0c06c",
+        "attempts": 3
+      },
+      {
+        "id": "5951d0f9282016c4deb78617bd464110",
+        "attempts": 3
+      },
+      {
+        "id": "621475d832c462ff56867dd4667c8f0a",
+        "attempts": 3
+      },
+      {
+        "id": "62d71ef902a91529a3a4503ebc7e1081",
+        "attempts": 3
+      },
+      {
+        "id": "64c362998642eecf277ef3350684e91d",
+        "attempts": 3
+      },
+      {
+        "id": "6574c09f9df40c6ed5ef2003db23e4ba",
+        "attempts": 3
+      },
+      {
+        "id": "6abc7fb324ea102d28756e05ac8458ed",
+        "attempts": 3
+      },
+      {
+        "id": "81080db74f7deab45bfa2d2bc06d1532",
+        "attempts": 3
+      },
+      {
+        "id": "85ba6304dac250e55e14a9bd006ffa75",
+        "attempts": 3
+      },
+      {
+        "id": "9537e7119942b1b456b253bedd4b803a",
+        "attempts": 3
+      },
+      {
+        "id": "dd4f6238399925e15c965e7d26ab6601",
+        "attempts": 3
+      },
+      {
+        "id": "ebde36300984dcfc7bddc206e72c1884",
+        "attempts": 3
+      },
+      {
+        "id": "f5f345b2424cedd7c6b5a0bce1ca8890",
+        "attempts": 2
+      },
+      {
+        "id": "fb2175365f95dd544bf0e4d2f53faf70",
+        "attempts": 2
+      }
+    ],
+    "diagnostics": {
+      "attachmentCount": 0,
+      "operationCount": 0,
+      "recordBytes": 17924,
+      "recordCount": 17,
+      "roles": {
+        "INSERT_OUTCOME_UNCERTAIN": 17
+      },
+      "sweep": {
+        "deferredAttempts": 2,
+        "deferredUntilMs": 3000,
+        "oldestDeadlineAtMs": 1000,
+        "reservedBytes": 17924,
+        "retainedCount": 17,
+        "selectedCount": 16,
+        "stopReason": "deferred"
+      },
+      "totalBytes": 17924
+    }
+  }
+}

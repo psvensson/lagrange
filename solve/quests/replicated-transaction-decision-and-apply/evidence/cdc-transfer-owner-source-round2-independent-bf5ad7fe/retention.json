@@ -1,0 +1,128 @@
+{
+  "utc": "2026-10-11T23:10:18.109232+00:00",
+  "scope": "Independent source review round2; REJECT PO-5; PO1-4 tested scopes preserved; no integrated acceptance",
+  "reportSha256": "bf5ad7fea043d07c929dca7ab5a649182583b928aaf3d64ca4636a413aeb9c0a",
+  "sourceSnapshot": "7a8dfa2822c15dd6ee497933669d835da832c561",
+  "entries": [
+    {
+      "path": "diagnostics/audit-impact.txt",
+      "sha256": "f7010f027eed68fef0201495d8d73cc153abf223657c180f8bd7cffd57177579",
+      "bytes": 228
+    },
+    {
+      "path": "diagnostics/audit-shards.txt",
+      "sha256": "f68f74830bd786e9bd1628fde14cb86d772a323ca9d2c676d928e7af32722721",
+      "bytes": 547
+    },
+    {
+      "path": "diagnostics/capture-reentry.json",
+      "sha256": "e4175033929ff2ec612770b6deb45114c1f54378a0030ccfd078c9c7eb7670ed",
+      "bytes": 9038
+    },
+    {
+      "path": "diagnostics/capture-reentry.mjs",
+      "sha256": "a4caed2780eb69dd8be465f00fb0422bf0c2fa1edf131dffe330a51b5164681f",
+      "bytes": 4753
+    },
+    {
+      "path": "diagnostics/capture-reentry.txt",
+      "sha256": "1b958c19931abc3f8e477c4a491b5017ae7b70507d5ca4270ceebb000fcdb701",
+      "bytes": 240
+    },
+    {
+      "path": "diagnostics/commands-and-results.md",
+      "sha256": "fdc2e47622ed431252002261eed41c8061b1de446746d5af50fe4e46bceec581",
+      "bytes": 4176
+    },
+    {
+      "path": "diagnostics/counterexamples.json",
+      "sha256": "03be80a99aedf1db9662ebe468f1b8c7cf01993fb0e6a5f9c2e006598826c5dd",
+      "bytes": 10809
+    },
+    {
+      "path": "diagnostics/counterexamples.txt",
+      "sha256": "2aeec386db0c6ce3bc87f7dfa486cc28f67a4672ce109ece3045fd1c6e538779",
+      "bytes": 446
+    },
+    {
+      "path": "diagnostics/cumulative-tests.txt",
+      "sha256": "8e17d183103756485d986852edf41c355e816e5aa6c95687d2b22e67b27b9ba3",
+      "bytes": 752
+    },
+    {
+      "path": "diagnostics/descriptor-boundaries.json",
+      "sha256": "ae7aa8f6400b300cf8b51b5440299e1fa327b32b85518c7e7fdd1589876c4c7b",
+      "bytes": 1015
+    },
+    {
+      "path": "diagnostics/descriptor-boundaries.mjs",
+      "sha256": "bfed5cfefa48671b81869b51876c777043bd0fbc851a144df55a983c4266bdc5",
+      "bytes": 2161
+    },
+    {
+      "path": "diagnostics/descriptor-boundaries.txt",
+      "sha256": "ae7aa8f6400b300cf8b51b5440299e1fa327b32b85518c7e7fdd1589876c4c7b",
+      "bytes": 1015
+    },
+    {
+      "path": "diagnostics/git-object-checks.json",
+      "sha256": "a77779210f3781c09e5d27531255c512d9923df35832a4f1b7ceb15a36eefabe",
+      "bytes": 522
+    },
+    {
+      "path": "diagnostics/manifest.sha256",
+      "sha256": "b8059c037cb5c9d0370366de4b3b031573098180555d661e19a7a9bb250c0afb",
+      "bytes": 2073
+    },
+    {
+      "path": "diagnostics/metadata-comparison.json",
+      "sha256": "037cc7ff354af2e3bf305086359fc7d1cd4309eed08c507ab109d2758b9be0f1",
+      "bytes": 187
+    },
+    {
+      "path": "diagnostics/navigation/src/cdc/cdc-coverage-reconcile-owner.js",
+      "sha256": "0d844cff666dfcd3e7aa58246b782cad5ccfdd5f321e7b5af8d795fdc949218a",
+      "bytes": 21972
+    },
+    {
+      "path": "diagnostics/navigation/src/cdc/cdc-coverage-transfer-owner.js",
+      "sha256": "f25e59b5dbfbb7ce07ddd2159ad8ae5dfeff06ff3d7dbf9a2643fcc393312627",
+      "bytes": 20595
+    },
+    {
+      "path": "diagnostics/navigation/test/cdc/cdc-coverage-lifecycle-owner.test.js",
+      "sha256": "f2dceed1e9f244c7f2f975f28908baa06efdd25649616c5040aaca2fbe5c3912",
+      "bytes": 22432
+    },
+    {
+      "path": "diagnostics/navigation/test/shards/impact-contracts.json",
+      "sha256": "a68b9d32d56527bb3d5a5c50ee7f7cb47132dbe803f4833395083c3e95b9ec56",
+      "bytes": 103484
+    },
+    {
+      "path": "diagnostics/navigation/test/shards/subsystem-classes.json",
+      "sha256": "cfc1f79e47cff18887d1918b9cc15f7a4163738f58b2f81ff4c5956ec8c3ee2f",
+      "bytes": 698365
+    },
+    {
+      "path": "diagnostics/owner-counterexamples.mjs",
+      "sha256": "cddc57673257908ad8a4ed933d85180837986a577820627b865fe1181a7e126d",
+      "bytes": 8185
+    },
+    {
+      "path": "diagnostics/packet-checks.json",
+      "sha256": "e96290ab428b91cf5441fda0c5d378320a4291fb9a5c610a8b399f9de3577cbf",
+      "bytes": 5037
+    },
+    {
+      "path": "diagnostics/source-ledger.json",
+      "sha256": "0fbfc05659c0ac7f2df1111f097418d837f20c814c59b0144d830dd50711754b",
+      "bytes": 722
+    },
+    {
+      "path": "review.md",
+      "sha256": "bf5ad7fea043d07c929dca7ab5a649182583b928aaf3d64ca4636a413aeb9c0a",
+      "bytes": 29827
+    }
+  ]
+}

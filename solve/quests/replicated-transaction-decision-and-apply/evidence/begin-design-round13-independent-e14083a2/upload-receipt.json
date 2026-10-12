@@ -1,0 +1,13 @@
+{
+  "owner": "solve evidence add; upload redownload and rehash completed",
+  "entry": {
+    "ts": "2026-10-11T23:45:46.201Z",
+    "type": "finding",
+    "kind": "evidence",
+    "text": "Complete independent BEGIN round13 design review e14083a2 and 50-file diagnostics manifest a80f53ad. REVISE D13-1 physical custody and supported aggregate admission, D13-2 reply completion and retained recovery progress. Preserves prior schema and private-slot design approvals. Actual nested router/ledger seam with explicitly modeled proposed gate, exact deployment capacity comparison, repeated legal 30s deadline schedules and positive controls retained. No source, startup, or merge approval.",
+    "evidence": "sha256:86c4fcb69d9a8e9bf3ef54646c05054c7420b4806136346a4a4fe71e2a560016",
+    "asset": "replicated-transaction-decision-and-apply--begin-design-round13-independent-e14083a2.tar.gz",
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/replicated-transaction-decision-and-apply--begin-design-round13-independent-e14083a2.tar.gz",
+    "bytes": 302814
+  }
+}

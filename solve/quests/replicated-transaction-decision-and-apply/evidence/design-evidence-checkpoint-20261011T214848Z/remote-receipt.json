@@ -1,0 +1,68 @@
+{
+  "utc": "2026-10-11T21:48:48.696152+00:00",
+  "namespace": "refs/heads/checkpoint/rs-raft-preservation-20261011T214848Z",
+  "mainBefore": "878eb8ac059dab71deae5feb0fa88e0c5c610c93",
+  "newRefs": {
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T214848Z/startup-wip": "ed20e28fd1be84c180c034f9e5f0f9bf13c95fa1",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T214848Z/tx1-owner-wip": "8f06591f09590aaacde134081329ce5a15d589cf",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T214848Z/cdc-wip": "663e4153da51cdcbb45844974e0fe13bd6d4ad71"
+  },
+  "coverage": {
+    "startup-wip": {
+      "status": "VERIFIED_PUSHED",
+      "sha": "ed20e28fd1be84c180c034f9e5f0f9bf13c95fa1",
+      "ref": "refs/heads/checkpoint/rs-raft-preservation-20261011T214848Z/startup-wip",
+      "changedSinceRemote": "bcfc5811f37f0dc3a558fd3ee8725227596d4d3b",
+      "changedPaths": [
+        "solve/quests/replicated-transaction-decision-and-apply/design-query-begin-uncertain-insert-resolution-2026-10-11.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/begin-round9-classification-feasibility.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/design-query-begin-uncertain-insert-resolution-round8-56b96438.md"
+      ]
+    },
+    "tx1-owner-wip": {
+      "status": "VERIFIED_PUSHED",
+      "sha": "8f06591f09590aaacde134081329ce5a15d589cf",
+      "ref": "refs/heads/checkpoint/rs-raft-preservation-20261011T214848Z/tx1-owner-wip",
+      "changedSinceRemote": "5d2bc896fe24c3153b163d49ad19c5b78de8258f",
+      "changedPaths": [
+        "solve/quests/replicated-transaction-decision-and-apply/cdc-coverage-response-resource-handoff-amendment-20261011.md",
+        "solve/quests/replicated-transaction-decision-and-apply/design-query-begin-uncertain-insert-resolution-2026-10-11.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/begin-round9-classification-feasibility.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/design-freeze-bd551d60/design-query-begin-uncertain-insert-resolution-2026-10-11.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/design-freeze-bd551d60/retention.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/design-freeze-ce9e463c/cdc-coverage-response-resource-handoff-amendment-20261011.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/design-freeze-ce9e463c/retention.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/design-query-begin-uncertain-insert-resolution-round8-56b96438.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/review-evidence-checkpoint-20261011T214030Z/caller-states-after-capture.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/review-evidence-checkpoint-20261011T214030Z/caller-states-after-push.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/review-evidence-checkpoint-20261011T214030Z/caller-states-before.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/review-evidence-checkpoint-20261011T214030Z/push-attempt.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/review-evidence-checkpoint-20261011T214030Z/push-plan.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/review-evidence-checkpoint-20261011T214030Z/remote-receipt.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/review-evidence-checkpoint-20261011T214030Z/remote-refs.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/review-evidence-checkpoint-20261011T214030Z/tx1-owner-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/log.ndjson"
+      ]
+    },
+    "cdc-wip": {
+      "status": "VERIFIED_PUSHED",
+      "sha": "663e4153da51cdcbb45844974e0fe13bd6d4ad71",
+      "ref": "refs/heads/checkpoint/rs-raft-preservation-20261011T214848Z/cdc-wip",
+      "changedSinceRemote": "71be41b665830c0cfd2b1aaf6f2db22ffad83822",
+      "changedPaths": [
+        "solve/quests/replicated-transaction-decision-and-apply/cdc-coverage-response-resource-handoff-amendment-20261011.md"
+      ]
+    }
+  },
+  "callerStatesVerified": true,
+  "preservationOnly": true,
+  "remoteRefs": {
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T214848Z/cdc-wip": "663e4153da51cdcbb45844974e0fe13bd6d4ad71",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T214848Z/startup-wip": "ed20e28fd1be84c180c034f9e5f0f9bf13c95fa1",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T214848Z/tx1-owner-wip": "8f06591f09590aaacde134081329ce5a15d589cf",
+    "refs/heads/main": "878eb8ac059dab71deae5feb0fa88e0c5c610c93"
+  },
+  "verified": true,
+  "mainUnchanged": true,
+  "callerStatesVerifiedAfterPush": true
+}

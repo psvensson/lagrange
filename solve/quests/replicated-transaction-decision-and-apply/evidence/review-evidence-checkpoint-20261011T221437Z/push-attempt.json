@@ -1,0 +1,5 @@
+{
+  "exitCode": 0,
+  "stdout": "[pre-push +0s] >> pushed-refs: reading pushed refs\n[pre-push +0s] >> tag-only-fast-path: tag-only fast path check\n[pre-push +0s] >> branch-preservation-fast-path: non-main branch preservation check\npre-push: non-main branch preservation push - skipping local proof gate\npre-push: remote preservation is NOT merge, Quest-land, release, or publication approval\npre-push: set LAGRANGE_PUSH_PROVE_BRANCH=1 to prove a feature branch locally before push\n[pre-push +0s] all stages green\n",
+  "stderr": "remote: \nremote: Create a pull request for 'checkpoint/rs-raft-preservation-20261011T221437Z/tx1-owner-wip' on GitHub by visiting:        \nremote:      https://github.com/psvensson/lagrange/pull/new/checkpoint/rs-raft-preservation-20261011T221437Z/tx1-owner-wip        \nremote: \nTo github.com:psvensson/lagrange.git\n * [new branch]          4f258b16e3892a4930951eee58c895c3d0d63f40 -> checkpoint/rs-raft-preservation-20261011T221437Z/tx1-owner-wip\n"
+}

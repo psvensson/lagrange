@@ -1,0 +1,11 @@
+{
+  "worktree": "/mnt/data/peter/projects/.worktrees/tx1-query-20261011",
+  "worktreeHead": "be99622d6b21162e9cc459104d7f1b5d8cd3830d",
+  "base": "be99622d6b21162e9cc459104d7f1b5d8cd3830d",
+  "snapshot": "41a054f9fc20969a375afce5a555152dc197518b",
+  "tree": "bc68e6ba8bd2bd0d37e3f1c49f0a1a31a34fb02a",
+  "remoteRef": "refs/heads/checkpoint/rs-raft-preservation-20261011T182115Z/query-wip",
+  "callerStatePreserved": true,
+  "callerIndexSha256": "6e2ad9543303a009701dca0b7e91c190fc42117d06ec3812a9fe1f4c48303a82",
+  "status": "Preservation only; no additional review or readiness approval"
+}

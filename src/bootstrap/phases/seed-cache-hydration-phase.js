@@ -8,7 +8,6 @@
  * The class receives required dependencies via constructor injection.
  */
 
-import {SQLQueryEngine} from '../../query/sql-query-engine.js';
 import {wireMigrationWorkflowOwners} from '../../migration/migration-composition.js';
 import {RPCClient} from '../../transport/rpc-client.js';
 import {TablePolicyService} from '../../policy/table-policy-service.js';
@@ -42,9 +41,6 @@ import {
   TABLES,
   CDC_OPERATION,
 } from '../../constants/index.js';
-import {
-  CONTROL_PLANE_READINESS_DIMENSION,
-} from '../../control-plane/control-plane-readiness-constants.js';
 import {
   SeedRuntimeBridgeOwner,
 } from '../owners/seed-runtime-bridge-owner.js';
@@ -217,21 +213,9 @@ class SeedCacheHydrationPhase {
       durationMs: resolveHostedNodeClock(this.delegates)() - readinessStartedAt,
     });
 
-    const cdcQueryEngine = new SQLQueryEngine({
-      // The engine stamps and times for THIS node.
-      nowFn: resolveHostedNodeClock(d),
-      systemCache: systemTableCache,
-      messageRouter: d.getMessageRouter(),
-      nodeId: d.getNodeId(),
-      rebalanceCoordinator: d.getRebalanceCoordinator(),
-      controlPlaneReadinessService:
-        d.getRebalanceCoordinator()?.controlPlaneReadinessService || null,
-      defaultRoutingReadinessDimension:
-        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-      migrationAutoWire: false,
-      autoStartDistributedTransactionRecovery: false,
-      unrefRetryDelayTimers: true,
-    });
+    // The same query/coordinator owner acquired before release/registration
+    // is handed to normal CDC routing after cache hydration.
+    const cdcQueryEngine = this.runtimeBridgeOwner.acquireSqlQueryEngine();
     wireMigrationWorkflowOwners({
       sqlCore: cdcQueryEngine,
       systemTableCache,

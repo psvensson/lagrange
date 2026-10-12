@@ -1,0 +1,252 @@
+{
+  "scope": "Design and native/schema feasibility only; no production source, test, metadata, Quest log, transport or schema mutation.",
+  "provenance": {
+    "subjectSha256": "a43acda04119ee312a9452c38d32fc3a67b33e0cdf7a47193a6fff05be1844d1",
+    "predecessorSha256": "df779a902d3972db751eebdd8790b828ed8bfa2f422f042a60ecf1445c7acc53",
+    "reviewSha256": "68e4b447c7f17e20971999025341ff864265ab2b276499c57ba66439a049d77a",
+    "sqliteVersion": "3.49.2"
+  },
+  "tupleFields": {
+    "creditRequest": [
+      "contract_version",
+      "scan_id",
+      "classification_role",
+      "transaction_id",
+      "attempt_key",
+      "attempt_row_bytes",
+      "phase",
+      "page_offset",
+      "page_bytes",
+      "origin_resource_generation",
+      "original_deadline_at_ms",
+      "turn_started_at_ms",
+      "turn_deadline_at_ms"
+    ],
+    "grant": [
+      "contract_version",
+      "scan_id",
+      "classification_role",
+      "transaction_id",
+      "attempt_key",
+      "phase",
+      "page_offset",
+      "page_bytes",
+      "origin_resource_generation",
+      "credit_id",
+      "target_resource_generation",
+      "grant_sequence",
+      "grant_expires_at_ms"
+    ],
+    "classificationRequest": [
+      "contract_version",
+      "scan_id",
+      "classification_role",
+      "transaction_id",
+      "attempt_key",
+      "attempt_row_bytes",
+      "phase",
+      "page_offset",
+      "page_bytes",
+      "origin_resource_generation",
+      "original_deadline_at_ms",
+      "turn_started_at_ms",
+      "turn_deadline_at_ms",
+      "credit_id",
+      "target_resource_generation",
+      "grant_sequence",
+      "grant_expires_at_ms"
+    ],
+    "pageResult": [
+      "contract_version",
+      "scan_id",
+      "credit_id",
+      "classification_role",
+      "transaction_id",
+      "attempt_key",
+      "identity_state",
+      "initial_match",
+      "transaction_epoch",
+      "timeout_deadline",
+      "transaction_mode",
+      "created_at",
+      "session_octets",
+      "phase",
+      "page_offset",
+      "page_bytes",
+      "session_page_hex",
+      "origin_resource_generation",
+      "target_resource_generation",
+      "grant_sequence"
+    ],
+    "outerLeaderWitness": [
+      "state",
+      "partitionId",
+      "servingNodeId",
+      "servingReplicaId",
+      "term",
+      "role",
+      "observedAtMs"
+    ]
+  },
+  "tupleBytes": {
+    "creditRequest": 523,
+    "creditRequestWire": 731,
+    "grant": 532,
+    "grantWire": 983,
+    "classificationRequest": 689,
+    "classificationRequestWire": 897,
+    "pageResult": 8923,
+    "pageResultWire": 9374,
+    "ack": 81,
+    "pressure": 266,
+    "pressureWire": 717,
+    "expired": 290,
+    "expiredWire": 741
+  },
+  "wrapperBound": {
+    "kind": "exact_current_connection_generation_measurement",
+    "sourceNodeId": "source-node",
+    "sourceAddress": "source-address",
+    "targetAddress": "target-address",
+    "note": "Payload fields have fixed maxima. Wrapper identity/address bytes are measured from the exact immutable connection generation before its private capability is enabled; no peer-ID length cap is inferred."
+  },
+  "connectionFrameBytes": 10519,
+  "deadlines": [
+    {
+      "role": "FOREGROUND_CREATION",
+      "now": 4000,
+      "originalDeadline": 5000,
+      "turnBudget": 2000,
+      "turnDeadline": 5000,
+      "mutationAdmission": true,
+      "activePublication": true
+    },
+    {
+      "role": "FOREGROUND_CREATION",
+      "now": 6000,
+      "originalDeadline": 5000,
+      "turnBudget": 1000,
+      "turnDeadline": 5000,
+      "mutationAdmission": false,
+      "activePublication": false
+    },
+    {
+      "role": "SERVER_RECONCILIATION",
+      "now": 6000,
+      "originalDeadline": 5000,
+      "turnBudget": 1000,
+      "turnDeadline": 7000,
+      "mutationAdmission": false,
+      "activePublication": false
+    }
+  ],
+  "endpointSchedules": {
+    "fourOrigins": {
+      "targetNativeLanes": 1,
+      "capableConnections": 4,
+      "frameSlotsPerConnection": 4,
+      "originA": [
+        "credit_ack",
+        "grant_outcome",
+        "native_lane"
+      ],
+      "originsBCD": [
+        "credit_ack",
+        "pressure_outcome"
+      ],
+      "unchargedFrames": 0
+    },
+    "classifierBeforeGrantCallback": {
+      "simultaneouslyCharged": [
+        "credit_ack",
+        "grant_outcome",
+        "classifier_ack",
+        "classifier_result",
+        "native_lane"
+      ],
+      "distinctFrameSlots": 4,
+      "unchargedFrames": 0
+    },
+    "expiryWithRetainedGrantFrame": {
+      "semanticExpiryReleases": [
+        "native_lane"
+      ],
+      "semanticExpiryRetains": [
+        "grant_outcome_until_send_callback_error_or_close",
+        "compact_retired_credit_binding"
+      ],
+      "doubleReleaseAllowed": false
+    },
+    "lateClassifierAfterExpiry": {
+      "chargedBy": [
+        "per_connection_parse_scratch",
+        "classifier_ack",
+        "classifier_outcome"
+      ],
+      "nativeCalls": 0,
+      "outcome": "GRANT_EXPIRED"
+    }
+  },
+  "generationDomains": {
+    "origin_resource_generation": "origin_node_local",
+    "target_resource_generation": "target_node_local",
+    "connection_delivery_generation": "target_router_connection_local_outer_fact",
+    "crossDomainNumericEqualityRequired": false
+  },
+  "schema": {
+    "actualVirginV2OwnerState": {
+      "state": "install_required",
+      "schemaVersion": 2,
+      "schemaDigest": "8200c95c4ecdf0b6e3311ee67c0952b4bdb561b3f8b77dc2ae12bb5f2947093c",
+      "enforcerDigest": null,
+      "missingColumns": []
+    },
+    "actualInstalledV2OwnerState": {
+      "state": "enforced",
+      "schemaVersion": 2,
+      "schemaDigest": "8200c95c4ecdf0b6e3311ee67c0952b4bdb561b3f8b77dc2ae12bb5f2947093c",
+      "enforcerDigest": "bdde8533813a78d55860924b1ae04693667080208044d4ee7593e1c5d6858d16",
+      "missingColumns": []
+    },
+    "exactV2TriggerSha256": "bdde8533813a78d55860924b1ae04693667080208044d4ee7593e1c5d6858d16",
+    "proposedV3TriggerSha256": "5b3b5dd8c24b550442c3dc2b7ff23031f89ea2179a6c29deb621d8b09092eac1",
+    "proposedV3UsesOctetLength": true,
+    "states": [
+      {
+        "originPresent": false,
+        "rowCount": 0,
+        "trigger": "MISSING",
+        "outcome": "INSTALL_REQUIRED_V3",
+        "next": "INSTALL_V3_IN_ORIGIN_APPLY"
+      },
+      {
+        "originPresent": false,
+        "rowCount": 0,
+        "trigger": "EXACT_V2",
+        "outcome": "UPGRADE_REQUIRED_V2_TO_V3",
+        "next": "REPLACE_IN_ORIGIN_APPLY"
+      },
+      {
+        "originPresent": false,
+        "rowCount": 1,
+        "trigger": "MISSING",
+        "outcome": "INCOMPATIBLE_RETAINED_LEGACY",
+        "next": "NONE"
+      },
+      {
+        "originPresent": true,
+        "rowCount": 0,
+        "trigger": "EXACT_V3",
+        "outcome": "ENFORCED_V3",
+        "next": "NONE"
+      },
+      {
+        "originPresent": true,
+        "rowCount": 0,
+        "trigger": "MISSING_OR_V2_OR_FOREIGN",
+        "outcome": "INCOMPATIBLE",
+        "next": "NONE"
+      }
+    ]
+  }
+}

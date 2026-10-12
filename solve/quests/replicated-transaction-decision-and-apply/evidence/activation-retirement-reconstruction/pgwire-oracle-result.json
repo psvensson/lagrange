@@ -1,0 +1,27 @@
+{
+  "utc": "2026-10-11T22:49:45.545911+00:00",
+  "source": "14fac7d6ef64881daa7a0d266a272b724dfe640a",
+  "sourceManifestSha256": "7357539a7730f4a672d4a5f81b3b9812172225903839259962960bff3d4a9162",
+  "sourcePathsVerifiedAfter": 67,
+  "test": "test/integration/pgwire-command-tag-real-engine.integration.test.js",
+  "testSha256": "8f44c75bf894b7b55b7046eb0976a763f5162ccbb3c44265c72e2db09482ac28",
+  "command": "npx tap --disable-coverage --timeout=300 --reporter=tap test/integration/pgwire-command-tag-real-engine.integration.test.js",
+  "result": {
+    "total": 1,
+    "pass": 0,
+    "fail": 1,
+    "durationMs": 49830.734
+  },
+  "firstProductFailure": {
+    "stage": "seed participant release before client connection",
+    "dependentPartition": "artifact_payload_chunks-p1",
+    "controlPartition": "sql_transactions-p1",
+    "firstOutcome": "release_drain_pending",
+    "firstSettlementStage": "post_enable_release_census",
+    "remainingMs": 29949,
+    "laterOutcome": "release_generation_changed",
+    "laterMissingFact": "committed_control_reservation"
+  },
+  "rawLogSha256": "aca296ecce3e3c3116749b902f3dea1746f02a44907ef721955e992268562ab7",
+  "causalInterpretation": "Unresolved; retired authorization reuse is a source-level hypothesis awaiting durable command census. This result is not a passing normal startup witness."
+}

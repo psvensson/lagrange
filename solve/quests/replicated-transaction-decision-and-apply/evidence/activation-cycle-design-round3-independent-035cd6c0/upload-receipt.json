@@ -1,0 +1,13 @@
+{
+  "owner": "solve evidence add; upload redownload and rehash completed",
+  "entry": {
+    "ts": "2026-10-12T00:00:34.710Z",
+    "type": "finding",
+    "kind": "evidence",
+    "text": "Complete independent activation round13 review035cd6c0 and57-file diagnostics manifest28616a86. REVISE first-history/bootstrap binding, root-result custody after slot reuse, and consistent expired-turn successor entitlement. Preserve approved pre-submit capture, established-history supersession and history-qualified retirement subscopes. Source14fac and unchanged pgwire RED remain held. Actual private SQLite and supplied-fact design schedules are explicitly distinguished; no source, startup, replacement, or merge acceptance.",
+    "evidence": "sha256:84b3ae6863943364419424b3e242d236280a9a54a91b3f3680895c0c69af6faf",
+    "asset": "replicated-transaction-decision-and-apply--activation-cycle-design-round3-independent-035cd6c0.tar.gz",
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/replicated-transaction-decision-and-apply--activation-cycle-design-round3-independent-035cd6c0.tar.gz",
+    "bytes": 314917
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "tx1-owner-wip": {
+    "head": "e7c89f4b5114c0238312d3831b65889a4622f4e9",
+    "branch": "refs/heads/tx1/work-20261010",
+    "indexSha256": "775ee49801a0c92172acb5193f4bc0f20a1e130ff472696e391d53e944109e67",
+    "statusSha256": "c9def7eb713714fe959862c0be38ed72be194c44af47bdeef30e50645c4a7f24",
+    "dirtyContentSha256": "8704f84d19ffb443d36bfc79a5552f2671e94479621e5846cb454d5fec818a0e",
+    "dirtyPathCount": 1017,
+    "oversized": []
+  }
+}

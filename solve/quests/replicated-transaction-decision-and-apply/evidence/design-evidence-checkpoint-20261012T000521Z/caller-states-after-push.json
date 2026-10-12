@@ -1,0 +1,29 @@
+{
+  "startup-wip": {
+    "head": "c6d71665e98be03de916705f272a9d6340e4a842",
+    "branch": "refs/heads/integration/rs-raft-startup-20261011",
+    "indexSha256": "ca384aaa12984178960158d793b549a2ef63b75f6d5452f7d21c7487d7e5c25c",
+    "statusSha256": "1177ed79831374301ef2d15b8a9c2a46044f57aae5f137314c885d6c881bcc30",
+    "dirtyContentSha256": "9483bbdf7657f6cb144c496569153c81ff31658008eef65cbfd461fb7ae4bcc8",
+    "dirtyPathCount": 58,
+    "oversized": []
+  },
+  "tx1-owner-wip": {
+    "head": "e7c89f4b5114c0238312d3831b65889a4622f4e9",
+    "branch": "refs/heads/tx1/work-20261010",
+    "indexSha256": "775ee49801a0c92172acb5193f4bc0f20a1e130ff472696e391d53e944109e67",
+    "statusSha256": "4e22f32a0f6b078c93ec2efb7ee0aecfae967c0b39c9d2a92348e9aa8ba576ff",
+    "dirtyContentSha256": "3a2a55ea953fdf33dda146d338a57b779807e3f240fa61b7900bdd8deb1b79f0",
+    "dirtyPathCount": 1326,
+    "oversized": []
+  },
+  "cdc-wip": {
+    "head": "e7c89f4b5114c0238312d3831b65889a4622f4e9",
+    "branch": "refs/heads/tx1/cdc-receipt8-20261011",
+    "indexSha256": "1acd788a3d7a443b40191af97ace7c7ed0f8827375cb850b5dded7d12a5bf1e7",
+    "statusSha256": "6e5809511d7ccd6ce1bd114da5adc45345a5d77cfe437fdb518b8ec3ecf6cf6a",
+    "dirtyContentSha256": "8748ab057843311fca3dde48bbbe009efe6f2a80c147b7160a23008b414aad10",
+    "dirtyPathCount": 286,
+    "oversized": []
+  }
+}

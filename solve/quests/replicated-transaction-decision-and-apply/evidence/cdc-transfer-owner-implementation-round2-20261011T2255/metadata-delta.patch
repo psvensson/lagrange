@@ -1,0 +1,29 @@
+--- a/test/shards/subsystem-classes.json
++++ b/test/shards/subsystem-classes.json
+@@ -28,7 +28,7 @@
+   "censusSize": 2349,
+   "digest": "fnv1a32-8ec7a469",
+   "observationSchemaVersion": 2,
+-  "observationDigest": "fnv1a32-0f9e22aa",
++  "observationDigest": "fnv1a32-db406c62",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
+     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
+@@ -3287,7 +3287,8 @@
+       "files": [
+         "src/bootstrap/system-table-schemas-constants.js",
+         "src/cdc/cdc-integration-service.js",
+-        "src/cdc/cdc-source-scope-evidence.js"
++        "src/cdc/cdc-source-scope-evidence.js",
++        "src/constants/cdc-lifecycle-constants.js"
+       ]
+     },
+     "test/cdc/cdc-authoritative-coverage-reconciliation.test.js": {
+@@ -8643,6 +8644,7 @@
+         "src/cdc/cdc-coverage-domain.js",
+         "src/cdc/cdc-coverage-transfer-owner.js",
+         "src/control-plane/control-plane-readiness-constants.js",
++        "src/control-plane/pressure-governor.js",
+         "src/partition/partition-service-cdc-coverage-methods.js",
+         "src/partition/split-key-comparator.js",
+         "src/query/query-executor-partition-request-builders.js"

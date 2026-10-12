@@ -29,6 +29,7 @@
 // partition-participant-transaction-legacy-fence.js.
 
 import {PARTICIPANT_COMMIT_OUTCOME} from '../constants/transactions.js';
+import {TABLES} from '../constants/tables.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {
   partitionWriteLeadershipRefusalOf,
@@ -78,6 +79,14 @@ import {participantDeterminismSelfCheckOf} from
   './partition-participant-transaction-self-check.js';
 import {participantConnectionStampOf} from
   './partition-participant-transaction-connection.js';
+import {participantCutoverPauseOf} from './partition-participant-transaction-pause.js';
+import {coordinatorTableParticipantRefusal} from
+  '../query/distributed/distributed-transaction-participant-admission.js';
+import {readTransactionSchemaEnforcement, TRANSACTION_SCHEMA_ENFORCEMENT_ERROR,
+  TRANSACTION_SCHEMA_ENFORCEMENT_STATE} from
+  '../query/distributed/distributed-transaction-schema-enforcement.js';
+import {TOPOLOGY_TRANSITION_KIND, topologyTransitionOf} from
+  './partition-participant-transaction-topology-fence.js';
 import {executionEnvelopeOf} from './partition-transaction-execution-envelope.js';
 import {transactionStatementKindOf} from './partition-transaction-determinism.js';
 import {TRANSACTION_STATEMENT_KIND} from './partition-transaction-determinism-constants.js';
@@ -207,6 +216,14 @@ function volatileStateOf(session) {
 
 // --- BEGIN ---
 
+function topologyRefusalOf(service, payload) {
+  const topology = topologyTransitionOf(service);
+  return topology === null ? null : refusalOf(service, payload,
+    topology.kind === TOPOLOGY_TRANSITION_KIND.UNAVAILABLE ?
+      CODE.TOPOLOGY_UNAVAILABLE : CODE.TOPOLOGY_TRANSITION_ACTIVE,
+    {deferRetry: true, topology});
+}
+
 // What refuses a BEGIN before any session is looked up: leadership (a
 // session stages on the leader only), the generation origin, the leader's
 // self-check, the removal fence.
@@ -214,6 +231,9 @@ function beginRefusalOf(service, payload) {
   const leadership = partitionWriteLeadershipRefusalOf(service);
   if (leadership !== null) {
     return answerOf(service, payload, leadership);
+  }
+  if (participantCutoverPauseOf(service) !== null) {
+    return refusalOf(service, payload, CODE.CUTOVER_PAUSED, {deferRetry: true});
   }
   const origin = readPartitionWriteOrigin(service.db);
   if (origin === null) {
@@ -224,7 +244,8 @@ function beginRefusalOf(service, payload) {
     return refusalOf(service, payload, CODE.DETERMINISM_SELF_CHECK_FAILED);
   }
   return service.removalServingAdmissionFenced === true ?
-    refusalOf(service, payload, CODE.REMOVAL_FENCED, {deferRetry: true}) : null;
+    refusalOf(service, payload, CODE.REMOVAL_FENCED, {deferRetry: true}) :
+    topologyRefusalOf(service, payload);
 }
 
 function existingSessionAnswer(service, payload, session) {
@@ -240,6 +261,8 @@ function existingSessionAnswer(service, payload, session) {
 }
 
 function beginParticipantSession(service, payload) {
+  const coordinatorRefusal = coordinatorTableParticipantRefusal(service.tableName);
+  if (coordinatorRefusal !== null) return answerOf(service, payload, coordinatorRefusal);
   const refused = beginRefusalOf(service, payload);
   if (refused !== null) {
     return refused;
@@ -325,6 +348,12 @@ async function prepareSession(service, payload, session) {
   if (isPartitionReserved(service.db)) {
     return refusalOf(service, payload, CODE.RESERVED,
       {deferRetry: true, ...participantOutcomeOf(null, volatileStateOf(session))});
+  }
+  // A sealed command already submitted belongs to its outcome owner. Only
+  // a new PREPARE is topology admission; retries retain their exact bytes.
+  if (session.sealed === null) {
+    const topology = topologyRefusalOf(service, payload);
+    if (topology !== null) return topology;
   }
   const sealRefusal = session.sealed === null ?
     sealSession(service, payload, session) : null;
@@ -606,7 +635,18 @@ function answerParticipantSessionQuery(service, payload) {
  */
 async function enableParticipantTransactionAdmission(service) {
   const recorded = readPartitionWriteOrigin(service.db);
-  if (recorded !== null) {
+  const coordinatorEnforcement = service.tableName === TABLES.SQL_TRANSACTIONS ?
+    readTransactionSchemaEnforcement(service.db) : null;
+  if (recorded !== null &&
+      coordinatorEnforcement?.state !== TRANSACTION_SCHEMA_ENFORCEMENT_STATE.REQUIRED) {
+    if (coordinatorEnforcement !== null &&
+        coordinatorEnforcement.state !== TRANSACTION_SCHEMA_ENFORCEMENT_STATE.ENFORCED) {
+      return {success: false,
+        failureCode: TRANSACTION_SCHEMA_ENFORCEMENT_ERROR.SCHEMA,
+        errorCode: TRANSACTION_SCHEMA_ENFORCEMENT_ERROR.SCHEMA,
+        error: TRANSACTION_SCHEMA_ENFORCEMENT_ERROR.SCHEMA,
+        partitionId: service.partitionId, enforcement: coordinatorEnforcement};
+    }
     return {success: true, alreadyEnabled: true,
       partitionId: service.partitionId, ...recorded};
   }

@@ -1,0 +1,48 @@
+{
+  "writes": 1,
+  "sweep": {
+    "swept": 1,
+    "resolved": 0,
+    "failed": 0,
+    "deferred": 1,
+    "deferredUntilMs": 1791752043919,
+    "skipped": false,
+    "results": [
+      {
+        "transactionId": "d995f5fee43143ab21d605f637f8796f",
+        "sessionId": "queued-sweep",
+        "sweepPath": "BEGIN_TRANSACTION",
+        "statusAfter": "ACTIVE",
+        "success": false,
+        "deferred": true,
+        "error": "Distributed transaction creation outcome is uncertain; retry this BEGIN on the same session"
+      }
+    ]
+  },
+  "messageTypes": [
+    "C",
+    "Z"
+  ],
+  "frames": [
+    "C\u0000\u0000\u0000\nBEGIN\u0000",
+    "Z\u0000\u0000\u0000\u0005T"
+  ],
+  "txState": "ENTERED_ACTIVE",
+  "diagnostics": {
+    "attachmentCount": 0,
+    "operationCount": 0,
+    "recordBytes": 0,
+    "recordCount": 0,
+    "roles": {},
+    "sweep": {
+      "deferredAttempts": 1,
+      "deferredUntilMs": 1791752043919,
+      "oldestDeadlineAtMs": null,
+      "reservedBytes": 0,
+      "retainedCount": 0,
+      "selectedCount": 1,
+      "stopReason": "deferred"
+    },
+    "totalBytes": 0
+  }
+}

@@ -1,0 +1,34 @@
+
+> lagrange-server@0.2.6 audit:guidelines
+> npm run audit:guideline:literals && npm run audit:guideline:decision-boundaries && npm run audit:guideline:boundary-mode-contracts && npm run audit:guideline:hot-path-diagnostics && npm run audit:guideline:deferred-outcomes && npm run audit:guideline:silent-catch && npm run audit:guideline:ambient-intrinsics && npm run audit:style-terminal-vocabulary
+
+
+> lagrange-server@0.2.6 audit:guideline:literals
+> node scripts/check-guideline-literals.js
+
+Scanned 2217 JavaScript files
+Found 304 new literal-guideline violations
+Top files:
+- scripts/quest-evidence/cutover-workflow-crash-baseline.js: 65
+- scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js: 63
+- scripts/quest-evidence/cutover-terminal-obligation-baseline.js: 45
+- scripts/quest-evidence/retry-recovery-window.js: 42
+- scripts/quest-evidence/cutover-owner-entry-baseline.js: 24
+- scripts/quest-evidence/cutover-transition-authority-baseline.js: 24
+- src/cdc/cdc-coverage-reconcile-owner.js: 4
+- src/partition/partition-participant-release-contract.js: 4
+- src/query/distributed/distributed-transaction-settlement.js: 4
+- src/cdc/cdc-delivery-outcome.js: 3
+- src/query/distributed/distributed-transaction-schema-enforcement.js: 3
+- src/cdc/cdc-complete-coverage-reconcile.js: 2
+- src/cdc/cdc-coverage-transfer-owner.js: 2
+- src/diagnostics/runtime-build-provenance.js: 2
+- src/message-group/message-group-cdc-commit-owner.js: 2
+- src/partition/cdc-event-buffer.js: 2
+- src/partition/partition-cdc-coverage-transfer.js: 2
+- src/partition/partition-participant-transaction-topology-fence.js: 2
+- src/topology/cdc-group-propagation-delivery-methods.js: 2
+- src/cache/cdc-propagation-delivery-profile.js: 1
+Matched 1267 inherited literal-guideline baseline violations
+
+exit=1

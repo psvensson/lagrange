@@ -1,0 +1,10 @@
+{
+  "utc": "2026-10-11T23:25:48.298424+00:00",
+  "scope": "REVISE D12-1/2 resource design; APPROVE D11-2 schema design only",
+  "reportSha256": "0a0bfe8195cc47d931f25aa0c94fca74dfce1c2ba3716ce8a3b0577828833c7d",
+  "manifestSha256": "e775b4d7ec26d785b69de66a3917f0b3ad6d40beb15054fdb6498226a6b0495e",
+  "archiveName": "begin-design-round12-independent-0a0bfe81.tar.gz",
+  "archiveSha256": "f65d2ccbbea959b66b0c6a137c50377671a796866914b25d85e6bbe9d47b96a0",
+  "diagnosticFileCount": 46,
+  "archiveDisposition": "Awaiting canonical solve evidence upload; local archive outside solve tree"
+}
