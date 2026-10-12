@@ -23,6 +23,7 @@ import {
 
 const HEALTHY = 'healthy';
 const UNHEALTHY = 'unhealthy';
+const REPLACING = 'replacing';
 const USABLE = 'usable';
 const RECOVERY_REQUIRED = 'recovery-required';
 const NO_LEADER = '0';
@@ -90,6 +91,7 @@ const PEER_DELIVERY_OBSERVATION_LIMIT = 256;
 // same bound as its per-peer delivery observations.
 const INBOUND_STEP_REFUSAL_OBSERVATION_LIMIT = PEER_DELIVERY_OBSERVATION_LIMIT;
 const RUNTIME_PHASE = Object.freeze({
+  RUNTIME_REPLACEMENT: 'runtime-replacement',
   GENERATION_CHANGED: 'runtime-generation-changed',
   BOOTSTRAP_PERSISTENCE: 'bootstrap-persistence',
   ADDRESS_RESOLUTION: 'address-resolution',
@@ -116,6 +118,7 @@ const RUNTIME_PHASE = Object.freeze({
   LOCAL_LOG_GUARD: 'local-log-guard',
 });
 const RUNTIME_REASON = Object.freeze({
+  REPLACEMENT_IN_PROGRESS: 'runtime-replacement-in-progress',
   CORE_REFUSED: 'core-refused',
   GENERATION_CHANGED:
     'execution generation changed while host work was pending',
@@ -251,5 +254,6 @@ export {
   RUNTIME_PHASE,
   RUNTIME_REASON,
   UNHEALTHY,
+  REPLACING,
   USABLE,
 };
