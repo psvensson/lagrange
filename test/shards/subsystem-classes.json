@@ -19,16 +19,16 @@
     "services-runtime": 146,
     "solver-tooling": 7,
     "storage-partition": 182,
-    "storage-raft": 122,
+    "storage-raft": 123,
     "test-infrastructure": 143,
     "transactions": 18,
     "transport-messaging": 95,
     "wasm-toolchain": 57
   },
-  "censusSize": 2361,
-  "digest": "fnv1a32-0e41fcc2",
+  "censusSize": 2362,
+  "digest": "fnv1a32-893ed0e0",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-b7ad9b0e",
+  "observationDigest": "fnv1a32-82b845f4",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1612,6 +1612,7 @@
     "test/raft/raft-rs-backend/reseed-hold-durability.test.js": "storage-raft",
     "test/raft/raft-rs-backend/restart-from-durable-record.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-trap-and-restore.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-turn-integrity.test.js": "storage-raft",
@@ -10729,6 +10730,15 @@
       "directories": [
         "src",
         "test/raft/raft-rs-backend"
+      ]
+    },
+    "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js"
       ]
     },
     "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js": {
