@@ -1,0 +1,642 @@
+diff --git a/src/bootstrap/bootstrap-service-seed-workflow.js b/src/bootstrap/bootstrap-service-seed-workflow.js
+index 2d70712be..dc2dc397d 100644
+--- a/src/bootstrap/bootstrap-service-seed-workflow.js
++++ b/src/bootstrap/bootstrap-service-seed-workflow.js
+@@ -273,7 +273,19 @@ function createBootstrapServiceSeedWorkflowMethods() {
+         return leftControl - rightControl || left.partitionId.localeCompare(right.partitionId);
+       });
+       const timeSource = this.nodeService.getTimeSource();
++      process.stderr.write(JSON.stringify({t: Date.now(), ev: 'seed.plan', count: services.length, deadlineAtMs, remainingMs: deadlineAtMs - timeSource.now(), order: services.map((s) => s.partitionId), allPartitionServices: this.partitionServices.size}) + '\n');
++      let __index = 0;
+       for (const service of services) {
++        const __startedAt = timeSource.now();
++        let __attempts = 0;
++        process.stderr.write(JSON.stringify({t: Date.now(), ev: 'seed.partition.start', index: __index, partitionId: service.partitionId, remainingMs: deadlineAtMs - __startedAt}) + '\n');
++        __index += 1;
++        // RUN-3 MEASUREMENT PERTURBATION (scratch only, default off): wait DIAG_DEPENDENT_PRE_SLEEP_MS before a dependent's FIRST attempt so the control followers can apply the previous CONFIRM.
++        const __preSleepMs = Number(process.env.DIAG_DEPENDENT_PRE_SLEEP_MS ?? 0);
++        if (__preSleepMs > 0 && service.tableName !== TABLES.SQL_TRANSACTIONS) {
++          process.stderr.write(JSON.stringify({t: Date.now(), ev: 'seed.perturbation.preSleep', partitionId: service.partitionId, ms: __preSleepMs}) + '\n');
++          await this.sleep(__preSleepMs);
++        }
+         const authorization = this.replicaHandler
+           .participantReleaseAuthorizationOwner.authorizeFreshSeed({
+             partitionId: service.partitionId,
+@@ -297,6 +309,8 @@ function createBootstrapServiceSeedWorkflowMethods() {
+             deadlineAtMs,
+             authorization,
+           });
++          __attempts += 1;
++          process.stderr.write(JSON.stringify({t: Date.now(), ev: 'seed.answer', partitionId: service.partitionId, attempt: __attempts, outcome: answer.outcome, missingFact: answer.missingFact ?? null, controlOutcome: answer.controlOutcome ?? null, controlReason: answer.controlReason ?? null, stage: answer.querySettlementFailure?.stage ?? null, stageReason: answer.querySettlementFailure?.reason ?? null, retryAfterMs: answer.retryAfterMs ?? null, elapsedMs: timeSource.now() - __startedAt}) + '\n');
+           if (answer.outcome === PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER) break;
+           firstRefusal ||= answer;
+           if (answer.outcome !== PARTICIPANT_CUTOVER_OUTCOME.NOT_LEADER &&
+@@ -311,6 +325,7 @@ function createBootstrapServiceSeedWorkflowMethods() {
+           await this.sleep(Math.min(retryAfterMs,
+             Math.max(0, deadlineAtMs - timeSource.now())));
+         } while (timeSource.now() <= deadlineAtMs);
++        process.stderr.write(JSON.stringify({t: Date.now(), ev: 'seed.partition.end', partitionId: service.partitionId, attempts: __attempts, outcome: answer?.outcome ?? null, elapsedMs: timeSource.now() - __startedAt, remainingMs: deadlineAtMs - timeSource.now()}) + '\n');
+         if (answer?.outcome !== PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER) {
+           const error = new Error('Seed participant release failed: ' +
+             JSON.stringify({partitionId: service.partitionId,
+diff --git a/src/node/participant-release-lifecycle-retirement.js b/src/node/participant-release-lifecycle-retirement.js
+index 4ff060ca5..051c66a9e 100644
+--- a/src/node/participant-release-lifecycle-retirement.js
++++ b/src/node/participant-release-lifecycle-retirement.js
+@@ -20,6 +20,18 @@ import {PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
+   '../partition/partition-participant-transaction-cutover-constants.js';
+ import {askParticipantRelease, releaseNodeOfAddress} from './participant-release-client.js';
+ 
++// --- diagnostic instrumentation (scratch only) ---
++function __trace(ev, fields) {
++  process.stderr.write(JSON.stringify({t: Date.now(), ev, ...fields}) + '\n');
++}
++function __short(id) { return typeof id === 'string' ? id.slice(0, 10) : id ?? null; }
++function __caller(depth = 3) {
++  const lines = new Error().stack.split('\n');
++  return [lines[depth], lines[depth + 1]].map((l) => (l ?? '').trim()
++    .replace(/file:\/\/\/[^ )]*\//, '')).join(' <- ');
++}
++// --- end instrumentation ---
++
+ function retirementIdOf(current) {
+   return createHash('sha256').update(JSON.stringify([
+     current.authorizationId, current.target,
+@@ -61,10 +73,13 @@ async function reconstructDurableRetirement(handler, service) {
+   const targets = parseJson(authorization?.targetEntriesText);
+   if (!Array.isArray(targets) || targets.some((target) => !targetEntryValid(target)) ||
+       typeof authorization?.controlAuthorizationId !== 'string' ||
+-      typeof authorization?.controlPartitionId !== 'string') return null;
++      typeof authorization?.controlPartitionId !== 'string') {
++    __trace('reconstruct', {replicaId: service.replicaId, partitionId: service.partitionId, why: 'no_durable_authorization', hasAuthorization: authorization !== null});
++    return null;
++  }
+   const retiredTarget = targets.find((target) =>
+     target.replicaIdentity === service.replicaId) ?? null;
+-  if (retiredTarget === null) return null;
++  if (retiredTarget === null) { __trace('reconstruct', {replicaId: service.replicaId, partitionId: service.partitionId, why: 'no_retired_target'}); return null; }
+   const facts = await readParticipantReleaseFacts(handler, service);
+   if (facts?.outcome !== OUTCOME.OBSERVED) {
+     throw new Error('Current participant release retirement generation unavailable');
+@@ -74,8 +89,10 @@ async function reconstructDurableRetirement(handler, service) {
+     throw new Error('Current participant release retirement generation unavailable');
+   }
+   if (JSON.stringify(currentTarget) === JSON.stringify(retiredTarget)) {
++    __trace('reconstruct', {replicaId: service.replicaId, partitionId: service.partitionId, why: 'same_target', authorizationId: __short(authorization.controlAuthorizationId), admissionGeneration: currentTarget.admissionGeneration});
+     return null;
+   }
++  __trace('reconstruct', {replicaId: service.replicaId, partitionId: service.partitionId, why: 'reconstructed', authorizationId: __short(authorization.controlAuthorizationId), controlAuthorizationRevision: authorization.controlAuthorizationRevision ?? null, retiredTarget: {admissionGeneration: retiredTarget.admissionGeneration, connectionGeneration: retiredTarget.connectionGeneration, runtimeGeneration: retiredTarget.runtimeGeneration}, currentTarget: {admissionGeneration: currentTarget.admissionGeneration, connectionGeneration: currentTarget.connectionGeneration, runtimeGeneration: currentTarget.runtimeGeneration}});
+   const hint = topologyControlHint(handler, service, authorization.controlPartitionId);
+   if (hint === null) {
+     throw new Error('Current participant release retirement route unavailable');
+@@ -137,11 +154,19 @@ async function retireParticipantReleaseBeforeReplacement(handler, service,
+   if (!Number.isSafeInteger(deadlineAtMs) || deadlineAtMs <= handler.timeSource.now()) {
+     throw new Error('Current participant release has no retirement owner');
+   }
++  let __source = obligation !== null ? 'retained' : 'none';
+   if (obligation === null) {
+-    obligation = current === null ?
+-      await reconstructDurableRetirement(handler, service) :
+-      retainParticipantReleaseLocalRetirement(service, current);
++    if (current === null) {
++      obligation = await reconstructDurableRetirement(handler, service);
++      __source = obligation === null ? 'none' : 'reconstructed';
++    } else {
++      obligation = retainParticipantReleaseLocalRetirement(service, current);
++      __source = 'from_current';
++    }
+   }
++  __trace('retire.obligation', {replicaId: service.replicaId, partitionId: service.partitionId, source: __source,
++    current: current === null ? null : {authorizationId: __short(current.authorizationId), admissionGeneration: current.target?.admissionGeneration ?? null, controlOwner: current.controlOwner?.replicaId ?? null},
++    obligation: obligation === null ? null : {authorizationId: __short(obligation.authorizationId), retiredAdmissionGeneration: obligation.retiredTarget?.admissionGeneration ?? null, controlOwner: obligation.controlOwner?.replicaId ?? null}});
+   if (obligation === null) return Object.freeze({retired: false});
+   raiseParticipantCutoverPause(service);
+   const route = await currentControlRoute(handler, obligation, deadlineAtMs);
+@@ -167,6 +192,7 @@ async function retireParticipantReleaseBeforeReplacement(handler, service,
+   };
+   const answer = await askParticipantRelease(handler,
+     request.controlOwnerNodeId, request);
++  __trace('retire.answer', {replicaId: service.replicaId, partitionId: service.partitionId, authorizationId: __short(obligation.authorizationId), retirementId: __short(request.retirementId), outcome: answer.outcome, missingFact: answer.missingFact ?? null, retiredOutcome: answer.retired?.outcome ?? null, controlRevision: answer.controlRevision ?? answer.retired?.controlRevision ?? null, retirementIndex: answer.retirementIndex ?? null});
+   if (answer.outcome !== OUTCOME.RETIRED) {
+     throw new Error('Participant release retirement held replacement: ' +
+       JSON.stringify(answer));
+diff --git a/src/node/replica-handler-participant-cutover.js b/src/node/replica-handler-participant-cutover.js
+index ee3e98a2a..58ec74962 100644
+--- a/src/node/replica-handler-participant-cutover.js
++++ b/src/node/replica-handler-participant-cutover.js
+@@ -38,6 +38,19 @@ import {PARTICIPANT_RELEASE_ACTION as ACTION, PARTICIPANT_CUTOVER_OUTCOME as OUT
+   '../partition/partition-participant-transaction-cutover-constants.js';
+ 
+ const RUNS = new WeakMap();
++const __DEPTH = new WeakMap();
++
++// --- diagnostic instrumentation (scratch only) ---
++function __trace(ev, fields) {
++  process.stderr.write(JSON.stringify({t: Date.now(), ev, ...fields}) + '\n');
++}
++function __short(id) { return typeof id === 'string' ? id.slice(0, 10) : id ?? null; }
++function __caller(depth = 3) {
++  const lines = new Error().stack.split('\n');
++  return [lines[depth], lines[depth + 1]].map((l) => (l ?? '').trim()
++    .replace(/file:\/\/\/[^ )]*\//, '')).join(' <- ');
++}
++// --- end instrumentation ---
+ 
+ function localLeader(handler, request) {
+   const hosted = [...handler.localServices.values()].filter((service) =>
+@@ -262,17 +275,20 @@ async function releaseControlOwnerFirst(handler, service, request) {
+     return attemptRefusal(request, OUTCOME.UNAVAILABLE,
+       {missingFact: 'current_control_owner_fact'});
+   }
++  __trace('control.first', {dependent: request.partitionId, localControlLeader: localControlLeader?.replicaId ?? null, nodeId});
+   if (localControlLeader !== undefined && localControlLeader !== null) {
+     const observed = await observeCurrentControlOwner(handler, localControlLeader,
+       request);
+     if (observed !== null) return observed;
+   }
++  __trace('control.nested.start', {dependent: request.partitionId, control: partitionId, nodeId});
+   const authorization = handler.participantReleaseAuthorizationOwner
+     .authorizeControlFrom(request.authorization, partitionId,
+       request.targetBuildDigest);
+   const answer = await requestParticipantRelease(handler, {partitionId, nodeId,
+     targetBuildDigest: request.targetBuildDigest, trigger: request.trigger,
+     deadlineAtMs: request.deadlineAtMs, authorization});
++  __trace('control.nested.end', {dependent: request.partitionId, outcome: answer?.outcome ?? null, missingFact: answer?.missingFact ?? null, reason: answer?.reason ?? null, valid: controlReleaseAnswerValid(answer, request.targetBuildDigest), authorizationId: __short(answer?.controlAuthorization?.authorizationId)});
+   if (answer?.outcome === OUTCOME.BUILD_MISMATCH) {
+     return releaseAnswer(OUTCOME.BUILD_MISMATCH, request,
+       {controlPartitionId: partitionId});
+@@ -293,26 +309,47 @@ async function releaseControlOwnerFirst(handler, service, request) {
+ async function observeCurrentControlOwner(handler, service, request) {
+   const own = await readParticipantReleaseFacts(handler, service,
+     COMMITTED_MEMBERSHIP_READ_PURPOSE.RETIREMENT);
+-  if (own.outcome !== OUTCOME.OBSERVED || own.origin === null) return null;
++  const __base = {dependent: request.partitionId, control: service.partitionId};
++  if (own.outcome !== OUTCOME.OBSERVED || own.origin === null) {
++    __trace('observe.return', {...__base, line: 296, why: 'own_unavailable_or_origin_null', ownOutcome: own.outcome, missingFact: own.missingFact ?? null, reason: own.reason ?? null, origin: own.origin ?? null});
++    return null;
++  }
+   const release = releaseIdentityOf({partitionId: service.partitionId,
+     targetBuildDigest: request.targetBuildDigest,
+     configurationKey: own.membership.configurationKey,
+     membershipGenerationIndex: own.membership.membershipGenerationIndex});
+   const cohort = release === null ? null : cohortOf(handler, own);
+-  if (cohort === null) return null;
++  if (cohort === null) {
++    __trace('observe.return', {...__base, line: 302, why: 'cohort_null', releaseNull: release === null});
++    return null;
++  }
+   const census = await readCohort(handler, service.partitionId, cohort,
+     request.deadlineAtMs);
+   if (unavailableCensus(census) !== null || census.some((facts) => facts.paused === true)) {
++    __trace('observe.return', {...__base, line: 305, why: 'census_unavailable_or_paused', unavailable: unavailableCensus(census), members: census.map((f) => ({replicaId: f.generation?.replicaId ?? null, outcome: f.outcome, paused: f.paused ?? null}))});
+     return null;
+   }
+   const authorization = parseJson(readParticipantReleaseState(service.db).authorizationText);
+   if (authorization?.dependentReleaseText !== JSON.stringify(release) ||
+       authorization.targetEntriesText !== canonicalTargetEntriesText(census) ||
+-      authorization.targetConfigurationText !== canonicalConfigurationText(census)) return null;
++      authorization.targetConfigurationText !== canonicalConfigurationText(census)) {
++    __trace('observe.return', {...__base, line: 309, why: 'authorization_mismatch', hasAuthorization: authorization !== null,
++      dependentReleaseMatch: authorization?.dependentReleaseText === JSON.stringify(release),
++      targetEntriesMatch: authorization?.targetEntriesText === canonicalTargetEntriesText(census),
++      configurationMatch: authorization?.targetConfigurationText === canonicalConfigurationText(census),
++      recordedTargets: parseJson(authorization?.targetEntriesText)?.map((t) => ({replicaIdentity: t.replicaIdentity, admissionGeneration: t.admissionGeneration, connectionGeneration: t.connectionGeneration, runtimeGeneration: t.runtimeGeneration, lifecycleIncarnation: t.lifecycleIncarnation})) ?? null,
++      currentTargets: census.map((f) => targetEntryOf(f)).map((t) => t && ({replicaIdentity: t.replicaIdentity, admissionGeneration: t.admissionGeneration, connectionGeneration: t.connectionGeneration, runtimeGeneration: t.runtimeGeneration, lifecycleIncarnation: t.lifecycleIncarnation})),
++      authorizationId: __short(authorization?.controlAuthorizationId), authorizationRevision: authorization?.controlAuthorizationRevision ?? null});
++    return null;
++  }
+   const local = census.find((facts) => facts.generation.replicaId === service.replicaId);
+   const attempt = releaseAttemptFromFacts(request, release, own);
+-  if (releaseCensusDefect(release, census, local,
+-    {attempt, pausedRequired: false}) !== null) return null;
++  const __defect = releaseCensusDefect(release, census, local, {attempt, pausedRequired: false});
++  if (__defect !== null) {
++    __trace('observe.return', {...__base, line: 314, why: 'census_defect', defect: __defect, members: census.map((f) => ({replicaId: f.generation.replicaId, work: f.work, paused: f.paused, queryState: f.queryCensus?.state ?? null, servedLegacy: f.connection?.servedLegacy ?? null, topology: f.topology, originIndex: f.origin?.originIndex ?? null, term: f.membership?.term, leader: f.leaderReplicaId}))});
++    return null;
++  }
++  __trace('observe.return', {...__base, line: 316, why: 'ok', authorizationId: __short(authorization.controlAuthorizationId), authorizationRevision: authorization.controlAuthorizationRevision});
+   return releaseAnswer(OUTCOME.CUT_OVER, {...request, release},
+     {release, census, attempt, queryDrainProof: null,
+       controlAuthorization: Object.freeze({
+@@ -386,6 +423,7 @@ async function confirmDependentRelease(handler, request, control,
+ 
+ async function completeAuthorizedRelease(handler, service, request, control, dependent) {
+   const authorized = await authorizeDependentRelease(handler, request, control, dependent);
++  __trace('complete.authorized', {partitionId: request.partitionId, outcome: authorized.outcome, missingFact: authorized.missingFact ?? null, authorizationId: __short(authorized.authorizationId), authorizationRevision: authorized.authorizationRevision ?? null, replayed: authorized.replayed ?? false});
+   if (authorized.outcome !== OUTCOME.AUTHORIZED) return authorized;
+   const controlAuthorization = Object.freeze({
+     controlPartitionId: control.release.partitionId,
+@@ -413,6 +451,7 @@ async function completeAuthorizedRelease(handler, service, request, control, dep
+     controlAuthorizationRevision: controlAuthorization.authorizationRevision,
+     census: dependent.census,
+   });
++  __trace('complete.durableResume', {partitionId: request.partitionId, outcome: durableResume?.outcome ?? null, replayed: durableResume?.replayed ?? false, pauseGeneration: durableResume?.pauseGeneration ?? null});
+   if (durableResume?.outcome !== 'RESUMED') {
+     return attemptRefusal(request, OUTCOME.UNAVAILABLE,
+       {missingFact: 'committed_dependent_resume', resumed: durableResume});
+@@ -421,6 +460,7 @@ async function completeAuthorizedRelease(handler, service, request, control, dep
+     dependent.attempt, dependent.census,
+     {census: dependent.census, queryDrainProof: dependent.queryDrainProof,
+       controlAuthorization, controlOwner: controlRetirementOwner});
++  __trace('complete.resumeCohort', {partitionId: request.partitionId, refusal: resumedResult.refusal?.outcome ?? null, missingFact: resumedResult.refusal?.missingFact ?? null, answers: resumedResult.answers?.map((a) => a.outcome) ?? null});
+   if (resumedResult.refusal !== null) return resumedResult.refusal;
+   const receipts = resumedResult.answers.map((answer, index) => ({
+     ...targetEntryOf(dependent.census[index]),
+@@ -431,6 +471,7 @@ async function completeAuthorizedRelease(handler, service, request, control, dep
+   }));
+   const confirmed = await confirmDependentRelease(handler, request, control,
+     controlAuthorization, receipts);
++  __trace('complete.confirmed', {partitionId: request.partitionId, outcome: confirmed.outcome, missingFact: confirmed.missingFact ?? null, controlRevision: confirmed.controlRevision ?? null});
+   return confirmed.outcome !== OUTCOME.CONFIRMED ? confirmed :
+     releaseAnswer(OUTCOME.CUT_OVER, {...request, release: dependent.release},
+       {release: dependent.release, census: dependent.census,
+@@ -559,6 +600,34 @@ async function reopenCohort(handler, service, request, release, attempt, census)
+ }
+ 
+ async function runCutoverAttempt(handler, request) {
++  const __started = Date.now();
++  const __depth = (__DEPTH.get(handler) ?? 0) + 1;
++  __DEPTH.set(handler, __depth);
++  __trace('attempt.start', {partitionId: request.partitionId, trigger: request.trigger ?? null,
++    depth: __depth, deadlineAtMs: request.deadlineAtMs ?? null, remainingMs: Number.isSafeInteger(request.deadlineAtMs) ? request.deadlineAtMs - Date.now() : null});
++  try {
++    const answer = await runCutoverAttemptInner(handler, request);
++    __trace('attempt.end', {partitionId: request.partitionId, trigger: request.trigger ?? null, depth: __depth,
++      elapsedMs: Date.now() - __started, outcome: answer?.outcome ?? null,
++      missingFact: answer?.missingFact ?? null, reason: answer?.reason ?? null,
++      stage: answer?.querySettlementFailure?.stage ?? null,
++      stageReason: answer?.querySettlementFailure?.reason ?? null,
++      controlOutcome: answer?.controlOutcome ?? null, controlMissingFact: answer?.controlMissingFact ?? null,
++      controlReason: answer?.controlReason ?? null,
++      heldReplicas: answer?.heldReplicas ?? null,
++      authorizationId: __short(answer?.controlAuthorization?.authorizationId),
++      authorizationRevision: answer?.controlAuthorization?.authorizationRevision ?? null});
++    return answer;
++  } catch (error) {
++    __trace('attempt.throw', {partitionId: request.partitionId, depth: __depth,
++      elapsedMs: Date.now() - __started, error: String(error?.message ?? error)});
++    throw error;
++  } finally {
++    __DEPTH.set(handler, __depth - 1);
++  }
++}
++
++async function runCutoverAttemptInner(handler, request) {
+   if (Number.isSafeInteger(request.deadlineAtMs) &&
+       handler.timeSource.now() >= request.deadlineAtMs) {
+     return attemptRefusal(request, OUTCOME.UNAVAILABLE,
+@@ -583,6 +652,7 @@ async function runCutoverAttempt(handler, request) {
+       {missingFact: 'fresh_storage_or_operator_authority'});
+   }
+   const wasClosed = participantCutoverPauseOf(service) !== null;
++  __trace('attempt.wasClosed', {partitionId: request.partitionId, replicaId: service.replicaId, wasClosed, localRetirement: readParticipantReleaseLocalRetirement(service) !== null});
+   // Close the requesting partition before any remote control observation.
+   // If a previous OPEN authorization exists, closing retains its exact
+   // retirement identity before the next replicated PAUSE clears the local
+@@ -596,11 +666,14 @@ async function runCutoverAttempt(handler, request) {
+   if (service.tableName === TABLES.SQL_TRANSACTIONS && wasClosed &&
+       readParticipantReleaseLocalRetirement(service) === null) {
+     const continued = await continueDurableRelease(handler, service, request, null);
++    __trace('attempt.continueDurable', {partitionId: request.partitionId, outcome: continued?.outcome ?? null, missingFact: continued?.missingFact ?? null});
+     if (continued !== null) return continued;
+   }
+   const retired = await retireParticipantReleaseBeforeReplacement(handler, service,
+     {deadlineAtMs: request.deadlineAtMs});
++  __trace('attempt.retired', {partitionId: request.partitionId, retired: retired.retired, answerOutcome: retired.answer?.outcome ?? null});
+   const controlOwner = await releaseControlOwnerFirst(handler, service, request);
++  __trace('attempt.controlOwner', {partitionId: request.partitionId, outcome: controlOwner?.outcome ?? null, missingFact: controlOwner?.missingFact ?? null, valid: controlReleaseAnswerValid(controlOwner, request.targetBuildDigest), authorizationId: __short(controlOwner?.controlAuthorization?.authorizationId)});
+   if (service.tableName !== TABLES.SQL_TRANSACTIONS &&
+       !controlReleaseAnswerValid(controlOwner, request.targetBuildDigest)) {
+     return controlOwner;
+@@ -641,6 +714,7 @@ async function runCutoverAttempt(handler, request) {
+   // its local gate, then observes these exact committed bytes. Retrying a
+   // lost reply reads the durable entry ID instead of appending another PAUSE.
+   const committedPause = await pauseParticipantAdmission(service, attempt);
++  __trace('attempt.pause', {partitionId: request.partitionId, outcome: committedPause?.outcome ?? null, replayed: committedPause?.replayed ?? false, pauseGeneration: committedPause?.pauseGeneration ?? null});
+   if (committedPause?.outcome !== 'PAUSED') {
+     return attemptRefusal(request, OUTCOME.UNAVAILABLE,
+       {missingFact: 'committed_dependent_pause', paused: committedPause});
+@@ -656,6 +730,7 @@ async function runCutoverAttempt(handler, request) {
+   unavailable = unavailableCensus(census);
+   if (unavailable !== null) return unavailable;
+   if (census.some((facts) => !isReleaseDrained(facts.work))) {
++    __trace('attempt.stage', {partitionId: request.partitionId, stage: 'post_pause_drain', work: census.map((facts) => ({replicaId: facts.generation.replicaId, work: facts.work}))});
+     return attemptRefusal({...request, release}, OUTCOME.DRAIN_PENDING, {
+       heldReplicas: census.filter((facts) => !isReleaseDrained(facts.work))
+         .map((facts) => ({
+@@ -665,7 +740,7 @@ async function runCutoverAttempt(handler, request) {
+     });
+   }
+   const reopened = await reopenCohort(handler, service, request, release, attempt, census);
+-  if (reopened !== null) return reopened;
++  if (reopened !== null) { __trace('attempt.stage', {partitionId: request.partitionId, stage: 'reopen', outcome: reopened.outcome, missingFact: reopened.missingFact ?? null}); return reopened; }
+   const queryRelease = await settleQueryRelease(handler, service, release, attempt,
+     cohort, census);
+   if (queryRelease?.queryDrainProof === undefined &&
+@@ -702,6 +777,7 @@ async function runCutoverAttempt(handler, request) {
+   const enabled = await askParticipantRelease(handler, handler.nodeId,
+     requestFor(release, attempt, ACTION.ENABLE, local,
+       {census, queryDrainProof: queryRelease.queryDrainProof}));
++  __trace('attempt.enable', {partitionId: request.partitionId, outcome: enabled.outcome, missingFact: enabled.missingFact ?? null, originIndex: enabled.origin?.originIndex ?? null});
+   if (enabled.outcome !== OUTCOME.OBSERVED) return enabled;
+   census = await readCohort(handler, service.partitionId, cohort,
+     request.deadlineAtMs);
+@@ -734,6 +810,7 @@ async function runCutoverAttempt(handler, request) {
+   const finalDefect = releaseCensusDefect(release, census, finalLocal,
+     {attempt, queryDrainProof: finalQueryDrainProof});
+   if (finalDefect !== null) {
++    __trace('attempt.stage', {partitionId: request.partitionId, stage: 'post_enable_release_census', defect: finalDefect, work: census.map((facts) => ({replicaId: facts.generation.replicaId, work: facts.work, paused: facts.paused, queryState: facts.queryCensus?.state ?? null}))});
+     return attemptRefusal({...request, release}, finalDefect,
+       {...(finalDefect === OUTCOME.TOPOLOGY_PENDING ?
+         {topology: finalLocal.topology} : {}),
+@@ -778,12 +855,15 @@ async function runParticipantCutover(handler, request) {
+     authorityKind: authorization?.authorityKind ?? null,
+   });
+   if (current) {
++    __trace('run.inflight', {partitionId: request.partitionId, same: current.requestIdentity === requestIdentity, trigger: request.trigger ?? null});
+     return current.requestIdentity === requestIdentity ? current.promise :
+       attemptRefusal(request, OUTCOME.UNAVAILABLE,
+         {missingFact: 'different_release_request_in_flight'});
+   }
+-  const running = runCutoverAttempt(handler, request).catch((error) =>
+-    attemptRefusal(request, OUTCOME.UNAVAILABLE, {reason: String(error?.message ?? error)}));
++  const running = runCutoverAttempt(handler, request).catch((error) => {
++    __trace('run.caught', {partitionId: request.partitionId, trigger: request.trigger ?? null, error: String(error?.message ?? error)});
++    return attemptRefusal(request, OUTCOME.UNAVAILABLE, {reason: String(error?.message ?? error)});
++  });
+   const record = {requestIdentity, promise: running};
+   runs.set(request.partitionId, record);
+   try {
+diff --git a/src/node/replica-handler-participant-release.js b/src/node/replica-handler-participant-release.js
+index cfba90648..7e9dbc06e 100644
+--- a/src/node/replica-handler-participant-release.js
++++ b/src/node/replica-handler-participant-release.js
+@@ -34,6 +34,18 @@ import {PARTICIPANT_RELEASE_ACTION as ACTION, PARTICIPANT_CUTOVER_BOUND as BOUND
+ import {retireParticipantReleaseBeforeReplacement} from
+   './participant-release-lifecycle-retirement.js';
+ 
++// --- diagnostic instrumentation (scratch only) ---
++function __trace(ev, fields) {
++  process.stderr.write(JSON.stringify({t: Date.now(), ev, ...fields}) + '\n');
++}
++function __short(id) { return typeof id === 'string' ? id.slice(0, 10) : id ?? null; }
++function __caller(depth = 3) {
++  const lines = new Error().stack.split('\n');
++  return [lines[depth], lines[depth + 1]].map((l) => (l ?? '').trim()
++    .replace(/file:\/\/\/[^ )]*\//, '')).join(' <- ');
++}
++// --- end instrumentation ---
++
+ function attemptMatches(request, facts) {
+   return request.attempt?.term === facts.membership.term &&
+     request.attempt?.leaderReplicaId === facts.leaderReplicaId &&
+@@ -127,6 +139,22 @@ async function reopenReplica(handler, service, request, facts) {
+ }
+ 
+ async function executeReleaseAction(handler, service, request, facts) {
++  const __started = Date.now();
++  const answer = await executeReleaseActionInner(handler, service, request, facts);
++  __trace('action', {action: request.action, partitionId: service.partitionId, replicaId: service.replicaId,
++    outcome: answer?.outcome ?? null, missingFact: answer?.missingFact ?? null,
++    authorizationId: __short(request.controlAuthorization?.authorizationId),
++    dependent: request.dependentRelease?.partitionId ?? null,
++    retainedAuthorization: request.retainedAuthorization !== null && request.retainedAuthorization !== undefined,
++    elapsedMs: Date.now() - __started,
++    resultAuthorizationId: __short(answer?.authorizationId), resultAuthorizationRevision: answer?.authorizationRevision ?? null,
++    replayed: answer?.replayed ?? null, controlRevision: answer?.controlRevision ?? null,
++    retiredOutcome: answer?.retired?.outcome ?? null,
++    reservedOutcome: answer?.reserved?.outcome ?? null, finalizedOutcome: answer?.finalized?.outcome ?? null});
++  return answer;
++}
++
++async function executeReleaseActionInner(handler, service, request, facts) {
+   switch (request.action) {
+   case ACTION.PAUSE: {
+     raiseParticipantCutoverPause(service);
+@@ -188,6 +216,7 @@ async function executeReleaseAction(handler, service, request, facts) {
+       return releaseAnswer(OUTCOME.INVALID, request);
+     }
+     const retainedAuthorization = retainedAuthorizationMatches(service, request);
++    __trace('authorize.enter', {partitionId: service.partitionId, dependent: request.dependentRelease?.partitionId ?? null, authorizationId: __short(request.controlAuthorization?.authorizationId), retainedAuthorization, controlState: parseJson(readParticipantReleaseState(service.db).controlText)?.state ?? null, controlAuth: __short(parseJson(readParticipantReleaseState(service.db).controlText)?.authorizationId)});
+     const controlDefect = releaseCensusDefect(request.release,
+       request.controlCensus, facts,
+       {attempt: request.attempt, queryDrainProof: request.controlQueryDrainProof,
+@@ -201,6 +230,7 @@ async function executeReleaseAction(handler, service, request, facts) {
+           queryDrainProof: request.dependentQueryDrainProof,
+           pausedRequired: !retainedAuthorization});
+     if (controlDefect !== null || dependentDefect !== null) {
++      __trace('authorize.defect', {partitionId: service.partitionId, dependent: request.dependentRelease?.partitionId ?? null, controlDefect, dependentDefect});
+       return releaseAnswer(controlDefect ?? dependentDefect, request);
+     }
+     if (retainedAuthorization) {
+@@ -384,17 +414,20 @@ async function receiveParticipantRelease(handler, request) {
+       COMMITTED_MEMBERSHIP_READ_PURPOSE.RETIREMENT :
+       COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS;
+     const facts = await readParticipantReleaseFacts(handler, service, purpose);
++    if (facts.outcome !== OUTCOME.OBSERVED) __trace('receive.factsUnavailable', {action: request.action, partitionId: service.partitionId, replicaId: service.replicaId, missingFact: facts.missingFact ?? null, reason: facts.reason ?? null});
+     if (request.action === ACTION.INSPECT || facts.outcome !== OUTCOME.OBSERVED) return facts;
+     if (!releaseIdentityValid(request.release) ||
+         request.release.partitionId !== service.partitionId) {
+       return releaseAnswer(OUTCOME.INVALID, request);
+     }
+     if (!sameReplicaGeneration(request.target, facts.generation)) {
++      __trace('receive.stale', {action: request.action, partitionId: service.partitionId, replicaId: service.replicaId, why: 'current_replica_generation', requested: request.target, current: facts.generation});
+       return releaseAnswer(OUTCOME.STALE, request,
+         {missingFact: 'current_replica_generation', requested: request.target,
+           current: facts.generation});
+     }
+     if (!attemptMatches(request, facts)) {
++      __trace('receive.stale', {action: request.action, partitionId: service.partitionId, replicaId: service.replicaId, why: 'current_release_attempt'});
+       return releaseAnswer(OUTCOME.STALE, request,
+         {missingFact: 'current_release_attempt'});
+     }
+@@ -413,11 +446,13 @@ async function receiveParticipantRelease(handler, request) {
+         status.configurationKey !== request.release.configurationKey ||
+         (service.replicaId === request.attempt.leaderReplicaId &&
+           status.lifecycleIncarnation !== request.attempt.leaderLifecycleIncarnation)) {
++      __trace('receive.stale', {action: request.action, partitionId: service.partitionId, replicaId: service.replicaId, why: 'current_runtime_attempt'});
+       return releaseAnswer(OUTCOME.STALE, request,
+         {missingFact: 'current_runtime_attempt'});
+     }
+     return executeReleaseAction(handler, service, request, facts);
+   } catch (error) {
++    __trace('receive.throw', {action: request.action, partitionId: request.partitionId ?? null, replicaId: request.replicaId ?? null, error: String(error?.message ?? error)});
+     return releaseAnswer(OUTCOME.INVALID, request, {reason: String(error?.message ?? error)});
+   }
+ }
+diff --git a/src/partition/partition-participant-release-apply.js b/src/partition/partition-participant-release-apply.js
+index 1070a383d..1f3213c0b 100644
+--- a/src/partition/partition-participant-release-apply.js
++++ b/src/partition/partition-participant-release-apply.js
+@@ -18,7 +18,30 @@ import {
+ import {raiseParticipantCutoverPause} from
+   './partition-participant-transaction-pause.js';
+ 
++// --- diagnostic instrumentation (scratch only) ---
++function __trace(ev, fields) {
++  process.stderr.write(JSON.stringify({t: Date.now(), ev, ...fields}) + '\n');
++}
++function __short(id) { return typeof id === 'string' ? id.slice(0, 10) : id ?? null; }
++function __caller(depth = 3) {
++  const lines = new Error().stack.split('\n');
++  return [lines[depth], lines[depth + 1]].map((l) => (l ?? '').trim()
++    .replace(/file:\/\/\/[^ )]*\//, '')).join(' <- ');
++}
++// --- end instrumentation ---
++
++let __lastResult = null;
++function __stateSummary(db) {
++  const s = readParticipantReleaseState(db);
++  const c = parseJson(s.controlText);
++  const a = parseJson(s.authorizationText);
++  return {rev: s.controlRevision, state: c?.state ?? null, auth: __short(c?.authorizationId), authRev: c?.authorizationRevision ?? null,
++    retirement: __short(c?.retirementId), retiredReplica: c?.retiredReplicaIdentity ?? null, pauseGen: s.pauseGeneration,
++    resumeAuth: __short(a?.controlAuthorizationId), resumeAuthRev: a?.controlAuthorizationRevision ?? null, authIndex: s.authorizationIndex};
++}
++
+ function resolve(service, committed, result) {
++  __lastResult = result;
+   committed.afterCommit(() => service.resolveCommittedWrite(
+     committed.command.entryId,
+     {success: [RESULT.PAUSED, RESULT.RESERVED, RESULT.AUTHORIZED,
+@@ -615,6 +638,23 @@ function applyConfirm(service, committed) {
+ }
+ 
+ function applyParticipantReleaseCommand(service, committed) {
++  const before = __stateSummary(service.db);
++  __lastResult = null;
++  let applied = null;
++  try {
++    applied = applyParticipantReleaseCommandInner(service, committed);
++    return applied;
++  } finally {
++    const command = committed.command;
++    __trace('apply', {replicaId: service.replicaId, partitionId: service.partitionId, type: command.type, index: committed.index, term: committed.term,
++      authorizationId: __short(command.authorizationId), expectedControlRevision: command.expectedControlRevision ?? null,
++      expectedPauseGeneration: command.expectedPauseGeneration ?? null, retirementId: __short(command.retirementId),
++      retiredAdmissionGeneration: parseJson(command.retiredTargetText ?? null)?.admissionGeneration ?? null,
++      applied, result: __lastResult?.outcome ?? null, replayed: __lastResult?.replayed ?? false, before, after: __stateSummary(service.db)});
++  }
++}
++
++function applyParticipantReleaseCommandInner(service, committed) {
+   switch (committed.command.type) {
+   case COMMAND.ADMISSION_PAUSE: return applyPause(service, committed);
+   case COMMAND.RELEASE_RESERVE: return applyReserve(service, committed);
+diff --git a/src/partition/partition-participant-release-local-current.js b/src/partition/partition-participant-release-local-current.js
+index 2426f0830..017d3b97e 100644
+--- a/src/partition/partition-participant-release-local-current.js
++++ b/src/partition/partition-participant-release-local-current.js
+@@ -1,6 +1,18 @@
+ const CURRENT = new WeakMap();
+ const RETIREMENTS = new WeakMap();
+ 
++// --- diagnostic instrumentation (scratch only) ---
++function __trace(ev, fields) {
++  process.stderr.write(JSON.stringify({t: Date.now(), ev, ...fields}) + '\n');
++}
++function __short(id) { return typeof id === 'string' ? id.slice(0, 10) : id ?? null; }
++function __caller(depth = 3) {
++  const lines = new Error().stack.split('\n');
++  return [lines[depth], lines[depth + 1]].map((l) => (l ?? '').trim()
++    .replace(/file:\/\/\/[^ )]*\//, '')).join(' <- ');
++}
++// --- end instrumentation ---
++
+ function retirementObligationOf(current) {
+   return current === null || current?.controlOwner === null ? null : Object.freeze({
+     version: 1,
+@@ -12,6 +24,7 @@ function retirementObligationOf(current) {
+ 
+ function publishParticipantReleaseLocalCurrent(service, authorizationId, target,
+   controlOwner = null) {
++  __trace('local.publish', {replicaId: service.replicaId, partitionId: service.partitionId, authorizationId: __short(authorizationId), previous: __short(CURRENT.get(service)?.authorizationId), admissionGeneration: target?.admissionGeneration ?? null, controlOwner: controlOwner?.replicaId ?? null, retained: __short(RETIREMENTS.get(service)?.authorizationId), caller: __caller()});
+   CURRENT.set(service, Object.freeze({authorizationId, target, controlOwner}));
+ }
+ 
+@@ -23,6 +36,7 @@ function invalidateParticipantReleaseLocalCurrent(service) {
+   const current = CURRENT.get(service) ?? null;
+   const obligation = retirementObligationOf(current);
+   const retained = RETIREMENTS.get(service);
++  __trace('local.invalidate', {replicaId: service.replicaId, partitionId: service.partitionId, current: __short(current?.authorizationId), currentAdmissionGeneration: current?.target?.admissionGeneration ?? null, obligation: obligation !== null, retained: __short(retained?.authorizationId), retainedAdmissionGeneration: retained?.retiredTarget?.admissionGeneration ?? null, conflict: obligation !== null && retained !== undefined && JSON.stringify(retained) !== JSON.stringify(obligation), caller: __caller()});
+   if (obligation !== null && retained === undefined) {
+     RETIREMENTS.set(service, obligation);
+   } else if (obligation !== null && JSON.stringify(retained) !== JSON.stringify(obligation)) {
+@@ -39,6 +53,7 @@ function retainParticipantReleaseLocalRetirement(service, current) {
+     throw new Error('Participant release retirement identity changed');
+   }
+   const retained = existing ?? Object.freeze(request);
++  __trace('local.retain', {replicaId: service.replicaId, partitionId: service.partitionId, authorizationId: __short(retained.authorizationId), existed: existing !== undefined, caller: __caller()});
+   RETIREMENTS.set(service, retained);
+   return retained;
+ }
+@@ -48,6 +63,7 @@ function readParticipantReleaseLocalRetirement(service) {
+ }
+ 
+ function clearParticipantReleaseLocalRetirement(service, request) {
++  __trace('local.clear', {replicaId: service.replicaId, partitionId: service.partitionId, authorizationId: __short(request?.authorizationId), matched: RETIREMENTS.get(service) === request, caller: __caller()});
+   if (RETIREMENTS.get(service) === request) RETIREMENTS.delete(service);
+ }
+ 
+diff --git a/src/partition/partition-participant-transaction-pause.js b/src/partition/partition-participant-transaction-pause.js
+index a836f86a1..1e844956e 100644
+--- a/src/partition/partition-participant-transaction-pause.js
++++ b/src/partition/partition-participant-transaction-pause.js
+@@ -19,14 +19,28 @@ import {invalidateParticipantReleaseLocalCurrent} from
+ const ADMISSIONS = new WeakMap();
+ let nextAdmissionGeneration = 0;
+ 
++// --- diagnostic instrumentation (scratch only) ---
++function __trace(ev, fields) {
++  process.stderr.write(JSON.stringify({t: Date.now(), ev, ...fields}) + '\n');
++}
++function __short(id) { return typeof id === 'string' ? id.slice(0, 10) : id ?? null; }
++function __caller(depth = 3) {
++  const lines = new Error().stack.split('\n');
++  return [lines[depth], lines[depth + 1]].map((l) => (l ?? '').trim()
++    .replace(/file:\/\/\/[^ )]*\//, '')).join(' <- ');
++}
++// --- end instrumentation ---
++
+ function newPause(service) {
+   // Closing admission revokes the process-local projection immediately. The
+   // durable claim/receipt remains with the control owner until its ordered
+   // retirement command applies; reconnecting cannot recreate this projection.
++  const __previous = ADMISSIONS.get(service) ?? null;
+   invalidateParticipantReleaseLocalCurrent(service);
+   nextAdmissionGeneration += 1;
+   const admission = Object.freeze({state: ADMISSION.CLOSED,
+     raisedAtMs: service.timeSource.now(), generation: nextAdmissionGeneration, releaseId: null});
++  __trace('admission.newPause', {replicaId: service.replicaId, partitionId: service.partitionId, generation: admission.generation, previousState: __previous?.state ?? null, previousGeneration: __previous?.generation ?? null, caller: __caller()});
+   ADMISSIONS.set(service, admission);
+   return admission;
+ }
+@@ -58,6 +72,7 @@ function invalidateParticipantReleaseAdmission(service) {
+       status?.membershipGenerationIndex !== proof.membershipGenerationIndex ||
+       status?.runtimeGeneration !== proof.runtimeGeneration ||
+       status?.lifecycleIncarnation !== proof.lifecycleIncarnation) {
++    __trace('admission.invalidated', {replicaId: service.replicaId, partitionId: service.partitionId, generation: admission.generation, diff: {term: [proof.term, status?.term], leaderId: [proof.leaderId, status?.leaderId], configurationKey: [proof.configurationKey, status?.configurationKey], membershipGenerationIndex: [proof.membershipGenerationIndex, status?.membershipGenerationIndex], runtimeGeneration: [proof.runtimeGeneration, status?.runtimeGeneration], lifecycleIncarnation: [proof.lifecycleIncarnation, status?.lifecycleIncarnation]}, caller: __caller()});
+     invalidateParticipantReleaseLocalCurrent(service);
+     raiseParticipantCutoverPause(service);
+   }
+@@ -120,6 +135,7 @@ async function resumeParticipantCutoverAdmission(handler, service, request) {
+       target.connectionGeneration !== generation.connectionGeneration ||
+       target.admissionGeneration !== generation.admissionGeneration ||
+       target.buildDigest !== facts.buildDigest) return OUTCOME.STALE;
++  __trace('admission.open', {replicaId: service.replicaId, partitionId: service.partitionId, generation: current.generation, authorizationId: __short(authorization.controlAuthorizationId)});
+   ADMISSIONS.set(service, Object.freeze({...current, state: ADMISSION.OPEN,
+     releaseId: request.release.releaseId,
+     authorizationId: authorization.controlAuthorizationId,
+diff --git a/test/integration/pgwire-command-tag-real-engine.integration.test.js b/test/integration/pgwire-command-tag-real-engine.integration.test.js
+index 877e0b302..4119d86d5 100644
+--- a/test/integration/pgwire-command-tag-real-engine.integration.test.js
++++ b/test/integration/pgwire-command-tag-real-engine.integration.test.js
+@@ -110,7 +110,7 @@ async function observe(client, text, values) {
+ 
+ async function startRuntime(t) {
+   const root = await mkdtemp(path.join(tmpdir(), TEMPORARY_PREFIX));
+-  t.teardown(() => rm(root, {force: true, recursive: true}));
++  console.error('DIAGNOSTIC_RUNTIME_ROOT', root);
+   const {restApiPort: restPort} = ports.getListenerPorts();
+   const pgwirePort = ports.getPort();
+   const runtime = await startSeamRuntime({
