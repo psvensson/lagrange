@@ -561,7 +561,7 @@
       ]
     },
     "raft-rs-runtime-application-transaction": {
-      "description": "Ready processing and the application transaction owner keep application effects, partition progress, raft-rs applied progress, ConfState and each statement's durable outcome coherent across host failure and reconstruction; failure scope follows failure class (a core failure replaces the runtime and resumes every group once, a host failure reconstructs its own group and touches no other group; a failure within one retry window of the last instant the previous one held the group is the same persisting failure, whatever its class and whether or not a reconstruction succeeded in between, so the group is reconstructed at most once per window while it persists - at most ceil(span / window) + 1 reconstructions over any span - and a failure more than one window after the last one starts afresh; a group healed inside a window serves again only after it, so its first write after a heal waits up to one window), a durable record that cannot be read where a group is opened or reconstructed (a missing table, SQLITE_IOERR, SQLITE_CORRUPT) is that group's own typed host failure of phase durable-record-read and never a throw, a record that lost a table is never recreated empty (the record's tables are created in one transaction of the store's own, whole or not at all, so a partial schema only ever comes from outside), a replica whose record cannot be read at open is refused at initialization, typed and naming the phase and the table, whatever its replica count (healing in place is for a group that fails while it runs), a throw the runtime did not type is contained by the port as the group's typed host failure, a group without a usable host announces no role so its partition does not lead, a reconstructed sole voter leads again, a retry is answered from its durable outcome, and the admission owner refuses before consensus (and before a session stages it) every command the application would refuse or never answer.",
+      "description": "Ready processing and the application transaction owner keep application effects, partition progress, raft-rs applied progress, ConfState and each statement's durable outcome coherent across host failure and reconstruction; failure scope follows failure class (a core failure replaces the runtime and resumes every group once, a host failure reconstructs its own group and touches no other group; a failure within one retry window of the last instant the previous one held the group is the same persisting failure, whatever its class and whether or not a reconstruction succeeded in between, so the group is reconstructed at most once per window while it persists - at most ceil(span / window) + 1 reconstructions over any span - and a failure more than one window after the last one starts afresh; a group healed inside a window serves again only after it, so its first write after a heal waits up to one window), a durable record that cannot be read where a group is opened or reconstructed (a missing table, SQLITE_IOERR, SQLITE_CORRUPT) is that group's own typed host failure of phase durable-record-read and never a throw, a record that lost a table is never recreated empty (the record's tables are created in one transaction of the store's own, whole or not at all, so a partial schema only ever comes from outside), a replica whose record cannot be read at open is refused at initialization, typed and naming the phase and the table, whatever its replica count (healing in place is for a group that fails while it runs), a throw the runtime did not type is contained by the port as the group's typed host failure, a group without a usable host announces no role so its partition does not lead, a reconstructed sole voter leads again, a retry is answered from its durable outcome, and the admission owner refuses before consensus (and before a session stages it) every command the application would refuse or never answer. Shared native replacement holds entry until every registered group is reconstructed or explicitly held; callbacks cannot use stale handles or cached healthy observations. A failed shared reload owns one captured clock and existing election-derived retry window, shared by all callers; caller changes cannot renew or bypass it. Resumption uses each existing group queue; close discharges exact-handle obligations and final close releases the shared retry record.",
       "owners": [
         "src/raft/raft-rs-runtime-owner.js",
         "src/raft/raft-rs-runtime-tuning.js",
@@ -577,7 +577,10 @@
         "src/partition/partition-participant-transaction-bytes.js",
         "src/partition/partition-participant-transaction-constants.js",
         "src/partition/partition-participant-transaction-store.js",
-        "src/partition/partition-transaction-execution-envelope.js"
+        "src/partition/partition-transaction-execution-envelope.js",
+        "src/raft/raft-rs-binding-owner.js",
+        "src/raft/raft-rs-runtime-owner-constants.js",
+        "src/raft/raft-rs-runtime-faults.js"
       ],
       "tests": [
         "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
@@ -1397,7 +1400,10 @@
           "owners": [
             "src/raft/raft-rs-runtime-owner.js",
             "src/raft/raft-rs-runtime-tuning.js",
-            "src/raft/raft-rs-durable-store.js"
+            "src/raft/raft-rs-durable-store.js",
+            "src/raft/raft-rs-binding-owner.js",
+            "src/raft/raft-rs-runtime-owner-constants.js",
+            "src/raft/raft-rs-runtime-faults.js"
           ]
         },
         {

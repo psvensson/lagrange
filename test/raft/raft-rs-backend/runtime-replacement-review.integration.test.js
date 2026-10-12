@@ -13,7 +13,7 @@ const DIR = 'test/raft/raft-rs-backend';
 const CHILD = `${DIR}/runtime-replacement-review-child.js`;
 const OUTPUT = path.join(ROOT, 'test-output/runtime-review-native');
 const digest = (file) => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
-for (const scenario of ['control', 'partial-restore', 'reentrant-restore', 'reload-backoff']) {
+for (const scenario of ['control', 'partial-restore', 'reentrant-restore', 'reload-backoff', 'trap-during-restore', 'close-during-restore', 'mixed-clocks', 'last-close']) {
   test(`shared runtime independent-review witness: ${scenario}`, (t) => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'raft-review-isolated-'));
     try {

@@ -18,9 +18,11 @@ import {RAFT_RS_WASM_FILE} from '../../../src/raft/raft-rs-core-constants.js';
 
 const root = fileURLToPath(new URL('../../../', import.meta.url));
 const scenario = process.argv[2];
-assert.ok(['control', 'partial-restore', 'reentrant-restore', 'reload-backoff'].includes(scenario));
+assert.ok(['control', 'partial-restore', 'reentrant-restore', 'reload-backoff', 'trap-during-restore', 'close-during-restore', 'mixed-clocks', 'last-close'].includes(scenario));
 const clock = new VirtualTimeSource({startMs: 1000});
-const readFault = {enabled: false};
+const readFault = {enabled: false, target: 'a'};
+const otherClock = new VirtualTimeSource({startMs: 1000000});
+const closedGroups = new Set();
 const receipt = {scenario, phase: 'setup', traps: 0, entries: [], callbacks: [], loadAttempts: 0};
 const clusters = [];
 const nativeReadFile = fs.readFileSync;
@@ -37,10 +39,10 @@ function makeGroup(suffix) {
   const id = `${name}-replica`;
   let cluster;
   cluster = new PartitionNodeCluster({partitionId: name, replicaIds: [id], tempRoot: root,
-    substrateFor: () => ({timeSource: clock}),
+    substrateFor: () => ({timeSource: scenario === 'mixed-clocks' && suffix === 'b' ? otherClock : clock}),
     wrapDatabase: (_id, db) => new Proxy(db, {get(target, property) {
       if (property === 'prepare') return (sql) => {
-        if (suffix === 'a' && readFault.enabled && /^\s*SELECT/iu.test(sql) && /_raft_rs_/u.test(sql)) {
+        if (suffix === readFault.target && readFault.enabled && /^\s*SELECT/iu.test(sql) && /_raft_rs_/u.test(sql)) {
           throw Object.assign(new Error('injected real-store read unavailability'), {code: 'SQLITE_IOERR'});
         }
         return target.prepare(sql);
@@ -109,7 +111,7 @@ try {
     assert.equal(receipt.callbacks[0].status.outcome, OUTCOME.HOST_FAILURE,
       'replacement-in-progress must be a typed hold, not cached healthy or a core fault');
     unsubscribe(); unsubscribe = undefined;
-  } else if (scenario === 'reload-backoff') {
+  } else if (['reload-backoff', 'mixed-clocks', 'last-close'].includes(scenario)) {
     receipt.phase = 'reload-backoff:shared-window';
     const binding = verifyRaftRsBinding();
     const manifest = binding.digestFile;
@@ -136,9 +138,65 @@ try {
     assert.equal((await pb.readStatus()).outcome, OUTCOME.HOST_FAILURE);
     assert.equal(receipt.loadAttempts, initialAttempts, 'no retry before the existing deadline');
     fs.writeFileSync(gluePath, originalGlue);
-    clock.advance(1);
-    assert.equal((await pb.readStatus()).outcome, OUTCOME.CORE_OK);
-    assert.equal(receipt.loadAttempts, initialAttempts + 1, 'another group resumes the one due attempt');
+    if (scenario === 'last-close') {
+      receipt.phase = 'last-close:new-opening';
+      for (const group of [...clusters]) {
+        assert.equal(portOf(group).close().outcome, OUTCOME.CORE_OK);
+        closedGroups.add(group);
+      }
+      const d = makeGroup('d');
+      assert.equal((await portOf(d).campaign()).outcome, OUTCOME.CORE_OK);
+      assert.equal((await portOf(d).propose(`before:${d.partitionId}`)).outcome, OUTCOME.CORE_OK);
+      assert.deepEqual(readRows(d), [`before:${d.partitionId}`]);
+      receipt.openedAfterFinalClose = true;
+    } else {
+      clock.advance(1);
+      assert.equal((await pb.readStatus()).outcome, OUTCOME.CORE_OK);
+      assert.equal(receipt.loadAttempts, initialAttempts + 1, 'another group resumes the one due attempt');
+    }
+  } else if (scenario === 'trap-during-restore') {
+    receipt.phase = 'trap-during-restore:retry';
+    receipt.restoreTraps = 0;
+    setCoreFaultInjector((groupId, operation) => {
+      if (groupId === b.partitionId && operation === 'create_node') {
+        setCoreFaultInjector(null); receipt.restoreTraps += 1;
+        throw new WebAssembly.RuntimeError('injected trap during reconstruction');
+      }
+    });
+    const failed = await pa.readStatus();
+    receipt.restoreFailure = failed;
+    assert.equal(receipt.restoreTraps, 1);
+    assert.equal(failed.outcome, OUTCOME.HOST_FAILURE);
+    assert.equal(failed.recoveryRequired, true);
+    assert.ok(failed.retryAfterMs > 0);
+    const before = receipt.entries.length;
+    assert.equal((await pc.readStatus()).outcome, OUTCOME.HOST_FAILURE);
+    assert.equal(receipt.entries.length, before, 'partial new handles cannot escape the failed replacement');
+    clock.advance(failed.retryAfterMs);
+    const recovered = await pc.readStatus();
+    assert.equal(recovered.outcome, OUTCOME.CORE_OK);
+    assert.equal(recovered.runtimeGeneration, receipt.initial.runtimeGeneration + 2);
+  } else if (scenario === 'close-during-restore') {
+    receipt.phase = 'close-during-restore:callback';
+    readFault.target = 'c';
+    unsubscribe = pc.subscribe(RAFT_EVENT.FOLLOWER, () => {
+      const before = receipt.entries.length;
+      const closed = pb.close();
+      closedGroups.add(b);
+      receipt.callbacks.push({closed, enteredCore: receipt.entries.length - before});
+    });
+    readFault.enabled = true;
+    receipt.initiator = await pa.readStatus();
+    readFault.enabled = false;
+    assert.equal(receipt.callbacks.length, 1);
+    assert.equal(receipt.callbacks[0].closed.outcome, OUTCOME.CORE_OK);
+    assert.equal(receipt.callbacks[0].enteredCore, 0, 'closing from a callback must not enter the replacing core');
+    const freed = receipt.entries.filter((entry) => entry.operation === 'free' && entry.groupId === b.partitionId);
+    assert.equal(freed.length, 1, 'the driver must discharge the exact newly created handle once');
+    const atClose = receipt.entries.length;
+    assert.notEqual((await pb.readStatus()).outcome, OUTCOME.CORE_OK);
+    assert.equal(receipt.entries.length, atClose, 'closed group cannot be resumed by later work');
+    unsubscribe(); unsubscribe = undefined;
   } else {
     receipt.phase = 'control:recovery';
     assert.equal((await pc.readStatus()).outcome, OUTCOME.CORE_OK);
@@ -146,6 +204,7 @@ try {
   setCoreFaultInjector(null); readFault.enabled = false;
   // A held individual group may need its owner-advertised window. Never invent a new budget.
   for (const group of clusters) {
+    if (closedGroups.has(group)) continue;
     let status = await portOf(group).readStatus();
     if (status.outcome === OUTCOME.HOST_FAILURE && status.retryAfterMs > 0) {
       clock.advance(status.retryAfterMs); status = await portOf(group).readStatus();

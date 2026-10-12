@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import Database from 'better-sqlite3';
+import {VirtualTimeSource} from '../../../src/time/time-source.js';
 import {PartitionNodeCluster} from './partition-node-cluster.js';
 import {setActualCoreEntryObserver, setCoreFaultInjector} from
   '../../../src/raft/raft-rs-runtime-owner.js';
@@ -18,6 +19,7 @@ const scenario = process.argv[2];
 assert.ok(['control', 'missing-glue', 'changed-glue', 'repeated-refusal'].includes(scenario));
 const receipt = {scenario, phase: 'start', traps: 0, failures: [], entries: []};
 const groups = [];
+const clock = new VirtualTimeSource({startMs: 1000});
 let manifestPath;
 let gluePath;
 let originalManifest;
@@ -33,6 +35,7 @@ function makeGroup(name) {
   const id = `${name}-replica`;
   let cluster;
   cluster = new PartitionNodeCluster({partitionId: name, replicaIds: [id], tempRoot: root,
+    substrateFor: () => ({timeSource: clock}),
     applyFor(replicaId, marker, {index}) {
       cluster.replica(replicaId).db.prepare('INSERT INTO recovery_witness VALUES (?, ?, ?)')
         .run(marker, name, index);
@@ -105,6 +108,8 @@ try {
       assert.equal(receipt.entries.length, entriesAtTrap, 'rejected load must enter no core primitive');
     }
     restoreArtifacts();
+    // A restored artifact does not waive the runtime owner's retry window.
+    clock.advance(receipt.failures.at(-1).retryAfterMs ?? 0);
   }
   receipt.phase = 'recover-from-other-group';
   const recoveredB = await portB.readStatus();
