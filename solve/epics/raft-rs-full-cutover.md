@@ -15,6 +15,7 @@ quests:
   - replicated-transaction-decision-and-apply
   - transaction-topology-admission-barrier
   - snapshot-lifecycle-staging-boundary
+  - replica-opening-history
 authorizes:
   - architecture
   - docs

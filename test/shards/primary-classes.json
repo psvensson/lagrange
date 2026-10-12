@@ -3,13 +3,13 @@
   "id": "test-primary-classification",
   "counts": {
     "unit": 2063,
-    "integration": 91,
+    "integration": 92,
     "bootstrap": 202,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2363,
-  "digest": "fnv1a32-866879fb",
+  "censusSize": 2364,
+  "digest": "fnv1a32-f9b84f56",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1593,6 +1593,7 @@
     "test/raft/raft-rs-backend/reseed-hold-durability.test.js": "unit",
     "test/raft/raft-rs-backend/restart-from-durable-record.test.js": "unit",
     "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js": "integration",
+    "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js": "integration",
     "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js": "integration",
     "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js": "integration",
     "test/raft/raft-rs-backend/runtime-trap-and-restore.test.js": "unit",

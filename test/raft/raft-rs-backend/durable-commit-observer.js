@@ -33,6 +33,7 @@ const DURABLE_EVENT = Object.freeze({
 const originalTransaction = Database.prototype.transaction;
 const originalPragma = Database.prototype.pragma;
 const originalPersistReady = RaftRsDurableStore.prototype.persistReady;
+const originalBootstrap = RaftRsDurableStore.prototype.putBootstrapAppliedState;
 
 function levelOf(db) {
   return originalPragma.call(db, READ_LEVEL, {simple: true});
@@ -52,13 +53,20 @@ function installDurableCommitObserver({onDurableCommit = null} = {}) {
   const events = [];
   const depth = new WeakMap();
   const persisting = new WeakSet();
+  const bootstrapping = new WeakSet();
+  RaftRsDurableStore.prototype.putBootstrapAppliedState = function observedBootstrap(...args) {
+    const result = originalBootstrap.apply(this, args);
+    if (this.db.inTransaction) bootstrapping.add(this.db);
+    return result;
+  };
   Database.prototype.transaction = function observedTransaction(work) {
     const db = this;
     const observedWork = function observedWork(...args) {
       const result = work.apply(this, args);
       if (depth.get(db) === 1) {
         events.push({type: DURABLE_EVENT.COMMIT, file: db.name,
-          level: levelOf(db), persist: persisting.has(db)});
+          level: levelOf(db), persist: persisting.has(db),
+          openingBootstrap: bootstrapping.has(db)});
       }
       return result;
     };
@@ -77,6 +85,7 @@ function installDurableCommitObserver({onDurableCommit = null} = {}) {
         }
         return result;
       } finally {
+        if (depth.get(db) === 1) bootstrapping.delete(db);
         depth.set(db, depth.get(db) - 1);
         if (committedLevel !== null &&
           committedLevel >= SQLITE_SYNCHRONOUS.FULL && onDurableCommit) {
@@ -121,6 +130,7 @@ function installDurableCommitObserver({onDurableCommit = null} = {}) {
     uninstall() {
       Database.prototype.transaction = originalTransaction;
       RaftRsDurableStore.prototype.persistReady = originalPersistReady;
+      RaftRsDurableStore.prototype.putBootstrapAppliedState = originalBootstrap;
     },
   };
 }

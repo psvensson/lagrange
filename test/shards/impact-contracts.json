@@ -391,7 +391,7 @@
       ]
     },
     "CL-041": {
-      "description": "A follower grants its vote to at most one candidate per term, so at most one leader can be elected per term (Raft §5.2 Election Safety).",
+      "description": "A follower grants its vote to at most one candidate per term, so at most one leader can be elected per term (Raft \u00a75.2 Election Safety).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -402,7 +402,7 @@
       ]
     },
     "CL-040": {
-      "description": "A committed Raft log entry is identical cluster-wide at its index; a follower never stale-commits its own same-index/different-term entry on catch-up (Raft §5.3 Log Matching).",
+      "description": "A committed Raft log entry is identical cluster-wide at its index; a follower never stale-commits its own same-index/different-term entry on catch-up (Raft \u00a75.3 Log Matching).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -413,7 +413,7 @@
       ]
     },
     "CL-042": {
-      "description": "An empty raft log's last-log-term is 0 (Raft §5.4.1): the consensus core never masquerades an empty log as up-to-date, so a voter holding committed entries denies an empty-log candidate regardless of the candidate's election term (CL-042).",
+      "description": "An empty raft log's last-log-term is 0 (Raft \u00a75.4.1): the consensus core never masquerades an empty log as up-to-date, so a voter holding committed entries denies an empty-log candidate regardless of the candidate's election term (CL-042).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -548,7 +548,7 @@
       ]
     },
     "raft-rs-runtime-lifecycle-entry": {
-      "description": "The replica lifecycle owner admits each semantic operation before the runtime owner can enter the raft-rs core, and durable retirement waits for admitted operations before becoming terminal. A constructor refused before runtime admission publishes no membership reservation owner or native handle; each service initialization retains the exact named consensus failure and releases its own opening resources before reporting refusal.",
+      "description": "The replica lifecycle owner admits each semantic operation before the runtime owner can enter the raft-rs core, and durable retirement waits for admitted operations before becoming terminal. A constructor refused before runtime admission publishes no membership reservation owner or native handle; each service initialization retains the exact named consensus failure and releases its own opening resources before reporting refusal. Exact-incarnation native opening history is NEVER_OPENED or ESTABLISHED in the existing lifecycle row; legacy NULL is unknown. Bootstrap and establishment commit atomically at FULL before participation; intact history restores, while absent native state cannot reopen an established or unknown incarnation. Host prior-existence remains independent for complete storage loss.",
       "owners": [
         "src/raft/raft-rs-replica-lifecycle-owner.js",
         "src/raft/raft-rs-lifecycle-administration.js",
@@ -558,12 +558,16 @@
         "src/raft/raft-rs-membership-administration.js",
         "src/partition/partition-consensus-port-opening.js",
         "src/message-group/message-group-consensus-port.js",
-        "src/wasm-service/wasm-service-consensus-port.js"
+        "src/wasm-service/wasm-service-consensus-port.js",
+        "src/raft/raft-rs-opening-history-constants.js",
+        "src/raft/raft-rs-durable-store.js",
+        "src/raft/raft-rs-participation-gate.js"
       ],
       "tests": [
         "test/raft/raft-rs-backend/operation-port-lifecycle.test.js",
         "test/raft/raft-rs-backend/operation-port-boundary.test.js",
-        "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js"
+        "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+        "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js"
       ]
     },
     "raft-rs-runtime-application-transaction": {
@@ -598,7 +602,8 @@
         "test/partition/partition-participant-transaction-staging.test.js",
         "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js",
         "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js",
-        "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js"
+        "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+        "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js"
       ]
     },
     "partition-raft-operation-port": {
@@ -1390,7 +1395,7 @@
       }
     },
     "raft-rs-runtime-lifecycle-entry": {
-      "description": "Lifecycle admission and core entry must remain one boundary: retirement cannot race an admitted operation, and queued ingress must recheck lifecycle before worker-side core entry. Refused construction leaves earlier exact owners intact and service initialization consumes the canonical failure without bypassing its cleanup.",
+      "description": "Lifecycle admission and core entry must remain one boundary: retirement cannot race an admitted operation, and queued ingress must recheck lifecycle before worker-side core entry. Refused construction leaves earlier exact owners intact and service initialization consumes the canonical failure without bypassing its cleanup. The lifecycle history fact and the runtime bootstrap transaction share one durable opening boundary, including process-crash recovery and genuine never-opened retries.",
       "endpoints": [
         {
           "id": "durable-lifecycle-admission",
@@ -1408,7 +1413,10 @@
             "src/raft/raft-rs-operation-port.js",
             "src/raft/raft-rs-runtime-owner.js",
             "src/raft/raft-operation-port.js",
-            "src/raft/raft-rs-membership-administration.js"
+            "src/raft/raft-rs-membership-administration.js",
+            "src/raft/raft-rs-opening-history-constants.js",
+            "src/raft/raft-rs-durable-store.js",
+            "src/raft/raft-rs-participation-gate.js"
           ]
         }
       ],
@@ -1416,7 +1424,8 @@
       "witnessTests": [
         "test/raft/raft-rs-backend/operation-port-lifecycle.test.js",
         "test/raft/raft-rs-backend/operation-port-boundary.test.js",
-        "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js"
+        "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+        "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js"
       ]
     },
     "raft-rs-runtime-application-transaction": {
@@ -1459,7 +1468,8 @@
         "test/partition/partition-participant-transaction-staging.test.js",
         "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js",
         "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js",
-        "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js"
+        "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+        "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js"
       ]
     },
     "partition-raft-operation-port": {

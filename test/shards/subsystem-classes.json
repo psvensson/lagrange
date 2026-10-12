@@ -19,16 +19,16 @@
     "services-runtime": 146,
     "solver-tooling": 7,
     "storage-partition": 182,
-    "storage-raft": 124,
+    "storage-raft": 125,
     "test-infrastructure": 143,
     "transactions": 18,
     "transport-messaging": 95,
     "wasm-toolchain": 57
   },
-  "censusSize": 2363,
-  "digest": "fnv1a32-4e6185f8",
+  "censusSize": 2364,
+  "digest": "fnv1a32-be14590e",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-aab2c089",
+  "observationDigest": "fnv1a32-48dc04be",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1612,6 +1612,7 @@
     "test/raft/raft-rs-backend/reseed-hold-durability.test.js": "storage-raft",
     "test/raft/raft-rs-backend/restart-from-durable-record.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-trap-and-restore.test.js": "storage-raft",
@@ -10732,6 +10733,11 @@
       "directories": [
         "src",
         "test/raft/raft-rs-backend"
+      ]
+    },
+    "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js": {
+      "files": [
+        "test/raft/raft-rs-backend/opening-history-process-child.js"
       ]
     },
     "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js": {

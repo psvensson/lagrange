@@ -1,0 +1,34 @@
+{
+  "schema": "test-receipt/1",
+  "status": "FAIL",
+  "receipts": [
+    {
+      "id": "established-history-loss-refused-before-native-entry",
+      "passed": false
+    },
+    {
+      "id": "never-opened-retry-remains-admitted",
+      "passed": false
+    },
+    {
+      "id": "bootstrap-record-and-history-witness-atomic",
+      "passed": false
+    },
+    {
+      "id": "legacy-unknown-cannot-authorize-genesis",
+      "passed": false
+    },
+    {
+      "id": "intact-cold-process-reopen-and-lost-history-refusal",
+      "passed": false
+    },
+    {
+      "id": "host-prior-existence-and-participation-fences-preserved",
+      "passed": false
+    },
+    {
+      "id": "current-impact-and-regression-proof",
+      "passed": false
+    }
+  ]
+}
