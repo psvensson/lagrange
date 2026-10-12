@@ -69,11 +69,20 @@ function bulkConnectionTransferSocket(connection, options = {}) {
     }
   };
 
-  // Any non-SENT chunk outcome is FATAL: close the channel and surface a
+  // Any non-SENT frame outcome is FATAL: close the channel and surface a
   // local close so BOTH driver loops abort typed (never a silent drop).
   const fatalAbort = () => {
+    if (closed) return;
     connection.close();
     emitClose();
+  };
+
+  const settleSend = (send) => {
+    void Promise.resolve(send).then(
+      (result) => {
+        if (result?.outcome !== BULK_CHANNEL_SEND_OUTCOME.SENT) fatalAbort();
+      },
+      () => fatalAbort());
   };
 
   connection.onMessage(deliver);
@@ -103,19 +112,18 @@ function bulkConnectionTransferSocket(connection, options = {}) {
       // encodeControlFrame); sendControl re-encodes an object, so decode
       // once here rather than double-encoding on the wire.
       if (typeof payload === TRANSFER_SOCKET_TYPEOF.STRING) {
-        const result = connection.sendControl(JSON.parse(payload));
-        if (result.outcome !== BULK_CHANNEL_SEND_OUTCOME.SENT) {
+        try {
+          settleSend(connection.sendControl(JSON.parse(payload)));
+        } catch {
           fatalAbort();
         }
         return;
       }
-      void connection.sendChunkFrame(payload).then(
-        (result) => {
-          if (result.outcome !== BULK_CHANNEL_SEND_OUTCOME.SENT) {
-            fatalAbort();
-          }
-        },
-        () => fatalAbort());
+      try {
+        settleSend(connection.sendChunkFrame(payload));
+      } catch {
+        fatalAbort();
+      }
     },
     close() {
       connection.close();

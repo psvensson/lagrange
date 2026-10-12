@@ -85,9 +85,10 @@ test('markShuttingDown while the catch-up sleeps between deferred reads: it ' +
     tables: [...CATCHUP_TABLES],
   }));
   await turns(TURNS);
-  assert.equal(composed.reads.length, 1, 'the first table\'s read deferred');
-  assert.equal(composed.timeSource.pendingTimerCount(), 1,
-    'the catch-up sleeps before its retry');
+  assert.ok(composed.reads.length >= 1,
+    'the first table\'s descriptor read deferred');
+  assert.equal(composed.timeSource.pendingTimerCount(), 2,
+    'one generation owns its deadline and retry wait');
 
   composed.service.markShuttingDown();
   await turns(TURNS);

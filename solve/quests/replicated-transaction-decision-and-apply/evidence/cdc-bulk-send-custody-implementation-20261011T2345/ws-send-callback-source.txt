@@ -1,0 +1,537 @@
+$ node -p "require(\"ws/package.json\").version"
+8.21.0
+
+$ sha256sum node_modules/ws/package.json node_modules/ws/lib/websocket.js node_modules/ws/lib/sender.js
+584ce6e7516587ba249dc910b0c04e2753f6b3f451fc3a5bc324f7735bdacc71  node_modules/ws/package.json
+48fdb0f54c1f8ce580d3cfa2908fe7d96fe18f06f9d82306950441cb09b5db26  node_modules/ws/lib/websocket.js
+d0791d30c3defd44dcabbddb879a901c757993fea2c00a7ffea01d53b23b4b77  node_modules/ws/lib/sender.js
+
+$ nl -ba node_modules/ws/lib/websocket.js | sed -n "440,485p;1138,1159p;1275,1301p;1316,1365p;1390,1410p"
+   440	  /**
+   441	   * Send a data message.
+   442	   *
+   443	   * @param {*} data The message to send
+   444	   * @param {Object} [options] Options object
+   445	   * @param {Boolean} [options.binary] Specifies whether `data` is binary or
+   446	   *     text
+   447	   * @param {Boolean} [options.compress] Specifies whether or not to compress
+   448	   *     `data`
+   449	   * @param {Boolean} [options.fin=true] Specifies whether the fragment is the
+   450	   *     last one
+   451	   * @param {Boolean} [options.mask] Specifies whether or not to mask `data`
+   452	   * @param {Function} [cb] Callback which is executed when data is written out
+   453	   * @public
+   454	   */
+   455	  send(data, options, cb) {
+   456	    if (this.readyState === WebSocket.CONNECTING) {
+   457	      throw new Error('WebSocket is not open: readyState 0 (CONNECTING)');
+   458	    }
+   459	
+   460	    if (typeof options === 'function') {
+   461	      cb = options;
+   462	      options = {};
+   463	    }
+   464	
+   465	    if (typeof data === 'number') data = data.toString();
+   466	
+   467	    if (this.readyState !== WebSocket.OPEN) {
+   468	      sendAfterClose(this, data, cb);
+   469	      return;
+   470	    }
+   471	
+   472	    const opts = {
+   473	      binary: typeof data !== 'string',
+   474	      mask: !this._isServer,
+   475	      compress: true,
+   476	      fin: true,
+   477	      ...options
+   478	    };
+   479	
+   480	    if (!this._extensions[PerMessageDeflate.extensionName]) {
+   481	      opts.compress = false;
+   482	    }
+   483	
+   484	    this._sender.send(data || EMPTY_BUFFER, opts, cb);
+   485	  }
+  1138	function sendAfterClose(websocket, data, cb) {
+  1139	  if (data) {
+  1140	    const length = isBlob(data) ? data.size : toBuffer(data).length;
+  1141	
+  1142	    //
+  1143	    // The `_bufferedAmount` property is used only when the peer is a client and
+  1144	    // the opening handshake fails. Under these circumstances, in fact, the
+  1145	    // `setSocket()` method is not called, so the `_socket` and `_sender`
+  1146	    // properties are set to `null`.
+  1147	    //
+  1148	    if (websocket._socket) websocket._sender._bufferedBytes += length;
+  1149	    else websocket._bufferedAmount += length;
+  1150	  }
+  1151	
+  1152	  if (cb) {
+  1153	    const err = new Error(
+  1154	      `WebSocket is not open: readyState ${websocket.readyState} ` +
+  1155	        `(${readyStates[websocket.readyState]})`
+  1156	    );
+  1157	    process.nextTick(cb, err);
+  1158	  }
+  1159	}
+  1275	/**
+  1276	 * The `Sender` error event handler.
+  1277	 *
+  1278	 * @param {Error} The error
+  1279	 * @private
+  1280	 */
+  1281	function senderOnError(err) {
+  1282	  const websocket = this[kWebSocket];
+  1283	
+  1284	  if (websocket.readyState === WebSocket.CLOSED) return;
+  1285	  if (websocket.readyState === WebSocket.OPEN) {
+  1286	    websocket._readyState = WebSocket.CLOSING;
+  1287	    setCloseTimer(websocket);
+  1288	  }
+  1289	
+  1290	  //
+  1291	  // `socket.end()` is used instead of `socket.destroy()` to allow the other
+  1292	  // peer to finish sending queued data. There is no need to set a timer here
+  1293	  // because `CLOSING` means that it is already set or not needed.
+  1294	  //
+  1295	  this._socket.end();
+  1296	
+  1297	  if (!websocket._errorEmitted) {
+  1298	    websocket._errorEmitted = true;
+  1299	    websocket.emit('error', err);
+  1300	  }
+  1301	}
+  1316	/**
+  1317	 * The listener of the socket `'close'` event.
+  1318	 *
+  1319	 * @private
+  1320	 */
+  1321	function socketOnClose() {
+  1322	  const websocket = this[kWebSocket];
+  1323	
+  1324	  this.removeListener('close', socketOnClose);
+  1325	  this.removeListener('data', socketOnData);
+  1326	  this.removeListener('end', socketOnEnd);
+  1327	
+  1328	  websocket._readyState = WebSocket.CLOSING;
+  1329	
+  1330	  //
+  1331	  // The close frame might not have been received or the `'end'` event emitted,
+  1332	  // for example, if the socket was destroyed due to an error. Ensure that the
+  1333	  // `receiver` stream is closed after writing any remaining buffered data to
+  1334	  // it. If the readable side of the socket is in flowing mode then there is no
+  1335	  // buffered data as everything has been already written. If instead, the
+  1336	  // socket is paused, any possible buffered data will be read as a single
+  1337	  // chunk.
+  1338	  //
+  1339	  if (
+  1340	    !this._readableState.endEmitted &&
+  1341	    !websocket._closeFrameReceived &&
+  1342	    !websocket._receiver._writableState.errorEmitted &&
+  1343	    this._readableState.length !== 0
+  1344	  ) {
+  1345	    const chunk = this.read(this._readableState.length);
+  1346	
+  1347	    websocket._receiver.write(chunk);
+  1348	  }
+  1349	
+  1350	  websocket._receiver.end();
+  1351	
+  1352	  this[kWebSocket] = undefined;
+  1353	
+  1354	  clearTimeout(websocket._closeTimer);
+  1355	
+  1356	  if (
+  1357	    websocket._receiver._writableState.finished ||
+  1358	    websocket._receiver._writableState.errorEmitted
+  1359	  ) {
+  1360	    websocket.emitClose();
+  1361	  } else {
+  1362	    websocket._receiver.on('error', receiverOnFinish);
+  1363	    websocket._receiver.on('finish', receiverOnFinish);
+  1364	  }
+  1365	}
+  1390	}
+  1391	
+  1392	/**
+  1393	 * The listener of the socket `'error'` event.
+  1394	 *
+  1395	 * @private
+  1396	 */
+  1397	function socketOnError() {
+  1398	  const websocket = this[kWebSocket];
+  1399	
+  1400	  this.removeListener('error', socketOnError);
+  1401	  this.on('error', NOOP);
+  1402	
+  1403	  if (websocket) {
+  1404	    websocket._readyState = WebSocket.CLOSING;
+  1405	    this.destroy();
+  1406	  }
+  1407	}
+
+$ nl -ba node_modules/ws/lib/sender.js | sed -n "556,607p"
+   556	  /**
+   557	   * Sends a frame.
+   558	   *
+   559	   * @param {(Buffer | String)[]} list The frame to send
+   560	   * @param {Function} [cb] Callback
+   561	   * @private
+   562	   */
+   563	  sendFrame(list, cb) {
+   564	    if (list.length === 2) {
+   565	      this._socket.cork();
+   566	      this._socket.write(list[0]);
+   567	      this._socket.write(list[1], cb);
+   568	      this._socket.uncork();
+   569	    } else {
+   570	      this._socket.write(list[0], cb);
+   571	    }
+   572	  }
+   573	}
+   574	
+   575	module.exports = Sender;
+   576	
+   577	/**
+   578	 * Calls queued callbacks with an error.
+   579	 *
+   580	 * @param {Sender} sender The `Sender` instance
+   581	 * @param {Error} err The error to call the callbacks with
+   582	 * @param {Function} [cb] The first callback
+   583	 * @private
+   584	 */
+   585	function callCallbacks(sender, err, cb) {
+   586	  if (typeof cb === 'function') cb(err);
+   587	
+   588	  for (let i = 0; i < sender._queue.length; i++) {
+   589	    const params = sender._queue[i];
+   590	    const callback = params[params.length - 1];
+   591	
+   592	    if (typeof callback === 'function') callback(err);
+   593	  }
+   594	}
+   595	
+   596	/**
+   597	 * Handles a `Sender` error.
+   598	 *
+   599	 * @param {Sender} sender The `Sender` instance
+   600	 * @param {Error} err The error
+   601	 * @param {Function} [cb] The first pending callback
+   602	 * @private
+   603	 */
+   604	function onError(sender, err, cb) {
+   605	  callCallbacks(sender, err, cb);
+   606	  sender.onerror(err);
+   607	}
+
+$ sha256sum pinned writable source
+8ed9b030949448f68db50151b094be811177b6f7ba672bd06d7c5243f56e6453  solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-runtime-allocation-certification-20261011T2100/node-v22.22.0-libuv-v1.51.0/node-lib-internal-streams-writable.js.txt
+
+$ nl -ba pinned writable source | sed -n "480,610p;602,740p;1100,1135p"
+   480	      encoding = 'buffer';
+   481	    } else {
+   482	      throw new ERR_INVALID_ARG_TYPE(
+   483	        'chunk', ['string', 'Buffer', 'TypedArray', 'DataView'], chunk);
+   484	    }
+   485	  }
+   486	
+   487	  let err;
+   488	  if ((state[kState] & kEnding) !== 0) {
+   489	    err = new ERR_STREAM_WRITE_AFTER_END();
+   490	  } else if ((state[kState] & kDestroyed) !== 0) {
+   491	    err = new ERR_STREAM_DESTROYED('write');
+   492	  }
+   493	
+   494	  if (err) {
+   495	    process.nextTick(cb, err);
+   496	    errorOrDestroy(stream, err, true);
+   497	    return err;
+   498	  }
+   499	
+   500	  state.pendingcb++;
+   501	  return writeOrBuffer(stream, state, chunk, encoding, cb);
+   502	}
+   503	
+   504	Writable.prototype.write = function(chunk, encoding, cb) {
+   505	  if (encoding != null && typeof encoding === 'function') {
+   506	    cb = encoding;
+   507	    encoding = null;
+   508	  }
+   509	
+   510	  return _write(this, chunk, encoding, cb) === true;
+   511	};
+   512	
+   513	Writable.prototype.cork = function() {
+   514	  const state = this._writableState;
+   515	
+   516	  state[kState] |= kCorked;
+   517	  state.corked++;
+   518	};
+   519	
+   520	Writable.prototype.uncork = function() {
+   521	  const state = this._writableState;
+   522	
+   523	  if (state.corked) {
+   524	    state.corked--;
+   525	
+   526	    if (!state.corked) {
+   527	      state[kState] &= ~kCorked;
+   528	    }
+   529	
+   530	    if ((state[kState] & kWriting) === 0)
+   531	      clearBuffer(this, state);
+   532	  }
+   533	};
+   534	
+   535	Writable.prototype.setDefaultEncoding = function setDefaultEncoding(encoding) {
+   536	  // node::ParseEncoding() requires lower case.
+   537	  if (typeof encoding === 'string')
+   538	    encoding = StringPrototypeToLowerCase(encoding);
+   539	  if (!Buffer.isEncoding(encoding))
+   540	    throw new ERR_UNKNOWN_ENCODING(encoding);
+   541	  this._writableState.defaultEncoding = encoding;
+   542	  return this;
+   543	};
+   544	
+   545	// If we're already writing something, then just put this
+   546	// in the queue, and wait our turn.  Otherwise, call _write
+   547	// If we return false, then we need a drain event, so set that flag.
+   548	function writeOrBuffer(stream, state, chunk, encoding, callback) {
+   549	  const len = (state[kState] & kObjectMode) !== 0 ? 1 : chunk.length;
+   550	
+   551	  state.length += len;
+   552	
+   553	  if ((state[kState] & (kWriting | kErrored | kCorked | kConstructed)) !== kConstructed) {
+   554	    if ((state[kState] & kBuffered) === 0) {
+   555	      state[kState] |= kBuffered;
+   556	      state[kBufferedValue] = [];
+   557	    }
+   558	
+   559	    state[kBufferedValue].push({ chunk, encoding, callback });
+   560	    if ((state[kState] & kAllBuffers) !== 0 && encoding !== 'buffer') {
+   561	      state[kState] &= ~kAllBuffers;
+   562	    }
+   563	    if ((state[kState] & kAllNoop) !== 0 && callback !== nop) {
+   564	      state[kState] &= ~kAllNoop;
+   565	    }
+   566	  } else {
+   567	    state.writelen = len;
+   568	    if (callback !== nop) {
+   569	      state.writecb = callback;
+   570	    }
+   571	    state[kState] |= kWriting | kSync | kExpectWriteCb;
+   572	    stream._write(chunk, encoding, state.onwrite);
+   573	    state[kState] &= ~kSync;
+   574	  }
+   575	
+   576	  const ret = state.length < state.highWaterMark || state.length === 0;
+   577	
+   578	  if (!ret) {
+   579	    state[kState] |= kNeedDrain;
+   580	  }
+   581	
+   582	  // Return false if errored or destroyed in order to break
+   583	  // any synchronous while(stream.write(data)) loops.
+   584	  return ret && (state[kState] & (kDestroyed | kErrored)) === 0;
+   585	}
+   586	
+   587	function doWrite(stream, state, writev, len, chunk, encoding, cb) {
+   588	  state.writelen = len;
+   589	  if (cb !== nop) {
+   590	    state.writecb = cb;
+   591	  }
+   592	  state[kState] |= kWriting | kSync | kExpectWriteCb;
+   593	  if ((state[kState] & kDestroyed) !== 0)
+   594	    state.onwrite(new ERR_STREAM_DESTROYED('write'));
+   595	  else if (writev)
+   596	    stream._writev(chunk, state.onwrite);
+   597	  else
+   598	    stream._write(chunk, encoding, state.onwrite);
+   599	  state[kState] &= ~kSync;
+   600	}
+   601	
+   602	function onwriteError(stream, state, er, cb) {
+   602	function onwriteError(stream, state, er, cb) {
+   603	  --state.pendingcb;
+   603	  --state.pendingcb;
+   604	
+   604	
+   605	  cb(er);
+   605	  cb(er);
+   606	  // Ensure callbacks are invoked even when autoDestroy is
+   606	  // Ensure callbacks are invoked even when autoDestroy is
+   607	  // not enabled. Passing `er` here doesn't make sense since
+   607	  // not enabled. Passing `er` here doesn't make sense since
+   608	  // it's related to one specific write, not to the buffered
+   608	  // it's related to one specific write, not to the buffered
+   609	  // writes.
+   609	  // writes.
+   610	  errorBuffer(state);
+   610	  errorBuffer(state);
+   611	  // This can emit error, but error must always follow cb.
+   612	  errorOrDestroy(stream, er);
+   613	}
+   614	
+   615	function onwrite(stream, er) {
+   616	  const state = stream._writableState;
+   617	
+   618	  if ((state[kState] & kExpectWriteCb) === 0) {
+   619	    errorOrDestroy(stream, new ERR_MULTIPLE_CALLBACK());
+   620	    return;
+   621	  }
+   622	
+   623	  const sync = (state[kState] & kSync) !== 0;
+   624	  const cb = (state[kState] & kWriteCb) !== 0 ? state[kWriteCbValue] : nop;
+   625	
+   626	  state.writecb = null;
+   627	  state[kState] &= ~(kWriting | kExpectWriteCb);
+   628	  state.length -= state.writelen;
+   629	  state.writelen = 0;
+   630	
+   631	  if (er) {
+   632	    // Avoid V8 leak, https://github.com/nodejs/node/pull/34103#issuecomment-652002364
+   633	    er.stack; // eslint-disable-line no-unused-expressions
+   634	
+   635	    if ((state[kState] & kErrored) === 0) {
+   636	      state[kErroredValue] = er;
+   637	      state[kState] |= kErrored;
+   638	    }
+   639	
+   640	    // In case of duplex streams we need to notify the readable side of the
+   641	    // error.
+   642	    if (stream._readableState && !stream._readableState.errored) {
+   643	      stream._readableState.errored = er;
+   644	    }
+   645	
+   646	    if (sync) {
+   647	      process.nextTick(onwriteError, stream, state, er, cb);
+   648	    } else {
+   649	      onwriteError(stream, state, er, cb);
+   650	    }
+   651	  } else {
+   652	    if ((state[kState] & kBuffered) !== 0) {
+   653	      clearBuffer(stream, state);
+   654	    }
+   655	
+   656	    if (sync) {
+   657	      const needDrain = (state[kState] & kNeedDrain) !== 0 && state.length === 0;
+   658	      const needTick = needDrain || (state[kState] & kDestroyed !== 0) || cb !== nop;
+   659	
+   660	      // It is a common case that the callback passed to .write() is always
+   661	      // the same. In that case, we do not schedule a new nextTick(), but
+   662	      // rather just increase a counter, to improve performance and avoid
+   663	      // memory allocations.
+   664	      if (cb === nop) {
+   665	        if ((state[kState] & kAfterWritePending) === 0 && needTick) {
+   666	          process.nextTick(afterWrite, stream, state, 1, cb);
+   667	          state[kState] |= kAfterWritePending;
+   668	        } else {
+   669	          state.pendingcb--;
+   670	          if ((state[kState] & kEnding) !== 0) {
+   671	            finishMaybe(stream, state, true);
+   672	          }
+   673	        }
+   674	      } else if ((state[kState] & kAfterWriteTickInfo) !== 0 &&
+   675	                 state[kAfterWriteTickInfoValue].cb === cb) {
+   676	        state[kAfterWriteTickInfoValue].count++;
+   677	      } else if (needTick) {
+   678	        state[kAfterWriteTickInfoValue] = { count: 1, cb, stream, state };
+   679	        process.nextTick(afterWriteTick, state[kAfterWriteTickInfoValue]);
+   680	        state[kState] |= (kAfterWritePending | kAfterWriteTickInfo);
+   681	      } else {
+   682	        state.pendingcb--;
+   683	        if ((state[kState] & kEnding) !== 0) {
+   684	          finishMaybe(stream, state, true);
+   685	        }
+   686	      }
+   687	    } else {
+   688	      afterWrite(stream, state, 1, cb);
+   689	    }
+   690	  }
+   691	}
+   692	
+   693	function afterWriteTick({ stream, state, count, cb }) {
+   694	  state[kState] &= ~kAfterWriteTickInfo;
+   695	  state[kAfterWriteTickInfoValue] = null;
+   696	  return afterWrite(stream, state, count, cb);
+   697	}
+   698	
+   699	function afterWrite(stream, state, count, cb) {
+   700	  state[kState] &= ~kAfterWritePending;
+   701	
+   702	  const needDrain = (state[kState] & (kEnding | kNeedDrain | kDestroyed)) === kNeedDrain && state.length === 0;
+   703	  if (needDrain) {
+   704	    state[kState] &= ~kNeedDrain;
+   705	    stream.emit('drain');
+   706	  }
+   707	
+   708	  while (count-- > 0) {
+   709	    state.pendingcb--;
+   710	    cb(null);
+   711	  }
+   712	
+   713	  if ((state[kState] & kDestroyed) !== 0) {
+   714	    errorBuffer(state);
+   715	  }
+   716	
+   717	  if ((state[kState] & kEnding) !== 0) {
+   718	    finishMaybe(stream, state, true);
+   719	  }
+   720	}
+   721	
+   722	// If there's something in the buffer waiting, then invoke callbacks.
+   723	function errorBuffer(state) {
+   724	  if ((state[kState] & kWriting) !== 0) {
+   725	    return;
+   726	  }
+   727	
+   728	  if ((state[kState] & kBuffered) !== 0) {
+   729	    for (let n = state.bufferedIndex; n < state.buffered.length; ++n) {
+   730	      const { chunk, callback } = state[kBufferedValue][n];
+   731	      const len = (state[kState] & kObjectMode) !== 0 ? 1 : chunk.length;
+   732	      state.length -= len;
+   733	      callback(state.errored ?? new ERR_STREAM_DESTROYED('write'));
+   734	    }
+   735	  }
+   736	
+   737	
+   738	  callFinishedCallbacks(state, state.errored ?? new ERR_STREAM_DESTROYED('end'));
+   739	
+   740	  resetBuffer(state);
+  1100	  writableAborted: {
+  1101	    __proto__: null,
+  1102	    get: function() {
+  1103	      const state = this._writableState;
+  1104	      return (
+  1105	        (state[kState] & (kHasWritable | kWritable)) !== kHasWritable &&
+  1106	        (state[kState] & (kDestroyed | kErrored)) !== 0 &&
+  1107	        (state[kState] & kFinished) === 0
+  1108	      );
+  1109	    },
+  1110	  },
+  1111	});
+  1112	
+  1113	const destroy = destroyImpl.destroy;
+  1114	Writable.prototype.destroy = function(err, cb) {
+  1115	  const state = this._writableState;
+  1116	
+  1117	  // Invoke pending callbacks.
+  1118	  if ((state[kState] & (kBuffered | kOnFinished)) !== 0 && (state[kState] & kDestroyed) === 0) {
+  1119	    process.nextTick(errorBuffer, state);
+  1120	  }
+  1121	
+  1122	  destroy.call(this, err, cb);
+  1123	  return this;
+  1124	};
+  1125	
+  1126	Writable.prototype._undestroy = destroyImpl.undestroy;
+  1127	Writable.prototype._destroy = function(err, cb) {
+  1128	  cb(err);
+  1129	};
+  1130	
+  1131	Writable.prototype[EE.captureRejectionSymbol] = function(err) {
+  1132	  this.destroy(err);
+  1133	};
+  1134	
+  1135	let webStreamsAdapters;

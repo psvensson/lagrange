@@ -1,0 +1,3 @@
+bde0b33492c7843475e39c26885c25ab00f4afb4bd7569aee7c6b702dcddd0d5  src/cdc/cdc-coverage-transfer-owner.js
+9912fb688f9f27d5272df713e8627a201bbf954078fcf69157f43435790d54b3  test/cdc/cdc-coverage-lifecycle-owner.test.js
+cfe7405ce63469383c879c7dd3de6406b255468cd3e6816fbdbb5c219019eb84  solve/quests/replicated-transaction-decision-and-apply/cdc-coverage-response-resource-handoff-amendment-20261011.md

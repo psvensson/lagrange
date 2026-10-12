@@ -33,10 +33,15 @@ class FakeBulkSocket extends EventEmitter {
   constructor() {
     super();
     this.sent = [];
+    this.completedSends = 0;
     queueMicrotask(() => this.emit('open'));
   }
-  send(data) {
+  send(data, callback) {
     this.sent.push(data);
+    queueMicrotask(() => {
+      this.completedSends += 1;
+      callback?.();
+    });
   }
   close() {}
   terminate() {}
@@ -73,9 +78,55 @@ test('the bulk IDENTIFY frame stamps the dialling node\'s boot incarnation',
         'the first frame is the bulk IDENTIFY');
       t.equal(identify.bootIncarnation, TEST_BOOT_INCARNATION,
         'the snapshot channel identifies the exact generation');
+      t.equal(sockets[0].completedSends, 1,
+        'dial returns only after physical IDENTIFY send completion');
     } finally {
       registry.closeAll();
     }
+  });
+
+test('a late dial cancellation cannot attach after IDENTIFY completion',
+  async (t) => {
+    let completeIdentify;
+    let terminated = false;
+    class DelayedIdentifySocket extends EventEmitter {
+      constructor() {
+        super();
+        queueMicrotask(() => this.emit('open'));
+      }
+      send(data, callback) {
+        completeIdentify = callback;
+      }
+      close() {}
+      terminate() {
+        terminated = true;
+      }
+    }
+    const registry = createBulkTransferChannelRegistry({
+      createWebSocket: () => new DelayedIdentifySocket(),
+    });
+    const cancellation = new AbortController();
+    const dialing = registry.dial({
+      nodeId: 'peer-1',
+      address: 'ws://127.0.0.1:1',
+      identify: {
+        nodeId: SELF_NODE_ID,
+        nodeAddress: SELF_ADDRESS,
+        bootIncarnation: TEST_BOOT_INCARNATION,
+      },
+      signal: cancellation.signal,
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    cancellation.abort();
+    completeIdentify();
+    await t.rejects(dialing, /cancelled/u,
+      'the post-callback continuation observes the late cancellation');
+    t.equal(terminated, true,
+      'the identified but cancelled socket is terminated');
+    t.equal(registry.hasConnection('peer-1'), false,
+      'the cancelled socket never becomes routable');
+    registry.closeAll();
   });
 
 test('a bulk dial without an issued incarnation is refused before any ' +

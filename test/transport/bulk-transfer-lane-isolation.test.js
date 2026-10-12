@@ -1,3 +1,6 @@
+import {EventEmitter} from 'node:events';
+import WebSocket, {WebSocketServer} from 'ws';
+
 import t from '../../src/test-helpers/tap.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -20,6 +23,7 @@ import {
   PressureGovernor,
 } from '../../src/control-plane/pressure-governor.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {createPortAllocator} from '../../src/test-helpers/port-allocator.js';
 
 // raft-snapshot-bulk-transfer (S3) transport lane-isolation guard: with the
 // bulk channel saturated (never-draining bulk sends, pending at cap) the
@@ -45,6 +49,11 @@ const BULK_RESOURCE_KEY = 'snapshot-transfer:chunk-serve';
 const CONTROL_PLANE_WRITE_KEY = 'control-plane:write';
 const BULK_PARTITION = 'bulk';
 const CONTROL_PLANE_PARTITION = 'control-plane';
+const EXPECTED_INPROC_SEND_ERROR_CODE = Object.freeze({
+  CLOSED: 'inproc_websocket_closed',
+  DELIVERY_FAILED: 'inproc_websocket_delivery_failed',
+});
+const ports = createPortAllocator(import.meta.url);
 
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -92,6 +101,52 @@ async function createDrainedBucket() {
   return bucket;
 }
 
+class CallbackControlledSocket extends EventEmitter {
+  constructor() {
+    super();
+    this.sent = [];
+    this.callbacks = [];
+    this.closed = false;
+  }
+
+  send(data, callback) {
+    this.sent.push(data);
+    this.callbacks.push(callback);
+  }
+
+  settleNext(error) {
+    this.callbacks.shift()(error);
+  }
+
+  close() {
+    if (this.closed) return;
+    this.closed = true;
+    queueMicrotask(() => this.emit(TRANSPORT_EVENT.CLOSE));
+  }
+}
+
+function createObservedAbortSignal() {
+  const listeners = new Set();
+  const signal = {
+    aborted: false,
+    addEventListener(event, listener) {
+      if (event === 'abort') listeners.add(listener);
+    },
+    removeEventListener(event, listener) {
+      if (event === 'abort') listeners.delete(listener);
+    },
+  };
+  return {
+    signal,
+    abort() {
+      signal.aborted = true;
+      for (const listener of [...listeners]) listener();
+      listeners.clear();
+    },
+    listenerCount: () => listeners.size,
+  };
+}
+
 t.test('bulk saturation leaves critical enqueue+dispatch and quarantine ' +
   'untouched, and the governor sees the bulk lane', async (t) => {
   initializeTestEnvironment();
@@ -106,6 +161,8 @@ t.test('bulk saturation leaves critical enqueue+dispatch and quarantine ' +
     outboundQueueCriticalReserve: 1,
   });
   await router.initialize();
+  t.equal(router.getStats().bulkChannel.retainedSendBytes, 0,
+    'the unattached bulk owner reports typed zero retained custody');
   const bucket = await createDrainedBucket();
   const registry = createBulkTransferChannelRegistry({
     nodeId: TEST_LOCAL_NODE_ID,
@@ -143,8 +200,11 @@ t.test('bulk saturation leaves critical enqueue+dispatch and quarantine ' +
       'bulk pending requests are visible in the router stats bridge');
     t.equal(stats.bulkChannel.saturatedPeerCount, 1,
       'the saturated bulk peer is visible');
-    t.ok(stats.bulkChannel.inFlightBytes > 0,
-      'the in-flight bulk chunk bytes are visible');
+    t.equal(stats.bulkChannel.inFlightBytes, 0,
+      'a token-waiting chunk is not mislabeled as a physical write');
+    t.equal(stats.bulkChannel.retainedSendBytes,
+      TEST_MAX_PENDING_SENDS * TEST_CHUNK_FRAME_BYTES,
+      'all token-waiting frame bytes remain visible as retained custody');
     t.equal(stats.bulkChannel.tokenDepth, 0,
       'the drained token bucket depth is visible');
 
@@ -341,5 +401,293 @@ t.test('a stale socket close cannot evict a live replacement connection',
         'the replacement\'s own close still removes it');
     } finally {
       registry.closeAll();
+    }
+  });
+
+t.test('accepted bulk frames retain bounded custody through callback unwind',
+  async (t) => {
+    const ws = new CallbackControlledSocket();
+    const registry = createBulkTransferChannelRegistry({maxPendingSends: 2});
+    const connection = registry.adoptIncomingSocket({
+      nodeId: TEST_PEER_NODE_ID,
+      ws,
+    });
+    const control = {kind: 'ACK', transferId: 'custody-1'};
+    const controlBytes = Buffer.byteLength(JSON.stringify(control));
+    const chunk = Buffer.alloc(7);
+    try {
+      const controlSend = connection.sendControl(control);
+      const chunkSend = connection.sendChunkFrame(chunk);
+      await Promise.resolve();
+      t.same(connection.getStats(), {
+        nodeId: TEST_PEER_NODE_ID,
+        open: true,
+        pendingSends: 2,
+        retainedSendBytes: controlBytes + chunk.length,
+        inFlightBytes: controlBytes,
+        maxPendingSends: 2,
+      }, 'both accepted frames remain charged while the first callback waits');
+      t.equal(ws.sent.length, 1, 'the physical writer stays single-flight');
+      const refused = await connection.sendControl({kind: 'COMPLETE'});
+      t.equal(refused.outcome, BULK_CHANNEL_SEND_OUTCOME.PENDING_LIMIT,
+        'a third frame is refused before it becomes accepted debt');
+
+      ws.settleNext();
+      t.equal(connection.getStats().retainedSendBytes,
+        controlBytes + chunk.length,
+        'callback entry alone does not release either retained frame');
+      t.equal((await controlSend).outcome, BULK_CHANNEL_SEND_OUTCOME.SENT);
+      await Promise.resolve();
+      t.equal(ws.sent.length, 2, 'the chunk starts after control completion');
+      ws.settleNext();
+      t.equal(connection.getStats().retainedSendBytes, chunk.length,
+        'the callback frame remains charged until its continuation runs');
+      t.equal((await chunkSend).outcome, BULK_CHANNEL_SEND_OUTCOME.SENT);
+      t.equal(connection.getStats().retainedSendBytes, 0,
+        'the last continuation returns all accepted frame custody');
+
+      const circular = {};
+      circular.self = circular;
+      await t.rejects(connection.sendControl(circular), TypeError,
+        'control serialization failure rejects before socket custody');
+      t.equal(connection.getStats().pendingSends, 0,
+        'serialization failure returns its reserved pending slot');
+
+      const queuedSocket = new CallbackControlledSocket();
+      const queuedConnection = registry.adoptIncomingSocket({
+        nodeId: 'queued-peer',
+        ws: queuedSocket,
+      });
+      const firstQueued = queuedConnection.sendControl({kind: 'FIRST'});
+      const secondQueued = queuedConnection.sendControl({kind: 'SECOND'});
+      await Promise.resolve();
+      queuedConnection.close();
+      queuedSocket.settleNext();
+      t.equal((await firstQueued).outcome, BULK_CHANNEL_SEND_OUTCOME.SENT,
+        'an already-written frame keeps its physical completion outcome');
+      t.equal((await secondQueued).outcome, BULK_CHANNEL_SEND_OUTCOME.CLOSED,
+        'a queued frame revalidates socket state before physical write');
+      t.equal(queuedSocket.sent.length, 1,
+        'the closed queued frame never enters socket custody');
+
+      const cancelledSocket = new CallbackControlledSocket();
+      const cancelledConnection = registry.adoptIncomingSocket({
+        nodeId: 'cancelled-peer',
+        ws: cancelledSocket,
+      });
+      const blockingControl = cancelledConnection.sendControl({kind: 'BLOCK'});
+      const queuedAbort = new AbortController();
+      const cancelledChunk = cancelledConnection.sendChunkFrame(
+        Buffer.alloc(7), {signal: queuedAbort.signal});
+      await Promise.resolve();
+      queuedAbort.abort();
+      cancelledSocket.settleNext();
+      await blockingControl;
+      t.equal((await cancelledChunk).outcome,
+        BULK_CHANNEL_SEND_OUTCOME.CANCELLED,
+        'a token-granted queued chunk revalidates cancellation before write');
+      t.equal(cancelledSocket.sent.length, 1,
+        'the cancelled queued chunk never enters socket custody');
+
+      const lateSocket = new CallbackControlledSocket();
+      const lateConnection = registry.adoptIncomingSocket({
+        nodeId: 'late-peer',
+        ws: lateSocket,
+      });
+      const lateSend = lateConnection.sendControl({kind: 'LATE'});
+      await Promise.resolve();
+      lateConnection.close();
+      await flushDeliveries();
+      t.equal(registry.hasConnection('late-peer'), false,
+        'the closed endpoint leaves active routing before callback settlement');
+      t.ok(registry.getStats().retainedSendBytes > 0,
+        'retired diagnostics keep custody before a late send callback');
+      lateSocket.settleNext();
+      t.equal(lateConnection.getStats().retainedSendBytes > 0, true,
+        'late callback entry remains charged until its continuation');
+      t.equal((await lateSend).outcome, BULK_CHANNEL_SEND_OUTCOME.SENT,
+        'native success remains distinct from the concurrent socket close');
+      t.equal(lateConnection.getStats().retainedSendBytes, 0,
+        'late callback unwind releases the final retained frame');
+
+      const failedSocket = new CallbackControlledSocket();
+      const failedConnection = registry.adoptIncomingSocket({
+        nodeId: 'failed-peer',
+        ws: failedSocket,
+      });
+      const failedSend = failedConnection.sendControl({kind: 'FAILED'});
+      await Promise.resolve();
+      failedSocket.settleNext(new Error('native write failed'));
+      t.ok(failedConnection.getStats().retainedSendBytes > 0,
+        'a failing callback keeps custody through its executing stack');
+      t.equal((await failedSend).outcome, BULK_CHANNEL_SEND_OUTCOME.CLOSED);
+      t.equal(failedConnection.getStats().retainedSendBytes, 0,
+        'the failed-write continuation returns its retained frame');
+      t.equal(failedConnection.isOpen(), false,
+        'a physical write failure closes the connection owner');
+      await flushDeliveries();
+      t.equal(registry.getStats().retainedSendBytes, 0,
+        'registry diagnostics return to zero after close and callback unwind');
+    } finally {
+      registry.closeAll();
+    }
+  });
+
+t.test('paced chunk cancellation does not block control or another peer',
+  async (t) => {
+    const bucket = await createDrainedBucket();
+    const registry = createBulkTransferChannelRegistry({
+      tokenBucket: bucket,
+      maxPendingSends: 2,
+    });
+    const blockedSocket = new CallbackControlledSocket();
+    const liveSocket = new CallbackControlledSocket();
+    const blocked = registry.adoptIncomingSocket({
+      nodeId: 'blocked-peer',
+      ws: blockedSocket,
+    });
+    const live = registry.adoptIncomingSocket({
+      nodeId: 'live-peer',
+      ws: liveSocket,
+    });
+    const abortController = new AbortController();
+    try {
+      const chunkSend = blocked.sendChunkFrame(Buffer.alloc(8), {
+        signal: abortController.signal,
+      });
+      await Promise.resolve();
+      const abortSend = blocked.sendControl({kind: 'ABORT'});
+      const peerSend = live.sendControl({kind: 'ACK'});
+      await Promise.resolve();
+      t.equal(blockedSocket.sent.length, 1,
+        'terminal control overtakes only the token-waiting chunk');
+      t.equal(liveSocket.sent.length, 1,
+        'the shared token bucket does not pace another peer control');
+      blockedSocket.settleNext();
+      liveSocket.settleNext();
+      t.equal((await abortSend).outcome, BULK_CHANNEL_SEND_OUTCOME.SENT);
+      t.equal((await peerSend).outcome, BULK_CHANNEL_SEND_OUTCOME.SENT);
+      abortController.abort();
+      t.equal((await chunkSend).outcome, BULK_CHANNEL_SEND_OUTCOME.CANCELLED,
+        'cancellation removes the paced frame without a socket write');
+      t.equal(bucket.pendingCount(), 0,
+        'normal and aborted grants leave no bucket listener/waiter roots');
+
+      const closeBlocked = blocked.sendChunkFrame(Buffer.alloc(8));
+      await Promise.resolve();
+      blocked.close();
+      await flushDeliveries();
+      t.equal((await closeBlocked).outcome, BULK_CHANNEL_SEND_OUTCOME.CLOSED,
+        'connection close releases its own paced wait with a closed outcome');
+      const afterClose = live.sendControl({kind: 'COMPLETE'});
+      await Promise.resolve();
+      liveSocket.settleNext();
+      t.equal((await afterClose).outcome, BULK_CHANNEL_SEND_OUTCOME.SENT,
+        'closing one connection does not dispose the shared peer bucket');
+
+      let now = 0;
+      const cleanupBucket = createByteRateTokenBucket({
+        bytesPerSecond: 1,
+        capacityBytes: 1,
+        now: () => now,
+      });
+      await cleanupBucket.acquire(1);
+      const firstSignal = createObservedAbortSignal();
+      const grantedSignal = createObservedAbortSignal();
+      const removed = cleanupBucket.acquire(1, {signal: firstSignal.signal});
+      const granted = cleanupBucket.acquire(1, {signal: grantedSignal.signal});
+      now = 1000;
+      firstSignal.abort();
+      t.equal((await removed).acquired, false,
+        'the aborted head waiter is removed from the bucket');
+      t.equal((await granted).acquired, true,
+        'the next waiter consumes the newly available byte');
+      t.equal(grantedSignal.listenerCount(), 0,
+        'a normal grant removes its abort-listener retention root');
+      cleanupBucket.dispose();
+    } finally {
+      registry.closeAll();
+    }
+  });
+
+t.test('in-process send settles once after delivery unwind and typed failures',
+  async (t) => {
+    const delivered = [];
+    const first = createInProcWebSocketPair();
+    let insideDelivery = false;
+    let callbackCount = 0;
+    first.b.on(TRANSPORT_EVENT.MESSAGE, (data) => {
+      insideDelivery = true;
+      delivered.push(data);
+      insideDelivery = false;
+    });
+    await new Promise((resolve, reject) => first.a.send('first', (error) => {
+      callbackCount += 1;
+      t.equal(insideDelivery, false,
+        'completion runs only after the peer listener stack unwinds');
+      if (error) return reject(error);
+      first.a.send('second', (secondError) => {
+        callbackCount += 1;
+        if (secondError) return reject(secondError);
+        resolve();
+      });
+    }));
+    t.same(delivered, ['first', 'second'],
+      'callback reentry queues the successor after the first delivery');
+    t.equal(callbackCount, 2, 'each accepted send settles exactly once');
+
+    const closing = createInProcWebSocketPair();
+    const closed = new Promise((resolve) => closing.a.send('late', resolve));
+    closing.b.close();
+    const closeError = await closed;
+    t.equal(closeError.code, EXPECTED_INPROC_SEND_ERROR_CODE.CLOSED,
+      'close before the queued delivery has a typed callback failure');
+
+    const throwing = createInProcWebSocketPair();
+    throwing.b.on(TRANSPORT_EVENT.MESSAGE, () => {
+      throw new Error('consumer failed');
+    });
+    const deliveryError = await new Promise((resolve) =>
+      throwing.a.send('throw', resolve));
+    t.equal(deliveryError.code,
+      EXPECTED_INPROC_SEND_ERROR_CODE.DELIVERY_FAILED,
+      'a consumer throw settles the sender with a typed delivery failure');
+  });
+
+t.test('real ws send custody ends at the installed socket write callback',
+  async (t) => {
+    const port = ports.getPort();
+    const server = new WebSocketServer({host: '127.0.0.1', port});
+    const registry = createBulkTransferChannelRegistry();
+    let client;
+    try {
+      await new Promise((resolve, reject) => {
+        server.once('listening', resolve);
+        server.once(TRANSPORT_EVENT.ERROR, reject);
+      });
+      const accepted = new Promise((resolve) =>
+        server.once('connection', (ws) => resolve(
+          registry.adoptIncomingSocket({nodeId: 'native-peer', ws}))));
+      client = new WebSocket(`ws://127.0.0.1:${port}`);
+      await new Promise((resolve, reject) => {
+        client.once(TRANSPORT_EVENT.OPEN, resolve);
+        client.once(TRANSPORT_EVENT.ERROR, reject);
+      });
+      const connection = await accepted;
+      const received = new Promise((resolve) =>
+        client.once(TRANSPORT_EVENT.MESSAGE, resolve));
+      const send = connection.sendControl({kind: 'NATIVE_CALLBACK'});
+      t.ok(connection.getStats().retainedSendBytes > 0,
+        'the encoded frame is charged before the real ws write starts');
+      t.equal((await send).outcome, BULK_CHANNEL_SEND_OUTCOME.SENT,
+        'the real ws socket write callback settles the send');
+      t.match((await received).toString(), /NATIVE_CALLBACK/u,
+        'peer delivery remains a separate observed protocol fact');
+      t.equal(connection.getStats().retainedSendBytes, 0,
+        'the callback continuation releases real ws frame custody');
+    } finally {
+      registry.closeAll();
+      client?.terminate();
+      await new Promise((resolve) => server.close(resolve));
     }
   });

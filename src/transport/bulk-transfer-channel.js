@@ -7,7 +7,7 @@
 // bulk write buffer; the primary router's queue-class/reserve machinery is
 // never touched, and bulk traffic deliberately does NOT stamp
 // nodeInboundActivityAt (lane isolation, not an oversight). The registry
-// feeds {pendingRequests, inFlightBytes, tokenDepth} into
+// feeds {pendingRequests, retainedSendBytes, inFlightBytes, tokenDepth} into
 // MessageRouter.getStats() as the additive `bulkChannel` section the pressure
 // governor's BULK partition reads (sensor advisory; the sender bucket is the
 // enforcement point).
@@ -60,6 +60,43 @@ const SEND_RESULT = Object.freeze({
   [BULK_CHANNEL_SEND_OUTCOME.CLOSED]:
     frozenSendResult(BULK_CHANNEL_SEND_OUTCOME.CLOSED),
 });
+
+function sendWebSocketFrame(ws, frame, options = {}) {
+  return new Promise((resolve) => {
+    let settled = false;
+    let observedError = null;
+    const signal = options.signal;
+    const observeError = (error) => {
+      observedError ||= error;
+    };
+    const abortSend = () => {
+      try {
+        ws.terminate();
+      } catch (error) {
+        observedError ||= error;
+      }
+    };
+    const settle = (error) => {
+      if (settled) return;
+      settled = true;
+      ws.removeListener(TRANSPORT_EVENT.ERROR, observeError);
+      signal?.removeEventListener(SIGNAL_ABORT_EVENT, abortSend);
+      resolve(error || observedError);
+    };
+    ws.on(TRANSPORT_EVENT.ERROR, observeError);
+    signal?.addEventListener(SIGNAL_ABORT_EVENT, abortSend, {once: true});
+    if (signal?.aborted) {
+      abortSend();
+      settle(new Error(BULK_CHANNEL_SEND_OUTCOME.CANCELLED));
+      return;
+    }
+    try {
+      ws.send(frame, settle);
+    } catch (error) {
+      settle(error);
+    }
+  });
+}
 
 /**
  * Sender-side byte-rate token bucket (the enforcement point: the serving node
@@ -116,7 +153,13 @@ function createByteRateTokenBucket(options = {}) {
     while (waiters.length > 0 && waiters[0].bytes <= availableBytes) {
       const waiter = waiters.shift();
       availableBytes -= waiter.bytes;
+      waiter.signal?.removeEventListener(
+        SIGNAL_ABORT_EVENT, waiter.abortListener);
       waiter.resolve(Object.freeze({acquired: true}));
+    }
+    if (waiters.length === 0 && drainTimer) {
+      clearTimeout(drainTimer);
+      drainTimer = null;
     }
     scheduleDrain();
   }
@@ -136,16 +179,19 @@ function createByteRateTokenBucket(options = {}) {
         return Promise.resolve(Object.freeze({acquired: true}));
       }
       return new Promise((resolve) => {
-        const waiter = {bytes: want, resolve};
+        const waiter = {bytes: want, resolve, signal, abortListener: null};
         waiters.push(waiter);
         if (signal) {
-          signal.addEventListener(SIGNAL_ABORT_EVENT, () => {
+          waiter.abortListener = () => {
             const index = waiters.indexOf(waiter);
             if (index >= 0) {
               waiters.splice(index, 1);
               resolve(Object.freeze({acquired: false}));
+              drainWaiters();
             }
-          }, {once: true});
+          };
+          signal.addEventListener(
+            SIGNAL_ABORT_EVENT, waiter.abortListener, {once: true});
         }
         scheduleDrain();
       });
@@ -163,7 +209,10 @@ function createByteRateTokenBucket(options = {}) {
         drainTimer = null;
       }
       while (waiters.length > 0) {
-        waiters.shift().resolve(Object.freeze({acquired: false}));
+        const waiter = waiters.shift();
+        waiter.signal?.removeEventListener(
+          SIGNAL_ABORT_EVENT, waiter.abortListener);
+        waiter.resolve(Object.freeze({acquired: false}));
       }
     },
   });
@@ -173,10 +222,19 @@ function createByteRateTokenBucket(options = {}) {
 // in-flight chunk (sends serialize through a chain), bounded pending sends,
 // token-bucket pacing, and AbortSignal cancellation.
 function createBulkTransferConnection(context) {
-  const {nodeId, ws, tokenBucket, maxPendingSends, logger, onClosed} = context;
+  const {
+    nodeId,
+    ws,
+    tokenBucket,
+    maxPendingSends,
+    logger,
+    onSocketClosed,
+    onRetired,
+  } = context;
   const state = {
     open: true,
     pendingSends: 0,
+    retainedSendBytes: 0,
     inFlightBytes: 0,
   };
   const messageListeners = [];
@@ -185,7 +243,9 @@ function createBulkTransferConnection(context) {
   // forever. Listeners fire exactly once, after the registry eviction.
   const closeListeners = [];
   let closeNotified = false;
+  let closeObserved = false;
   let sendChain = Promise.resolve();
+  const connectionAbortController = new AbortController();
   // Self-reference handed to onClosed so the registry can guard against a
   // STALE socket's async close event evicting a live replacement connection
   // for the same peer (verifier MF-1).
@@ -201,6 +261,12 @@ function createBulkTransferConnection(context) {
     }
   };
 
+  const retireIfDrained = () => {
+    if (closeObserved && state.pendingSends === 0) {
+      onRetired(nodeId, connectionSelf);
+    }
+  };
+
   ws.on(TRANSPORT_EVENT.MESSAGE, (data, isBinary) => {
     for (const listener of [...messageListeners]) {
       listener(data, isBinary);
@@ -208,8 +274,11 @@ function createBulkTransferConnection(context) {
   });
   ws.on(TRANSPORT_EVENT.CLOSE, () => {
     state.open = false;
-    onClosed(nodeId, connectionSelf);
+    closeObserved = true;
+    connectionAbortController.abort();
+    onSocketClosed(nodeId, connectionSelf);
     notifyClosed();
+    retireIfDrained();
   });
   ws.on(TRANSPORT_EVENT.ERROR, (error) => {
     logger.warn(TRANSPORT_EVENT.ERROR, {
@@ -217,6 +286,60 @@ function createBulkTransferConnection(context) {
       error: error?.message,
     });
   });
+
+  const closeAfterSendFailure = (error) => {
+    logger.warn(TRANSPORT_EVENT.ERROR, {nodeId, error: error?.message});
+    state.open = false;
+    connectionAbortController.abort();
+    try {
+      ws.close();
+    } catch (closeError) {
+      logger.warn(TRANSPORT_EVENT.CLOSE, {
+        nodeId,
+        error: closeError?.message,
+      });
+    }
+  };
+
+  const writeRetainedFrame = (frame, frameBytes, writeOptions = {}) => {
+    const run = sendChain.then(async () => {
+      if (writeOptions.signal?.aborted) {
+        return SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.CANCELLED];
+      }
+      if (!state.open) {
+        return SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.CLOSED];
+      }
+      state.inFlightBytes = frameBytes;
+      try {
+        const error = await sendWebSocketFrame(ws, frame);
+        if (error) {
+          closeAfterSendFailure(error);
+          return SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.CLOSED];
+        }
+        return SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.SENT];
+      } finally {
+        state.inFlightBytes = 0;
+      }
+    });
+    sendChain = run.then(() => {}, () => {});
+    return run;
+  };
+
+  const retainSend = (frameBytes) => {
+    if (!state.open) return BULK_CHANNEL_SEND_OUTCOME.CLOSED;
+    if (state.pendingSends >= maxPendingSends) {
+      return BULK_CHANNEL_SEND_OUTCOME.PENDING_LIMIT;
+    }
+    state.pendingSends += 1;
+    state.retainedSendBytes += frameBytes;
+    return null;
+  };
+
+  const releaseSend = (frameBytes) => {
+    state.retainedSendBytes -= frameBytes;
+    state.pendingSends -= 1;
+    retireIfDrained();
+  };
 
   const connectionApi = Object.freeze({
     nodeId,
@@ -241,53 +364,49 @@ function createBulkTransferConnection(context) {
       }
       closeListeners.push(listener);
     },
-    sendControl(message) {
-      if (!state.open) {
-        return SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.CLOSED];
+    async sendControl(message) {
+      const refusal = retainSend(0);
+      if (refusal) return SEND_RESULT[refusal];
+      let frameBytes = 0;
+      try {
+        const frame = JSON.stringify(message);
+        frameBytes = Buffer.byteLength(frame);
+        state.retainedSendBytes += frameBytes;
+        return await writeRetainedFrame(frame, frameBytes);
+      } finally {
+        releaseSend(frameBytes);
       }
-      ws.send(JSON.stringify(message));
-      return SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.SENT];
     },
     async sendChunkFrame(frame, sendOptions = {}) {
       const signal = sendOptions.signal;
-      if (!state.open) {
-        return SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.CLOSED];
-      }
-      if (state.pendingSends >= maxPendingSends) {
-        return SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.PENDING_LIMIT];
-      }
-      state.pendingSends += 1;
-      const run = sendChain.then(async () => {
+      const frameBytes = frame.length;
+      const refusal = retainSend(frameBytes);
+      if (refusal) return SEND_RESULT[refusal];
+      try {
         if (signal?.aborted) {
           return SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.CANCELLED];
         }
-        if (!state.open) {
+        const acquireSignal = signal ?
+          globalThis.AbortSignal.any(
+            [signal, connectionAbortController.signal]) :
+          connectionAbortController.signal;
+        const grant = await tokenBucket.acquire(frameBytes, {
+          signal: acquireSignal,
+        });
+        if (!state.open || connectionAbortController.signal.aborted) {
           return SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.CLOSED];
         }
-        state.inFlightBytes = frame.length;
-        try {
-          const grant = await tokenBucket.acquire(frame.length, {signal});
-          if (!grant.acquired || signal?.aborted) {
-            return SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.CANCELLED];
-          }
-          if (!state.open) {
-            return SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.CLOSED];
-          }
-          ws.send(frame);
-          return SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.SENT];
-        } finally {
-          state.inFlightBytes = 0;
+        if (!grant.acquired || signal?.aborted) {
+          return SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.CANCELLED];
         }
-      });
-      sendChain = run.then(() => {}, () => {});
-      try {
-        return await run;
+        return await writeRetainedFrame(frame, frameBytes, {signal});
       } finally {
-        state.pendingSends -= 1;
+        releaseSend(frameBytes);
       }
     },
     close() {
       state.open = false;
+      connectionAbortController.abort();
       try {
         ws.close();
       } catch (error) {
@@ -299,6 +418,7 @@ function createBulkTransferConnection(context) {
         nodeId,
         open: state.open,
         pendingSends: state.pendingSends,
+        retainedSendBytes: state.retainedSendBytes,
         inFlightBytes: state.inFlightBytes,
         maxPendingSends,
       });
@@ -339,25 +459,32 @@ function createBulkTransferChannelRegistry(options = {}) {
       options.createWebSocket :
       (address, wsOptions) => new WebSocket(address, wsOptions);
   const connections = new Map();
+  const retiredConnections = new Set();
   // Adoption listeners (S6): the follower-side snapshot offer router arms
   // its first-frame peek here — INBOUND adopted sockets only, never dials
   // (the dialing side is the transfer initiator, not an offer target).
   const adoptListeners = [];
 
-  const dropConnection = (nodeId, closedConnection) => {
+  const retireConnection = (nodeId, closedConnection) => {
     // A STALE socket's async close event must not evict a live replacement
     // connection adopted for the same peer (verifier MF-1): delete only when
     // the mapped connection IS the one that closed.
     if (connections.get(nodeId) === closedConnection) {
       connections.delete(nodeId);
     }
+    retiredConnections.add(closedConnection);
+  };
+
+  const dropRetiredConnection = (nodeId, retiredConnection) => {
+    retiredConnections.delete(retiredConnection);
   };
 
   const attach = (nodeId, ws) => {
     const existing = connections.get(nodeId);
     if (existing) {
-      existing.close();
       connections.delete(nodeId);
+      retiredConnections.add(existing);
+      existing.close();
     }
     const connection = createBulkTransferConnection({
       nodeId,
@@ -365,7 +492,8 @@ function createBulkTransferChannelRegistry(options = {}) {
       tokenBucket,
       maxPendingSends,
       logger,
-      onClosed: dropConnection,
+      onSocketClosed: retireConnection,
+      onRetired: dropRetiredConnection,
     });
     connections.set(nodeId, connection);
     return connection;
@@ -397,21 +525,35 @@ function createBulkTransferChannelRegistry(options = {}) {
         BULK_TRANSFER_CHANNEL_DEFAULT.MAX_PAYLOAD_BYTES;
       const ws = createWebSocket(address, {maxPayload});
       await new Promise((resolve, reject) => {
-        const failDial = (error) => reject(error);
-        ws.once(TRANSPORT_EVENT.OPEN, () => {
-          ws.removeListener(TRANSPORT_EVENT.ERROR, failDial);
+        const handlers = {};
+        const cleanup = () => {
+          ws.removeListener(TRANSPORT_EVENT.OPEN, handlers.open);
+          ws.removeListener(TRANSPORT_EVENT.ERROR, handlers.fail);
+          signal?.removeEventListener(SIGNAL_ABORT_EVENT, handlers.abort);
+        };
+        handlers.open = () => {
+          cleanup();
           resolve();
-        });
-        ws.once(TRANSPORT_EVENT.ERROR, failDial);
-        signal?.addEventListener(SIGNAL_ABORT_EVENT, () => {
+        };
+        handlers.fail = (error) => {
+          cleanup();
+          reject(error);
+        };
+        handlers.abort = () => {
+          cleanup();
           ws.terminate();
           reject(new Error(BULK_CHANNEL_SEND_OUTCOME.CANCELLED));
-        }, {once: true});
+        };
+        ws.once(TRANSPORT_EVENT.OPEN, handlers.open);
+        ws.once(TRANSPORT_EVENT.ERROR, handlers.fail);
+        signal?.addEventListener(
+          SIGNAL_ABORT_EVENT, handlers.abort, {once: true});
+        if (signal?.aborted) handlers.abort();
       });
       // Pre-claim frame discipline (load-bearing): the IDENTIFY frame with
       // the bulk channel marker is the FIRST and ONLY frame on this socket
       // until the receiver's claim completes.
-      ws.send(JSON.stringify({
+      const identifyError = await sendWebSocketFrame(ws, JSON.stringify({
         type: ROUTER_MESSAGE_TYPE.IDENTIFY,
         nodeId: identify.nodeId,
         nodeAddress: identify.nodeAddress,
@@ -419,7 +561,12 @@ function createBulkTransferChannelRegistry(options = {}) {
         bootIncarnation,
         channel: ROUTER_IDENTIFY_CHANNEL.BULK,
         timestamp: now(),
-      }));
+      }), {signal});
+      if (identifyError || signal?.aborted) {
+        ws.terminate();
+        throw identifyError ||
+          new Error(BULK_CHANNEL_SEND_OUTCOME.CANCELLED);
+      }
       return attach(nodeId, ws);
     },
     hasConnection(nodeId) {
@@ -430,11 +577,17 @@ function createBulkTransferChannelRegistry(options = {}) {
     },
     getStats() {
       let pendingRequests = 0;
+      let retainedSendBytes = 0;
       let inFlightBytes = 0;
       let saturatedPeerCount = 0;
-      for (const connection of connections.values()) {
+      const ownedConnections = new Set([
+        ...connections.values(),
+        ...retiredConnections,
+      ]);
+      for (const connection of ownedConnections) {
         const stats = connection.getStats();
         pendingRequests += stats.pendingSends;
+        retainedSendBytes += stats.retainedSendBytes;
         inFlightBytes += stats.inFlightBytes;
         if (stats.pendingSends >= stats.maxPendingSends) {
           saturatedPeerCount += 1;
@@ -442,14 +595,17 @@ function createBulkTransferChannelRegistry(options = {}) {
       }
       return Object.freeze({
         pendingRequests,
+        retainedSendBytes,
         inFlightBytes,
         tokenDepth: tokenBucket.depthBytes(),
-        maxPendingRequests: maxPendingSends * Math.max(1, connections.size),
+        maxPendingRequests:
+          maxPendingSends * Math.max(1, ownedConnections.size),
         saturatedPeerCount,
       });
     },
     closeAll() {
       for (const connection of [...connections.values()]) {
+        retiredConnections.add(connection);
         connection.close();
       }
       connections.clear();

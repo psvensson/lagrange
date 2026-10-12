@@ -5,6 +5,9 @@ import {
   handleNodeJoinedCDC,
   deriveWsAddressFromNodeAddress,
 } from './cdc-integration-service-node-join.js';
+import {wakeAllCdcCoverageReconciles} from
+  './cdc-coverage-reconcile-owner.js';
+import {TRANSPORT_EVENT} from '../constants/transport.js';
 
 const {
   CDC_ERROR_MSG,
@@ -12,6 +15,27 @@ const {
 } = CDC_INTEGRATION_SERVICE_SHARED;
 
 const CDC_INTEGRATION_SERVICE_CDC_EVENT_DELEGATES_CONSTRUCTOR = 'constructor';
+const CDC_COVERAGE_ROUTE_RELEASE_EVENTS = Object.freeze([
+  TRANSPORT_EVENT.CONNECTION_ESTABLISHED,
+  TRANSPORT_EVENT.NODE_CONNECTED,
+  TRANSPORT_EVENT.NODE_IDENTIFIED,
+]);
+
+function replaceCdcCoverageRouteWake(service, messageRouter) {
+  service.cdcCoverageRouteWakeCleanup?.();
+  service.cdcCoverageRouteWakeCleanup = null;
+  if (typeof messageRouter?.on !== 'function' ||
+      typeof messageRouter?.off !== 'function') return;
+  const wake = () => wakeAllCdcCoverageReconciles(service);
+  for (const eventName of CDC_COVERAGE_ROUTE_RELEASE_EVENTS) {
+    messageRouter.on(eventName, wake);
+  }
+  service.cdcCoverageRouteWakeCleanup = () => {
+    for (const eventName of CDC_COVERAGE_ROUTE_RELEASE_EVENTS) {
+      messageRouter.off(eventName, wake);
+    }
+  };
+}
 
 /**
  * Subsystem-reference setters and CDC event-dispatch methods for the CDC
@@ -20,6 +44,10 @@ const CDC_INTEGRATION_SERVICE_CDC_EVENT_DELEGATES_CONSTRUCTOR = 'constructor';
  * join helper.
  */
 class CDCIntegrationServiceCdcEventDelegates {
+  refreshCdcCoverageRouteWake() {
+    replaceCdcCoverageRouteWake(this, this.messageRouter);
+  }
+
   /**
    * Set the epoch manager reference for CDC epoch change handling.
    * @param {AssignmentEpochManager} epochManager - The epoch manager instance.
@@ -96,6 +124,8 @@ class CDCIntegrationServiceCdcEventDelegates {
       throw new Error(CDC_ERROR_MSG.MESSAGE_ROUTER_REQUIRED);
     }
     this.messageRouter = messageRouter;
+    this.refreshCdcCoverageRouteWake();
+    wakeAllCdcCoverageReconciles(this);
     this.logger.debug(CDC_LOG_MSG.MESSAGE_ROUTER_SET, {
       nodeId: this.nodeId,
     });

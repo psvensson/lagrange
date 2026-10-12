@@ -1,3 +1,6 @@
+import {copyCdcEventMetadata} from '../cdc/cdc-event-envelope.js';
+import {hasDurableCdcEvents} from '../cdc/cdc-delivery-outcome.js';
+import {applyDurableCdcBatch} from './message-group-cdc-commit-owner.js';
 import {MESSAGE_GROUP_COMMAND_TYPE} from './constants.js';
 import {
   assertMessageGroupCommandAdmitted,
@@ -179,6 +182,11 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
         null;
       const useCanonicalLocalStrictIngress =
         strictIngressDecision?.localIngress === true;
+      if (hasDurableCdcEvents(normalizedEvents)) {
+        return applyDurableCdcBatch(this, normalizedEvents, {
+          strictIngressDecision, skipSubscriptionCheck,
+        });
+      }
       const isSingleReplicaGroup =
         Array.isArray(this.replicaIds) && this.replicaIds.length <= 1;
       const requiresRaftReplication =
@@ -206,6 +214,7 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
               tableName: event.tableName,
               operation: event.operation,
               data: event.data,
+              ...copyCdcEventMetadata(event),
               timestamp: event.timestamp,
               causeId: event.causeId,
             },
@@ -224,6 +233,7 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
               tableName: normalizedEvents[0].tableName,
               operation: normalizedEvents[0].operation,
               data: normalizedEvents[0].data,
+              ...copyCdcEventMetadata(normalizedEvents[0]),
               timestamp: normalizedEvents[0].timestamp,
               causeId: normalizedEvents[0].causeId,
               replayOnly: normalizedEvents[0].replayOnly === true,
@@ -278,6 +288,7 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
               tableName: normalizedEvents[0].tableName,
               operation: normalizedEvents[0].operation,
               data: normalizedEvents[0].data,
+              ...copyCdcEventMetadata(normalizedEvents[0]),
               timestamp: normalizedEvents[0].timestamp,
               causeId: normalizedEvents[0].causeId,
               replayOnly: normalizedEvents[0].replayOnly === true,
@@ -300,7 +311,7 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
      * @return {Promise<void>}
      * @private
      */
-    async proposeCDCCommand(cdcCommand) {
+    async proposeCDCCommand(cdcCommand, options = {}) {
       // A command the committed-command owner refuses is never proposed,
       // forwarded or retried.
       assertMessageGroupCommandAdmitted(cdcCommand);
@@ -313,7 +324,8 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
         configuredRetryBudget,
       );
       try {
-        await routeMessageGroupCommand(this, cdcCommand, {
+        const routed = await routeMessageGroupCommand(this, cdcCommand, {
+          shouldContinue: options.shouldContinue,
           maxAttempts: configuredRetryBudget,
           proposeTimeoutMs,
           forwardToLeader: (command, routeContext) =>
@@ -336,6 +348,7 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
             );
           },
         });
+        return routed.answer;
       } catch (error) {
         this.logger.error(
           MESSAGE_GROUP_SERVICE_LITERAL.RAFT_CDC_COMMAND_FAILED,
@@ -374,20 +387,20 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
       const relayDepth =
         Number.isInteger(attempt) && attempt >= 1 ? attempt : 1;
       if (command?.type === MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH) {
-        await this.forwardCDCBatchToLeader(
+        return this.forwardCDCBatchToLeader(
           Array.isArray(command?.events) ? command.events : [],
           {
             relayDepth,
             replayOnly: command?.replayOnly === true,
           },
         );
-        return;
       }
-      await this.forwardCDCEventToLeader(
+      return this.forwardCDCEventToLeader(
         command.tableName,
         command.operation,
         command.data,
         {
+          ...copyCdcEventMetadata(command),
           timestamp: command.timestamp,
           causeId: command.causeId,
           replayOnly: command.replayOnly === true,
