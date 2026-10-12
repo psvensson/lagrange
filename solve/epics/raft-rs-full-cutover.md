@@ -14,6 +14,7 @@ quests:
   - message-group-fresh-identity-membership
   - replicated-transaction-decision-and-apply
   - transaction-topology-admission-barrier
+  - snapshot-lifecycle-staging-boundary
 authorizes:
   - architecture
   - docs
