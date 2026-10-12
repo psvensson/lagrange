@@ -1,12 +1,24 @@
 # Independent design review, round 1: participant release model reduction (2026-10-12)
 
 Subject: `solve/quests/replicated-transaction-decision-and-apply/design-participant-release-reduction-2026-10-12.md`
-on worktree `/mnt/data/peter/projects/.worktrees/activation-reduction-20261012` (HEAD f15da93b6 = 14fac7d6e + two doc/log
-commits; `git diff --stat 14fac7d6 HEAD -- src test` is empty, so every `file:line` below is the held source).
-Read-only. No cluster run. Parallel artifacts `activation-trace-14fac7d6.md` and `startup-admission-census.md` were
-ABSENT when this review was written (the scratchpad holds only their briefs, an instrumentation diff and one raw
-oracle log, `oracle-run-1.log`, from the trace agent's first run). Every claim the design marks (T) therefore stays
-unconfirmed by a live trace; where the retained `diagnostic.json` or the source alone settles a (T), I say so.
+on worktree `/mnt/data/peter/projects/.worktrees/activation-reduction-20261012` (HEAD 72f329a30 at the end of this
+review = 14fac7d6e + six doc/log/evidence commits; `git diff --stat 14fac7d6 HEAD -- src test` is empty and the design
+note is unchanged since 009419129, so every `file:line` below is the held source and the note as committed).
+Read-only. No cluster run.
+
+Parallel artifacts: `startup-admission-census.md` arrived while this review was being written (archived on the
+branch at `solve/quests/replicated-transaction-decision-and-apply/evidence/activation-reduction-2026-10-12/startup-admission-census.md`,
+commit abef00ee8); its sections A.2, C.2, D.2, E.1, E.3, F and G are consumed below and marked [census]. The live
+trace `activation-trace-14fac7d6.md` was still ABSENT (the scratchpad holds its brief, the instrumentation diff and one
+raw run log `oracle-run-1.log`). Every claim the design marks (T) therefore stays unconfirmed by a live trace; where
+`diagnostic.json` or the source alone settles a (T), I say so.
+
+The predecessor design the note cites by bare filename (line 11) is not part of 14fac7d6; it was read at
+`/mnt/data/peter/projects/.worktrees/rs-raft-startup-activation-20261011/solve/quests/replicated-transaction-decision-and-apply/design-participant-release-activation-authority-2026-10-11.md`
+(4193 lines) and is now retained on the branch as
+`evidence/activation-reduction-2026-10-12/predecessor-design-participant-release-activation-authority-2026-10-11-d00c8f3e9.md`
+(commit 1e3374fce, sha256 `9c716e2603f6a20d...`, byte-identical to the lane copy). The note's citation predates
+that commit and still names a file the branch does not carry under that name (L7).
 
 ## Verdict: REVISE
 
@@ -23,7 +35,9 @@ admission already OPEN) and has no remote wake, leaving `control_release_pending
 change replaces one 30 s invocation deadline by `ceil(N/4)` waves of 30 s attempts without saying what bounds the
 seed, which is either a disguised raise or a no-op. The design also silently drops three of round ten's six
 required witnesses (the owner's "submission, transport ack and a runtime turn do not establish commitment" proofs)
-and 10 of the 14 accepted-input clauses it supersedes are not named as superseded.
+and 10 of the 14 accepted-input clauses it supersedes are not named as superseded. The startup census, read after the
+first draft of this review, strengthens (2) and (3) rather than relieving them: the authorization id is minted per seed
+invocation, and release authority tokens do not cross nodes.
 
 ## Evidence base
 
@@ -44,6 +58,7 @@ plus `partition-participant-transaction-cutover-constants.js`, `partition-servic
 | F3 attempt changes what it proves | PARTLY | `participant-cutover.js:590`; `transaction-pause.js:38-41` (`raiseParticipantCutoverPause` returns the existing CLOSED admission unchanged; `newPause` only when OPEN) | "every retry is a new cycle" holds only for a service OPEN at attempt start (the control re-cycles, F7). A CLOSED dependent's retry rebuilds byte-identical RESERVE/PAUSE and replays (`release-request.js:69-78,106-114`). F3 and F7 are one defect (re-pausing an OPEN partition), not two. Citation `release-local-current.js:102-112` is wrong (file is 57 lines; the obligation move is `:22-32`). |
 | F4 two paths | CORRECT, understated | `participant-cutover.js:265-275` (observe only when a control leader is LOCAL), `:259-260,273` (no local control leader: `requestParticipantRelease` to the remote node, i.e. a full remote control cutover with NO observe at all) | The design should state that any dependent whose node does not host the control leader always re-runs the control cutover. |
 | F5 drain vs catch-up | CORRECT | `release-facts.js:65-70`; `diagnostic.json.firstRefusal` (followers applied=commit=2, last=3, all work counters zero) | - |
+| F5 (addendum) | CONFIRMED by census F | `proposals`/`pendingOutcomes` are transiently non-zero "on the leader after any append until quorum commit and apply; on a learner until caught up"; the leader's PAUSE is settled before DRAIN is evaluated (`release-request.js:84-88`) | Consistent with `diagnostic.json.firstRefusal` (leader 3/3/3, followers 2/2/3). |
 | F6 one budget | CORRECT | `bootstrap-service-seed-workflow.js:270-313` (serial loop, one `deadlineAtMs`), `seed-startup-session-store.js:199` (`deadlineAtMs = startedAt + timeoutMs`), `:414` (`timeoutMs: leadershipWaitTimeoutMs`), `config-definitions.js:61` (30000). `oracle-run-1.log` line 7: `servicesCreated:138` = 46 partitions x 3 | - |
 | F7 no idempotent observation | CORRECT, uncited surface | `runCutoverAttempt` pauses first (`:590`) so an OPEN partition gets `wasClosed=false` and never reaches `continueDurableRelease` | `continueDurableRelease` (`:441-530`) IS an existing partial observe path for the CLOSED-with-record case (`:596-600`, `:608-610`). Section 3 does not cite it; Observe must replace it, not sit beside it (R11). |
 
@@ -151,6 +166,16 @@ means only that it authorizes a supersession, not a reopen), or (b) split the re
 (the five incarnation fields), reopen only after the incarnation observations are re-established by a committed
 RESUME. (b) is what 18:32 literally asks for; the design's fact 3 conflates both.
 
+[census D.2] A second, independent restart blocker: the FRESH_SEED authorization id hashes
+`[authorityId, invocationId, bootIncarnation, deadlineAtMs, targetBuildDigest]` (`authorization-owner.js:34-38`) and
+every seed boot writes a new `startupInvocation` with a fresh `invocationId` and deadline
+(`seed-startup-session-store.js:198-239`), so `H(root, releaseId)` differs per boot; the recovery driver's root is
+`existing:<releaseId>` (`participant-cutover.js:448-450`), which never equals a FRESH_SEED-rooted record either. Today
+that is why `continueDurableRelease` returns null on every seed restart and the full cycle re-runs for every partition
+(census D.2); under the design, Observe's "the same authorization id/revision" can never hold for a restarted seed
+even if the incarnation fields were set aside. The design keeps `authorizationId = H(root, releaseId)` (section 2
+fact 4) and compares it in Observe: the restart reopen is doubly unreachable.
+
 The wiped-and-recreated variant of W-D is sound at the dependent (its own record names a generation the new
 incarnation cannot have). The foreign-record case at the control is M6 below.
 
@@ -163,7 +188,11 @@ the write kernel for every committed write ("one handed to consensus may still c
 `catch_up_pending` means `reopenCohort` -> `reopenReplica` (`participant-release.js:98-119`) can `service.shutdown()`
 with client writes proposed before the PAUSE still in flight (the parked writer is answered
 `partition_write_service_shutdown`, quest log 2026-10-11 08:09). That drops an acknowledged obligation (R12) and
-breaks L6's "no old committed obligation is discarded". There is no per-origin accounting of these counters; the
+breaks L6's "no old committed obligation is discarded". [census A.2, F] The counters are not even "the protocol's own" on a fresh seed: CDC_DELIVERED
+(`CDC_DELIVERY_OWNER`), COORDINATOR_SETTLEMENT (`COORDINATOR_OWNER`), participant PREPARE/DECISION and
+GENERATION_ORIGIN replays (`TRANSACTION_OWNER`) all bypass the pause and are proposed while CLOSED
+(`partition-committed-command-admission.js:66-72`; census A.2 bypass list; census F "CDC_DELIVERED (E.3a)" in
+`proposals`), and the seed's CDC subscribers attach before the release loop (`seed-workflow.js:340`). There is no per-origin accounting of these counters; the
 design cites none (template section 1: a surface it must create). Close: keep `proposals === 0 && pendingOutcomes ===
 0` in the pre-reopen drain, or add an owner-level count of release-owner proposals and subtract only those.
 
@@ -178,7 +207,12 @@ fresh create the control's FIRST release cannot come from recovery at all. `enqu
 be hosted locally (`:49`). There is no remote wake surface in the tree. Today the dependent-run nested cutover is the
 only carrier of the seed/operator authority to the control (`participant-cutover.js:270-275`,
 `participant-release-authorization-owner.js:60-67` `authorizeControlFrom`); the design deletes it and names no
-replacement. Result: `control_release_pending` with `retryAfterMs` and no driver, a typed livelock until the
+replacement. [census C.2, G.5] The authority cannot be forwarded either: a release authorization token is a process-local
+WeakMap key (`authorization-owner.js:17-24`) that does not travel; on another node `reference(token)` is null and the
+root collapses to `existing:<releaseId>` (`participant-cutover.js:342-343,448-450,624-625`), and a remote leader whose
+origin is null answers `OPERATOR_REQUIRED` (`:577-584`). So "a token-bearing request routed to the control leader's
+node" is not available as a closure without a transferable (durable or signed) authority, which the design does not
+define. Result: `control_release_pending` with `retryAfterMs` and no driver, a typed livelock until the
 dependent's deadline. The seed order saves the seed's happy path only. Close: name the owner that performs the
 control's own release when a dependent finds it absent (a token-bearing request routed to the control leader's node
 through the existing RELEASE route, or an explicit remote recovery wake), and give `reconcile` a typed path for
@@ -195,6 +229,19 @@ non-terminal cycle, the old leader's FINALIZE goes STALE, the old leader's retry
 live. Close: bind the dependent attempt `(term, leaderReplicaId)` into the cycle row and refuse a RESERVE/RETIRE whose
 dependent term is lower than the row's; or require the control to re-INSPECT the dependent leader before ordering a
 supersession.
+
+MEDIUM M13. **Two drivers with two roots on one partition.** [census D.2, G.6] The seed loop (root =
+FRESH_SEED token, retry 100 ms) and the recovery loop (root = `existing:<releaseId>`, armed by
+`subscribeServiceChanges`/`consensusEvents` as soon as the handler registers the partitions, `release-recovery.js:124-134`,
+one 30 s attempt per wake, 1 s re-enqueue) derive different `authorizationId`s for the same dependent. Today RUNS
+refuses the second as `different_release_request_in_flight` (`participant-cutover.js:780-783`) and the single slot
+blocks a second RESERVE. Under per-dependent supersession "from live facts", whichever driver finds the other's
+non-terminal cycle with a different authorization id will order `RETIRE(dependent, gen)` and reserve gen+1, and the
+other will do the same on its next wake: the same flip-flop as M5 but between the seed and the recovery owner on one
+node. F6 makes it worse by routing seed dependents "through the recovery owner's existing bound" without saying which
+root they carry. Close: one root per partition per boot (the recovery owner consumes the seed's durable
+`participantReleaseCommand` record rather than minting `existing:`), or the cycle row binds the root and a RESERVE with
+a different root for a non-terminal cycle is `HELD`, never a supersession.
 
 MEDIUM M4. **PAUSE identity is leader/term-bound, and PAUSE apply deletes fact 3.** `buildParticipantAdmissionPauseCommand`
 hashes `leaderReplicaId, leaderTerm` (`release-command.js:155-166`); `applyParticipantAdmissionPause` bumps
@@ -249,6 +296,11 @@ dependent authorization, which the cycle table supersedes.
 - MEDIUM M3 (above): INSPECT-returns-cycle-row, `continueDurableRelease`, `retainedAuthorizationMatches` uncited.
 - MEDIUM M1 (above): per-origin proposal accounting is a surface to create, unlisted.
 - HIGH H1 (above): the dispatch fence re-key is a surface to change, unlisted.
+- LOW L7. The note cites its subject's predecessor as `design-participant-release-activation-authority-2026-10-11.md`
+  (line 11) and, for the owner contract, "recorded on this quest's log"; at 14fac7d6 neither file is on the branch. The
+  predecessor was retained later (commit 1e3374fce) under `evidence/activation-reduction-2026-10-12/predecessor-...-d00c8f3e9.md`.
+  Cite the retained path and sha256 so the design-vet reads what the branch carries (R22 by analogy: a claim names the
+  exact artifact it is true of).
 - LOW L5. `authorizeControlFrom` (`authorization-owner.js:60-67`) and the dependent-side use of the RELEASE route's
   NOT_LEADER redirect become dead with the nested cutover deleted; the unused-exports ratchet will catch the former.
   Section 3 row "client route ... unchanged" is partly false.
@@ -304,6 +356,20 @@ dependent authorization, which the cycle table supersedes.
   entry is already visible and unaddressed: the control's first release is the only way to its origin
   (`transaction-request.js:636-673`), and the recovery owner refuses to run without that origin
   (`release-recovery.js:80-84`), so "control first, by consumption" through recovery is circular on a fresh seed (H3).
+- [census E.1, G.3] A control follower that needs a snapshot during formation runs `beforeServiceReplacement`
+  -> `retireParticipantReleaseBeforeReplacement`; with no local CURRENT and no retained obligation it calls
+  `reconstructDurableRetirement`, which THROWS "retirement route unavailable" when the durable record exists but the
+  topology route does not (`lifecycle-retirement.js:79-82,148-150`; the route falls back to published SERVICES rows
+  that are written only after release, `:45-55`), and the install aborts `RETIREMENT_FAILED`
+  (`snapshot-catchup.js:369-376`). The follower then cannot reach `applied == commit == last`, and the control's
+  own release (drain or `catch_up_pending`) never completes: a circular wait the design inherits. Under the reduced
+  model a replacement that never published an own authorization owes no retirement (obligation 7 exists only when
+  fact 6 is invalidated); the design must state that `beforeServiceReplacement` with no own authorization is a typed
+  no-op that needs no route, and that the durable record alone never creates an obligation.
+- [census E.3b, G.1] A seed restart with HELD `sql_transactions` rows holds at `QUERY_DRAIN_PENDING` until the
+  invocation deadline if the provisional engine cannot route to a local leader before CACHE_HYDRATION (which runs
+  after REGISTRATION). The design keeps settlement "unchanged" (section 3), so this formation-window risk is
+  untouched; it should be recorded as out of scope with its owner, not left implicit.
 - Window arithmetic absent (H4). Formation-window clients: W-F's client transaction during dependents' release is
   the right probe but see L4.
 
@@ -411,8 +477,8 @@ drivers, W-B/W-C/W-D (rewritten)/W-F/W-H.
 | Id | Sev | Section | One line |
 | --- | --- | --- | --- |
 | H1 | HIGH | 2a, 3, 5, 7, 9 | SHARE deleted but the dispatch fence "unchanged": every dependent FINALIZE/CONFIRM refused `local_hold` (`release-dispatch-admission.js:59-65`) |
-| H2 | HIGH | 2c, 6, 8 (W-D) | target entries anchor on boot incarnation + process counters; restart reopen unreachable; only a forbidden stub greens W-D |
-| H3 | HIGH | 2e, formation | recovery owner cannot run the control release (not local leader / OPEN / no origin, `release-recovery.js:72-84`); no remote wake; `control_release_pending` undriven |
+| H2 | HIGH | 2c, 6, 8 (W-D) | target entries anchor on boot incarnation + process counters AND the authorization id is per seed invocation [census D.2]; restart reopen unreachable; only a forbidden stub greens W-D |
+| H3 | HIGH | 2e, formation | recovery owner cannot run the control release (not local leader / OPEN / no origin, `release-recovery.js:72-84`); no remote wake; tokens do not travel [census C.2]; `control_release_pending` undriven |
 | H4 | HIGH | 2g, 8 (W-H) | seed bound unstated; `ceil(46/4)` waves x 30 s vs a 30 s token-bound invocation deadline; "slowest partition" false for N > 4 |
 | H5 | HIGH | 7, 8 | round-10 witnesses 2, 3, 6-inverse (ack/runtime-turn/append are not commitment) dropped from W-A..W-I |
 | M1 | MED | 2d, 4 | `proposals`/`pendingOutcomes` are all pending writes; moving them post-ENABLE lets reopen shut down in-flight client writes (L6, R12) |
@@ -426,10 +492,12 @@ drivers, W-B/W-C/W-D (rewritten)/W-F/W-H.
 | M9 | MED | 9 | six hidden changes inside "one increment" |
 | M10 | MED | 5 | STALE re-proposal amplifier and the pending map not audited; RETIRE has no row pre-check |
 | M11 | MED | 4 | six missing typed edges (continue-cycle, row absent, proof mismatch, non-leader INSPECT, older-gen RETIRE, undriven control) |
-| M12 | MED | formation | census absent; control-origin circularity visible and unaddressed |
+| M12 | MED | formation | control-origin circularity (recovery needs the origin only the control release creates); snapshot-install retirement route throws and aborts the install [census E.1/G.3]; HELD-rows restart hold [census E.3b/G.1] |
+| M13 | MED | 2f | seed driver (FRESH_SEED root) vs recovery driver (`existing:` root) on one partition flip-flop under per-dependent supersession [census D.2] |
 | L1 | LOW | 3 | two wrong citations (`release-identity.js`, `release-local-current.js`) |
 | L2 | LOW | 1 (F1) | RETIRE(Y) on CONFIRMED(X) overwrites a complete authorization; idx 32 row imprecise |
 | L3 | LOW | 1 | the idx 59->60 refusal is unattributed; logs show 6x `current_control_owner_fact`, 3x `release_drain_pending` |
 | L4 | LOW | 8 (W-F) | eventual success under `deferRetry` is not discriminating |
 | L5 | LOW | 3 | `authorizeControlFrom` and the dependent NOT_LEADER redirect go dead; "client route unchanged" partly false |
 | L6 | LOW | 2b, 6 | what a dependent FINALIZE binds about the control at apply is unstated |
+| L7 | LOW | header, 3 | predecessor cited by a bare name the branch did not carry at the design commit; cite the retained evidence path + sha |
