@@ -1,0 +1,32 @@
+{
+  "schema": "solve-quest/2",
+  "id": "snapshot-receiver-admission",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "Fresh CREATE native snapshot installation validates the existing receiver through its lifecycle owner before staging and revalidates before atomic replacement and STAGED restart recovery. It refuses retired, conflicting, unknown or established receiver history, retains matching never-opened incarnation, and never discards unreadable files or pending journal bytes. Existing CREATE authorization, marker identity and closed-handle custody remain necessary; this adds no general reseed or live catchup permission.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/snapshot-receiver-admission/evidence/receipt.json",
+      "requiredReceipts": [
+        "surviving-receiver-refusal",
+        "fresh-and-never-opened-import",
+        "pre-swap-and-restart-revalidation",
+        "symbol-limited-owner-boundary",
+        "native-controls-and-regressions",
+        "independent-review-and-gates"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "same-owners",
+      "statement": "No second lifecycle authority/store, no whole-file-loss inference, no blanket import permission, no altered caller/protocol deadline."
+    },
+    {
+      "id": "evidence",
+      "statement": "Keep original source and negative/revert evidence. Independent review and full required gates precede merge."
+    }
+  ],
+  "sealedAt": "4981aad1ed8eef5784f531a5cccc0b76b477ae01"
+}
