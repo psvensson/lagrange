@@ -1,0 +1,152 @@
+TAP version 13
+# Subtest: F-ah: a lone leader whose durable record becomes unreadable is held typed - no escaping exception across its scheduled ticks, a bounded reconstruction per window, a typed write refusal, its sibling untouched - and serves again once the table is restored
+not ok 1 - F-ah: a lone leader whose durable record becomes unreadable is held typed - no escaping exception across its scheduled ticks, a bounded reconstruction per window, a typed write refusal, its sibling untouched - and serves again once the table is restored
+  ---
+  duration_ms: 257.740517
+  type: 'test'
+  location: '/home/runner/work/lagrange/lagrange/test/partition/partition-unreadable-durable-record.test.js:278:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    setup: the lone leader serves a write
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    file:///home/runner/work/lagrange/lagrange/test/partition/partition-unreadable-durable-record.test.js:296:12
+    async withLonePartitions (file:///home/runner/work/lagrange/lagrange/test/partition/partition-unreadable-durable-record.test.js:268:5)
+    async loneLeaderUnreadableCase (file:///home/runner/work/lagrange/lagrange/test/partition/partition-unreadable-durable-record.test.js:292:3)
+    async TestContext.<anonymous> (file:///home/runner/work/lagrange/lagrange/test/partition/partition-unreadable-durable-record.test.js:285:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: F-ah: a lone partition restarted while its record table is still missing is refused at initialization, typed and naming the phase, and releases its database
+not ok 2 - F-ah: a lone partition restarted while its record table is still missing is refused at initialization, typed and naming the phase, and releases its database
+  ---
+  duration_ms: 153.013084
+  type: 'test'
+  location: '/home/runner/work/lagrange/lagrange/test/partition/partition-unreadable-durable-record.test.js:360:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    setup: the lone leader serves a write
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    file:///home/runner/work/lagrange/lagrange/test/partition/partition-unreadable-durable-record.test.js:365:12
+    async withLonePartitions (file:///home/runner/work/lagrange/lagrange/test/partition/partition-unreadable-durable-record.test.js:268:5)
+    async TestContext.<anonymous> (file:///home/runner/work/lagrange/lagrange/test/partition/partition-unreadable-durable-record.test.js:363:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: F-ah: a follower whose durable record becomes unreadable is held typed while its leader keeps serving; nothing escapes
+not ok 3 - F-ah: a follower whose durable record becomes unreadable is held typed while its leader keeps serving; nothing escapes
+  ---
+  duration_ms: 249.663597
+  type: 'test'
+  location: '/home/runner/work/lagrange/lagrange/test/partition/partition-unreadable-durable-record.test.js:399:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    setup: the group serves a write
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/runner/work/lagrange/lagrange/test/partition/partition-unreadable-durable-record.test.js:417:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: F-ap: a follower restarted while its record table is missing is refused at initialization, typed and naming the phase and the table; its leader keeps serving, and once the table is restored it initializes and catches up
+not ok 4 - F-ap: a follower restarted while its record table is missing is refused at initialization, typed and naming the phase and the table; its leader keeps serving, and once the table is restored it initializes and catches up
+  ---
+  duration_ms: 178.869406
+  type: 'test'
+  location: '/home/runner/work/lagrange/lagrange/test/partition/partition-unreadable-durable-record.test.js:465:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    setup: the group serves a write
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/runner/work/lagrange/lagrange/test/partition/partition-unreadable-durable-record.test.js:498:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: F-ah: a core failure restores every readable group; a group whose record is unreadable is held by its own failure and touches no other group
+not ok 5 - F-ah: a core failure restores every readable group; a group whose record is unreadable is held by its own failure and touches no other group
+  ---
+  duration_ms: 93.436292
+  type: 'test'
+  location: '/home/runner/work/lagrange/lagrange/test/partition/partition-unreadable-durable-record.test.js:584:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    setup: v serves a write
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    file:///home/runner/work/lagrange/lagrange/test/partition/partition-unreadable-durable-record.test.js:596:16
+    async withLonePartitions (file:///home/runner/work/lagrange/lagrange/test/partition/partition-unreadable-durable-record.test.js:268:5)
+    async TestContext.<anonymous> (file:///home/runner/work/lagrange/lagrange/test/partition/partition-unreadable-durable-record.test.js:589:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: F-ao: the durable record's tables are created whole or not at all, and a partial schema made outside is refused typed
+not ok 6 - F-ao: the durable record's tables are created whole or not at all, and a partial schema made outside is refused typed
+  ---
+  duration_ms: 85.504436
+  type: 'test'
+  location: '/home/runner/work/lagrange/lagrange/test/partition/partition-unreadable-durable-record.test.js:639:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    a partition initializes on that database and serves a write
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    file:///home/runner/work/lagrange/lagrange/test/partition/partition-unreadable-durable-record.test.js:674:12
+    async withLonePartitions (file:///home/runner/work/lagrange/lagrange/test/partition/partition-unreadable-durable-record.test.js:268:5)
+    async TestContext.<anonymous> (file:///home/runner/work/lagrange/lagrange/test/partition/partition-unreadable-durable-record.test.js:642:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 0
+# fail 6
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1027.715647
+# time=3334ms

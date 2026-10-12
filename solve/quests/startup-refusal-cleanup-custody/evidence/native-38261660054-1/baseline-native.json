@@ -1,0 +1,68 @@
+{
+  "exit": 1,
+  "files": [
+    {
+      "file": "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+      "counts": {
+        "tests": 27,
+        "pass": 12,
+        "fail": 15,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "names": [
+        "native runtime opening: partition unhealthy initialization is typed, cleans up, and can retry",
+        "native runtime opening: partition backoff initialization is typed, cleans up, and can retry",
+        "native runtime opening: message-group unhealthy initialization is typed, cleans up, and can retry",
+        "native runtime opening: message-group backoff initialization is typed, cleans up, and can retry",
+        "native runtime opening: wasm-service unhealthy initialization is typed, cleans up, and can retry",
+        "native runtime opening: wasm-service backoff initialization is typed, cleans up, and can retry",
+        "native runtime opening: unhealthy refusal preserves absence of a reservation owner",
+        "native runtime opening: unhealthy refusal preserves an existing reservation owner",
+        "native runtime opening: replacing refusal preserves absence of a reservation owner",
+        "native runtime opening: replacing refusal preserves an existing reservation owner",
+        "WASM opening history: intact restart restores after a real commit",
+        "WASM opening history: lost record refuses after a real commit",
+        "startup cleanup custody: partition SQLite close before effect retains both failures and retries",
+        "startup cleanup custody: partition SQLite close after effect retains both failures and retries",
+        "startup cleanup custody: message-group SQLite close before effect retains both failures and retries",
+        "startup cleanup custody: message-group SQLite close after effect retains both failures and retries",
+        "startup cleanup custody: wasm-service SQLite close before effect retains both failures and retries",
+        "startup cleanup custody: wasm-service SQLite close after effect retains both failures and retries",
+        "startup cleanup custody: partition earlier cleanup stage retains primary and remaining releases",
+        "startup cleanup custody: wasm-service earlier cleanup stage retains primary and remaining releases",
+        "startup cleanup custody: message-group concurrent release joins and retains rejected port before database",
+        "startup cleanup custody: wasm-service concurrent release joins and retains rejected port before database",
+        "startup cleanup custody: WASM transport retirement before effect remains nonterminal and retries exact identity",
+        "startup cleanup custody: WASM transport retirement after effect remains nonterminal and retries exact identity",
+        "startup cleanup custody: WASM stop-activity failure is reported after owned release without falsely completing shutdown",
+        "startup cleanup custody: partition status refusal uses the same cleanup boundary",
+        "startup cleanup custody: partition campaign refusal uses the same cleanup boundary"
+      ],
+      "failed": [
+        "startup cleanup custody: partition SQLite close before effect retains both failures and retries",
+        "startup cleanup custody: partition SQLite close after effect retains both failures and retries",
+        "startup cleanup custody: message-group SQLite close before effect retains both failures and retries",
+        "startup cleanup custody: message-group SQLite close after effect retains both failures and retries",
+        "startup cleanup custody: wasm-service SQLite close before effect retains both failures and retries",
+        "startup cleanup custody: wasm-service SQLite close after effect retains both failures and retries",
+        "startup cleanup custody: partition earlier cleanup stage retains primary and remaining releases",
+        "startup cleanup custody: wasm-service earlier cleanup stage retains primary and remaining releases",
+        "startup cleanup custody: message-group concurrent release joins and retains rejected port before database",
+        "startup cleanup custody: wasm-service concurrent release joins and retains rejected port before database",
+        "startup cleanup custody: WASM transport retirement before effect remains nonterminal and retries exact identity",
+        "startup cleanup custody: WASM transport retirement after effect remains nonterminal and retries exact identity",
+        "startup cleanup custody: WASM stop-activity failure is reported after owned release without falsely completing shutdown",
+        "startup cleanup custody: partition status refusal uses the same cleanup boundary",
+        "startup cleanup custody: partition campaign refusal uses the same cleanup boundary"
+      ],
+      "assertionFailures": 15,
+      "sourceSha256": "2b13412489c6a3a69be9caef1b7068b6ceee04fb5a7d1dd1c4a5b9299cae4d22",
+      "maxCaseMs": 160.826123,
+      "targetMs": 30000,
+      "toleranceMs": 300000,
+      "durationPassed": true
+    }
+  ]
+}

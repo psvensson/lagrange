@@ -1,0 +1,47 @@
+TAP version 13
+# Subtest: a delayed G1 retirement callback lands on G1 only; G2 stays running
+ok 1 - a delayed G1 retirement callback lands on G1 only; G2 stays running
+  ---
+  duration_ms: 7.027091
+  type: 'test'
+  ...
+# Subtest: duplicate, post-close and post-recreation G1 work is a typed stale result, never a retirement of G2
+ok 2 - duplicate, post-close and post-recreation G1 work is a typed stale result, never a retirement of G2
+  ---
+  duration_ms: 0.43834
+  type: 'test'
+  ...
+# Subtest: a runtime handle for a different logical replica is refused
+ok 3 - a runtime handle for a different logical replica is refused
+  ---
+  duration_ms: 0.219421
+  type: 'test'
+  ...
+# Subtest: real raft-rs ports: old-generation removal after the name is reused leaves the new generation serving
+ok 4 - real raft-rs ports: old-generation removal after the name is reused leaves the new generation serving
+  ---
+  duration_ms: 103.177761
+  type: 'test'
+  ...
+# Subtest: a delayed G1 close cannot unregister the G2 peer-reservation owner
+ok 5 - a delayed G1 close cannot unregister the G2 peer-reservation owner
+  ---
+  duration_ms: 0.393346
+  type: 'test'
+  ...
+# Subtest: registry operation census: exact-generation only, no logical lookup
+ok 6 - registry operation census: exact-generation only, no logical lookup
+  ---
+  duration_ms: 155.783593
+  type: 'test'
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 6
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 275.822517
+# time=1032ms

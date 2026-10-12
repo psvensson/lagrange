@@ -30,5 +30,7 @@
       "id": "independent-review-and-static-gates",
       "passed": false
     }
-  ]
+  ],
+  "candidate": "e2c7435b72bb49856e7d13af08835d38f97b469d",
+  "evidence": "run 38261660054; focused proof is not independent acceptance"
 }

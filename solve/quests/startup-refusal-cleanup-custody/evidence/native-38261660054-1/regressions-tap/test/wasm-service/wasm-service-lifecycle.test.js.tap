@@ -1,0 +1,393 @@
+{"level":50,"time":"2026-10-12T14:18:20.392Z","nodeId":"test-node","pid":3736,"subsystem":"wasm-service-lifecycle","serviceId":"svc-1","handlerFunctionId":"fn-missing","moduleVersion":"v1","diagnosticCode":"module_unavailable","nodeId":"test-node","msg":"WASM module not available on any node"}
+{"level":50,"time":"2026-10-12T14:18:20.422Z","nodeId":"test-node","pid":3736,"subsystem":"wasm-service-lifecycle","serviceId":"svc-1","handlerFunctionId":"fn-1","moduleVersion":"v1","diagnosticCode":"module_mirror_missing","nodeId":"test-node","msg":"WASM module not available on any node"}
+{"level":50,"time":"2026-10-12T14:18:20.448Z","nodeId":"test-node","pid":3736,"subsystem":"wasm-service-lifecycle","serviceId":"svc-1","handlerFunctionId":"fn-1","moduleVersion":"v1","diagnosticCode":"module_unavailable","nodeId":"test-node","msg":"WASM module not available on any node"}
+{"level":50,"time":"2026-10-12T14:18:20.645Z","nodeId":"test-node","pid":3736,"subsystem":"wasm-service-lifecycle","serviceId":"svc-1","moduleVersion":null,"diagnosticCode":"port_allocator_unavailable","nodeId":"test-node","msg":"WASM service port allocator has no owner on this node"}
+{"level":50,"time":"2026-10-12T14:18:20.667Z","nodeId":"test-node","pid":3736,"subsystem":"wasm-service-lifecycle","serviceId":"svc-1","moduleVersion":null,"diagnosticCode":"consensus_start_refused","nodeId":"test-node","msg":"consensus refused"}
+{"level":50,"time":"2026-10-12T14:18:20.904Z","nodeId":"test-node","pid":3736,"subsystem":"wasm-service-lifecycle","serviceId":"svc-1","moduleVersion":null,"diagnosticCode":"wasm_service_replica_retired","nodeId":"test-node","msg":"WASM service replica instance is shut down or shutting down; a successor is a new replica"}
+{"level":50,"time":"2026-10-12T14:18:20.956Z","nodeId":"test-node","pid":3736,"subsystem":"wasm-service-lifecycle","serviceId":"svc-1","moduleVersion":null,"diagnosticCode":"wasm_service_replica_stopped_during_start","nodeId":"test-node","msg":"WASM service replica was stopped while it was starting"}
+{"level":50,"time":"2026-10-12T14:18:20.995Z","nodeId":"test-node","pid":3736,"subsystem":"wasm-service-lifecycle","serviceId":"svc-1","moduleVersion":null,"diagnosticCode":"wasm_service_replica_retired","nodeId":"test-node","msg":"WASM service replica instance is shut down or shutting down; a successor is a new replica"}
+{"level":50,"time":"2026-10-12T14:18:21.047Z","nodeId":"test-node","pid":3736,"subsystem":"wasm-service-lifecycle","serviceId":"svc-1","moduleVersion":null,"diagnosticCode":"EEXIST","nodeId":"test-node","msg":"EEXIST: file already exists, mkdir '/tmp/wasm-service-lifecycle-0MS0zm/blocker'"}
+TAP version 13
+# Subtest: WasmServiceLifecycle
+    # Subtest: exports
+        # Subtest: should export WasmServiceLifecycle class
+        ok 1 - should export WasmServiceLifecycle class
+          ---
+          duration_ms: 133.979717
+          type: 'test'
+          ...
+        # Subtest: should export REPLICA_LIFECYCLE_STATE enum
+        ok 2 - should export REPLICA_LIFECYCLE_STATE enum
+          ---
+          duration_ms: 90.551809
+          type: 'test'
+          ...
+        1..2
+    ok 1 - exports
+      ---
+      duration_ms: 225.640243
+      type: 'suite'
+      ...
+    # Subtest: constructor
+        # Subtest: should initialize with empty active replicas
+        ok 1 - should initialize with empty active replicas
+          ---
+          duration_ms: 66.941459
+          type: 'test'
+          ...
+        # Subtest: should store portAllocator reference
+        ok 2 - should store portAllocator reference
+          ---
+          duration_ms: 53.255492
+          type: 'test'
+          ...
+        # Subtest: should store moduleMirror reference
+        ok 3 - should store moduleMirror reference
+          ---
+          duration_ms: 64.182298
+          type: 'test'
+          ...
+        # Subtest: should store nodeId
+        ok 4 - should store nodeId
+          ---
+          duration_ms: 31.104121
+          type: 'test'
+          ...
+        # Subtest: binds module mirror to cdc integration service
+        ok 5 - binds module mirror to cdc integration service
+          ---
+          duration_ms: 59.535625
+          type: 'test'
+          ...
+        1..5
+    ok 2 - constructor
+      ---
+      duration_ms: 275.932837
+      type: 'suite'
+      ...
+    # Subtest: createReplica
+        # Subtest: should store replica in active replicas map
+        ok 1 - should store replica in active replicas map
+          ---
+          duration_ms: 54.689643
+          type: 'test'
+          ...
+        # Subtest: should return the created replica
+        ok 2 - should return the created replica
+          ---
+          duration_ms: 88.403693
+          type: 'test'
+          ...
+        # Subtest: derives the durable path from the data directory owner
+        ok 3 - derives the durable path from the data directory owner
+          ---
+          duration_ms: 26.948096
+          type: 'test'
+          ...
+        # Subtest: should pass serviceDefinitionId to replica
+        ok 4 - should pass serviceDefinitionId to replica
+          ---
+          duration_ms: 31.637941
+          type: 'test'
+          ...
+        # Subtest: should pass replicaId from config
+        ok 5 - should pass replicaId from config
+          ---
+          duration_ms: 34.818299
+          type: 'test'
+          ...
+        # Subtest: should pass readConsistency from definition
+        ok 6 - should pass readConsistency from definition
+          ---
+          duration_ms: 29.650858
+          type: 'test'
+          ...
+        # Subtest: should create multiple replicas for different services
+        ok 7 - should create multiple replicas for different services
+          ---
+          duration_ms: 70.070526
+          type: 'test'
+          ...
+        1..7
+    ok 3 - createReplica
+      ---
+      duration_ms: 336.816363
+      type: 'suite'
+      ...
+    # Subtest: founding replica set
+        # Subtest: refuses a replica without its explicit replica set
+        ok 1 - refuses a replica without its explicit replica set
+          ---
+          duration_ms: 70.515824
+          type: 'test'
+          ...
+        # Subtest: refuses a replica outside or a set without distinct ids
+        ok 2 - refuses a replica outside or a set without distinct ids
+          ---
+          duration_ms: 41.253888
+          type: 'test'
+          ...
+        1..2
+    ok 4 - founding replica set
+      ---
+      duration_ms: 111.975267
+      type: 'suite'
+      ...
+    # Subtest: startReplica
+        # Subtest: should allocate port and return result
+        ok 1 - should allocate port and return result
+          ---
+          duration_ms: 63.54201
+          type: 'test'
+          ...
+        # Subtest: should set portAllocation on the replica
+        ok 2 - should set portAllocation on the replica
+          ---
+          duration_ms: 40.373358
+          type: 'test'
+          ...
+        # Subtest: should return null for unknown serviceId
+        ok 3 - should return null for unknown serviceId
+          ---
+          duration_ms: 35.567834
+          type: 'test'
+          ...
+        # Subtest: should check module mirror when handler provided
+        ok 4 - should check module mirror when handler provided
+          ---
+          duration_ms: 41.175602
+          type: 'test'
+          ...
+        # Subtest: fails closed when module is unavailable
+        ok 5 - fails closed when module is unavailable
+          ---
+          duration_ms: 47.413088
+          type: 'test'
+          ...
+        # Subtest: fails closed when module mirror is missing
+        ok 6 - fails closed when module mirror is missing
+          ---
+          duration_ms: 27.412567
+          type: 'test'
+          ...
+        # Subtest: records and clears startup diagnostics
+        ok 7 - records and clears startup diagnostics
+          ---
+          duration_ms: 32.105313
+          type: 'test'
+          ...
+        # Subtest: should build endpoint when serviceDefinition provided
+        ok 8 - should build endpoint when serviceDefinition provided
+          ---
+          duration_ms: 28.809671
+          type: 'test'
+          ...
+        # Subtest: should return null endpoint when no serviceDefinition
+        ok 9 - should return null endpoint when no serviceDefinition
+          ---
+          duration_ms: 49.94863
+          type: 'test'
+          ...
+        # Subtest: should allocate different ports for different services
+        ok 10 - should allocate different ports for different services
+          ---
+          duration_ms: 38.951443
+          type: 'test'
+          ...
+        # Subtest: opens the replica consensus on the raft-rs operation port
+        ok 11 - opens the replica consensus on the raft-rs operation port
+          ---
+          duration_ms: 40.220161
+          type: 'test'
+          ...
+        # Subtest: refuses start typed when the node owns no port allocator
+        ok 12 - refuses start typed when the node owns no port allocator
+          ---
+          duration_ms: 31.902501
+          type: 'test'
+          ...
+        # Subtest: releases the port when its consensus refuses to start
+        ok 13 - releases the port when its consensus refuses to start
+          ---
+          duration_ms: 22.677301
+          type: 'test'
+          ...
+        1..13
+    ok 5 - startReplica
+      ---
+      duration_ms: 500.925368
+      type: 'suite'
+      ...
+    # Subtest: stopReplica
+        # Subtest: should release port and remove from map
+        ok 1 - should release port and remove from map
+          ---
+          duration_ms: 39.062893
+          type: 'test'
+          ...
+        # Subtest: should return stopped false for unknown serviceId
+        ok 2 - should return stopped false for unknown serviceId
+          ---
+          duration_ms: 26.837372
+          type: 'test'
+          ...
+        # Subtest: should make port available again after release
+        ok 3 - should make port available again after release
+          ---
+          duration_ms: 33.306114
+          type: 'test'
+          ...
+        # Subtest: should call replica shutdown
+        ok 4 - should call replica shutdown
+          ---
+          duration_ms: 40.060362
+          type: 'test'
+          ...
+        # Subtest: stop and start overlapping for one serviceId
+            # Subtest: a stop in flight leaves the successor created and started for the same serviceId owned, registered and stoppable
+            ok 1 - a stop in flight leaves the successor created and started for the same serviceId owned, registered and stoppable
+              ---
+              duration_ms: 56.984083
+              type: 'test'
+              ...
+            # Subtest: a start of a replica whose stop is in flight is refused typed
+            ok 2 - a start of a replica whose stop is in flight is refused typed
+              ---
+              duration_ms: 41.760658
+              type: 'test'
+              ...
+            # Subtest: a stop that begins while a start awaits refuses that start typed
+            ok 3 - a stop that begins while a start awaits refuses that start typed
+              ---
+              duration_ms: 51.814729
+              type: 'test'
+              ...
+            # Subtest: a start refused on a stopping replica leaves a successor's port and diagnostic alone
+            ok 4 - a start refused on a stopping replica leaves a successor's port and diagnostic alone
+              ---
+              duration_ms: 47.25936
+              type: 'test'
+              ...
+            # Subtest: a failing start overlapped by a stop leaves a successor's port and diagnostic alone
+            ok 5 - a failing start overlapped by a stop leaves a successor's port and diagnostic alone
+              ---
+              duration_ms: 43.148762
+              type: 'test'
+              ...
+{"level":50,"time":"2026-10-12T14:18:21.099Z","nodeId":"test-node","pid":3736,"subsystem":"wasm-service-lifecycle","serviceId":"svc-1","moduleVersion":null,"diagnosticCode":"EEXIST","nodeId":"test-node","msg":"EEXIST: file already exists, mkdir '/tmp/wasm-service-lifecycle-fvf7fF/blocker'"}
+{"level":50,"time":"2026-10-12T14:18:21.129Z","nodeId":"test-node","pid":3736,"subsystem":"wasm-service-lifecycle","serviceId":"svc-1","moduleVersion":null,"diagnosticCode":"wasm_service_replica_retired","nodeId":"test-node","msg":"WASM service replica instance is shut down or shutting down; a successor is a new replica"}
+            # Subtest: a failed start releases its port when the successor that replaced it never started
+            ok 6 - a failed start releases its port when the successor that replaced it never started
+              ---
+              duration_ms: 50.848827
+              type: 'test'
+              ...
+            # Subtest: a refused start leaves no diagnostic once its stop removed the replica
+            ok 7 - a refused start leaves no diagnostic once its stop removed the replica
+              ---
+              duration_ms: 29.352752
+              type: 'test'
+              ...
+            # Subtest: a replica is never created over a live one for its serviceId
+            ok 8 - a replica is never created over a live one for its serviceId
+              ---
+              duration_ms: 39.088292
+              type: 'test'
+              ...
+            1..8
+        ok 5 - stop and start overlapping for one serviceId
+          ---
+          duration_ms: 360.83367
+          type: 'suite'
+          ...
+        1..5
+    ok 6 - stopReplica
+      ---
+      duration_ms: 500.463892
+      type: 'suite'
+      ...
+    # Subtest: getReplica
+        # Subtest: should return active replica by serviceId
+        ok 1 - should return active replica by serviceId
+          ---
+          duration_ms: 29.219698
+          type: 'test'
+          ...
+        # Subtest: should return null for unknown serviceId
+        ok 2 - should return null for unknown serviceId
+          ---
+          duration_ms: 32.639118
+          type: 'test'
+          ...
+        1..2
+    ok 7 - getReplica
+      ---
+      duration_ms: 62.049502
+      type: 'suite'
+      ...
+    # Subtest: getActiveReplicas
+        # Subtest: should return empty map when no replicas
+        ok 1 - should return empty map when no replicas
+          ---
+          duration_ms: 24.248
+          type: 'test'
+          ...
+        # Subtest: should return all active replicas
+        ok 2 - should return all active replicas
+          ---
+          duration_ms: 30.044085
+          type: 'test'
+          ...
+        1..2
+    ok 8 - getActiveReplicas
+      ---
+      duration_ms: 54.465067
+      type: 'suite'
+      ...
+    # Subtest: shutdownAll
+        # Subtest: should stop all active replicas
+        ok 1 - should stop all active replicas
+          ---
+          duration_ms: 47.739798
+          type: 'test'
+          ...
+        # Subtest: should release all ports
+        ok 2 - should release all ports
+          ---
+          duration_ms: 45.303247
+          type: 'test'
+          ...
+        # Subtest: should handle empty replicas map gracefully
+        ok 3 - should handle empty replicas map gracefully
+          ---
+          duration_ms: 33.248713
+          type: 'test'
+          ...
+        # Subtest: unbinds module mirror CDC listeners on shutdown
+        ok 4 - unbinds module mirror CDC listeners on shutdown
+          ---
+          duration_ms: 33.884256
+          type: 'test'
+          ...
+        1..4
+    ok 9 - shutdownAll
+      ---
+      duration_ms: 160.571102
+      type: 'suite'
+      ...
+    1..9
+ok 1 - WasmServiceLifecycle
+  ---
+  duration_ms: 2230.51979
+  type: 'suite'
+  ...
+1..1
+# tests 49
+# suites 11
+# pass 49
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2249.22115
+# time=3336ms
