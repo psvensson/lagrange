@@ -548,7 +548,7 @@
       ]
     },
     "raft-rs-runtime-lifecycle-entry": {
-      "description": "The replica lifecycle owner admits each semantic operation before the runtime owner can enter the raft-rs core, and durable retirement waits for admitted operations before becoming terminal. A constructor refused before runtime admission publishes no membership reservation owner or native handle; each service initialization retains the exact named consensus failure and releases its own opening resources before reporting refusal. Exact-incarnation native opening history is NEVER_OPENED or ESTABLISHED in the existing lifecycle row; legacy NULL is unknown. Bootstrap and establishment commit atomically at FULL before participation; intact history restores, while absent native state cannot reopen an established or unknown incarnation. Host prior-existence remains independent for complete storage loss.",
+      "description": "The replica lifecycle owner admits each semantic operation before the runtime owner can enter the raft-rs core, and durable retirement waits for admitted operations before becoming terminal. A constructor refused before runtime admission publishes no membership reservation owner or native handle; each service initialization retains the exact named consensus failure and releases its own opening resources before reporting refusal. Exact-incarnation native opening history is NEVER_OPENED or ESTABLISHED in the existing lifecycle row; legacy NULL is unknown. Bootstrap and establishment commit atomically at FULL before participation; intact history restores, while absent native state cannot reopen an established or unknown incarnation. Host prior-existence remains independent for complete storage loss. If startup cleanup also fails, the original typed refusal and immutable owner retry answer remain primary; the actual secondary failure is retained, exact unclosed resources remain with the service lifecycle, initialize stays held, and existing shutdown retries that same cleanup without a new scheduler. Failed WASM teardown is CLEANUP_REQUIRED, not STOPPED.",
       "owners": [
         "src/raft/raft-rs-replica-lifecycle-owner.js",
         "src/raft/raft-rs-lifecycle-administration.js",
@@ -561,13 +561,24 @@
         "src/wasm-service/wasm-service-consensus-port.js",
         "src/raft/raft-rs-opening-history-constants.js",
         "src/raft/raft-rs-durable-store.js",
-        "src/raft/raft-rs-participation-gate.js"
+        "src/raft/raft-rs-participation-gate.js",
+        "src/partition/partition-service-core-base.js",
+        "src/partition/partition-service-raft-init-base.js",
+        "src/partition/partition-service-lifecycle-methods.js",
+        "src/message-group/message-group-service-raft-lifecycle.js",
+        "src/message-group/message-group-service-state.js",
+        "src/message-group/message-group-service-cache-and-lifecycle-runtime-methods.js",
+        "src/wasm-service/wasm-service-replica.js",
+        "src/wasm-service/wasm-service-replica-lifecycle.js",
+        "src/wasm-service/wasm-service-constants.js",
+        "src/node/replica-transport-handler-identity.js"
       ],
       "tests": [
         "test/raft/raft-rs-backend/operation-port-lifecycle.test.js",
         "test/raft/raft-rs-backend/operation-port-boundary.test.js",
         "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
-        "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js"
+        "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
+        "test/raft/raft-opening-cleanup-error.test.js"
       ]
     },
     "raft-rs-runtime-application-transaction": {
@@ -1395,7 +1406,7 @@
       }
     },
     "raft-rs-runtime-lifecycle-entry": {
-      "description": "Lifecycle admission and core entry must remain one boundary: retirement cannot race an admitted operation, and queued ingress must recheck lifecycle before worker-side core entry. Refused construction leaves earlier exact owners intact and service initialization consumes the canonical failure without bypassing its cleanup. The lifecycle history fact and the runtime bootstrap transaction share one durable opening boundary, including process-crash recovery and genuine never-opened retries.",
+      "description": "Lifecycle admission and core entry must remain one boundary: retirement cannot race an admitted operation, and queued ingress must recheck lifecycle before worker-side core entry. Refused construction leaves earlier exact owners intact and service initialization consumes the canonical failure without bypassing its cleanup. The lifecycle history fact and the runtime bootstrap transaction share one durable opening boundary, including process-crash recovery and genuine never-opened retries. If startup cleanup also fails, the original typed refusal and immutable owner retry answer remain primary; the actual secondary failure is retained, exact unclosed resources remain with the service lifecycle, initialize stays held, and existing shutdown retries that same cleanup without a new scheduler. Failed WASM teardown is CLEANUP_REQUIRED, not STOPPED.",
       "endpoints": [
         {
           "id": "durable-lifecycle-admission",
@@ -1404,7 +1415,17 @@
             "src/raft/raft-rs-lifecycle-administration.js",
             "src/partition/partition-consensus-port-opening.js",
             "src/message-group/message-group-consensus-port.js",
-            "src/wasm-service/wasm-service-consensus-port.js"
+            "src/wasm-service/wasm-service-consensus-port.js",
+            "src/partition/partition-service-core-base.js",
+            "src/partition/partition-service-raft-init-base.js",
+            "src/partition/partition-service-lifecycle-methods.js",
+            "src/message-group/message-group-service-raft-lifecycle.js",
+            "src/message-group/message-group-service-state.js",
+            "src/message-group/message-group-service-cache-and-lifecycle-runtime-methods.js",
+            "src/wasm-service/wasm-service-replica.js",
+            "src/wasm-service/wasm-service-replica-lifecycle.js",
+            "src/wasm-service/wasm-service-constants.js",
+            "src/node/replica-transport-handler-identity.js"
           ]
         },
         {
@@ -1425,7 +1446,8 @@
         "test/raft/raft-rs-backend/operation-port-lifecycle.test.js",
         "test/raft/raft-rs-backend/operation-port-boundary.test.js",
         "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
-        "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js"
+        "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
+        "test/raft/raft-opening-cleanup-error.test.js"
       ]
     },
     "raft-rs-runtime-application-transaction": {

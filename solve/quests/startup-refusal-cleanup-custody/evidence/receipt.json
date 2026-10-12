@@ -1,0 +1,34 @@
+{
+  "schema": "test-receipt/1",
+  "status": "FAIL",
+  "receipts": [
+    {
+      "id": "primary-refusal-and-secondary-cleanup-preserved",
+      "passed": false
+    },
+    {
+      "id": "exact-resource-custody-until-release",
+      "passed": false
+    },
+    {
+      "id": "no-opening-over-pending-cleanup",
+      "passed": false
+    },
+    {
+      "id": "same-owner-retry-and-safe-reopen",
+      "passed": false
+    },
+    {
+      "id": "concurrent-shutdown-and-lifecycle-state",
+      "passed": false
+    },
+    {
+      "id": "unchanged-native-and-lifecycle-regressions",
+      "passed": false
+    },
+    {
+      "id": "independent-review-and-static-gates",
+      "passed": false
+    }
+  ]
+}

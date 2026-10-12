@@ -1,3 +1,7 @@
+import {createRaftOperationPort} from '../../../src/raft/raft-operation-port.js';
+import {closeMessageGroupConsensus} from '../../../src/message-group/message-group-consensus-port.js';
+import {closeWasmServiceConsensus} from '../../../src/wasm-service/wasm-service-consensus-port.js';
+import {SessionKVStore} from '../../../src/wasm-service/session-kv-store.js';
 // PR117: production initialization consumes the real runtime's opening refusal.
 // No constructor is stubbed. A shared-core trap is injected through the existing
 // native-call seam; the three service initializers and their cleanup are real.
@@ -283,6 +287,317 @@ for (const loseHistory of [false, true]) {
         Buffer.from('committed-before-restart'));
       assert.equal((await successor.raft.readStatus()).lifecycleIncarnation,
         committed.lifecycleIncarnation, 'an intact restart preserves the durable generation');
+    }
+  });
+}
+
+
+// PR117 cleanup-failure review: the primary native refusal must survive a
+// failed release, and the existing service must keep custody until shutdown
+// can finish. The fault wraps an actual SQLite close, not a fake consensus path.
+for (const kind of KINDS) {
+  for (const afterEffect of [false, true]) {
+    test(`startup cleanup custody: ${kind} SQLite close ${afterEffect ? 'after' : 'before'} effect retains both failures and retries`, async (t) => {
+      const fixture = await createFixture(t);
+      const service = buildService(fixture, kind);
+      await fixture.trap();
+      let restorationTraps = 0;
+      setCoreFaultInjector((groupId, operation) => {
+        if (groupId === EXISTING_GROUP && operation === 'create_node') {
+          setCoreFaultInjector(null); restorationTraps += 1;
+          throw new globalThis.WebAssembly.RuntimeError('cleanup refusal retry-window trap');
+        }
+      });
+      const shared = await fixture.port.readStatus();
+      assert.equal(restorationTraps, 1);
+      assert.equal(shared.outcome, OUTCOME.HOST_FAILURE);
+      assert.ok(shared.retryAfterMs > 0);
+      const entries = fixture.entries.length;
+      const originalClose = Database.prototype.close;
+      const cleanupError = new Error(`injected ${kind} SQLite release failure`);
+      let captured = null;
+      let attempts = 0;
+      let healed = false;
+      Database.prototype.close = function() {
+        if (this.name === service.dbPath) {
+          captured = this;
+          attempts += 1;
+          if (!healed) {
+            if (afterEffect) originalClose.call(this);
+            throw cleanupError;
+          }
+        }
+        return originalClose.call(this);
+      };
+      try {
+        let failure;
+        try {
+          await service.initialize();
+        } catch (error) {
+          failure = error;
+        }
+        assert.ok(captured, 'actual service database release must be reached');
+        assert.equal(attempts, 1, 'one real cleanup attempt, not a retry loop');
+        assertInitializationRefusal(kind, failure, service.replicaId, shared);
+        assert.ok(failure instanceof AggregateError, 'secondary cleanup failure must remain visible');
+        assert.equal(failure.errors.length, 2);
+        assert.equal(failure.cause, failure.errors[0], 'the primary refusal is the cause');
+        assert.equal(failure.errors[1], cleanupError, 'retain the exact cleanup error');
+        assert.equal(failure.consensus, failure.errors[0].consensus,
+          'never rebuild or renew the immutable owner answer');
+        assert.equal(service.db, captured, 'owner retains exact handle until release is confirmed');
+        assert.equal(captured.open, !afterEffect);
+        assert.equal(fixture.entries.length, entries, 'refused opening/cleanup enters no core');
+        // Even after runtime healing, unfinished local cleanup cannot admit a
+        // second opening that would overwrite its retained connection.
+        fixture.clock.advance(shared.retryAfterMs);
+        assert.equal((await fixture.port.readStatus()).outcome, OUTCOME.CORE_OK);
+        await assert.rejects(service.initialize(), (error) => error === failure,
+          'pending cleanup refuses initialize with the retained failure');
+        assert.equal(service.db, captured);
+        assert.equal(attempts, 1, 'an initialize call cannot drive a second cleanup algorithm');
+        healed = true;
+        await service.shutdown();
+        await service.shutdown();
+        assert.equal(captured.open, false, 'existing shutdown eventually releases its connection');
+        assert.equal(service.db, null);
+        assert.ok(service.raft == null);
+        const successor = buildService(fixture, kind);
+        await successor.initialize();
+        assert.equal(successor.raft.readStatus().outcome, OUTCOME.CORE_OK,
+          'ordinary fresh instance reopens the same file after cleanup');
+        await successor.shutdown();
+      } finally {
+        healed = true;
+        Database.prototype.close = originalClose;
+        // Baseline failures can drop custody; rescue only for test teardown,
+        // never count this out-of-owner release as a positive witness.
+        try {
+          await service.shutdown();
+        } finally {
+          if (captured?.open) originalClose.call(captured);
+        }
+      }
+    });
+  }
+}
+
+for (const kind of ['partition', 'wasm-service']) {
+  test(`startup cleanup custody: ${kind} earlier cleanup stage retains primary and remaining releases`, async (t) => {
+    const fixture = await createFixture(t);
+    const service = buildService(fixture, kind);
+    await fixture.trap();
+    const holder = kind === 'partition' ? service.roleMutationHelper : SessionKVStore.prototype;
+    const method = kind === 'partition' ? 'shutdown' : 'close';
+    const original = holder[method];
+    const cleanupError = new Error(`injected ${kind} earlier release failure`);
+    let attempts = 0;
+    let healed = false;
+    holder[method] = function(...args) {
+      attempts += 1;
+      if (!healed) throw cleanupError;
+      return original.apply(this, args);
+    };
+    try {
+      let failure;
+      try {
+        await service.initialize();
+      } catch (error) {
+        failure = error;
+      }
+      assert.equal(attempts, 1, 'the claimed existing release stage must engage');
+      assertInitializationRefusal(kind, failure, service.replicaId);
+      assert.ok(failure instanceof AggregateError);
+      assert.equal(failure.errors[1], cleanupError);
+      await assert.rejects(service.initialize(), (error) => error === failure);
+      healed = true;
+      await service.shutdown();
+      assert.equal(service.db, null);
+      if (kind === 'wasm-service') assert.equal(service.kvStore, null);
+      assert.ok(service.raft == null);
+    } finally {
+      healed = true; holder[method] = original;
+      await service.shutdown();
+    }
+  });
+}
+
+
+for (const [kind, close] of [['message-group', closeMessageGroupConsensus], ['wasm-service', closeWasmServiceConsensus]]) {
+  test(`startup cleanup custody: ${kind} concurrent release joins and retains rejected port before database`, async () => {
+    // Contract-level release witness. Real SQLite, a controllable asynchronous
+    // port-close boundary; this is not a native Raft fault witness.
+    const db = new Database(':memory:');
+    let attempts = 0;
+    let finish;
+    const cleanupError = new Error('port release refused before effect');
+    const service = {db, raft: {close() {
+      attempts += 1;
+      return new Promise((resolve, reject) => {
+        finish = {resolve, reject};
+      });
+    }}};
+    const original = service.raft;
+    const first = close(service);
+    const second = close(service);
+    const outcomes = Promise.allSettled([first, second]);
+    const pending = {attempts, port: service.raft, db: service.db, open: db.open};
+    finish.reject(cleanupError);
+    const refused = await outcomes;
+    assert.equal(pending.attempts, 1, 'concurrent cleanup has one release owner and one attempt');
+    assert.equal(pending.port, original, 'pending port release retains exact custody');
+    assert.equal(pending.db, db);
+    assert.equal(pending.open, true, 'database cannot close before the port releases it');
+    assert.ok(refused.every((result) => result.status === 'rejected' && result.reason === cleanupError));
+    assert.equal(service.raft, original);
+    assert.equal(service.db, db);
+    const third = close(service);
+    const fourth = close(service);
+    assert.equal(attempts, 2, 'one subsequent shared retry, not one per caller');
+    finish.resolve();
+    await Promise.all([third, fourth]);
+    assert.equal(db.open, false);
+    assert.equal(service.raft, null);
+    assert.equal(service.db, null);
+  });
+}
+
+for (const afterEffect of [false, true]) {
+  test(`startup cleanup custody: WASM transport retirement ${afterEffect ? 'after' : 'before'} effect remains nonterminal and retries exact identity`, async (t) => {
+    const fixture = await createFixture(t);
+    const service = buildService(fixture, 'wasm-service');
+    await service.initialize();
+    const handler = fixture.router.getRegisteredHandler(service.unifiedAddress);
+    assert.equal(typeof handler, 'function');
+    const db = service.db;
+    const originalUnregister = fixture.router.unregisterExact;
+    const cleanupError = new Error('injected exact handler retirement failure');
+    let calls = 0;
+    let healed = false;
+    fixture.router.unregisterExact = function(address, candidate) {
+      if (address === service.unifiedAddress && candidate === handler) {
+        calls += 1;
+        if (!healed) {
+          if (afterEffect) originalUnregister.call(this, address, candidate);
+          throw cleanupError;
+        }
+      }
+      return originalUnregister.call(this, address, candidate);
+    };
+    try {
+      await assert.rejects(service.shutdown(), (error) => error === cleanupError);
+      assert.equal(calls, 1);
+      assert.equal(service.lifecycleState, 'cleanup-required', 'failed teardown is not STOPPED');
+      assert.equal(service.live, true, 'host cannot replace an instance that still owns cleanup');
+      assert.equal(service.transportHandler, handler, 'keep the exact identity for a retry');
+      assert.equal(service.db, db);
+      assert.equal(db.open, true);
+      await assert.rejects(service.initialize());
+      healed = true;
+      const successorHandler = () => undefined;
+      // A newer handler identity at the same address must survive old cleanup.
+      fixture.router.register(service.unifiedAddress, successorHandler);
+      await service.shutdown();
+      assert.equal(service.lifecycleState, 'stopped');
+      assert.equal(service.db, null);
+      assert.equal(service.transportHandler, null);
+      assert.equal(fixture.router.getRegisteredHandler(service.unifiedAddress), successorHandler);
+      originalUnregister.call(fixture.router, service.unifiedAddress, successorHandler);
+      assert.equal(db.open, false);
+    } finally {
+      healed = true; fixture.router.unregisterExact = originalUnregister;
+      await service.shutdown();
+      // An old STOPPED-on-failure implementation may have abandoned these
+      // handles. Test teardown rescue is not owner-driven release evidence.
+      service.raft?.close();
+      if (db.open) db.close();
+    }
+  });
+}
+
+test('startup cleanup custody: WASM stop-activity failure is reported after owned release without falsely completing shutdown', async (t) => {
+  const fixture = await createFixture(t);
+  const service = buildService(fixture, 'wasm-service');
+  await service.initialize();
+  const original = service.roleMutationHelper.shutdown;
+  const failure = new Error('injected activity-stop failure');
+  let healed = false;
+  service.roleMutationHelper.shutdown = function() {
+    if (!healed) throw failure;
+    return original.call(this);
+  };
+  try {
+    await assert.rejects(service.shutdown(), (error) => error === failure);
+    // Join any in-flight release; it must report the same incomplete activity
+    // rather than claiming all obligations settled.
+    await assert.rejects(service.lifecycleSettlement, (error) => error === failure);
+    assert.equal(service.lifecycleState, 'cleanup-required');
+    assert.equal(service.db, null);
+    assert.equal(service.raft, null);
+    healed = true;
+    await service.shutdown();
+    assert.equal(service.lifecycleState, 'stopped');
+  } finally {
+    healed = true; service.roleMutationHelper.shutdown = original;
+    await service.shutdown();
+  }
+});
+
+
+for (const edge of ['status', 'campaign']) {
+  test(`startup cleanup custody: partition ${edge} refusal uses the same cleanup boundary`, async (t) => {
+    const fixture = await createFixture(t);
+    const service = buildService(fixture, 'partition');
+    service.deferElection = false;
+    const answer = Object.freeze({outcome: OUTCOME.HOST_FAILURE,
+      phase: `controlled-${edge}`, reason: 'controlled host refusal',
+      retryAfterMs: 37, retryable: true, recoveryRequired: true});
+    const makePort = service.createOperationPort;
+    let nativePort;
+    let engaged = 0;
+    service.createOperationPort = (request) => {
+      nativePort = makePort(request);
+      const operations = {...nativePort};
+      // Real port construction; controlled returned outcome at the service
+      // adapter. This is not a native fault reproduction.
+      if (edge === 'status') {
+        operations.readStatus = () => {
+          engaged += 1; return answer;
+        };
+      } else {
+        operations.campaign = () => {
+          engaged += 1; return answer;
+        };
+      }
+      return createRaftOperationPort(operations);
+    };
+    const cleanupError = new Error('partition post-open cleanup failure');
+    const original = service.roleMutationHelper.shutdown;
+    let healed = false;
+    service.roleMutationHelper.shutdown = function() {
+      if (!healed) throw cleanupError;
+      return original.call(this);
+    };
+    try {
+      let failure;
+      try {
+        await service.initialize();
+      } catch (error) {
+        failure = error;
+      }
+      assert.ok(engaged > 0, 'the actual initializer must consume the controlled refusal');
+      assert.equal(failure?.code, PARTITION_CONSENSUS_STARTUP_OUTCOME.CONSENSUS_INIT_REFUSED);
+      assert.equal(failure.consensus, answer, 'keep exact post-open refusal');
+      assert.ok(failure instanceof AggregateError);
+      assert.equal(failure.errors[1], cleanupError);
+      await assert.rejects(service.initialize(), (error) => error === failure);
+      healed = true;
+      await service.shutdown();
+      assert.equal(service.db, null);
+      assert.equal(service.raft, null);
+    } finally {
+      healed = true; service.roleMutationHelper.shutdown = original;
+      await service.shutdown(); nativePort?.close();
     }
   });
 }

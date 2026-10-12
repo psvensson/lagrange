@@ -16,6 +16,7 @@ quests:
   - transaction-topology-admission-barrier
   - snapshot-lifecycle-staging-boundary
   - replica-opening-history
+  - startup-refusal-cleanup-custody
 authorizes:
   - architecture
   - docs
