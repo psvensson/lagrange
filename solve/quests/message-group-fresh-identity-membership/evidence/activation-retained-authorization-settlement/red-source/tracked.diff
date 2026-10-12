@@ -1,0 +1,3039 @@
+diff --git a/src/bootstrap/bootstrap-service-replica-registration-methods.js b/src/bootstrap/bootstrap-service-replica-registration-methods.js
+index 80fdbc2b7..3c5efefa2 100644
+--- a/src/bootstrap/bootstrap-service-replica-registration-methods.js
++++ b/src/bootstrap/bootstrap-service-replica-registration-methods.js
+@@ -124,7 +124,8 @@ function createBootstrapServiceReplicaHandlerRuntimeMethods() {
+      * Initialize the ReplicaHandler to handle CREATE_REPLICA/REMOVE_REPLICA.
+      * @private
+      */
+-    initializeReplicaHandler() {
++    acquireReplicaHandler() {
++      if (this.replicaHandler) return this.replicaHandler;
+       const messageGroupService =
+         this.getLeaderMessageGroupService();
+ 
+@@ -280,11 +281,25 @@ function createBootstrapServiceReplicaHandlerRuntimeMethods() {
+           this.rebalanceCoordinator?.executorOutcomeEmitter,
+         timeSource: this.nodeService.getTimeSource(),
+         ownerIncarnation: this.bootIncarnation,
++        deferInitialization: true,
+       });
+ 
+       this.replicaHandler = acquired.replicaHandler;
+       this.replicaStateMachine = acquired.replicaStateMachine;
+ 
++      // The release route needs the already opened local services before any
++      // SERVICES registration write. Publishing lifecycle state remains with
++      // initializeReplicaHandler after activation completes.
++      for (const [replicaId, partition] of this.partitionServices) {
++        this.replicaHandler.localServices.set(replicaId, partition);
++      }
++      return this.replicaHandler;
++    },
++
++    initializeReplicaHandler() {
++      this.acquireReplicaHandler();
++      this.replicaHandler.initialize();
++
+       const partitionRegistrationStartedAt = Date.now();
+       this.writeBootstrapReplicaRegistrationTrace(
+         BOOTSTRAP_REPLICA_REGISTRATION_TRACE.SCOPE_PARTITION,
+@@ -369,7 +384,7 @@ function createBootstrapServiceReplicaHandlerRuntimeMethods() {
+ 
+       this.logger.info(BootstrapLog.REPLICA_HANDLER_READY, {
+         nodeId: this.nodeId,
+-        hasMessageGroupService: !!messageGroupService,
++        hasMessageGroupService: !!this.getLeaderMessageGroupService(),
+         registeredPartitions: this.partitionServices.size,
+       });
+     },
+diff --git a/src/bootstrap/bootstrap-service-seed-workflow.js b/src/bootstrap/bootstrap-service-seed-workflow.js
+index b8239a775..2d70712be 100644
+--- a/src/bootstrap/bootstrap-service-seed-workflow.js
++++ b/src/bootstrap/bootstrap-service-seed-workflow.js
+@@ -11,16 +11,23 @@ import {
+ } from './pipeline/startup-pipeline-runner.js';
+ import {createSeedStartupPlan} from './pipeline/seed-startup-plan.js';
+ import {
++  attachSqlRuntimeToStartupOwner,
+   activateSteadyStateRuntimeHandoff,
+ } from './shared/startup-sql-runtime-handoff.js';
+ import {
+   WORK_CLASS,
+ } from '../runtime/work-class-scheduler.js';
++import {runtimeBuildProvenance, RUNTIME_BUILD_STATE} from
++  '../diagnostics/runtime-build-provenance.js';
++import {requestParticipantRelease} from '../node/participant-release-client.js';
++import {PARTICIPANT_CUTOVER_BOUND, PARTICIPANT_CUTOVER_OUTCOME,
++  PARTICIPANT_RELEASE_TRIGGER} from
++  '../partition/partition-participant-transaction-cutover-constants.js';
+ import {
+   NodeState,
+ } from '../node/node-lifecycle-state-machine.js';
+ import {BOOTSTRAP_SUB_PHASE} from '../node/node-constants.js';
+-import {NUM} from '../constants/index.js';
++import {NUM, TABLES} from '../constants/index.js';
+ 
+ const BootstrapPhase = BOOTSTRAP_PHASE;
+ const BootstrapEvent = BOOTSTRAP_EVENT;
+@@ -196,6 +203,20 @@ function createBootstrapServiceSeedWorkflowMethods() {
+         }
+         this.phase = BootstrapPhase.COMPLETE;
+         this.clearNodeReadyRebalanceState();
++        const sqlQueryEngine = this.seedRuntimeBridgeOwner.acquireSqlQueryEngine();
++        attachSqlRuntimeToStartupOwner({
++          owner: this,
++          sqlQueryEngine,
++          systemTableCache: this.getSystemTableCache(),
++          cacheMutationTarget: this.getSystemTableCache(),
++          messageRouter: this.messageRouter,
++          partitionServicesProvider: () => this.partitionServices,
++          // This engine exists only to perform the closed-admission bootstrap
++          // read and participant-release cut.  The entrypoint attaches the
++          // final SQL runtime after bootstrap returns; recovery must belong to
++          // that final engine rather than latch onto this provisional one.
++          activateDistributedTransactionRecovery: false,
++        });
+         activateSteadyStateRuntimeHandoff({
+           owner: this.runtimeHandoffOwner,
+           activateControlPlaneBackgroundWriters: true,
+@@ -235,6 +256,90 @@ function createBootstrapServiceSeedWorkflowMethods() {
+         messageRouter: this.messageRouter,
+       };
+     },
++    async releaseSeedParticipantCohorts(deadlineAtMs) {
++      const build = this.seedStartupInvocation;
++      if (!build || build.deadlineAtMs !== deadlineAtMs) {
++        throw new Error('Seed participant release invocation unavailable');
++      }
++      const servicesByPartition = new Map();
++      for (const service of this.partitionServices.values()) {
++        if (!servicesByPartition.has(service.partitionId)) {
++          servicesByPartition.set(service.partitionId, service);
++        }
++      }
++      const services = [...servicesByPartition.values()].sort((left, right) => {
++        const leftControl = left.tableName === TABLES.SQL_TRANSACTIONS ? 0 : 1;
++        const rightControl = right.tableName === TABLES.SQL_TRANSACTIONS ? 0 : 1;
++        return leftControl - rightControl || left.partitionId.localeCompare(right.partitionId);
++      });
++      const timeSource = this.nodeService.getTimeSource();
++      for (const service of services) {
++        const authorization = this.replicaHandler
++          .participantReleaseAuthorizationOwner.authorizeFreshSeed({
++            partitionId: service.partitionId,
++            targetBuildDigest: build.targetBuildDigest,
++            seedAuthorization: this.seedStartupAuthorization,
++            nodeId: this.nodeId,
++            bootIncarnation: this.bootIncarnation,
++            deadlineAtMs,
++          });
++        if (authorization === null) {
++          throw new Error('Seed participant release authority unavailable');
++        }
++        let answer = null;
++        let firstRefusal = null;
++        let lastRefusal = null;
++        do {
++          answer = await requestParticipantRelease(this.replicaHandler, {
++            partitionId: service.partitionId,
++            targetBuildDigest: build.targetBuildDigest,
++            trigger: PARTICIPANT_RELEASE_TRIGGER.FRESH_SEED,
++            deadlineAtMs,
++            authorization,
++          });
++          if (answer.outcome === PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER) break;
++          firstRefusal ||= answer;
++          if (answer.outcome !== PARTICIPANT_CUTOVER_OUTCOME.NOT_LEADER &&
++              answer.missingFact !== 'release_deadline') lastRefusal = answer;
++          this.seedFirstParticipantReleaseRefusal ||= answer;
++          const retryAfterMs = answer.outcome ===
++              PARTICIPANT_CUTOVER_OUTCOME.NOT_LEADER ?
++            PARTICIPANT_CUTOVER_BOUND.PAUSE_RETRY_AFTER_MS :
++            answer.retryAfterMs;
++          if (!Number.isSafeInteger(retryAfterMs) || retryAfterMs < 0 ||
++              timeSource.now() + retryAfterMs > deadlineAtMs) break;
++          await this.sleep(Math.min(retryAfterMs,
++            Math.max(0, deadlineAtMs - timeSource.now())));
++        } while (timeSource.now() <= deadlineAtMs);
++        if (answer?.outcome !== PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER) {
++          const error = new Error('Seed participant release failed: ' +
++            JSON.stringify({partitionId: service.partitionId,
++              deadlineAtMs, now: timeSource.now(),
++              firstRefusal: this.seedFirstParticipantReleaseRefusal || firstRefusal,
++              lastRefusal,
++              answer}));
++          error.firstRefusal = this.seedFirstParticipantReleaseRefusal;
++          error.code = 'STARTUP_CHECKPOINT_HELD';
++          error.retryable = true;
++          error.retryAfterMs = PARTICIPANT_CUTOVER_BOUND.PAUSE_RETRY_AFTER_MS;
++          throw error;
++        }
++      }
++    },
++    async prepareFreshSeedActivationReadCut(sqlQueryEngine) {
++      if (this.seedParticipantActivationReadCutReady === true) return;
++      const systemTableCache = this.getSystemTableCache();
++      const cdcIntegrationService = this.seedRuntimeBridgeOwner
++        .ensureBootstrapCdcIntegrationService();
++      this.seedRuntimeBridgeOwner.ensureLatencyTopologyOwners();
++      for (const partition of this.partitionServices.values()) {
++        partition.systemTableCache = systemTableCache;
++        partition.cdcIntegrationService = cdcIntegrationService;
++        partition.sqlQueryEngine = sqlQueryEngine;
++      }
++      await this.seedCacheHydrationPhase.subscribeToInitialSystemTableCDC();
++      this.seedParticipantActivationReadCutReady = true;
++    },
+     buildSeedCheckpointSteps(startupPipelineRunner, seedPlan) {
+       const phases = Array.isArray(seedPlan?.phases) ? seedPlan.phases : [];
+       const resolveCheckpointSnapshot = () =>
+@@ -292,6 +397,29 @@ function createBootstrapServiceSeedWorkflowMethods() {
+                 .ensureBootstrapCdcIntegrationService();
+               this.initializeReplicaStateMachine();
+             }
++            const sqlQueryEngine = this.seedRuntimeBridgeOwner.acquireSqlQueryEngine();
++            this.acquireReplicaHandler();
++            if (this.seedStartupInvocation === null) {
++              const build = await runtimeBuildProvenance();
++              if (build.state !== RUNTIME_BUILD_STATE.MEASURED) {
++                throw new Error(`Seed participant release build unavailable: ${build.reason}`);
++              }
++              const prepared = await this.seedStartupSessionStore
++                .prepareAuthorizedInvocation({
++                  bootIncarnation: this.bootIncarnation,
++                  dataDirectoryProcessOwner: this.dataDirectoryProcessOwner,
++                  nodeId: this.nodeId,
++                  planVersion: SEED_WORKFLOW_PLAN_VERSION,
++                  targetBuildDigest: build.digest,
++                  timeoutMs: this.config.leadershipWaitTimeoutMs,
++                });
++              this.seedStartupAuthorization = prepared.authorization;
++              this.seedStartupInvocation = prepared.record.startupInvocation;
++            }
++            await this.prepareFreshSeedActivationReadCut(sqlQueryEngine);
++            await this.releaseSeedParticipantCohorts(
++              this.seedStartupInvocation.deadlineAtMs);
++            this.sqlQueryEngine = sqlQueryEngine;
+             await startupPipelineRunner.run({
+               phases: phases.slice(NUM.THREE, NUM.FOUR),
+             });
+@@ -323,9 +451,7 @@ function createBootstrapServiceSeedWorkflowMethods() {
+             });
+ 
+             const replicaHandlerStartMs = Date.now();
+-            if (!this.replicaHandler) {
+-              this.initializeReplicaHandler();
+-            }
++            this.initializeReplicaHandler();
+             this.logger.info(POST_PIPELINE_LOG.REPLICA_HANDLER, {
+               nodeId: this.nodeId,
+               durationMs: Date.now() - replicaHandlerStartMs,
+@@ -398,6 +524,12 @@ function createBootstrapServiceSeedWorkflowMethods() {
+       });
+ 
+       try {
++        await this.seedStartupSessionStore.prepareDurableAuthority({
++          bootIncarnation: this.bootIncarnation,
++          dataDirectoryProcessOwner: this.dataDirectoryProcessOwner,
++          nodeId: this.nodeId,
++          planVersion: SEED_WORKFLOW_PLAN_VERSION,
++        });
+         const startupPipelineRunner = new StartupPipelineRunner({
+           logger: this.logger,
+           eventSink: this,
+@@ -407,18 +539,36 @@ function createBootstrapServiceSeedWorkflowMethods() {
+           nodeId: this.nodeId,
+           allowResumeLatest: true,
+         });
+-        await startupPipelineRunner.runWorkflow({
+-          nodeId: this.nodeId,
+-          sessionId: seedSessionId,
+-          allowResumeLatest: true,
+-          planVersion: SEED_WORKFLOW_PLAN_VERSION,
+-          sessionStore: this.seedStartupSessionStore,
+-          steps: this.buildSeedCheckpointSteps(
+-            startupPipelineRunner,
+-            seedPlan,
+-          ),
+-          isRetryableFailure: () => false,
+-        });
++        const timeSource = this.nodeService.getTimeSource();
++        for (;;) {
++          try {
++            await startupPipelineRunner.runWorkflow({
++              nodeId: this.nodeId,
++              sessionId: seedSessionId,
++              allowResumeLatest: true,
++              planVersion: SEED_WORKFLOW_PLAN_VERSION,
++              sessionStore: this.seedStartupSessionStore,
++              steps: this.buildSeedCheckpointSteps(
++                startupPipelineRunner,
++                seedPlan,
++              ),
++              isRetryableFailure: (error) =>
++                error?.code === 'STARTUP_CHECKPOINT_HELD',
++            });
++            break;
++          } catch (error) {
++            if (error?.code !== 'STARTUP_CHECKPOINT_HELD' ||
++                timeSource.now() >= this.seedStartupInvocation.deadlineAtMs) {
++              throw error;
++            }
++            const remaining = this.seedStartupInvocation.deadlineAtMs -
++              timeSource.now();
++            await this.sleep(Math.min(
++              error.retryAfterMs ?? PARTICIPANT_CUTOVER_BOUND.PAUSE_RETRY_AFTER_MS,
++              remaining,
++            ));
++          }
++        }
+         return this.completeSuccessfulBootstrap();
+       } catch (error) {
+         return this.handleBootstrapFailure(error);
+diff --git a/src/bootstrap/bootstrap-service.js b/src/bootstrap/bootstrap-service.js
+index 8b273c940..2094e826f 100644
+--- a/src/bootstrap/bootstrap-service.js
++++ b/src/bootstrap/bootstrap-service.js
+@@ -213,6 +213,12 @@ class BootstrapService extends EventEmitter {
+     );
+     this.bootstrapReadinessState = options.readinessState || null;
+     this.startupServicesAdmission = options.startupServicesAdmission || null;
++    this.membershipOwnerOutcome = options.membershipOwnerOutcome || null;
++    this.dataDirectoryProcessOwner = options.dataDirectoryProcessOwner || null;
++    this.seedStartupAuthorization = null;
++    this.seedStartupInvocation = null;
++    this.seedFirstParticipantReleaseRefusal = null;
++    this.seedParticipantActivationReadCutReady = false;
+     this.sqlQueryEngine = options.sqlQueryEngine || null;
+     this.onLocalAdminRuntimeReady =
+       typeof options.onLocalAdminRuntimeReady === LOCAL_STR_FUNCTION ?
+@@ -490,6 +496,10 @@ class BootstrapService extends EventEmitter {
+         }),
+         getHeartbeatRunningState: () => HEARTBEAT_STATE.RUNNING,
+         getRouteSource: () => this.nodeAddress,
++        // Seed bootstrap owns a provisional SQL engine while ordinary writes
++        // remain closed.  Recovery is activated by the final SQL-runtime
++        // attachment, after that engine replaces the provisional binding.
++        activateDistributedTransactionRecoveryOnWriterActivation: false,
+         isDistributedTransactionRecoveryAvailable: () =>
+           typeof this.sqlQueryEngine?.activateDistributedTransactionRecovery ===
+             LOCAL_STR_FUNCTION,
+@@ -534,6 +544,7 @@ class BootstrapService extends EventEmitter {
+         options.seedStartupSessionStore :
+         new SeedStartupSessionStore({
+           dataDir: startupWorkflowDataDir,
++          now: () => this.nodeService.getTimeSource().now(),
+         });
+     this.seedPhaseOwners = createSeedPhaseOwners(this);
+     this.partitionReplicaProgressReporter = new ReplicaCreationProgressReporter({
+diff --git a/src/bootstrap/owners/seed-runtime-bridge-owner.js b/src/bootstrap/owners/seed-runtime-bridge-owner.js
+index e2c1d94b8..778ddd07c 100644
+--- a/src/bootstrap/owners/seed-runtime-bridge-owner.js
++++ b/src/bootstrap/owners/seed-runtime-bridge-owner.js
+@@ -19,6 +19,9 @@ import {
+ } from '../../cache/cache-constants.js';
+ import {resolveHostedNodeClock} from
+   '../shared/hosted-replica-authorities.js';
++import {SQLQueryEngine} from '../../query/sql-query-engine.js';
++import {CONTROL_PLANE_READINESS_DIMENSION} from
++  '../../control-plane/control-plane-readiness-constants.js';
+ 
+ const LOCAL_STR_FUNCTION = 'function';
+ 
+@@ -31,6 +34,36 @@ class SeedRuntimeBridgeOwner {
+   constructor(options = {}) {
+     this.delegates = options.delegates || {};
+     this.compatibilityPhase = options.compatibilityPhase || null;
++    this.sqlQueryEngine = null;
++    this.bootstrapTopologySnapshotOwner = null;
++  }
++
++  attachBootstrapTopologySnapshotOwner(owner) {
++    this.bootstrapTopologySnapshotOwner = owner;
++    this.sqlQueryEngine?.queryExecutor.setBootstrapTopologySnapshotOwner(owner);
++  }
++
++  acquireSqlQueryEngine() {
++    if (this.sqlQueryEngine !== null) return this.sqlQueryEngine;
++    const d = this.delegates;
++    const cdcIntegrationService = this.ensureBootstrapCdcIntegrationService();
++    const engine = new SQLQueryEngine({
++      nowFn: resolveHostedNodeClock(d), systemCache: d.getSystemTableCache(),
++      messageRouter: d.getMessageRouter(), nodeId: d.getNodeId(),
++      cdcIntegrationService, partitionServicesProvider: () => d.getPartitionServices(),
++      bootstrapTopologySnapshotOwner: this.bootstrapTopologySnapshotOwner,
++      rebalanceCoordinator: d.getRebalanceCoordinator(),
++      controlPlaneReadinessService:
++        d.getRebalanceCoordinator()?.controlPlaneReadinessService || null,
++      defaultRoutingReadinessDimension:
++        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
++      migrationAutoWire: false, autoStartDistributedTransactionRecovery: false,
++      unrefRetryDelayTimers: true,
++    });
++    this.sqlQueryEngine = engine;
++    d.setSqlQueryEngine?.(engine);
++    cdcIntegrationService.setSqlQueryEngine(engine);
++    return engine;
+   }
+ 
+   getCompatibilityOverride(methodName) {
+diff --git a/src/bootstrap/phases/seed-registration-phase.js b/src/bootstrap/phases/seed-registration-phase.js
+index d29ed78b1..8916eeb1c 100644
+--- a/src/bootstrap/phases/seed-registration-phase.js
++++ b/src/bootstrap/phases/seed-registration-phase.js
+@@ -75,6 +75,11 @@ const REGISTRATION_REQUIRED_LEADER_TABLES = Object.freeze([
+   SYSTEM_TABLE_NAME.SERVICES,
+   SYSTEM_TABLE_NAME.TABLES,
+   SYSTEM_TABLE_NAME.MESSAGE_GROUPS,
++  // Participant activation precedes every registration write and is decided
++  // by the transaction control partition.  Start only that additional cohort
++  // with the existing registration dependency cut; unrelated system groups
++  // remain in the deferred election cohort.
++  SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
+ ]);
+ const REGISTRATION_REQUIRED_LEADER_PARTITION_IDS = Object.freeze(
+   REGISTRATION_REQUIRED_LEADER_TABLES.map((tableName) =>
+diff --git a/src/bootstrap/seed-startup-session-store.js b/src/bootstrap/seed-startup-session-store.js
+index d92fa2881..b2c5c8d73 100644
+--- a/src/bootstrap/seed-startup-session-store.js
++++ b/src/bootstrap/seed-startup-session-store.js
+@@ -2,6 +2,9 @@ import {
+   STARTUP_WORKFLOW_ERROR,
+   StartupWorkflowStore,
+ } from './startup-workflow-store.js';
++import {randomBytes} from 'node:crypto';
++import {readDataDirectoryProcessOwnerEvidence} from
++  '../storage/data-directory-process-owner.js';
+ 
+ const SEED_STARTUP_CHECKPOINT = Object.freeze({
+   SESSION_CREATED: 'SESSION_CREATED',
+@@ -44,6 +47,43 @@ const SEED_STARTUP_SESSION_ID = Object.freeze({
+ });
+ 
+ const SEED_STARTUP_WORKFLOW_KIND = 'seed';
++const SEED_STORAGE_BIRTH_KIND = 'seed_storage_birth_v1';
++const PARTICIPANT_RELEASE_SCOPE = 'participant_release';
++const AUTHORIZATION_CAPABILITIES = new WeakMap();
++
++function validPositiveInteger(value) {
++  return Number.isSafeInteger(value) && value > 0 && !Object.is(value, -0);
++}
++
++function validateStoredAuthorization(record, options, ownerEvidence) {
++  const authority = record?.immutableAuthorization;
++  return authority?.kind === SEED_STORAGE_BIRTH_KIND &&
++    authority.activationScope === PARTICIPANT_RELEASE_SCOPE &&
++    authority.authorityId === ownerEvidence.authorityId &&
++    authority.canonicalDataDir === ownerEvidence.canonicalDataDir &&
++    authority.nodeId === options.nodeId &&
++    authority.sessionId === SEED_STARTUP_SESSION_ID.DEFAULT &&
++    validPositiveInteger(authority.firstBootIncarnation);
++}
++
++function issueAuthorizationCapability(store, record, ownerEvidence) {
++  const token = Object.freeze(Object.create(null));
++  AUTHORIZATION_CAPABILITIES.set(token, Object.freeze({
++    authorityId: record.immutableAuthorization.authorityId,
++    bootIncarnation: record.startupInvocation.currentBootIncarnation,
++    canonicalDataDir: ownerEvidence.canonicalDataDir,
++    deadlineAtMs: record.startupInvocation.deadlineAtMs,
++    invocationId: record.startupInvocation.invocationId,
++    nodeId: record.nodeId,
++    store,
++    targetBuildDigest: record.startupInvocation.targetBuildDigest,
++  }));
++  return token;
++}
++
++function readSeedStartupAuthorization(token) {
++  return AUTHORIZATION_CAPABILITIES.get(token) || null;
++}
+ 
+ class SeedStartupSessionStore {
+   constructor(options = {}) {
+@@ -58,8 +98,10 @@ class SeedStartupSessionStore {
+         now: options.now,
+         dataDir: options.dataDir,
+         storage: options.storage,
+-        restartTerminalSession: true,
++        restartTerminalSession: false,
+       });
++    this.dataDir = options.dataDir || null;
++    this.now = typeof options.now === 'function' ? options.now : () => Date.now();
+   }
+ 
+   async resolveSessionId(options = {}) {
+@@ -90,6 +132,115 @@ class SeedStartupSessionStore {
+     });
+   }
+ 
++  async prepareDurableAuthority(options = {}) {
++    const ownerEvidence = readDataDirectoryProcessOwnerEvidence(
++      options.dataDirectoryProcessOwner, this.dataDir);
++    if (ownerEvidence === null ||
++        !validPositiveInteger(options.bootIncarnation) ||
++        typeof options.nodeId !== 'string' || options.nodeId.length === 0) {
++      const error = new Error('Seed startup durable authority unavailable');
++      error.code = 'SEED_STARTUP_AUTHORITY_UNAVAILABLE';
++      throw error;
++    }
++    let record = await this.loadLatestSession({nodeId: options.nodeId});
++    const startedAt = this.now();
++    if (record === null) {
++      if (ownerEvidence.createdAndOwned !== true ||
++          typeof ownerEvidence.authorityId !== 'string') {
++        const error = new Error('Existing data directory requires seed authority');
++        error.code = 'SEED_STARTUP_OPERATOR_REQUIRED';
++        throw error;
++      }
++      const immutableAuthorization = Object.freeze({
++        activationScope: PARTICIPANT_RELEASE_SCOPE,
++        authorityId: ownerEvidence.authorityId,
++        canonicalDataDir: ownerEvidence.canonicalDataDir,
++        createdAt: startedAt,
++        firstBootIncarnation: options.bootIncarnation,
++        kind: SEED_STORAGE_BIRTH_KIND,
++        nodeId: options.nodeId,
++        sessionId: SEED_STARTUP_SESSION_ID.DEFAULT,
++      });
++      record = await this.workflowStore.createOrLoadSession({
++        immutableAuthorization,
++        nodeId: options.nodeId,
++        planVersion: options.planVersion,
++        sessionId: SEED_STARTUP_SESSION_ID.DEFAULT,
++        startupInvocation: null,
++      });
++    } else {
++      if (!validateStoredAuthorization(record, options, ownerEvidence)) {
++        const error = new Error('Seed startup durable authority conflicts');
++        error.code = 'SEED_STARTUP_AUTHORITY_CONFLICT';
++        throw error;
++      }
++    }
++    return Object.freeze({record, ownerEvidence});
++  }
++
++  async prepareAuthorizedInvocation(options = {}) {
++    if (typeof options.targetBuildDigest !== 'string' ||
++        options.targetBuildDigest.length === 0 ||
++        !validPositiveInteger(options.timeoutMs)) {
++      const error = new Error('Seed startup invocation is invalid');
++      error.code = 'SEED_STARTUP_INVOCATION_INVALID';
++      throw error;
++    }
++    const prepared = await this.prepareDurableAuthority(options);
++    let {record} = prepared;
++    const {ownerEvidence} = prepared;
++    if (record.startupInvocation?.currentBootIncarnation ===
++        options.bootIncarnation &&
++        record.startupInvocation?.state === 'pending') {
++      return Object.freeze({record,
++        authorization: issueAuthorizationCapability(this, record, ownerEvidence)});
++    }
++    const startedAt = this.now();
++    const deadlineAtMs = startedAt + options.timeoutMs;
++    if (!Number.isSafeInteger(deadlineAtMs) || deadlineAtMs <= startedAt) {
++      const error = new Error('Seed startup deadline is invalid');
++      error.code = 'SEED_STARTUP_DEADLINE_INVALID';
++      throw error;
++    }
++    {
++      record = await this.workflowStore.updateSession({
++        nodeId: options.nodeId,
++        sessionId: SEED_STARTUP_SESSION_ID.DEFAULT,
++        update: (current) => {
++          const restartedWorkflow = current.terminal === true ||
++            (current.startupInvocation !== null &&
++              current.startupInvocation?.currentBootIncarnation !==
++                options.bootIncarnation);
++          return {
++            ...current,
++            attemptCount: current.attemptCount + 1,
++            checkpoint: restartedWorkflow ?
++              SEED_STARTUP_CHECKPOINT.SESSION_CREATED : current.checkpoint,
++            completedAt: null,
++            failureMessage: null,
++            lastErrorCode: null,
++            phase: restartedWorkflow ?
++              SEED_STARTUP_SESSION_PHASE.SESSION_CREATED : current.phase,
++            retryAfterMs: 0,
++            retryable: true,
++            startupInvocation: {
++              currentBootIncarnation: options.bootIncarnation,
++              deadlineAtMs,
++              invocationId: randomBytes(24).toString('hex'),
++              seedStartupHoldStartedAtMs: startedAt,
++              state: 'pending',
++              targetBuildDigest: options.targetBuildDigest,
++            },
++            status: 'active',
++            terminal: false,
++          };
++        },
++      });
++    }
++    return Object.freeze({record,
++      authorization: issueAuthorizationCapability(this, record, ownerEvidence)});
++  }
++
+   async advanceCheckpoint(options = {}) {
+     return this.workflowStore.advanceCheckpoint(options);
+   }
+@@ -98,6 +249,15 @@ class SeedStartupSessionStore {
+     return this.workflowStore.recordFailure(options);
+   }
+ 
++  validatesAuthorization(token, options = {}) {
++    const capability = readSeedStartupAuthorization(token);
++    return capability?.store === this &&
++      capability.nodeId === options.nodeId &&
++      capability.bootIncarnation === options.bootIncarnation &&
++      capability.targetBuildDigest === options.targetBuildDigest &&
++      capability.deadlineAtMs === options.deadlineAtMs;
++  }
++
+   isCheckpointSatisfied(currentCheckpoint, targetCheckpoint) {
+     return this.workflowStore.isCheckpointSatisfied(
+       currentCheckpoint,
+@@ -121,4 +281,5 @@ export {
+   SEED_STARTUP_SESSION_PHASE,
+   STARTUP_WORKFLOW_ERROR,
+   SeedStartupSessionStore,
++  readSeedStartupAuthorization,
+ };
+diff --git a/src/bootstrap/shared/replica-handler-setup.js b/src/bootstrap/shared/replica-handler-setup.js
+index bd82a4d81..5c1c27fcd 100644
+--- a/src/bootstrap/shared/replica-handler-setup.js
++++ b/src/bootstrap/shared/replica-handler-setup.js
+@@ -181,6 +181,7 @@ class ReplicaHandlerSetup {
+       replicaStateMachine: existingReplicaStateMachine,
+       timeSource,
+       ownerIncarnation,
++      deferInitialization = false,
+     } = options;
+ 
+     // Validate required dependencies
+@@ -261,10 +262,12 @@ class ReplicaHandlerSetup {
+       dataDir,
+       executorOutcomeEmitter,
+       ownerIncarnation,
++      timeSource,
+     });
+ 
+-    // Initialize the handler
+-    replicaHandler.initialize();
++    if (!deferInitialization) {
++      replicaHandler.initialize();
++    }
+ 
+     // Register with message router for receiving replica operation messages
+     replicaHandler.registerWithRouter(messageRouter, {
+diff --git a/src/bootstrap/shared/snapshot-catchup-wiring.js b/src/bootstrap/shared/snapshot-catchup-wiring.js
+index dc8aa3056..eb42f982e 100644
+--- a/src/bootstrap/shared/snapshot-catchup-wiring.js
++++ b/src/bootstrap/shared/snapshot-catchup-wiring.js
+@@ -41,6 +41,8 @@ import {
+ } from '../../transport/node-address-resolution.js';
+ import {LoggingService} from '../../logging/logging-service.js';
+ import {SUBSYSTEM} from '../../constants/index.js';
++import {retireParticipantReleaseBeforeReplacement} from
++  '../../node/participant-release-lifecycle-retirement.js';
+ 
+ const SNAPSHOT_WIRING_LOG_MSG = Object.freeze({
+   DISPATCH_FAILED: 'Snapshot catch-up dispatch failed',
+@@ -195,8 +197,10 @@ function armSnapshotOfferRouting(context) {
+       connection,
+       resolveLocalReplica: (raftGroupId) =>
+         resolveLocalReplicaService(replicaHandler, raftGroupId),
+-      orchestrate: ({service, socket}) =>
+-        orchestrateSnapshotCatchupInstall({
++      orchestrate: ({service, socket}) => {
++        const deadlineAtMs = replicaHandler.timeSource.now() +
++          replicaHandler.syncTimeoutMs;
++        return orchestrateSnapshotCatchupInstall({
+           service,
+           receiveOptions: {
+             socket,
+@@ -216,6 +220,9 @@ function armSnapshotOfferRouting(context) {
+             );
+             return replicaHandler.createPartitionService(serviceOptions);
+           },
++          beforeServiceReplacement: (current) =>
++            retireParticipantReleaseBeforeReplacement(replicaHandler, current,
++              {deadlineAtMs}),
+           registerReplacementService: (replacement) =>
+             replicaHandler.replaceLocalReplicaService(
+               service.replicaId, replacement),
+@@ -226,7 +233,8 @@ function armSnapshotOfferRouting(context) {
+               error: error?.message,
+             });
+           return null;
+-        }),
++        });
++      },
+       onOutcome: context.onRouteOutcome,
+     });
+   });
+diff --git a/src/bootstrap/shared/startup-sql-runtime-handoff.js b/src/bootstrap/shared/startup-sql-runtime-handoff.js
+index 92be16a58..5277a1524 100644
+--- a/src/bootstrap/shared/startup-sql-runtime-handoff.js
++++ b/src/bootstrap/shared/startup-sql-runtime-handoff.js
+@@ -7,6 +7,8 @@ import {
+ import {
+   ensureServiceInstallationReconcilerOwner,
+ } from './service-installation-reconciler-setup.js';
++import {CONTROL_PLANE_READINESS_DIMENSION} from
++  '../../control-plane/control-plane-readiness-constants.js';
+ 
+ const LOCAL_STR_FUNCTION = 'function';
+ const numberIsSafeInteger = Number.isSafeInteger;
+@@ -60,6 +62,7 @@ function attachRuntimeAccessPolicyOwner(owner, sqlQueryEngine) {
+  * @param {Object|null} [options.cacheMutationTarget]
+  * @param {Object|null} [options.messageRouter]
+  * @param {Function|null} [options.partitionServicesProvider]
++ * @param {boolean} [options.activateDistributedTransactionRecovery=true]
+  * @return {*}
+  */
+ function attachSqlRuntimeToStartupOwner(options) {
+@@ -140,6 +143,21 @@ function attachSqlRuntimeToStartupOwner(options) {
+   }
+ 
+   const rebalanceCoordinator = owner.rebalanceCoordinator || null;
++  if (typeof sqlQueryEngine.setRebalanceCoordinator === LOCAL_STR_FUNCTION) {
++    sqlQueryEngine.setRebalanceCoordinator(rebalanceCoordinator);
++  }
++  if (rebalanceCoordinator &&
++      typeof sqlQueryEngine.setTablePartitionProvisioner === LOCAL_STR_FUNCTION &&
++      typeof sqlQueryEngine.provisionInitialTablePartition === LOCAL_STR_FUNCTION) {
++    sqlQueryEngine.setTablePartitionProvisioner((context) =>
++      sqlQueryEngine.provisionInitialTablePartition(context));
++  }
++  if (typeof sqlQueryEngine.setDefaultRoutingReadinessDimension ===
++      LOCAL_STR_FUNCTION) {
++    sqlQueryEngine.setDefaultRoutingReadinessDimension(
++      CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
++    );
++  }
+   if (
+     rebalanceCoordinator &&
+     typeof rebalanceCoordinator.syncOwnerDependencies === LOCAL_STR_FUNCTION
+@@ -178,7 +196,8 @@ function attachSqlRuntimeToStartupOwner(options) {
+   }
+ 
+   let transactionRecovery = null;
+-  if (typeof owner.activateDistributedTransactionRecovery ===
++  if (options.activateDistributedTransactionRecovery !== false &&
++      typeof owner.activateDistributedTransactionRecovery ===
+       LOCAL_STR_FUNCTION) {
+     transactionRecovery = activateOwnerTrackedTransactionRecovery(owner);
+   }
+diff --git a/src/bootstrap/startup-workflow-store.js b/src/bootstrap/startup-workflow-store.js
+index 7cf1d3b62..49c024303 100644
+--- a/src/bootstrap/startup-workflow-store.js
++++ b/src/bootstrap/startup-workflow-store.js
+@@ -1,4 +1,4 @@
+-import {mkdir, readFile, rename, writeFile} from 'node:fs/promises';
++import {mkdir, open, readFile, rename} from 'node:fs/promises';
+ import {join as joinPath} from 'node:path';
+ 
+ const LOCAL_STR_UNDERSCORE = '_';
+@@ -70,6 +70,13 @@ function cloneWorkflowRecord(record) {
+     createdAt: record.createdAt,
+     updatedAt: record.updatedAt,
+     completedAt: record.completedAt,
++    recordRevision: record.recordRevision,
++    immutableAuthorization: record.immutableAuthorization ?
++      {...record.immutableAuthorization} : null,
++    startupInvocation: record.startupInvocation ?
++      {...record.startupInvocation} : null,
++    participantReleaseCommand: record.participantReleaseCommand ?
++      {...record.participantReleaseCommand} : null,
+   };
+ }
+ 
+@@ -132,14 +139,25 @@ class FileStartupWorkflowStorage {
+     });
+     const tempPath = `${recordPath}${STARTUP_WORKFLOW_TEMP_SUFFIX}.` +
+       `${process.pid}.${Date.now()}`;
+-    await writeFile(
+-      tempPath,
+-      JSON.stringify(record, null, STARTUP_WORKFLOW_JSON_INDENT) +
+-        STARTUP_WORKFLOW_JSON_LINE_SUFFIX,
+-      STARTUP_WORKFLOW_UTF8,
+-    );
++    const bytes = JSON.stringify(record, null, STARTUP_WORKFLOW_JSON_INDENT) +
++      STARTUP_WORKFLOW_JSON_LINE_SUFFIX;
++    const file = await open(tempPath, 'wx', 0o600);
++    try {
++      await file.writeFile(bytes, STARTUP_WORKFLOW_UTF8);
++      await file.sync();
++    } finally {
++      await file.close();
++    }
+     await rename(tempPath, recordPath);
+-    return cloneWorkflowRecord(record);
++    const directory = await open(
++      joinPath(this.dataDir, STARTUP_WORKFLOW_STORAGE_DIRNAME), 'r');
++    try {
++      await directory.sync();
++    } finally {
++      await directory.close();
++    }
++    return cloneWorkflowRecord(JSON.parse(
++      await readFile(recordPath, STARTUP_WORKFLOW_UTF8)));
+   }
+ }
+ 
+@@ -280,6 +298,7 @@ class StartupWorkflowStore {
+         planVersion,
+         attemptCount: existing.attemptCount + 1,
+         updatedAt: now,
++        recordRevision: (existing.recordRevision ?? 0) + 1,
+       };
+       await this.storage.saveRecord(storageKey, updated);
+       return cloneWorkflowRecord(updated);
+@@ -302,6 +321,10 @@ class StartupWorkflowStore {
+       createdAt: now,
+       updatedAt: now,
+       completedAt: STARTUP_WORKFLOW_DEFAULT_COMPLETED_AT,
++      recordRevision: 1,
++      immutableAuthorization: options.immutableAuthorization || null,
++      startupInvocation: options.startupInvocation || null,
++      participantReleaseCommand: options.participantReleaseCommand || null,
+     };
+     await this.storage.saveRecord(storageKey, created);
+     return cloneWorkflowRecord(created);
+@@ -356,6 +379,7 @@ class StartupWorkflowStore {
+       completedAt: terminal ?
+         this.now() :
+         STARTUP_WORKFLOW_DEFAULT_COMPLETED_AT,
++      recordRevision: (existing.recordRevision ?? 0) + 1,
+     };
+     await this.storage.saveRecord(storageKey, updated);
+     return cloneWorkflowRecord(updated);
+@@ -400,10 +424,34 @@ class StartupWorkflowStore {
+       completedAt: terminal ?
+         this.now() :
+         STARTUP_WORKFLOW_DEFAULT_COMPLETED_AT,
++      recordRevision: (existing.recordRevision ?? 0) + 1,
+     };
+     await this.storage.saveRecord(storageKey, updated);
+     return cloneWorkflowRecord(updated);
+   }
++
++  async updateSession(options = {}) {
++    const nodeId = normalizeNonEmptyString(options.nodeId);
++    const sessionId = normalizeNonEmptyString(options.sessionId);
++    if (nodeId === null || sessionId === null ||
++        typeof options.update !== 'function') {
++      throw new Error(STARTUP_WORKFLOW_ERROR.SESSION_NOT_FOUND);
++    }
++    const storageKey = this.buildStorageKey({nodeId});
++    const existing = await this.storage.loadRecord(storageKey);
++    if (!existing || existing.sessionId !== sessionId) {
++      throw new Error(STARTUP_WORKFLOW_ERROR.SESSION_NOT_FOUND);
++    }
++    const updated = options.update(cloneWorkflowRecord(existing));
++    if (!updated || updated.sessionId !== existing.sessionId ||
++        updated.nodeId !== existing.nodeId ||
++        updated.workflowKind !== existing.workflowKind) {
++      throw new Error(STARTUP_WORKFLOW_ERROR.SESSION_NOT_FOUND);
++    }
++    updated.recordRevision = (existing.recordRevision ?? 0) + 1;
++    updated.updatedAt = this.now();
++    return this.storage.saveRecord(storageKey, updated);
++  }
+ }
+ 
+ export {
+diff --git a/src/lagrange-runtime-startup.js b/src/lagrange-runtime-startup.js
+index 181f9c63c..f53458981 100644
+--- a/src/lagrange-runtime-startup.js
++++ b/src/lagrange-runtime-startup.js
+@@ -429,6 +429,8 @@ async function startSeedNode(options) {
+     readinessState,
+     bootIncarnation,
+     startupServicesAdmission,
++    membershipOwnerOutcome: options.membershipOwnerOutcome,
++    dataDirectoryProcessOwner: options.dataDirectoryProcessOwner,
+   });
+   options.cleanupLedger.defer(() => bootstrapService.shutdown());
+ 
+@@ -452,6 +454,9 @@ async function startSeedNode(options) {
+     requestCellEnv: env,
+     rolloutControls,
+   });
++  bootstrapService.seedRuntimeBridgeOwner.attachBootstrapTopologySnapshotOwner(
++    bootstrapAPI.bootstrapTopologySnapshotOwner,
++  );
+ 
+   options.cleanupLedger.defer(() => bootstrapAPI.shutdown());
+   await awaitStartupAcquisition(bootstrapAPI.initialize(), options.signal);
+@@ -716,10 +721,11 @@ async function acquireLagrangeRuntime(options, cleanupLedger) {
+   });
+ 
+   const dataDirectoryManager = DataDirectoryManager.getInstance();
+-  dataDirectoryManager.initialize();
++  dataDirectoryManager.configure();
+   const dataDirectoryProcessOwner = acquireDataDirectoryProcessOwner(
+     dataDirectoryManager.getDataDir());
+   cleanupLedger.defer(() => dataDirectoryProcessOwner.release());
++  dataDirectoryManager.initialize({processOwner: dataDirectoryProcessOwner});
+ 
+   const hlcClock = new HLCClockService(config.get(CONFIG_KEY.NODE_ID), {
+     maxDrift: config.get(CONFIG_KEY.HLC_MAX_DRIFT_MS),
+@@ -766,6 +772,8 @@ async function acquireLagrangeRuntime(options, cleanupLedger) {
+   } else {
+     runtime = await startSeedNode({cleanupLedger, config, mainLogger,
+       dataDirectoryManager, rolloutControls, env: environment,
++      membershipOwnerOutcome: startupJoinDecision.membershipOwnerOutcome,
++      dataDirectoryProcessOwner,
+       signal: options.signal});
+   }
+   return bindDataDirectoryProcessOwner(runtime, dataDirectoryProcessOwner);
+diff --git a/src/node/replica-create-admission-owner.js b/src/node/replica-create-admission-owner.js
+index 0e3323f5e..8fcbbfb71 100644
+--- a/src/node/replica-create-admission-owner.js
++++ b/src/node/replica-create-admission-owner.js
+@@ -676,6 +676,25 @@ class ReplicaCreateAdmissionOwner {
+     );
+   }
+ 
++  async authorizeParticipantRelease(evidence, physicalClaim) {
++    if (evidence?.admissionState !== CREATE_ADMISSION_STATE.MATERIALIZED ||
++        !await this.revalidatePhysicalWorker(physicalClaim, evidence)) {
++      return null;
++    }
++    const row = await this.readOperation(evidence.operationId);
++    await this.requireCurrentBootIncarnation();
++    if (!rowMatchesAdmission(row, requestFromAdmissionRow(row)) ||
++        !rowMatchesAdmissionIdentity(row, evidence) ||
++        row.create_admission_state !== CREATE_ADMISSION_STATE.MATERIALIZED ||
++        nullableSafeInteger(row.create_admission_owner_incarnation) !==
++          this.ownerIncarnation ||
++        row.completed_at !== null && row.completed_at !== undefined ||
++        !await this.revalidatePhysicalWorker(physicalClaim, evidence)) {
++      return null;
++    }
++    return evidence;
++  }
++
+   async markProgress(evidence, nextState) {
+     if (nextState !== CREATE_ADMISSION_STATE.ACTIVE &&
+         nextState !== CREATE_ADMISSION_STATE.FAILED) return null;
+diff --git a/src/node/replica-handler-class.js b/src/node/replica-handler-class.js
+index d87572cd0..f91074c8d 100644
+--- a/src/node/replica-handler-class.js
++++ b/src/node/replica-handler-class.js
+@@ -33,6 +33,9 @@ import {createSystemMetadataGatewayRequiredError} from '../control-plane/system-
+ import {LoggingService} from '../logging/logging-service.js';
+ import {assertCritical} from '../utils/assert.js';
+ import {TrackedServiceRegistry} from './replica-handler-membership-relay.js';
++import {createParticipantReleaseRecovery} from './replica-handler-release-recovery.js';
++import {createParticipantReleaseAuthorizationOwner} from
++  './participant-release-authorization-owner.js';
+ import {assignReplicaHandlerMembershipMethods} from
+   './replica-handler-membership-methods.js';
+ import {assignReplicaHandlerCommittedMembershipMethods} from
+@@ -146,6 +149,10 @@ class ReplicaHandler extends EventEmitter {
+         controlPlaneSystemTableGateway: this.controlPlaneSystemTableGateway,
+         systemTableCache: this.systemTableCache,
+       });
++    this.timeSource = options.timeSource || this.replicaStateMachine?.timeSource ||
++      Object.freeze({now: Date.now,
++        setTimeout: (callback, delay) => setTimeout(callback, delay),
++        clearTimeout: (handle) => clearTimeout(handle)});
+     // Track live service references by replica_id (needed for shutdown,
+     // voter-readiness); the registry also relays each tracked service's
+     // consensus observations to the REPLACE owner (design S5.2).
+@@ -190,6 +197,9 @@ class ReplicaHandler extends EventEmitter {
+     });
+     this.creationProgressByReplica = new Map();
+     this.initialized = false;
++    this.participantReleaseAuthorizationOwner =
++      createParticipantReleaseAuthorizationOwner(this);
++    this.participantReleaseRecovery = createParticipantReleaseRecovery(this);
+   }
+ }
+ 
+diff --git a/src/node/replica-handler-create-methods.js b/src/node/replica-handler-create-methods.js
+index 7004f3e05..b70f0792e 100644
+--- a/src/node/replica-handler-create-methods.js
++++ b/src/node/replica-handler-create-methods.js
+@@ -400,6 +400,26 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
+           });
+           await this.waitForVoterReadyActivation(replicaId, partitionId);
+         }
++        if (createAdmissionEvidence) {
++          const participantReleaseDeadlineAtMs =
++            createAdmissionEvidence.workflowUpdatedAt + this.syncTimeoutMs;
++          if (!Number.isSafeInteger(participantReleaseDeadlineAtMs) ||
++              participantReleaseDeadlineAtMs <=
++                createAdmissionEvidence.workflowUpdatedAt) {
++            throw new Error(
++              `Fresh replica release deadline invalid for ${operationId}`,
++            );
++          }
++          await this.participantReleaseRecovery.releaseFreshCreate(
++            partitionId,
++            {
++              createAdmissionEvidence,
++              createPhysicalWorkerClaim: request.createPhysicalWorkerClaim,
++              identityExisted: existed,
++              deadlineAtMs: participantReleaseDeadlineAtMs,
++            },
++          );
++        }
+         // Voter readiness is executor evidence, not permission to complete
+         // the operation. Publish it before the SERVICES write so formation
+         // cannot depend on a round-trip through the control plane being
+diff --git a/src/node/replica-handler-lifecycle-methods.js b/src/node/replica-handler-lifecycle-methods.js
+index 27def84c9..4806f1be7 100644
+--- a/src/node/replica-handler-lifecycle-methods.js
++++ b/src/node/replica-handler-lifecycle-methods.js
+@@ -19,6 +19,11 @@ import {
+   REPLICA_HANDLER_ERROR_MSG,
+   REPLICA_HANDLER_LOG_MSG,
+ } from './replica-handler-constants.js';
++import {PARTICIPANT_RELEASE_ACTION, PARTICIPANT_RELEASE_RESULT_FIELD,
++  PARTICIPANT_RELEASE_TYPE} from
++  '../partition/partition-participant-transaction-cutover-constants.js';
++import {receiveParticipantRelease} from './replica-handler-participant-release.js';
++import {runParticipantCutover} from './replica-handler-participant-cutover.js';
+ 
+ const LOCAL_STR_CONSTRUCTOR = 'constructor';
+ const CREATE_ADMISSION_RECOVERY_NOT_STARTED = false;
+@@ -127,9 +132,19 @@ function assignReplicaHandlerLifecycleMethods(ReplicaHandler) {
+      * @return {Promise<Object>} Response.
+      */
+     async handleMessage(envelope) {
+-      await this.awaitRemovedReplicaCleanupAdmissionBarrier();
+       const {payload, correlationId} = envelope;
+       const type = payload?.[ReplicaOperationField.TYPE];
++      // Release fact reads and admission closure must remain reachable before
++      // registration. Storage-changing lifecycle work still waits for its own
++      // retained-storage admission inside the release recipient.
++      if (type === PARTICIPANT_RELEASE_TYPE) {
++        const response = payload.action === PARTICIPANT_RELEASE_ACTION.RELEASE ?
++          await runParticipantCutover(this, payload) :
++          await receiveParticipantRelease(this, payload);
++        return {acknowledged: true,
++          [PARTICIPANT_RELEASE_RESULT_FIELD]: response, correlationId};
++      }
++      await this.awaitRemovedReplicaCleanupAdmissionBarrier();
+       this.logger.debug(REPLICA_HANDLER_LOG_MSG.MESSAGE_RECEIVED, {
+         type,
+         correlationId,
+diff --git a/src/node/replica-handler-membership-relay.js b/src/node/replica-handler-membership-relay.js
+index 0db95dfa0..64650a13a 100644
+--- a/src/node/replica-handler-membership-relay.js
++++ b/src/node/replica-handler-membership-relay.js
+@@ -36,26 +36,43 @@ class TrackedServiceRegistry extends Map {
+   constructor() {
+     super();
+     this.membershipListeners = new Set();
++    this.serviceListeners = new Set();
+     this.relayByReplicaId = new Map();
+   }
+ 
+   set(replicaId, service) {
++    const previous = this.get(replicaId);
+     this.detachRelay(replicaId);
+     super.set(replicaId, service);
+     this.attachRelay(replicaId, service);
++    this.notifyServiceChange(replicaId, service, previous);
+     return this;
+   }
+ 
+   delete(replicaId) {
++    const previous = this.get(replicaId);
+     this.detachRelay(replicaId);
+-    return super.delete(replicaId);
++    const deleted = super.delete(replicaId);
++    if (deleted) this.notifyServiceChange(replicaId, null, previous);
++    return deleted;
+   }
+ 
+   clear() {
+-    for (const replicaId of [...this.relayByReplicaId.keys()]) {
+-      this.detachRelay(replicaId);
++    for (const replicaId of [...this.keys()]) {
++      this.delete(replicaId);
+     }
+-    super.clear();
++  }
++
++  notifyServiceChange(replicaId, service, previous) {
++    for (const listener of [...this.serviceListeners]) {
++      listener({replicaId, service, previous});
++    }
++  }
++
++  subscribeServiceChanges(listener) {
++    if (typeof listener !== FUNCTION_TYPE) return () => {};
++    this.serviceListeners.add(listener);
++    return () => this.serviceListeners.delete(listener);
+   }
+ 
+   attachRelay(replicaId, service) {
+diff --git a/src/node/replica-handler-runtime-methods.js b/src/node/replica-handler-runtime-methods.js
+index 78e5b9c4e..26c46a3fb 100644
+--- a/src/node/replica-handler-runtime-methods.js
++++ b/src/node/replica-handler-runtime-methods.js
+@@ -645,6 +645,7 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
+         this.replicaCreateAdmissionRecoveryRearmOwner.cancel();
+         await Promise.allSettled([
+           this.replicaCreateAdmissionRecoveryTask,
++          this.participantReleaseRecovery?.shutdown?.(),
+         ].filter(Boolean));
+         // A removal waiting for its replica to leave consensus stops waiting.
+         this.removalConsensusExitRelease?.abort();
+diff --git a/src/partition/partition-committed-command-admission.js b/src/partition/partition-committed-command-admission.js
+index 093d6f4a0..18def10e9 100644
+--- a/src/partition/partition-committed-command-admission.js
++++ b/src/partition/partition-committed-command-admission.js
+@@ -40,6 +40,7 @@ import {
+ } from './partition-service-constants.js';
+ import {
+   PARTICIPANT_TRANSACTION_ADMISSION_CODE,
++  PARTICIPANT_RELEASE_COMMAND_TYPES,
+   PARTICIPANT_TRANSACTION_COMMAND_TYPES,
+   PARTICIPANT_TRANSACTION_MESSAGE,
+ } from './partition-participant-transaction-constants.js';
+@@ -67,6 +68,7 @@ const PARTITION_COMMITTED_COMMAND_ORIGIN = Object.freeze({
+   TRANSACTION_OWNER: 'transaction-owner',
+   CDC_DELIVERY_OWNER: PARTITION_CDC_OBLIGATION_ORIGIN.CDC_DELIVERY_OWNER,
+   COORDINATOR_OWNER: 'coordinator-owner',
++  PARTICIPANT_RELEASE_OWNER: 'participant-release-owner',
+ });
+ 
+ // What a refused write is answered with.
+@@ -136,7 +138,11 @@ function sqlCommandRefusal(command) {
+ }
+ 
+ function participantCommandRefusal(command, origin) {
+-  if (origin !== PARTITION_COMMITTED_COMMAND_ORIGIN.TRANSACTION_OWNER) {
++  const releaseCommand = PARTICIPANT_RELEASE_COMMAND_TYPES.includes(command.type);
++  const expectedOrigin = releaseCommand ?
++    PARTITION_COMMITTED_COMMAND_ORIGIN.PARTICIPANT_RELEASE_OWNER :
++    PARTITION_COMMITTED_COMMAND_ORIGIN.TRANSACTION_OWNER;
++  if (origin !== expectedOrigin) {
+     return refused(PARTICIPANT_TRANSACTION_ADMISSION_CODE.ORIGIN_REFUSED,
+       PARTICIPANT_TRANSACTION_MESSAGE.ORIGIN_REFUSED);
+   }
+@@ -171,7 +177,8 @@ function commandRefusalByKind(command, origin) {
+   if (PARTITION_CDC_COMMAND_TYPES.includes(command.type)) {
+     return cdcCommandRefusal(command, origin);
+   }
+-  return PARTICIPANT_TRANSACTION_COMMAND_TYPES.includes(command.type) ?
++  return [...PARTICIPANT_TRANSACTION_COMMAND_TYPES,
++    ...PARTICIPANT_RELEASE_COMMAND_TYPES].includes(command.type) ?
+     participantCommandRefusal(command, origin) : sqlCommandRefusal(command);
+ }
+ 
+diff --git a/src/partition/partition-coordinator-settlement.js b/src/partition/partition-coordinator-settlement.js
+index 38c243952..8437648e0 100644
+--- a/src/partition/partition-coordinator-settlement.js
++++ b/src/partition/partition-coordinator-settlement.js
+@@ -63,7 +63,12 @@ function requestCoordinatorSettlement(service, payload) {
+   const pending = service.getPendingCommittedWriteOutcome(command.entryId);
+   if (pending !== null) return pending;
+   const observed = observeTransactionSettlement(service.db, command.settlement);
+-  if (observed.outcome !== SETTLEMENT.READY) {
++  // A matching terminal/frozen row can predate this exact settlement command
++  // (for example, the normal coordinator completed while release was reading
++  // its participant replies).  REPLAYED is therefore still ordered through
++  // consensus so the caller receives an exact durable command result.  A
++  // conflicting or unreadable observation remains an immediate refusal.
++  if (![SETTLEMENT.READY, SETTLEMENT.REPLAYED].includes(observed.outcome)) {
+     return settlementAnswer(service, observed, {admitted: false});
+   }
+   return startPartitionRaftWriteCommit(service, {entry: command, phaseTimings: null,
+diff --git a/src/partition/partition-participant-release-contract.js b/src/partition/partition-participant-release-contract.js
+index 00e482030..2fb7069af 100644
+--- a/src/partition/partition-participant-release-contract.js
++++ b/src/partition/partition-participant-release-contract.js
+@@ -1,18 +1,17 @@
+ // Canonical release identity and census validation. The census consists of
+ // replies read from each exact current member's owners, never progress from
+ // a leader's replication transport. Local resume re-reads its own facts.
+-import {createHash} from 'node:crypto';
+ import {deepFreeze} from '../raft/raft-operation-port.js';
+ import {COMMITTED_MEMBERSHIP_MAX_PEERS} from '../raft/raft-committed-membership-constants.js';
+ import {PARTITION_ROWID_LIMIT} from './partition-statement-admission-constants.js';
+ import {TRANSACTION_RELEASE_CENSUS_STATE} from
+   '../query/distributed/distributed-transaction-release-census.js';
+ import {isReleaseDrained} from './partition-participant-release-facts.js';
+-import {PARTICIPANT_CUTOVER_OUTCOME as OUTCOME, PARTICIPANT_RELEASE_VERSION} from
++import {PARTICIPANT_CUTOVER_OUTCOME as OUTCOME} from
+   './partition-participant-transaction-cutover-constants.js';
++import {releaseIdentityOf, releaseIdentityValid} from
++  './partition-participant-release-identity.js';
+ 
+-const DIGEST = 'sha256';
+-const ENCODING = 'hex';
+ const GENERATION_FIELDS = Object.freeze(['nodeId', 'ownerIncarnation', 'replicaId',
+   'lifecycleIncarnation', 'runtimeGeneration', 'connectionGeneration', 'admissionGeneration']);
+ const DIGEST_PATTERN = /^[a-f0-9]{64}$/;
+@@ -51,22 +50,6 @@ function transactionReleaseProofValid(proof, {release, attempt, census}) {
+     entry.participantIds.every(nonempty));
+ }
+ 
+-function releaseIdentityOf({partitionId, targetBuildDigest, configurationKey,
+-  membershipGenerationIndex}) {
+-  if (!nonempty(partitionId) || !DIGEST_PATTERN.test(targetBuildDigest) ||
+-      !nonempty(configurationKey) || !ordinal(membershipGenerationIndex)) return null;
+-  const identity = {partitionId, protocolVersion: PARTICIPANT_RELEASE_VERSION,
+-    targetBuildDigest, configurationKey, membershipGenerationIndex};
+-  const releaseId = createHash(DIGEST).update(JSON.stringify(identity)).digest(ENCODING);
+-  return Object.freeze({...identity, releaseId});
+-}
+-
+-function releaseIdentityValid(release) {
+-  const canonical = release && releaseIdentityOf(release);
+-  return canonical !== null && release.protocolVersion === canonical.protocolVersion &&
+-    release.releaseId === canonical.releaseId;
+-}
+-
+ function sameReplicaGeneration(left, right) {
+   return left != null && right != null &&
+     GENERATION_FIELDS.every((field) => left[field] != null && left[field] === right[field]);
+@@ -102,7 +85,7 @@ function rowidValid(rowid) {
+ }
+ 
+ function releaseFactsDefect(release, facts, options = {}) {
+-  const {originRequired = true} = options;
++  const {originRequired = true, pausedRequired = true} = options;
+   if (facts?.outcome !== OUTCOME.OBSERVED || !facts.membership || !facts.generation ||
+       !facts.connection || !facts.work) return OUTCOME.UNAVAILABLE;
+   if (facts.partitionId !== release.partitionId ||
+@@ -112,7 +95,8 @@ function releaseFactsDefect(release, facts, options = {}) {
+     return OUTCOME.STALE;
+   }
+   if (facts.buildDigest !== release.targetBuildDigest) return OUTCOME.BUILD_MISMATCH;
+-  if (facts.paused !== true || !sameReplicaGeneration(facts.generation, facts.generation) ||
++  if (pausedRequired && facts.paused !== true ||
++      !sameReplicaGeneration(facts.generation, facts.generation) ||
+       !nonempty(facts.leaderReplicaId) || !ordinal(facts.membership.term) ||
+       facts.membership.term === 0) return OUTCOME.STALE;
+   if (!isReleaseDrained(facts.work)) return OUTCOME.DRAIN_PENDING;
+diff --git a/src/partition/partition-participant-transaction-apply.js b/src/partition/partition-participant-transaction-apply.js
+index 0338f7b0a..7b4814896 100644
+--- a/src/partition/partition-participant-transaction-apply.js
++++ b/src/partition/partition-participant-transaction-apply.js
+@@ -85,8 +85,11 @@ import {
+   recordPartitionWriteOrigin,
+   updateParticipantTransactionDecided,
+ } from './partition-participant-transaction-store.js';
++import {applyParticipantReleaseCommand} from
++  './partition-participant-release-apply.js';
+ import {
+   PARTICIPANT_TRANSACTION_COMMAND as COMMAND,
++  PARTICIPANT_RELEASE_COMMAND_TYPES,
+   PARTICIPANT_TRANSACTION_COMMAND_TYPES,
+   PARTICIPANT_TRANSACTION_DECISION as DECISION,
+   PARTICIPANT_TRANSACTION_FAILURE_CODE as CODE,
+@@ -622,6 +625,16 @@ const PARTICIPANT_COMMAND_APPLIERS = Object.freeze({
+   [COMMAND.PREPARE]: applyParticipantPrepare,
+   [COMMAND.DECISION]: applyParticipantDecision,
+   [COMMAND.GENERATION_ORIGIN]: applyGenerationOrigin,
++  [COMMAND.ADMISSION_PAUSE]: applyParticipantReleaseCommand,
++  [COMMAND.RELEASE_RESERVE]: applyParticipantReleaseCommand,
++  [COMMAND.RELEASE_PUBLISH_CLAIM]: applyParticipantReleaseCommand,
++  [COMMAND.RELEASE_RECORD_SHARE]: applyParticipantReleaseCommand,
++  [COMMAND.RELEASE_FINALIZE]: applyParticipantReleaseCommand,
++  [COMMAND.RELEASE_DISPATCH]: applyParticipantReleaseCommand,
++  [COMMAND.RELEASE_RETIRE]: applyParticipantReleaseCommand,
++  [COMMAND.ADMISSION_RESUME]: applyParticipantReleaseCommand,
++  [COMMAND.RELEASE_RECORD_RECEIPT]: applyParticipantReleaseCommand,
++  [COMMAND.RELEASE_CONFIRM]: applyParticipantReleaseCommand,
+ });
+ 
+ function applyParticipantCommand(service, committed) {
+@@ -652,7 +665,8 @@ function applyParticipantCommand(service, committed) {
+  */
+ function applyCommittedTransactionCommand(service, committed) {
+   const {command} = committed;
+-  const applied = PARTICIPANT_TRANSACTION_COMMAND_TYPES.includes(command.type) ?
++  const applied = [...PARTICIPANT_TRANSACTION_COMMAND_TYPES,
++    ...PARTICIPANT_RELEASE_COMMAND_TYPES].includes(command.type) ?
+     applyParticipantCommand(service, committed) :
+     applyLegacyTransactionMarker(service, committed);
+   committed.afterCommit(() => service.emit(
+diff --git a/src/partition/partition-participant-transaction-bytes.js b/src/partition/partition-participant-transaction-bytes.js
+index f8664f81e..fac315f34 100644
+--- a/src/partition/partition-participant-transaction-bytes.js
++++ b/src/partition/partition-participant-transaction-bytes.js
+@@ -14,9 +14,12 @@
+ 
+ import {createHash} from 'node:crypto';
+ import {isExecutionEnvelope} from './partition-transaction-execution-envelope.js';
++import {isPinnedParticipantReleaseCommand} from
++  './partition-participant-release-command.js';
+ import {
+   PARTICIPANT_TRANSACTION_BYTES as BYTES,
+   PARTICIPANT_TRANSACTION_COMMAND as COMMAND,
++  PARTICIPANT_RELEASE_COMMAND_TYPES,
+   PARTICIPANT_TRANSACTION_DECISION as DECISION,
+   PARTICIPANT_TRANSACTION_FAILURE_CODE as CODE,
+ } from './partition-participant-transaction-constants.js';
+@@ -353,6 +356,9 @@ function isPinnedGenerationOrigin(command) {
+  * @return {boolean} Whether its bytes are pinned.
+  */
+ function isPinnedParticipantCommand(command) {
++  if (PARTICIPANT_RELEASE_COMMAND_TYPES.includes(command.type)) {
++    return isPinnedParticipantReleaseCommand(command);
++  }
+   if (command.type === COMMAND.GENERATION_ORIGIN) {
+     return isPinnedGenerationOrigin(command);
+   }
+diff --git a/src/partition/partition-participant-transaction-constants.js b/src/partition/partition-participant-transaction-constants.js
+index 93b3353c8..e66dea9e1 100644
+--- a/src/partition/partition-participant-transaction-constants.js
++++ b/src/partition/partition-participant-transaction-constants.js
+@@ -19,9 +19,33 @@ const PARTICIPANT_TRANSACTION_COMMAND = Object.freeze({
+   PREPARE: 'PARTICIPANT_PREPARE',
+   DECISION: 'PARTICIPANT_DECISION',
+   GENERATION_ORIGIN: 'PARTICIPANT_GENERATION_ORIGIN',
++  ADMISSION_PAUSE: 'PAUSE_PARTICIPANT_ADMISSION',
++  RELEASE_RESERVE: 'RESERVE_PARTICIPANT_RELEASE',
++  RELEASE_PUBLISH_CLAIM: 'PUBLISH_PARTICIPANT_RELEASE_CLAIM',
++  RELEASE_RECORD_SHARE: 'RECORD_PARTICIPANT_RELEASE_SHARE',
++  RELEASE_FINALIZE: 'FINALIZE_PARTICIPANT_RELEASE',
++  RELEASE_DISPATCH: 'DISPATCH_PARTICIPANT_RELEASE',
++  RELEASE_RETIRE: 'RETIRE_PARTICIPANT_RELEASE',
++  ADMISSION_RESUME: 'RESUME_PARTICIPANT_ADMISSION',
++  RELEASE_RECORD_RECEIPT: 'RECORD_PARTICIPANT_RELEASE_RECEIPT',
++  RELEASE_CONFIRM: 'CONFIRM_PARTICIPANT_RELEASE',
+ });
+ const PARTICIPANT_TRANSACTION_COMMAND_TYPES = Object.freeze(
+-  Object.values(PARTICIPANT_TRANSACTION_COMMAND));
++  [PARTICIPANT_TRANSACTION_COMMAND.PREPARE,
++    PARTICIPANT_TRANSACTION_COMMAND.DECISION,
++    PARTICIPANT_TRANSACTION_COMMAND.GENERATION_ORIGIN]);
++const PARTICIPANT_RELEASE_COMMAND_TYPES = Object.freeze([
++  PARTICIPANT_TRANSACTION_COMMAND.ADMISSION_PAUSE,
++  PARTICIPANT_TRANSACTION_COMMAND.RELEASE_RESERVE,
++  PARTICIPANT_TRANSACTION_COMMAND.RELEASE_PUBLISH_CLAIM,
++  PARTICIPANT_TRANSACTION_COMMAND.RELEASE_RECORD_SHARE,
++  PARTICIPANT_TRANSACTION_COMMAND.RELEASE_FINALIZE,
++  PARTICIPANT_TRANSACTION_COMMAND.RELEASE_DISPATCH,
++  PARTICIPANT_TRANSACTION_COMMAND.RELEASE_RETIRE,
++  PARTICIPANT_TRANSACTION_COMMAND.ADMISSION_RESUME,
++  PARTICIPANT_TRANSACTION_COMMAND.RELEASE_RECORD_RECEIPT,
++  PARTICIPANT_TRANSACTION_COMMAND.RELEASE_CONFIRM,
++]);
+ 
+ // What a decision decides (design 2.4).
+ const PARTICIPANT_TRANSACTION_DECISION = Object.freeze({
+@@ -220,14 +244,26 @@ const PARTICIPANT_TRANSACTION_SQL = Object.freeze({
+         singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+         generation INTEGER NOT NULL,
+         origin_index INTEGER,
+-        origin_term INTEGER
++        origin_term INTEGER,
++        participant_pause_generation INTEGER NOT NULL DEFAULT 0,
++        participant_pause_entry_id TEXT,
++        participant_release_control_revision INTEGER NOT NULL DEFAULT 0,
++        participant_release_control_text TEXT,
++        participant_release_authorization_text TEXT,
++        participant_release_authorization_index INTEGER,
++        participant_release_authorization_term INTEGER
+       )
+     `,
+   INSERT_INITIAL_GENERATION:
+     'INSERT OR IGNORE INTO _partition_write_generation ' +
+     '(singleton, generation) VALUES (1, 0)',
+   SELECT_GENERATION:
+-    'SELECT generation, origin_index, origin_term ' +
++    'SELECT generation, origin_index, origin_term, ' +
++    'participant_pause_generation, participant_pause_entry_id, ' +
++    'participant_release_control_revision, participant_release_control_text, ' +
++    'participant_release_authorization_text, ' +
++    'participant_release_authorization_index, ' +
++    'participant_release_authorization_term ' +
+     'FROM _partition_write_generation WHERE singleton = 1',
+   // The origin is recorded once: a later origin command changes nothing.
+   RECORD_ORIGIN:
+@@ -364,6 +400,35 @@ const PARTICIPANT_TRANSACTION_GENERATION_ORIGIN_COLUMNS = Object.freeze({
+     'ALTER TABLE _partition_write_generation ADD COLUMN origin_term INTEGER',
+ });
+ 
++// Release state extends the existing singleton generation owner. Older
++// application images gain the fields at open; no second release ledger is
++// created. Control state is canonical JSON for the one transition slot, while
++// the authorization fields are the dependent partition's last committed
++// target authorization.
++const PARTICIPANT_TRANSACTION_RELEASE_COLUMNS = Object.freeze({
++  participant_pause_generation:
++    'ALTER TABLE _partition_write_generation ADD COLUMN ' +
++    'participant_pause_generation INTEGER NOT NULL DEFAULT 0',
++  participant_pause_entry_id:
++    'ALTER TABLE _partition_write_generation ADD COLUMN ' +
++    'participant_pause_entry_id TEXT',
++  participant_release_control_revision:
++    'ALTER TABLE _partition_write_generation ADD COLUMN ' +
++    'participant_release_control_revision INTEGER NOT NULL DEFAULT 0',
++  participant_release_control_text:
++    'ALTER TABLE _partition_write_generation ADD COLUMN ' +
++    'participant_release_control_text TEXT',
++  participant_release_authorization_text:
++    'ALTER TABLE _partition_write_generation ADD COLUMN ' +
++    'participant_release_authorization_text TEXT',
++  participant_release_authorization_index:
++    'ALTER TABLE _partition_write_generation ADD COLUMN ' +
++    'participant_release_authorization_index INTEGER',
++  participant_release_authorization_term:
++    'ALTER TABLE _partition_write_generation ADD COLUMN ' +
++    'participant_release_authorization_term INTEGER',
++});
++
+ // The coordinator's durable record columns on the two transaction system
+ // tables (TX1 seams C and E, the coordinator seam's participant obligations,
+ // 0.0.15): the insert-once decision record on `sql_transactions` and the
+@@ -388,12 +453,14 @@ const PARTICIPANT_COORDINATOR_TABLE_COLUMNS = Object.freeze({
+ export {
+   PARTICIPANT_COORDINATOR_TABLE_COLUMNS,
+   PARTICIPANT_TRANSACTION_ADMISSION_CODE,
++  PARTICIPANT_RELEASE_COMMAND_TYPES,
+   PARTICIPANT_TRANSACTION_BYTES,
+   PARTICIPANT_TRANSACTION_COMMAND,
+   PARTICIPANT_TRANSACTION_COMMAND_TYPES,
+   PARTICIPANT_TRANSACTION_DECISION,
+   PARTICIPANT_TRANSACTION_FAILURE_CODE,
+   PARTICIPANT_TRANSACTION_GENERATION_ORIGIN_COLUMNS,
++  PARTICIPANT_TRANSACTION_RELEASE_COLUMNS,
+   PARTICIPANT_TRANSACTION_LOG_MSG,
+   PARTICIPANT_TRANSACTION_MESSAGE,
+   PARTICIPANT_TRANSACTION_REFUSAL_CAUSE,
+diff --git a/src/partition/partition-participant-transaction-cutover-constants.js b/src/partition/partition-participant-transaction-cutover-constants.js
+index fba779f0d..be1d4d50d 100644
+--- a/src/partition/partition-participant-transaction-cutover-constants.js
++++ b/src/partition/partition-participant-transaction-cutover-constants.js
+@@ -6,7 +6,9 @@ const PARTICIPANT_RELEASE_RESULT_FIELD = 'releaseResult';
+ const PARTICIPANT_RELEASE_VERSION = 1;
+ const PARTICIPANT_RELEASE_ACTION = Object.freeze({
+   RELEASE: 'release', INSPECT: 'inspect', PAUSE: 'pause', DRAIN: 'drain',
+-  REOPEN: 'reopen', ENABLE: 'enable', RESUME: 'resume',
++  REOPEN: 'reopen', ENABLE: 'enable', AUTHORIZE: 'authorize',
++  CLAIM: 'claim', SHARE: 'share',
++  RESUME: 'resume', CONFIRM: 'confirm', RETIRE: 'retire',
+ });
+ const PARTICIPANT_CUTOVER_PHASE = Object.freeze({
+   INSPECT: 'inspect', PAUSE: 'pause', DRAIN: 'drain', REOPEN: 'reopen',
+@@ -16,6 +18,8 @@ const PARTICIPANT_CUTOVER_PHASE = Object.freeze({
+ const PARTICIPANT_CUTOVER_OUTCOME = Object.freeze({
+   CUT_OVER: 'cut_over', OBSERVED: 'observed', PAUSED: 'paused',
+   DRAINED: 'drained', REOPENED: 'reopened', RESUMED: 'resumed',
++  CLAIMED: 'claimed', SHARED: 'shared', AUTHORIZED: 'authorized',
++  CONFIRMED: 'confirmed', RETIRED: 'retired',
+   NOT_LEADER: 'not_leader', UNAVAILABLE: 'release_fact_unavailable',
+   INVALID: 'release_request_invalid', STALE: 'release_generation_changed',
+   BUILD_MISMATCH: 'release_build_mismatch', DRAIN_PENDING: 'release_drain_pending',
+diff --git a/src/partition/partition-participant-transaction-pause.js b/src/partition/partition-participant-transaction-pause.js
+index 17a66098e..a836f86a1 100644
+--- a/src/partition/partition-participant-transaction-pause.js
++++ b/src/partition/partition-participant-transaction-pause.js
+@@ -9,11 +9,21 @@ import {releaseCensusDefect, sameReplicaGeneration} from './partition-participan
+ import {PARTICIPANT_CUTOVER_BOUND, PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
+   PARTICIPANT_RELEASE_ADMISSION as ADMISSION} from
+   './partition-participant-transaction-cutover-constants.js';
++import {parseJson, targetEntryValid} from
++  './partition-participant-release-command.js';
++import {readParticipantReleaseState} from
++  './partition-participant-transaction-store.js';
++import {invalidateParticipantReleaseLocalCurrent} from
++  './partition-participant-release-local-current.js';
+ 
+ const ADMISSIONS = new WeakMap();
+ let nextAdmissionGeneration = 0;
+ 
+ function newPause(service) {
++  // Closing admission revokes the process-local projection immediately. The
++  // durable claim/receipt remains with the control owner until its ordered
++  // retirement command applies; reconnecting cannot recreate this projection.
++  invalidateParticipantReleaseLocalCurrent(service);
+   nextAdmissionGeneration += 1;
+   const admission = Object.freeze({state: ADMISSION.CLOSED,
+     raisedAtMs: service.timeSource.now(), generation: nextAdmissionGeneration, releaseId: null});
+@@ -48,6 +58,7 @@ function invalidateParticipantReleaseAdmission(service) {
+       status?.membershipGenerationIndex !== proof.membershipGenerationIndex ||
+       status?.runtimeGeneration !== proof.runtimeGeneration ||
+       status?.lifecycleIncarnation !== proof.lifecycleIncarnation) {
++    invalidateParticipantReleaseLocalCurrent(service);
+     raiseParticipantCutoverPause(service);
+   }
+ }
+@@ -57,13 +68,38 @@ async function resumeParticipantCutoverAdmission(handler, service, request) {
+   if (current.state === ADMISSION.OPEN) {
+     invalidateParticipantReleaseAdmission(service);
+     if (participantReleaseAdmissionOf(service) === current &&
+-        current.releaseId === request.release?.releaseId) return OUTCOME.RESUMED;
++        current.releaseId === request.release?.releaseId &&
++        current.authorizationId ===
++          request.controlAuthorization?.authorizationId) return OUTCOME.RESUMED;
++    return OUTCOME.STALE;
++  }
++  const durable = readParticipantReleaseState(service.db);
++  const authorization = parseJson(durable.authorizationText);
++  const targets = parseJson(authorization?.targetEntriesText);
++  const target = Array.isArray(targets) ? targets.find((candidate) =>
++    candidate?.replicaIdentity === service.replicaId) : null;
++  if (authorization === null || !targetEntryValid(target) ||
++      authorization.controlPartitionId !==
++        request.controlAuthorization?.controlPartitionId ||
++      authorization.controlAuthorizationId !==
++        request.controlAuthorization?.authorizationId ||
++      authorization.controlAuthorizationRevision !==
++        request.controlAuthorization?.authorizationRevision ||
++      authorization.dependentReleaseText !== JSON.stringify(request.release) ||
++      authorization.expectedPauseGeneration !== durable.pauseGeneration ||
++      authorization.authorizationIndex !== durable.authorizationIndex ||
++      authorization.authorizationTerm !== durable.authorizationTerm) {
+     return OUTCOME.STALE;
+   }
+   const facts = await readParticipantReleaseFacts(handler, service);
+   if (facts.outcome !== OUTCOME.OBSERVED) return facts.outcome;
++  if (facts.paused !== true) return OUTCOME.STALE;
+   const defect = releaseCensusDefect(request.release, request.census, facts,
+-    {attempt: request.attempt, queryDrainProof: request.queryDrainProof});
++    {attempt: request.attempt, queryDrainProof: request.queryDrainProof,
++      // A committed set-wide RESUME can be retried after another exact target
++      // already opened. The current recipient is still CLOSED here; mixed
++      // peer admission projections cannot invalidate the replicated command.
++      pausedRequired: false});
+   if (defect !== null) return defect;
+   // No await separates the final generation/leadership check from resume.
+   const status = service.raft.readStatus();
+@@ -71,8 +107,23 @@ async function resumeParticipantCutoverAdmission(handler, service, request) {
+       !sameReplicaGeneration(facts.generation, replicaGenerationOf(handler, service, status)) ||
+       status.term !== facts.membership.term || status.leaderId !== facts.leaderReplicaId ||
+       status.configurationKey !== request.release.configurationKey) return OUTCOME.STALE;
++  const generation = facts.generation;
++  if (target.replicaIdentity !== service.replicaId ||
++      target.peerId !== String(facts.peers.find((peer) =>
++        peer.replicaIdentity === service.replicaId)?.peerId ??
++        Object.entries(facts.membership.identities).find(([, replicaIdentity]) =>
++          replicaIdentity === service.replicaId)?.[0] ?? '') ||
++      target.nodeId !== generation.nodeId ||
++      target.ownerIncarnation !== generation.ownerIncarnation ||
++      target.lifecycleIncarnation !== generation.lifecycleIncarnation ||
++      target.runtimeGeneration !== generation.runtimeGeneration ||
++      target.connectionGeneration !== generation.connectionGeneration ||
++      target.admissionGeneration !== generation.admissionGeneration ||
++      target.buildDigest !== facts.buildDigest) return OUTCOME.STALE;
+   ADMISSIONS.set(service, Object.freeze({...current, state: ADMISSION.OPEN,
+-    releaseId: request.release.releaseId, proof: Object.freeze({term: status.term,
++    releaseId: request.release.releaseId,
++    authorizationId: authorization.controlAuthorizationId,
++    proof: Object.freeze({term: status.term,
+       leaderId: status.leaderId, configurationKey: status.configurationKey,
+       membershipGenerationIndex: status.membershipGenerationIndex,
+       runtimeGeneration: status.runtimeGeneration,
+diff --git a/src/partition/partition-participant-transaction-request.js b/src/partition/partition-participant-transaction-request.js
+index 160b57000..9991b0ae6 100644
+--- a/src/partition/partition-participant-transaction-request.js
++++ b/src/partition/partition-participant-transaction-request.js
+@@ -232,14 +232,14 @@ function beginRefusalOf(service, payload) {
+   if (leadership !== null) {
+     return answerOf(service, payload, leadership);
+   }
+-  if (participantCutoverPauseOf(service) !== null) {
+-    return refusalOf(service, payload, CODE.CUTOVER_PAUSED, {deferRetry: true});
+-  }
+   const origin = readPartitionWriteOrigin(service.db);
+   if (origin === null) {
+     return refusalOf(service, payload, CODE.GENERATION_ORIGIN_PENDING,
+       participantOutcomeOf(null));
+   }
++  if (participantCutoverPauseOf(service) !== null) {
++    return refusalOf(service, payload, CODE.CUTOVER_PAUSED, {deferRetry: true});
++  }
+   if (participantDeterminismSelfCheckOf(service)?.passed !== true) {
+     return refusalOf(service, payload, CODE.DETERMINISM_SELF_CHECK_FAILED);
+   }
+diff --git a/src/partition/partition-participant-transaction-store.js b/src/partition/partition-participant-transaction-store.js
+index 12e095f71..8ee5fc46b 100644
+--- a/src/partition/partition-participant-transaction-store.js
++++ b/src/partition/partition-participant-transaction-store.js
+@@ -13,6 +13,7 @@ import {PARTICIPANT_COMMIT_OUTCOME} from '../constants/transactions.js';
+ import {stampParticipantConnection} from './partition-participant-transaction-connection.js';
+ import {
+   PARTICIPANT_TRANSACTION_GENERATION_ORIGIN_COLUMNS as ORIGIN_COLUMNS,
++  PARTICIPANT_TRANSACTION_RELEASE_COLUMNS as RELEASE_COLUMNS,
+   PARTICIPANT_TRANSACTION_SQL as SQL,
+   PARTICIPANT_TRANSACTION_STATE as STATE,
+   PARTICIPANT_TRANSACTION_STORE_ERROR as STORE_ERROR,
+@@ -70,7 +71,10 @@ function openParticipantTransactionStore(db) {
+   db.exec(SQL.CREATE_GENERATION_TABLE);
+   const present = new Set(db.prepare(SQL.GENERATION_TABLE_COLUMNS).all()
+     .map((column) => column.name));
+-  for (const [column, addColumn] of Object.entries(ORIGIN_COLUMNS)) {
++  for (const [column, addColumn] of Object.entries({
++    ...ORIGIN_COLUMNS,
++    ...RELEASE_COLUMNS,
++  })) {
+     if (!present.has(column)) {
+       db.exec(addColumn);
+     }
+@@ -107,6 +111,90 @@ function readPartitionWriteOrigin(db) {
+     Object.freeze({originIndex: row.origin_index, originTerm: row.origin_term});
+ }
+ 
++function participantReleaseStateOf(row) {
++  return Object.freeze({
++    pauseGeneration: row.participant_pause_generation,
++    pauseEntryId: row.participant_pause_entry_id,
++    controlRevision: row.participant_release_control_revision,
++    controlText: row.participant_release_control_text,
++    authorizationText: row.participant_release_authorization_text,
++    authorizationIndex: row.participant_release_authorization_index,
++    authorizationTerm: row.participant_release_authorization_term,
++  });
++}
++
++/**
++ * Read the release fields owned by the singleton generation row.
++ * @param {Object} db - The partition connection.
++ * @return {Object} Frozen exact stored fields.
++ */
++function readParticipantReleaseState(db) {
++  return participantReleaseStateOf(generationRowOf(db));
++}
++
++/**
++ * Apply one durable pause invocation. Replaying the same entry is inert;
++ * every distinct committed pause advances the generation and clears the
++ * dependent authorization in the same application transaction.
++ * @param {Object} db - The partition connection.
++ * @param {string} entryId - Exact pause command identity.
++ * @return {{applied: boolean, state: Object}} Result and current state.
++ */
++function applyParticipantAdmissionPause(db, entryId) {
++  const before = readParticipantReleaseState(db);
++  if (before.pauseEntryId === entryId) {
++    return Object.freeze({applied: false, state: before});
++  }
++  const moved = db.prepare(
++    'UPDATE _partition_write_generation SET ' +
++    'participant_pause_generation = participant_pause_generation + 1, ' +
++    'participant_pause_entry_id = ?, ' +
++    'participant_release_authorization_text = NULL, ' +
++    'participant_release_authorization_index = NULL, ' +
++    'participant_release_authorization_term = NULL WHERE singleton = 1',
++  ).run(entryId);
++  if (moved.changes !== ONE_ROW) throw new Error(STORE_ERROR.GENERATION_ROW_MISSING);
++  return Object.freeze({applied: true, state: readParticipantReleaseState(db)});
++}
++
++/**
++ * Conditionally replace the control transition slot and increment its durable
++ * revision. The caller has already validated the canonical payload.
++ * @param {Object} db - The partition connection.
++ * @param {number} expectedRevision - Revision captured by the command.
++ * @param {string} controlText - Canonical control state, or null to clear.
++ * @return {Object|null} New state, or null when another command won.
++ */
++function updateParticipantReleaseControl(db, expectedRevision, controlText) {
++  const moved = db.prepare(
++    'UPDATE _partition_write_generation SET ' +
++    'participant_release_control_revision = ' +
++    'participant_release_control_revision + 1, ' +
++    'participant_release_control_text = ? WHERE singleton = 1 AND ' +
++    'participant_release_control_revision = ?',
++  ).run(controlText, expectedRevision);
++  return moved.changes === ONE_ROW ? readParticipantReleaseState(db) : null;
++}
++
++/**
++ * Record the target-specific authorization at the command's committed
++ * position, conditional on the expected durable pause generation.
++ * @param {Object} db - The partition connection.
++ * @param {Object} authorization - Canonical text and commit position.
++ * @return {Object|null} New state, or null when a newer pause won.
++ */
++function applyParticipantReleaseAuthorization(db, authorization) {
++  const moved = db.prepare(
++    'UPDATE _partition_write_generation SET ' +
++    'participant_release_authorization_text = ?, ' +
++    'participant_release_authorization_index = ?, ' +
++    'participant_release_authorization_term = ? WHERE singleton = 1 AND ' +
++    'participant_pause_generation = ?',
++  ).run(authorization.text, authorization.index, authorization.term,
++    authorization.expectedPauseGeneration);
++  return moved.changes === ONE_ROW ? readParticipantReleaseState(db) : null;
++}
++
+ /**
+  * Record the generation origin at the origin command's log position and
+  * start g at 0 there, inside its application transaction; only when no
+@@ -300,6 +388,8 @@ function participantOutcomeOf(row, volatileState = STATE.ABSENT) {
+ 
+ export {
+   advancePartitionWriteGeneration,
++  applyParticipantAdmissionPause,
++  applyParticipantReleaseAuthorization,
+   insertParticipantTransactionRow,
+   isParticipantSessionKnown,
+   isParticipantSessionPrepared,
+@@ -307,9 +397,11 @@ export {
+   openParticipantTransactionStore,
+   participantOutcomeOf,
+   readParticipantTransactionRow,
++  readParticipantReleaseState,
+   readPreparedParticipantIds,
+   readPartitionWriteGeneration,
+   readPartitionWriteOrigin,
+   recordPartitionWriteOrigin,
++  updateParticipantReleaseControl,
+   updateParticipantTransactionDecided,
+ };
+diff --git a/src/partition/partition-service-constants.js b/src/partition/partition-service-constants.js
+index c5ab27e92..b67ca4f9c 100644
+--- a/src/partition/partition-service-constants.js
++++ b/src/partition/partition-service-constants.js
+@@ -8,7 +8,8 @@ import {
+   PARTITION_SERVICE_CREATE_ADMISSION_COLUMN_SQL,
+   PARTITION_SERVICE_CREATE_ADMISSION_LOG_MSG,
+ } from './partition-service-create-admission-migration-constants.js';
+-import {PARTICIPANT_TRANSACTION_COMMAND_TYPES} from
++import {PARTICIPANT_RELEASE_COMMAND_TYPES,
++  PARTICIPANT_TRANSACTION_COMMAND_TYPES} from
+   './partition-participant-transaction-constants.js';
+ import {PARTITION_CDC_COMMAND_TYPES} from
+   './partition-cdc-obligation-constants.js';
+@@ -195,6 +196,7 @@ const PARTITION_COMMITTED_COMMAND_TYPES = Object.freeze([
+   ...PARTITION_COMMITTED_SQL_COMMAND_TYPES,
+   ...PARTITION_COMMITTED_MARKER_COMMAND_TYPES,
+   ...PARTICIPANT_TRANSACTION_COMMAND_TYPES,
++  ...PARTICIPANT_RELEASE_COMMAND_TYPES,
+   ...PARTITION_CDC_COMMAND_TYPES,
+   COORDINATOR_SETTLEMENT_TYPE,
+ ]);
+diff --git a/src/partition/partition-service-entry-apply-base.js b/src/partition/partition-service-entry-apply-base.js
+index 4e92bd379..b50c2134e 100644
+--- a/src/partition/partition-service-entry-apply-base.js
++++ b/src/partition/partition-service-entry-apply-base.js
+@@ -993,7 +993,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
+    * @param {{afterCommit: Array, afterRollback: Array}} committed.effects
+    * @return {string} A PARTITION_COMMITTED_COMMAND_OUTCOME.
+    */
+-  applyCommittedEntry({command, index, term, effects}) {
++  applyCommittedEntry({command, index, term, effects, committedConfiguration}) {
+     const scheduleEffect = (phase, effect) => {
+       effects[phase].push(() => {
+         try {
+@@ -1104,6 +1104,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
+     } else {
+       // A transaction command (participant, or a legacy marker): its owner.
+       return applyCommittedTransactionCommand(this, {command, index, term,
++        committedConfiguration,
+         afterCommit: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, effect),
+         afterRollback: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, effect)});
+     }
+diff --git a/src/partition/partition-service-raft-init-base.js b/src/partition/partition-service-raft-init-base.js
+index cb22caac3..e756c74fc 100644
+--- a/src/partition/partition-service-raft-init-base.js
++++ b/src/partition/partition-service-raft-init-base.js
+@@ -56,6 +56,8 @@ import {createCommittedStatementOutcomeTable} from
+ import {openParticipantTransactionStore} from
+   './partition-participant-transaction-store.js';
+ import {isHeldByHostFailure} from './partition-write-kernel.js';
++import {admitParticipantReleaseProposalDispatch} from
++  './partition-participant-release-dispatch-admission.js';
+ import {REPLICA_DB_PRAGMA} from '../storage/storage-constants.js';
+ 
+ const {
+@@ -458,6 +460,8 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
+       // that also advances the rs-raft applied state.
+       [RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY]: (committed) =>
+         this.applyCommittedEntry(committed),
++      [RAFT_OPERATION_PORT_REQUEST.ADMIT_PROPOSAL_DISPATCH]: (command) =>
++        admitParticipantReleaseProposalDispatch(this, command),
+       [RAFT_OPERATION_PORT_REQUEST.SNAPSHOT_CATCHUP_NEEDED]: (decision) => {
+         if (typeof this.onSnapshotCatchupNeeded ===
+             PARTITION_SERVICE_TYPE.FUNCTION) {
+diff --git a/src/query/distributed/distributed-transaction-release-settlement.js b/src/query/distributed/distributed-transaction-release-settlement.js
+index 5cba48a4b..962b00d7d 100644
+--- a/src/query/distributed/distributed-transaction-release-settlement.js
++++ b/src/query/distributed/distributed-transaction-release-settlement.js
+@@ -89,6 +89,11 @@ function settlementOf(kind, authority, fields = {}) {
+     participantSetText: authority.row.participant_set_text, ...fields};
+ }
+ 
++function reportFailure(observeFailure, stage, transactionId, fields = {}) {
++  if (typeof observeFailure !== 'function') return;
++  observeFailure(deepFreeze({stage, transactionId, ...fields}));
++}
++
+ async function applySettlement(service, settlement) {
+   const answer = await service.handleApplicationMessage({
+     type: COORDINATOR_SETTLEMENT_TYPE,
+@@ -102,40 +107,69 @@ async function applySettlement(service, settlement) {
+   return result;
+ }
+ 
+-async function readAuthority(engine, transactionId, now) {
++async function readAuthority(engine, transactionId, now, observeFailure, stage) {
+   try {
+-    return releaseRowOf(
++    const authority = releaseRowOf(
+       await engine.readDistributedTransactionRecoveryState(transactionId),
+       transactionId,
+       now,
+     );
+-  } catch {
++    if (authority === null) {
++      reportFailure(observeFailure, stage, transactionId,
++        {reason: 'authoritative_row_invalid_or_unavailable'});
++    }
++    return authority;
++  } catch (error) {
++    reportFailure(observeFailure, stage, transactionId,
++      {reason: 'authoritative_read_failed', error: String(error?.message ?? error)});
+     return null;
+   }
+ }
+ 
+-async function ensureFrozen(engine, service, authority, now) {
++async function ensureFrozen(engine, service, authority, now, observeFailure) {
+   if (authority === null) return null;
+   if (authority.row.participant_set_state === PARTICIPANT_SET_STATE.FROZEN) {
+     return authority;
+   }
+-  if (!authority.expired || authority.decision.state !== RECORDED_DECISION_STATE.ABSENT ||
+-      await applySettlement(service, settlementOf(KIND.FREEZE, authority)) === null) return null;
+-  return readAuthority(engine, authority.row.transaction_id, now);
++  const transactionId = authority.row.transaction_id;
++  if (!authority.expired || authority.decision.state !== RECORDED_DECISION_STATE.ABSENT) {
++    reportFailure(observeFailure, 'freeze_ineligible', transactionId,
++      {expired: authority.expired, decisionState: authority.decision.state});
++    return null;
++  }
++  if (await applySettlement(service, settlementOf(KIND.FREEZE, authority)) === null) {
++    reportFailure(observeFailure, 'freeze_apply', transactionId);
++    return null;
++  }
++  return readAuthority(engine, transactionId, now, observeFailure, 'freeze_readback');
+ }
+ 
+-async function ensureDecision(engine, service, authority, now) {
++async function ensureDecision(engine, service, authority, now, observeFailure) {
+   if (authority?.decision.state === RECORDED_DECISION_STATE.RECORDED) return authority;
+-  if (!authority || authority.row.participant_set_state !== PARTICIPANT_SET_STATE.FROZEN ||
+-      authority.decision.state !== RECORDED_DECISION_STATE.ABSENT) return null;
++  if (!authority) return null;
++  const transactionId = authority.row.transaction_id;
++  if (authority.row.participant_set_state !== PARTICIPANT_SET_STATE.FROZEN ||
++      authority.decision.state !== RECORDED_DECISION_STATE.ABSENT) {
++    reportFailure(observeFailure, 'decision_ineligible', transactionId,
++      {participantSetState: authority.row.participant_set_state,
++        decisionState: authority.decision.state});
++    return null;
++  }
+   const record = buildDecisionRecord(authority.row.transaction_id, DECISION.ROLLBACK,
+     authority.pairs.map(([participantId]) => [participantId, null]));
+-  if (!record || await applySettlement(service, settlementOf(KIND.DECIDE, authority, {
++  if (!record) {
++    reportFailure(observeFailure, 'decision_record', transactionId);
++    return null;
++  }
++  if (await applySettlement(service, settlementOf(KIND.DECIDE, authority, {
+     decision: record.decision,
+     decisionText: record.decisionText,
+     decisionDigest: record.decisionDigest,
+-  })) === null) return null;
+-  return readAuthority(engine, authority.row.transaction_id, now);
++  })) === null) {
++    reportFailure(observeFailure, 'decision_apply', transactionId);
++    return null;
++  }
++  return readAuthority(engine, transactionId, now, observeFailure, 'decision_readback');
+ }
+ 
+ function participantAnswerComplete(decision, answer, expected) {
+@@ -153,73 +187,119 @@ function participantAnswerComplete(decision, answer, expected) {
+   }
+ }
+ 
+-async function settleParticipants(engine, authority) {
++async function settleParticipants(engine, authority, observeFailure) {
+   const record = authority.decision;
+   const replies = [];
+   for (let index = 0; index < authority.pairs.length; index += 1) {
+     const [participantId, partitionId] = authority.pairs[index];
+     const recorded = record.participants[index];
+-    if (recorded?.[0] !== participantId) return null;
++    if (recorded?.[0] !== participantId) {
++      reportFailure(observeFailure, 'participant_binding', authority.row.transaction_id,
++        {participantId, partitionId});
++      return null;
++    }
++    const operation = record.decision === DECISION.COMMIT ?
++      QUERY_OPERATION.COMMIT : QUERY_OPERATION.ROLLBACK;
+     let answer;
+     try {
+       answer = await engine.deliverTransactionOperation(
+         authority.row.session_id,
+         partitionId,
+-        record.decision === DECISION.COMMIT ? QUERY_OPERATION.COMMIT :
+-          QUERY_OPERATION.ROLLBACK,
++        operation,
+         {transactionId: authority.row.transaction_id, participantId,
+           commitMode: COMMIT_MODE.TWO_PHASE_COMMIT,
+           transactionEpoch: authority.row.transaction_epoch,
+           decision: record.decision, preparedDigest: recorded[1],
+           decisionText: record.decisionText, decisionDigest: record.decisionDigest},
+       );
+-    } catch {
++    } catch (error) {
++      reportFailure(observeFailure, 'participant_delivery', authority.row.transaction_id,
++        {participantId, partitionId, operation,
++          error: String(error?.message ?? error),
++          failureCode: error?.failureCode ?? null,
++          state: error?.state ?? null, outcome: error?.outcome ?? null});
+       return null;
+     }
+     if (!participantAnswerComplete(record.decision, answer, {
+-      operation: record.decision === DECISION.COMMIT ? QUERY_OPERATION.COMMIT :
+-        QUERY_OPERATION.ROLLBACK,
++      operation,
+       partitionId,
+       transactionId: authority.row.transaction_id,
+       participantId,
+-    })) return null;
++    })) {
++      reportFailure(observeFailure, 'participant_reply', authority.row.transaction_id,
++        {participantId, partitionId, operation});
++      return null;
++    }
+     replies.push(participantId);
+   }
+   return replies;
+ }
+ 
+-async function settleOne(engine, service, transactionId, now) {
+-  let authority = await readAuthority(engine, transactionId, now);
+-  authority = await ensureFrozen(engine, service, authority, now);
+-  authority = await ensureDecision(engine, service, authority, now);
++async function settleOne(engine, service, transactionId, now, observeFailure) {
++  let authority = await readAuthority(engine, transactionId, now,
++    observeFailure, 'initial_authority');
++  authority = await ensureFrozen(engine, service, authority, now, observeFailure);
++  authority = await ensureDecision(engine, service, authority, now, observeFailure);
+   if (!authority || authority.decision.state !== RECORDED_DECISION_STATE.RECORDED) return null;
+-  const participantIds = await settleParticipants(engine, authority);
++  const participantIds = await settleParticipants(engine, authority, observeFailure);
+   if (participantIds === null) return null;
+   const terminalStatus = TERMINAL_STATUS[authority.decision.decision];
+-  if (!terminalStatus || await applySettlement(service,
++  if (!terminalStatus) {
++    reportFailure(observeFailure, 'terminal_status', transactionId,
++      {decision: authority.decision.decision});
++    return null;
++  }
++  if (await applySettlement(service,
+     settlementOf(KIND.PROGRESS, authority, {
+       decisionDigest: authority.decision.decisionDigest,
+       status: terminalStatus,
+-    })) === null) return null;
+-  const after = await readAuthority(engine, transactionId, now);
++    })) === null) {
++    reportFailure(observeFailure, 'progress_apply', transactionId,
++      {decision: authority.decision.decision, terminalStatus});
++    return null;
++  }
++  const after = await readAuthority(engine, transactionId, now,
++    observeFailure, 'progress_readback');
+   if (!after || after.decision.state !== RECORDED_DECISION_STATE.RECORDED ||
+       after.decision.decisionText !== authority.decision.decisionText ||
+-      after.row.status !== terminalStatus) return null;
++      after.row.status !== terminalStatus) {
++    reportFailure(observeFailure, 'progress_binding', transactionId,
++      {decision: authority.decision.decision, terminalStatus,
++        observedStatus: after?.row?.status ?? null});
++    return null;
++  }
+   return deepFreeze({transactionId, decision: after.decision.decision,
+     decisionDigest: after.decision.decisionDigest, terminalStatus,
+     participantIds: Object.freeze(participantIds)});
+ }
+ 
+-async function settleTransactionReleaseRows({engine, service, census, now = Date.now()}) {
+-  if (!engine || typeof engine.readDistributedTransactionRecoveryState !== 'function' ||
++async function settleTransactionReleaseRows({engine, service, census, now = Date.now(),
++  observeFailure = null}) {
++  const inputInvalid = !engine ||
++      typeof engine.readDistributedTransactionRecoveryState !== 'function' ||
+       typeof engine.deliverTransactionOperation !== 'function' ||
+       !service || typeof service.handleApplicationMessage !== 'function' ||
+       census?.state !== TRANSACTION_RELEASE_CENSUS_STATE.HELD ||
+       census.legacyTransactionIds?.length !== 0 ||
+-      !Array.isArray(census.recoverableTransactionIds)) return null;
++      !Array.isArray(census.recoverableTransactionIds);
++  if (inputInvalid) {
++    reportFailure(observeFailure, 'settlement_input', null, {
++      enginePresent: engine !== null && engine !== undefined,
++      recoveryReaderPresent:
++        typeof engine?.readDistributedTransactionRecoveryState === 'function',
++      participantDeliveryPresent: typeof engine?.deliverTransactionOperation === 'function',
++      settlementPortPresent: typeof service?.handleApplicationMessage === 'function',
++      censusState: census?.state ?? null,
++      legacyTransactionCount: Array.isArray(census?.legacyTransactionIds) ?
++        census.legacyTransactionIds.length : null,
++      recoverableTransactionCount: Array.isArray(census?.recoverableTransactionIds) ?
++        census.recoverableTransactionIds.length : null,
++    });
++    return null;
++  }
+   const transactions = [];
+   for (const transactionId of census.recoverableTransactionIds) {
+-    const result = await settleOne(engine, service, transactionId, now);
++    const result = await settleOne(engine, service, transactionId, now, observeFailure);
+     if (result === null) return null;
+     transactions.push(result);
+   }
+diff --git a/src/raft/raft-operation-port-request.js b/src/raft/raft-operation-port-request.js
+index 4aea7bea1..9ffeca765 100644
+--- a/src/raft/raft-operation-port-request.js
++++ b/src/raft/raft-operation-port-request.js
+@@ -47,6 +47,11 @@ const RAFT_OPERATION_PORT_REQUEST = Object.freeze({
+   SEND_TO_PEER: 'sendToPeer',
+   RESOLVE_PEER_ADDRESS: 'resolvePeerAddress',
+   APPLY_COMMITTED_ENTRY: 'applyCommittedEntry',
++  // A group-specific local HOLD checked in the runtime turn after inbound
++  // traffic drains and immediately before the native proposal primitive.
++  // It may refuse this exact proposal locally; it is never an input to
++  // committed application and therefore cannot become replicated authority.
++  ADMIT_PROPOSAL_DISPATCH: 'admitProposalDispatch',
+   SNAPSHOT_CATCHUP_NEEDED: 'snapshotCatchupNeeded',
+   // A durable apply transaction did NOT commit, so any cached applied
+   // progress is unreliable and must be re-read from the durable store. It
+diff --git a/src/raft/raft-rs-application-transaction-owner.js b/src/raft/raft-rs-application-transaction-owner.js
+index efdd1f49c..ffbf2eada 100644
+--- a/src/raft/raft-rs-application-transaction-owner.js
++++ b/src/raft/raft-rs-application-transaction-owner.js
+@@ -50,6 +50,7 @@ function runIsolatedEffects(effects) {
+  */
+ function applyCommittedEntryTransaction({store, groupId, entry, confState,
+   membershipGenerationIndex, applyCommittedEntry, admitted = false,
++  committedConfiguration = null,
+   committedMembershipContext = null, applyCommittedMembershipContext = null,
+   runApplySlice = null}) {
+   if (committedMembershipContext !== null &&
+@@ -61,7 +62,8 @@ function applyCommittedEntryTransaction({store, groupId, entry, confState,
+     if (carriesProposedCommand(entry) &&
+         typeof applyCommittedEntry === 'function') {
+       const applied = applyCommittedEntry(Buffer.from(entry.data, 'base64'),
+-        {index: entry.index, term: entry.term, effects});
++        {index: entry.index, term: entry.term, effects,
++          committedConfiguration});
+       if (applied && typeof applied.then === 'function') {
+         throw new TypeError(ASYNC_APPLICATION_CALLBACK_ERROR);
+       }
+diff --git a/src/raft/raft-rs-operation-port.js b/src/raft/raft-rs-operation-port.js
+index caf1fd553..ddb78cfcd 100644
+--- a/src/raft/raft-rs-operation-port.js
++++ b/src/raft/raft-rs-operation-port.js
+@@ -88,12 +88,14 @@ function coreOk(reason, fields = {}) {
+ // command the port encoded, decoded by the same codec, and the entry's
+ // position and deferred-effect bag the runtime hands the application.
+ function committedEntryApplication(applyCommittedEntry) {
+-  return (bytes, {index, term, effects}) => applyCommittedEntry(Object.freeze({
+-    command: decodeCommittedProposal(bytes),
+-    index: Number(index),
+-    term: Number(term),
+-    effects,
+-  }));
++  return (bytes, {index, term, effects, committedConfiguration}) =>
++    applyCommittedEntry(Object.freeze({
++      command: decodeCommittedProposal(bytes),
++      index: Number(index),
++      term: Number(term),
++      committedConfiguration,
++      effects,
++    }));
+ }
+ 
+ function tickIntervalOf(timing) {
+@@ -226,6 +228,10 @@ function createRaftRsOperationPort(request) {
+       registry.resolveReplicaIdentity(raftPeerId),
+     applyCommittedEntry: committedEntryApplication(required(
+       request, RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY)),
++    admitProposalDispatch: (bytes) => {
++      const admit = request[RAFT_OPERATION_PORT_REQUEST.ADMIT_PROPOSAL_DISPATCH];
++      return typeof admit === 'function' ? admit(decodeCommittedProposal(bytes)) : null;
++    },
+     applyCommittedMembershipContext: (context, position) => {
+       registry.reserveCommittedReplica(context.replicaIdentity, context.peerId);
+       if (context.stage === RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER) {
+@@ -324,7 +330,7 @@ function createRaftRsOperationPort(request) {
+     subscribe,
+     step: enqueueStep,
+     propose: (value) => executeTurn({
+-      type: 'propose', bytes: encodeProposal(value),
++      type: RUNTIME_COMMAND.PROPOSE, bytes: encodeProposal(value),
+     }),
+     proposeConfChange: (change) => protocolTurn(() => {
+       const normalized = normalizedConfChange(change, registry);
+diff --git a/src/raft/raft-rs-runtime-owner-constants.js b/src/raft/raft-rs-runtime-owner-constants.js
+index c97b24a9f..46f503239 100644
+--- a/src/raft/raft-rs-runtime-owner-constants.js
++++ b/src/raft/raft-rs-runtime-owner-constants.js
+@@ -52,6 +52,7 @@ const RUNTIME_COMMAND = Object.freeze({
+   // through the core and nothing else - it is not a tick, so a replica whose
+   // scheduling is stopped never campaigns from it.
+   DRAIN_INBOUND: 'drain-inbound',
++  PROPOSE: 'propose',
+   PROBE_PEER_PROGRESS: 'probe-peer-progress',
+   // Leadership moved to one voter through the core's own MsgTransferLeader,
+   // validated against the core's status and configuration in the same turn.
+diff --git a/src/raft/raft-rs-runtime-owner.js b/src/raft/raft-rs-runtime-owner.js
+index 530b211c0..9f0bf2bf0 100644
+--- a/src/raft/raft-rs-runtime-owner.js
++++ b/src/raft/raft-rs-runtime-owner.js
+@@ -920,12 +920,27 @@ function resolveEntryConfStateOrFailure(group, expectedGeneration, entry) {
+ function applyEntryDurablyOrFailure({group, entry, resolvedConfState,
+   nextMembershipGeneration, admitted}) {
+   try {
++    const confState = resolvedConfState.value;
++    // Only facts replicated in the Raft record may enter deterministic
++    // application. Peer identity reservations are intentionally local and
++    // may be absent on an otherwise current replica; the release command
++    // carries its immutable identity manifest and application validates that
++    // manifest against these replicated peer IDs.
++    const committedConfiguration = deepFreeze({
++      voters: [...(confState.voters || [])].map(String).sort(),
++      votersOutgoing: [...(confState.votersOutgoing || [])].map(String).sort(),
++      learners: [...(confState.learners || [])].map(String).sort(),
++      learnersNext: [...(confState.learnersNext || [])].map(String).sort(),
++      configurationKey: raftRsConfStateKey(confState),
++      membershipGenerationIndex: Number(nextMembershipGeneration),
++    });
+     applyCommittedEntryTransaction({
+       store: group.store,
+       groupId: group.groupId,
+       entry,
+       confState: resolvedConfState.value,
+       membershipGenerationIndex: String(nextMembershipGeneration),
++      committedConfiguration,
+       applyCommittedEntry: group.applyCommittedEntry,
+       admitted,
+       committedMembershipContext: resolvedConfState.membershipContext || null,
+@@ -1187,6 +1202,7 @@ function readGroupObservation(group, expectedGeneration, rawStatus = null) {
+   // may run ahead of it), never the core's status.applied.
+   return {ok: true, value: {status: status.value, confState: conf.value,
+     ...observedParticipation(group),
++    lastIndex: group.persistedLastIndex,
+     configurationKey: raftRsConfStateKey(conf.value),
+     membershipGenerationIndex: group.membershipGenerationKnown ?
+       Number(group.membershipGenerationIndex) : null,
+@@ -1444,7 +1460,7 @@ const COMMAND_OPERATION = Object.freeze({
+ });
+ const PROPOSE_CONF_CHANGE = 'propose-conf-change';
+ const TICK_COMMAND = 'tick';
+-const PROPOSAL_COMMANDS = new Set(['propose', PROPOSE_CONF_CHANGE]);
++const PROPOSAL_COMMANDS = new Set([RUNTIME_COMMAND.PROPOSE, PROPOSE_CONF_CHANGE]);
+ 
+ // What the closed participation gate refuses (O1: a replica not yet
+ // admitted may not campaign or serve): every proposal, and a tick that could
+@@ -1483,7 +1499,7 @@ function performCommand(group, command, expectedGeneration) {
+   }
+   const primitive = {
+     'tick': ['tick', []],
+-    'propose': ['propose', [command.bytes]],
++    [RUNTIME_COMMAND.PROPOSE]: ['propose', [command.bytes]],
+     [PROPOSE_CONF_CHANGE]: ['propose_conf_change_v2', [command.change]],
+   }[command.type];
+   if (primitive && !group.gateOpen) {
+@@ -1504,6 +1520,18 @@ function performCommand(group, command, expectedGeneration) {
+   if (refused !== null) {
+     return refused;
+   }
++  if (command.type === RUNTIME_COMMAND.PROPOSE) {
++    const admission = group.admitProposalDispatch(command.bytes);
++    if (admission?.admitted === false) {
++      return outcome(CORE_REFUSED, {
++        reason: admission.reason,
++        phase: RUNTIME_PHASE.DISPATCH,
++        retryable: admission.retryable === true,
++        recoveryRequired: admission.recoveryRequired === true,
++        ...(admission.detail === undefined ? {} : {detail: admission.detail}),
++      });
++    }
++  }
+   const invoked = invokeCoreAt(
+     group, expectedGeneration, primitive[0], ...primitive[1]);
+   if (invoked.ok) {
+@@ -1674,6 +1702,8 @@ function createRuntimeDispatcher(request) {
+     resolvePeerAddress: request.resolvePeerAddress,
+     resolvePeerIdentity: request.resolvePeerIdentity,
+     applyCommittedEntry: request.applyCommittedEntry,
++    admitProposalDispatch: typeof request.admitProposalDispatch === 'function' ?
++      request.admitProposalDispatch : () => null,
+     applyCommittedMembershipContext: request.applyCommittedMembershipContext,
+     readLearnerOriginEvidence: request.readLearnerOriginEvidence,
+     applyTransactionRolledBack: request.applyTransactionRolledBack,
+diff --git a/src/raft/raft-rs-status-observation.js b/src/raft/raft-rs-status-observation.js
+index 93a8fe22e..57098496f 100644
+--- a/src/raft/raft-rs-status-observation.js
++++ b/src/raft/raft-rs-status-observation.js
+@@ -142,6 +142,7 @@ function shapeGroupObservation(group, observation, leaderIdentityUnresolved) {
+     // The runtime's applied index of this same observation (the one its
+     // confState came from).
+     appliedIndex: observation.appliedIndex,
++    lastIndex: Number(observation.lastIndex),
+     configurationKey: observation.configurationKey,
+     membershipGenerationIndex: observation.membershipGenerationIndex,
+     lifecycleIncarnation: observation.lifecycleIncarnation,
+diff --git a/src/raft/snapshot-catchup-constants.js b/src/raft/snapshot-catchup-constants.js
+index 46a02f61d..18ef69589 100644
+--- a/src/raft/snapshot-catchup-constants.js
++++ b/src/raft/snapshot-catchup-constants.js
+@@ -37,6 +37,7 @@ const RAFT_SNAPSHOT_CATCHUP_DISPATCH_OUTCOME = Object.freeze({
+ const RAFT_SNAPSHOT_CATCHUP_INSTALL_OUTCOME = Object.freeze({
+   INSTALLED_AND_RECREATED: 'installed_and_recreated',
+   RECEIVE_FAILED: 'receive_failed',
++  RETIREMENT_FAILED: 'retirement_failed',
+   SHUTDOWN_FAILED: 'shutdown_failed',
+   INSTALL_REJECTED: 'install_rejected',
+   RECREATE_FAILED: 'recreate_failed',
+diff --git a/src/raft/snapshot-catchup.js b/src/raft/snapshot-catchup.js
+index 0e3a8fdc6..cd35ef124 100644
+--- a/src/raft/snapshot-catchup.js
++++ b/src/raft/snapshot-catchup.js
+@@ -366,6 +366,14 @@ async function orchestrateSnapshotCatchupInstall(options) {
+     return orchestrationResult(INSTALL_ORCHESTRATION.RECEIVE_FAILED,
+       {transfer});
+   }
++  try {
++    await options.beforeServiceReplacement?.(service);
++  } catch (error) {
++    return orchestrationResult(INSTALL_ORCHESTRATION.RETIREMENT_FAILED, {
++      transfer,
++      detail: error.message,
++    });
++  }
+   try {
+     await service.shutdown();
+   } catch (error) {
+diff --git a/src/storage/data-directory-manager.js b/src/storage/data-directory-manager.js
+index 2373cc01f..cfd044221 100644
+--- a/src/storage/data-directory-manager.js
++++ b/src/storage/data-directory-manager.js
+@@ -15,6 +15,8 @@ import {
+   STORAGE_LOG_MSG,
+   STORAGE_SUBSYSTEM,
+ } from './storage-constants.js';
++import {readDataDirectoryProcessOwnerEvidence} from
++  './data-directory-process-owner.js';
+ 
+ /**
+  * DataDirectoryManager handles persistent storage directory operations.
+@@ -55,7 +57,7 @@ class DataDirectoryManager {
+    * Creates the data directory if it doesn't exist and validates writability.
+    * @throws {Error} If the data directory is not writable.
+    */
+-  initialize() {
++  configure() {
+     if (this.initialized) {
+       return;
+     }
+@@ -71,9 +73,21 @@ class DataDirectoryManager {
+ 
+     // Resolve to absolute path
+     this.dataDir = path.resolve(this.dataDir);
++  }
++
++  initialize(options = {}) {
++    if (this.initialized) {
++      return;
++    }
++    this.configure();
+ 
+-    // Create data directory if it doesn't exist
+-    this.ensureDirectoryExists(this.dataDir);
++    const processOwner = options.processOwner || null;
++    if (processOwner === null) {
++      this.ensureDirectoryExists(this.dataDir);
++    } else if (readDataDirectoryProcessOwnerEvidence(
++      processOwner, this.dataDir) === null) {
++      throw new Error(`Data directory process owner is invalid: ${this.dataDir}`);
++    }
+ 
+     // Validate directory is writable
+     this.validateWritable(this.dataDir);
+@@ -129,7 +143,7 @@ class DataDirectoryManager {
+    * @return {string} The data directory path.
+    */
+   getDataDir() {
+-    if (!this.initialized) {
++    if (!this.initialized && this.dataDir === null) {
+       throw new Error(STORAGE_ERROR_MSG.NOT_INITIALIZED);
+     }
+     return this.dataDir;
+diff --git a/src/storage/data-directory-process-owner.js b/src/storage/data-directory-process-owner.js
+index fb15ffab0..6a492ea88 100644
+--- a/src/storage/data-directory-process-owner.js
++++ b/src/storage/data-directory-process-owner.js
+@@ -1,56 +1,233 @@
+ import Database from 'better-sqlite3';
++import {createHash, randomBytes} from 'node:crypto';
++import fs from 'node:fs';
+ import path from 'node:path';
+ 
+ const DATA_DIRECTORY_OWNER_DB = '.lagrange-data-directory-owner.sqlite';
++const DATA_DIRECTORY_BIRTH_MARKER = '.lagrange-data-directory-birth.json';
++const DATA_DIRECTORY_RENDEZVOUS_PREFIX = '.lagrange-data-directory-claim-';
+ const DATA_DIRECTORY_OWNER_ERROR_CODE = 'DATA_DIRECTORY_ALREADY_OWNED';
+ const DATA_DIRECTORY_OWNER_UNAVAILABLE_ERROR_CODE =
+   'DATA_DIRECTORY_OWNERSHIP_UNAVAILABLE';
++const DATA_DIRECTORY_ENTRY_CONFLICT_ERROR_CODE =
++  'DATA_DIRECTORY_ENTRY_CONFLICT';
+ const DATA_DIRECTORY_OWNER_SQL = Object.freeze({
+   ACQUIRE: 'BEGIN EXCLUSIVE',
+   BUSY_TIMEOUT: 'busy_timeout = 0',
+   RELEASE: 'ROLLBACK',
+ });
++const OWNER_STATE = new WeakMap();
+ 
+-function dataDirectoryOwnershipError(dataDir, cause, alreadyOwned) {
+-  const error = new Error(
+-    alreadyOwned ?
+-      `Data directory is already owned by another Lagrange process: ${dataDir}` :
+-      `Data directory ownership could not be established: ${dataDir}`,
+-  );
+-  error.code = alreadyOwned ? DATA_DIRECTORY_OWNER_ERROR_CODE :
+-    DATA_DIRECTORY_OWNER_UNAVAILABLE_ERROR_CODE;
+-  error.errorCode = error.code;
++function dataDirectoryOwnershipError(dataDir, cause, code) {
++  const error = new Error(code === DATA_DIRECTORY_OWNER_ERROR_CODE ?
++    `Data directory is already owned by another Lagrange process: ${dataDir}` :
++    `Data directory ownership could not be established: ${dataDir}`);
++  error.code = code;
++  error.errorCode = code;
+   error.cause = cause;
+   return error;
+ }
+ 
+-function acquireDataDirectoryProcessOwner(dataDir) {
+-  const canonicalDataDir = path.resolve(dataDir);
+-  const lockPath = path.join(canonicalDataDir, DATA_DIRECTORY_OWNER_DB);
++function fsyncDirectory(directory) {
++  const descriptor = fs.openSync(directory, fs.constants.O_RDONLY);
++  try {
++    fs.fsyncSync(descriptor);
++  } finally {
++    fs.closeSync(descriptor);
++  }
++}
++
++function requireOrdinaryDirectory(directory, requested) {
++  const stat = fs.lstatSync(directory);
++  if (!stat.isDirectory() || stat.isSymbolicLink()) {
++    throw dataDirectoryOwnershipError(requested, null,
++      DATA_DIRECTORY_ENTRY_CONFLICT_ERROR_CODE);
++  }
++  return stat;
++}
++
++function openExclusiveDatabase(file, dataDir) {
+   let database = null;
+   try {
+-    database = new Database(lockPath);
++    database = new Database(file);
+     database.pragma(DATA_DIRECTORY_OWNER_SQL.BUSY_TIMEOUT);
+     database.exec(DATA_DIRECTORY_OWNER_SQL.ACQUIRE);
++    return database;
+   } catch (cause) {
+     database?.close();
+-    const alreadyOwned = cause?.code === 'SQLITE_BUSY' ||
+-      cause?.code === 'SQLITE_LOCKED';
+-    throw dataDirectoryOwnershipError(canonicalDataDir, cause, alreadyOwned);
++    const code = cause?.code === 'SQLITE_BUSY' || cause?.code === 'SQLITE_LOCKED' ?
++      DATA_DIRECTORY_OWNER_ERROR_CODE :
++      DATA_DIRECTORY_OWNER_UNAVAILABLE_ERROR_CODE;
++    throw dataDirectoryOwnershipError(dataDir, cause, code);
+   }
+-  let released = false;
+-  return Object.freeze({
+-    dataDir: canonicalDataDir,
+-    lockPath,
+-    release() {
+-      if (released) return;
+-      released = true;
+-      try {
+-        database.exec(DATA_DIRECTORY_OWNER_SQL.RELEASE);
+-      } finally {
+-        database.close();
++}
++
++function releaseDatabase(database) {
++  if (!database) return;
++  try {
++    database.exec(DATA_DIRECTORY_OWNER_SQL.RELEASE);
++  } finally {
++    database.close();
++  }
++}
++
++function writeBirthMarker(markerPath, canonicalDataDir) {
++  const marker = Object.freeze({
++    authorityId: randomBytes(32).toString('hex'),
++    canonicalDataDir,
++    version: 1,
++  });
++  const descriptor = fs.openSync(markerPath,
++    fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_WRONLY |
++      (fs.constants.O_NOFOLLOW ?? 0), 0o600);
++  try {
++    fs.writeFileSync(descriptor, `${JSON.stringify(marker)}\n`, 'utf8');
++    fs.fsyncSync(descriptor);
++  } finally {
++    fs.closeSync(descriptor);
++  }
++  fsyncDirectory(canonicalDataDir);
++  return marker;
++}
++
++function readBirthMarker(markerPath, canonicalDataDir) {
++  let marker;
++  try {
++    const stat = fs.lstatSync(markerPath);
++    if (!stat.isFile() || stat.isSymbolicLink()) return null;
++    marker = JSON.parse(fs.readFileSync(markerPath, 'utf8'));
++  } catch (error) {
++    if (error?.code === 'ENOENT') return null;
++    throw dataDirectoryOwnershipError(canonicalDataDir, error,
++      DATA_DIRECTORY_OWNER_UNAVAILABLE_ERROR_CODE);
++  }
++  return marker?.version === 1 &&
++    typeof marker.authorityId === 'string' && marker.authorityId.length === 64 &&
++    marker.canonicalDataDir === canonicalDataDir ? marker : null;
++}
++
++function resolveLeaf(dataDir) {
++  const requested = path.resolve(dataDir);
++  const parentInput = path.dirname(requested);
++  const leafName = path.basename(requested);
++  if (leafName.length === 0 || leafName === '.' || leafName === '..') {
++    throw dataDirectoryOwnershipError(requested, null,
++      DATA_DIRECTORY_ENTRY_CONFLICT_ERROR_CODE);
++  }
++  let realParent;
++  try {
++    realParent = fs.realpathSync.native(parentInput);
++    requireOrdinaryDirectory(realParent, requested);
++  } catch (cause) {
++    if (cause?.code === DATA_DIRECTORY_ENTRY_CONFLICT_ERROR_CODE) throw cause;
++    throw dataDirectoryOwnershipError(requested, cause,
++      DATA_DIRECTORY_OWNER_UNAVAILABLE_ERROR_CODE);
++  }
++  const canonicalDataDir = path.join(realParent, leafName);
++  const digest = createHash('sha256').update(canonicalDataDir).digest('hex');
++  return Object.freeze({canonicalDataDir, leafName, realParent,
++    rendezvousPath: path.join(realParent,
++      `${DATA_DIRECTORY_RENDEZVOUS_PREFIX}${digest}.sqlite`)});
++}
++
++function pathExists(file) {
++  try {
++    fs.lstatSync(file);
++    return true;
++  } catch (error) {
++    if (error?.code === 'ENOENT') return false;
++    throw error;
++  }
++}
++
++function acquireDataDirectoryProcessOwner(dataDir) {
++  const leaf = resolveLeaf(dataDir);
++  const {canonicalDataDir, realParent, rendezvousPath} = leaf;
++  let rendezvous = null;
++  let database = null;
++  let created = false;
++  try {
++    const existedInitially = pathExists(canonicalDataDir);
++    if (!existedInitially || pathExists(rendezvousPath)) {
++      rendezvous = openExclusiveDatabase(rendezvousPath, canonicalDataDir);
++    }
++    if (!pathExists(canonicalDataDir)) {
++      if (!rendezvous) {
++        rendezvous = openExclusiveDatabase(rendezvousPath, canonicalDataDir);
+       }
+-    },
++      fs.mkdirSync(canonicalDataDir, {recursive: false, mode: 0o700});
++      fsyncDirectory(realParent);
++      created = true;
++    }
++    const firstIdentity = requireOrdinaryDirectory(canonicalDataDir,
++      canonicalDataDir);
++    const lockPath = path.join(canonicalDataDir, DATA_DIRECTORY_OWNER_DB);
++    database = openExclusiveDatabase(lockPath, canonicalDataDir);
++    const secondIdentity = requireOrdinaryDirectory(canonicalDataDir,
++      canonicalDataDir);
++    if (firstIdentity.dev !== secondIdentity.dev ||
++        firstIdentity.ino !== secondIdentity.ino) {
++      throw dataDirectoryOwnershipError(canonicalDataDir, null,
++        DATA_DIRECTORY_ENTRY_CONFLICT_ERROR_CODE);
++    }
++    if (!rendezvous && pathExists(rendezvousPath)) {
++      releaseDatabase(database);
++      database = null;
++      return acquireDataDirectoryProcessOwner(canonicalDataDir);
++    }
++    const markerPath = path.join(canonicalDataDir,
++      DATA_DIRECTORY_BIRTH_MARKER);
++    const birthMarker = created ?
++      writeBirthMarker(markerPath, canonicalDataDir) :
++      readBirthMarker(markerPath, canonicalDataDir);
++    releaseDatabase(rendezvous);
++    rendezvous = null;
++    let released = false;
++    const owner = Object.freeze({
++      dataDir: canonicalDataDir,
++      lockPath,
++      release() {
++        if (released) return;
++        released = true;
++        OWNER_STATE.delete(owner);
++        releaseDatabase(database);
++        database = null;
++      },
++    });
++    OWNER_STATE.set(owner, Object.freeze({
++      authorityId: birthMarker?.authorityId ?? null,
++      canonicalDataDir,
++      createdAndOwned: created,
++      device: secondIdentity.dev,
++      inode: secondIdentity.ino,
++      owner,
++    }));
++    return owner;
++  } catch (cause) {
++    releaseDatabase(database);
++    releaseDatabase(rendezvous);
++    if (cause?.code === DATA_DIRECTORY_OWNER_ERROR_CODE ||
++        cause?.code === DATA_DIRECTORY_OWNER_UNAVAILABLE_ERROR_CODE ||
++        cause?.code === DATA_DIRECTORY_ENTRY_CONFLICT_ERROR_CODE) throw cause;
++    throw dataDirectoryOwnershipError(canonicalDataDir, cause,
++      DATA_DIRECTORY_OWNER_UNAVAILABLE_ERROR_CODE);
++  }
++}
++
++function readDataDirectoryProcessOwnerEvidence(owner, dataDir) {
++  const state = OWNER_STATE.get(owner);
++  if (!state || state.owner !== owner ||
++      typeof dataDir !== 'string' || dataDir.length === 0) return null;
++  const canonical = fs.realpathSync.native(path.resolve(dataDir));
++  if (canonical !== state.canonicalDataDir) return null;
++  const stat = requireOrdinaryDirectory(canonical, canonical);
++  if (stat.dev !== state.device || stat.ino !== state.inode) return null;
++  return Object.freeze({
++    authorityId: state.authorityId,
++    canonicalDataDir: state.canonicalDataDir,
++    createdAndOwned: state.createdAndOwned,
++    device: state.device,
++    inode: state.inode,
+   });
+ }
+ 
+@@ -70,6 +247,8 @@ function bindDataDirectoryProcessOwner(runtime, owner) {
+ 
+ export {
+   DATA_DIRECTORY_OWNER_ERROR_CODE,
++  DATA_DIRECTORY_OWNER_UNAVAILABLE_ERROR_CODE,
+   acquireDataDirectoryProcessOwner,
+   bindDataDirectoryProcessOwner,
++  readDataDirectoryProcessOwnerEvidence,
+ };
+diff --git a/test/bootstrap/bootstrap-service-ready-signal.test.js b/test/bootstrap/bootstrap-service-ready-signal.test.js
+index a9d4ef06d..a3f16db65 100644
+--- a/test/bootstrap/bootstrap-service-ready-signal.test.js
++++ b/test/bootstrap/bootstrap-service-ready-signal.test.js
+@@ -164,8 +164,8 @@ test('BootstrapService waits for lifecycle metadata publication readiness before
+       'lease writer should start once lifecycle metadata publication readiness is satisfied');
+     t.equal(heartbeatStarts, 1,
+       'heartbeat writer should start once lifecycle metadata publication readiness is satisfied');
+-    t.equal(recoveryStarts, 1,
+-      'deferred transaction recovery should arm once steady-state writers become active');
++    t.equal(recoveryStarts, 0,
++      'the provisional seed engine cannot consume final transaction recovery activation');
+   });
+ 
+ test('BootstrapService final SQL attachment engages transaction recovery when background writers are already active',
+diff --git a/test/bootstrap/seed-registration-phase.test.js b/test/bootstrap/seed-registration-phase.test.js
+index 2c9a85fd3..5af345dd3 100644
+--- a/test/bootstrap/seed-registration-phase.test.js
++++ b/test/bootstrap/seed-registration-phase.test.js
+@@ -321,8 +321,10 @@ test('SeedRegistrationPhase waits only for cache-hydration leader partitions bef
+         'services-p1',
+         'tables-p1',
+         'message_groups-p1',
++        'sql_transactions-p1',
+       ],
+-    }], 'bootstrap-direct registration should wait only for cache-hydration leader partitions');
++    }], 'bootstrap-direct registration should wait for its write leaders and ' +
++      'the participant activation control leader');
+     t.same(events, [
+       'enable',
+       'registerMessageGroup',
+diff --git a/test/bootstrap/shared/startup-sql-runtime-handoff.test.js b/test/bootstrap/shared/startup-sql-runtime-handoff.test.js
+index 90b90d8dc..9ac03a1f1 100644
+--- a/test/bootstrap/shared/startup-sql-runtime-handoff.test.js
++++ b/test/bootstrap/shared/startup-sql-runtime-handoff.test.js
+@@ -407,6 +407,54 @@ describe(STARTUP_SQL_RUNTIME_HANDOFF_SUITE, () => {
+       );
+     });
+ 
++  it('defers recovery on a provisional engine and activates the final engine once',
++    async () => {
++      let provisionalActivationCount = 0;
++      let finalActivationCount = 0;
++      const provisionalEngine = {
++        activateDistributedTransactionRecovery() {
++          provisionalActivationCount += 1;
++        },
++      };
++      const finalEngine = {
++        activateDistributedTransactionRecovery() {
++          finalActivationCount += 1;
++          return Promise.resolve({failed: 0});
++        },
++      };
++      const owner = new StartupRuntimeHandoffOwner({
++        delegates: {
++          isDistributedTransactionRecoveryAvailable: () => true,
++          activateDistributedTransactionRecovery: () =>
++            owner.sqlQueryEngine.activateDistributedTransactionRecovery(),
++        },
++      });
++
++      const provisional = attachSqlRuntimeToStartupOwner({
++        owner,
++        sqlQueryEngine: provisionalEngine,
++        systemTableCache: null,
++        activateDistributedTransactionRecovery: false,
++      });
++      assert.strictEqual(provisional, null);
++      assert.strictEqual(owner.sqlQueryEngine, provisionalEngine);
++      assert.strictEqual(provisionalActivationCount, 0);
++      assert.strictEqual(owner.getDistributedTransactionRecoverySnapshot().state,
++        'not_started');
++
++      const final = attachSqlRuntimeToStartupOwner({
++        owner,
++        sqlQueryEngine: finalEngine,
++        systemTableCache: null,
++      });
++      await final;
++      assert.strictEqual(owner.sqlQueryEngine, finalEngine);
++      assert.strictEqual(provisionalActivationCount, 0);
++      assert.strictEqual(finalActivationCount, 1);
++      assert.strictEqual(owner.getDistributedTransactionRecoverySnapshot().state,
++        'completed');
++    });
++
+   it(STARTUP_SQL_RUNTIME_HANDOFF_TEST.rebalanceDependencies,
+     () => {
+       const systemTableCache = {
+diff --git a/test/partition/partition-coordinator-settlement.test.js b/test/partition/partition-coordinator-settlement.test.js
+index 526fc0b52..a6bf884b2 100644
+--- a/test/partition/partition-coordinator-settlement.test.js
++++ b/test/partition/partition-coordinator-settlement.test.js
+@@ -96,6 +96,47 @@ test('ordinary write origin cannot propose fixed settlement and new COMMIT never
+     assert.equal(row(leader).decision, null);
+   }));
+ 
++for (const {decision, status} of [
++  {decision: 'COMMIT', status: 'COMMITTED'},
++  {decision: 'ROLLBACK', status: 'ROLLED_BACK'},
++]) {
++  test(`terminal ${decision} completed by the normal owner orders one exact progress replay`, () =>
++    fixture(async (leader, proposed) => {
++      const record = buildDecisionRecord(TX, decision, []);
++      leader.db.prepare('UPDATE sql_transactions SET participant_set_state=\'FROZEN\',' +
++        'commit_mode=\'TWO_PHASE_COMMIT\',decision=?,decision_text=?,decision_digest=?,status=?')
++        .run(record.decision, record.decisionText, record.decisionDigest, status);
++      const progress = {kind: KIND.PROGRESS, ...BASE,
++        decisionDigest: record.decisionDigest, status};
++      const pending = track(send(leader, progress));
++      const command = await awaitProposal(proposed,
++        (value) => value.type === COORDINATOR_SETTLEMENT_TYPE);
++      assert.ok(command, 'semantic replay still enters the ordered command stream');
++      assert.equal(command.entryId, transactionSettlementBytes(progress).entryId);
++      assert.equal(applyCommitted(leader, command), null);
++
++      // Model the first ordered answer being lost: exact re-entry consumes the
++      // retained command result and must not mint another command or decision.
++      const recovered = await send(leader, progress);
++      const first = await pending.promise;
++      assert.equal(first.committed, true);
++      assert.equal(recovered.committed, true);
++      assert.deepEqual(recovered[RESULT], first[RESULT]);
++      assert.equal(recovered[RESULT].outcome, OUTCOME.REPLAYED);
++      assert.equal(entry(leader, command).state, 'settled');
++      assert.equal(proposed.length, 1);
++      assert.equal(row(leader).decision, decision);
++      assert.equal(row(leader).decision_digest, record.decisionDigest);
++
++      const mismatch = await send(leader, {...progress,
++        decisionDigest: 'f'.repeat(64)});
++      assert.equal(mismatch.committed, undefined);
++      assert.equal(mismatch[RESULT].outcome, OUTCOME.REFUSED);
++      assert.equal(mismatch[RESULT].reason, 'decision_binding_conflict');
++      assert.equal(proposed.length, 1, 'mismatched evidence never enters consensus');
++    }));
++}
++
+ test('enlist winning between source and apply is a retained conflict, not lineage rewrite', () =>
+   fixture(async (leader, proposed) => {
+     const pending = track(send(leader, FREEZE));
+diff --git a/test/partition/partition-participant-transaction-apply.test.js b/test/partition/partition-participant-transaction-apply.test.js
+index dcb29f667..cdae321a6 100644
+--- a/test/partition/partition-participant-transaction-apply.test.js
++++ b/test/partition/partition-participant-transaction-apply.test.js
+@@ -40,7 +40,8 @@ import {
+   durableAppliedIndex, generationOf, hasEntryId, identityOf, isDecisionCommand,
+   isPrepareCommand, notCommitted, onTwoReplicas, operationOf, ordinaryWriteOf,
+   originCommandOf, originOf, outcomeOf, pick, plantAppliedStateFailure, prepareCommandOf,
+-  prepareMessage, queryMessage, removeAppliedStateFailure, rowCount, send, settleTicks,
++  prepareMessage, queryMessage, removeAppliedStateFailure, resumeFixtureParticipantAdmission,
++  rowCount, send, settleTicks,
+   sha256, shutdownAll, startLeader, startReplica, statementOutcomeOf, statementState,
+   temporaryDbPath, track, transactionOperationOutcomes, txMessage,
+ } from '../test-helpers/participant-transaction-fixture.js';
+@@ -504,6 +505,7 @@ test('TX1 inc3 origin: until the generation origin has applied on the leader a B
+     facts.again = pick(await enableParticipantTransactionAdmission(leader),
+       ['success', 'alreadyEnabled', 'originIndex']);
+     facts.proposed = proposed.map((entry) => entry.type);
++    await resumeFixtureParticipantAdmission(leader);
+     facts.beginAfter = pick(await send(leader, beginMessage(tx)), ['success', 'state']);
+     assert.deepEqual(facts, {begin: {success: false, failureCode: CODE.ORIGIN_PENDING},
+       stagingOpen: false, answeredBeforeApply: false, originApply: null,
+diff --git a/test/raft/raft-rs-backend/operation-port-lifecycle.test.js b/test/raft/raft-rs-backend/operation-port-lifecycle.test.js
+index f3bfb11d4..24d92a5f4 100644
+--- a/test/raft/raft-rs-backend/operation-port-lifecycle.test.js
++++ b/test/raft/raft-rs-backend/operation-port-lifecycle.test.js
+@@ -94,6 +94,107 @@ test('malformed ingress is refused locally without core entry', async () => {
+   }
+ });
+ 
++test('a queued proposal rechecks local admission after the prior runtime turn and before ' +
++  'native propose', async () => {
++  const heldSends = [];
++  let holdSends = false;
++  let held = false;
++  let cluster = null;
++  cluster = new PartitionNodeCluster({
++    partitionId: 'queued-proposal-dispatch-admission',
++    replicaIds: ['dispatch-a', 'dispatch-b', 'dispatch-c'],
++    sendFor: (fromReplicaId, address, envelope) => holdSends ?
++      new Promise((resolve) => heldSends.push(() => {
++        cluster.queue(fromReplicaId, address, envelope);
++        resolve(undefined);
++      })) : undefined,
++    admitFor: (_replicaId, command) => held && command.entryId === 'second' ?
++      {admitted: false, reason: 'test-local-hold', retryable: true,
++        recoveryRequired: false} : null,
++  });
++  try {
++    assert.equal(cluster.settle(() => cluster.leaderReplicaId() !== null), true);
++    const leader = cluster.leaderReplicaId();
++    const followers = [...cluster.replicas.keys()]
++      .filter((replicaId) => replicaId !== leader);
++    const first = await cluster.propose(leader, {entryId: 'first'});
++    for (const follower of followers) {
++      for (const envelope of cluster.replica(follower).inbox.splice(0)) {
++        cluster.node(follower).step(envelope);
++      }
++      cluster.node(follower).tick();
++    }
++    for (const envelope of cluster.replica(leader).inbox.splice(0)) {
++      cluster.node(leader).step(envelope);
++    }
++    holdSends = true;
++    const completingFirst = Promise.resolve(cluster.node(leader).tick());
++    await new Promise((resolve) => setImmediate(resolve));
++    assert.ok(heldSends.length > 0,
++      'the first committed Ready is held in a real peer delivery');
++    const second = cluster.propose(leader, {entryId: 'second'});
++    held = true;
++    while (heldSends.length > 0) {
++      heldSends.shift()();
++      await new Promise((resolve) => setImmediate(resolve));
++    }
++    holdSends = false;
++    assert.equal(first.outcome, 'CORE_OK');
++    assert.equal((await completingFirst).outcome, 'CORE_OK');
++    const refused = await second;
++    assert.equal(refused.outcome, 'CORE_REFUSED');
++    assert.equal(refused.reason, 'test-local-hold');
++    assert.equal(refused.phase, 'dispatch');
++  } finally {
++    cluster.dispose();
++  }
++});
++
++test('one committed entry gives every replica the same application configuration when ' +
++  'one local identity reservation is absent', async () => {
++  const observed = new Map();
++  const command = {entryId: 'replicated-configuration-only'};
++  const cluster = new PartitionNodeCluster({
++    partitionId: 'replicated-configuration-local-reservation-gap',
++    replicaIds: ['config-a', 'config-b', 'config-c'],
++    applyFor: (replicaId, applied, {committedConfiguration}) => {
++      if (applied.entryId === command.entryId) {
++        observed.set(replicaId, committedConfiguration);
++      }
++    },
++  });
++  try {
++    assert.equal(cluster.settle(() => cluster.leaderReplicaId() !== null), true);
++    const leader = cluster.leaderReplicaId();
++    const incompleteReplicaId = [...cluster.replicas.keys()]
++      .find((replicaId) => replicaId !== leader);
++    const omittedReplicaId = [...cluster.replicas.keys()]
++      .find((replicaId) => replicaId !== incompleteReplicaId);
++    const incompleteReplica = cluster.replica(incompleteReplicaId);
++    const omittedPeerId = cluster.raftPeerIdOf(omittedReplicaId);
++    const registry = new RaftRsPeerIdentityRegistry(incompleteReplica.db);
++    assert.equal(registry.replicaIdentityOf(omittedPeerId), omittedReplicaId);
++    incompleteReplica.db.prepare(
++      'DELETE FROM raft_rs_peer_identity WHERE replica_identity = ?')
++      .run(omittedReplicaId);
++    assert.equal(registry.resolveReplicaIdentity(omittedPeerId).replicaIdentity,
++      null, 'precondition: one lawful local observation lacks the reservation');
++
++    assert.equal((await cluster.propose(leader, command)).outcome, 'CORE_OK');
++    assert.equal(cluster.settle(() => observed.size === cluster.replicas.size),
++      true, 'the exact entry applies on every replica');
++    const facts = [...observed.values()];
++    assert.equal(new Set(facts.map(JSON.stringify)).size, 1,
++      'application receives one replicated configuration despite local registry drift');
++    assert.equal(Object.hasOwn(facts[0], 'identities'), false,
++      'a local identity projection never enters deterministic application');
++    assert.equal(facts[0].voters.includes(omittedPeerId), true,
++      'the replicated ConfState still carries the omitted peer');
++  } finally {
++    cluster.dispose();
++  }
++});
++
+ test('durable retirement refuses every active operation before core entry after restart',
+   async () => {
+     const cluster = new PartitionNodeCluster({
+diff --git a/test/raft/raft-rs-backend/partition-node-cluster.js b/test/raft/raft-rs-backend/partition-node-cluster.js
+index 7f82b7574..436a1b93a 100644
+--- a/test/raft/raft-rs-backend/partition-node-cluster.js
++++ b/test/raft/raft-rs-backend/partition-node-cluster.js
+@@ -88,13 +88,15 @@ class PartitionNodeCluster {
+    */
+   constructor({partitionId, replicaIds, substrateFor = null,
+     sendFor = null, resolveFor = null, applyFor = null,
+-    wrapDatabase = null, timingFor = null, tempRoot = os.tmpdir()}) {
++    admitFor = null, wrapDatabase = null, timingFor = null,
++    tempRoot = os.tmpdir()}) {
+     this.partitionId = partitionId;
+     this.replicaIds = [...replicaIds];
+     this.substrateFor = substrateFor;
+     this.sendFor = sendFor;
+     this.resolveFor = resolveFor;
+     this.applyFor = applyFor;
++    this.admitFor = admitFor;
+     this.wrapDatabase = wrapDatabase;
+     this.timingFor = timingFor;
+     this.coreEntries = [];
+@@ -185,13 +187,16 @@ class PartitionNodeCluster {
+       // driver keeps the decoded command, applied only once its transaction
+       // commits.
+       [RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY]: ({command,
+-        index, term, effects}) => {
++        index, term, effects, committedConfiguration}) => {
+         if (this.applyFor) {
+-          this.applyFor(replicaId, command, {index, term, effects});
++          this.applyFor(replicaId, command,
++            {index, term, effects, committedConfiguration});
+         }
+         effects.afterCommit.push(() =>
+           replicaOf().appliedCommands.push(command));
+       },
++      [RAFT_OPERATION_PORT_REQUEST.ADMIT_PROPOSAL_DISPATCH]: (command) =>
++        this.admitFor === null ? null : this.admitFor(replicaId, command),
+       [RAFT_OPERATION_PORT_REQUEST.SNAPSHOT_CATCHUP_NEEDED]: () => undefined,
+     };
+   }
+diff --git a/test/test-helpers/controllable-consensus-port.js b/test/test-helpers/controllable-consensus-port.js
+index 6af810f03..ec02d50ce 100644
+--- a/test/test-helpers/controllable-consensus-port.js
++++ b/test/test-helpers/controllable-consensus-port.js
+@@ -52,7 +52,7 @@ export function testCoreOk(fields = {}) {
+  *   applyCommittedEntry}.
+  */
+ export function applyCommandThroughApplicationOwner({database, groupId, index,
+-  term, command, applyCommittedEntry}) {
++  term, command, applyCommittedEntry, committedConfiguration = null}) {
+   applyCommittedEntryTransaction({
+     store: new RaftRsDurableStore(database),
+     groupId,
+@@ -63,11 +63,13 @@ export function applyCommandThroughApplicationOwner({database, groupId, index,
+       data: Buffer.from(encodeProposal(command)).toString('base64'),
+     },
+     confState: {},
++    committedConfiguration,
+     applyCommittedEntry: (bytes, position) => applyCommittedEntry(
+       Object.freeze({
+         command: decodeCommittedProposal(bytes),
+         index: Number(position.index),
+         term: Number(position.term),
++        committedConfiguration: position.committedConfiguration,
+         effects: position.effects,
+       })),
+   });
+@@ -128,6 +130,8 @@ export class ControllableConsensusPort {
+       command,
+       applyCommittedEntry:
+         this.request[RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY],
++      committedConfiguration: this.committedMembershipHandler ?
++        this.committedMembershipHandler({purpose: 'witness'}) : null,
+     });
+     this.committedIndex = index;
+   }
+diff --git a/test/test-helpers/participant-transaction-fixture.js b/test/test-helpers/participant-transaction-fixture.js
+index 9566b09fc..2870f154f 100644
+--- a/test/test-helpers/participant-transaction-fixture.js
++++ b/test/test-helpers/participant-transaction-fixture.js
+@@ -33,6 +33,17 @@ import {readParticipantReleaseFacts} from
+   '../../src/partition/partition-participant-release-facts.js';
+ import {releaseIdentityOf} from
+   '../../src/partition/partition-participant-release-contract.js';
++import {buildParticipantAdmissionPauseCommand,
++  buildParticipantAdmissionResumeCommand,
++  buildParticipantReleaseDispatchCommand,
++  buildParticipantReleaseFinalizeCommand,
++  buildParticipantReleasePublishClaimCommand,
++  buildParticipantReleaseRecordShareCommand,
++  buildParticipantReleaseReserveCommand,
++  targetEntryOf} from
++  '../../src/partition/partition-participant-release-command.js';
++import {readParticipantReleaseState} from
++  '../../src/partition/partition-participant-transaction-store.js';
+ import {resumeParticipantCutoverAdmission} from
+   '../../src/partition/partition-participant-transaction-pause.js';
+ import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+@@ -424,22 +435,101 @@ async function resumeFixtureParticipantAdmission(leader) {
+   const configurationKey = raftRsConfStateKey(confState);
+   const port = leader.controllablePort;
+   port.configurationKey = configurationKey;
+-  port.membershipGenerationIndex = port.committedIndex;
++  const membershipGenerationIndex = port.committedIndex;
++  port.membershipGenerationIndex = membershipGenerationIndex;
+   port.committedMembershipHandler = () => deepFreeze({
+     kind: COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED,
+     ...confState, identities: {[peerId]: leader.replicaId},
+     appliedIndex: port.committedIndex, commitIndex: port.committedIndex,
+-    configurationKey, membershipGenerationIndex: port.committedIndex,
++    configurationKey, membershipGenerationIndex,
+     term: port.term, leaderId: leader.replicaId, gateOpen: true,
+   });
+   const handler = {nodeId: leader.nodeId, ownerIncarnation: 1,
+     localServices: new Map([[leader.replicaId, leader]])};
+-  const facts = await readParticipantReleaseFacts(handler, leader);
++  let facts = await readParticipantReleaseFacts(handler, leader);
+   const release = releaseIdentityOf({partitionId: leader.partitionId,
+     targetBuildDigest: facts.buildDigest, configurationKey,
+-    membershipGenerationIndex: port.committedIndex});
++    membershipGenerationIndex});
++  const stamp = () => ({timestamp: leader.hlcClock.now().toString(),
++    proposedBy: leader.replicaId, proposedAt: leader.timeSource.now()});
++  const pause = buildParticipantAdmissionPauseCommand({
++    partitionId: leader.partitionId,
++    pauseInvocationId: 'fixture-participant-release-pause',
++    leaderReplicaId: leader.replicaId,
++    leaderTerm: port.term,
++  });
++  if (pause === null || applyCommitted(leader, pause) !== null) {
++    throw new Error('fixture participant release pause refused');
++  }
++  facts = await readParticipantReleaseFacts(handler, leader);
++  const authorizationId = 'fixture-participant-release-authorization';
++  const decision = {
++    controlPartitionId: leader.partitionId,
++    dependentRelease: release,
++    controlRelease: release,
++    controlCensus: [facts],
++    dependentCensus: [facts],
++    authorizationId,
++    deadlineAtMs: leader.timeSource.now() + 30000,
++  };
++  const reserved = buildParticipantReleaseReserveCommand({...decision,
++    expectedControlRevision: 0}, stamp());
++  if (reserved === null || applyCommitted(leader, reserved) !== null) {
++    throw new Error('fixture participant release reservation refused');
++  }
++  let releaseState = readParticipantReleaseState(leader.db);
++  const target = targetEntryOf(facts);
++  const claimed = buildParticipantReleasePublishClaimCommand({
++    controlPartitionId: leader.partitionId, authorizationId, target,
++    expectedControlRevision: releaseState.controlRevision}, stamp());
++  if (claimed === null || applyCommitted(leader, claimed) !== null) {
++    throw new Error('fixture participant release claim refused');
++  }
++  releaseState = readParticipantReleaseState(leader.db);
++  const claimRevision = JSON.parse(releaseState.controlText)
++    .memberClaims[0].claimRevision;
++  const shared = buildParticipantReleaseRecordShareCommand({
++    controlPartitionId: leader.partitionId, authorizationId, target,
++    claimRevision, expectedControlRevision: releaseState.controlRevision}, stamp());
++  if (shared === null || applyCommitted(leader, shared) !== null) {
++    throw new Error('fixture participant release share refused');
++  }
++  releaseState = readParticipantReleaseState(leader.db);
++  const finalized = buildParticipantReleaseFinalizeCommand({...decision,
++    expectedControlRevision: releaseState.controlRevision}, stamp());
++  const finalizationError = finalized === null ? 'invalid-command' :
++    applyCommitted(leader, finalized);
++  if (finalizationError !== null) {
++    throw new Error('fixture participant release finalization refused: ' +
++      finalizationError);
++  }
++  releaseState = readParticipantReleaseState(leader.db);
++  const authorizationRevision = releaseState.controlRevision;
++  const dispatched = buildParticipantReleaseDispatchCommand({
++    controlPartitionId: leader.partitionId, authorizationId,
++    expectedControlRevision: releaseState.controlRevision}, stamp());
++  if (dispatched === null || applyCommitted(leader, dispatched) !== null) {
++    throw new Error('fixture participant release dispatch refused');
++  }
++  releaseState = readParticipantReleaseState(leader.db);
++  const resumed = buildParticipantAdmissionResumeCommand({
++    partitionId: leader.partitionId,
++    dependentRelease: release,
++    controlPartitionId: leader.partitionId,
++    controlAuthorizationId: authorizationId,
++    controlAuthorizationRevision: authorizationRevision,
++    expectedPauseGeneration: releaseState.pauseGeneration,
++    target, census: [facts],
++  }, stamp());
++  if (resumed === null || applyCommitted(leader, resumed) !== null) {
++    throw new Error('fixture participant release resume refused');
++  }
++  facts = await readParticipantReleaseFacts(handler, leader);
+   const outcome = await resumeParticipantCutoverAdmission(handler, leader,
+-    {release, census: [facts]});
++    {release, census: [facts], attempt: {term: facts.membership.term,
++      leaderReplicaId: facts.leaderReplicaId},
++    controlAuthorization: {controlPartitionId: leader.partitionId,
++      authorizationId, authorizationRevision}});
+   if (outcome !== 'resumed') {
+     throw new Error(`fixture participant release refused: ${outcome}`);
+   }
+@@ -771,6 +861,7 @@ export {
+   queryMessage,
+   removeAppliedStateFailure,
+   removeStorageFault,
++  resumeFixtureParticipantAdmission,
+   rowCount,
+   send,
+   settleTicks,

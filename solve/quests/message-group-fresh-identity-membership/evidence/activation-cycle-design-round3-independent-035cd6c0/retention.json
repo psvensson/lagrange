@@ -1,0 +1,10 @@
+{
+  "utc": "2026-10-12T00:00:29.685090+00:00",
+  "scope": "REVISE AC13-1/2/3; established-history design positives retained, source14fac remains HOLD",
+  "reportSha256": "035cd6c092c3bca6dec2800aa9fbaa09df8357ba9f766cbe415445568cb2a34f",
+  "manifestSha256": "28616a8650e27f79229b03a9d19df689ce79be7f70e4f7a922a888b6edb09190",
+  "archiveName": "activation-cycle-design-round3-independent-035cd6c0.tar.gz",
+  "archiveSha256": "84b3ae6863943364419424b3e242d236280a9a54a91b3f3680895c0c69af6faf",
+  "diagnosticFileCount": 57,
+  "archiveDisposition": "Awaiting canonical solve evidence upload; local archive is outside solve tree"
+}
