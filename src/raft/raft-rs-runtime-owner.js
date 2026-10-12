@@ -541,8 +541,8 @@ function openingForReplacement(group) {
 // restored.
 function replaceRuntime(trigger) {
   core = null;
-  runtimeHealth = HEALTHY;
   ensureCore();
+  runtimeHealth = HEALTHY;
   const restoredGroups = [];
   for (const group of groups.values()) {
     const opening = openingForReplacement(group);
