@@ -188,7 +188,6 @@ function reportWaitBoundExceeded(group, kind, fields) {
 }
 
 export {
-  enterReseedHold,
   recordReseedHold,
   refuseInboundStep,
   reportCoreTrap,

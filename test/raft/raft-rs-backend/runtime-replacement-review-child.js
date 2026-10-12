@@ -23,7 +23,7 @@ const clock = new VirtualTimeSource({startMs: 1000});
 const readFault = {enabled: false, target: 'a'};
 const otherClock = new VirtualTimeSource({startMs: 1000000});
 const closedGroups = new Set();
-const receipt = {scenario, phase: 'setup', traps: 0, entries: [], callbacks: [], loadAttempts: 0};
+const receipt = {scenario, phase: 'setup', traps: 0, entries: [], callbacks: [], manifestReads: 0};
 const clusters = [];
 const nativeReadFile = fs.readFileSync;
 let gluePath;
@@ -120,23 +120,23 @@ try {
     originalGlue = nativeReadFile(gluePath);
     fs.unlinkSync(gluePath);
     fs.readFileSync = function(file, ...args) {
-      if (file === manifest) receipt.loadAttempts += 1;
+      if (file === manifest) receipt.manifestReads += 1;
       return nativeReadFile.call(this, file, ...args);
     };
     const first = await pa.readStatus(); receipt.firstRefusal = first;
     assert.equal(first.outcome, OUTCOME.HOST_FAILURE);
-    const initialAttempts = receipt.loadAttempts;
+    const initialAttempts = receipt.manifestReads;
     assert.equal(initialAttempts, 1, 'the first failed real artifact read must engage');
     for (let index = 0; index < 24; index += 1) {
       const refusal = await [pb, pc, pa][index % 3].readStatus();
       assert.equal(refusal.outcome, OUTCOME.HOST_FAILURE);
     }
-    assert.equal(receipt.loadAttempts, initialAttempts,
+    assert.equal(receipt.manifestReads, initialAttempts,
       'all groups must share one reload attempt per retry window');
     assert.ok(first.retryAfterMs > 0, 'the shared hold must name a positive remaining window');
     clock.advance(first.retryAfterMs - 1);
     assert.equal((await pb.readStatus()).outcome, OUTCOME.HOST_FAILURE);
-    assert.equal(receipt.loadAttempts, initialAttempts, 'no retry before the existing deadline');
+    assert.equal(receipt.manifestReads, initialAttempts, 'no retry before the existing deadline');
     fs.writeFileSync(gluePath, originalGlue);
     if (scenario === 'last-close') {
       receipt.phase = 'last-close:new-opening';
@@ -151,8 +151,18 @@ try {
       receipt.openedAfterFinalClose = true;
     } else {
       clock.advance(1);
-      assert.equal((await pb.readStatus()).outcome, OUTCOME.CORE_OK);
-      assert.equal(receipt.loadAttempts, initialAttempts + 1, 'another group resumes the one due attempt');
+      const resumed = await pb.readStatus();
+      assert.equal(resumed.outcome, OUTCOME.CORE_OK);
+      assert.equal(resumed.runtimeGeneration, receipt.initial.runtimeGeneration + 1,
+        'the due caller causes exactly one successful native instantiation');
+      // instantiateRaftRsCore verifies integrity before AND after executing
+      // the glue. Two successful manifest reads are one load, not two loads.
+      assert.equal(receipt.manifestReads, initialAttempts + 2,
+        'one successful load keeps both pre-load and post-load integrity checks');
+      const creates = receipt.entries.filter((entry) =>
+        entry.operation === 'create_node' &&
+        entry.runtimeGeneration === resumed.runtimeGeneration);
+      assert.equal(creates.length, 3, 'one due shared attempt reconstructs each group once');
     }
   } else if (scenario === 'trap-during-restore') {
     receipt.phase = 'trap-during-restore:retry';
