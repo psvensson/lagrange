@@ -1,0 +1,73 @@
+{
+  "candidate": "5d7a0981eabbe8a9745c6e0e7bd3eadb62e46bd1",
+  "publishedInput": "64b85decf37d58d9c52cabbd95b207ae027bd050",
+  "productionSourceTree": "34af50ee2245c8bd99b0f87e484beb6871d11c3c",
+  "productionChanged": false,
+  "checks": {
+    "as-shipped-preconditions-reproduced": true,
+    "candidate-focused": true,
+    "negative-engaged": true,
+    "negative-test-unchanged": true,
+    "source-unchanged": true,
+    "focused-timing-tolerance": true,
+    "all-wider-files-engaged": true,
+    "lint": true,
+    "impact": true,
+    "boundary": true,
+    "shards": true,
+    "whitespace": true,
+    "changed-delta-whitespace": true
+  },
+  "asShippedFixtures": {
+    "tests": 12,
+    "pass": 0,
+    "fail": 12,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "focused": {
+    "tests": 13,
+    "pass": 13,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "negative": {
+    "tests": 6,
+    "pass": 5,
+    "fail": 1,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "wider": {
+    "tests": 251,
+    "pass": 242,
+    "fail": 9,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "widerFailedFiles": [
+    "test/partition/partition-participant-transaction-apply.test.js",
+    "test/partition/partition-participant-transaction-staging.test.js",
+    "test/partition/partition-legacy-session-statement-admission.test.js"
+  ],
+  "widerOverTolerance": [
+    "test/partition/partition-legacy-session-statement-admission.test.js"
+  ],
+  "guidelineExit": 1,
+  "independentApproval": false,
+  "mergeReady": false,
+  "negativeSource": {
+    "path": "src/partition/partition-participant-transaction-legacy-fence.js",
+    "originalSha256": "24a22ae0494656dc309ed5c011e0be0690c64f3fefd4005aa092c100ab01c3fd",
+    "mutantSha256": "fe3fe8a69868c39e25d2fff4dbe931d156825b1eea4fd46ec9990f6984a9dfd3",
+    "restored": true
+  },
+  "scope": "Actual three-replica participant Raft/SQLite and real release-owner requests; six engaged storage faults; SQL engine recovery over a local coordinator gateway double. No replicated coordinator-store, coordinator process-kill, historical legacy-session migration, downstream CDC delivery, split/merge or physical multi-host certification.",
+  "focusedProofPassed": true,
+  "allRunGatesPassed": false
+}
