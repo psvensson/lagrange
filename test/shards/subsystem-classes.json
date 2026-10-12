@@ -19,16 +19,16 @@
     "services-runtime": 146,
     "solver-tooling": 7,
     "storage-partition": 182,
-    "storage-raft": 121,
+    "storage-raft": 122,
     "test-infrastructure": 143,
     "transactions": 18,
     "transport-messaging": 95,
     "wasm-toolchain": 57
   },
-  "censusSize": 2360,
-  "digest": "fnv1a32-be07fb26",
+  "censusSize": 2361,
+  "digest": "fnv1a32-0e41fcc2",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-fd4b9dac",
+  "observationDigest": "fnv1a32-b7ad9b0e",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1612,6 +1612,7 @@
     "test/raft/raft-rs-backend/reseed-hold-durability.test.js": "storage-raft",
     "test/raft/raft-rs-backend/restart-from-durable-record.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-trap-and-restore.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-turn-integrity.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-wait-bound-spent.test.js": "storage-raft",
@@ -10724,6 +10725,21 @@
         "src/raft/raft-rs-durable-store.js",
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js"
+      ],
+      "directories": [
+        "src",
+        "test/raft/raft-rs-backend"
+      ]
+    },
+    "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js": {
+      "files": [
+        "package.json",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-binding-owner.js",
+        "src/raft/raft-rs-durable-store.js",
+        "src/raft/raft-rs-operation-port.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/time/time-source.js"
       ],
       "directories": [
         "src",
