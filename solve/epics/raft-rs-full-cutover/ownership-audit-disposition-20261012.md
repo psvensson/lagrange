@@ -184,3 +184,54 @@ seed-storage-loss recovery and physical multi-host certification. Maintenance
 portions of findings 5-7 follow safety. A disposition is not a closed defect.
 No direct subagent, approving Solver verification, Quest land, main merge or
 release is claimed by this checkpoint.
+
+## Measured continuation and timing supersession — 2026-10-12
+
+This addendum updates the initial dispositions above without rewriting their
+historical evidence. Current source candidate:
+`ff177c43c60556d6f65d09f7d610fe555fa1a1f3`; source/evidence publication:
+`7036fb1bd03144837e00ec040c6ba6ae903bfe42`; run `38253337720`.
+The owning unit is `replica-opening-history`, sealed through the canonical Solver.
+Its result is retained at
+`solve/quests/replica-opening-history/evidence/native-38253337720-1/result-and-review-request.md`.
+
+Finding 2 now has a MEASURED SOURCE CORRECTION, pending independent acceptance.
+The existing lifecycle row records NEVER_OPENED versus ESTABLISHED for the exact
+incarnation; legacy NULL remains UNKNOWN. Native bootstrap and establishment
+commit atomically before participation. Missing established/unknown history
+refuses, while a never-opened failed constructor can retry. All service kinds
+consume the same private lifecycle/runtime interaction. The old WASM loss test
+passes; all 28 native cases pass versus 13 pass / 15 failures on baseline and
+source-only revert, with unchanged tests. Sixteen new cases include actual
+separate-process restart, process-kill boundaries, transactional rollback,
+unknown legacy state and host/deferred-identity controls. Whole-file loss without
+an external host fact and power-loss certification are NOT claimed. This is not
+complete closure of every acceptance item listed under finding 2.
+
+Finding 4 remains OPEN for receiver validation: review 5490741740/comment
+4247979520 observes that lifecycle validation of checkpoint-derived staging does
+not bind the existing receiver file before rename. Conflicting/retired or
+lifecycle-less surviving receiver history must not be erased. The narrow staging
+API remains; marking imported staging ESTABLISHED does not resolve that separate
+snapshot admission/swap problem. Finding 7's cleanup-error masking also remains
+OPEN. Findings 1/3 keep genuine-admission, legacy isolation and explicit deletion
+proof obligations. Deferred maintenance and deliberate non-consolidations remain.
+
+The user explicitly authorized up to 10x hardware-sensitive elapsed test-case
+cost. `test-timing-ruling-20261012.md` and `test/guidelines/harness.md` now hold the
+2/30-second targets and 20/300-second tolerance ceilings. Earlier raw timing reds
+are retained, but the 5380 ms boundary case is no longer a current blocker under
+this ruling. The current boundary case is 8892.961534 ms (4.446480767x target),
+within tolerance. Protocol/election/lease/seed/caller/retry deadlines and assertion
+or runner kill bounds are unchanged.
+
+The current wider measurement is 172 cases: 166 pass / 6 failures, zero skipped,
+todo or cancelled. All six are the existing partition-unreadable-durable-record
+fixture, which also fails all six baseline setup-write assertions. They are not
+storage-fault coverage or waived inherited failures. Actual boundary, focused
+lint, changed literals, impact and new-delta whitespace checks pass; the full
+literal gate still reports 311 above-baseline violations and later chained checks
+remain unproved. Prior retained-patch whitespace disposition remains separate.
+The new Quest's full receipt remains FAIL; allRunGatesPassed and mergeReady remain
+false. Next: owned startup cleanup, receiver binding, real admission prerequisites
+for failed partition/TX1 fixtures, independent review, then integrated certification.
