@@ -1,0 +1,14 @@
+diff --git a/src/raft/raft-rs-runtime-owner.js b/src/raft/raft-rs-runtime-owner.js
+index 54fe5ceed..568bf6453 100644
+--- a/src/raft/raft-rs-runtime-owner.js
++++ b/src/raft/raft-rs-runtime-owner.js
+@@ -541,8 +541,8 @@ function openingForReplacement(group) {
+ // restored.
+ function replaceRuntime(trigger) {
+   core = null;
+-  runtimeHealth = HEALTHY;
+   ensureCore();
++  runtimeHealth = HEALTHY;
+   const restoredGroups = [];
+   for (const group of groups.values()) {
+     const opening = openingForReplacement(group);
