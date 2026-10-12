@@ -19,6 +19,8 @@ const LIFECYCLE_OWNER =
   'src/raft/raft-rs-replica-lifecycle-owner.js';
 const SNAPSHOT_INSTALL = 'src/raft/snapshot-install.js';
 const SNAPSHOT_LIFECYCLE_PREPARE = 'prepareReplicaLifecycleForSnapshot';
+const SNAPSHOT_RECEIVER = 'src/raft/snapshot-receiver-admission.js';
+const SNAPSHOT_LIFECYCLE_INSPECT = 'inspectReplicaLifecycleForSnapshot';
 const LIFECYCLE_ADMIN =
   'src/raft/raft-rs-lifecycle-administration.js';
 const LIFECYCLE_COORDINATOR =
@@ -248,13 +250,15 @@ function violation(file, code, detail) {
 
 // Symbol-limited boundary, not a file-wide lifecycle allowlist. Snapshot
 // installation can request staging but cannot import the class, registration,
-// retirement or durable inspection controls. Namespace/dynamic/re-exports fail.
+// retirement or general inspection controls. The receiver interaction gets only
+// its specific read-only inspection, never staging or mutation capabilities. Namespace/dynamic/re-exports fail.
 function isSnapshotStagingImport(fileName, node) {
-  return fileName === SNAPSHOT_INSTALL &&
+  return (fileName === SNAPSHOT_INSTALL || fileName === SNAPSHOT_RECEIVER) &&
     node.type === AUDIT_AST.IMPORT_DECLARATION &&
     node.specifiers.length === 1 &&
     node.specifiers[0].type === AUDIT_AST.IMPORT_SPECIFIER &&
-    node.specifiers[0].imported.name === SNAPSHOT_LIFECYCLE_PREPARE;
+    node.specifiers[0].imported.name === (fileName === SNAPSHOT_INSTALL ?
+      SNAPSHOT_LIFECYCLE_PREPARE : SNAPSHOT_LIFECYCLE_INSPECT);
 }
 
 function auditRaftRsOperationBoundary({root}) {

@@ -109,6 +109,20 @@ for (const [label, source, accepted, caller = 'snapshot-install.js'] of [
   ['dynamic', `const lifecycle = await import('${ownerModule}');`, false],
   ['re-export', `export {${allowed}} from '${ownerModule}';`, false],
   ['different caller', `import {${allowed}} from '${ownerModule}';`, false, 'not-the-snapshot-owner.js'],
+  ['receiver inspection', `import {inspectReplicaLifecycleForSnapshot} from '${ownerModule}';`,
+    true, 'snapshot-receiver-admission.js'],
+  ['receiver staging forbidden', `import {${allowed}} from '${ownerModule}';`,
+    false, 'snapshot-receiver-admission.js'],
+  ['receiver class forbidden', `import {RaftRsReplicaLifecycleOwner} from '${ownerModule}';`,
+    false, 'snapshot-receiver-admission.js'],
+  ['receiver namespace forbidden', `import * as owner from '${ownerModule}';`,
+    false, 'snapshot-receiver-admission.js'],
+  ['receiver dynamic forbidden', `const owner = await import('${ownerModule}');`,
+    false, 'snapshot-receiver-admission.js'],
+  ['receiver reexport forbidden', `export {inspectReplicaLifecycleForSnapshot} from '${ownerModule}';`,
+    false, 'snapshot-receiver-admission.js'],
+  ['inspection elsewhere forbidden', `import {inspectReplicaLifecycleForSnapshot} from '${ownerModule}';`,
+    false, 'unrelated-caller.js'],
 ]) {
   test(`snapshot lifecycle import boundary: ${label}`, (t) => {
     const f = fixture(t);
