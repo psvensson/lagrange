@@ -1,0 +1,10 @@
+{
+  "command": [
+    "npm",
+    "run",
+    "-s",
+    "test:metadata:refresh"
+  ],
+  "completed": true,
+  "exit": 0
+}

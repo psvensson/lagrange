@@ -1,0 +1,10 @@
+{
+  "command": [
+    "npm",
+    "run",
+    "-s",
+    "audit:guidelines"
+  ],
+  "completed": true,
+  "exit": 1
+}

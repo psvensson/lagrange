@@ -1,0 +1,95 @@
+TAP version 13
+# Subtest: snapshot staging is idempotent receiver-local data, not a runtime capability
+ok 1 - snapshot staging is idempotent receiver-local data, not a runtime capability
+  ---
+  duration_ms: 26.712553
+  type: 'test'
+  ...
+# Subtest: staging refuses conflicting receiver identity without changing the existing generation
+ok 2 - staging refuses conflicting receiver identity without changing the existing generation
+  ---
+  duration_ms: 13.831662
+  type: 'test'
+  ...
+# Subtest: staging cannot reactivate a retired receiver or erase its evidence
+ok 3 - staging cannot reactivate a retired receiver or erase its evidence
+  ---
+  duration_ms: 11.886785
+  type: 'test'
+  ...
+# Subtest: staging refuses an existing native history whose lifecycle row is absent
+ok 4 - staging refuses an existing native history whose lifecycle row is absent
+  ---
+  duration_ms: 12.632866
+  type: 'test'
+  ...
+# Subtest: two staging files never share a newly minted receiver incarnation
+ok 5 - two staging files never share a newly minted receiver incarnation
+  ---
+  duration_ms: 17.850123
+  type: 'test'
+  ...
+# Subtest: unavailable staging storage throws rather than reporting preparation success
+ok 6 - unavailable staging storage throws rather than reporting preparation success
+  ---
+  duration_ms: 1.302198
+  type: 'test'
+  ...
+# Subtest: snapshot lifecycle import boundary: named staging
+ok 7 - snapshot lifecycle import boundary: named staging
+  ---
+  duration_ms: 9.590734
+  type: 'test'
+  ...
+# Subtest: snapshot lifecycle import boundary: aliased staging
+ok 8 - snapshot lifecycle import boundary: aliased staging
+  ---
+  duration_ms: 2.556507
+  type: 'test'
+  ...
+# Subtest: snapshot lifecycle import boundary: old class
+ok 9 - snapshot lifecycle import boundary: old class
+  ---
+  duration_ms: 2.27924
+  type: 'test'
+  ...
+# Subtest: snapshot lifecycle import boundary: mixed capabilities
+ok 10 - snapshot lifecycle import boundary: mixed capabilities
+  ---
+  duration_ms: 2.303745
+  type: 'test'
+  ...
+# Subtest: snapshot lifecycle import boundary: namespace
+ok 11 - snapshot lifecycle import boundary: namespace
+  ---
+  duration_ms: 3.421742
+  type: 'test'
+  ...
+# Subtest: snapshot lifecycle import boundary: dynamic
+ok 12 - snapshot lifecycle import boundary: dynamic
+  ---
+  duration_ms: 4.679496
+  type: 'test'
+  ...
+# Subtest: snapshot lifecycle import boundary: re-export
+ok 13 - snapshot lifecycle import boundary: re-export
+  ---
+  duration_ms: 2.201245
+  type: 'test'
+  ...
+# Subtest: snapshot lifecycle import boundary: different caller
+ok 14 - snapshot lifecycle import boundary: different caller
+  ---
+  duration_ms: 1.519343
+  type: 'test'
+  ...
+1..14
+# tests 14
+# suites 0
+# pass 14
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 150.019456
+# time=638ms

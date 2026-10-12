@@ -1,0 +1,12 @@
+{
+  "command": [
+    "node",
+    "scripts/solve.js",
+    "start",
+    "--id",
+    "replica-opening-history",
+    "--json"
+  ],
+  "completed": true,
+  "exit": 0
+}

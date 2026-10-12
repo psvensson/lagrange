@@ -1,0 +1,35 @@
+TAP version 13
+# Subtest: a three-replica partition commits every must-sync Ready at FULL before messages leave; only durable opening establishment adds a sync
+ok 1 - a three-replica partition commits every must-sync Ready at FULL before messages leave; only durable opening establishment adds a sync
+  ---
+  duration_ms: 457.272315
+  type: 'test'
+  ...
+# Subtest: a snapshot-bearing Ready from the real core commits at FULL
+ok 2 - a snapshot-bearing Ready from the real core commits at FULL
+  ---
+  duration_ms: 42.028005
+  type: 'test'
+  ...
+# Subtest: the persist transaction: fail closed without the flag, restored on throw, never downgrading, refused nested
+ok 3 - the persist transaction: fail closed without the flag, restored on throw, never downgrading, refused nested
+  ---
+  duration_ms: 18.066851
+  type: 'test'
+  ...
+# Subtest: the reseed hold and the retirement row commit at FULL
+ok 4 - the reseed hold and the retirement row commit at FULL
+  ---
+  duration_ms: 9.939519
+  type: 'test'
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 4
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 564.380648
+# time=1351ms
