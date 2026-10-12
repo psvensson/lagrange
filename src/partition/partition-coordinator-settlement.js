@@ -63,7 +63,12 @@ function requestCoordinatorSettlement(service, payload) {
   const pending = service.getPendingCommittedWriteOutcome(command.entryId);
   if (pending !== null) return pending;
   const observed = observeTransactionSettlement(service.db, command.settlement);
-  if (observed.outcome !== SETTLEMENT.READY) {
+  // A matching terminal/frozen row can predate this exact settlement command
+  // (for example, the normal coordinator completed while release was reading
+  // its participant replies).  REPLAYED is therefore still ordered through
+  // consensus so the caller receives an exact durable command result.  A
+  // conflicting or unreadable observation remains an immediate refusal.
+  if (![SETTLEMENT.READY, SETTLEMENT.REPLAYED].includes(observed.outcome)) {
     return settlementAnswer(service, observed, {admitted: false});
   }
   return startPartitionRaftWriteCommit(service, {entry: command, phaseTimings: null,

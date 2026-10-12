@@ -1,0 +1,31 @@
+{
+  "model": "activation-cycle-round14-design-feasibility",
+  "ceiling": "deterministic supplied-fact model; no product Raft, SQLite or gateway import",
+  "observationCount": 13,
+  "observations": {
+    "freshOriginNullClaimPauseThenOrigin": true,
+    "establishedRestartReusesHistoryAndOrigin": true,
+    "freshSupersessionBindsAndMakesDelayedPauseInert": true,
+    "corruptUnboundDependentRemainsHeld": true,
+    "foreignDependentHistoryRemainsHeld": true,
+    "lostRootReceiptAfterBCGetsTerminalExclusion": true,
+    "directCurrentClaimGetsExactReceipt": true,
+    "unavailableRootStoreDoesNotBlockControlOrLoseCandidate": true,
+    "laterRootStoreAvailabilityPersistsExactDisposition": true,
+    "expiredUnknownCandidateNeverRemints": true,
+    "expiredAdmittedRootAfterTerminalExclusionGetsOneSuccessor": true,
+    "hardConflictNeverGetsSuccessor": true,
+    "sameOrdinalForeignControlHistoryHolds": true
+  },
+  "retained": {
+    "firstHistoryId": "0ccf084b06fac2d99947ed4f4e505455ceba29bf14d9f4b7e8dce7f6146b216f",
+    "firstOrigin": {
+      "index": 9,
+      "term": 1
+    },
+    "lostCandidateEntryId": "b8b47d1ac820aa63857e7777752cfac256e3c24311174a20f87de27ab98c9db7",
+    "terminalExclusionClosedThrough": 3,
+    "originalDeadlineAtMs": 5000,
+    "successorAttemptGeneration": 1
+  }
+}
