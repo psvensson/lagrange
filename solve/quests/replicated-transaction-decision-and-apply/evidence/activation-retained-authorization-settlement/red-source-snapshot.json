@@ -1,0 +1,13 @@
+{
+  "utc": "2026-10-11T22:20:43.194874+00:00",
+  "snapshot": "088bf48b38293dc45d4e63133df34d3d2d5a9c8e",
+  "tree": "99b6739f9ef5548805276356660559b8b096538b",
+  "parent": "26dedb0829145c3063dbb2609955307cfdcec842",
+  "verifiedFiles": 64,
+  "changedFrom26ded": [
+    "src/query/distributed/distributed-transaction-release-settlement.js",
+    "src/node/replica-handler-participant-cutover.js",
+    "src/node/replica-handler-release-recovery.js"
+  ],
+  "scope": "Exact red pgwire-release-drain-exit-trace source per author chronology; does not bind earlier explicit-COMMIT matrix."
+}

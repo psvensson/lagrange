@@ -34,6 +34,9 @@
 // entryId instead of answered.
 
 import {ERRORS} from '../constants/errors.js';
+import {TABLES} from '../constants/tables.js';
+import {installTransactionSchemaEnforcement} from
+  '../query/distributed/distributed-transaction-schema-enforcement.js';
 import {
   PARTITION_COMMITTED_COMMAND_OUTCOME as OUTCOME,
   PARTITION_SERVICE_EVENT,
@@ -56,7 +59,11 @@ import {
   readmitReservedWrites,
   reparkReservedWrite,
 } from './partition-service-raft-write-commit.js';
+import {captureCommittedOperationCdc, recordCommittedOperationCdc} from
+  './partition-cdc-obligation.js';
 import {noteExecutionEnvelope} from './partition-transaction-execution-envelope.js';
+import {participantConnectionStampOf} from
+  './partition-participant-transaction-connection.js';
 import {
   carriedOriginIndexOf,
   decisionBindingRefusalOf,
@@ -360,34 +367,17 @@ function operationResultsOf(service, row) {
   });
 }
 
-function reportOperationCdcFailure(service, cdcError) {
-  if (service.isShutdown) {
-    return;
-  }
-  service.logger.error(LOG_MSG.CDC_EVENT_FAILED, {
-    partitionId: service.partitionId,
-    error: cdcError?.message ?? String(cdcError),
-  });
-}
-
-// After the COMMIT commits: the proposer's answer, the size update, and on the
-// leader one CDC event per applied operation, as ordinary writes emit theirs.
-function scheduleCommitEffects(service, committed, operations, results) {
-  const {command} = committed;
+// After the COMMIT commits: the proposer's answer and the size update. The
+// CDC events of the applied operations are not emitted here: they are
+// recorded as owed obligations inside this same application transaction by
+// the committed-entry CDC hook (partition-cdc-obligation.js, design 8.3 and
+// section 8.3), and the leader's CDC delivery owner drives them after the commit.
+function scheduleCommitEffects(service, committed, operations, events) {
+  recordCommittedOperationCdc(service, committed, events);
   committed.afterCommit(() => {
     if (operations.length > 0) {
       service.scheduleSizeUpdate();
     }
-    if (!service.isLeader) {
-      return;
-    }
-    operations.forEach((operation, ordinal) => service.trackPendingCDCEvent(
-      service.generateCDCEvent({type: OPERATION.QUERY, sql: operation.sql,
-        params: operation.params, entryId: operation.entryId,
-        sessionId: command.sessionId, timestamp: command.timestamp,
-        proposedBy: command.proposedBy, proposedAt: command.proposedAt,
-        changes: results[ordinal].changes})
-        .catch((cdcError) => reportOperationCdcFailure(service, cdcError))));
   });
 }
 
@@ -409,13 +399,18 @@ function refuseCommit(service, committed, refusal) {
 
 function runCommittedOperations(service, committed, operations) {
   const {command, index, term} = committed;
-  return service.db.transaction(() => operations.map((operation, ordinal) => {
+  const events = [];
+  const results = service.db.transaction(() => operations.map((operation, ordinal) => {
     const result = runCarriedOperation(service, operation);
     recordCommittedStatementOutcome(service, {
       entryKey: operationOutcomeKeyOf(command.participantId, ordinal),
       outcome: OUTCOME.APPLIED, index, term, result});
+    const event = captureCommittedOperationCdc(service, committed,
+      {operation, result, ordinal});
+    if (event !== null) events.push(event);
     return result;
   }))();
+  return {results, events};
 }
 
 // The COMMIT of a PREPARED row (design 6.1): re-check g, run the operations in
@@ -431,9 +426,9 @@ function commitPrepared(service, committed, row) {
     return refuseCommit(service, committed, {cause: CAUSE.COMMIT_STATEMENT_FAILED,
       detail: MESSAGE.OPERATIONS_UNREADABLE});
   }
-  let results;
+  let applied;
   try {
-    results = runCommittedOperations(service, committed, operations);
+    applied = runCommittedOperations(service, committed, operations);
   } catch (failed) {
     return refuseCommit(service, committed,
       deterministicRefusalOf(service, failed, COMMIT_CAUSES));
@@ -444,9 +439,9 @@ function commitPrepared(service, committed, row) {
   if (operations.length > 0) {
     advancePartitionWriteGeneration(service.db);
   }
-  answerProposer(service, committed, {success: true, results,
+  answerProposer(service, committed, {success: true, results: applied.results,
     ...rowAnswer(service, committed.command)});
-  scheduleCommitEffects(service, committed, operations, results);
+  scheduleCommitEffects(service, committed, operations, applied.events);
   return OUTCOME.APPLIED;
 }
 
@@ -584,6 +579,12 @@ function applyGenerationOrigin(service, committed) {
   if (command.partitionId !== service.partitionId) {
     return consumedRefusal(service, committed, CODE.IDENTITY_MISMATCH);
   }
+  // The query row owner is installed by the same application transaction as
+  // the origin and applied index. A replay repairs a missing enforcer without
+  // changing the original origin or write generation.
+  if (service.tableName === TABLES.SQL_TRANSACTIONS) {
+    installTransactionSchemaEnforcement(service.db);
+  }
   const recorded = readPartitionWriteOrigin(service.db);
   if (recorded !== null) {
     answerProposer(service, committed, {success: true, idempotent: true,
@@ -591,11 +592,30 @@ function applyGenerationOrigin(service, committed) {
     return OUTCOME.REPLAYED;
   }
   recordPartitionWriteOrigin(service.db, {index, term});
-  committed.afterCommit(() => service.logger.info(LOG_MSG.ORIGIN_RECORDED, {
-    partitionId: service.partitionId, originIndex: index, originTerm: term}));
+  committed.afterCommit(() => {
+    service.logger.info(LOG_MSG.ORIGIN_RECORDED, {
+      partitionId: service.partitionId, originIndex: index, originTerm: term});
+    observeOriginConnection(service, index);
+  });
   answerProposer(service, committed, {success: true, originIndex: index,
     originTerm: term});
   return OUTCOME.APPLIED;
+}
+
+// The replica-side observation of the L6 reopen obligation (design 0.0.15):
+// the origin applied on a connection whose stamp says it served a legacy
+// session since its open. On this build every legacy statement is admitted
+// before any prepare, so such a session set no connection state and the
+// apply stays identical on every replica; the enabling leader's own
+// connection is refused by enable instead. A diagnostic for the release
+// owner, after the commit, never a disposition.
+function observeOriginConnection(service, originIndex) {
+  const stamp = participantConnectionStampOf(service.db);
+  if (stamp.servedLegacy) {
+    service.logger.warn(LOG_MSG.ORIGIN_APPLIED_ON_LEGACY_CONNECTION, {
+      partitionId: service.partitionId, replicaId: service.replicaId,
+      connectionGeneration: stamp.generation, originIndex});
+  }
 }
 
 const PARTICIPANT_COMMAND_APPLIERS = Object.freeze({

@@ -1,0 +1,68 @@
+{
+  "recordedAt": "2026-10-11T16:14:26.709629+00:00",
+  "branch": "checkpoint/rs-raft-recovery-chain-20261011",
+  "currentHead": "10c2f0610f2924b8e7773497b03ac95fa4f42e58",
+  "state": "Bounded composition in progress; no new coherent committed source checkpoint yet",
+  "approvedInputs": [
+    {
+      "scope": "19-path production transaction binding correction",
+      "sourceSha": "a01eff86f387367226e1b2ae08574a084fa16d56",
+      "review": {
+        "path": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/review-c56-transaction-binding-round2-fresh56.md",
+        "sha256": "cc6b0e9809ee1b9ed522e0869899602b03f3d77d748d1a5bf9a19b92a5dbf08c"
+      },
+      "ceiling": "Adjacent source dependencies and new composition require verification; narrow BEGIN contradictions remain open"
+    },
+    {
+      "scope": "Test-only evidence matrix",
+      "sourceSha": "20b6355f1d866c1f20d97c64b166734fe9bf0065",
+      "review": {
+        "path": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/review-tx1-evidence-matrix.md",
+        "sha256": "6a6ca0381274eed44877f5cea3fe5cacc0cb69649c0226512e6303abc8679c17"
+      },
+      "ceiling": "Not independent approval of whole source snapshot"
+    },
+    {
+      "scope": "Marker preservation two-path correction",
+      "sourceSha": "a287c9ff560889daae7e13e5b5d8c7c5fe4ca031",
+      "reviewSha256": "d7160f1459af49fe1b804d276a07106c2e72b94c341a83360ac7813ecf611c41",
+      "ceiling": "Direct whole-file transplant depends on unapproved Fresh source; candidate adaptation is new integration scope requiring review"
+    },
+    {
+      "scope": "F5 release terminal evidence correction only",
+      "sourceSha256": "904da2c331f1fc522623769c1def7683a108e2b49e1715f3e02778b6c580527c",
+      "testSha256": "bc67711f88234c158d858fd1a0ad637b5e2207c5e4f7d2c9e6b04574273f32b8",
+      "reviewSha256": "b5d07f499e83d15ff5c0648bb3f944cc3bd739186df06f524077046ec0d8d906",
+      "proof": "Invalid terminal evidence leaves full COMMIT row unchanged; valid same-ID redrive and durable REFUSED rollback succeed; focused8/8 and combined51/51; actual receiver remains F3 scope."
+    },
+    {
+      "scope": "Candidate-adapted two marker preservation branches only",
+      "sourceSha256": "bab76ee45d80cbdd274ca83cf5856bf36013f6c62d570aa45bc95cc57c458bdc",
+      "testSha256": "5fc0eae78abea99b07e2d807cf2c21b53ea51338b7146e46b1ce463d2ec352f4",
+      "reviewSha256": "44acde2fbf47c9e45b22ee5ca69c0b3741da1c00046e1358abb792fa637fa963",
+      "proof": "67 TAP leaf assertions plus parent; no normal startup proof."
+    }
+  ],
+  "currentComposition": "Prior65-path staged composition rejected F1-F5. F5 canonical terminal evidence correction independently approved; GPT-5.6 high is completing F1-F4 actual participant/schema/settlement receiver/CDC obligation dependency interaction. No new coherent committed checkpoint yet.",
+  "remainingIntegration": [
+    "BEGIN uncertainty correction",
+    "Activation/startup ordering and authorization",
+    "C17 ten-finding correction and production startup/race witnesses",
+    "Manifest resource contract and measured aggregate envelope",
+    "Two production replacements and unavailable-seed SQL/CDC/cache recovery",
+    "Exact candidate static/corpus/physical gates"
+  ],
+  "beginReview": {
+    "path": "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/review-begin-uncertain-design-cdc56.md",
+    "sha256": "814b6550299880637bc3ddbc274b159c69ca4e3cc0abcc97f780c2acd6960e15",
+    "currentSubject": "a43e0a4f5d1e4022277200fb02db6ad23d40165a6e079e85194620da3af37c1b",
+    "currentVerdict": "Independent round2 design review pending; no source change"
+  },
+  "originalCheckout": "integrate/rs-raft-2026-09-30 retains18 pre-existing staged paths; not used for implementation",
+  "mainMergedOrPublished": false,
+  "rejectedComposition": {
+    "stagedTree": "be8cd676baf918aa39e721ebde2678930e93ca4a",
+    "manifestSha256": "5dc24bb961339ee788871a1079016cd920f9423be84116a20c942bd363be799e",
+    "reviewSha256": "44acde2fbf47c9e45b22ee5ca69c0b3741da1c00046e1358abb792fa637fa963"
+  }
+}

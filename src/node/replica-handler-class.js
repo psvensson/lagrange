@@ -33,6 +33,9 @@ import {createSystemMetadataGatewayRequiredError} from '../control-plane/system-
 import {LoggingService} from '../logging/logging-service.js';
 import {assertCritical} from '../utils/assert.js';
 import {TrackedServiceRegistry} from './replica-handler-membership-relay.js';
+import {createParticipantReleaseRecovery} from './replica-handler-release-recovery.js';
+import {createParticipantReleaseAuthorizationOwner} from
+  './participant-release-authorization-owner.js';
 import {assignReplicaHandlerMembershipMethods} from
   './replica-handler-membership-methods.js';
 import {assignReplicaHandlerCommittedMembershipMethods} from
@@ -146,6 +149,10 @@ class ReplicaHandler extends EventEmitter {
         controlPlaneSystemTableGateway: this.controlPlaneSystemTableGateway,
         systemTableCache: this.systemTableCache,
       });
+    this.timeSource = options.timeSource || this.replicaStateMachine?.timeSource ||
+      Object.freeze({now: Date.now,
+        setTimeout: (callback, delay) => setTimeout(callback, delay),
+        clearTimeout: (handle) => clearTimeout(handle)});
     // Track live service references by replica_id (needed for shutdown,
     // voter-readiness); the registry also relays each tracked service's
     // consensus observations to the REPLACE owner (design S5.2).
@@ -190,6 +197,9 @@ class ReplicaHandler extends EventEmitter {
     });
     this.creationProgressByReplica = new Map();
     this.initialized = false;
+    this.participantReleaseAuthorizationOwner =
+      createParticipantReleaseAuthorizationOwner(this);
+    this.participantReleaseRecovery = createParticipantReleaseRecovery(this);
   }
 }
 

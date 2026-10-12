@@ -1,0 +1,7 @@
+report=test-output/analysis/jscpd-test/jscpd-report.json
+whole_tree_clones=698
+whole_tree_duplicated_lines=26410
+test/transport/bulk-transfer-lane-isolation.test.js	clone_groups=0
+test/raft/bulk-transfer-socket-adapter.test.js	clone_groups=0
+test/transport/bulk-channel-identify-incarnation.test.js	clone_groups=0
+test/raft/snapshot-recorded-gaps.test.js	clone_groups=0

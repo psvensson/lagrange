@@ -1,0 +1,215 @@
+--- a/src/cdc/cdc-coverage-transfer-owner.js
++++ b/src/cdc/cdc-coverage-transfer-owner.js
+@@ -55,6 +55,11 @@
+ const TERMINAL_DESCRIPTOR_NUMBER_FIELDS = Object.freeze(
+   TERMINAL_DESCRIPTOR_FIELDS.slice(1),
+ );
++const TERMINAL_TRANSFER_OPTION_FIELDS = Object.freeze([
++  'shutdownRecord',
++  'terminalize',
++  'descriptor',
++]);
+ 
+ function positiveSafeInteger(value, fallback) {
+   return Number.isSafeInteger(value) && value > 0 ? value : fallback;
+@@ -159,6 +164,26 @@
+   return Object.freeze(captured);
+ }
+ 
++function captureTerminalTransferOptions(options) {
++  if (!options || typeof options !== 'object') return null;
++  const captured = Object.create(null);
++  try {
++    for (const field of TERMINAL_TRANSFER_OPTION_FIELDS) {
++      const property = objectGetOwnPropertyDescriptor(options, field);
++      if (!property || !objectHasOwn(property, 'value')) return null;
++      captured[field] = property.value;
++    }
++  } catch {
++    return null;
++  }
++  if (!captured.shutdownRecord ||
++      typeof captured.shutdownRecord !== 'object' ||
++      typeof captured.terminalize !== 'function') {
++    return null;
++  }
++  return captured;
++}
++
+ function dispatchWakeCallbacks(pool) {
+   let failures = 0;
+   for (const wake of [...pool.wakeCallbacks]) {
+@@ -336,20 +361,34 @@
+  * @return {boolean} whether the exact generation transferred once
+  */
+ function transferCdcCoverageListenerToTerminal(service, claim, options = {}) {
++  const initialOwner = owners.get(service);
++  const initialState = listenerClaimStates.get(claim);
++  if (!initialOwner || initialOwner.retired || !initialState ||
++      initialState.owner !== initialOwner ||
++      initialState.pool.activeListenerClaim !== claim ||
++      initialState.state !== CDC_COVERAGE_LISTENER_STATE.ACTIVE ||
++      initialState.firstCheckEntered !== true ||
++      initialState.releaseCapability === null) {
++    return false;
++  }
++  const capturedOptions = captureTerminalTransferOptions(options);
++  if (!capturedOptions) return false;
++  const descriptor = captureTerminalDescriptor(
++    capturedOptions.descriptor, claim.listenerGenerationId);
++  if (!descriptor) return false;
++  // Both option capture and own-data descriptor capture can invoke Proxy
++  // getOwnPropertyDescriptor traps. Reacquire the exact claim only after all
++  // such callouts; no caller-controlled value is read again after this point.
+   const owner = owners.get(service);
+   const state = listenerClaimStates.get(claim);
+   if (!owner || owner.retired || !state || state.owner !== owner ||
+       state.pool.activeListenerClaim !== claim ||
+       state.state !== CDC_COVERAGE_LISTENER_STATE.ACTIVE ||
+-      state.shutdownRecord !== options.shutdownRecord ||
++      state.shutdownRecord !== capturedOptions.shutdownRecord ||
+       state.firstCheckEntered !== true ||
+-      state.releaseCapability === null ||
+-      typeof options.terminalize !== 'function') {
++      state.releaseCapability === null) {
+     return false;
+   }
+-  const descriptor = captureTerminalDescriptor(
+-    options.descriptor, claim.listenerGenerationId);
+-  if (!descriptor) return false;
+   const terminalResult = Object.freeze({
+     state: CDC_COVERAGE_LISTENER_STATE.TERMINAL_TRANSFERRED,
+     bootIncarnation: claim.bootIncarnation,
+@@ -360,7 +399,7 @@
+   state.releaseCapability = null;
+   let installedResult;
+   try {
+-    installedResult = options.terminalize(terminalResult);
++    installedResult = capturedOptions.terminalize(terminalResult);
+   } catch {
+     state.state = CDC_COVERAGE_LISTENER_STATE.ACTIVE;
+     state.releaseCapability = releaseCapability;
+--- a/test/cdc/cdc-coverage-lifecycle-owner.test.js
++++ b/test/cdc/cdc-coverage-lifecycle-owner.test.js
+@@ -401,6 +401,121 @@
+   t.end();
+ });
+ 
++test('C17 terminal transfer reacquires the exact claim after input capture',
++  (t) => {
++    for (const seam of ['descriptor', 'shutdownRecord', 'terminalize',
++      'optionsDescriptor']) {
++      const nodeId = `listener-capture-reentry-${seam}`;
++      const owner = {nodeId};
++      const shutdownRecord = {state: 'active', transport: {socket: true}};
++      const generation = `capture-reentry-${seam}`;
++      const claim = reserveCdcCoverageListenerBase(owner, {
++        bootIncarnation: 5, listenerGenerationId: generation,
++        shutdownRecord,
++      });
++      t.equal(enterCdcCoverageListenerTerminalCheck(owner, claim), true);
++      const successorOwner = {nodeId};
++      const successorRecord = {state: 'active', transport: {socket: true}};
++      let nestedResult = null;
++      let successor = null;
++      let fired = false;
++      const reenter = () => {
++        if (fired) return;
++        fired = true;
++        nestedResult = completeListener(owner, claim, shutdownRecord,
++          listenerTerminalDescriptor(generation));
++        successor = reserveCdcCoverageListenerBase(successorOwner, {
++          bootIncarnation: 5,
++          listenerGenerationId: `${generation}-next`,
++          shutdownRecord: successorRecord,
++        });
++      };
++      const rawOptions = {
++        shutdownRecord,
++        descriptor: listenerTerminalDescriptor(generation),
++        terminalize: (result) => result,
++      };
++      let outerCallbackCalls = 0;
++      rawOptions.terminalize = (result) => {
++        outerCallbackCalls += 1;
++        return result;
++      };
++      let options = rawOptions;
++      if (seam === 'descriptor') {
++        rawOptions.descriptor = new Proxy(rawOptions.descriptor, {
++          getOwnPropertyDescriptor(target, field) {
++            reenter();
++            return Reflect.getOwnPropertyDescriptor(target, field);
++          },
++        });
++      } else {
++        const optionField = seam === 'optionsDescriptor' ?
++          'descriptor' : seam;
++        options = new Proxy(rawOptions, {
++          getOwnPropertyDescriptor(target, field) {
++            if (field === optionField) reenter();
++            return Reflect.getOwnPropertyDescriptor(target, field);
++          },
++        });
++      }
++      t.equal(transferCdcCoverageListenerToTerminal(owner, claim, options),
++        false, `${seam} capture refuses the stale outer operation`);
++      t.equal(nestedResult, true,
++        `${seam} nested operation consumed the old claim once`);
++      t.equal(outerCallbackCalls, 0,
++        `${seam} stale operation cannot invoke its captured callback`);
++      t.ok(successor, `${seam} nested completion admitted a successor`);
++      t.match(readCdcCoverageTransferDiagnostics(successorOwner), {
++        retainedBytes: 16 * 1024 * 1024, listenerActive: true,
++        releases: 1, listenerGenerations: 2,
++      }, `${seam} stale refusal leaves successor accounting exact`);
++      t.equal(enterCdcCoverageListenerTerminalCheck(
++        successorOwner, successor), true);
++      t.equal(completeListener(successorOwner, successor, successorRecord,
++        listenerTerminalDescriptor(`${generation}-next`)), true,
++      `${seam} successor completes through the legitimate path`);
++      t.equal(retireCdcCoverageTransferOwner(owner), true);
++      t.equal(retireCdcCoverageTransferOwner(successorOwner), true);
++    }
++    t.end();
++  });
++
++test('C17 terminal transfer refuses option accessors without invoking them',
++  (t) => {
++    for (const field of ['shutdownRecord', 'terminalize', 'descriptor']) {
++      const owner = {nodeId: `listener-option-accessor-${field}`};
++      const shutdownRecord = {state: 'active', transport: {socket: true}};
++      const generation = `option-accessor-${field}`;
++      const claim = reserveCdcCoverageListenerBase(owner, {
++        bootIncarnation: 5, listenerGenerationId: generation,
++        shutdownRecord,
++      });
++      t.equal(enterCdcCoverageListenerTerminalCheck(owner, claim), true);
++      const options = {
++        shutdownRecord,
++        terminalize: (result) => result,
++        descriptor: listenerTerminalDescriptor(generation),
++      };
++      const value = options[field];
++      let getterCalls = 0;
++      Object.defineProperty(options, field, {
++        enumerable: true,
++        get() {
++          getterCalls += 1;
++          return value;
++        },
++      });
++      t.equal(transferCdcCoverageListenerToTerminal(owner, claim, options),
++        false, `${field} accessor is not a transferable input`);
++      t.equal(getterCalls, 0, `${field} accessor is never invoked`);
++      t.equal(completeListener(owner, claim, shutdownRecord,
++        listenerTerminalDescriptor(generation)), true,
++      `${field} capture refusal leaves the original claim retryable`);
++      t.equal(retireCdcCoverageTransferOwner(owner), true);
++    }
++    t.end();
++  });
++
+ test('C17 callback-time retirement preserves the retry owner', (t) => {
+   for (const mode of ['throw', 'wrong-result']) {
+     const nodeId = `listener-terminalize-retire-${mode}`;

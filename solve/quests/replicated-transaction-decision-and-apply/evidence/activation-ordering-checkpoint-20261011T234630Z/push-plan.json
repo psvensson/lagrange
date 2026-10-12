@@ -1,0 +1,80 @@
+{
+  "utc": "2026-10-11T23:46:30.547690+00:00",
+  "namespace": "refs/heads/checkpoint/rs-raft-preservation-20261011T234630Z",
+  "mainBefore": "878eb8ac059dab71deae5feb0fa88e0c5c610c93",
+  "newRefs": {
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T234630Z/activation-startup-wip": "8e022cc283807a45727c32dab1e3486fcb36c30d",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T234630Z/tx1-owner-wip": "b99ed59b3fc4d5b8fecd939b480dd84a23c94f7f",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T234630Z/freshmg-wip": "54006d65f96aaf3dd7daa3c85778c897f31f8646"
+  },
+  "coverage": {
+    "activation-startup-wip": {
+      "status": "NEW_SNAPSHOT_PENDING_PUSH",
+      "sha": "8e022cc283807a45727c32dab1e3486fcb36c30d",
+      "ref": "refs/heads/checkpoint/rs-raft-preservation-20261011T234630Z/activation-startup-wip",
+      "changedSinceRemote": "34ea6784c2ec00ee8b4b44cc0026368a0ffd4b55",
+      "changedPaths": [
+        "solve/quests/replicated-transaction-decision-and-apply/design-participant-release-activation-authority-2026-10-11.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-cycle-round13-evidence.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-cycle-round13-feasibility-result.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-cycle-round13-feasibility.mjs",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-cycle-round13-manifest.sha256"
+      ]
+    },
+    "tx1-owner-wip": {
+      "status": "NEW_SNAPSHOT_PENDING_PUSH",
+      "sha": "b99ed59b3fc4d5b8fecd939b480dd84a23c94f7f",
+      "ref": "refs/heads/checkpoint/rs-raft-preservation-20261011T234630Z/tx1-owner-wip",
+      "changedSinceRemote": "8358618be4cc1ea32cef88ccb86139467bf41e32",
+      "changedPaths": [
+        "solve/quests/replicated-transaction-decision-and-apply/design-participant-release-activation-authority-2026-10-11.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-cycle-design-round2-independent-f14f3614/diagnostic-manifest.sha256",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-cycle-design-round2-independent-f14f3614/retention.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-cycle-design-round2-independent-f14f3614/review-activation-cycle-design-round2-independent.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-cycle-design-round2-independent-f14f3614/upload-receipt.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-cycle-round13-evidence.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-cycle-round13-feasibility-result.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-cycle-round13-feasibility.mjs",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-cycle-round13-manifest.sha256",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/begin-design-round13-independent-e14083a2/diagnostic-manifest.sha256",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/begin-design-round13-independent-e14083a2/retention.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/begin-design-round13-independent-e14083a2/review-begin-uncertain-design-round13-independent.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/begin-design-round13-independent-e14083a2/upload-receipt.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/design-participant-release-activation-authority-cycle-round13-predecessor-3aeadfe3.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T234120Z/activation-startup-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T234120Z/caller-states-after-capture.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T234120Z/caller-states-after-push.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T234120Z/caller-states-before.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T234120Z/candidate.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T234120Z/cdc-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T234120Z/coordinator-fixtures-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T234120Z/freshmg-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T234120Z/original-staged.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T234120Z/push-attempt.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T234120Z/push-plan.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T234120Z/query-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T234120Z/recovery-foundation.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T234120Z/remote-receipt.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T234120Z/remote-refs.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T234120Z/startup-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/remote-preservation-20261011T234120Z/tx1-owner-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/log.ndjson"
+      ]
+    },
+    "freshmg-wip": {
+      "status": "NEW_SNAPSHOT_PENDING_PUSH",
+      "sha": "54006d65f96aaf3dd7daa3c85778c897f31f8646",
+      "ref": "refs/heads/checkpoint/rs-raft-preservation-20261011T234630Z/freshmg-wip",
+      "changedSinceRemote": "0ce16cfd0cd2d27da820aaf02474b74ae64f5ba7",
+      "changedPaths": [
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-cycle-design-round2-independent-f14f3614/diagnostic-manifest.sha256",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-cycle-design-round2-independent-f14f3614/retention.json",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-cycle-design-round2-independent-f14f3614/review-activation-cycle-design-round2-independent.md",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-cycle-design-round2-independent-f14f3614/upload-receipt.json",
+        "solve/quests/message-group-fresh-identity-membership/log.ndjson"
+      ]
+    }
+  },
+  "callerStatesVerified": true,
+  "preservationOnly": true
+}

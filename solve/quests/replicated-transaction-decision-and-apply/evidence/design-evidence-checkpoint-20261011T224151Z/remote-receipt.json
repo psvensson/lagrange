@@ -1,0 +1,106 @@
+{
+  "utc": "2026-10-11T22:41:51.117944+00:00",
+  "namespace": "refs/heads/checkpoint/rs-raft-preservation-20261011T224151Z",
+  "mainBefore": "878eb8ac059dab71deae5feb0fa88e0c5c610c93",
+  "newRefs": {
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T224151Z/startup-wip": "4cc1641aedd3b9303bb80120894887b31fe3fe25",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T224151Z/tx1-owner-wip": "39e28fc810577987d2f26726c0dfcb19ce5c26f0",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T224151Z/cdc-wip": "c8800cd70d315b27034506d5632c6d554fabbb80"
+  },
+  "coverage": {
+    "startup-wip": {
+      "status": "VERIFIED_PUSHED",
+      "sha": "4cc1641aedd3b9303bb80120894887b31fe3fe25",
+      "ref": "refs/heads/checkpoint/rs-raft-preservation-20261011T224151Z/startup-wip",
+      "changedSinceRemote": "ff3491d967306f992bda23e394faba422698678c",
+      "changedPaths": [
+        "solve/quests/replicated-transaction-decision-and-apply/design-query-begin-uncertain-insert-resolution-2026-10-11.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/begin-round11-endpoint-feasibility.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/begin-round11-endpoint-feasibility.mjs",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/design-query-begin-uncertain-insert-resolution-round10-df779a90.md"
+      ]
+    },
+    "tx1-owner-wip": {
+      "status": "VERIFIED_PUSHED",
+      "sha": "39e28fc810577987d2f26726c0dfcb19ce5c26f0",
+      "ref": "refs/heads/checkpoint/rs-raft-preservation-20261011T224151Z/tx1-owner-wip",
+      "changedSinceRemote": "2916aaa64e3edb72076b3fdb6a4c044f2862d329",
+      "changedPaths": [
+        "solve/quests/replicated-transaction-decision-and-apply/design-query-begin-uncertain-insert-resolution-2026-10-11.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-ordering-checkpoint-20261011T223323Z/activation-startup-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-ordering-checkpoint-20261011T223323Z/caller-states-after-capture.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-ordering-checkpoint-20261011T223323Z/caller-states-after-push.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-ordering-checkpoint-20261011T223323Z/caller-states-before.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-ordering-checkpoint-20261011T223323Z/freshmg-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-ordering-checkpoint-20261011T223323Z/push-attempt.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-ordering-checkpoint-20261011T223323Z/push-plan.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-ordering-checkpoint-20261011T223323Z/remote-receipt.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-ordering-checkpoint-20261011T223323Z/remote-refs.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-ordering-checkpoint-20261011T223323Z/tx1-owner-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/begin-round11-endpoint-feasibility.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/begin-round11-endpoint-feasibility.mjs",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-native-profile-prerequisite-20261011T2223/certification-report.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-native-profile-prerequisite-20261011T2223/commands-and-results.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-native-profile-prerequisite-20261011T2223/drop-graph-layout-probe.cjs",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-native-profile-prerequisite-20261011T2223/malloc-extent-probe.c",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-native-profile-prerequisite-20261011T2223/native-cap-ledger.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-native-profile-prerequisite-20261011T2223/node-release-key-CC68F5A3106FF448322E48ED27F5E38D5B0A215F.asc",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-native-profile-prerequisite-20261011T2223/node-v22.22.0-SHASUMS256.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-native-profile-prerequisite-20261011T2223/node-v22.22.0-SHASUMS256.txt.sig",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-native-profile-prerequisite-20261011T2223/packet-sha256.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-native-profile-prerequisite-20261011T2223/profile-identity.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-native-profile-prerequisite-20261011T2223/source-correspondence.tsv",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-native-profile-prerequisite-20261011T2223/upstream-selected-sha256.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-20261011T2236/commands-and-results.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-20261011T2236/eslint.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-20261011T2236/implementation-report.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-20261011T2236/packet-sha256.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-20261011T2236/selected-runtime-test.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-20261011T2236/selected-runtime.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-20261011T2236/source-sha256.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/design-query-begin-uncertain-insert-resolution-round10-df779a90.md",
+        "solve/quests/replicated-transaction-decision-and-apply/log.ndjson"
+      ]
+    },
+    "cdc-wip": {
+      "status": "VERIFIED_PUSHED",
+      "sha": "c8800cd70d315b27034506d5632c6d554fabbb80",
+      "ref": "refs/heads/checkpoint/rs-raft-preservation-20261011T224151Z/cdc-wip",
+      "changedSinceRemote": "17ed539596f11bae22fd69c7fb43e3b637dcd5e2",
+      "changedPaths": [
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-native-profile-prerequisite-20261011T2223/certification-report.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-native-profile-prerequisite-20261011T2223/commands-and-results.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-native-profile-prerequisite-20261011T2223/drop-graph-layout-probe.cjs",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-native-profile-prerequisite-20261011T2223/malloc-extent-probe.c",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-native-profile-prerequisite-20261011T2223/native-cap-ledger.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-native-profile-prerequisite-20261011T2223/node-release-key-CC68F5A3106FF448322E48ED27F5E38D5B0A215F.asc",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-native-profile-prerequisite-20261011T2223/node-v22.22.0-SHASUMS256.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-native-profile-prerequisite-20261011T2223/node-v22.22.0-SHASUMS256.txt.sig",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-native-profile-prerequisite-20261011T2223/packet-sha256.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-native-profile-prerequisite-20261011T2223/profile-identity.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-native-profile-prerequisite-20261011T2223/source-correspondence.tsv",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-native-profile-prerequisite-20261011T2223/upstream-selected-sha256.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-20261011T2236/commands-and-results.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-20261011T2236/eslint.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-20261011T2236/implementation-report.md",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-20261011T2236/packet-sha256.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-20261011T2236/selected-runtime-test.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-20261011T2236/selected-runtime.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-20261011T2236/source-sha256.txt",
+        "src/cdc/cdc-coverage-transfer-owner.js",
+        "test/cdc/cdc-coverage-lifecycle-owner.test.js"
+      ]
+    }
+  },
+  "callerStatesVerified": true,
+  "preservationOnly": true,
+  "remoteRefs": {
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T224151Z/cdc-wip": "c8800cd70d315b27034506d5632c6d554fabbb80",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T224151Z/startup-wip": "4cc1641aedd3b9303bb80120894887b31fe3fe25",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T224151Z/tx1-owner-wip": "39e28fc810577987d2f26726c0dfcb19ce5c26f0",
+    "refs/heads/main": "878eb8ac059dab71deae5feb0fa88e0c5c610c93"
+  },
+  "verified": true,
+  "mainUnchanged": true,
+  "callerStatesVerifiedAfterPush": true
+}

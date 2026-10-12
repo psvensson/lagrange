@@ -1,0 +1,41 @@
+{
+  "sourceBase": "14fac7d6ef64881daa7a0d266a272b724dfe640a",
+  "scope": "diagnostic only; scratch has two instrumentation edits and is not byte-identical to product",
+  "entries": [
+    {
+      "path": "diagnostic.json",
+      "sha256": "b5d127272ef959ce9dd081b6837b03ede498eeccc8deec3a6c79f7d9153dc258",
+      "bytes": 17533
+    },
+    {
+      "path": "instrumentation.diff",
+      "sha256": "32269137b7f674352ff354ff47a2e726c9b6d8a590fec8751937d2579e918736",
+      "bytes": 1808
+    },
+    {
+      "path": "control-replicas.tar.gz",
+      "sha256": "8a60d29c17c7195d1be0ded40ab422b34e1606e19a60d86c7b5cb98838af15a7",
+      "bytes": 108286
+    },
+    {
+      "path": "oracle-diagnostic.log.txt",
+      "sha256": "3edaec99ca633020500ffc220ebc99c0a709ed286364d8999c87d1b799d61ad1",
+      "bytes": 7958
+    },
+    {
+      "path": "oracle-diagnostic-cohort.log.txt",
+      "sha256": "a396a62d37cf8c4dd85f250bda0847ee432b12a225afe54b1ae14a8a6ec46c8f",
+      "bytes": 15370
+    },
+    {
+      "path": "source/test/integration/pgwire-command-tag-real-engine.integration.test.js",
+      "sha256": "e4613e83d34ffd955d3887f09ae3e3976880eec8d3d1dda1d04ae20f993b527f",
+      "bytes": 36370
+    },
+    {
+      "path": "source/src/node/replica-handler-participant-cutover.js",
+      "sha256": "c0ad401193eb3f72bd55c3badece2776d75d33d94d3b9c38eb24f36db21fac98",
+      "bytes": 40089
+    }
+  ]
+}

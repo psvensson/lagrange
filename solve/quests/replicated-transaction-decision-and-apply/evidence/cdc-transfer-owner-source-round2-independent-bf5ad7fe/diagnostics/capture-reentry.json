@@ -1,0 +1,342 @@
+[
+  {
+    "name": "proxy-descriptor",
+    "contractHolds": false,
+    "result": null,
+    "thrown": "Cannot set properties of null (setting 'terminalDescriptor')",
+    "outerCalls": 1,
+    "nested": true,
+    "successor": true,
+    "after": {
+      "sessions": 0,
+      "retainedBytes": 16777216,
+      "highWaterBytes": 16777216,
+      "refusals": 0,
+      "releases": 1,
+      "wakeFailures": 0,
+      "held": [],
+      "liveBytesByCategory": {
+        "coverage-listener-terminal": 16384,
+        "coverage-listener": 16760832
+      },
+      "listenerActive": true,
+      "listenerGenerations": 2,
+      "terminalRetained": true,
+      "terminalDescriptor": {
+        "listenerGenerationId": "proxy-descriptor",
+        "immediateCount": 2,
+        "immediateBytes": 4096,
+        "completionCount": 2,
+        "completionBytes": 8192,
+        "aliasSetCount": 1,
+        "aliasBytes": 4096,
+        "destroyIdCount": 2
+      },
+      "maxSessions": 8,
+      "maxRetainedBytes": 134217728
+    },
+    "successorCompleted": true,
+    "afterSuccessor": {
+      "sessions": 0,
+      "retainedBytes": 16384,
+      "highWaterBytes": 16777216,
+      "refusals": 0,
+      "releases": 2,
+      "wakeFailures": 0,
+      "held": [],
+      "liveBytesByCategory": {
+        "coverage-listener-terminal": 16384
+      },
+      "listenerActive": false,
+      "listenerGenerations": 2,
+      "terminalRetained": true,
+      "terminalDescriptor": {
+        "listenerGenerationId": "proxy-descriptor-next",
+        "immediateCount": 2,
+        "immediateBytes": 4096,
+        "completionCount": 2,
+        "completionBytes": 8192,
+        "aliasSetCount": 1,
+        "aliasBytes": 4096,
+        "destroyIdCount": 2
+      },
+      "maxSessions": 8,
+      "maxRetainedBytes": 134217728
+    }
+  },
+  {
+    "name": "options-descriptor",
+    "contractHolds": false,
+    "result": null,
+    "thrown": "Cannot set properties of null (setting 'terminalDescriptor')",
+    "outerCalls": 1,
+    "nested": true,
+    "successor": true,
+    "after": {
+      "sessions": 0,
+      "retainedBytes": 16777216,
+      "highWaterBytes": 16777216,
+      "refusals": 0,
+      "releases": 1,
+      "wakeFailures": 0,
+      "held": [],
+      "liveBytesByCategory": {
+        "coverage-listener-terminal": 16384,
+        "coverage-listener": 16760832
+      },
+      "listenerActive": true,
+      "listenerGenerations": 2,
+      "terminalRetained": true,
+      "terminalDescriptor": {
+        "listenerGenerationId": "options-descriptor",
+        "immediateCount": 2,
+        "immediateBytes": 4096,
+        "completionCount": 2,
+        "completionBytes": 8192,
+        "aliasSetCount": 1,
+        "aliasBytes": 4096,
+        "destroyIdCount": 2
+      },
+      "maxSessions": 8,
+      "maxRetainedBytes": 134217728
+    },
+    "successorCompleted": true,
+    "afterSuccessor": {
+      "sessions": 0,
+      "retainedBytes": 16384,
+      "highWaterBytes": 16777216,
+      "refusals": 0,
+      "releases": 2,
+      "wakeFailures": 0,
+      "held": [],
+      "liveBytesByCategory": {
+        "coverage-listener-terminal": 16384
+      },
+      "listenerActive": false,
+      "listenerGenerations": 2,
+      "terminalRetained": true,
+      "terminalDescriptor": {
+        "listenerGenerationId": "options-descriptor-next",
+        "immediateCount": 2,
+        "immediateBytes": 4096,
+        "completionCount": 2,
+        "completionBytes": 8192,
+        "aliasSetCount": 1,
+        "aliasBytes": 4096,
+        "destroyIdCount": 2
+      },
+      "maxSessions": 8,
+      "maxRetainedBytes": 134217728
+    }
+  },
+  {
+    "name": "options-terminalize",
+    "contractHolds": false,
+    "result": null,
+    "thrown": "Cannot set properties of null (setting 'terminalDescriptor')",
+    "outerCalls": 1,
+    "nested": true,
+    "successor": true,
+    "after": {
+      "sessions": 0,
+      "retainedBytes": 16777216,
+      "highWaterBytes": 16777216,
+      "refusals": 0,
+      "releases": 1,
+      "wakeFailures": 0,
+      "held": [],
+      "liveBytesByCategory": {
+        "coverage-listener-terminal": 16384,
+        "coverage-listener": 16760832
+      },
+      "listenerActive": true,
+      "listenerGenerations": 2,
+      "terminalRetained": true,
+      "terminalDescriptor": {
+        "listenerGenerationId": "options-terminalize",
+        "immediateCount": 2,
+        "immediateBytes": 4096,
+        "completionCount": 2,
+        "completionBytes": 8192,
+        "aliasSetCount": 1,
+        "aliasBytes": 4096,
+        "destroyIdCount": 2
+      },
+      "maxSessions": 8,
+      "maxRetainedBytes": 134217728
+    },
+    "successorCompleted": true,
+    "afterSuccessor": {
+      "sessions": 0,
+      "retainedBytes": 16384,
+      "highWaterBytes": 16777216,
+      "refusals": 0,
+      "releases": 2,
+      "wakeFailures": 0,
+      "held": [],
+      "liveBytesByCategory": {
+        "coverage-listener-terminal": 16384
+      },
+      "listenerActive": false,
+      "listenerGenerations": 2,
+      "terminalRetained": true,
+      "terminalDescriptor": {
+        "listenerGenerationId": "options-terminalize-next",
+        "immediateCount": 2,
+        "immediateBytes": 4096,
+        "completionCount": 2,
+        "completionBytes": 8192,
+        "aliasSetCount": 1,
+        "aliasBytes": 4096,
+        "destroyIdCount": 2
+      },
+      "maxSessions": 8,
+      "maxRetainedBytes": 134217728
+    }
+  },
+  {
+    "name": "options-shutdownRecord",
+    "contractHolds": true,
+    "result": false,
+    "thrown": null,
+    "outerCalls": 0,
+    "nested": true,
+    "successor": true,
+    "after": {
+      "sessions": 0,
+      "retainedBytes": 16777216,
+      "highWaterBytes": 16777216,
+      "refusals": 0,
+      "releases": 1,
+      "wakeFailures": 0,
+      "held": [],
+      "liveBytesByCategory": {
+        "coverage-listener-terminal": 16384,
+        "coverage-listener": 16760832
+      },
+      "listenerActive": true,
+      "listenerGenerations": 2,
+      "terminalRetained": true,
+      "terminalDescriptor": {
+        "listenerGenerationId": "options-shutdownRecord",
+        "immediateCount": 2,
+        "immediateBytes": 4096,
+        "completionCount": 2,
+        "completionBytes": 8192,
+        "aliasSetCount": 1,
+        "aliasBytes": 4096,
+        "destroyIdCount": 2
+      },
+      "maxSessions": 8,
+      "maxRetainedBytes": 134217728
+    },
+    "successorCompleted": true,
+    "afterSuccessor": {
+      "sessions": 0,
+      "retainedBytes": 16384,
+      "highWaterBytes": 16777216,
+      "refusals": 0,
+      "releases": 2,
+      "wakeFailures": 0,
+      "held": [],
+      "liveBytesByCategory": {
+        "coverage-listener-terminal": 16384
+      },
+      "listenerActive": false,
+      "listenerGenerations": 2,
+      "terminalRetained": true,
+      "terminalDescriptor": {
+        "listenerGenerationId": "options-shutdownRecord-next",
+        "immediateCount": 2,
+        "immediateBytes": 4096,
+        "completionCount": 2,
+        "completionBytes": 8192,
+        "aliasSetCount": 1,
+        "aliasBytes": 4096,
+        "destroyIdCount": 2
+      },
+      "maxSessions": 8,
+      "maxRetainedBytes": 134217728
+    }
+  },
+  {
+    "name": "throwing-proxy-refusal-and-valid-retry",
+    "contractHolds": true,
+    "result": false,
+    "retry": true,
+    "calls": 1,
+    "before": {
+      "sessions": 0,
+      "retainedBytes": 16777216,
+      "highWaterBytes": 16777216,
+      "refusals": 0,
+      "releases": 0,
+      "wakeFailures": 0,
+      "held": [],
+      "liveBytesByCategory": {
+        "coverage-listener-terminal": 16384,
+        "coverage-listener": 16760832
+      },
+      "listenerActive": true,
+      "listenerGenerations": 1,
+      "terminalRetained": true,
+      "terminalDescriptor": null,
+      "maxSessions": 8,
+      "maxRetainedBytes": 134217728
+    },
+    "after": {
+      "sessions": 0,
+      "retainedBytes": 16384,
+      "highWaterBytes": 16777216,
+      "refusals": 0,
+      "releases": 1,
+      "wakeFailures": 0,
+      "held": [],
+      "liveBytesByCategory": {
+        "coverage-listener-terminal": 16384
+      },
+      "listenerActive": false,
+      "listenerGenerations": 1,
+      "terminalRetained": true,
+      "terminalDescriptor": {
+        "listenerGenerationId": "throwing-proxy",
+        "immediateCount": 2,
+        "immediateBytes": 4096,
+        "completionCount": 2,
+        "completionBytes": 8192,
+        "aliasSetCount": 1,
+        "aliasBytes": 4096,
+        "destroyIdCount": 2
+      },
+      "maxSessions": 8,
+      "maxRetainedBytes": 134217728
+    }
+  },
+  {
+    "name": "plain-proxy-captured-once",
+    "contractHolds": true,
+    "result": true,
+    "counts": {
+      "listenerGenerationId": 1,
+      "immediateCount": 1,
+      "immediateBytes": 1,
+      "completionCount": 1,
+      "completionBytes": 1,
+      "aliasSetCount": 1,
+      "aliasBytes": 1,
+      "destroyIdCount": 1
+    }
+  },
+  {
+    "name": "fixed-snapshot-does-not-expand",
+    "contractHolds": true,
+    "result": true,
+    "afterFirst": {
+      "firstCalls": 1,
+      "lateCalls": 0
+    },
+    "released": true,
+    "firstCalls": 2,
+    "lateCalls": 1
+  }
+]

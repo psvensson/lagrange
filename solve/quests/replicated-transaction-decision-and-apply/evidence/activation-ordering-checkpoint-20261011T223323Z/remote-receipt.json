@@ -1,0 +1,69 @@
+{
+  "utc": "2026-10-11T22:33:23.805967+00:00",
+  "namespace": "refs/heads/checkpoint/rs-raft-preservation-20261011T223323Z",
+  "mainBefore": "878eb8ac059dab71deae5feb0fa88e0c5c610c93",
+  "newRefs": {
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T223323Z/activation-startup-wip": "da6a82c81edb4fea678d832293ed7ba57e843f44",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T223323Z/tx1-owner-wip": "2916aaa64e3edb72076b3fdb6a4c044f2862d329",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T223323Z/freshmg-wip": "78b98114784faf8fab629a5b4a03f4858eb4cea1"
+  },
+  "coverage": {
+    "activation-startup-wip": {
+      "status": "VERIFIED_PUSHED",
+      "sha": "da6a82c81edb4fea678d832293ed7ba57e843f44",
+      "ref": "refs/heads/checkpoint/rs-raft-preservation-20261011T223323Z/activation-startup-wip",
+      "changedSinceRemote": "949b8c63f3923f7a20f72a7329fe86948cbf204d",
+      "changedPaths": [
+        "src/node/participant-release-lifecycle-retirement.js",
+        "src/node/replica-handler-participant-cutover.js",
+        "src/partition/partition-participant-release-local-current.js",
+        "test/partition/participant-release-protocol.test.js"
+      ]
+    },
+    "tx1-owner-wip": {
+      "status": "VERIFIED_PUSHED",
+      "sha": "2916aaa64e3edb72076b3fdb6a4c044f2862d329",
+      "ref": "refs/heads/checkpoint/rs-raft-preservation-20261011T223323Z/tx1-owner-wip",
+      "changedSinceRemote": "c772c508b9521307054083f2091ec48219db1c93",
+      "changedPaths": [
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-release-ordering-correction/focused.log.txt",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-release-ordering-correction/scope.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/activation-release-ordering-correction/source-manifest.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/review-evidence-checkpoint-20261011T223136Z/caller-states-after-capture.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/review-evidence-checkpoint-20261011T223136Z/caller-states-after-push.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/review-evidence-checkpoint-20261011T223136Z/caller-states-before.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/review-evidence-checkpoint-20261011T223136Z/push-attempt.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/review-evidence-checkpoint-20261011T223136Z/push-plan.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/review-evidence-checkpoint-20261011T223136Z/remote-receipt.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/review-evidence-checkpoint-20261011T223136Z/remote-refs.json",
+        "solve/quests/replicated-transaction-decision-and-apply/evidence/review-evidence-checkpoint-20261011T223136Z/tx1-owner-wip.json",
+        "solve/quests/replicated-transaction-decision-and-apply/log.ndjson"
+      ]
+    },
+    "freshmg-wip": {
+      "status": "VERIFIED_PUSHED",
+      "sha": "78b98114784faf8fab629a5b4a03f4858eb4cea1",
+      "ref": "refs/heads/checkpoint/rs-raft-preservation-20261011T223323Z/freshmg-wip",
+      "changedSinceRemote": "c503d36682121d1e409d76fc989d730c6cca5a7d",
+      "changedPaths": [
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-release-ordering-correction/focused.log.txt",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-release-ordering-correction/scope.json",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-release-ordering-correction/source-manifest.json",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-retained-authorization-settlement/completed-oracle-result.json",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-retained-authorization-settlement/corrected-source-provenance.json",
+        "solve/quests/message-group-fresh-identity-membership/evidence/activation-retained-authorization-settlement/pgwire-after-retained-authorization-settlement.log.txt"
+      ]
+    }
+  },
+  "callerStatesVerified": true,
+  "preservationOnly": true,
+  "remoteRefs": {
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T223323Z/activation-startup-wip": "da6a82c81edb4fea678d832293ed7ba57e843f44",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T223323Z/freshmg-wip": "78b98114784faf8fab629a5b4a03f4858eb4cea1",
+    "refs/heads/checkpoint/rs-raft-preservation-20261011T223323Z/tx1-owner-wip": "2916aaa64e3edb72076b3fdb6a4c044f2862d329",
+    "refs/heads/main": "878eb8ac059dab71deae5feb0fa88e0c5c610c93"
+  },
+  "verified": true,
+  "mainUnchanged": true,
+  "callerStatesVerifiedAfterPush": true
+}
