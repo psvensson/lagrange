@@ -82,7 +82,7 @@ jobs:
           PY
           npm ci > "$EVIDENCE/install.log" 2>&1
           node --version > "$EVIDENCE/node-version.txt"
-          python3 -m py_compile scripts/quest-evidence/measure-startup-cleanup-20261012.py
+          PYTHONPYCACHEPREFIX="$RUNNER_TEMP/startup-cleanup-pycache" python3 -m py_compile scripts/quest-evidence/measure-startup-cleanup-20261012.py
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
       - name: Measure baseline candidate source-only revert and all selected lifecycle cases
