@@ -60,6 +60,7 @@ jobs:
       - name: Measure original source without retries
         run: |
           set -uo pipefail
+          set +e
           npm run -s test:file -- "$TEST" > "$EVIDENCE/baseline.log" 2>&1
           printf '%s\n' "$?" > "$EVIDENCE/baseline-exit.txt"
           test ! -d test-output/runtime-load-native || mv test-output/runtime-load-native "$EVIDENCE/baseline-cases"
@@ -88,6 +89,7 @@ jobs:
       - name: Measure exact candidate
         run: |
           set -uo pipefail
+          set +e
           npm run -s test:file -- "$TEST" > "$EVIDENCE/candidate.log" 2>&1
           printf '%s\n' "$?" > "$EVIDENCE/candidate-exit.txt"
           test ! -d test-output/runtime-load-native || mv test-output/runtime-load-native "$EVIDENCE/candidate-cases"
@@ -96,6 +98,7 @@ jobs:
       - name: Revert only source ordering and retain the discriminating result
         run: |
           set -uo pipefail
+          set +e
           trap 'git show "$(cat "$EVIDENCE/candidate-sha.txt"):$SUBJECT" > "$SUBJECT"' EXIT
           git show "$BASE:$SUBJECT" > "$SUBJECT"
           npm run -s test:file -- "$TEST" > "$EVIDENCE/revert.log" 2>&1
@@ -106,6 +109,7 @@ jobs:
       - name: Existing operation-port regression cone on restored candidate
         run: |
           set -uo pipefail
+          set +e
           git diff --exit-code -- "$SUBJECT" || exit "$?"
           npm run -s test:file -- test/raft/raft-rs-backend/operation-port-ready-recovery.test.js test/raft/raft-rs-backend/operation-port-throw-containment.test.js test/raft/raft-rs-backend/operation-port-provenance.test.js > "$EVIDENCE/existing.log" 2>&1
           printf '%s\n' "$?" > "$EVIDENCE/existing-exit.txt"
