@@ -36,3 +36,10 @@ Required sections:
 
 Vet instruction: the design verifier attacks each section separately and
 reports ALL refutations per section, not the first found.
+
+For changes to authority, state, retries or recovery, include the
+[authority-reduction review contract](../../../architecture/contracts/authority-and-recovery.md#authority-reduction-review-contract)
+as a cross-cutting check across these four sections. Keep its fact/transition
+inventory in the Quest design, not in a second registry. The verdict must name
+unresolved duplicate authorities, the owner of each continuation, and the
+witness for every proposed deletion. Missing evidence is REVISE, not approval.

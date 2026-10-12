@@ -146,3 +146,53 @@ owned by the existing FreshMG Quest's
 [safety-first ruling](../../solve/quests/message-group-fresh-identity-membership/safety-first-ruling-20261009.md).
 This mandate grants design judgment, not independent source approval, a merge,
 a release, or a claim of correctness under every possible hardware failure.
+
+## Authority-reduction review contract
+
+Draft addition for the operator-requested release reduction, 2026-10-12;
+independent design review and normal landing remain required. This section
+elaborates the existing owner rules; it adds no always-loaded rule or registry.
+
+Before adding or retaining a state, counter, projection, handshake, persistent
+record or retry path, put this inventory in the owning Quest's design:
+
+`fact -> sole writer/commit point -> identity and lifetime -> consumers ->
+invalidators -> remaining obligation -> continuation/release owner`.
+
+The inventory describes semantic facts, not one row per class. Two representations
+of the same permission are a defect unless one is explicitly a disposable view
+whose consumers return to the authority. Distinct facts must not be collapsed
+merely to reduce the number of fields: durable pause ordering and revocation of
+one local dispatch submission, for example, have different lifetimes.
+
+For every proposed addition, name the decision or failure boundary it alone
+owns and an executable falsifier of that distinction. For every proposed
+removal, name all callers, apply predicates, restart consumers, outstanding
+obligations and witnesses that depended on it. Move the whole interaction;
+deleting a producer while its dispatch fence still consumes it is a rejection.
+A state that changes neither permissible effects nor remaining obligations is
+a derived observation, not another authoritative protocol phase.
+
+All triggers for one transition converge on one driver and winner rule. State
+both the process-local scheduling scope and the durable/leader fencing scope;
+a local single-flight is not distributed serialization. A retry cannot mint a
+new semantic identity, renew the caller's deadline or choose a different root
+merely because its previous answer was lost. A recoverable refusal names an
+actually reachable continuation, including pre-origin and remote-leader cases.
+
+Keep durable decisions separate from live observations and physical history.
+Dropping volatile state must not grant new effects or erase retirement debt.
+An absent projection is not proof that no obligation existed; an unavailable
+record is not proof of an empty store. Do not introduce a release-owned store
+or history token to repair a lifecycle or reseed owner defect.
+
+The review must contain an explicit accepted-clause and witness disposition
+map. Retain old evidence byte-for-byte. Every supersession names its authority,
+replacement invariant and both positive and refusal witnesses. "Fewer lines",
+"tests pass", and a declaration of single ownership do not prove the reduction.
+
+Use existing owner-interaction witnesses and audits for enforceable boundaries.
+The verifier must identify a negative case that the existing gate rejects, or
+record a scoped enforcement gap; prose alone is not machine enforcement. No new
+checker, manifest or coordinator may duplicate the owner it is meant to police.
+This contract does not promise that a static check can prove semantic uniqueness.
