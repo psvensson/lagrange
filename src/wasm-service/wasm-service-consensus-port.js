@@ -214,12 +214,19 @@ function closeWasmServiceConsensus(replica) {
   replica.consensusCloseSettlement = promise;
   const port = replica.raft;
   const db = replica.db;
+  const kvStore = replica.kvStore;
   const release = async () => {
     if (port) {
       assertRaftOperationSucceeded(await port.close());
     }
     if (replica.raft === port) {
       replica.raft = null;
+    }
+    if (kvStore) {
+      await kvStore.close();
+      if (replica.kvStore === kvStore) {
+        replica.kvStore = null;
+      }
     }
     if (db?.open) {
       db.close();

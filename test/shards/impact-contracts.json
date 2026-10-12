@@ -578,7 +578,8 @@
         "test/raft/raft-rs-backend/operation-port-boundary.test.js",
         "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
         "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
-        "test/raft/raft-opening-cleanup-error.test.js"
+        "test/raft/raft-opening-cleanup-error.test.js",
+        "test/raft/raft-rs-backend/startup-cleanup.integration.test.js"
       ]
     },
     "raft-rs-runtime-application-transaction": {
@@ -614,7 +615,8 @@
         "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js",
         "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js",
         "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
-        "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js"
+        "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
+        "test/raft/raft-rs-backend/startup-cleanup.integration.test.js"
       ]
     },
     "partition-raft-operation-port": {
@@ -635,7 +637,8 @@
         "test/partition/partition-port-refusal-outcomes.test.js",
         "test/partition/partition-write-typed-releases.test.js",
         "test/partition/partition-consensus-hold-log.test.js",
-        "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js"
+        "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+        "test/raft/raft-rs-backend/startup-cleanup.integration.test.js"
       ]
     },
     "partition-session-transaction-persistence-admission": {
@@ -970,6 +973,26 @@
         "test/raft/snapshot-lifecycle-staging.test.js",
         "test/integration/message-group-learner-runtime-authorization.integration.test.js",
         "test/raft/raft-rs-backend/operation-port-boundary.test.js"
+      ]
+    },
+    "replica-host-cleanup-custody": {
+      "description": "The existing host retains exact unreleased service objects independently of active routing. Failed CREATE/restart and host shutdown use the same instance cleanup owner; typed failure retains custody, retries do not retarget successors, and pending cleanup bounds replacement admission without granting CREATE or storage-deletion authority.",
+      "owners": [
+        "src/node/replica-handler-class.js",
+        "src/node/replica-handler-create-methods.js",
+        "src/node/replica-handler-runtime-methods.js",
+        "src/node/replica-handler-create-status-methods.js",
+        "src/node/replica-runtime-cleanup-custody.js",
+        "src/wasm-service/wasm-service-lifecycle.js",
+        "src/partition/partition-service-lifecycle-methods.js",
+        "src/message-group/message-group-service-cache-and-lifecycle-runtime-methods.js",
+        "src/wasm-service/wasm-service-replica-lifecycle.js",
+        "src/raft/raft-operation-port.js"
+      ],
+      "tests": [
+        "test/node/replica-runtime-cleanup-custody.integration.test.js",
+        "test/wasm-service/wasm-service-lifecycle.test.js",
+        "test/node/replica-failed-create-cleanup-generation.test.js"
       ]
     }
   },
@@ -1447,7 +1470,8 @@
         "test/raft/raft-rs-backend/operation-port-boundary.test.js",
         "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
         "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
-        "test/raft/raft-opening-cleanup-error.test.js"
+        "test/raft/raft-opening-cleanup-error.test.js",
+        "test/raft/raft-rs-backend/startup-cleanup.integration.test.js"
       ]
     },
     "raft-rs-runtime-application-transaction": {
@@ -1491,7 +1515,8 @@
         "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js",
         "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js",
         "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
-        "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js"
+        "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
+        "test/raft/raft-rs-backend/startup-cleanup.integration.test.js"
       ]
     },
     "partition-raft-operation-port": {
@@ -1523,7 +1548,8 @@
         "test/partition/partition-port-refusal-outcomes.test.js",
         "test/partition/partition-write-typed-releases.test.js",
         "test/partition/partition-consensus-hold-log.test.js",
-        "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js"
+        "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+        "test/raft/raft-rs-backend/startup-cleanup.integration.test.js"
       ]
     },
     "spread-cure-transition-authorization": {
@@ -1937,6 +1963,37 @@
         "test/raft/snapshot-lifecycle-staging.test.js",
         "test/integration/message-group-learner-runtime-authorization.integration.test.js",
         "test/raft/raft-rs-backend/operation-port-boundary.test.js"
+      ]
+    },
+    "replica-host-cleanup-custody": {
+      "description": "The existing host retains exact unreleased service objects independently of active routing. Failed CREATE/restart and host shutdown use the same instance cleanup owner; typed failure retains custody, retries do not retarget successors, and pending cleanup bounds replacement admission without granting CREATE or storage-deletion authority.",
+      "contract": "replica-host-cleanup-custody",
+      "endpoints": [
+        {
+          "id": "host-object-custody",
+          "owners": [
+            "src/node/replica-handler-class.js",
+            "src/node/replica-handler-create-methods.js",
+            "src/node/replica-handler-runtime-methods.js",
+            "src/node/replica-handler-create-status-methods.js",
+            "src/node/replica-runtime-cleanup-custody.js",
+            "src/wasm-service/wasm-service-lifecycle.js"
+          ]
+        },
+        {
+          "id": "instance-resource-release",
+          "owners": [
+            "src/partition/partition-service-lifecycle-methods.js",
+            "src/message-group/message-group-service-cache-and-lifecycle-runtime-methods.js",
+            "src/wasm-service/wasm-service-replica-lifecycle.js",
+            "src/raft/raft-operation-port.js"
+          ]
+        }
+      ],
+      "witnessTests": [
+        "test/node/replica-runtime-cleanup-custody.integration.test.js",
+        "test/wasm-service/wasm-service-lifecycle.test.js",
+        "test/node/replica-failed-create-cleanup-generation.test.js"
       ]
     }
   }

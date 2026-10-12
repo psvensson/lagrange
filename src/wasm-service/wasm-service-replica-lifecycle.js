@@ -64,10 +64,6 @@ function isLiveWasmServiceReplica(replica) {
  */
 async function releaseWasmServiceReplicaConsensus(replica) {
   await closeWasmServiceConsensus(replica);
-  if (replica.kvStore) {
-    replica.kvStore.close();
-    replica.kvStore = null;
-  }
 }
 
 /**

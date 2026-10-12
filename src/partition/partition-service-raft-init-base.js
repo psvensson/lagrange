@@ -88,6 +88,8 @@ const {
   resolveRaftTransportDeliveryOptions,
 } = PARTITION_SERVICE_SHARED;
 
+const SERVICE_SHUTDOWN = 'partition_service_shutdown';
+
 class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
   /**
    * One checkpoint-cadence tick, driven by the 1s prepared-state-hold sweep
@@ -299,6 +301,9 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
   async initialize() {
     if (this.startupFailure !== null) {
       throw this.startupFailure;
+    }
+    if (this.isShutdown) {
+      throw Object.assign(new Error(SERVICE_SHUTDOWN), {code: SERVICE_SHUTDOWN});
     }
     if (this.initialized) {
       return;

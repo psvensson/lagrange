@@ -17,6 +17,7 @@ quests:
   - snapshot-lifecycle-staging-boundary
   - replica-opening-history
   - startup-refusal-cleanup-custody
+  - replica-cleanup-host-custody
 authorizes:
   - architecture
   - docs

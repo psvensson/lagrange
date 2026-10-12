@@ -42,10 +42,9 @@ async function openPartitionConsensusPort(service, request) {
   try {
     return service.createOperationPort(request);
   } catch (error) {
-    if (!isRaftOpeningFailure(error)) {
-      throw error;
-    }
-    return refusePartitionConsensusStartup(service, error.consensus);
+    const primary = isRaftOpeningFailure(error) ?
+      consensusInitRefusedError(service.partitionId, error.consensus) : error;
+    return cleanupRefusedPartitionStartup(service, primary);
   }
 }
 
@@ -53,7 +52,11 @@ async function openPartitionConsensusPort(service, request) {
 // use this same lifecycle interaction. Cleanup failure cannot replace the
 // primary refusal, and pending cleanup cannot admit another opening.
 async function refusePartitionConsensusStartup(service, answer) {
-  const primary = consensusInitRefusedError(service.partitionId, answer);
+  return cleanupRefusedPartitionStartup(service,
+    consensusInitRefusedError(service.partitionId, answer));
+}
+
+async function cleanupRefusedPartitionStartup(service, primary) {
   service.startupFailure = primary;
   try {
     await service.shutdown();

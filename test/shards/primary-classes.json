@@ -3,13 +3,13 @@
   "id": "test-primary-classification",
   "counts": {
     "unit": 2064,
-    "integration": 92,
+    "integration": 94,
     "bootstrap": 202,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2365,
-  "digest": "fnv1a32-b6bc7fc8",
+  "censusSize": 2367,
+  "digest": "fnv1a32-6e30ba74",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1172,6 +1172,7 @@
     "test/node/replica-removal-deferred-row-write.test.js": "unit",
     "test/node/replica-removal-graceful-shutdown.property.test.js": "unit",
     "test/node/replica-removal-leader-source.test.js": "unit",
+    "test/node/replica-runtime-cleanup-custody.integration.test.js": "integration",
     "test/node/replica-state-delegation.test.js": "unit",
     "test/node/replica-state-machine-authoritative-transition.test.js": "unit",
     "test/node/replica-state-machine-registered-activation.test.js": "unit",
@@ -1602,6 +1603,7 @@
     "test/raft/raft-rs-backend/runtime-wait-bound-spent.test.js": "unit",
     "test/raft/raft-rs-backend/single-path-partition-cutover.test.js": "unit",
     "test/raft/raft-rs-backend/stampless-opening-refusal.test.js": "unit",
+    "test/raft/raft-rs-backend/startup-cleanup.integration.test.js": "integration",
     "test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js": "unit",
     "test/raft/raft-rs-backend/transfer-leadership-attack-matrix.test.js": "unit",
     "test/raft/raft-rs-backend/transfer-leadership-decision-inputs.test.js": "unit",

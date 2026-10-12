@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 116,
     "architecture-governance": 19,
-    "bootstrap-membership": 306,
+    "bootstrap-membership": 307,
     "cdc-metadata": 63,
     "cli-tooling": 96,
     "control-plane": 214,
@@ -19,16 +19,16 @@
     "services-runtime": 146,
     "solver-tooling": 7,
     "storage-partition": 182,
-    "storage-raft": 126,
+    "storage-raft": 127,
     "test-infrastructure": 143,
     "transactions": 18,
     "transport-messaging": 95,
     "wasm-toolchain": 57
   },
-  "censusSize": 2365,
-  "digest": "fnv1a32-19421eef",
+  "censusSize": 2367,
+  "digest": "fnv1a32-91bb71c9",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-48dc04be",
+  "observationDigest": "fnv1a32-efa76705",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1191,6 +1191,7 @@
     "test/node/replica-removal-deferred-row-write.test.js": "bootstrap-membership",
     "test/node/replica-removal-graceful-shutdown.property.test.js": "bootstrap-membership",
     "test/node/replica-removal-leader-source.test.js": "bootstrap-membership",
+    "test/node/replica-runtime-cleanup-custody.integration.test.js": "bootstrap-membership",
     "test/node/replica-state-delegation.test.js": "bootstrap-membership",
     "test/node/replica-state-machine-authoritative-transition.test.js": "bootstrap-membership",
     "test/node/replica-state-machine-registered-activation.test.js": "bootstrap-membership",
@@ -1621,6 +1622,7 @@
     "test/raft/raft-rs-backend/runtime-wait-bound-spent.test.js": "storage-raft",
     "test/raft/raft-rs-backend/single-path-partition-cutover.test.js": "storage-raft",
     "test/raft/raft-rs-backend/stampless-opening-refusal.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/startup-cleanup.integration.test.js": "storage-raft",
     "test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js": "storage-raft",
     "test/raft/raft-rs-backend/transfer-leadership-attack-matrix.test.js": "storage-raft",
     "test/raft/raft-rs-backend/transfer-leadership-decision-inputs.test.js": "storage-raft",
@@ -8376,6 +8378,16 @@
         "test/raft/raft-rs-backend/partition-node-cluster.js"
       ]
     },
+    "test/node/replica-runtime-cleanup-custody.integration.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/wasm-service/wasm-service-constants.js"
+      ]
+    },
     "test/node/replica-state-machine-registered-activation.test.js": {
       "files": [
         "src/config/configuration-manager.js",
@@ -10813,6 +10825,15 @@
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-conf-state-key.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/startup-cleanup.integration.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",

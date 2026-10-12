@@ -156,55 +156,69 @@ class PartitionServiceLifecycleMethods {
    * Shutdown the partition service.
    * @return {Promise<void>}
    */
-  async shutdown() {
-    this.isShutdown = true;
-    this.leaderActivationGate.shutdown();
-    this.logger.info(PARTITION_SERVICE_LOG_MSG.SHUTTING_DOWN, {
-      partitionId: this.partitionId,
-      replicaId: this.replicaId,
-    });
-    // A tenure claim must not outlive its replica (see
-    // clearLocalCanonicalLeaderClaimOnTeardown).
-    this.clearLocalCanonicalLeaderClaimOnTeardown?.();
-    // No reader continues a closed replica's leadership.
-    endReplicaLeadershipTenure(this);
-    await closePartitionConsensusResources(this);
-    this.stopPeriodicSizeUpdates();
-    this.stopPreparedStateHoldTimeoutSweep();
-    this.roleMutationHelper.shutdown();
-    this.leaderNodeMutationHelper.shutdown();
-    clearPartitionLifecycleListeners(this);
-    this.releaseMetadataPublicationReadinessListener = null;
-    this._metadataPublicationReadinessState = null;
-    // Every pending write is released with the write kernel's typed answer:
-    // one handed to consensus may still commit, so its outcome is not known
-    // here; one never handed to it was not proposed.
-    this.releasePendingCommittedWrites((pending) =>
-      buildReleasedPendingWriteAnswer(pending, this.partitionId,
-        {cause: PARTITION_WRITE_RELEASE_CAUSE.SHUTDOWN}));
-    await this.quiesceRebalancing();
-    if (this.pendingCDCEventDeliveries.size > 0) {
-      await Promise.allSettled([...this.pendingCDCEventDeliveries]);
-      this.pendingCDCEventDeliveries.clear();
+  shutdown() {
+    if (this.shutdownSettlement) {
+      return this.shutdownSettlement;
     }
-    await retirePartitionTransportHandler(this);
-    closePartitionPersistenceResources(this);
+    this.isShutdown = true;
     this.initialized = false;
-    this.cdcSubscribers.clear();
-    this.cdcSubscriberWrappers.clear();
-    this.cdcSubscriberStates.clear();
-    this.cdcSubscriptionEpoch = 0;
-    this.cdcEventSequenceNumber = 0;
-    this.cdcBufferReplayDelayMs =
-      PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
-    this.cdcReplayBufferGrowthCount = 0;
-    this.cdcReplayRetryDepth = 0;
-    this.pendingCDCEventDeliveries.clear();
-    this.startupFailure = null;
-    this.emit(PARTITION_SERVICE_EVENT.SHUTDOWN, {
-      partitionId: this.partitionId,
-      replicaId: this.replicaId,
+    const {promise, resolve, reject} = Promise.withResolvers();
+    this.shutdownSettlement = promise;
+    const release = async () => {
+      this.leaderActivationGate.shutdown();
+      this.logger.info(PARTITION_SERVICE_LOG_MSG.SHUTTING_DOWN, {
+        partitionId: this.partitionId,
+        replicaId: this.replicaId,
+      });
+      // A tenure claim must not outlive its replica (see
+      // clearLocalCanonicalLeaderClaimOnTeardown).
+      this.clearLocalCanonicalLeaderClaimOnTeardown?.();
+      // No reader continues a closed replica's leadership.
+      endReplicaLeadershipTenure(this);
+      await closePartitionConsensusResources(this);
+      this.stopPeriodicSizeUpdates();
+      this.stopPreparedStateHoldTimeoutSweep();
+      this.roleMutationHelper.shutdown();
+      this.leaderNodeMutationHelper.shutdown();
+      clearPartitionLifecycleListeners(this);
+      this.releaseMetadataPublicationReadinessListener = null;
+      this._metadataPublicationReadinessState = null;
+      // Every pending write is released with the write kernel's typed answer:
+      // one handed to consensus may still commit, so its outcome is not known
+      // here; one never handed to it was not proposed.
+      this.releasePendingCommittedWrites((pending) =>
+        buildReleasedPendingWriteAnswer(pending, this.partitionId,
+          {cause: PARTITION_WRITE_RELEASE_CAUSE.SHUTDOWN}));
+      await this.quiesceRebalancing();
+      if (this.pendingCDCEventDeliveries.size > 0) {
+        await Promise.allSettled([...this.pendingCDCEventDeliveries]);
+        this.pendingCDCEventDeliveries.clear();
+      }
+      await retirePartitionTransportHandler(this);
+      closePartitionPersistenceResources(this);
+      this.cdcSubscribers.clear();
+      this.cdcSubscriberWrappers.clear();
+      this.cdcSubscriberStates.clear();
+      this.cdcSubscriptionEpoch = 0;
+      this.cdcEventSequenceNumber = 0;
+      this.cdcBufferReplayDelayMs =
+        PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
+      this.cdcReplayBufferGrowthCount = 0;
+      this.cdcReplayRetryDepth = 0;
+      this.pendingCDCEventDeliveries.clear();
+      this.startupFailure = null;
+      this.emit(PARTITION_SERVICE_EVENT.SHUTDOWN, {
+        partitionId: this.partitionId,
+        replicaId: this.replicaId,
+      });
+    };
+    release().then(resolve, (error) => {
+      if (this.shutdownSettlement === promise) {
+        this.shutdownSettlement = null;
+      }
+      reject(error);
     });
+    return promise;
   }
 }
 

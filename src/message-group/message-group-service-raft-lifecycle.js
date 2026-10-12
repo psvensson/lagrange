@@ -33,6 +33,8 @@ import {
 import {MESSAGE_GROUP_SERVICE_LITERAL} from
   './message-group-service-runtime-support.js';
 
+const SERVICE_SHUTDOWN = 'message_group_service_shutdown';
+
 function isThisGroupsServiceRow(service, row) {
   return (row?.[COLUMN.GROUP_ID] || row?.group_id) === service.groupId &&
     (row?.[COLUMN.SERVICE_TYPE] || row?.service_type) ===
@@ -169,6 +171,9 @@ function assignRaftLifecycle(serviceClass) {
     async initialize() {
       if (this.startupFailure !== null) {
         throw this.startupFailure;
+      }
+      if (this.isShutdown) {
+        throw Object.assign(new Error(SERVICE_SHUTDOWN), {code: SERVICE_SHUTDOWN});
       }
       if (this.initialized) {
         return;

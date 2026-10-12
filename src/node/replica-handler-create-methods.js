@@ -236,6 +236,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
       let partitionService = null;
       try {
         this.throwIfShuttingDown();
+        await this.settlePendingReplicaRuntimeCleanup(replicaId, partitionId);
         const {existed, record: identityRecord} = await priorExistence
           .observeReplicaIdentity(this, replicaId, skipLifecycleStatusPersistence);
         // A refused or unreadable identity observation must not consume the
@@ -471,16 +472,8 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
       } catch (error) {
         if (this.shuttingDown) {
           this.clearReplicaCreationProgress(progress);
-          if (
-            partitionService &&
-            typeof partitionService.shutdown === REPLICA_HANDLER_TYPEOF.FUNCTION
-          ) {
-            try {
-              await partitionService.shutdown();
-            } catch (_shutdownErr) {
-              void _shutdownErr;
-            }
-          }
+          await this.fenceFailedReplicaCreateRuntime(
+            replicaId, partitionId, partitionService, error);
           if (operationId) {
             this.inProgressOperations.delete(operationId);
             this.getReplicaCreateAdmissionOwner()
@@ -519,6 +512,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
             replicaId,
             partitionId,
             partitionService,
+            error,
           );
           this.clearReplicaCreationProgress(progress);
           if (operationId) {
@@ -534,6 +528,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           replicaId,
           partitionId,
           partitionService,
+          error,
         );
         this.failReplicaCreationProgress(progress, error);
         this.logger.error(REPLICA_HANDLER_LOG_MSG.CREATE_FAILED, {

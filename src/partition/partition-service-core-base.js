@@ -229,6 +229,7 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.initialized = false;
     this.isShutdown = false;
     this.startupFailure = null;
+    this.shutdownSettlement = null;
     this.isLeader = false;
     // Minted and ended only at the leadership edge
     // (src/raft/replica-leadership-state.js).
