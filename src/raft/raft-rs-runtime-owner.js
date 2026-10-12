@@ -3,8 +3,10 @@ import {instantiateRaftRsCore, verifyRaftRsBinding} from './raft-rs-binding-owne
 import {RaftRsDurableStore} from './raft-rs-durable-store.js';
 import {
   RAFT_RS_RECORD_COMPATIBILITY,
+  RAFT_RS_COMMIT_DURABILITY,
 } from './raft-rs-durable-store-constants.js';
 import {admitRaftRsMessage} from './raft-rs-ingress.js';
+import {RAFT_RS_OPENING_HISTORY} from './raft-rs-opening-history-constants.js';
 import {RAFT_RS_MESSAGE_TYPE} from './raft-rs-ingress-constants.js';
 import {
   recordInboundStepRefusal,
@@ -264,7 +266,7 @@ function readOpeningRecord(group) {
       return {ok: false, result: durableRecordIncompatible()};
     }
     const restore = group.store.hasDurableRecord(group.groupId);
-    return {ok: true, restore,
+    return {ok: true, restore, history: group.readOpeningHistory(),
       record: restore ? group.store.readDurableRecord(group.groupId) : null};
   } catch (error) {
     return {ok: false, result: groupHostFailure(group,
@@ -425,7 +427,7 @@ function openingParticipationRefusal(group, opening) {
     group.membershipGenerationIndex = membershipGeneration.index;
     return null;
   }
-  const refused = openingWithoutRecordRefusal(group.bootstrap);
+  const refused = openingWithoutRecordRefusal(group.bootstrap, opening.history);
   if (refused !== null) {
     if (refused.reason === RUNTIME_REASON.RESEED_REQUIRED) {
       group.holdForReseed();
@@ -465,6 +467,14 @@ function openGroupInCurrentRuntime(group, opening) {
   if (refused !== null) {
     return refused;
   }
+  if (opening.restore && opening.history !== RAFT_RS_OPENING_HISTORY.ESTABLISHED) {
+    try {
+      group.store.transaction(() => group.recordOpeningHistory(),
+        RAFT_RS_COMMIT_DURABILITY.SYNCED);
+    } catch (error) {
+      return groupHostFailure(group, RUNTIME_PHASE.BOOTSTRAP_PERSISTENCE, error);
+    }
+  }
   const created = invokeCore(group, 'create_node',
     createNodeArguments(group, opening));
   if (!created.ok) {
@@ -482,10 +492,12 @@ function openGroupInCurrentRuntime(group, opening) {
       return confState.result;
     }
     try {
-      group.store.putBootstrapAppliedState(group.groupId, confState.value,
-        {...participationGateColumns(group.gate),
-          membershipGenerationIndex:
-            String(group.membershipGenerationIndex)});
+      group.store.transaction(() => {
+        group.store.putBootstrapAppliedState(group.groupId, confState.value,
+          {...participationGateColumns(group.gate),
+            membershipGenerationIndex: String(group.membershipGenerationIndex)});
+        group.recordOpeningHistory();
+      }, RAFT_RS_COMMIT_DURABILITY.SYNCED);
     } catch (error) {
       return groupHostFailure(group, RUNTIME_PHASE.BOOTSTRAP_PERSISTENCE,
         error);
@@ -1786,6 +1798,8 @@ function createRuntimeDispatcher(request) {
     replicaIdentity: request.replicaIdentity,
     peerId: request.peerId,
     lifecycleIncarnation: request.lifecycleIncarnation,
+    readOpeningHistory: request.readOpeningHistory,
+    recordOpeningHistory: request.recordOpeningHistory,
     bootstrap: request.bootstrap,
     // Whether the opening's prior-existence fact is durable: false only for
     // an opening whose host writes that fact after the port opened (a
@@ -1847,8 +1861,12 @@ function createRuntimeDispatcher(request) {
     opening.result;
   if (opened.outcome === CORE_REFUSED ||
       (opening.ok && opened.outcome !== CORE_OK)) {
+    const released = group.handle !== null && runtimeHealth === HEALTHY ?
+      invokeCore(group, 'free') : {ok: true};
+    group.handle = null;
     groups.delete(group.key);
-    throw Object.assign(new Error(opened.reason), {consensus: opened});
+    throw Object.assign(new Error(opened.reason), {consensus: opened,
+      ...(released.ok ? {} : {cleanupFailure: released.result})});
   }
   const first = opening.ok ? invokeCore(group, 'status') : {ok: false};
   if (first.ok) {

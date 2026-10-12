@@ -8,6 +8,8 @@ import {
   COMMITTED_MEMBERSHIP_REFUSAL,
 } from './raft-committed-membership-constants.js';
 import {commitDurably} from './raft-rs-durable-store.js';
+import {RAFT_RS_OPENING_HISTORY, RAFT_RS_OPENING_HISTORY_ERROR} from
+  './raft-rs-opening-history-constants.js';
 
 const LIFECYCLE_TABLE = '_raft_rs_replica_lifecycle';
 // Columns added after the table first shipped: an older database gains them
@@ -19,7 +21,7 @@ const LIFECYCLE_TABLE = '_raft_rs_replica_lifecycle';
 // row removed, before it could be born). `retirement_evidence` is the
 // verified group-retirement evidence a retirement recorded with the row.
 const LIFECYCLE_ADDED_COLUMNS = Object.freeze(['incarnation',
-  'retirement_evidence']);
+  'retirement_evidence', 'native_history_state']);
 const LIFECYCLE_STATE = Object.freeze({
   ACTIVE: 'active',
   RETIRED: 'retired',
@@ -108,6 +110,7 @@ class RaftRsReplicaLifecycleOwner {
         changed_at TEXT NOT NULL,
         incarnation TEXT,
         retirement_evidence TEXT,
+        native_history_state TEXT,
         PRIMARY KEY (group_id, peer_id),
         UNIQUE (group_id, replica_identity)
       )
@@ -135,10 +138,10 @@ class RaftRsReplicaLifecycleOwner {
         db.prepare(`
           INSERT INTO ${LIFECYCLE_TABLE}
             (group_id, peer_id, replica_identity, state, reason, changed_at,
-              incarnation)
-          VALUES (?, ?, ?, 'active', NULL, ?, ?)
+              incarnation, native_history_state)
+          VALUES (?, ?, ?, 'active', NULL, ?, ?, ?)
         `).run(groupId, peerId, replicaIdentity, new Date().toISOString(),
-          String(mintIncarnation()));
+          String(mintIncarnation()), RAFT_RS_OPENING_HISTORY.NEVER_OPENED);
         this.#state = LIFECYCLE_STATE.ACTIVE;
       }
     } else {
@@ -168,6 +171,54 @@ class RaftRsReplicaLifecycleOwner {
       WHERE group_id = ? AND peer_id = ? AND replica_identity = ?
     `).get(this.#groupId, this.#peerId, this.#replicaIdentity);
     return typeof row?.incarnation === 'string' ? row.incarnation : null;
+  }
+
+  /**
+   * Read the monotonic opening fact of exactly the admitted incarnation.
+   * Missing/changed identity and invalid persisted values never mean fresh.
+   * @param {string} incarnation - The port's captured lifecycle identity.
+   * @return {string} Owner-defined opening history state.
+   */
+  openingHistory(incarnation) {
+    const row = this.#db.prepare(`
+      SELECT native_history_state FROM ${LIFECYCLE_TABLE}
+      WHERE group_id = ? AND peer_id = ? AND replica_identity = ?
+        AND incarnation = ? AND state = 'active'
+    `).get(this.#groupId, this.#peerId, this.#replicaIdentity, incarnation);
+    if (row === undefined) {
+      throw new Error(RAFT_RS_OPENING_HISTORY_ERROR.IDENTITY_CHANGED);
+    }
+    const value = row.native_history_state;
+    if (value === null) return RAFT_RS_OPENING_HISTORY.UNKNOWN;
+    if (value !== RAFT_RS_OPENING_HISTORY.NEVER_OPENED &&
+        value !== RAFT_RS_OPENING_HISTORY.ESTABLISHED) {
+      throw new Error(RAFT_RS_OPENING_HISTORY_ERROR.INVALID_STATE);
+    }
+    return value;
+  }
+
+  /**
+   * Record establishment inside the existing store's synced transaction.
+   * The runtime orders this atomically with fresh bootstrap before publishing
+   * a port; for an intact legacy record it runs before native reconstruction.
+   * @param {string} incarnation - Exact captured identity, never current-name lookup.
+   */
+  recordOpeningHistory(incarnation) {
+    if (!this.#db.inTransaction) {
+      throw new Error(RAFT_RS_OPENING_HISTORY_ERROR.TRANSACTION_REQUIRED);
+    }
+    // Validate the predecessor even on an idempotent update. No missing row
+    // or invalid state is promoted to an established incarnation.
+    this.openingHistory(incarnation);
+    const result = this.#db.prepare(`
+      UPDATE ${LIFECYCLE_TABLE} SET native_history_state = ?
+      WHERE group_id = ? AND peer_id = ? AND replica_identity = ?
+        AND incarnation = ? AND state = 'active'
+    `).run(RAFT_RS_OPENING_HISTORY.ESTABLISHED, this.#groupId,
+      this.#peerId, this.#replicaIdentity, incarnation);
+    if (result.changes !== 1) {
+      throw new Error(RAFT_RS_OPENING_HISTORY_ERROR.IDENTITY_CHANGED);
+    }
   }
 
   get active() {
@@ -296,9 +347,14 @@ class RaftRsReplicaLifecycleOwner {
  */
 function prepareReplicaLifecycleForSnapshot(request) {
   const owner = new RaftRsReplicaLifecycleOwner(request);
-  return owner.execute(() => frozenResult(RAFT_OPERATION_OUTCOME.CORE_OK,
-    LIFECYCLE_REASON.STAGING_PREPARED,
-    Object.freeze({incarnation: owner.incarnation})));
+  return owner.execute(() => {
+    const incarnation = owner.incarnation;
+    // A snapshot is imported history. Never publish a staged lifecycle row
+    // that could later authorize fresh genesis if the installed log is lost.
+    commitDurably(request.db, () => owner.recordOpeningHistory(incarnation));
+    return frozenResult(RAFT_OPERATION_OUTCOME.CORE_OK,
+      LIFECYCLE_REASON.STAGING_PREPARED, Object.freeze({incarnation}));
+  });
 }
 
 /**

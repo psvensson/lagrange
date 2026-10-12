@@ -220,11 +220,14 @@ function createRaftRsOperationPort(request) {
   let tickIntervalMs = tickIntervalOf(timing);
   let timer = null;
   let closed = false;
+  const lifecycleIncarnation = lifecycle.incarnation;
   const dispatcher = lifecycle.active ? createRuntimeDispatcher({
     database,
     groupId,
     replicaIdentity,
-    lifecycleIncarnation: lifecycle.incarnation,
+    lifecycleIncarnation,
+    readOpeningHistory: () => lifecycle.openingHistory(lifecycleIncarnation),
+    recordOpeningHistory: () => lifecycle.recordOpeningHistory(lifecycleIncarnation),
     peerId,
     bootstrap,
     identityRecordPending,
