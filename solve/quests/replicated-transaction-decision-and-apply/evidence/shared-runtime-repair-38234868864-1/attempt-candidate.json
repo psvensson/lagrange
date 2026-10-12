@@ -1,0 +1,15 @@
+{
+  "id": "replicated-transaction-decision-and-apply",
+  "entry": {
+    "ts": "2026-10-12T10:14:04.879Z",
+    "type": "attempt",
+    "text": "PR117 source candidate: existing runtime owner now holds one shared replacement barrier, invalidates all handles/views, accounts for each group, retains queued resumption and close obligations, and uses one captured-clock election-derived load retry window. Existing binding/reseed/queue owners retained. WIP only, awaiting independent source review and all gates.",
+    "at": "bd5be2e5bc8a9172c2f2e6964324c77367c97fc3",
+    "pathCount": 3,
+    "paths": [
+      "src/raft/raft-rs-runtime-faults.js",
+      "src/raft/raft-rs-runtime-owner-constants.js",
+      "src/raft/raft-rs-runtime-owner.js"
+    ]
+  }
+}
