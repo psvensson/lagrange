@@ -57,6 +57,7 @@ const RAFT_SNAPSHOT_INSTALL_REJECTION = Object.freeze({
   CREATE_ADMISSION_REQUIRED: 'create_admission_required',
   RAFT_RS_DESCRIPTOR_MISMATCH: 'raft_rs_descriptor_mismatch',
   CREATE_GENERATION_MISMATCH: 'create_generation_mismatch',
+  RECEIVER_STATE_REFUSED: 'receiver_state_refused',
 });
 
 // Marker exact-object shape.

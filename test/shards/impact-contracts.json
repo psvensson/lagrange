@@ -964,10 +964,11 @@
       ]
     },
     "snapshot-receiver-lifecycle-staging": {
-      "description": "Validated snapshot installation consumes a narrow, immutable receiver-local staging result from the existing replica lifecycle owner; it neither constructs that owner nor acquires runtime/retirement authority. The lifecycle owner preserves an exact active incarnation and refuses conflicting, retired or lifecycle-less surviving native history. Snapshot installation retains validation, CREATE authorization, staged-file custody, native reconstruction and atomic publication.",
+      "description": "Validated snapshot installation consumes a narrow, immutable receiver-local staging result from the existing replica lifecycle owner; it neither constructs that owner nor acquires runtime/retirement authority. The lifecycle owner preserves an exact active incarnation and refuses conflicting, retired or lifecycle-less surviving native history. Snapshot installation retains validation, CREATE authorization, staged-file custody, native reconstruction and atomic publication. Fresh CREATE also consumes read-only surviving-receiver admission before staging, final swap and STAGED recovery; existing receiver history is not replaceable by checkpoint validity alone.",
       "owners": [
         "src/raft/snapshot-install.js",
-        "src/raft/raft-rs-replica-lifecycle-owner.js"
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/raft/snapshot-receiver-admission.js"
       ],
       "tests": [
         "test/raft/snapshot-lifecycle-staging.test.js",
@@ -1948,7 +1949,8 @@
         {
           "id": "validated-snapshot-installation",
           "owners": [
-            "src/raft/snapshot-install.js"
+            "src/raft/snapshot-install.js",
+            "src/raft/snapshot-receiver-admission.js"
           ]
         },
         {

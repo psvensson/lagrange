@@ -28,7 +28,7 @@
   "censusSize": 2367,
   "digest": "fnv1a32-91bb71c9",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-efa76705",
+  "observationDigest": "fnv1a32-865cc606",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -7341,6 +7341,7 @@
         "src/raft/raft-rs-ingress-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/raft/snapshot-checkpoint-constants.js",
         "src/raft/snapshot-checkpoint-store.js",
@@ -10537,6 +10538,7 @@
         "src/raft/raft-rs-replica-lifecycle-owner.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/raft/snapshot-install.js",
+        "src/raft/snapshot-receiver-admission.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
       ],
       "directories": [
@@ -11008,7 +11010,8 @@
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-replica-lifecycle-owner.js",
         "src/raft/raft-rs-runtime-owner.js",
-        "src/raft/snapshot-install.js"
+        "src/raft/snapshot-install.js",
+        "src/raft/snapshot-receiver-admission.js"
       ],
       "directories": [
         "src",

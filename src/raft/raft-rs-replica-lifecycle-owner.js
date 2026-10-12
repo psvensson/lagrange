@@ -8,10 +8,22 @@ import {
   COMMITTED_MEMBERSHIP_REFUSAL,
 } from './raft-committed-membership-constants.js';
 import {commitDurably} from './raft-rs-durable-store.js';
+import {RAFT_RS_TABLE} from './raft-rs-durable-store-constants.js';
 import {RAFT_RS_OPENING_HISTORY, RAFT_RS_OPENING_HISTORY_ERROR} from
   './raft-rs-opening-history-constants.js';
 
 const LIFECYCLE_TABLE = '_raft_rs_replica_lifecycle';
+const SNAPSHOT_RECEIVER_REASON = Object.freeze({
+  FRESH: 'snapshot-receiver-fresh',
+  HISTORY: 'snapshot-receiver-history-present',
+  IDENTITY: 'snapshot-receiver-identity-mismatch',
+  UNAVAILABLE: 'snapshot-receiver-unavailable',
+  JOURNAL: 'snapshot-receiver-journal-pending',
+  STAGING: 'snapshot-receiver-staging-mismatch',
+});
+const SNAPSHOT_RECEIVER_JOURNALS = Object.freeze(['-wal', '-journal']);
+const FILE_ABSENT_CODE = 'ENOENT';
+
 // Columns added after the table first shipped: an older database gains them
 // (NULL for its existing rows) the first time a lifecycle owner opens it.
 // `incarnation` is the replica incarnation stamp: minted once, when the row
@@ -346,15 +358,111 @@ class RaftRsReplicaLifecycleOwner {
  * @return {Object} Immutable lifecycle outcome, never install permission.
  */
 function prepareReplicaLifecycleForSnapshot(request) {
-  const owner = new RaftRsReplicaLifecycleOwner(request);
+  const retained = request.receiverIncarnation ?? null;
+  const owner = new RaftRsReplicaLifecycleOwner({...request,
+    ...(retained === null ? {} : {mintIncarnation: () => retained})});
   return owner.execute(() => {
     const incarnation = owner.incarnation;
+    if (retained !== null && retained !== incarnation) {
+      return frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+        LIFECYCLE_REASON.IDENTITY_MISMATCH);
+    }
     // A snapshot is imported history. Never publish a staged lifecycle row
     // that could later authorize fresh genesis if the installed log is lost.
     commitDurably(request.db, () => owner.recordOpeningHistory(incarnation));
     return frozenResult(RAFT_OPERATION_OUTCOME.CORE_OK,
       LIFECYCLE_REASON.STAGING_PREPARED, Object.freeze({incarnation}));
   });
+}
+
+// A native FRESH_CREATE cannot replace established receiver history. Reseed or
+// live catchup needs its own existing authority; a valid checkpoint is not it.
+function snapshotReceiverRow(db, request, imported) {
+  const names = [LIFECYCLE_TABLE, ...Object.values(RAFT_RS_TABLE)];
+  const tables = db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table'
+    AND name IN (${names.map(() => '?').join(',')})`).all(...names)
+    .map(({name}) => name);
+  if (!imported && Object.values(RAFT_RS_TABLE).some((table) =>
+    tables.includes(table) && db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get())) {
+    return frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED, SNAPSHOT_RECEIVER_REASON.HISTORY);
+  }
+  const rows = tables.includes(LIFECYCLE_TABLE) ?
+    db.prepare(`SELECT * FROM ${LIFECYCLE_TABLE} LIMIT 2`).all() : [];
+  if (rows.length === 0 && !imported) return snapshotReceiverFresh(null);
+  const row = rows[0];
+  if (rows.length !== 1 || row.group_id !== request.groupId ||
+      row.peer_id !== request.peerId || row.replica_identity !== request.replicaIdentity ||
+      typeof row.incarnation !== 'string' || row.incarnation.length === 0) {
+    return frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED, SNAPSHOT_RECEIVER_REASON.IDENTITY);
+  }
+  if (row.state !== LIFECYCLE_STATE.ACTIVE) {
+    return frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED, retiredRefusalReason(row.reason));
+  }
+  const required = imported ? RAFT_RS_OPENING_HISTORY.ESTABLISHED :
+    RAFT_RS_OPENING_HISTORY.NEVER_OPENED;
+  if (row.native_history_state !== required) {
+    return frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED, SNAPSHOT_RECEIVER_REASON.HISTORY);
+  }
+  return snapshotReceiverFresh(row.incarnation);
+}
+
+function snapshotReceiverFresh(incarnation) {
+  return frozenResult(RAFT_OPERATION_OUTCOME.CORE_OK, SNAPSHOT_RECEIVER_REASON.FRESH,
+    Object.freeze({incarnation}));
+}
+
+function snapshotFileStat(file) {
+  try {
+    return fs.lstatSync(file);
+  } catch (error) {
+    if (error.code === FILE_ABSENT_CODE) return null;
+    throw error;
+  }
+}
+
+function inspectSnapshotLifecycleFile(file, request, imported = false) {
+  // Never discard uncheckpointed receiver bytes. A read-only SQLite handle is
+  // not proof that another writer has relinquished the required closed boundary.
+  for (const suffix of SNAPSHOT_RECEIVER_JOURNALS) {
+    const journal = snapshotFileStat(`${file}${suffix}`);
+    if (journal && (!journal.isFile() || journal.size > 0)) {
+      return frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED, SNAPSHOT_RECEIVER_REASON.JOURNAL);
+    }
+  }
+  const stat = snapshotFileStat(file);
+  if (!stat && !imported) return snapshotReceiverFresh(null);
+  if (!stat?.isFile()) {
+    return frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED, SNAPSHOT_RECEIVER_REASON.UNAVAILABLE);
+  }
+  const db = new Database(file, {readonly: true, fileMustExist: true});
+  try {
+    return snapshotReceiverRow(db, request, imported);
+  } finally {
+    db.close();
+  }
+}
+
+/** Read receiver facts, without creating or migrating lifecycle/native state.
+ * A caller must re-read before swap; this result is not durable permission.
+ * @param {Object} request - Exact identity, receiverDbPath and optional stagedDbPath.
+ * @return {Object} Frozen fresh-receiver/incarnation result or typed refusal.
+ */
+function inspectReplicaLifecycleForSnapshot(request) {
+  try {
+    const receiver = inspectSnapshotLifecycleFile(request.receiverDbPath, request);
+    if (receiver.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK || !request.stagedDbPath) {
+      return receiver;
+    }
+    const staged = inspectSnapshotLifecycleFile(request.stagedDbPath, request, true);
+    if (staged.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK ||
+        receiver.detail.incarnation !== null &&
+        receiver.detail.incarnation !== staged.detail.incarnation) {
+      return frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED, SNAPSHOT_RECEIVER_REASON.STAGING);
+    }
+    return receiver;
+  } catch (_error) {
+    return frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED, SNAPSHOT_RECEIVER_REASON.UNAVAILABLE);
+  }
 }
 
 /**
@@ -483,6 +591,7 @@ export {
   RaftRsReplicaLifecycleOwner,
   readDurableReplicaLifecycle,
   prepareReplicaLifecycleForSnapshot,
+  inspectReplicaLifecycleForSnapshot,
   registerRuntimeLifecycle,
   retireReplicaLifecycle,
   unregisterRuntimeLifecycle,
