@@ -7,8 +7,9 @@
  * Through the real SQLQueryEngine and the participant group's own transport,
  * one transaction stages two rows on a real three-replica rs-raft participant
  * group and is prepared there; its COMMIT decision is recorded insert-once in
- * the coordinator's durable row; the coordinator process stops at its very
- * next write, before any decision fanout. The group's leadership then moves.
+ * the coordinator gateway double's SQLite row; a hold suspends that engine
+ * at its next write, before any decision fanout. No process is killed here.
+ * The real participant group's leadership then moves.
  * A new coordinator - a new engine over the same durable rows, recovering
  * them through the engine's production startup path - drives the SAME
  * transaction identity forward to COMMITTED: every replica holds exactly one
@@ -121,6 +122,7 @@ async () => {
       statusWriteOf(TRANSACTION_STATUS.COMMITTING));
     const first = ctx.createCoordinator({hold});
     const begun = await first.executeQuery('BEGIN', [], {sessionId: SESSION});
+    assert.equal(begun.success, true, `BEGIN must actually be admitted: ${JSON.stringify(begun)}`);
     const transactionId = begun.transactionId;
     const participantId = `${transactionId}:${ctx.partitionId}`;
     const staged = [];
