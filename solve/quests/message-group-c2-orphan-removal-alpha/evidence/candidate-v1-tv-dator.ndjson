@@ -1,0 +1,7 @@
+{"file":"test/rebalancer/message-group-membership-branch-authorization.test.js","attempt":1,"ok":true,"assertions":90,"durationMs":1628,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-service-learner-promotion.test.js","attempt":1,"ok":true,"assertions":47,"durationMs":1646,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-participant-release-admission.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":2569,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/learner-promotion-progress-proof-contract.test.js","attempt":1,"ok":true,"assertions":76,"durationMs":379,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-service-learner-promotion-wake.test.js","attempt":1,"ok":true,"assertions":41,"durationMs":1383,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/participant-release-protocol.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":3303,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/convergence/dt6-learner-promotion-progress-proof.test.js","attempt":1,"ok":true,"assertions":29,"durationMs":2372,"retriedOnce":false,"firstFailureLine":null}

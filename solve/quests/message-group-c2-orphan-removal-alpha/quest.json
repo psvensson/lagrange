@@ -1,0 +1,54 @@
+{
+  "schema": "solve-quest/2",
+  "id": "message-group-c2-orphan-removal-alpha",
+  "statement": "Remove the unreachable partial message-group learner-successor and promotion execution island introduced by the unreviewed ephemeral snapshot, including only its exclusive helper exports, result vocabulary and stale owner comments. The repaired source graph has no unresolved learner-catch-up import and no second rebalancer promotion path, while the current initial-learner recording/discovery owner, tested durable PROMOTE/ABORT branch selection and later-phase debt recognition, and the native and partition learner-promotion owners retain their existing behavior. This subtraction neither restores historical C2 code nor claims any open message-group-fresh-identity-membership acceptance.",
+  "epic": "raft-rs-full-cutover",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/message-group-c2-orphan-removal-alpha/evidence/receipt.json",
+      "requiredReceipts": [
+        "orphan-import-graph-closed",
+        "initial-learner-owner-preserved",
+        "durable-branch-and-later-phase-preserved",
+        "live-promotion-owner-preserved",
+        "scope-static-and-metadata-clean"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "Every source attempt requires independent verification newer than the attempt, recorded through Solver with verifier subagent:<id> and an approve verdict before landing."
+    },
+    {
+      "id": "subtraction-only-scope",
+      "statement": "Delete src/rebalancer/replica-operation-message-group-promotion.js and src/rebalancer/replica-operation-message-group-learner-successor.js plus only their exclusive helpers, exports, result vocabulary and comments in the existing membership authorization/permit owners. Add no stub, replacement evaluator, compatibility adapter, new owner, new execution path or migration behavior."
+    },
+    {
+      "id": "current-learner-owner-preserved",
+      "statement": "Preserve the current exact initial ADD_LEARNER recording, readback, discovery/reentry, claim fencing, lost-answer behavior and typed unresolved outcomes through ReplicaOperationRepository and OperationWorkflowOwner. Helpers still used inside that owner may be de-exported but not duplicated or semantically changed."
+    },
+    {
+      "id": "durable-branch-contract-preserved",
+      "statement": "Preserve the tested generic PROMOTE/ABORT row CAS, permit decoder, durable PROMOTION_IN_FLIGHT and VOTER_COMMITTED vocabulary, and later-phase debt refusal. Existing persistent row shapes and branch semantics are not deleted or reinterpreted in this unit."
+    },
+    {
+      "id": "live-promotion-owners-preserved",
+      "statement": "Preserve src/raft/learner-promotion-progress.js, raft-rs-membership-transition-runtime.js, partition-service learner-promotion owners and their current identity, term, configuration-generation, commit/match progress and proposal fences. The removed rebalancer island must not be redirected to or restated beside those owners."
+    },
+    {
+      "id": "freshmg-acceptance-unchanged",
+      "statement": "The sealed open message-group-fresh-identity-membership Quest remains unchanged and incomplete. This unit proves dependency and ownership cleanup only; it does not claim current CREATE, successor issuance, full replacement, promotion orchestration, source retirement, cleanup/restart or physical off-seed seed-loss acceptance."
+    },
+    {
+      "id": "behavioral-proof-not-file-absence",
+      "statement": "Closure requires the focused dependency red to disappear and current learner recording/discovery, durable branch/later-phase, and live native promotion behavior to pass on the exact candidate. A check that only asserts the retired files are absent is insufficient."
+    },
+    {
+      "id": "no-static-debt-growth",
+      "statement": "Do not raise or weaken any static baseline. Candidate-scoped unused-export, dependency, file-size, complexity, guideline, impact-contract and shard checks must be clean; unrelated baseline failures remain separately attributed and cannot count as green proof."
+    }
+  ],
+  "sealedAt": "e6d43bc1acb128a2b83ac89c77a3ec400e7edb1f"
+}

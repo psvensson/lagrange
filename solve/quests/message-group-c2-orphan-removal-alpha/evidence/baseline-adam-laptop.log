@@ -1,0 +1,56 @@
+lab test: adam-laptop: exclusive (3 files) cores=8 mem=15.5GiB speed x1.97
+[adam-laptop] placement-shell=1847750
+[adam-laptop] placement-head=d35d8828c630d1b9675b47f511c477b3cc9ee991
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2 mode:local retry: timeout: lanecap:7
+[adam-laptop] placement-pid=1848176
+[adam-laptop] # test-files planned=3
+[adam-laptop] classified lane exclusive: 3 file(s), jobs=1
+[adam-laptop] thermal: hold cpu 79C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 79C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 41C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] ok test/integration/message-group-learner-process-loss.integration.test.js (4 assertions, 5435ms)
+[adam-laptop] ok test/integration/message-group-learner-runtime-authorization.integration.test.js (72 assertions, 16149ms)
+[adam-laptop] not ok test/integration/message-group-membership-claim-cache.integration.test.js (1 assertions, 12679ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] {"level":50,"time":"2026-10-13T13:32:57.736Z","nodeId":"membership-claim-cache-seed","pid":1848267,"subsystem":"bootstrap","nodeId":"membership-claim-cache-seed","phase":"partitions","duration":10284,"error":"Seed participant release authority unavailable","stack":"Error: Seed participant release authority unavailable\n    at BootstrapService.releaseSeedParticipantCohorts (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxpz-1639575/src/bootstrap/bootstrap-service-seed-workflow.js:275:17)\n    at async Object.run (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxpz-1639575/src/bootstrap/bootstrap-service-seed-workflow.js:359:13)\n    at async StartupPipelineRunner.runWorkflow (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxpz-1639575/src/bootstrap/pipeline/startup-pipeline-runner.js:169:9)\n    at async BootstrapService.bootstrap (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxpz-1639575/src/bootstrap/bootstrap-service-seed-workflow.js:473:9)\n    at async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxpz-1639575/test/integration/message-group-membership-claim-cache.integration.test.js:271:16)\n    at async Test.run (node:internal/test_runner/test:1054:7)\n    at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)","servicesCreated":138,"msg":"Bootstrap failed"}
+[adam-laptop] {"schema":"membership-cache-timing/2","budgetMs":30000,"elapsedMs":10953,"fixtureReplicaStaggerDelayMs":0,"timings":[{"phase":"bootstrap","elapsedMs":10913},{"phase":"teardown-start","elapsedMs":10916},{"phase":"bootstrap-stopped","elapsedMs":10938},{"phase":"cleanup-complete","elapsedMs":10953}]}
+[adam-laptop] # Subtest: repository failed and successful T1 cases share one SQL/Raft/cache seed
+[adam-laptop] not ok 1 - repository failed and successful T1 cases share one SQL/Raft/cache seed
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 10955.84439
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxpz-1639575/test/integration/message-group-membership-claim-cache.integration.test.js:256:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     "Seed participant release authority unavailable"
+[adam-laptop]     
+[adam-laptop]     false !== true
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected: true
+[adam-laptop]   actual: false
+[adam-laptop]   operator: 'strictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxpz-1639575/test/integration/message-group-membership-claim-cache.integration.test.js:273:14)
+[adam-laptop]     process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adam-laptop]   ...
+[adam-laptop] 1..1
+[adam-laptop] # tests 1
+[adam-laptop] # suites 0
+[adam-laptop] # pass 0
+[adam-laptop] # fail 1
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 10963.104136
+[adam-laptop] # time=12679ms
+[adam-laptop] # test-files total=3 pass=2 fail=1 assertions=77
+lab test: adam-laptop: # test-files total=3 pass=2 fail=1 assertions=77
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=3 pass=2 fail=1 assertions=77

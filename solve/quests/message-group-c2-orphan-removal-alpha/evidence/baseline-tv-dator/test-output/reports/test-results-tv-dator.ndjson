@@ -1,0 +1,5 @@
+{"file":"test/partition/partition-service-learner-promotion-wake.test.js","attempt":1,"ok":true,"assertions":41,"durationMs":1369,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-service-learner-promotion.test.js","attempt":1,"ok":true,"assertions":47,"durationMs":1449,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/message-group-membership-branch-authorization.test.js","attempt":1,"ok":false,"assertions":90,"durationMs":1515,"retriedOnce":false,"firstFailureLine":"not ok 1 - promotion authorization commits exact target intent; replay/reopen never writes it twice"}
+{"file":"test/raft/learner-promotion-progress-proof-contract.test.js","attempt":1,"ok":true,"assertions":76,"durationMs":316,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/convergence/dt6-learner-promotion-progress-proof.test.js","attempt":1,"ok":false,"assertions":30,"durationMs":2384,"retriedOnce":false,"firstFailureLine":"not ok 9 - Replica transport handler left registered: the transport cannot prove handler identity, so retirement was refused"}

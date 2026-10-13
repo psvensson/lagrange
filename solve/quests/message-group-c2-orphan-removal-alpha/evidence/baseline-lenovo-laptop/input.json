@@ -1,0 +1,9 @@
+{
+  "sha": "d35d8828c630d1b9675b47f511c477b3cc9ee991",
+  "host": "lenovo-laptop",
+  "files": [
+    "test/integration/message-group-learner-recipient.integration.test.js",
+    "test/integration/message-group-learner-discovery.integration.test.js",
+    "test/message-group/message-group-fresh-learner-promotion.test.js"
+  ]
+}

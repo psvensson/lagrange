@@ -43,11 +43,13 @@ const CLAIM = JSON.stringify({replicaId: S, createdAt: 30,
 const peerOf = deriveRaftRsPeerId;
 const conf = (learners) => ({voters: [peerOf(S)], votersOutgoing: [],
   learners, learnersNext: [], autoLeave: false});
-const learnerStamp = Object.freeze({kind: COMMITTED_MEMBERSHIP_STAMP_KIND.COMMITTED,
+const learnerStamp = committedStampOfAnswer(Object.freeze({
+  kind: COMMITTED_MEMBERSHIP_STAMP_KIND.COMMITTED,
   voters: [peerOf(S)], votersOutgoing: [], learners: [peerOf(T)], learnersNext: [],
   appliedIndex: 6, commitIndex: 6, membershipGenerationIndex: 5, term: 3,
   configurationKey: raftRsConfStateKey(conf([peerOf(T)])), leaderId: S,
-  gateOpen: true, identities: {[peerOf(S)]: S, [peerOf(T)]: T}});
+  gateOpen: true, identities: {[peerOf(S)]: S, [peerOf(T)]: T},
+}));
 const prior = Object.freeze({version: 2, transitionIdentity: 'branch-transition',
   permitSequence: 1, permitStage: 'add-learner', permitState: 'committed',
   workflowOwnerNodeId: OWNER, workflowOwnerFence: `${OWNER}:1:1`,
@@ -184,7 +186,7 @@ async function setup(t, {initial = false} = {}) {
   let repository = repo();
   assert.equal(typeof repository.selectMessageGroupMembershipBranch, 'function',
     'existing repository must own the durable promotion/abort CAS');
-  assert.ok(committedStampOfAnswer(learnerStamp), 'typed committed learner fixture validates');
+  assert.ok(learnerStamp, 'typed committed learner fixture validates');
   if (!cachedFixture) {
     const operation = {operationId: O, type: OperationType.REPLACE, partitionId: GROUP,
       entityType: SERVICE_TYPE.MESSAGE_GROUP, entityId: GROUP, replicaId: T, sourceReplicaId: S,

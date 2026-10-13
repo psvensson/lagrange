@@ -85,6 +85,9 @@ function gatedProofChannel(inner, gate) {
   return {
     register: (address, handler) => inner.register(address, handler),
     unregister: (address) => inner.unregister(address),
+    getRegisteredHandler: (address) => inner.getRegisteredHandler(address),
+    unregisterExact: (address, handler) =>
+      inner.unregisterExact(address, handler),
     deliver: async (address, payload, options) => {
       if (gate.closed &&
           payload?.type === PARTITION_SERVICE_MESSAGE_TYPE.LEARNER_PROMOTION_PROOF) {

@@ -1,0 +1,3 @@
+{"file":"test/message-group/message-group-fresh-learner-promotion.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":2733,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/integration/message-group-learner-discovery.integration.test.js","attempt":1,"ok":true,"assertions":21,"durationMs":18060,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/integration/message-group-learner-recipient.integration.test.js","attempt":1,"ok":true,"assertions":45,"durationMs":32400,"retriedOnce":false,"firstFailureLine":null}

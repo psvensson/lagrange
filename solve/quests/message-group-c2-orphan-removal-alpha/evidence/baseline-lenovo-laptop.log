@@ -1,0 +1,25 @@
+lab test: lenovo-laptop: ordinary, exclusive (3 files) cores=8 mem=15.5GiB speed x1.81
+[lenovo-laptop] placement-shell=1737171
+[lenovo-laptop] placement-head=d35d8828c630d1b9675b47f511c477b3cc9ee991
+[lenovo-laptop] placement-link=node_modules
+[lenovo-laptop] placement-link=data/examples
+[lenovo-laptop] placement-link=data/partitions
+[lenovo-laptop] placement-link=tools/alloy-6.2.0
+[lenovo-laptop] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[lenovo-laptop] placement-link=tools/tla2tools.jar
+[lenovo-laptop] placement-prepared=import-graph
+[lenovo-laptop] placement-env=factor:1.9 mode:local retry: timeout: lanecap:7
+[lenovo-laptop] placement-pid=1737555
+[lenovo-laptop] # test-files planned=3
+[lenovo-laptop] classified lane ordinary: 1 file(s), jobs=4
+[lenovo-laptop] thermal: ok cpu 50C (coretemp/Package id 0) nvme unmeasured
+[lenovo-laptop] ok test/message-group/message-group-fresh-learner-promotion.test.js (7 assertions, 3014ms)
+[lenovo-laptop] # test-files total=1 pass=1 fail=0 assertions=7
+[lenovo-laptop] classified lane exclusive: 2 file(s), jobs=1
+[lenovo-laptop] thermal: ok cpu 46C (coretemp/Package id 0) nvme unmeasured
+[lenovo-laptop] ok test/integration/message-group-learner-discovery.integration.test.js (21 assertions, 17072ms)
+[lenovo-laptop] ok test/integration/message-group-learner-recipient.integration.test.js (45 assertions, 30631ms)
+[lenovo-laptop] # test-files total=2 pass=2 fail=0 assertions=66
+lab test: lenovo-laptop: # test-files total=3 pass=3 fail=0 assertions=73
+lab test: lenovo-laptop: results copied to test-output/reports/test-results-lenovo-laptop.ndjson
+# test-files total=3 pass=3 fail=0 assertions=73

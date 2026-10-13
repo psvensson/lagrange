@@ -1,0 +1,3 @@
+{"file":"test/integration/message-group-learner-process-loss.integration.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":5435,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/integration/message-group-learner-runtime-authorization.integration.test.js","attempt":1,"ok":true,"assertions":72,"durationMs":16149,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/integration/message-group-membership-claim-cache.integration.test.js","attempt":1,"ok":false,"assertions":1,"durationMs":12679,"retriedOnce":false,"firstFailureLine":"not ok 1 - repository failed and successful T1 cases share one SQL/Raft/cache seed"}

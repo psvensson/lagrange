@@ -1,0 +1,1059 @@
+lab test: tv-dator: ordinary (5 files) cores=12 mem=15.4GiB speed x1.48
+[tv-dator] placement-shell=400593
+[tv-dator] placement-head=d35d8828c630d1b9675b47f511c477b3cc9ee991
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.5 mode:local retry: timeout: lanecap:11
+[tv-dator] placement-pid=401015
+[tv-dator] # test-files planned=5
+[tv-dator] classified lane ordinary: 5 file(s), jobs=4
+[tv-dator] thermal: ok cpu 64C (coretemp/Package id 0) nvme 42C (nvme/Sensor 1)
+[tv-dator] ok test/partition/partition-service-learner-promotion-wake.test.js (41 assertions, 1369ms)
+[tv-dator] ok test/partition/partition-service-learner-promotion.test.js (47 assertions, 1449ms)
+[tv-dator] not ok test/rebalancer/message-group-membership-branch-authorization.test.js (90 assertions, 1515ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 13
+[tv-dator] # Subtest: promotion authorization commits exact target intent; replay/reopen never writes it twice
+[tv-dator] not ok 1 - promotion authorization commits exact target intent; replay/reopen never writes it twice
+[tv-dator]   ---
+[tv-dator]   duration_ms: 36.64848
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:258:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     Expected values to be strictly equal:
+[tv-dator]     + actual - expected
+[tv-dator]     
+[tv-dator]     + 'conflict'
+[tv-dator]     - 'recorded'
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 'recorded'
+[tv-dator]   actual: 'conflict'
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:261:10)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[tv-dator]   ...
+[tv-dator] # Subtest: promotion and learner-abandonment race on one old row: exactly one branch is recorded
+[tv-dator] not ok 2 - promotion and learner-abandonment race on one old row: exactly one branch is recorded
+[tv-dator]   ---
+[tv-dator]   duration_ms: 4.29614
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:269:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     Expected values to be strictly equal:
+[tv-dator]     
+[tv-dator]     0 !== 1
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 1
+[tv-dator]   actual: 0
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:273:10)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: pre-promotion abandonment wins first and permanently excludes promotion under that basis
+[tv-dator] not ok 3 - pre-promotion abandonment wins first and permanently excludes promotion under that basis
+[tv-dator]   ---
+[tv-dator]   duration_ms: 3.502017
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:276:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     Expected values to be strictly equal:
+[tv-dator]     + actual - expected
+[tv-dator]     
+[tv-dator]     + 'conflict'
+[tv-dator]     - 'recorded'
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 'recorded'
+[tv-dator]   actual: 'conflict'
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:278:10)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: terminal settlement first refuses promotion without altering exact debt
+[tv-dator] ok 4 - terminal settlement first refuses promotion without altering exact debt
+[tv-dator]   ---
+[tv-dator]   duration_ms: 13.541348
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: terminal settlement between owner read and CAS cannot be overwritten by authorization
+[tv-dator] not ok 5 - terminal settlement between owner read and CAS cannot be overwritten by authorization
+[tv-dator]   ---
+[tv-dator]   duration_ms: 4.132611
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:290:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     Expected values to be strictly equal:
+[tv-dator]     + actual - expected
+[tv-dator]     
+[tv-dator]     + 'PENDING'
+[tv-dator]     - 'FAILED'
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 'FAILED'
+[tv-dator]   actual: 'PENDING'
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:294:10)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: terminal settlement after promotion retains direction and ordinary fields never rewrite the permit
+[tv-dator] not ok 6 - terminal settlement after promotion retains direction and ordinary fields never rewrite the permit
+[tv-dator]   ---
+[tv-dator]   duration_ms: 12.648063
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:297:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     Expected values to be strictly equal:
+[tv-dator]     + actual - expected
+[tv-dator]     
+[tv-dator]     + '{"version":2,"transitionIdentity":"branch-transition","permitSequence":1,"permitStage":"add-learner","permitState":"committed","workflowOwnerNodeId":"seed-node","workflowOwnerFence":"seed-node:1:1","membershipLeaseExpiresAt":1030000,"proposerNodeId":"seed-node","proposerBootIncarnation":1,"destinationNodeId":"seed-node","destinationBootIncarnation":1,"replicaLifecycleIncarnation":"runtime-incarnation","runtimeGeneration":1,"leaderTerm":3,"leaderConfigurationStamp":{"configurationKey":"[[\\"6750792597115109795\\"],[],[],[],false]","membershipGenerationIndex":1},"proposalIndex":5,"replicaIdentity":"mg-target-permanent","peerId":"6331259080022514362"}'
+[tv-dator]     - '{"version":2,"transitionIdentity":"branch-transition","permitSequence":2,"permitStage":"promote","permitState":"in_flight","workflowOwnerNodeId":"seed-node","workflowOwnerFence":"seed-node:1:1","membershipLeaseExpiresAt":1030000,"proposerNodeId":"seed-node","proposerBootIncarnation":1,"destinationNodeId":"seed-node","destinationBootIncarnation":1,"replicaLifecycleIncarnation":"runtime-incarnation","runtimeGeneration":1,"leaderTerm":3,"leaderConfigurationStamp":{"configurationKey":"[[\\"6750792597115109795\\"],[],[\\"6331259080022514362\\"],[],false]","membershipGenerationIndex":5},"proposalIndex":null,"replicaIdentity":"mg-target-permanent","peerId":"6331259080022514362"}'
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: '{"version":2,"transitionIdentity":"branch-transition","permitSequence":2,"permitStage":"promote","permitState":"in_flight","workflowOwnerNodeId":"seed-node","workflowOwnerFence":"seed-node:1:1","membershipLeaseExpiresAt":1030000,"proposerNodeId":"seed-node","proposerBootIncarnation":1,"destinationNodeId":"seed-node","destinationBootIncarnation":1,"replicaLifecycleIncarnation":"runtime-incarnation","runtimeGeneration":1,"leaderTerm":3,"leaderConfigurationStamp":{"configurationKey":"[[\\"6750792597115109795\\"],[],[\\"6331259080022514362\\"],[],false]","membershipGenerationIndex":5},"proposalIndex":null,"replicaIdentity":"mg-target-permanent","peerId":"6331259080022514362"}'
+[tv-dator]   actual: '{"version":2,"transitionIdentity":"branch-transition","permitSequence":1,"permitStage":"add-learner","permitState":"committed","workflowOwnerNodeId":"seed-node","workflowOwnerFence":"seed-node:1:1","membershipLeaseExpiresAt":1030000,"proposerNodeId":"seed-node","proposerBootIncarnation":1,"destinationNodeId":"seed-node","destinationBootIncarnation":1,"replicaLifecycleIncarnation":"runtime-incarnation","runtimeGeneration":1,"leaderTerm":3,"leaderConfigurationStamp":{"configurationKey":"[[\\"6750792597115109795\\"],[],[],[],false]","membershipGenerationIndex":1},"proposalIndex":5,"replicaIdentity":"mg-target-permanent","peerId":"6331259080022514362"}'
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:302:10)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: lost write answer recovers only the exact committed row; unreadable answer never grants
+[tv-dator] not ok 7 - lost write answer recovers only the exact committed row; unreadable answer never grants
+[tv-dator]   ---
+[tv-dator]   duration_ms: 2.563521
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:305:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     Expected values to be strictly equal:
+[tv-dator]     + actual - expected
+[tv-dator]     
+[tv-dator]     + 'conflict'
+[tv-dator]     - 'unknown'
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 'unknown'
+[tv-dator]   actual: 'conflict'
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:308:10)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: an old-state read does not cancel delayed authorization: only the competing CAS excludes it
+[tv-dator] not ok 8 - an old-state read does not cancel delayed authorization: only the competing CAS excludes it
+[tv-dator]   ---
+[tv-dator]   duration_ms: 3.544329
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:313:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     Expected values to be strictly equal:
+[tv-dator]     + actual - expected
+[tv-dator]     
+[tv-dator]     + 'conflict'
+[tv-dator]     - 'unknown'
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 'unknown'
+[tv-dator]   actual: 'conflict'
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:316:10)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: refused SQL preserves old basis and authorizes neither branch
+[tv-dator] not ok 9 - refused SQL preserves old basis and authorizes neither branch
+[tv-dator]   ---
+[tv-dator]   duration_ms: 2.889692
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:322:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     Expected values to be strictly equal:
+[tv-dator]     + actual - expected
+[tv-dator]     
+[tv-dator]     + 'conflict'
+[tv-dator]     - 'unknown'
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 'unknown'
+[tv-dator]   actual: 'conflict'
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:324:10)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: expired or remote owner cannot select a branch
+[tv-dator] not ok 10 - expired or remote owner cannot select a branch
+[tv-dator]   ---
+[tv-dator]   duration_ms: 2.958732
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:327:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     Expected values to be strictly equal:
+[tv-dator]     + actual - expected
+[tv-dator]     
+[tv-dator]     + 'conflict'
+[tv-dator]     - 'stale_owner'
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 'stale_owner'
+[tv-dator]   actual: 'conflict'
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:329:10)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: source substitution, altered lease fence, unknown branch, stale config and malformed permit refuse
+[tv-dator] ok 11 - source substitution, altered lease fence, unknown branch, stale config and malformed permit refuse
+[tv-dator]   ---
+[tv-dator]   duration_ms: 2.912551
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: changed owner claim at the actual UPDATE defeats stale branch selection
+[tv-dator] ok 12 - changed owner claim at the actual UPDATE defeats stale branch selection
+[tv-dator]   ---
+[tv-dator]   duration_ms: 1.608824
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: initial claimant is the live structural owner; no caller-selected node or clock
+[tv-dator] ok 13 - initial claimant is the live structural owner; no caller-selected node or clock
+[tv-dator]   ---
+[tv-dator]   duration_ms: 26.359809
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: two successor nodes with equal expiry compete on one exact expired claim
+[tv-dator] ok 14 - two successor nodes with equal expiry compete on one exact expired claim
+[tv-dator]   ---
+[tv-dator]   duration_ms: 13.572235
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: same-node new boot cannot reuse a live old claim; expired claim can be fenced and adopted
+[tv-dator] ok 15 - same-node new boot cannot reuse a live old claim; expired claim can be fenced and adopted
+[tv-dator]   ---
+[tv-dator]   duration_ms: 12.561297
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: expired claimed successor can authorize promotion; stale structural owner cannot
+[tv-dator] not ok 16 - expired claimed successor can authorize promotion; stale structural owner cannot
+[tv-dator]   ---
+[tv-dator]   duration_ms: 8.285795
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:381:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     Expected values to be strictly equal:
+[tv-dator]     + actual - expected
+[tv-dator]     
+[tv-dator]     + 'conflict'
+[tv-dator]     - 'stale_owner'
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 'stale_owner'
+[tv-dator]   actual: 'conflict'
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:386:10)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: takeover after terminal promotion keeps both action permit and forward direction
+[tv-dator] not ok 17 - takeover after terminal promotion keeps both action permit and forward direction
+[tv-dator]   ---
+[tv-dator]   duration_ms: 11.216325
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:393:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     Expected values to be strictly equal:
+[tv-dator]     + actual - expected
+[tv-dator]     
+[tv-dator]     + '{"version":2,"transitionIdentity":"branch-transition","permitSequence":1,"permitStage":"add-learner","permitState":"committed","workflowOwnerNodeId":"seed-node","workflowOwnerFence":"seed-node:1:1","membershipLeaseExpiresAt":1030000,"proposerNodeId":"seed-node","proposerBootIncarnation":1,"destinationNodeId":"seed-node","destinationBootIncarnation":1,"replicaLifecycleIncarnation":"runtime-incarnation","runtimeGeneration":1,"leaderTerm":3,"leaderConfigurationStamp":{"configurationKey":"[[\\"6750792597115109795\\"],[],[],[],false]","membershipGenerationIndex":1},"proposalIndex":5,"replicaIdentity":"mg-target-permanent","peerId":"6331259080022514362"}'
+[tv-dator]     - '{"version":2,"transitionIdentity":"branch-transition","permitSequence":2,"permitStage":"promote","permitState":"in_flight","workflowOwnerNodeId":"seed-node","workflowOwnerFence":"seed-node:1:1","membershipLeaseExpiresAt":1030000,"proposerNodeId":"seed-node","proposerBootIncarnation":1,"destinationNodeId":"seed-node","destinationBootIncarnation":1,"replicaLifecycleIncarnation":"runtime-incarnation","runtimeGeneration":1,"leaderTerm":3,"leaderConfigurationStamp":{"configurationKey":"[[\\"6750792597115109795\\"],[],[\\"6331259080022514362\\"],[],false]","membershipGenerationIndex":5},"proposalIndex":null,"replicaIdentity":"mg-target-permanent","peerId":"6331259080022514362"}'
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: '{"version":2,"transitionIdentity":"branch-transition","permitSequence":2,"permitStage":"promote","permitState":"in_flight","workflowOwnerNodeId":"seed-node","workflowOwnerFence":"seed-node:1:1","membershipLeaseExpiresAt":1030000,"proposerNodeId":"seed-node","proposerBootIncarnation":1,"destinationNodeId":"seed-node","destinationBootIncarnation":1,"replicaLifecycleIncarnation":"runtime-incarnation","runtimeGeneration":1,"leaderTerm":3,"leaderConfigurationStamp":{"configurationKey":"[[\\"6750792597115109795\\"],[],[\\"6331259080022514362\\"],[],false]","membershipGenerationIndex":5},"proposalIndex":null,"replicaIdentity":"mg-target-permanent","peerId":"6331259080022514362"}'
+[tv-dator]   actual: '{"version":2,"transitionIdentity":"branch-transition","permitSequence":1,"permitStage":"add-learner","permitState":"committed","workflowOwnerNodeId":"seed-node","workflowOwnerFence":"seed-node:1:1","membershipLeaseExpiresAt":1030000,"proposerNodeId":"seed-node","proposerBootIncarnation":1,"destinationNodeId":"seed-node","destinationBootIncarnation":1,"replicaLifecycleIncarnation":"runtime-incarnation","runtimeGeneration":1,"leaderTerm":3,"leaderConfigurationStamp":{"configurationKey":"[[\\"6750792597115109795\\"],[],[],[],false]","membershipGenerationIndex":1},"proposalIndex":5,"replicaIdentity":"mg-target-permanent","peerId":"6331259080022514362"}'
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:400:10)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: uncertain claimant write is not a grant; reread preserves the exact committed successor
+[tv-dator] ok 18 - uncertain claimant write is not a grant; reread preserves the exact committed successor
+[tv-dator]   ---
+[tv-dator]   duration_ms: 10.426672
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: delayed losing takeover cannot overwrite the exact winner
+[tv-dator] ok 19 - delayed losing takeover cannot overwrite the exact winner
+[tv-dator]   ---
+[tv-dator]   duration_ms: 11.575461
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: unavailable boot, changed boot after commit, overflow and released lane never grant
+[tv-dator] ok 20 - unavailable boot, changed boot after commit, overflow and released lane never grant
+[tv-dator]   ---
+[tv-dator]   duration_ms: 14.746761
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: membership renewal ignores ordinary lease touches but cannot revive an older holder
+[tv-dator] ok 21 - membership renewal ignores ordinary lease touches but cannot revive an older holder
+[tv-dator]   ---
+[tv-dator]   duration_ms: 11.744428
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: phase changes defeat claimant CAS without erasing the action that won
+[tv-dator] ok 22 - phase changes defeat claimant CAS without erasing the action that won
+[tv-dator]   ---
+[tv-dator]   duration_ms: 8.583649
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: owner loss before initial claim allows one expired-lease successor, not an unfenced late owner
+[tv-dator] ok 23 - owner loss before initial claim allows one expired-lease successor, not an unfenced late owner
+[tv-dator]   ---
+[tv-dator]   duration_ms: 11.570845
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: renewed ordinary lease defeats an orphan initial-claim read before it can win
+[tv-dator] ok 24 - renewed ordinary lease defeats an orphan initial-claim read before it can win
+[tv-dator]   ---
+[tv-dator]   duration_ms: 8.768984
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: NULL ordinary lease permits an exact initial successor claim
+[tv-dator] ok 25 - NULL ordinary lease permits an exact initial successor claim
+[tv-dator]   ---
+[tv-dator]   duration_ms: 11.282243
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: NULL ordinary lease initial competition records exactly one successor
+[tv-dator] ok 26 - NULL ordinary lease initial competition records exactly one successor
+[tv-dator]   ---
+[tv-dator]   duration_ms: 12.321173
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: NULL ordinary lease read cannot overwrite a concurrent lease renewal
+[tv-dator] ok 27 - NULL ordinary lease read cannot overwrite a concurrent lease renewal
+[tv-dator]   ---
+[tv-dator]   duration_ms: 12.126366
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: a non-NULL invalid lease must not match the NULL-lease CAS
+[tv-dator]     # Subtest: 0
+[tv-dator]     ok 1 - 0
+[tv-dator]       ---
+[tv-dator]       duration_ms: 9.389981
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: -1
+[tv-dator]     ok 2 - -1
+[tv-dator]       ---
+[tv-dator]       duration_ms: 11.729486
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     1..2
+[tv-dator] ok 28 - a non-NULL invalid lease must not match the NULL-lease CAS
+[tv-dator]   ---
+[tv-dator]   duration_ms: 22.083873
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: terminal-first NULL holder settles non-admission without creating an execution claim
+[tv-dator] ok 29 - terminal-first NULL holder settles non-admission without creating an execution claim
+[tv-dator]   ---
+[tv-dator]   duration_ms: 13.781252
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: terminal-first concurrent settlers may observe one resolution but mutate once
+[tv-dator] ok 30 - terminal-first concurrent settlers may observe one resolution but mutate once
+[tv-dator]   ---
+[tv-dator]   duration_ms: 12.175027
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: terminal-first resolver cannot settle a live operation or authorize a learner
+[tv-dator] ok 31 - terminal-first resolver cannot settle a live operation or authorize a learner
+[tv-dator]   ---
+[tv-dator]   duration_ms: 2.495585
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: terminal-first existing holder must be current; expiry permits exact takeover then resolution
+[tv-dator] ok 32 - terminal-first existing holder must be current; expiry permits exact takeover then resolution
+[tv-dator]   ---
+[tv-dator]   duration_ms: 15.886322
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: terminal-first held-claim renewal defeats stale resolution without erasing the winner
+[tv-dator] ok 33 - terminal-first held-claim renewal defeats stale resolution without erasing the winner
+[tv-dator]   ---
+[tv-dator]   duration_ms: 18.243768
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: terminal-first cannot erase an issued permit, a stamp, or a changed source
+[tv-dator]     # Subtest: message_group_membership_permit
+[tv-dator]     ok 1 - message_group_membership_permit
+[tv-dator]       ---
+[tv-dator]       duration_ms: 13.517684
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: message_group_learner_stamp
+[tv-dator]     ok 2 - message_group_learner_stamp
+[tv-dator]       ---
+[tv-dator]       duration_ms: 11.682261
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: message_group_voter_stamp
+[tv-dator]     ok 3 - message_group_voter_stamp
+[tv-dator]       ---
+[tv-dator]       duration_ms: 13.473799
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: message_group_removal_stamp
+[tv-dator]     ok 4 - message_group_removal_stamp
+[tv-dator]       ---
+[tv-dator]       duration_ms: 11.184491
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: source_replica_id
+[tv-dator]     ok 5 - source_replica_id
+[tv-dator]       ---
+[tv-dator]       duration_ms: 11.342881
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     1..5
+[tv-dator] ok 34 - terminal-first cannot erase an issued permit, a stamp, or a changed source
+[tv-dator]   ---
+[tv-dator]   duration_ms: 62.323786
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: terminal-first requires exact positive terminal time rather than a terminal-looking status
+[tv-dator]     # Subtest: null
+[tv-dator]     ok 1 - null
+[tv-dator]       ---
+[tv-dator]       duration_ms: 10.190314
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: 0
+[tv-dator]     ok 2 - 0
+[tv-dator]       ---
+[tv-dator]       duration_ms: 12.325991
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: -1
+[tv-dator]     ok 3 - -1
+[tv-dator]       ---
+[tv-dator]       duration_ms: 18.527418
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     1..3
+[tv-dator] ok 35 - terminal-first requires exact positive terminal time rather than a terminal-looking status
+[tv-dator]   ---
+[tv-dator]   duration_ms: 41.810013
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: terminal-first lost reply and unavailable read remain exact replay, not a new grant
+[tv-dator] ok 36 - terminal-first lost reply and unavailable read remain exact replay, not a new grant
+[tv-dator]   ---
+[tv-dator]   duration_ms: 13.069223
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: terminal-first delayed losing SQL cannot rewrite a resolved lane
+[tv-dator] ok 37 - terminal-first delayed losing SQL cannot rewrite a resolved lane
+[tv-dator]   ---
+[tv-dator]   duration_ms: 13.746696
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: terminal-first cannot act on unavailable or changed current boot
+[tv-dator] ok 38 - terminal-first cannot act on unavailable or changed current boot
+[tv-dator]   ---
+[tv-dator]   duration_ms: 13.57461
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: terminal-first resolution permits a distinct later operation through the existing lane index
+[tv-dator] ok 39 - terminal-first resolution permits a distinct later operation through the existing lane index
+[tv-dator]   ---
+[tv-dator]   duration_ms: 14.301646
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: returned operation-read failure is unavailable for claim, selection and settlement
+[tv-dator]     # Subtest: claim
+[tv-dator]     ok 1 - claim
+[tv-dator]       ---
+[tv-dator]       duration_ms: 1.622925
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: select
+[tv-dator]     ok 2 - select
+[tv-dator]       ---
+[tv-dator]       duration_ms: 1.158801
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: settle
+[tv-dator]     ok 3 - settle
+[tv-dator]       ---
+[tv-dator]       duration_ms: 8.182264
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     1..3
+[tv-dator] ok 40 - returned operation-read failure is unavailable for claim, selection and settlement
+[tv-dator]   ---
+[tv-dator]   duration_ms: 11.434486
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: confirmed empty operation remains a conflict rather than unavailable
+[tv-dator] ok 41 - confirmed empty operation remains a conflict rather than unavailable
+[tv-dator]   ---
+[tv-dator]   duration_ms: 8.786786
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: returned read failure after terminal resolution stays unknown until exact replay
+[tv-dator] ok 42 - returned read failure after terminal resolution stays unknown until exact replay
+[tv-dator]   ---
+[tv-dator]   duration_ms: 11.429028
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: T1 terminal learner selects exact target abandonment without reviving ordinary state
+[tv-dator] not ok 43 - T1 terminal learner selects exact target abandonment without reviving ordinary state
+[tv-dator]   ---
+[tv-dator]   duration_ms: 16.336607
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:726:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     Expected values to be strictly equal:
+[tv-dator]     + actual - expected
+[tv-dator]     
+[tv-dator]     + 'conflict'
+[tv-dator]     - 'recorded'
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 'recorded'
+[tv-dator]   actual: 'conflict'
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:731:10)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: T1 terminal state rejects promotion and malformed completion timestamps
+[tv-dator]     # Subtest: 1000001
+[tv-dator]     ok 1 - 1000001
+[tv-dator]       ---
+[tv-dator]       duration_ms: 9.302866
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: null
+[tv-dator]     ok 2 - null
+[tv-dator]       ---
+[tv-dator]       duration_ms: 10.541683
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: 0
+[tv-dator]     ok 3 - 0
+[tv-dator]       ---
+[tv-dator]       duration_ms: 13.38301
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: -1
+[tv-dator]     ok 4 - -1
+[tv-dator]       ---
+[tv-dator]       duration_ms: 12.216208
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: 0.5
+[tv-dator]     ok 5 - 0.5
+[tv-dator]       ---
+[tv-dator]       duration_ms: 13.364045
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     1..5
+[tv-dator] ok 44 - T1 terminal state rejects promotion and malformed completion timestamps
+[tv-dator]   ---
+[tv-dator]   duration_ms: 59.712959
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: T1 exact terminal timestamp defeats a stale abandonment CAS
+[tv-dator] not ok 45 - T1 exact terminal timestamp defeats a stale abandonment CAS
+[tv-dator]   ---
+[tv-dator]   duration_ms: 11.832685
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:764:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     Expected values to be strictly equal:
+[tv-dator]     + actual - expected
+[tv-dator]     
+[tv-dator]     + 'conflict'
+[tv-dator]     - 'unknown'
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 'unknown'
+[tv-dator]   actual: 'conflict'
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:771:10)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: T1 a terminal settlement crossing the nonterminal abort read requires a fresh basis
+[tv-dator] not ok 46 - T1 a terminal settlement crossing the nonterminal abort read requires a fresh basis
+[tv-dator]   ---
+[tv-dator]   duration_ms: 2.063103
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:778:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     Expected values to be strictly equal:
+[tv-dator]     + actual - expected
+[tv-dator]     
+[tv-dator]     + 'conflict'
+[tv-dator]     - 'unknown'
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 'unknown'
+[tv-dator]   actual: 'conflict'
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:782:10)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: T1 delayed preterminal promotion loses to terminal abandonment and cannot revive
+[tv-dator] not ok 47 - T1 delayed preterminal promotion loses to terminal abandonment and cannot revive
+[tv-dator]   ---
+[tv-dator]   duration_ms: 2.179177
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:789:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     Expected values to be strictly equal:
+[tv-dator]     + actual - expected
+[tv-dator]     
+[tv-dator]     + 'conflict'
+[tv-dator]     - 'unknown'
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 'unknown'
+[tv-dator]   actual: 'conflict'
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:792:10)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: T1 promotion committed first stays forward-only after terminal settlement
+[tv-dator] not ok 48 - T1 promotion committed first stays forward-only after terminal settlement
+[tv-dator]   ---
+[tv-dator]   duration_ms: 2.390506
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:803:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     Expected values to be strictly equal:
+[tv-dator]     + actual - expected
+[tv-dator]     
+[tv-dator]     + 'conflict'
+[tv-dator]     - 'recorded'
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 'recorded'
+[tv-dator]   actual: 'conflict'
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:806:10)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: T1 expired holder takeover permits only the current exact terminal-abort owner
+[tv-dator] not ok 49 - T1 expired holder takeover permits only the current exact terminal-abort owner
+[tv-dator]   ---
+[tv-dator]   duration_ms: 8.721049
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:815:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     Expected values to be strictly equal:
+[tv-dator]     + actual - expected
+[tv-dator]     
+[tv-dator]     + 'conflict'
+[tv-dator]     - 'stale_owner'
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 'stale_owner'
+[tv-dator]   actual: 'conflict'
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:819:10)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: T1 holder renewal between terminal read and mutation preserves the old learner phase
+[tv-dator] not ok 50 - T1 holder renewal between terminal read and mutation preserves the old learner phase
+[tv-dator]   ---
+[tv-dator]   duration_ms: 8.268717
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:834:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     Expected values to be strictly equal:
+[tv-dator]     + actual - expected
+[tv-dator]     
+[tv-dator]     + 'conflict'
+[tv-dator]     - 'unknown'
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 'unknown'
+[tv-dator]   actual: 'conflict'
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:842:10)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: T1 lost abandonment answer retains debt and exact replay survives reopen
+[tv-dator] not ok 51 - T1 lost abandonment answer retains debt and exact replay survives reopen
+[tv-dator]   ---
+[tv-dator]   duration_ms: 13.083819
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:849:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     Expected values to be strictly equal:
+[tv-dator]     + actual - expected
+[tv-dator]     
+[tv-dator]     + 'conflict'
+[tv-dator]     - 'unknown'
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 'unknown'
+[tv-dator]   actual: 'conflict'
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:855:10)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: T1 source substitution and unavailable operation authority cannot issue removal intent
+[tv-dator] ok 52 - T1 source substitution and unavailable operation authority cannot issue removal intent
+[tv-dator]   ---
+[tv-dator]   duration_ms: 9.505436
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: T1 successful REMOVED replacement refuses target abandonment across reopen
+[tv-dator] ok 53 - T1 successful REMOVED replacement refuses target abandonment across reopen
+[tv-dator]   ---
+[tv-dator]   duration_ms: 10.254339
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: T1 only exact FAILED status and step may select terminal abandonment
+[tv-dator]     # Subtest: removed/FAILED
+[tv-dator]     ok 1 - removed/FAILED
+[tv-dator]       ---
+[tv-dator]       duration_ms: 10.640405
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: failed/REMOVED
+[tv-dator]     ok 2 - failed/REMOVED
+[tv-dator]       ---
+[tv-dator]       duration_ms: 9.790104
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: pending/FAILED
+[tv-dator]     ok 3 - pending/FAILED
+[tv-dator]       ---
+[tv-dator]       duration_ms: 7.688052
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: failed/PENDING
+[tv-dator]     ok 4 - failed/PENDING
+[tv-dator]       ---
+[tv-dator]       duration_ms: 8.152482
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     1..4
+[tv-dator] ok 54 - T1 only exact FAILED status and step may select terminal abandonment
+[tv-dator]   ---
+[tv-dator]   duration_ms: 37.026307
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: T1 success racing the failed-row CAS cannot receive target removal intent
+[tv-dator] not ok 55 - T1 success racing the failed-row CAS cannot receive target removal intent
+[tv-dator]   ---
+[tv-dator]   duration_ms: 10.719107
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:918:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     changed ordinary state defeats the stale abandonment CAS
+[tv-dator]     + actual - expected
+[tv-dator]     
+[tv-dator]     + 'conflict'
+[tv-dator]     - 'unknown'
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 'unknown'
+[tv-dator]   actual: 'conflict'
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:922:10)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: T1 a delayed failed-row abandonment cannot apply after success is observed
+[tv-dator] not ok 56 - T1 a delayed failed-row abandonment cannot apply after success is observed
+[tv-dator]   ---
+[tv-dator]   duration_ms: 8.121589
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:930:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     Expected values to be strictly equal:
+[tv-dator]     + actual - expected
+[tv-dator]     
+[tv-dator]     + 'conflict'
+[tv-dator]     - 'unknown'
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 'unknown'
+[tv-dator]   actual: 'conflict'
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d35d8828c630-mv6pyxq4-1639574/test/rebalancer/message-group-membership-branch-authorization.test.js:934:10)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: initial learner intent commits once and exact replay survives reopen
+[tv-dator] ok 57 - initial learner intent commits once and exact replay survives reopen
+[tv-dator]   ---
+[tv-dator]   duration_ms: 10.84111
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: initial learner authorization requires the actual live holder, not a copied payload
+[tv-dator] ok 58 - initial learner authorization requires the actual live holder, not a copied payload
+[tv-dator]   ---
+[tv-dator]   duration_ms: 8.183885
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: initial learner permit cannot substitute the source or select a later stage
+[tv-dator] ok 59 - initial learner permit cannot substitute the source or select a later stage
+[tv-dator]   ---
+[tv-dator]   duration_ms: 7.37162
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: terminal non-admission first permanently defeats delayed learner authorization
+[tv-dator] ok 60 - terminal non-admission first permanently defeats delayed learner authorization
+[tv-dator]   ---
+[tv-dator]   duration_ms: 13.518135
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: ordinary terminal settlement racing initial authorization defeats its exact CAS
+[tv-dator] ok 61 - ordinary terminal settlement racing initial authorization defeats its exact CAS
+[tv-dator]   ---
+[tv-dator]   duration_ms: 13.849766
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: issued learner intent outlives terminal settlement and cannot be erased by T0
+[tv-dator] ok 62 - issued learner intent outlives terminal settlement and cannot be erased by T0
+[tv-dator]   ---
+[tv-dator]   duration_ms: 15.579612
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: holder renewal during initial authorization defeats the old holder predicate
+[tv-dator] ok 63 - holder renewal during initial authorization defeats the old holder predicate
+[tv-dator]   ---
+[tv-dator]   duration_ms: 9.961921
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: lost learner write answer is resolved by exact durable readback after reopen
+[tv-dator] ok 64 - lost learner write answer is resolved by exact durable readback after reopen
+[tv-dator]   ---
+[tv-dator]   duration_ms: 9.925877
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: refused learner mutation or unavailable read never becomes recorded permission
+[tv-dator] ok 65 - refused learner mutation or unavailable read never becomes recorded permission
+[tv-dator]   ---
+[tv-dator]   duration_ms: 10.963061
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: changed canonical boot after learner intent commit remains unknown to the stale owner
+[tv-dator] ok 66 - changed canonical boot after learner intent commit remains unknown to the stale owner
+[tv-dator]   ---
+[tv-dator]   duration_ms: 16.55995
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: successor observes original issued learner intent without rewriting its context
+[tv-dator] ok 67 - successor observes original issued learner intent without rewriting its context
+[tv-dator]   ---
+[tv-dator]   duration_ms: 12.061276
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: initial intent competitors record only one exact permit; all other phases retain debt
+[tv-dator] ok 68 - initial intent competitors record only one exact permit; all other phases retain debt
+[tv-dator]   ---
+[tv-dator]   duration_ms: 8.988064
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] 1..68
+[tv-dator] # tests 90
+[tv-dator] # suites 0
+[tv-dator] # pass 69
+[tv-dator] # fail 21
+[tv-dator] # cancelled 0
+[tv-dator] # skipped 0
+[tv-dator] # todo 0
+[tv-dator] # duration_ms 936.325652
+[tv-dator] # time=1515ms
+[tv-dator] ok test/raft/learner-promotion-progress-proof-contract.test.js (76 assertions, 316ms)
+[tv-dator] not ok test/convergence/dt6-learner-promotion-progress-proof.test.js (30 assertions, 2384ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 14
+[tv-dator] # Subtest: lagging learner is never promoted by elapsed time; healing the replication path promotes via the leader-observed applied index
+[tv-dator]     ok 1 - recovery precondition: the leader holds a committed prefix the learner does not have
+[tv-dator]     ok 2 - a lagging learner is never promoted no matter how much time passes
+[tv-dator]     ok 3 - the refusing gate is the progress proof (typed progress_behind), not leader discovery or quorum shape
+[tv-dator]     ok 4 - the leader holds no progress evidence for the partitioned learner
+[tv-dator]     ok 5 - the proven learner promotes within the retry cadence, not 30s
+[tv-dator]     ok 6 - promotion happened only after the leader observed learner progress
+[tv-dator]     ok 7 - the leader-observed match index covers the safe promotion index
+[tv-dator]     ok 8 - the promoted voter participates in elections
+[tv-dator]     1..8
+[tv-dator] ok 1 - lagging learner is never promoted by elapsed time; healing the replication path promotes via the leader-observed applied index # time=497.625ms
+[tv-dator] 
+[tv-dator] # Subtest: a term change after proof collection invalidates the proof (stale leader); promotion resumes when the term matches again
+[tv-dator]     ok 1 - a proof whose term is behind the learner is refused as stale
+[tv-dator]     ok 2 - the invalidated proof never promotes
+[tv-dator]     ok 3 - promotion resumes once the term matches
+[tv-dator]     1..3
+[tv-dator] ok 2 - a term change after proof collection invalidates the proof (stale leader); promotion resumes when the term matches again # time=159.186ms
+[tv-dator] 
+[tv-dator] # Subtest: a membership-epoch divergence refuses promotion until the caches converge
+[tv-dator]     ok 1 - a membership-epoch mismatch refuses the proof (typed epoch_mismatch)
+[tv-dator]     ok 2 - no promotion across a membership-epoch divergence
+[tv-dator]     ok 3 - promotion completes once the epochs converge
+[tv-dator]     1..3
+[tv-dator] ok 3 - a membership-epoch divergence refuses promotion until the caches converge # time=150.884ms
+[tv-dator] 
+[tv-dator] # Subtest: the leader progress probe answers with typed outcomes: it sends to a learner without acknowledged progress, and observes an idle learner caught up through real replication, whose promotion then follows
+[tv-dator]     ok 1 - precondition: the leader holds no acknowledged progress for the partitioned learner
+[tv-dator]     ok 2 - precondition: the committed prefix the learner lacks
+[tv-dator]     ok 3 - for a learner with no acknowledged progress the probe sends (typed progress-probe-sent; F18: the inert rs-raft probe reports progress-observed at match index 0 and sends nothing)
+[tv-dator]     ok 4 - the learner catches up through real replication
+[tv-dator]     ok 5 - no promotion while no proof reaches the learner
+[tv-dator]     ok 6 - for the idle caught-up learner the probe reports typed progress-observed
+[tv-dator]     ok 7 - the observed match index covers the safe promotion index (7 >= 7)
+[tv-dator]     ok 8 - the idle caught-up learner promotes through the same progress contract once its proof reaches the leader
+[tv-dator] {"level":50,"time":"2026-10-13T13:31:50.743Z","nodeId":"test-node","pid":401038,"subsystem":"partition","address":"node-5/partition/replica-5","replicaId":"replica-5","outcome":"refused_transport_without_handler_identity","nodeId":"test-node","msg":"Replica transport handler left registered: the transport cannot prove handler identity, so retirement was refused"}
+[tv-dator]     not ok 9 - Replica transport handler left registered: the transport cannot prove handler identity, so retirement was refused
+[tv-dator]       ---
+[tv-dator]       stack: >
+[tv-dator]         requireReplicaHandlerRetirement
+[tv-dator]         (src/node/replica-transport-handler-identity.js:33:25)
+[tv-dator]       
+[tv-dator]         retirePartitionTransportHandler
+[tv-dator]         (src/partition/partition-service-lifecycle-methods.js:76:3)
+[tv-dator]       
+[tv-dator]         async release (src/partition/partition-service-lifecycle-methods.js:202:7)
+[tv-dator]       
+[tv-dator]         async Promise.all (index 0)
+[tv-dator]       
+[tv-dator]         async shutdownTopology
+[tv-dator]         (test/convergence/dt6-learner-promotion-fixture.js:530:3)
+[tv-dator]       
+[tv-dator]         async Object.shutdown
+[tv-dator]         (test/convergence/dt6-learner-promotion-fixture.js:641:7)
+[tv-dator]       
+[tv-dator]         async Test.<anonymous>
+[tv-dator]         (test/convergence/dt6-learner-promotion-progress-proof.test.js:365:5)
+[tv-dator]       at:
+[tv-dator]         fileName: src/node/replica-transport-handler-identity.js
+[tv-dator]         lineNumber: 33
+[tv-dator]         columnNumber: 25
+[tv-dator]         functionName: requireReplicaHandlerRetirement
+[tv-dator]       code: refused_transport_without_handler_identity
+[tv-dator]       tapCaught: returnedPromiseRejection
+[tv-dator]       source: >2
+[tv-dator]           if (outcome !== REPLICA_HANDLER_RETIREMENT_OUTCOME.RETIRED &&
+[tv-dator]               outcome !== REPLICA_HANDLER_RETIREMENT_OUTCOME.ALREADY_ABSENT) {
+[tv-dator]             throw Object.assign(new Error(REPLICA_HANDLER_RETIREMENT_LOG_MSG.LEFT_REGISTERED),
+[tv-dator]         ------------------------^
+[tv-dator]               {code: outcome});
+[tv-dator]           }
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..9
+[tv-dator] not ok 4 - the leader progress probe answers with typed outcomes: it sends to a learner without acknowledged progress, and observes an idle learner caught up through real replication, whose promotion then follows # time=155.688ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/convergence/dt6-learner-promotion-progress-proof.test.js
+[tv-dator]     lineNumber: 279
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |
+[tv-dator]     });
+[tv-dator]   
+[tv-dator]     test('the leader progress probe answers with typed outcomes: it sends to a ' +
+[tv-dator]     ^
+[tv-dator]       'learner without acknowledged progress, and observes an idle learner ' +
+[tv-dator]       'caught up through real replication, whose promotion then follows',
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: quorum-shape gates still refuse even when the progress proof would grant
+[tv-dator]     ok 1 - the target-replica-count gate still refuses with its typed reason
+[tv-dator]     ok 2 - the progress proof is an additional necessary condition - it never weakens a quorum-shape gate
+[tv-dator]     1..2
+[tv-dator] ok 5 - quorum-shape gates still refuse even when the progress proof would grant # time=107.528ms
+[tv-dator] 
+[tv-dator] 1..5
+[tv-dator] # { total: 25, pass: 24, fail: 1 }
+[tv-dator] # time=1231.966ms
+[tv-dator] # test-files total=5 pass=3 fail=2 assertions=284
+lab test: tv-dator: # test-files total=5 pass=3 fail=2 assertions=284
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=5 pass=3 fail=2 assertions=284

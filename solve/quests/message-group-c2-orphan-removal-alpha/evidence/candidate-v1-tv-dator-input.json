@@ -1,0 +1,20 @@
+{
+  "schema": "c2-lab-input/1",
+  "kind": "candidate-v1",
+  "sha": "30706bc400f622e5849ca0697471a5fcdad81ea8",
+  "tree": "2f4f7b0bab060bc450fda9b5be9289814855d528",
+  "parent": "d35d8828c630d1b9675b47f511c477b3cc9ee991",
+  "worktree": "/tmp/session-worktree-eO3LaJ/tree",
+  "files": [
+    "test/rebalancer/message-group-membership-branch-authorization.test.js",
+    "test/raft/learner-promotion-progress-proof-contract.test.js",
+    "test/partition/partition-service-learner-promotion.test.js",
+    "test/partition/partition-service-learner-promotion-wake.test.js",
+    "test/convergence/dt6-learner-promotion-progress-proof.test.js",
+    "test/partition/participant-release-protocol.test.js",
+    "test/partition/partition-participant-release-admission.test.js"
+  ],
+  "createdAt": "2026-10-13T14:20:00.005Z",
+  "host": "tv-dator",
+  "startedAt": "2026-10-13T14:20:50.522Z"
+}

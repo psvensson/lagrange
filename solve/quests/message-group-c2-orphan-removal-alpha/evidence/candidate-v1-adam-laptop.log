@@ -1,0 +1,56 @@
+lab test: adam-laptop: exclusive (3 files) cores=8 mem=15.5GiB speed x2.06
+[adam-laptop] placement-shell=1852074
+[adam-laptop] placement-head=30706bc400f622e5849ca0697471a5fcdad81ea8
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2.1 mode:local retry: timeout: lanecap:7
+[adam-laptop] placement-pid=1852500
+[adam-laptop] # test-files planned=3
+[adam-laptop] classified lane exclusive: 3 file(s), jobs=1
+[adam-laptop] thermal: hold cpu 82C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 82C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 40C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] ok test/integration/message-group-learner-process-loss.integration.test.js (4 assertions, 5375ms)
+[adam-laptop] ok test/integration/message-group-learner-runtime-authorization.integration.test.js (72 assertions, 16356ms)
+[adam-laptop] not ok test/integration/message-group-membership-claim-cache.integration.test.js (1 assertions, 12183ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] {"level":50,"time":"2026-10-13T14:22:30.520Z","nodeId":"membership-claim-cache-seed","pid":1852591,"subsystem":"bootstrap","nodeId":"membership-claim-cache-seed","phase":"partitions","duration":9697,"error":"Seed participant release failed: {\"partitionId\":\"call_activation_leases-p1\",\"answer\":{\"outcome\":\"release_drain_pending\",\"releaseId\":\"cba3dbdfcaacb5f97c4bef55403cc6a25efc267ceb2a717778e4c9681999fcd9\",\"partitionId\":\"call_activation_leases-p1\",\"phase\":\"release\",\"retryAfterMs\":100}}","stack":"Error: Seed participant release failed: {\"partitionId\":\"call_activation_leases-p1\",\"answer\":{\"outcome\":\"release_drain_pending\",\"releaseId\":\"cba3dbdfcaacb5f97c4bef55403cc6a25efc267ceb2a717778e4c9681999fcd9\",\"partitionId\":\"call_activation_leases-p1\",\"phase\":\"release\",\"retryAfterMs\":100}}\n    at BootstrapService.releaseSeedParticipantCohorts (file:///home/peter/projects/lagrange/test-output/placement-worktrees/30706bc400f6-mv6rqnj5-1708811/src/bootstrap/bootstrap-service-seed-workflow.js:295:17)\n    at runNextTicks (node:internal/process/task_queues:64:5)\n    at listOnTimeout (node:internal/timers:547:9)\n    at process.processTimers (node:internal/timers:521:7)\n    at async Object.run (file:///home/peter/projects/lagrange/test-output/placement-worktrees/30706bc400f6-mv6rqnj5-1708811/src/bootstrap/bootstrap-service-seed-workflow.js:359:13)\n    at async StartupPipelineRunner.runWorkflow (file:///home/peter/projects/lagrange/test-output/placement-worktrees/30706bc400f6-mv6rqnj5-1708811/src/bootstrap/pipeline/startup-pipeline-runner.js:169:9)\n    at async BootstrapService.bootstrap (file:///home/peter/projects/lagrange/test-output/placement-worktrees/30706bc400f6-mv6rqnj5-1708811/src/bootstrap/bootstrap-service-seed-workflow.js:473:9)\n    at async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/30706bc400f6-mv6rqnj5-1708811/test/integration/message-group-membership-claim-cache.integration.test.js:271:16)\n    at async Test.run (node:internal/test_runner/test:1054:7)\n    at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)","servicesCreated":138,"msg":"Bootstrap failed"}
+[adam-laptop] {"schema":"membership-cache-timing/2","budgetMs":30000,"elapsedMs":10436,"fixtureReplicaStaggerDelayMs":0,"timings":[{"phase":"bootstrap","elapsedMs":10399},{"phase":"teardown-start","elapsedMs":10401},{"phase":"bootstrap-stopped","elapsedMs":10421},{"phase":"cleanup-complete","elapsedMs":10436}]}
+[adam-laptop] # Subtest: repository failed and successful T1 cases share one SQL/Raft/cache seed
+[adam-laptop] not ok 1 - repository failed and successful T1 cases share one SQL/Raft/cache seed
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 10438.411448
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/30706bc400f6-mv6rqnj5-1708811/test/integration/message-group-membership-claim-cache.integration.test.js:256:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     "Seed participant release failed: {\"partitionId\":\"call_activation_leases-p1\",\"answer\":{\"outcome\":\"release_drain_pending\",\"releaseId\":\"cba3dbdfcaacb5f97c4bef55403cc6a25efc267ceb2a717778e4c9681999fcd9\",\"partitionId\":\"call_activation_leases-p1\",\"phase\":\"release\",\"retryAfterMs\":100}}"
+[adam-laptop]     
+[adam-laptop]     false !== true
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected: true
+[adam-laptop]   actual: false
+[adam-laptop]   operator: 'strictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/30706bc400f6-mv6rqnj5-1708811/test/integration/message-group-membership-claim-cache.integration.test.js:273:14)
+[adam-laptop]     process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adam-laptop]   ...
+[adam-laptop] 1..1
+[adam-laptop] # tests 1
+[adam-laptop] # suites 0
+[adam-laptop] # pass 0
+[adam-laptop] # fail 1
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 10445.743326
+[adam-laptop] # time=12183ms
+[adam-laptop] # test-files total=3 pass=2 fail=1 assertions=77
+lab test: adam-laptop: # test-files total=3 pass=2 fail=1 assertions=77
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=3 pass=2 fail=1 assertions=77

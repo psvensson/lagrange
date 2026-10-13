@@ -1,0 +1,5 @@
+Complexity violations (threshold: 12):
+
+test/integration/helpers/cluster-test-helpers.js:461:8 Async function 'isPartitionLeader' has a complexity of 19. Maximum allowed is 12.
+
+1 violation(s) found.

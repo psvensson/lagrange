@@ -22,6 +22,8 @@ import {BootstrapService} from '../../../src/bootstrap/bootstrap-service.js';
 import {NodeJoiningService} from '../../../src/bootstrap/node-joining-service.js';
 import {readSeedStartupStorageAdmission} from
   '../../../src/bootstrap/seed-startup-storage-admission.js';
+import {resolveAutoRejoinStartupDecision} from
+  '../../../src/bootstrap/rejoin-hints.js';
 import {
   clearRegisteredControlPlaneSystemTableGateway,
 } from '../../../src/control-plane/control-plane-gateway-registry.js';
@@ -257,6 +259,14 @@ function bindOwnedVirginSeedDataDirectoryCleanup(bootstrap, dataDir) {
  * @return {Promise<BootstrapService>} Admitted bootstrap fixture.
  */
 export async function createVirginSeedBootstrapService(options = {}) {
+  const nodeId = options.nodeId;
+  const nodeAddress = options.nodeAddress;
+  const hasMembershipOwnerOutcome = Object.hasOwn(
+    options,
+    'membershipOwnerOutcome',
+  );
+  const suppliedMembershipOwnerOutcome = hasMembershipOwnerOutcome ?
+    options.membershipOwnerOutcome : undefined;
   const suppliedManager = options.dataDirectoryManager;
   const suppliedManagerDir = suppliedManager?.isInitialized?.() === true ?
     suppliedManager.getDataDir() : null;
@@ -276,12 +286,22 @@ export async function createVirginSeedBootstrapService(options = {}) {
   if (startupServicesAdmission.empty !== true) {
     throw new Error('Virgin seed fixture found durable SERVICES identity');
   }
+  const membershipOwnerOutcome = hasMembershipOwnerOutcome ?
+    suppliedMembershipOwnerOutcome :
+    (await resolveAutoRejoinStartupDecision({
+      dataDir,
+      nodeId,
+      nodeAddress,
+    })).membershipOwnerOutcome;
   const bootstrap = new BootstrapService({
     ...options,
     bootIncarnation: options.bootIncarnation ?? 1,
+    nodeId,
+    nodeAddress,
     dataDir,
     dataDirectoryManager: manager,
     startupServicesAdmission,
+    membershipOwnerOutcome,
   });
   if (ownsDataDir) {
     bindOwnedVirginSeedDataDirectoryCleanup(bootstrap, dataDir);

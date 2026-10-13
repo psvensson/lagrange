@@ -1,0 +1,26 @@
+lab test: tv-dator: ordinary (7 files) cores=12 mem=15.4GiB speed x1.37
+[tv-dator] placement-shell=404873
+[tv-dator] placement-head=30706bc400f622e5849ca0697471a5fcdad81ea8
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.4 mode:local retry: timeout: lanecap:11
+[tv-dator] placement-pid=405292
+[tv-dator] # test-files planned=7
+[tv-dator] classified lane ordinary: 7 file(s), jobs=4
+[tv-dator] thermal: ok cpu 61C (coretemp/Package id 0) nvme 44C (nvme/Sensor 1)
+[tv-dator] ok test/rebalancer/message-group-membership-branch-authorization.test.js (90 assertions, 1628ms)
+[tv-dator] ok test/partition/partition-service-learner-promotion.test.js (47 assertions, 1646ms)
+[tv-dator] ok test/partition/partition-participant-release-admission.test.js (4 assertions, 2569ms)
+[tv-dator] ok test/raft/learner-promotion-progress-proof-contract.test.js (76 assertions, 379ms)
+[tv-dator] ok test/partition/partition-service-learner-promotion-wake.test.js (41 assertions, 1383ms)
+[tv-dator] ok test/partition/participant-release-protocol.test.js (7 assertions, 3303ms)
+[tv-dator] ok test/convergence/dt6-learner-promotion-progress-proof.test.js (29 assertions, 2372ms)
+[tv-dator] # test-files total=7 pass=7 fail=0 assertions=294
+lab test: tv-dator: # test-files total=7 pass=7 fail=0 assertions=294
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=7 pass=7 fail=0 assertions=294

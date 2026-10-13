@@ -1,0 +1,34 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "message-group-c2-orphan-removal-alpha",
+  "status": "fail",
+  "base": "e6d43bc1acb128a2b83ac89c77a3ec400e7edb1f",
+  "generatedAt": "2026-10-13T00:00:00.000Z",
+  "receipts": [
+    {
+      "id": "orphan-import-graph-closed",
+      "passed": false,
+      "detail": "Baseline focused dependency cruise is red on the orphan promotion module's unresolved learner-catch-up import."
+    },
+    {
+      "id": "initial-learner-owner-preserved",
+      "passed": false,
+      "detail": "Candidate current-owner preservation has not been measured."
+    },
+    {
+      "id": "durable-branch-and-later-phase-preserved",
+      "passed": false,
+      "detail": "Candidate durable branch and later-phase preservation has not been measured."
+    },
+    {
+      "id": "live-promotion-owner-preserved",
+      "passed": false,
+      "detail": "Candidate native and partition promotion preservation has not been measured."
+    },
+    {
+      "id": "scope-static-and-metadata-clean",
+      "passed": false,
+      "detail": "Candidate static, metadata and independent-review evidence does not exist."
+    }
+  ]
+}

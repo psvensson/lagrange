@@ -1,0 +1,51 @@
+{
+  "schema": "c2-lab-input/1",
+  "kind": "candidate-v2",
+  "sha": "47e9e99ab1c2a8df806054a7d7d1e2efafcfaf23",
+  "tree": "3f5c31fbb9067873243f09531897f1e32f8a4b56",
+  "parent": "d35d8828c630d1b9675b47f511c477b3cc9ee991",
+  "worktree": "/tmp/session-worktree-NR32Nw/tree",
+  "files": [
+    {
+      "file": "src/rebalancer/replica-operation-message-group-learner-successor.js",
+      "sha256": null
+    },
+    {
+      "file": "src/rebalancer/replica-operation-message-group-membership-authorization.js",
+      "sha256": "9f78cfb0f3ef0ef1742661179e21e117381acba9e0038b7f309a8074875cb39f"
+    },
+    {
+      "file": "src/rebalancer/replica-operation-message-group-membership-permit.js",
+      "sha256": "a7c2fc03e8fd66e279e77a13c28a1a868cffe18a10f63aaa49714ab23b5e0ab0"
+    },
+    {
+      "file": "src/rebalancer/replica-operation-message-group-promotion.js",
+      "sha256": null
+    },
+    {
+      "file": "test/bootstrap/node-bootstrap-consistency.property.test.js",
+      "sha256": "df78abc52898eb758433956a84cf459ca80ebfd27da7e3b08b43bb1dc45ddab3"
+    },
+    {
+      "file": "test/convergence/dt6-learner-promotion-progress-proof.test.js",
+      "sha256": "d187747cf606f6c79fa6f05286967c9a448a519a3d7697677516d4d03082bfc0"
+    },
+    {
+      "file": "test/integration/helpers/cluster-test-helpers.js",
+      "sha256": "7c0a270c24c39f67b56bad6707fd9b0fbeb59b10d650c982bc4abb55380fa031"
+    },
+    {
+      "file": "test/rebalancer/message-group-membership-branch-authorization.test.js",
+      "sha256": "ea98ca5fb883a66ba42595bcb7332b210dc4937031175b40bb5c5c95b30bfcaa"
+    },
+    {
+      "file": "test/shards/impact-graph-seal.json",
+      "sha256": "a80f6f31423fc46b2340ad8cc79fe687d330800328eef7296be3175e04ca8300"
+    },
+    {
+      "file": "test/shards/subsystem-classes.json",
+      "sha256": "49b4e048d2213ffdbbd40620d380f3bdec613cbbafa633c64da4094f7355937d"
+    }
+  ],
+  "createdAt": "2026-10-13T14:32:41.279Z"
+}

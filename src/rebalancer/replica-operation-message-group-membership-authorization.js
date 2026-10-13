@@ -36,7 +36,6 @@ function noteUncertainMembershipWrite(repository, operationId, error) {
   repository.logger?.debug?.(REBALANCE_COORDINATOR_LOG_MSG.MEMBERSHIP_WRITE_UNCERTAIN,
     {nodeId: repository.nodeId, operationId, error: error?.message || String(error)});
 }
-export {noteUncertainMembershipWrite};
 function priorLearnerStamp(row, identity, prior) {
   try {
     const stamp = committedStampOfAnswer(JSON.parse(row.messageGroupLearnerStamp));
@@ -215,14 +214,13 @@ async function selectMessageGroupMembershipBranch(repository, request, isInvocat
 }
 export {selectMessageGroupMembershipBranch};
 
-/** The learner action of this transition: its ADD_LEARNER attempt for the
- * exact target, the initial one (sequence 1) or an ordered successor (the
- * codec admits any sequence from 1; only the successor issuance writes one
- * above 1, over the exact attempt before it). Pure. */
+/** The learner action of this transition: an ADD_LEARNER permit for the exact
+ * target. The codec retains any positive sequence already present in durable
+ * history; current initial authorization admits only sequence 1. Pure. */
 function learnerActionMatches(permit, identity) {
   return membershipActionMatches(permit, identity, RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER);
 }
-// Initial issuance is always the first attempt; a successor is never issued here.
+// Initial issuance is always the first attempt.
 function initialLearnerPermitMatches(permit, identity) {
   return learnerActionMatches(permit, identity) && permit.permitSequence === 1 &&
     permit.permitState === STATE.IN_FLIGHT && permit.proposalIndex === null;
@@ -318,8 +316,7 @@ export {authorizeMessageGroupLearner};
 
 // Record recovered fact, never issue an action. The host supplies the existing
 // native read port as a capability, not wire/payload-provided receipt bytes.
-// The action matcher names which action of the transition is recorded (the
-// learner action here; the promotion for the voter stamp, 6.C slice C2).
+// The action matcher binds the recorded learner action to this transition.
 function actionRecordingInput(request, actionMatches = learnerActionMatches) {
   const data = copyStrictOwnDataRecord(request);
   if (!data) return null;
@@ -475,22 +472,6 @@ async function observeActionRecording(readCommittedAction, input, spec, row) {
     return {refusal: OUTCOME.UNAVAILABLE};
   }
 }
-/** The ordered successor's own exact read of a learner attempt: the same query
- * and the same classification as the recorder, answering NONCOMMITTED with the
- * fencing observation, or the outcome that keeps the debt (UNKNOWN,
- * UNAVAILABLE, CONFLICT; a committed attempt is CONFLICT here, since recording
- * it is the recorder's). The caller supplies only the read capability. */
-async function observeLearnerActionAbsence(readCommittedLearner, input) {
-  try {
-    const observed = await readCommittedLearner(learnerOutcomeQuery(input));
-    if (notRecorded(observed)) return learnerActionAbsence(observed, input.permit);
-    const refusal = learnerObservationRefusal(observed, input.permit);
-    return Object.freeze({outcome: refusal ?? OUTCOME.CONFLICT, observation: null});
-  } catch {
-    return Object.freeze({outcome: OUTCOME.UNAVAILABLE, observation: null});
-  }
-}
-export {observeLearnerActionAbsence};
 function recordingBasisRefusal(repository, row, input) {
   if (!recordingRowMatches(repository, row, input)) return OUTCOME.CONFLICT;
   if (!membershipClaimIsLocalAndLive(repository, input.claim, input.identity)) {
@@ -540,10 +521,8 @@ function finishActionRecording(repository, row, input, evidence, isCurrent, spec
   if (evidence === null) return result(OUTCOME.CONFLICT, row);
   return recordObservedAction(repository, row, input, evidence, isCurrent, spec);
 }
-/** The one recorder of a membership action's exact outcome, by recording spec:
- * the learner fact (LEARNER_RECORDING below) and, since 6.C slice C2, the
- * promotion's voter stamp (replica-operation-message-group-promotion.js).
- * A spec answers basisRefusal(repository, row, input), recorded(row, input),
+/** The learner outcome recorder uses one internal recording spec. The spec
+ * answers basisRefusal(repository, row, input), recorded(row, input),
  * evidence(observed, input, query, row) -> {committedPermit, stamp} or
  * {refusal}, receipt(evidence) -> {set, params} (its three receipt columns)
  * and readback(repository, row, input, evidence). The same-row CAS includes
@@ -631,7 +610,7 @@ export {recoverMessageGroupLearnerOutcome};
  * new (not already-selected) promotion/abandonment branch selection.
  * It judges only the immutable historical record: the row's identity columns,
  * the committed phase with a COMMITTED ADD_LEARNER permit of this transition
- * (its initial attempt or an ordered successor, whose exact origin the
+ * (at the sequence carried by its persisted permit, whose exact origin the
  * recorder matched), no voter or removal stamp (the learner phase allows neither),
  * canonical permit and stamp encodings, and a learner stamp naming this
  * transition's source voter and target learner at or past the proposal index.
@@ -650,52 +629,3 @@ function recordedLearnerFactIsValid(row, identity, encodedIdentity) {
   return stamp !== null && row.messageGroupLearnerStamp === JSON.stringify(stamp);
 }
 export {recordedLearnerFactIsValid};
-
-// The recorded fact's columns a current CREATE's admission CAS repeats, as the
-// [column, decoded field] pairs membershipRowWhere takes (rowToOperation keeps
-// each of these values exactly, so the decoded value is the column value).
-const RECORDED_LEARNER_FACT_COLUMNS = Object.freeze([
-  ['message_group_membership_identity', 'messageGroupMembershipIdentity'],
-  ['message_group_membership_phase', 'messageGroupMembershipPhase'],
-  ['message_group_membership_obligation_state', 'messageGroupMembershipObligationState'],
-  ['message_group_membership_permit', 'messageGroupMembershipPermit'],
-  ['message_group_learner_stamp', 'messageGroupLearnerStamp'],
-  ['message_group_voter_stamp', 'messageGroupVoterStamp'],
-  ['message_group_removal_stamp', 'messageGroupRemovalStamp']]);
-/** Current CREATE consumes the recorded fact like a new branch selection: the
- * shared predicate first, then the still-outstanding UNKNOWN obligation. The
- * answer is the decoded identity, the recorded stamp and permit, the fact's
- * exact membership columns as the basis the CREATE admission CAS, its
- * MATERIALIZED advance and the learner install repeat, so a later phase (a
- * REMOVE selection) defeats them, and the exact committed origin bytes the
- * native ADD_LEARNER left (recordedLearnerOrigin). Null when the row carries
- * no such fact. Pure; not a grant. */
-function recordedLearnerCreateBasis(row) {
-  const identity = decodeMembershipIdentity(row?.messageGroupMembershipIdentity);
-  if (!identity || !recordedLearnerFactIsValid(row, identity, row.messageGroupMembershipIdentity) ||
-    row.messageGroupMembershipObligationState !== MEMBERSHIP_OBLIGATION.UNKNOWN) return null;
-  const where = Object.freeze(Object.fromEntries(
-    RECORDED_LEARNER_FACT_COLUMNS.map(([column, field]) => [column, row[field]])));
-  return Object.freeze({identity, where,
-    learnerStamp: row.messageGroupLearnerStamp, committedPermit: row.messageGroupMembershipPermit,
-    learnerOrigin: recordedLearnerOrigin(identity,
-      decodeMembershipPermit(row.messageGroupMembershipPermit))});
-}
-export {recordedLearnerCreateBasis};
-
-/** The exact committed origin of a recorded learner, in the native owner's own
- * encoding: the recorder records a permit only when the original action's
- * origin matched this action at its proposal index and leader term
- * (originalLearnerOriginMatches, committedLearnerPermit), so every replica that
- * applied the ADD_LEARNER, and every image sealed after it, carries exactly
- * these bytes beside the learner's reservation. Pure. */
-function recordedLearnerOrigin(identity, permit) {
-  const action = learnerOutcomeQuery({operationId: identity.operationId, identity, permit}).action;
-  return encodeCommittedLearnerAdmission({groupId: identity.groupId,
-    index: String(permit.proposalIndex), term: String(permit.leaderTerm), context: action});
-}
-// The shared recorder pieces the promotion's voter-stamp recording consumes
-// (replica-operation-message-group-promotion.js, 6.C slice C2).
-export {actionRecordingInput, recordMembershipActionOutcome, recordingInvocation,
-  recordingSettlementAllowed, learnerObservationRefusal, learnerWitnessUnavailable,
-  learnerOutcomeQuery};

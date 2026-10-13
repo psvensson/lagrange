@@ -1,0 +1,9 @@
+
+  error not-to-unresolvable: src/rebalancer/replica-operation-message-group-promotion.js → ../raft/learner-catch-up-acknowledgement.js
+    A relative import must resolve to a file: a module deleted while something
+    still imports it fails only when that importer loads, which a selected
+    proof may never do.
+
+
+x 1 dependency violations (1 errors, 0 warnings). 15 modules, 36 dependencies cruised.
+

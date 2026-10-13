@@ -1,0 +1,10 @@
+base=e6d43bc1acb128a2b83ac89c77a3ec400e7edb1f
+command=./node_modules/.bin/depcruise --config dependency-cruiser.config.cjs --focus '^src/rebalancer/replica-operation-message-group-(promotion|learner-successor)\.js$' --focus-depth 1 --output-type err-long src
+exit=1
+
+  error not-to-unresolvable: src/rebalancer/replica-operation-message-group-promotion.js -> ../raft/learner-catch-up-acknowledgement.js
+    A relative import must resolve to a file: a module deleted while something
+    still imports it fails only when that importer loads, which a selected
+    proof may never do.
+
+x 1 dependency violations (1 errors, 0 warnings). 15 modules, 36 dependencies cruised.

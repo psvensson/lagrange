@@ -1,0 +1,43 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "message-group-c2-orphan-removal-alpha",
+  "status": "fail",
+  "base": "e6d43bc1acb128a2b83ac89c77a3ec400e7edb1f",
+  "generatedAt": "2026-10-13T14:48:56.247Z",
+  "receipts": [
+    {
+      "id": "orphan-import-graph-closed",
+      "passed": true,
+      "detail": "Whole candidate dependency graph no longer contains the missing learner-catch-up import. The isolated file-absence probe is structurally vacuous and is not the sole proof. Two inherited release-owner cycles remain explicit whole-graph debt."
+    },
+    {
+      "id": "initial-learner-owner-preserved",
+      "passed": false,
+      "detail": "Runtime authorization/process loss/recipient/discovery preserve their focused behavior, but the real membership claim-cache T1 bodies remain unengaged because actual seed release refuses in both treatments. Full current-owner preservation is HOLD."
+    },
+    {
+      "id": "durable-branch-and-later-phase-preserved",
+      "passed": true,
+      "detail": "Identical canonical stamp witness executes90 runner assertions on candidate and same-host source revert, with no source semantic change to retained branch/CAS or later-phase refusal. Additive V1 attribution independently approved; not a finalHEAD/corpus claim."
+    },
+    {
+      "id": "live-promotion-owner-preserved",
+      "passed": true,
+      "detail": "Native progress76, partition promotion47, wake41, DT629 and fresh learner promotion7 runner assertions pass on candidate and same-host source revert with identical test/helper/source input attribution. Full FreshMG orchestration acceptance remains separate and open."
+    },
+    {
+      "id": "scope-static-and-metadata-clean",
+      "passed": false,
+      "detail": "Production and harness content independently approved; canonical shard/impact audits pass and source duplication remains47/1462. Whole test duplication has inherited46-line excess and unchanged helper isPartitionLeader has cyclomatic19>12; full helper-consumer and repository-selected proof remain pending. No waiver or baseline raise."
+    }
+  ],
+  "currentBase": "d35d8828c630d1b9675b47f511c477b3cc9ee991",
+  "sourceDiffSha256": "d982b26235430dfbfa92fa594c5d3b9d0b6d849682de5b02e143818f88b6c603",
+  "evidence": [
+    "paired-lab-result-v2.json",
+    "source-revert-pair-v2.json",
+    "independent-lab-attribution-review-v2.md",
+    "harness-implementation-review-v2-final-metadata.md"
+  ],
+  "limit": "Partial3/5 receipts only. Internal seed release deadline/drain failures remain system defects. No Quest landing, finalHEAD/corpus certification, FreshMG acceptance or main merge is claimed."
+}
