@@ -468,7 +468,8 @@ function resolveAutoRejoinDecisionState(context = {}) {
   // Missing hints do not erase a durable nodes-table observation. A seed
   // without remembered role or peer contact must not become a fresh cluster
   // over existing Raft history; reuse the seed recovery proof owner.
-  if (context.durableStateDetected === true) {
+  if (context.durableStateDetected === true &&
+      context.forceNewCluster !== true) {
     return AUTO_REJOIN_DECISION_STATE.SEED_RECOVERY_PROOF_MISSING;
   }
   return AUTO_REJOIN_DECISION_STATE.FRESH_SEED;
