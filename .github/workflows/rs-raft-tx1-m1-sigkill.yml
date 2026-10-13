@@ -1,0 +1,178 @@
+name: rs-raft-tx1-m1-sigkill
+on:
+  push:
+    branches: [resume/rs-raft-runtime-recovery-20261012]
+    paths:
+      - .github/workflows/rs-raft-tx1-m1-sigkill.yml
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-tx1-m1-sigkill
+  cancel-in-progress: false
+jobs:
+  exact-postkill-proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 17
+    permissions:
+      contents: write
+    env:
+      OUT: test-output/tx1-m1-sigkill-proof
+      BRANCH: resume/rs-raft-runtime-recovery-20261012
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+      M1: test/integration/seed-migration-cutover-persisted.integration.test.js
+      KILL: test/integration/seed-migration-process-loss.integration.test.js
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Lock source and refresh canonical test classifications
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/source-sha.txt"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          npm ci > "$OUT/install.log" 2>&1
+          npm run -s test:metadata:refresh > "$OUT/metadata.log" 2>&1
+          git diff --exit-code -- src
+          node --check "$M1"
+          node --check "$KILL"
+          node --check test/integration/helpers/tx1-postkill-coordinator-reader.js
+          node_modules/.bin/eslint "$M1" "$KILL"             test/integration/helpers/tx1-postkill-coordinator-reader.js             > "$OUT/eslint.log" 2>&1
+          npm run -s audit:impact-contracts > "$OUT/impact.log" 2>&1
+          node --input-type=module -e "import {auditRaftRsOperationBoundary} from './scripts/checks/raft-rs-operation-boundary-audit.js'; const v=auditRaftRsOperationBoundary({root:process.cwd()}); console.log(JSON.stringify(v,null,2)); process.exitCode=v.length?1:0;" > "$OUT/boundary.json"
+          git diff --check > "$OUT/metadata-whitespace.txt"
+          git diff --name-only > "$OUT/generated-paths.txt"
+          while IFS= read -r path; do
+            case "$path" in test/shards/*) ;; *)
+              echo "unexpected generated change: $path" >&2
+              exit 1;;
+            esac
+          done < "$OUT/generated-paths.txt"
+          git status --porcelain > "$OUT/pretest-worktree.txt"
+      - name: Real seed M1 orderly-close control
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          npm run -s test:file -- "$M1" > "$OUT/m1-control.log" 2>&1
+          printf '%s\n' "$?" > "$OUT/m1-control.exit"
+          mkdir -p "$OUT/tap"
+          cp ".tap/test-results/$M1.tap" "$OUT/tap/m1-control.tap" 2>/dev/null
+          cat "$OUT/m1-control.log"
+      - name: Actual SIGKILL with twelve live SQLite handles and read-only coordinator reconstruction
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          npm run -s test:file -- "$KILL" > "$OUT/m1-sigkill.log" 2>&1
+          printf '%s\n' "$?" > "$OUT/m1-sigkill.exit"
+          mkdir -p "$OUT/tap"
+          cp ".tap/test-results/$KILL.tap" "$OUT/tap/m1-sigkill.tap" 2>/dev/null
+          cat "$OUT/m1-sigkill.log"
+      - name: Derive semantic receipt rather than trusting process exit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os,re
+          from pathlib import Path
+          e=Path(os.environ['OUT'])
+          def receipt(name):
+              tap=(e/'tap'/f'{name}.tap').read_text()
+              def count(k):
+                  m=re.search(r'^# '+k+r' (\d+)\s*$',tap,re.M)
+                  return int(m.group(1)) if m else None
+              return {'tests':count('tests'),'pass':count('pass'),
+                  'fail':count('fail'),'cancelled':count('cancelled'),
+                  'skipped':count('skipped'),'todo':count('todo'),
+                  'durationMs':float(re.search(r'^# duration_ms ([\d.]+)',tap,re.M).group(1)),
+                  'tap':tap}
+          control=receipt('m1-control')
+          killed=receipt('m1-sigkill')
+          line=next((x[2:] for x in killed['tap'].splitlines()
+              if x.startswith('# {') and '"kind":"TX1_M1_SIGKILL_DISK_DURABILITY"' in x),None)
+          raw=json.loads(line) if line else {}
+          checks={
+            'm1-control':control['tests']==control['pass']==1 and all(control[k]==0 for k in ['fail','cancelled','skipped','todo']),
+            'm1-sigkill':killed['tests']==killed['pass']==1 and all(killed[k]==0 for k in ['fail','cancelled','skipped','todo']),
+            'control-exit':(e/'m1-control.exit').read_text().strip()=='0',
+            'sigkill-exit':(e/'m1-sigkill.exit').read_text().strip()=='0',
+            'exact-native-files':raw.get('distinctReplicaFiles')==12 and raw.get('killedWithOpenHandles')==12,
+            'durable-coordinator':raw.get('committedDecisionRecovered') is True and raw.get('coordinatorReconstructed') is True,
+            'scope-honest':raw.get('replayAttempted') is False and raw.get('coordinatorRestarted') is False,
+            'accepted-timing':control['durationMs']<=300000 and killed['durationMs']<=300000,
+          }
+          summary={'candidate':(e/'source-sha.txt').read_text().strip(),
+            'checks':checks,'control':{k:v for k,v in control.items() if k!='tap'},
+            'sigkill':{k:v for k,v in killed.items() if k!='tap'},
+            'nativeReceipt':raw,'focusedProofPassed':all(checks.values()),
+            'independentApproval':False,'mergeReady':False,
+            'scope':'Actual RF3 same-host system-table COMMITTED durability after SIGKILL with 12 open SQLite connections; independent disk reader and read-only reconstructed coordinator. Not interrupted COMMIT fanout, coordinator rejoin/resume, physical host failure, legacy historical migration, split/merge or global certification.'}
+          (e/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+          print(json.dumps(summary,indent=2))
+          PY
+      - name: Preserve exact source/classification/evidence on work branch only
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          e=Path(os.environ['OUT'])
+          assert json.loads((e/'summary.json').read_text())['focusedProofPassed']
+          PY
+          git diff --exit-code -- src
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          DEST="solve/quests/replicated-transaction-decision-and-apply/evidence/m1-sigkill-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$DEST"
+          cp -a "$OUT/." "$DEST/"
+          find "$DEST" -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > "$DEST/SHA256SUMS"
+          git add -- test/shards "$DEST"
+          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'WIP TX1: retain exact native post-SIGKILL coordinator durability receipts'
+          REMOTE="$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)"
+          test "$REMOTE" = "$GITHUB_SHA"
+          HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=$HEADER" push origin "HEAD:refs/heads/$BRANCH"
+          test "$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)" = "$(git rev-parse HEAD)"
+          git rev-parse HEAD > "$OUT/published-sha.txt"
+      - name: Preserve evidence even when a gate fails
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p "$OUT"
+          git status --porcelain > "$OUT/final-status.txt"
+          git diff -- src > "$OUT/unpublished-production.patch"
+          find "$OUT" -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > "$OUT/SHA256SUMS"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: rs-raft-tx1-m1-sigkill-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-output/tx1-m1-sigkill-proof/
+          retention-days: 30
+          if-no-files-found: error
+      - name: Fail closed if exact proof or publication is absent
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "$OUT/summary.json"
+          test -f "$OUT/published-sha.txt"
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          e=Path(os.environ['OUT'])
+          a=json.loads((e/'summary.json').read_text())
+          assert all(a['checks'].values())
+          assert a['independentApproval'] is False and a['mergeReady'] is False
+          PY
