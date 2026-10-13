@@ -301,6 +301,17 @@ test('durable nodes rows without seed-role hints cannot rebootstrap fresh ' +
   t.equal(decision.membershipOwnerOutcome.outcomeType,
     MEMBERSHIP_OWNER_OUTCOME_TYPE.BLOCKED_STARTUP,
     'the existing membership owner rejects unproved startup');
+
+  const explicit = await resolveAutoRejoinStartupDecision({
+    dataDir,
+    nodeId: LOCAL_NODE_ID,
+    nodeAddress: LOCAL_NODE_ADDRESS,
+    probePeerAddress: async () => false,
+    forceNewCluster: true,
+  });
+  t.equal(explicit.state, 'fresh_seed',
+    'only explicit operator authorization may reset a no-hints directory');
+  t.equal(explicit.mode, 'seed');
 });
 
 test('a genuinely empty directory remains eligible for fresh bootstrap',
