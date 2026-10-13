@@ -161,14 +161,18 @@ jobs:
           wasm-tools --version
 
       - name: Install dependencies
-        run: npm ci
+        env:
+          LAGRANGE_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+        run: bash scripts/ci/run-with-shared-thermal-guard.sh npm ci
 
       # The MovieLens evidence tests read the real 100k ratings file; data/ is
       # gitignored, so fetch it and fail closed on any digest drift (the same
       # sha256 the tests pin).
       - name: Fetch MovieLens dataset (digest-pinned)
+        env:
+          LAGRANGE_RUNNER_ENVIRONMENT: ${{ runner.environment }}
         run: |
-          node examples/service-data-affinity/download-movielens.js
+          bash scripts/ci/run-with-shared-thermal-guard.sh node examples/service-data-affinity/download-movielens.js
           echo "06416e597f82b7342361e41163890c81036900f418ad91315590814211dca490  data/examples/movielens-100k/u.data" | sha256sum --check
 
       # The change proof selects the import closure of changed test support
@@ -180,8 +184,10 @@ jobs:
       # its name rather than silently widen the proof (the seal would appear
       # as a changed path).
       - name: Prepare generated test metadata
+        env:
+          LAGRANGE_RUNNER_ENVIRONMENT: ${{ runner.environment }}
         run: |
-          npm run -s test:metadata:refresh
+          bash scripts/ci/run-with-shared-thermal-guard.sh npm run -s test:metadata:refresh
           git diff --exit-code -- \
             test/shards/primary-classes.json \
             test/shards/resource-classes.json \
@@ -196,7 +202,9 @@ jobs:
       # closed - an unclassifiable change refuses with MODULAR PROOF NOT SAFE
       # and a reason code rather than proving a convenient subset.
       - name: Ordinary proof
-        run: npm run check
+        env:
+          LAGRANGE_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+        run: bash scripts/ci/run-with-shared-thermal-guard.sh npm run check
 
       # The proof writes test-output/proof-scope.json itself, saying which sha
       # it proved and whether it ran the whole corpus; the canary reads it
@@ -239,11 +247,13 @@ jobs:
         # required run and block every later push.
         timeout-minutes: 45
         continue-on-error: true
+        env:
+          LAGRANGE_RUNNER_ENVIRONMENT: ${{ runner.environment }}
         run: |
-          npm run test:owner-debt:prepare
-          npm run test:static
-          npm run model:contracts
-          node scripts/checks/formation-health.js --bot-commits
+          bash scripts/ci/run-with-shared-thermal-guard.sh npm run test:owner-debt:prepare
+          bash scripts/ci/run-with-shared-thermal-guard.sh npm run test:static
+          bash scripts/ci/run-with-shared-thermal-guard.sh npm run model:contracts
+          bash scripts/ci/run-with-shared-thermal-guard.sh node scripts/checks/formation-health.js --bot-commits
 
       - name: Upload health evidence
         if: always() && github.event_name != 'pull_request'
