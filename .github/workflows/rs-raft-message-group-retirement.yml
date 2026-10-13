@@ -4,6 +4,10 @@ on:
     branches: [resume/rs-raft-runtime-recovery-20261012]
     paths:
       - .github/workflows/rs-raft-message-group-retirement.yml
+      - src/bootstrap/shared/message-group-transport-handler.js
+      - src/bootstrap/phases/seed-message-groups-phase.js
+      - src/bootstrap/phases/create-message-group-replica-lifecycle.js
+      - test/bootstrap/message-group-activation-handler-boundary.test.js
 permissions:
   contents: read
 jobs:
