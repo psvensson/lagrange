@@ -88,19 +88,23 @@ jobs:
           from pathlib import Path
           p=Path(os.environ['OUT'])
           raw=(p/'current-tx1.log').read_text()
-          def number(key):
-              ms=re.findall(r'^# '+key+r' (\d+)$',raw,re.M)
-              return int(ms[-1]) if ms else None
+          canonical=re.search(r'^# test-files total=(\d+) pass=(\d+) fail=(\d+) assertions=(\d+)$',raw,re.M)
+          counts={'files':int(canonical.group(1)),'passedFiles':int(canonical.group(2)),
+            'failedFiles':int(canonical.group(3)),
+            'assertions':int(canonical.group(4))} if canonical else {}
+          old=(p/'superseded-old-assertions.log').read_text()
+          oldFail=re.search(r'^# fail (\d+)$',old,re.M)
           checks={
-            'superseded-assertions-red':int((p/'superseded-old-exit.txt').read_text())!=0,
+            'superseded-assertions-red':int((p/'superseded-old-exit.txt').read_text())!=0
+              and oldFail is not None and int(oldFail.group(1))==4,
             'candidate-test-exit':(p/'current-tx1-exit.txt').read_text().strip()=='0',
-            'candidate-tests':number('fail')==0 and number('cancelled')==0 and
-              number('skipped')==0 and number('todo')==0 and number('pass') is not None,
+            'candidate-tests':counts.get('files')==5 and counts.get('passedFiles')==5
+              and counts.get('failedFiles')==0 and counts.get('assertions')==94,
           }
           result={'sourceInput':os.environ['INPUT'],
             'candidate':(p/'candidate-sha.txt').read_text().strip(),
             'checks':checks,
-            'tests':{k:number(k) for k in ['pass','fail','cancelled','skipped','todo']},
+            'tests':counts,
             'focusedProofPassed':all(checks.values()),
             'historicalLegacyAdmissionProved':False,
             'legacyMigrationRetirementAuthorized':False,
