@@ -5,11 +5,12 @@ const PARTICIPANT_RELEASE_TYPE = 'PARTICIPANT_RELEASE';
 const PARTICIPANT_RELEASE_RESULT_FIELD = 'releaseResult';
 const PARTICIPANT_RELEASE_VERSION = 1;
 const PARTICIPANT_RELEASE_ACTION = Object.freeze({
-  RELEASE: 'release', INSPECT: 'inspect', PAUSE: 'pause', DRAIN: 'drain',
-  REOPEN: 'reopen', ENABLE: 'enable', RESUME: 'resume',
+  RELEASE: 'release', INSPECT: 'inspect', PAUSE: 'pause',
+  REOPEN: 'reopen', ENABLE: 'enable',
+  OBSERVE_APPLIED_POSITION: 'observe_applied_position', RESUME: 'resume',
 });
 const PARTICIPANT_CUTOVER_PHASE = Object.freeze({
-  INSPECT: 'inspect', PAUSE: 'pause', DRAIN: 'drain', REOPEN: 'reopen',
+  INSPECT: 'inspect', PAUSE: 'pause', REOPEN: 'reopen',
   ROWID_CENSUS: 'rowid_census', ENABLE: 'enable', REPLICA_CENSUS: 'replica_census',
   RESUME: 'resume',
 });

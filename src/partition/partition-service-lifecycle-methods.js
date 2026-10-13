@@ -165,6 +165,10 @@ class PartitionServiceLifecycleMethods {
     const {promise, resolve, reject} = Promise.withResolvers();
     this.shutdownSettlement = promise;
     const release = async () => {
+      this.emit(PARTITION_SERVICE_EVENT.SHUTDOWN_STARTED, {
+        partitionId: this.partitionId,
+        replicaId: this.replicaId,
+      });
       const initialization = this.initializationSettlement;
       if (initialization && this.initializationOwnsCleanup !== true) {
         await Promise.allSettled([initialization]);

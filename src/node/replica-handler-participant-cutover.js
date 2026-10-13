@@ -66,6 +66,17 @@ function unavailableCensus(census) {
   return census.find((facts) => facts.outcome !== OUTCOME.OBSERVED) ?? null;
 }
 
+async function enableAndObserveCohort(handler, release, attempt, census, local,
+  queryDrainProof) {
+  const enabled = await askParticipantRelease(handler, handler.nodeId,
+    requestFor(release, attempt, ACTION.ENABLE, local,
+      {census, queryDrainProof}));
+  if (enabled.outcome !== OUTCOME.OBSERVED) return enabled;
+  const applied = await actOnCohort(handler, release, attempt,
+    ACTION.OBSERVE_APPLIED_POSITION, census, {origin: enabled.origin});
+  return unavailableCensus(applied);
+}
+
 async function actOnCohort(handler, release, attempt, action, census, fields = {}) {
   return Promise.all(census.map((facts) => askParticipantRelease(handler,
     facts.generation.nodeId, requestFor(release, attempt, action, facts, fields))));
@@ -274,10 +285,9 @@ async function runCutoverAttempt(handler, request) {
   const defect = releaseCensusDefect(release, census, local, {originRequired: false,
     attempt, queryDrainProof: queryRelease.queryDrainProof});
   if (defect !== null) return attemptRefusal({...request, release}, defect);
-  const enabled = await askParticipantRelease(handler, handler.nodeId,
-    requestFor(release, attempt, ACTION.ENABLE, local,
-      {census, queryDrainProof: queryRelease.queryDrainProof}));
-  if (enabled.outcome !== OUTCOME.OBSERVED) return enabled;
+  const application = await enableAndObserveCohort(handler, release, attempt,
+    census, local, queryRelease.queryDrainProof);
+  if (application !== null) return application;
   census = await readCohort(handler, service.partitionId, cohort,
     request.deadlineAtMs);
   unavailable = unavailableCensus(census);

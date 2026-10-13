@@ -222,6 +222,7 @@ const PARTITION_SERVICE_EVENT = Object.freeze({
   CDC_EVENT: 'cdcEvent',
   CDC_CATCHUP_STARTED: 'cdcCatchupStarted',
   CDC_CATCHUP_COMPLETED: 'cdcCatchupCompleted',
+  SHUTDOWN_STARTED: 'shutdownStarted',
   SHUTDOWN: 'shutdown',
   CONSENSUS_OBSERVED: 'consensusObserved',
 });

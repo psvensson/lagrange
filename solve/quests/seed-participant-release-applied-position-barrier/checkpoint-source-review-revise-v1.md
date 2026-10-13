@@ -1,0 +1,11 @@
+# Rejected source V1 preservation checkpoint
+
+This is a non-main WIP preservation checkpoint, not accepted source, Quest landing, merge approval, or publication proof. Integrated cleanup baseline is `9ba9a1941b2326d0d0bcfa49c581cc2fcf74af8d`; its 32 positive control assertions and qualified native source red remain bound to those older source/test bytes.
+
+Production V1 is the exact 15-path candidate independently reviewed at `bb976f03b1dca9989cfd990af7f188e490ac5243`. Review `7350c29ef69a49da0e16c512d2330ca9ea2814c4a7c6a05b2191db3d9c4c526a` is REVISE across S1-S8. Source V2 awaits a concrete existing-owner correction design. The retained source and actual static artifacts allow exact review replay; no candidate behavioral run has occurred. Generated metadata has not been refreshed for this rejected source checkpoint.
+
+Native V8 test SHA `56de6d74e80e9d07228af9a9eb23a90fe9d47932017fbfa8b0b66db94d048066` is frozen but content review is pending. Its live test edit is deliberately outside this source checkpoint; the exact V7-to-V8 patch and static logs are retained in evidence/native-witness-v8. Prepared source-only input `26b17aec63414ca9ea1d07f87029f69d5aa2d739` contains only that test and canonical impact graph seal on source tree `b09288511757fd86ef92553ac235c8d0fed0b345`; no lab run is authorized until independent witness review.
+
+Controls V3 remain isolated on base `ad23d75d58e320ca2fe58f8baa9b0a941a8158e2`; all three exact file hashes, reconstructable binary diff and actual static logs are retained in evidence/control-batch-v3. A V4 causal gap plan is being prepared against S1-S8, including correction of the earlier near-MAX arithmetic expectation. The final query witness is design-approved but not implemented; its corrected reusable delivery seam attribution is retained with V3.
+
+Existing startup source measurements still fail within original budgets: bootstrap exhausts its shared 5000ms bound and the claim case refuses after 928ms of 1000ms. These remain system defects. All five active Quest receipts remain false; fresh candidate startup, full fixture-consumer cone, native dirty-only falsifier, query preservation, static/corpus and exact-main gates remain open. No main ref is updated.

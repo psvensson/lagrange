@@ -184,6 +184,7 @@ function releaseAnswer(outcome, request = {}, fields = {}) {
     phase: request.action ?? null, ...fields});
 }
 
-export {isReleaseDrained, releaseAnswer, releaseCensusDefect, releaseFactsDefect, releaseIdentityOf,
-  releaseIdentityValid, releaseMemberIds, sameReplicaGeneration,
+export {isReleaseDrained, originEqual, releaseAnswer, releaseCensusDefect,
+  releaseFactsDefect, releaseIdentityOf, releaseIdentityValid, releaseMemberIds,
+  sameReplicaGeneration,
   transactionReleaseProofValid};

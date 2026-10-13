@@ -1,0 +1,1 @@
+{"file":"test/bootstrap/node-bootstrap-consistency.property.test.js","attempt":1,"ok":false,"assertions":57,"durationMs":35694,"retriedOnce":false,"firstFailureLine":"not ok 2 - seed bootstrap should succeed"}

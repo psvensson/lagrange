@@ -57,7 +57,7 @@ function clockUnavailable(observation) {
   return observation?.state === CLOCK_STATE.UNAVAILABLE;
 }
 
-function clockMeasured(observation) {
+function participantReleaseClockMeasured(observation) {
   return observation?.state === CLOCK_STATE.MEASURED;
 }
 
@@ -65,8 +65,9 @@ function unsafeObservationState(left, right, third = null) {
   if (clockUnavailable(left) || clockUnavailable(right) || clockUnavailable(third)) {
     return CLOCK_STATE.UNAVAILABLE;
   }
-  return clockMeasured(left) && clockMeasured(right) &&
-    (third === null || clockMeasured(third)) ? null : CLOCK_STATE.UNSAFE;
+  return participantReleaseClockMeasured(left) &&
+    participantReleaseClockMeasured(right) &&
+    (third === null || participantReleaseClockMeasured(third)) ? null : CLOCK_STATE.UNSAFE;
 }
 
 function safeDifference(later, earlier) {
@@ -118,6 +119,7 @@ function participantReleaseSeedBudgetObservation(start, terminal, budgetMs) {
 export {
   captureParticipantReleaseDiagnosticTrigger,
   observeParticipantReleaseClockValue,
+  participantReleaseClockMeasured,
   participantReleaseAttemptAgeObservation,
   participantReleaseSeedBudgetObservation,
   readParticipantReleaseClock,

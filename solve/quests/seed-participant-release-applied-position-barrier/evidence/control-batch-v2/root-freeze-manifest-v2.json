@@ -1,0 +1,72 @@
+{
+  "schema": "control-batch-root-freeze/2",
+  "base": "ad23d75d58e320ca2fe58f8baa9b0a941a8158e2",
+  "integrationBase": "9ba9a1941b2326d0d0bcfa49c581cc2fcf74af8d",
+  "allThreeBaseBlobsEqual": true,
+  "paths": [
+    {
+      "path": "test/node/replica-handler-release-recovery.test.js",
+      "sha256": "7b346915e8bb5959a3d5c45af9afaa914c42bd9ec160dca5db957ddd2be9690c"
+    },
+    {
+      "path": "test/partition/participant-release-protocol.test.js",
+      "sha256": "075d65a00be347dda6267a56451362f4722df3abbca3ace0c73747a5dea7ba95"
+    },
+    {
+      "path": "test/test-helpers/participant-transaction-fixture.js",
+      "sha256": "7a95f49285789057f29a95a50ce341b3f44bfadd69f8c4495b39cce8dabd7550"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/control-batch-v2/frozen-control-batch-v2-hashes.json",
+      "sha256": "6a05c25d4e3353c1ba3a031e089f6b582f96a52de5759b128ea6638a520bedf0",
+      "bytes": 2725
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/control-batch-v2/control-batch-v2.md",
+      "sha256": "10373536e11b6ab99fc1265632474349b7c49d7f727c0a18d44b8c8f2329b557",
+      "bytes": 4018
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/control-batch-v2/v2-syntax-fixture.log",
+      "sha256": "fb12d02da1eed5cdfb734edba129338ee6df0385fa2a6dc9d9933dbbc03f4d13",
+      "bytes": 83
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/control-batch-v2/v2-syntax-protocol.log",
+      "sha256": "ffa43a665cf78a5750f4d76be9461666e724ed2c9d42119f7a598ec480170692",
+      "bytes": 82
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/control-batch-v2/v2-syntax-recovery.log",
+      "sha256": "977ed7373d0da0541978a392247d7cb979ae6f24ab544c6ce210cbca9d9fbd5d",
+      "bytes": 81
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/control-batch-v2/v2-eslint.log",
+      "sha256": "59078ca3900fdc20b0b4bdca3ba723fa7c8c337ad924c5e7fa9b5b92c0335d8e",
+      "bytes": 184
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/control-batch-v2/v2-diff-check.log",
+      "sha256": "e4ad5764d46f12d606ca734869b38b6c8bc57d91fa7151fd332f695c55ce562e",
+      "bytes": 34
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/control-batch-v2/v2-scoped-metrics.log",
+      "sha256": "f4ca379d1665b5d5a935565f6da3e7fd650d517fe40a09a02d3fd069f53902c4",
+      "bytes": 608
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/control-batch-v2/scoped.diff",
+      "sha256": "00410bec088e97c51373a8869010f22f751a168374c0e5b46ec5377ea4d6a3f6",
+      "bytes": 61030
+    }
+  ],
+  "verdict": "CONTENT_REVIEW_PENDING_NO_BEHAVIOR_RUN",
+  "helperImportClosureBaseCount": 25,
+  "helperImportClosureOwner": "scripts/checks/helper-import-closure.js",
+  "expandedThreeFixtureUnionBaseCount": 40,
+  "coneLimit": "Provisional9ba9 seal; regenerate exact final selection after all fixture/test/source changes."
+}

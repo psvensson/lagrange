@@ -1,0 +1,53 @@
+{
+  "schema": "native-stale-refresh-witness-checks/8",
+  "baseHead": "9ba9a1941b2326d0d0bcfa49c581cc2fcf74af8d",
+  "v7WitnessSha256": "d0f0469f57b77858827309eecfc039909a7bd223cb250194492fd4a61cd3c8bd",
+  "v8WitnessSha256": "56de6d74e80e9d07228af9a9eb23a90fe9d47932017fbfa8b0b66db94d048066",
+  "commands": [
+    {
+      "name": "syntax",
+      "command": "node --check test/partition/participant-release-native-application-order.test.js",
+      "exit": 0,
+      "log": "syntax.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "eslint",
+      "command": "npx eslint test/partition/participant-release-native-application-order.test.js",
+      "exit": 0,
+      "log": "eslint.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "strict-metrics",
+      "command": "npm run test:metrics:scoped:strict -- test/partition/participant-release-native-application-order.test.js",
+      "exit": 0,
+      "log": "strict-metrics.log",
+      "logSha256": "ac9ea83b100821cf49f2368946d87b75326329617cd86011df4ee19d49bcaeef"
+    },
+    {
+      "name": "strict-file-size",
+      "command": "npm run audit:file-size:strict -- test/partition/participant-release-native-application-order.test.js",
+      "exit": 0,
+      "log": "file-size.log",
+      "logSha256": "2c692e3f8ff2f94734c09f04b607fda5bc89b04dace25a39395026b1e6beb20a"
+    },
+    {
+      "name": "diff-check",
+      "command": "git diff --check -- test/partition/participant-release-native-application-order.test.js",
+      "exit": 0,
+      "log": "diff-check.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "v7-to-v8-no-index-whitespace",
+      "command": "git diff --no-index --check /tmp/native-witness-v8/participant-release-native-application-order-v7.test.js test/partition/participant-release-native-application-order.test.js",
+      "exit": 1,
+      "expectedDifferenceExit": 1,
+      "log": "no-index-whitespace.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "behavioralRuns": 0,
+  "metadataRefreshes": 0
+}

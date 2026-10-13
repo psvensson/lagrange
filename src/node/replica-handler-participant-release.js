@@ -14,6 +14,8 @@ import {enableParticipantTransactionAdmission} from
   '../partition/partition-participant-transaction-request.js';
 import {PARTICIPANT_RELEASE_ACTION as ACTION, PARTICIPANT_CUTOVER_OUTCOME as OUTCOME} from
   '../partition/partition-participant-transaction-cutover-constants.js';
+import {observeParticipantAppliedPosition} from
+  './participant-release-applied-position-observation.js';
 
 function attemptMatches(request, facts) {
   return request.attempt?.term === facts.membership.term &&
@@ -56,9 +58,6 @@ async function executeReleaseAction(handler, service, request, facts) {
   case ACTION.PAUSE:
     raiseParticipantCutoverPause(service);
     return readParticipantReleaseFacts(handler, service);
-  case ACTION.DRAIN:
-    return isReleaseDrained(facts.work) ? facts :
-      releaseAnswer(OUTCOME.DRAIN_PENDING, request, {facts});
   case ACTION.REOPEN:
     return reopenReplica(handler, service, request, facts);
   case ACTION.ENABLE: {
@@ -79,10 +78,51 @@ async function executeReleaseAction(handler, service, request, facts) {
   }
 }
 
+function releaseRequestIdentityRefusal(service, request, facts) {
+  if (!releaseIdentityValid(request.release) ||
+      request.release.partitionId !== service.partitionId) {
+    return releaseAnswer(OUTCOME.INVALID, request);
+  }
+  const generationMatches = sameReplicaGeneration(request.target, facts.generation) &&
+    attemptMatches(request, facts);
+  const pauseMatches = request.action === ACTION.PAUSE || facts.paused === true ||
+    request.action === ACTION.RESUME;
+  return generationMatches && pauseMatches ? null :
+    releaseAnswer(OUTCOME.STALE, request);
+}
+
+function releaseStatusMatches(service, request, status) {
+  const statusMatches = status.term === request.attempt.term &&
+    status.leaderId === request.attempt.leaderReplicaId &&
+    status.configurationKey === request.release.configurationKey;
+  const leaderLifecycleMatches = service.replicaId !== request.attempt.leaderReplicaId ||
+    status.lifecycleIncarnation === request.attempt.leaderLifecycleIncarnation;
+  return statusMatches && leaderLifecycleMatches;
+}
+
+function releaseRequestRefusal(_handler, service, request, facts) {
+  if (facts.outcome !== OUTCOME.OBSERVED) return facts;
+  const identityRefusal = releaseRequestIdentityRefusal(service, request, facts);
+  if (identityRefusal !== null) return identityRefusal;
+  // A release request always closes new work even on a mixed-build node.
+  if (request.action === ACTION.PAUSE) raiseParticipantCutoverPause(service);
+  if (facts.buildDigest !== request.release.targetBuildDigest) {
+    return releaseAnswer(OUTCOME.BUILD_MISMATCH, request);
+  }
+  const status = service.raft.readStatus();
+  return releaseStatusMatches(service, request, status) ? null :
+    releaseAnswer(OUTCOME.STALE, request);
+}
+
+function requestDeadlineSpent(handler, request) {
+  return request.action !== ACTION.OBSERVE_APPLIED_POSITION &&
+    Number.isSafeInteger(request.deadlineAtMs) &&
+    handler.timeSource.now() >= request.deadlineAtMs;
+}
+
 async function receiveParticipantRelease(handler, request) {
   try {
-    if (Number.isSafeInteger(request.deadlineAtMs) &&
-        handler.timeSource.now() >= request.deadlineAtMs) {
+    if (requestDeadlineSpent(handler, request)) {
       return releaseAnswer(OUTCOME.UNAVAILABLE, request,
         {missingFact: 'release_deadline'});
     }
@@ -90,36 +130,17 @@ async function receiveParticipantRelease(handler, request) {
     if (!service || service.partitionId !== request.partitionId) {
       return releaseAnswer(OUTCOME.UNAVAILABLE, request, {missingFact: 'hosted_replica'});
     }
+    if (request.action === ACTION.OBSERVE_APPLIED_POSITION) {
+      return observeParticipantAppliedPosition(handler, service, request,
+        releaseRequestRefusal);
+    }
     const purpose = request.action === ACTION.INSPECT && request.leaderCohort === true ?
       COMMITTED_MEMBERSHIP_READ_PURPOSE.RETIREMENT :
       COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS;
     const facts = await readParticipantReleaseFacts(handler, service, purpose);
-    if (request.action === ACTION.INSPECT || facts.outcome !== OUTCOME.OBSERVED) return facts;
-    if (!releaseIdentityValid(request.release) ||
-        request.release.partitionId !== service.partitionId) {
-      return releaseAnswer(OUTCOME.INVALID, request);
-    }
-    if (!sameReplicaGeneration(request.target, facts.generation) ||
-        !attemptMatches(request, facts)) {
-      return releaseAnswer(OUTCOME.STALE, request);
-    }
-    if (request.action !== ACTION.PAUSE && facts.paused !== true &&
-        request.action !== ACTION.RESUME) {
-      return releaseAnswer(OUTCOME.STALE, request);
-    }
-    // A release request always closes new work even on a mixed-build node.
-    if (request.action === ACTION.PAUSE) raiseParticipantCutoverPause(service);
-    if (facts.buildDigest !== request.release.targetBuildDigest) {
-      return releaseAnswer(OUTCOME.BUILD_MISMATCH, request);
-    }
-    const status = service.raft.readStatus();
-    if (status.term !== request.attempt.term ||
-        status.leaderId !== request.attempt.leaderReplicaId ||
-        status.configurationKey !== request.release.configurationKey ||
-        (service.replicaId === request.attempt.leaderReplicaId &&
-          status.lifecycleIncarnation !== request.attempt.leaderLifecycleIncarnation)) {
-      return releaseAnswer(OUTCOME.STALE, request);
-    }
+    if (request.action === ACTION.INSPECT) return facts;
+    const refusal = releaseRequestRefusal(handler, service, request, facts);
+    if (refusal !== null) return refusal;
     return executeReleaseAction(handler, service, request, facts);
   } catch (error) {
     return releaseAnswer(OUTCOME.INVALID, request, {reason: String(error?.message ?? error)});

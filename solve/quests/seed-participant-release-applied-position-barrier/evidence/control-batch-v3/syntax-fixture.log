@@ -1,0 +1,2 @@
+command: node --check test/test-helpers/participant-transaction-fixture.js
+exit: 0

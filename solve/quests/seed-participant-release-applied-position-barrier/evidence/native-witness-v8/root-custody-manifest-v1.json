@@ -1,0 +1,61 @@
+{
+  "schema": "root-artifact-custody/1",
+  "testSha256": "56de6d74e80e9d07228af9a9eb23a90fe9d47932017fbfa8b0b66db94d048066",
+  "sourceReviewCommit": "bb976f03b1dca9989cfd990af7f188e490ac5243",
+  "sourceTreeGitOid": "aeb56ee8f9a208b693dc2251a11558e7d11386a1",
+  "authorManifestCorrection": "productionSourceAggregateSha256 is a Git source tree OID, not a SHA256 digest. The independent productionV1PathAggregateSha256 field is the 64-character path aggregate. Original artifact retained unchanged.",
+  "artifacts": [
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v8/checks.json",
+      "bytes": 2221,
+      "sha256": "3dc38ba906178988225b5338bdbad001e54e22804ab65c751116dbe7486b20e2"
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v8/diff-check.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v8/eslint.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v8/file-size.log",
+      "bytes": 274,
+      "sha256": "2c692e3f8ff2f94734c09f04b607fda5bc89b04dace25a39395026b1e6beb20a"
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v8/freeze-manifest.json",
+      "bytes": 1449,
+      "sha256": "037bc4db114b83bbe86bc736d09e9db14e388913d4be18345d63bd4b94e396b4"
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v8/no-index-whitespace.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v8/report.md",
+      "bytes": 2638,
+      "sha256": "57fa5c146f1c86f993faa391afd286237cd6beb94102d8b5632136659dcdbfcb"
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v8/strict-metrics.log",
+      "bytes": 309,
+      "sha256": "ac9ea83b100821cf49f2368946d87b75326329617cd86011df4ee19d49bcaeef"
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v8/syntax.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v8/v7-to-v8.diff",
+      "bytes": 21540,
+      "sha256": "80e9f9baa8b04570785c26da8b5eaa47b475d4ab37fe47c2ec244558142fe78c"
+    }
+  ],
+  "behavioralRuns": 0,
+  "verdict": "FROZEN_PENDING_INDEPENDENT_CONTENT_REVIEW"
+}

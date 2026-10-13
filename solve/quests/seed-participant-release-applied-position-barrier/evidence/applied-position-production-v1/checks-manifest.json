@@ -1,0 +1,16 @@
+{
+  "checks": {
+    "syntax": 0,
+    "eslint": 0,
+    "diff-check": 0,
+    "dependencies": 0,
+    "impact-contracts": 0,
+    "shards": 0,
+    "file-size": 0,
+    "impact-json": 0,
+    "complexity-scoped-strict": 1,
+    "cognitive-scoped-strict": 1,
+    "base-cognitive-v2": 1,
+    "base-cyclomatic": "four exact HEAD files each exit 1; eight inherited findings"
+  }
+}

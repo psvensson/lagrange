@@ -5,6 +5,8 @@ import {withRaftOpeningCleanupFailure} from '../raft/raft-operation-port.js';
 import {REPLICA_CLEANUP_ERROR_CODE} from './replica-cleanup-constants.js';
 import {REPLICA_HANDLER_EVENT, REPLICA_HANDLER_LOG_MSG} from './replica-handler-constants.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
+import {cancelParticipantAppliedPositionObservations} from
+  './participant-release-applied-position-observation.js';
 
 const RUNTIME_CLEANUP_PENDING = 'Replica runtime cleanup is still pending';
 const RUNTIME_SHUTDOWN_FAILED = 'Replica handler still owns failed runtime shutdowns';
@@ -85,6 +87,7 @@ function shutdownReplicaHandler(handler, options) {
   handler.initialized = false;
   const {promise, resolve, reject} = Promise.withResolvers();
   handler.shutdownPromise = promise;
+  cancelParticipantAppliedPositionObservations(handler);
   const release = async () => {
     handler.logger.info(REPLICA_HANDLER_LOG_MSG.SHUTTING_DOWN, {nodeId: handler.nodeId});
     handler.replicaCreateAdmissionRecoveryRearmOwner.cancel();

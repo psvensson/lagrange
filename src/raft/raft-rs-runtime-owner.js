@@ -486,6 +486,8 @@ function openGroupInCurrentRuntime(group, opening) {
   // Every (re)construction and restore announces its first observed
   // configuration again: a listener's baseline must be level-correct.
   group.announcedConfStateKey = CONF_STATE_NOT_ANNOUNCED;
+  group.announcedAppliedRuntimeGeneration = null;
+  group.announcedAppliedIndex = null;
   if (!opening.restore) {
     const confState = invokeCore(group, CORE_OPERATION.CONF_STATE);
     if (!confState.ok) {
@@ -1234,6 +1236,7 @@ function announce(group, expectedGeneration) {
   const before = group.lastStatus;
   group.lastStatus = now;
   const observed = recordStatusObservation(group, expectedGeneration, now);
+  announceAppliedProgress(group, expectedGeneration, observed);
   if (before && now.raftState !== before.raftState) {
     group.emit(ROLE[now.raftState] || ROLE[0]);
   }
@@ -1256,6 +1259,15 @@ function announce(group, expectedGeneration) {
   if (settlement !== null) {
     group.emit(RUNTIME_EVENT.CONF_CHANGE_APPLIED, settlement);
   }
+}
+
+function announceAppliedProgress(group, expectedGeneration, observed) {
+  if (!observed.ok ||
+      (group.announcedAppliedRuntimeGeneration === expectedGeneration &&
+        observed.value.appliedIndex <= group.announcedAppliedIndex)) return;
+  group.announcedAppliedRuntimeGeneration = expectedGeneration;
+  group.announcedAppliedIndex = observed.value.appliedIndex;
+  group.emit(RUNTIME_EVENT.APPLIED_PROGRESS);
 }
 
 // A conf-change proposal is taken only at the leader's port; one the core
@@ -1834,6 +1846,8 @@ function createRuntimeDispatcher(request) {
     lastStatus: null,
     statusObservation: null,
     announcedConfStateKey: CONF_STATE_NOT_ANNOUNCED,
+    announcedAppliedRuntimeGeneration: null,
+    announcedAppliedIndex: null,
     health: USABLE,
     pendingRuntimeResume: null,
     runtimeResumeTimer: null,

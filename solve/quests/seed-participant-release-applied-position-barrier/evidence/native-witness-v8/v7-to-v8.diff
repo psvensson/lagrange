@@ -1,0 +1,478 @@
+diff --git a/tmp/native-witness-v8/participant-release-native-application-order-v7.test.js b/test/partition/participant-release-native-application-order.test.js
+index 2cc6265db..7b4dcae53 100644
+--- a/tmp/native-witness-v8/participant-release-native-application-order-v7.test.js
++++ b/test/partition/participant-release-native-application-order.test.js
+@@ -35,9 +35,13 @@ import {PARTITION_SERVICE_OPERATION} from
+   '../../src/partition/partition-service-constants.js';
+ import {PARTITION_WRITE_LEADERSHIP_REFUSAL as WRITE_REFUSAL} from
+   '../../src/partition/partition-write-kernel.js';
+-import {RAFT_ROLE} from '../../src/raft/constants.js';
+-import {COMMITTED_MEMBERSHIP_ANSWER_KIND} from
++import {RAFT_EVENT, RAFT_ROLE} from '../../src/raft/constants.js';
++import {
++  COMMITTED_MEMBERSHIP_ANSWER_KIND,
++  COMMITTED_MEMBERSHIP_READ_PURPOSE,
++} from
+   '../../src/raft/raft-committed-membership-constants.js';
++import {createRaftOperationPort} from '../../src/raft/raft-operation-port.js';
+ import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
+ import {
+   RAFT_RS_MESSAGE_TYPE,
+@@ -336,6 +340,269 @@ function createCommitCarrierGate(router, {leader, followers, settled}) {
+   };
+ }
+ 
++function membershipReadFailure(state, phase, error) {
++  const failure = Object.freeze({kind: 'membership-read-failure',
++    replicaId: state.replicaId, phase, error});
++  state.errors.push(failure);
++  return failure;
++}
++
++function validateMembershipRead(state, request, answer, expectedIndex) {
++  assert.equal(request?.purpose, COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS,
++    `${state.replicaId}: the held native read is the canonical witness read`);
++  assert.equal(answer?.kind, COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED,
++    `${state.replicaId}: the native membership answer is committed`);
++  assert.equal(Object.isFrozen(answer), true,
++    `${state.replicaId}: the native membership answer is immutable`);
++  assert.equal(positionOf(answer.appliedIndex), expectedIndex,
++    `${state.replicaId}: native membership applied position is exact`);
++  assert.equal(positionOf(answer.commitIndex), expectedIndex,
++    `${state.replicaId}: native membership commit position is exact`);
++  assert.equal(answer.term, state.paused.membership.term,
++    `${state.replicaId}: native membership term retains PAUSE`);
++  assert.equal(answer.configurationKey, state.paused.membership.configurationKey,
++    `${state.replicaId}: native membership configuration retains PAUSE`);
++  assert.equal(answer.membershipGenerationIndex,
++    state.paused.membership.membershipGenerationIndex,
++    `${state.replicaId}: native membership generation retains PAUSE`);
++  assert.equal(answer.identities[String(state.status.peerId)], state.replicaId,
++    `${state.replicaId}: the native answer retains its exact peer identity`);
++}
++
++function passivelyRecordCurrentMembership(state, request, result) {
++  if (state.currentStarted || state.current !== null || state.routeOutcome !== null) {
++    return;
++  }
++  state.currentStarted = true;
++  const accept = (answer) => {
++    try {
++      assert.notEqual(state.expectedIndex, null,
++        `${state.replicaId}: current membership has an origin anchor`);
++      validateMembershipRead(state, request, answer, state.expectedIndex);
++      state.current = Object.freeze({request, answer});
++      state.currentSignal.resolve(Object.freeze({kind: 'current-membership',
++        replicaId: state.replicaId, answer}));
++    } catch (error) {
++      state.currentSignal.resolve(membershipReadFailure(state,
++        'current-membership', error));
++    }
++  };
++  const reject = (error) => state.currentSignal.resolve(
++    membershipReadFailure(state, 'current-membership', error));
++  if (result !== null && typeof result?.then === 'function') {
++    const observer = Promise.prototype.then.call(result, accept, reject);
++    state.passiveTasks.push(observer);
++    void Promise.prototype.catch.call(observer, () => undefined);
++    return;
++  }
++  accept(result);
++}
++
++function createMembershipReadState({service, status, settled}) {
++  const native = service.raft;
++  const capturedSignal = Promise.withResolvers();
++  const currentSignal = Promise.withResolvers();
++  const progressSignal = Promise.withResolvers();
++  const routeSignal = Promise.withResolvers();
++  const hold = Promise.withResolvers();
++  const state = {service, status, native, wrapper: null,
++    replicaId: service.replicaId, settled, paused: null, request: null,
++    captured: null, current: null, expectedIndex: null, progress: null,
++    capturedSignal, currentSignal, progressSignal, routeSignal, hold,
++    captureStarted: false, currentStarted: false, released: false,
++    routeResult: null, routeOutcome: null, unsubscribe: null,
++    heldTask: null, passiveTasks: [], errors: []};
++
++  const readCommittedMembership = function(request) {
++    const result = Reflect.apply(native.readCommittedMembership, native, [request]);
++    if (state.request === null ||
++        request?.purpose !== COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS) {
++      return result;
++    }
++    if (!state.captureStarted) {
++      state.captureStarted = true;
++      state.heldTask = (async () => {
++        try {
++          const answer = await result;
++          validateMembershipRead(state, request, answer, settled.index);
++          state.captured = Object.freeze({request, answer});
++          capturedSignal.resolve(Object.freeze({kind: 'captured-membership',
++            replicaId: state.replicaId, answer}));
++          await hold.promise;
++          return answer;
++        } catch (error) {
++          capturedSignal.resolve(membershipReadFailure(state,
++            'captured-membership', error));
++          throw error;
++        }
++      })();
++      void Promise.prototype.catch.call(state.heldTask, () => undefined);
++      return state.heldTask;
++    }
++    passivelyRecordCurrentMembership(state, request, result);
++    return result;
++  };
++  state.wrapper = createRaftOperationPort({...native, readCommittedMembership});
++  service.raft = state.wrapper;
++  return state;
++}
++
++function createMembershipReadTreatment(followers, settled) {
++  const states = new Map();
++  try {
++    for (const follower of followers) {
++      const state = createMembershipReadState({...follower, settled});
++      states.set(state.replicaId, state);
++    }
++  } catch (error) {
++    const restorationErrors = [];
++    for (const state of states.values()) {
++      try {
++        if (state.service.raft === state.wrapper) state.service.raft = state.native;
++      } catch (restoreError) {
++        restorationErrors.push(restoreError);
++      }
++    }
++    if (restorationErrors.length > 0) {
++      throw new AggregateError([error, ...restorationErrors], error.message,
++        {cause: error});
++    }
++    throw error;
++  }
++
++  return {
++    states: Object.freeze([...states.values()]),
++    arm(identity, request, paused) {
++      const state = states.get(identity.replicaId);
++      if (state === undefined) return;
++      assert.equal(state.request, null,
++        `${identity.replicaId}: one exact observation arms its native read`);
++      assert.equal(state.service.raft, state.wrapper,
++        `${identity.replicaId}: the exact installed native wrapper is current`);
++      assert.equal(request.replicaId, identity.replicaId,
++        `${identity.replicaId}: the exact route request is retained`);
++      assert.equal(sameReplicaGeneration(identity.target,
++        paused.generation), true,
++      `${identity.replicaId}: the wrapper is armed by its PAUSE generation`);
++      state.request = request;
++      state.paused = paused;
++    },
++    recordRoute(identity, result) {
++      const state = states.get(identity.replicaId);
++      if (state === undefined) return;
++      assert.equal(state.routeResult, null,
++        `${identity.replicaId}: one exact observation route is retained`);
++      state.routeResult = result;
++      const settlement = Promise.prototype.then.call(result,
++        (response) => Object.freeze({kind: 'observation-settled',
++          replicaId: state.replicaId, response}),
++        (error) => Object.freeze({kind: 'observation-threw',
++          replicaId: state.replicaId, error}));
++      state.passiveTasks.push(settlement);
++      const routeObserver = Promise.prototype.then.call(settlement, (outcome) => {
++        state.routeOutcome = outcome;
++        state.routeSignal.resolve(outcome);
++      }, (error) => {
++        const failure = membershipReadFailure(state, 'route-observer', error);
++        state.routeOutcome = failure;
++        state.routeSignal.resolve(failure);
++      });
++      state.passiveTasks.push(routeObserver);
++      void Promise.prototype.catch.call(routeObserver, () => undefined);
++    },
++    expectCurrent(index) {
++      for (const state of states.values()) state.expectedIndex = index;
++    },
++    subscribeProgress() {
++      for (const state of states.values()) {
++        assert.equal(state.unsubscribe, null,
++          `${state.replicaId}: one applied-progress subscription is installed`);
++        state.unsubscribe = state.native.subscribe(RAFT_EVENT.APPLIED_PROGRESS,
++          () => {
++            if (state.progress !== null) return;
++            state.progress = Object.freeze({replicaId: state.replicaId});
++            state.progressSignal.resolve(Object.freeze({kind: 'applied-progress',
++              replicaId: state.replicaId}));
++          });
++      }
++    },
++    release() {
++      for (const state of states.values()) {
++        if (state.released) continue;
++        state.released = true;
++        state.hold.resolve();
++      }
++    },
++    restore(state) {
++      if (state.service.raft === state.native) return;
++      assert.equal(state.service.raft, state.wrapper,
++        `${state.replicaId}: only the exact membership wrapper is restored`);
++      state.service.raft = state.native;
++    },
++  };
++}
++
++async function requireTreatmentRecord(state, field, signal, releaseSettled,
++  stage) {
++  const outcome = await Promise.race([
++    signal,
++    state.routeSignal.promise,
++    releaseSettled,
++  ]);
++  const record = state[field];
++  assert.notEqual(record, null,
++    `${state.replicaId}: ${stage} precedes route/release settlement ` +
++      `(${diagnosticText(outcome)})`);
++  return record;
++}
++
++async function requireOwnedSettlement(state, promise, releaseSettled, stage) {
++  const own = Promise.prototype.then.call(promise,
++    (value) => Object.freeze({kind: 'owned-settled', value}),
++    (error) => Object.freeze({kind: 'owned-threw', error}));
++  const outcome = await Promise.race([own, state.routeSignal.promise,
++    releaseSettled]);
++  assert.ok(outcome.kind === 'owned-settled' || outcome.kind === 'owned-threw',
++    `${state.replicaId}: ${stage} settles before the observation/release ` +
++      `(${diagnosticText(outcome)})`);
++  if (outcome.kind === 'owned-threw') throw outcome.error;
++  return outcome.value;
++}
++
++function assertPublishedFollower(state, group, held) {
++  const view = durableView(group.dbFileOf(MEMBERS.find(([replicaId]) =>
++    replicaId === state.replicaId)));
++  assert.deepEqual([view.applied, view.commit, view.last],
++    [held.k, held.k, held.k],
++    `${state.replicaId}: the real application owner publishes K while N is held`);
++  assert.equal(view.term, held.term,
++    `${state.replicaId}: publication retains the active term`);
++  assert.deepEqual(view.origin, held.enabled.origin,
++    `${state.replicaId}: publication stores the exact ENABLE origin`);
++  assert.deepEqual(view.rows, [],
++    `${state.replicaId}: publication adds no user write`);
++}
++
++function assertObservationRefresh(state, held) {
++  const outcome = state.routeOutcome;
++  assert.equal(outcome?.kind, 'observation-settled',
++    `${state.replicaId}: the exact observation route settles successfully`);
++  const answer = outcome.response[PARTICIPANT_RELEASE_RESULT_FIELD];
++  assert.equal(answer?.outcome, RELEASE_OUTCOME.OBSERVED,
++    `${state.replicaId}: the original observation returns canonical facts`);
++  assert.equal(answer.partitionId, PARTITION_ID);
++  assert.equal(answer.generation.replicaId, state.replicaId);
++  assert.equal(sameReplicaGeneration(answer.generation,
++    state.paused.generation), true,
++  `${state.replicaId}: refreshed facts retain the exact PAUSE generation`);
++  assert.equal(answer.membership, state.current.answer,
++    `${state.replicaId}: refreshed facts retain the native K answer`);
++  assert.equal(positionOf(answer.membership.appliedIndex), held.k);
++  assert.deepEqual(answer.origin, held.enabled.origin);
++  assert.deepEqual(state.errors, [],
++    `${state.replicaId}: native membership scheduling has no capture error`);
++}
++
+ function validatePauseAnchor(records, {leader, statuses, settled}) {
+   assert.equal(records.size, MEMBER_IDS.length,
+     'the natural PAUSE batch contains all three voters');
+@@ -382,7 +649,8 @@ function validatePauseAnchor(records, {leader, statuses, settled}) {
+     release: first.request.release, attempt: first.request.attempt, records});
+ }
+ 
+-function createReleaseRouteObserver(router, {gate, leader, statuses, settled}) {
++function createReleaseRouteObserver(router, {gate, leader, statuses, settled,
++  membershipReads}) {
+   const originalDeliver = router.deliver;
+   const pauseRecords = new Map();
+   const finalInspectRecords = [];
+@@ -456,9 +724,9 @@ function createReleaseRouteObserver(router, {gate, leader, statuses, settled}) {
+     return record;
+   };
+ 
+-  const observeAppliedPositionCall = (request) => {
++  const prepareAppliedPositionCall = (request) => {
+     const action = PARTICIPANT_RELEASE_ACTION.OBSERVE_APPLIED_POSITION;
+-    if (typeof action !== 'string' || request.action !== action) return;
++    if (typeof action !== 'string' || request.action !== action) return null;
+     const identity = requestIdentityOf(request);
+     observationCalls.push(identity);
+     try {
+@@ -472,13 +740,26 @@ function createReleaseRouteObserver(router, {gate, leader, statuses, settled}) {
+       assert.equal(sameReplicaGeneration(identity.target,
+         pause.answer.generation), true);
+       assert.deepEqual(identity.origin, enableRecord.answer.origin);
+-      entered.resolve(Object.freeze({kind: 'observation', identity}));
++      membershipReads.arm(identity, request, pause.answer);
++      return Object.freeze({identity, valid: true});
+     } catch (captureError) {
+       recordError(captureError);
+-      entered.resolve(Object.freeze({kind: 'invalid-observation', identity}));
++      return Object.freeze({identity, valid: false});
+     }
+   };
+ 
++  const recordAppliedPositionRoute = (observation, result) => {
++    if (observation === null) return;
++    try {
++      membershipReads.recordRoute(observation.identity, result);
++    } catch (captureError) {
++      recordError(captureError);
++    }
++    entered.resolve(Object.freeze({kind: observation.valid ?
++      'observation' : 'invalid-observation',
++    identity: observation.identity}));
++  };
++
+   const wrappedDeliver = function(...args) {
+     const request = args[1];
+     const observed = request?.type === PARTICIPANT_RELEASE_TYPE &&
+@@ -487,6 +768,7 @@ function createReleaseRouteObserver(router, {gate, leader, statuses, settled}) {
+     const callOrdinal = matched;
+     const finalInspect = captured ?
+       finalInspectAtCall(args[0], request, callOrdinal) : null;
++    const observation = captured ? prepareAppliedPositionCall(request) : null;
+     let result;
+     try {
+       result = Reflect.apply(originalDeliver, this, args);
+@@ -497,7 +779,7 @@ function createReleaseRouteObserver(router, {gate, leader, statuses, settled}) {
+       throw error;
+     }
+     if (captured) {
+-      observeAppliedPositionCall(request);
++      recordAppliedPositionRoute(observation, result);
+       try {
+         void Promise.prototype.then.call(result,
+           (response) => observeCompletion(request, response, null, finalInspect,
+@@ -821,7 +1103,34 @@ function finishWithCustody(primary, cleanupErrors) {
+   throw aggregate;
+ }
+ 
+-async function cleanupNativeWitness({gate, releasePromise, route,
++async function cleanupMembershipReads(membershipReads, cleanupErrors) {
++  if (membershipReads === null) return;
++  await captureCleanup(cleanupErrors, 'release-membership-reads', async () =>
++    membershipReads.release());
++  for (const state of membershipReads.states) {
++    if (state.heldTask !== null) {
++      await captureCleanup(cleanupErrors,
++        `settle-held-membership-${state.replicaId}`, () => state.heldTask);
++    }
++    for (const [ordinal, task] of state.passiveTasks.entries()) {
++      await captureCleanup(cleanupErrors,
++        `settle-membership-observer-${state.replicaId}-${ordinal}`, () => task);
++    }
++  }
++  for (const state of membershipReads.states) {
++    if (state.unsubscribe !== null) {
++      await captureCleanup(cleanupErrors,
++        `unsubscribe-applied-progress-${state.replicaId}`, async () => {
++          state.unsubscribe();
++        });
++    }
++    await captureCleanup(cleanupErrors,
++      `restore-membership-port-${state.replicaId}`, async () =>
++        membershipReads.restore(state));
++  }
++}
++
++async function cleanupNativeWitness({gate, membershipReads, releasePromise, route,
+   releaseOwners, group, router}, primary) {
+   const cleanupErrors = [];
+   if (gate !== null) gate.disarm();
+@@ -835,6 +1144,7 @@ async function cleanupNativeWitness({gate, releasePromise, route,
+         () => gate.restore(replicaId));
+     }
+   }
++  await cleanupMembershipReads(membershipReads, cleanupErrors);
+   if (releasePromise !== null) {
+     await captureCleanup(cleanupErrors, 'settle-release', () => releasePromise);
+   }
+@@ -873,6 +1183,7 @@ test('the real participant release owner waits for every native voter origin ' +
+   let group = null;
+   let releaseOwners = null;
+   let gate = null;
++  let membershipReads = null;
+   let route = null;
+   let releasePromise = null;
+   let primary = null;
+@@ -903,8 +1214,12 @@ test('the real participant release owner waits for every native voter origin ' +
+         status.role !== RAFT_ROLE.LEADER),
+       settled,
+     });
++    membershipReads = createMembershipReadTreatment(
++      current.statuses.filter(({status}) => status.role !== RAFT_ROLE.LEADER),
++      settled);
+     route = createReleaseRouteObserver(router, {gate,
+-      leader: current.leader, statuses: current.statuses, settled});
++      leader: current.leader, statuses: current.statuses, settled,
++      membershipReads});
+ 
+     releasePromise = releaseOwners.releaseOnce(PARTITION_ID);
+     const trackedRelease = track(releasePromise);
+@@ -914,6 +1229,7 @@ test('the real participant release owner waits for every native voter origin ' +
+     const edge = await Promise.race([releaseSettled, route.entered]);
+     const held = assertHeldEdge({gate, route, group,
+       leader: current.leader, settled});
++    membershipReads.expectCurrent(held.k);
+ 
+     const leaderMember = [current.leader.service.replicaId];
+     const beforeWrite = durableView(group.dbFileOf(leaderMember));
+@@ -950,9 +1266,35 @@ test('the real participant release owner waits for every native voter origin ' +
+     assert.equal(route.facts().observationCalls.length, MEMBER_IDS.length,
+       'the natural observation batch entered for every current member');
+ 
++    await Promise.all(membershipReads.states.map((state) =>
++      requireTreatmentRecord(state, 'captured', state.capturedSignal.promise,
++        releaseSettled, 'real native N capture')));
++    assert.equal(trackedRelease.settled, false,
++      'the same release remains pending while both native N answers are held');
++    membershipReads.subscribeProgress();
++    const forwarded = membershipReads.states.map((state) => Object.freeze({state,
++      promise: gate.forward(state.replicaId)}));
+     gate.disarm();
+-    for (const replicaId of gate.followerIds) await gate.forward(replicaId);
+     for (const replicaId of gate.followerIds) gate.restore(replicaId);
++    await Promise.all(forwarded.map(({state, promise}) =>
++      requireOwnedSettlement(state, promise, releaseSettled,
++        'the exact retained origin carrier')));
++    await Promise.all(membershipReads.states.map((state) =>
++      requireTreatmentRecord(state, 'progress', state.progressSignal.promise,
++        releaseSettled, 'real applied-progress publication')));
++    for (const state of membershipReads.states) {
++      assertPublishedFollower(state, group, held);
++    }
++    membershipReads.release();
++    await Promise.all(membershipReads.states.map((state) =>
++      requireTreatmentRecord(state, 'current', state.currentSignal.promise,
++        releaseSettled, 'canonical native K refresh')));
++    await Promise.all(membershipReads.states.map((state) =>
++      requireTreatmentRecord(state, 'routeOutcome', state.routeSignal.promise,
++        releaseSettled, 'original observation reply')));
++    for (const state of membershipReads.states) {
++      assertObservationRefresh(state, held);
++    }
+     const released = await releasePromise;
+     assertFinalRelease(released, route, held);
+     assert.equal(group.services.every((service) =>
+@@ -980,6 +1322,6 @@ test('the real participant release owner waits for every native voter origin ' +
+     primary = error;
+   }
+ 
+-  await cleanupNativeWitness({gate, releasePromise, route, releaseOwners,
+-    group, router}, primary);
++  await cleanupNativeWitness({gate, membershipReads, releasePromise, route,
++    releaseOwners, group, router}, primary);
+ });

@@ -8,6 +8,9 @@ const RAFT_EVENT = Object.freeze({
   LEADER_CHANGE: 'leader change',
   COMMIT: 'commit',
   TERM_CHANGE: 'term change',
+  // A payload-free wake emitted after the runtime successfully publishes a
+  // newly applied position. Consumers re-read their canonical owner.
+  APPLIED_PROGRESS: 'applied progress',
   COMMITTED_PREFIX_DIVERGENCE: 'committed prefix divergence',
   // The group's applied ConfState differs from the one last announced, or
   // this is the first announcement since the group was (re)constructed or

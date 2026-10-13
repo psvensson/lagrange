@@ -1,0 +1,207 @@
+{
+  "schema": "reviewed-cleanup-integrated-lab-results/1",
+  "inputSha": "9ba9a1941b2326d0d0bcfa49c581cc2fcf74af8d",
+  "tree": "c8bc996fe10cca221c68b5ca7954d1a51066d17d",
+  "sourceTree": "b09288511757fd86ef92553ac235c8d0fed0b345",
+  "nativeWitnessSha256": "d0f0469f57b77858827309eecfc039909a7bd223cb250194492fd4a61cd3c8bd",
+  "runs": [
+    {
+      "host": "adam-laptop",
+      "tag": "cleanup-integrated-native-v7-red-v1",
+      "results": [
+        {
+          "file": "test/partition/participant-release-native-application-order.test.js",
+          "attempt": 1,
+          "ok": false,
+          "assertions": 1,
+          "durationMs": 3772,
+          "retriedOnce": false,
+          "firstFailureLine": "not ok 1 - the real participant release owner waits for every native voter origin publication before final census and resumes the same attempt"
+        }
+      ],
+      "artifacts": [
+        {
+          "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/cleanup-integration-v1/lab-v1/cleanup-integrated-native-v7-red-v1/adam-laptop.raw.err",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        },
+        {
+          "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/cleanup-integration-v1/lab-v1/cleanup-integrated-native-v7-red-v1/adam-laptop.raw.log",
+          "sha256": "f9056275fbef3312d52e17de7fea4aef295780da168184f2dc40ec8c5922d5e9",
+          "bytes": 10483
+        },
+        {
+          "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/cleanup-integration-v1/lab-v1/cleanup-integrated-native-v7-red-v1/adam-laptop.status.json",
+          "sha256": "3ffe09ecc4a1f39ac6f78caca24c95a5d1182b4dbd23662d5e5938bcc488a56f",
+          "bytes": 36
+        },
+        {
+          "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/cleanup-integration-v1/lab-v1/cleanup-integrated-native-v7-red-v1/fleet.json",
+          "sha256": "095d4ff7a5dbc8088f29836f5363a0b432577c1b076f1e4827e0c488b978ff2c",
+          "bytes": 12696
+        },
+        {
+          "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/cleanup-integration-v1/lab-v1/cleanup-integrated-native-v7-red-v1/input.json",
+          "sha256": "2f08ce804751c378cffbafff4dd54c8b62ccd72a39d8dd301ff882f68180671e",
+          "bytes": 630
+        },
+        {
+          "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/cleanup-integration-v1/lab-v1/cleanup-integrated-native-v7-red-v1/lab.log",
+          "sha256": "023c7da2cd49e8622153b3312cf81945c5fe452fd9c23675f016172672fdac37",
+          "bytes": 11006
+        },
+        {
+          "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/cleanup-integration-v1/lab-v1/cleanup-integrated-native-v7-red-v1/result.json",
+          "sha256": "71c85db0e460328a4303691fd52aae52cecd7510cd26bec1f1c659b4928d754d",
+          "bytes": 62
+        },
+        {
+          "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/cleanup-integration-v1/lab-v1/cleanup-integrated-native-v7-red-v1/test-results-adam-laptop.ndjson",
+          "sha256": "2fc8ff90f4758bbbeec203e79f5cd15350cc72aa0132b74f0710027f2df9257b",
+          "bytes": 319
+        }
+      ]
+    },
+    {
+      "host": "lenovo-laptop",
+      "tag": "cleanup-integrated-release-controls-v1",
+      "results": [
+        {
+          "file": "test/node/replica-handler-release-recovery.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 15,
+          "durationMs": 4684,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/partition/participant-release-protocol.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 10,
+          "durationMs": 5859,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        }
+      ],
+      "artifacts": [
+        {
+          "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/cleanup-integration-v1/lab-v1/cleanup-integrated-release-controls-v1/fleet.json",
+          "sha256": "fe3938d433da73f38f98dbb962cb38ccd2f9453dc9c782b0dd459478448cef19",
+          "bytes": 12694
+        },
+        {
+          "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/cleanup-integration-v1/lab-v1/cleanup-integrated-release-controls-v1/input.json",
+          "sha256": "39cb6826697a1ca619f6fd2bf483bed12db63c42922fcc6cc6c40eaaa4fd1f3a",
+          "bytes": 846
+        },
+        {
+          "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/cleanup-integration-v1/lab-v1/cleanup-integrated-release-controls-v1/lab.log",
+          "sha256": "d01c5f603f196f10891931db3e9d93b611323c55c916b1241c2375d960e291b3",
+          "bytes": 1305
+        },
+        {
+          "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/cleanup-integration-v1/lab-v1/cleanup-integrated-release-controls-v1/lenovo-laptop.raw.err",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        },
+        {
+          "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/cleanup-integration-v1/lab-v1/cleanup-integrated-release-controls-v1/lenovo-laptop.raw.log",
+          "sha256": "3adda051a49ba955d9c8e43fd3e0cdd76e45710ca102329d24740373c77696c8",
+          "bytes": 1098
+        },
+        {
+          "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/cleanup-integration-v1/lab-v1/cleanup-integrated-release-controls-v1/lenovo-laptop.status.json",
+          "sha256": "f67f647bb544af538d33b715ae91a9f95a5c95eef71ec0aa1d071b7e2cccb231",
+          "bytes": 36
+        },
+        {
+          "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/cleanup-integration-v1/lab-v1/cleanup-integrated-release-controls-v1/result.json",
+          "sha256": "0bcad3bd0f03146513a2141c21dbd382cc60371507b79388ca5dade5f5e9ae47",
+          "bytes": 62
+        },
+        {
+          "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/cleanup-integration-v1/lab-v1/cleanup-integrated-release-controls-v1/test-results-lenovo-laptop.ndjson",
+          "sha256": "41b6cb44bbe59ae249ae98b2c7c81174068143e73f1ad4381f70555bb42ad1fe",
+          "bytes": 325
+        }
+      ]
+    },
+    {
+      "host": "tv-dator",
+      "tag": "cleanup-integrated-admission-controls-v1",
+      "results": [
+        {
+          "file": "test/partition/participant-release-build-provenance.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 3,
+          "durationMs": 1822,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/partition/partition-participant-release-admission.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 4,
+          "durationMs": 2120,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        }
+      ],
+      "artifacts": [
+        {
+          "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/cleanup-integration-v1/lab-v1/cleanup-integrated-admission-controls-v1/fleet.json",
+          "sha256": "3106820aea8f4124606ad6e213465b864a4f19aec58371f6f6b8e2dc1873584c",
+          "bytes": 12696
+        },
+        {
+          "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/cleanup-integration-v1/lab-v1/cleanup-integrated-admission-controls-v1/input.json",
+          "sha256": "8663571d97f44c7e8541937bd7114bf376dc1ef0bc4dd21095a96f5d2e137652",
+          "bytes": 901
+        },
+        {
+          "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/cleanup-integration-v1/lab-v1/cleanup-integrated-admission-controls-v1/lab.log",
+          "sha256": "5495c2ab3b64187b08bef7e63f0803b671af40254fcee2a86041a3a9de7d54a1",
+          "bytes": 1224
+        },
+        {
+          "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/cleanup-integration-v1/lab-v1/cleanup-integrated-admission-controls-v1/result.json",
+          "sha256": "5e1c14b23b0d4ea7b539b5ecfa7aa70e4d93f336f39053852643e467cba0e5d7",
+          "bytes": 62
+        },
+        {
+          "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/cleanup-integration-v1/lab-v1/cleanup-integrated-admission-controls-v1/test-results-tv-dator.ndjson",
+          "sha256": "52f1ea03a4f5677470ebbdfa870d9f5b099bdad2f327064d1ef7ea39201e591c",
+          "bytes": 343
+        },
+        {
+          "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/cleanup-integration-v1/lab-v1/cleanup-integrated-admission-controls-v1/tv-dator.raw.err",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        },
+        {
+          "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/cleanup-integration-v1/lab-v1/cleanup-integrated-admission-controls-v1/tv-dator.raw.log",
+          "sha256": "d739e7c837e1d193569c8f04f6bfa73823dd576da54dc301f2ef6aa5c24f4b54",
+          "bytes": 1141
+        },
+        {
+          "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/cleanup-integration-v1/lab-v1/cleanup-integrated-admission-controls-v1/tv-dator.status.json",
+          "sha256": "f67f647bb544af538d33b715ae91a9f95a5c95eef71ec0aa1d071b7e2cccb231",
+          "bytes": 36
+        }
+      ]
+    }
+  ],
+  "counts": {
+    "files": 5,
+    "passFiles": 4,
+    "failFiles": 1,
+    "passAssertions": 32,
+    "failAssertions": 1
+  },
+  "verdict": "FOCUSED_CONTROLS_GREEN_NATIVE_RED_ASSESSMENT_PENDING",
+  "limits": "Canonical runner reports are the result authority. Native named assertion at942 needs independent full diagnostic/engagement assessment. No candidate barrier/source-revert/startup/corpus/static/main closure claim. Source implementer is now editing later uncommitted bytes; all these runs bind immutable9ba9."
+}
