@@ -2,7 +2,12 @@ name: rs-raft-tx1-undelivered-decision
 on:
   push:
     branches: [resume/rs-raft-runtime-recovery-20261012]
-    paths: [.github/workflows/rs-raft-tx1-undelivered-decision.yml]
+    paths:
+      - .github/workflows/rs-raft-tx1-undelivered-decision.yml
+      - test/integration/seed-migration-interrupted-decision.integration.test.js
+      - test/integration/seed-migration-cutover-persisted.integration.test.js
+      - test/integration/helpers/tx1-in-doubt-decision-reader.js
+      - test/shards/impact-contracts.json
 permissions:
   contents: read
 jobs:
