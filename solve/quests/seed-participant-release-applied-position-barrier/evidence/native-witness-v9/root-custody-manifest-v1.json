@@ -1,0 +1,77 @@
+{
+  "schema": "root-artifact-custody/1",
+  "witness": {
+    "path": "test/partition/participant-release-native-application-order.test.js",
+    "sha256": "a8c86a338b3b01c86fa08e522d59b45d61fadb8dda2f3e7f4017757db1cbefba",
+    "lines": 1346
+  },
+  "artifacts": [
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v9/checks.json",
+      "bytes": 2303,
+      "sha256": "bab6fdd23609da9ad15e45ebe1f5c260c6b4cb52bb710d584c2da1bbe08a15a0"
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v9/diff-check.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v9/eslint.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v9/file-size.log",
+      "bytes": 274,
+      "sha256": "2c692e3f8ff2f94734c09f04b607fda5bc89b04dace25a39395026b1e6beb20a"
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v9/freeze-manifest.json",
+      "bytes": 1090,
+      "sha256": "f9bb6ba15e800ee02920b7c6ad4983f366eadf011aef887b7416bfd61b81280c"
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v9/head.txt",
+      "bytes": 41,
+      "sha256": "e0303f2eadea41833ee25e6a8df91648e8e9dd3f75bef0e7b6ce44b1b603af25"
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v9/no-index-whitespace.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v9/report.md",
+      "bytes": 1756,
+      "sha256": "a6d7b7a0e9a182055a5b9fcbd5d9c08ead02abb5cc74d87b0fb14835867072df"
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v9/scope.log",
+      "bytes": 110,
+      "sha256": "1ddb732e0eeac4ba477d9c54adbeacdfc2a1b9e0bc868cec4485470aeaaba864"
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v9/status.txt",
+      "bytes": 98,
+      "sha256": "60b60ee582d993465ffdb185c77f5188a66e00920a1260972c5025db6157c556"
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v9/strict-metrics.log",
+      "bytes": 309,
+      "sha256": "ac9ea83b100821cf49f2368946d87b75326329617cd86011df4ee19d49bcaeef"
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v9/syntax.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v9/v8-to-v9.diff",
+      "bytes": 5508,
+      "sha256": "f32a0255adcad34d5ff2b95af0df2ed7efc710846c414b33913fc455f57c83a1"
+    }
+  ],
+  "behavioralRuns": 0,
+  "verdict": "FROZEN_PENDING_FINAL_DELTA_REVIEW"
+}

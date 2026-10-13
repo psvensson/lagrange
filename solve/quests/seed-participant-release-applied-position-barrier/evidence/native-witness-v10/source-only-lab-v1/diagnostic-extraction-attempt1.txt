@@ -1,0 +1,1 @@
+Diagnostic extraction attempt 1 exited 13: the tap-parser complete listener was registered after parser.end(raw), leaving an unsettled top-level await. Eight raw/result files had been copied without mutation; no parsed result or verdict was written. This was offline diagnostic processing, not a lab/test rerun. Attempt 2 registers the completion listener before end.

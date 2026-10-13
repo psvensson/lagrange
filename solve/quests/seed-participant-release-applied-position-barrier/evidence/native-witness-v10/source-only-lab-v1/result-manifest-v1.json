@@ -1,0 +1,80 @@
+{
+  "schema": "native-witness-source-only-lab-results/1",
+  "inputSha": "c12840725e12c87855b2942566313ecee37bc487",
+  "tree": "384e43a1f3c650a2a81e5294ae2d1eb31feda423",
+  "sourceTree": "b09288511757fd86ef92553ac235c8d0fed0b345",
+  "sourceBaseline": "9ba9a1941b2326d0d0bcfa49c581cc2fcf74af8d",
+  "nativeWitnessSha256": "01518ea0132c2806d268c265e642fd9e2a54a3f05568ef49256f8acf4698c8c2",
+  "host": "adam-laptop",
+  "tag": "native-v10-source-only-v1",
+  "results": [
+    {
+      "file": "test/partition/participant-release-native-application-order.test.js",
+      "attempt": 1,
+      "ok": false,
+      "assertions": 1,
+      "durationMs": 4010,
+      "retriedOnce": false,
+      "firstFailureLine": "not ok 1 - the real participant release owner waits for every native voter origin publication before final census and resumes the same attempt"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v10/source-only-lab-v1/adam-laptop.raw.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v10/source-only-lab-v1/adam-laptop.raw.log",
+      "sha256": "750bd3a7b4229a0b7e4ac3e56794dfecb5eed636a6016fd3a9f395d65cc9efde",
+      "bytes": 10488
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v10/source-only-lab-v1/adam-laptop.status.json",
+      "sha256": "3ffe09ecc4a1f39ac6f78caca24c95a5d1182b4dbd23662d5e5938bcc488a56f",
+      "bytes": 36
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v10/source-only-lab-v1/fleet.json",
+      "sha256": "28b2dadec2d2fa6d6310e6095ef95529efcbba28ac1f81c6a3169f1271143b19",
+      "bytes": 12700
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v10/source-only-lab-v1/input.json",
+      "sha256": "ed563c368144aa81fd903f3ddcec8533a0e5fdd17c946d16db9697979b534fc5",
+      "bytes": 630
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v10/source-only-lab-v1/lab.log",
+      "sha256": "3e464a69213c86f230f0ca13a9e9fb458107a217bd30c25f7deae54989d13626",
+      "bytes": 11011
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v10/source-only-lab-v1/result.json",
+      "sha256": "f835f5998da497777e49004ef0b903acaf2cb2fd0b2dea04fe1db720d6e0c1ac",
+      "bytes": 62
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v10/source-only-lab-v1/test-results-adam-laptop.ndjson",
+      "sha256": "e469e3d737525a80f6422d97ccbe6f8478d036e2f6b46db47b940fe8e8962db7",
+      "bytes": 319
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v10/source-only-lab-v1/diagnostic-extraction-attempt1.txt",
+      "sha256": "336b545a88a4a901179485344e0fcfd8420055f97b23de2c2a2c6c6e088c7c9e",
+      "bytes": 368
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v10/source-only-lab-v1/decoded-diagnostic.json",
+      "sha256": "5303e1606d5dd523d72838cea98fdadaf97d2f79b5af0fa01e7a924e1c0e93c1",
+      "bytes": 11716
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v10/source-only-lab-v1/decoding-provenance.json",
+      "sha256": "5589f5af032e1fc482424390023f03de89245204e7dbdceebfb9f61c0d2c9590",
+      "bytes": 1520
+    }
+  ],
+  "independentAssessment": "pending",
+  "candidateProof": false
+}

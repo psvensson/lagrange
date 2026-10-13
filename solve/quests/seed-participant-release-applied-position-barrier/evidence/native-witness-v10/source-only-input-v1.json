@@ -1,0 +1,22 @@
+{
+  "schema": "immutable-lab-input/1",
+  "snapshot": "/tmp/session-worktree-CgfvZP/tree",
+  "commit": "c12840725e12c87855b2942566313ecee37bc487",
+  "tree": "384e43a1f3c650a2a81e5294ae2d1eb31feda423",
+  "sourceTree": "b09288511757fd86ef92553ac235c8d0fed0b345",
+  "sourceBaseline": "9ba9a1941b2326d0d0bcfa49c581cc2fcf74af8d",
+  "parentUnmeasuredV8Input": "26b17aec63414ca9ea1d07f87029f69d5aa2d739",
+  "changedFromBaseline": [
+    "test/partition/participant-release-native-application-order.test.js",
+    "test/shards/impact-graph-seal.json"
+  ],
+  "witnessSha256": "01518ea0132c2806d268c265e642fd9e2a54a3f05568ef49256f8acf4698c8c2",
+  "metadataProducer": "npm run -s test:metadata:refresh",
+  "metadataProducerExit": 0,
+  "metadataLog": {
+    "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v10/source-only-metadata-refresh.log",
+    "sha256": "7eac660966dc47124c9fcff1bfd86b6fddf4677e0d6cfd6e0df997173cfc1b5b"
+  },
+  "behavioralRuns": 0,
+  "verdict": "PREPARED_PENDING_INDEPENDENT_FINAL_DELTA_REVIEW"
+}
