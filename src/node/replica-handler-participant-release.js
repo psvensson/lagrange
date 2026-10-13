@@ -4,11 +4,11 @@
 import {RAFT_ROLE} from '../raft/constants.js';
 import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from '../raft/raft-committed-membership-constants.js';
 import {buildReplacementServiceOptions} from '../partition/partition-reopen-options.js';
-import {isReleaseDrained, readParticipantReleaseFacts} from
-  '../partition/partition-participant-release-facts.js';
-import {releaseAnswer, releaseCensusDefect, releaseIdentityValid, sameReplicaGeneration} from
+import {isReleaseDrained, releaseAnswer, releaseCensusDefect, releaseIdentityValid,
+  sameReplicaGeneration} from
   '../partition/partition-participant-release-contract.js';
-import {raiseParticipantCutoverPause, resumeParticipantCutoverAdmission} from
+import {raiseParticipantCutoverPause, readParticipantReleaseFacts,
+  resumeParticipantCutoverAdmission} from
   '../partition/partition-participant-transaction-pause.js';
 import {enableParticipantTransactionAdmission} from
   '../partition/partition-participant-transaction-request.js';

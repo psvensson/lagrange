@@ -10,13 +10,12 @@ import {ReplicaHandler} from '../../src/node/replica-handler-class.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {RAFT_OPERATION_OUTCOME} from '../../src/raft/raft-operation-port-constants.js';
 import {PARTITION_SERVICE_EVENT} from '../../src/partition/partition-service-constants.js';
-import {readParticipantReleaseFacts} from
-  '../../src/partition/partition-participant-release-facts.js';
 import {releaseIdentityOf} from
   '../../src/partition/partition-participant-release-contract.js';
 import {
   participantReleaseAdmissionOf,
   raiseParticipantCutoverPause,
+  readParticipantReleaseFacts,
   resumeParticipantCutoverAdmission,
 } from '../../src/partition/partition-participant-transaction-pause.js';
 import {

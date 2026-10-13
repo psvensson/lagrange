@@ -1,0 +1,34 @@
+{
+  "sha": "b1d7116c11102725ce34f4d18021f924851b9efe",
+  "tree": "96dd319f69fda9f7c62d42c30a315ecd73c3ba0f",
+  "host": "tv-dator",
+  "files": [
+    "test/partition/partition-participant-release-admission.test.js",
+    "test/partition/participant-release-build-provenance.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/partition/participant-release-build-provenance.test.js",
+        "test/partition/partition-participant-release-admission.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ],
+  "costs": [
+    {
+      "file": "test/partition/participant-release-build-provenance.test.js",
+      "jobs": 4,
+      "ms": 10000,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/partition-participant-release-admission.test.js",
+      "jobs": 4,
+      "ms": 10000,
+      "lane": "ordinary"
+    }
+  ],
+  "startedAt": "2026-10-13T19:15:30.412Z"
+}

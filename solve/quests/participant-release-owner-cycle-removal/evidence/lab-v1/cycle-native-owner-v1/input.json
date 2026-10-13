@@ -1,0 +1,34 @@
+{
+  "sha": "b1d7116c11102725ce34f4d18021f924851b9efe",
+  "tree": "96dd319f69fda9f7c62d42c30a315ecd73c3ba0f",
+  "host": "lenovo-laptop",
+  "files": [
+    "test/partition/participant-release-protocol.test.js",
+    "test/node/replica-handler-release-recovery.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/node/replica-handler-release-recovery.test.js",
+        "test/partition/participant-release-protocol.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ],
+  "costs": [
+    {
+      "file": "test/node/replica-handler-release-recovery.test.js",
+      "jobs": 4,
+      "ms": 10000,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/participant-release-protocol.test.js",
+      "jobs": 4,
+      "ms": 10000,
+      "lane": "ordinary"
+    }
+  ],
+  "startedAt": "2026-10-13T19:15:30.412Z"
+}

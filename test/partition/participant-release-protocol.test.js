@@ -14,11 +14,10 @@ import {SQL_TRANSACTIONS_SCHEMA} from
   '../../src/bootstrap/system-table-workflow-schema-definitions.js';
 import {readTransactionSchemaEnforcement} from
   '../../src/query/distributed/distributed-transaction-schema-enforcement.js';
-import {participantCutoverPauseOf} from
+import {participantCutoverPauseOf, readParticipantReleaseFacts} from
   '../../src/partition/partition-participant-transaction-pause.js';
 import {readPartitionWriteOrigin} from '../../src/partition/partition-participant-transaction-store.js';
-import {isReleaseDrained, readParticipantReleaseFacts} from
-  '../../src/partition/partition-participant-release-facts.js';
+import {isReleaseDrained} from '../../src/partition/partition-participant-release-contract.js';
 import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from
   '../../src/raft/raft-committed-membership-constants.js';
 import {PARTICIPANT_CUTOVER_OUTCOME as OUTCOME} from

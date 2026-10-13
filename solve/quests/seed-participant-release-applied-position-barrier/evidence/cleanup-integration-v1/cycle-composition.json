@@ -1,0 +1,12 @@
+{
+  "schema": "reviewed-cleanup-composition/1",
+  "parent": "c447019c2a5f22cd91938972387fce45eacb938d",
+  "merged": "ad23d75d58e320ca2fe58f8baa9b0a941a8158e2",
+  "componentExactMatchPaths": 9,
+  "nativeWitnessSha256": "d0f0469f57b77858827309eecfc039909a7bd223cb250194492fd4a61cd3c8bd",
+  "metadataProducer": "npm run -s test:metadata:refresh",
+  "ownerInventoryProducer": "node scripts/generate-global-owner-debt-inventory.js --refresh",
+  "ownerInventoryRefreshExit": 0,
+  "ownerInventoryLogSha256": "73efe09d5832f5123a7e0fd202b41a677d4e702e7a0c7287791b0a19a20f0aae",
+  "limitations": "Generated inventory records existing complexity/test duplication ratchet failures; it does not waive them. Component source/test/contract bytes match reviewed freeze except canonically regenerated metadata. No combined behavior proof yet. WIP preservation only."
+}

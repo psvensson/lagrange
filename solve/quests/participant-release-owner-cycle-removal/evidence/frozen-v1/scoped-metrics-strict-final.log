@@ -1,0 +1,25 @@
+
+> lagrange-server@0.2.6 test:metrics:scoped:strict
+> node scripts/check-scoped-ratchets.js --strict src/node/replica-handler-participant-cutover.js src/node/replica-handler-participant-release.js src/partition/partition-participant-release-contract.js src/partition/partition-participant-transaction-pause.js test/node/replica-handler-release-recovery.test.js test/partition/participant-release-protocol.test.js test/test-helpers/participant-transaction-fixture.js
+
+
+Cyclomatic complexity
+Complexity violations (threshold: 12):
+
+src/node/replica-handler-participant-cutover.js:139:1 Async function 'releaseControlOwnerFirst' has a complexity of 15. Maximum allowed is 12.
+src/node/replica-handler-participant-cutover.js:201:1 Async function 'runCutoverAttempt' has a complexity of 30. Maximum allowed is 12.
+src/node/replica-handler-participant-release.js:82:1 Async function 'receiveParticipantRelease' has a complexity of 26. Maximum allowed is 12.
+src/partition/partition-participant-release-contract.js:35:1 Function 'transactionReleaseProofValid' has a complexity of 19. Maximum allowed is 12.
+src/partition/partition-participant-release-contract.js:109:1 Function 'releaseFactsDefect' has a complexity of 33. Maximum allowed is 12.
+src/partition/partition-participant-release-contract.js:145:1 Function 'releaseCensusDefect' has a complexity of 35. Maximum allowed is 12.
+src/partition/partition-participant-transaction-pause.js:84:1 Async function 'readParticipantReleaseFacts' has a complexity of 18. Maximum allowed is 12.
+test/partition/participant-release-protocol.test.js:354:12 Async arrow function has a complexity of 17. Maximum allowed is 12.
+
+8 violation(s) found.
+
+Cognitive complexity
+Cognitive complexity violations (threshold: 20):
+
+src/node/replica-handler-participant-cutover.js:201:16 Refactor this function to reduce its Cognitive Complexity from 23 to the 20 allowed.
+
+1 violation(s) found.

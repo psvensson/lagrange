@@ -7,13 +7,11 @@ import {INITIAL_PARTITION_IDS} from
   '../bootstrap/system-table-schemas-constants.js';
 import {RAFT_LEADERSHIP_TRANSFER_SUCCESSOR} from '../raft/raft-operation-port-constants.js';
 import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from '../raft/raft-committed-membership-constants.js';
-import {readParticipantReleaseFacts, isReleaseDrained} from
-  '../partition/partition-participant-release-facts.js';
-import {raiseParticipantCutoverPause} from
+import {raiseParticipantCutoverPause, readParticipantReleaseFacts} from
   '../partition/partition-participant-transaction-pause.js';
 import {readPartitionWriteOrigin} from
   '../partition/partition-participant-transaction-store.js';
-import {releaseAnswer, releaseCensusDefect, releaseIdentityOf,
+import {isReleaseDrained, releaseAnswer, releaseCensusDefect, releaseIdentityOf,
   releaseIdentityValid, releaseMemberIds} from
   '../partition/partition-participant-release-contract.js';
 import {askParticipantRelease, releaseNodeOfAddress, requestParticipantRelease} from

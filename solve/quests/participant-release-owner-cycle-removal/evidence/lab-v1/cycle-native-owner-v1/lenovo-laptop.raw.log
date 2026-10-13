@@ -1,0 +1,19 @@
+placement-shell=1768547
+placement-head=b1d7116c11102725ce34f4d18021f924851b9efe
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:2.6 mode:local retry: timeout: lanecap:7
+placement-pid=1768931
+# test-files planned=2
+classified lane ordinary: 2 file(s), jobs=4
+thermal: ok cpu 55C (coretemp/Package id 0) nvme unmeasured
+ok test/node/replica-handler-release-recovery.test.js (15 assertions, 4715ms)
+ok test/partition/participant-release-protocol.test.js (10 assertions, 5990ms)
+# test-files total=2 pass=2 fail=0 assertions=25
+placement-results={"file":"test/node/replica-handler-release-recovery.test.js","attempt":1,"ok":true,"assertions":15,"durationMs":4715,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/participant-release-protocol.test.js","attempt":1,"ok":true,"assertions":10,"durationMs":5990,"retriedOnce":false,"firstFailureLine":null}

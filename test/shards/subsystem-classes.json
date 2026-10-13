@@ -28,7 +28,7 @@
   "censusSize": 2369,
   "digest": "fnv1a32-ebdf0e25",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-f06dd859",
+  "observationDigest": "fnv1a32-ad33a0be",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -4768,7 +4768,6 @@
       "files": [
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
-        "src/partition/partition-participant-release-facts.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
@@ -7686,7 +7685,6 @@
       "files": [
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
-        "src/partition/partition-participant-release-facts.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
@@ -8371,7 +8369,6 @@
       "files": [
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
-        "src/partition/partition-participant-release-facts.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
@@ -8636,7 +8633,6 @@
         "src/config/configuration-manager.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
-        "src/partition/partition-participant-release-facts.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
@@ -8735,7 +8731,6 @@
         "src/partition/partition-committed-command-admission.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
-        "src/partition/partition-participant-release-facts.js",
         "src/partition/partition-participant-transaction-constants.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
@@ -8769,7 +8764,6 @@
         "src/bootstrap/system-table-workflow-schema-definitions.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
-        "src/partition/partition-participant-release-facts.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
@@ -8794,7 +8788,6 @@
         "src/bootstrap/system-table-workflow-schema-definitions.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
-        "src/partition/partition-participant-release-facts.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
@@ -8831,7 +8824,6 @@
       "files": [
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
-        "src/partition/partition-participant-release-facts.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
@@ -8870,7 +8862,6 @@
         "src/partition/partition-coordinator-settlement-command.js",
         "src/partition/partition-coordinator-settlement-constants.js",
         "src/partition/partition-participant-release-contract.js",
-        "src/partition/partition-participant-release-facts.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
@@ -8908,7 +8899,6 @@
       "files": [
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
-        "src/partition/partition-participant-release-facts.js",
         "src/partition/partition-participant-transaction-connection.js",
         "src/partition/partition-participant-transaction-constants.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
@@ -8931,7 +8921,6 @@
       "files": [
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
-        "src/partition/partition-participant-release-facts.js",
         "src/partition/partition-participant-transaction-constants.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
@@ -8953,7 +8942,6 @@
       "files": [
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
-        "src/partition/partition-participant-release-facts.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
@@ -8975,7 +8963,6 @@
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-constants.js",
         "src/partition/partition-participant-release-contract.js",
-        "src/partition/partition-participant-release-facts.js",
         "src/partition/partition-participant-transaction-constants.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
@@ -9175,7 +9162,6 @@
       "files": [
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
-        "src/partition/partition-participant-release-facts.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
@@ -9198,7 +9184,6 @@
       "files": [
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
-        "src/partition/partition-participant-release-facts.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
@@ -9231,7 +9216,6 @@
       "files": [
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
-        "src/partition/partition-participant-release-facts.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
@@ -9252,7 +9236,6 @@
       "files": [
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
-        "src/partition/partition-participant-release-facts.js",
         "src/partition/partition-participant-transaction-constants.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
@@ -9275,7 +9258,6 @@
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-mirror-replay-cursor.js",
         "src/partition/partition-participant-release-contract.js",
-        "src/partition/partition-participant-release-facts.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
@@ -9297,7 +9279,6 @@
       "files": [
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
-        "src/partition/partition-participant-release-facts.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
@@ -9318,7 +9299,6 @@
       "files": [
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
-        "src/partition/partition-participant-release-facts.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
@@ -9341,7 +9321,6 @@
       "files": [
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
-        "src/partition/partition-participant-release-facts.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
@@ -9431,7 +9410,6 @@
         "src/config/configuration-manager.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
-        "src/partition/partition-participant-release-facts.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
@@ -9767,7 +9745,6 @@
         "src/bootstrap/phases/seed-cache-hydration-phase.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
-        "src/partition/partition-participant-release-facts.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
@@ -10133,7 +10110,6 @@
         "src/config/configuration-manager.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
-        "src/partition/partition-participant-release-facts.js",
         "src/partition/partition-participant-transaction-constants.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
@@ -15620,7 +15596,6 @@
         "src/config/configuration-manager.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
-        "src/partition/partition-participant-release-facts.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",

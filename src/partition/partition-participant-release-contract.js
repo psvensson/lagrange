@@ -7,7 +7,6 @@ import {COMMITTED_MEMBERSHIP_MAX_PEERS} from '../raft/raft-committed-membership-
 import {PARTITION_ROWID_LIMIT} from './partition-statement-admission-constants.js';
 import {TRANSACTION_RELEASE_CENSUS_STATE} from
   '../query/distributed/distributed-transaction-release-census.js';
-import {isReleaseDrained} from './partition-participant-release-facts.js';
 import {PARTICIPANT_CUTOVER_OUTCOME as OUTCOME, PARTICIPANT_RELEASE_VERSION} from
   './partition-participant-transaction-cutover-constants.js';
 
@@ -101,6 +100,12 @@ function rowidValid(rowid) {
   }
 }
 
+function isReleaseDrained(work) {
+  return work?.sqliteTransactionOpen === false && work.participantStaging === false &&
+    work.participantPrepared === 0 && work.proposals === 0 && work.pendingOutcomes === 0 &&
+    work.appliedIndex === work.commitIndex && work.commitIndex === work.lastIndex;
+}
+
 function releaseFactsDefect(release, facts, options = {}) {
   const {originRequired = true} = options;
   if (facts?.outcome !== OUTCOME.OBSERVED || !facts.membership || !facts.generation ||
@@ -179,6 +184,6 @@ function releaseAnswer(outcome, request = {}, fields = {}) {
     phase: request.action ?? null, ...fields});
 }
 
-export {releaseAnswer, releaseCensusDefect, releaseFactsDefect, releaseIdentityOf,
+export {isReleaseDrained, releaseAnswer, releaseCensusDefect, releaseFactsDefect, releaseIdentityOf,
   releaseIdentityValid, releaseMemberIds, sameReplicaGeneration,
   transactionReleaseProofValid};

@@ -1,0 +1,7 @@
+
+> lagrange-server@0.2.6 test:deps
+> depcruise --config dependency-cruiser.config.cjs src scripts test
+
+
+✔ no dependency violations found (5298 modules, 22411 dependencies cruised)
+
