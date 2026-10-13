@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One machine-local thermal authority shared with Spelunk. This adapter owns
+# One machine-local thermal authority shared across self-hosted projects. This adapter owns
 # only runner/environment routing and the cross-repository machine lock; it
 # never interprets a temperature or weakens Lagrange's proof taxonomy.
 set -euo pipefail
