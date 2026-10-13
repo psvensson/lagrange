@@ -18,7 +18,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-          fetch-depth: 2
+          fetch-depth: 0
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: '22'
@@ -29,14 +29,14 @@ jobs:
           set -euo pipefail
           mkdir -p "$OUT"
           git rev-parse HEAD > "$OUT/candidate-sha.txt"
-          git rev-parse HEAD^^^ > "$OUT/baseline-sha.txt"
+          git rev-parse 733da50e2bb5a70f1fbef0779a966012a150f74e > "$OUT/baseline-sha.txt"
           npm ci > "$OUT/install.log" 2>&1
       - name: Parent source must fail the unchanged race witness
         shell: bash
         run: |
           set -euo pipefail
           BASE="$RUNNER_TEMP/claim-race-baseline"
-          git worktree add --detach "$BASE" HEAD^^^
+          git worktree add --detach "$BASE" 733da50e2bb5a70f1fbef0779a966012a150f74e
           cp "$TEST" "$BASE/$TEST"
           ln -s "$GITHUB_WORKSPACE/node_modules" "$BASE/node_modules"
           set +e
