@@ -1,0 +1,204 @@
+diff --git a/test/partition/participant-release-native-application-order.test.js b/test/partition/participant-release-native-application-order.test.js
+index 0f3e765d4..ab0937c7a 100644
+--- a/test/partition/participant-release-native-application-order.test.js
++++ b/test/partition/participant-release-native-application-order.test.js
+@@ -326,6 +326,14 @@ function createCommitCarrierGate(router, {leader, followers, settled}) {
+           overflow: state.overflow});
+       });
+     },
++    diagnosticFacts() {
++      return followerIds.map((replicaId) => {
++        const state = states.get(replicaId);
++        return Object.freeze({replicaId, matched: state.matched,
++          suppressed: state.suppressed, overflow: state.overflow,
++          forwarded: state.forwarded, restored: state.restored});
++      });
++    },
+     async forward(replicaId) {
+       const state = states.get(replicaId);
+       if (state === undefined || state.forwarded) return;
+@@ -816,6 +824,13 @@ function createReleaseRouteObserver(router, {gate, leader, statuses, settled,
+         observationCalls: [...observationCalls], errors: boundedErrors,
+         matched, dropped, errorCount, errorOverflow});
+     },
++    diagnosticFacts() {
++      return Object.freeze({pauseComplete: pauseAnchor !== null,
++        enableComplete: enableRecord !== null,
++        observationCalls: observationCalls.length,
++        matched, dropped, errorCount, errorOverflow,
++        routeOverflow: routeOverflow !== null});
++    },
+     restore() {
+       if (router.deliver === originalDeliver) return;
+       assert.equal(router.deliver, wrappedDeliver,
+@@ -1044,6 +1059,34 @@ function diagnosticText(value) {
+   }
+ }
+ 
++function installBeforeExitDiagnostic(t, context) {
++  const listener = () => {
++    try {
++      const followers = context.membershipReads.states.map((state) =>
++        Object.freeze({replicaId: state.replicaId,
++          captureStarted: state.captureStarted,
++          captured: state.captured !== null,
++          carrier: state.carrierOutcome?.kind ?? null,
++          progress: state.progress !== null,
++          currentStarted: state.currentStarted,
++          current: state.current !== null,
++          route: state.routeOutcome?.kind ?? null,
++          errors: state.errors.length}));
++      const carriers = context.gate.diagnosticFacts();
++      const snapshot = Object.freeze({kind: 'native-before-exit',
++        partitionId: PARTITION_ID, phase: context.phase,
++        edge: context.edgeKind, cleanupEntered: context.cleanupEntered,
++        releaseSettled: context.trackedRelease?.settled ?? false,
++        route: context.route.diagnosticFacts(), carriers, followers});
++      t.diagnostic(JSON.stringify(snapshot));
++    } catch (error) {
++      context.error = error;
++    }
++  };
++  context.listener = listener;
++  process.once('beforeExit', listener);
++}
++
+ function assertFinalRelease(answer, route, held) {
+   const routeFacts = route.facts();
+   assert.deepEqual(routeFacts.errors, [],
+@@ -1147,9 +1190,23 @@ async function cleanupMembershipReads(membershipReads, cleanupErrors) {
+   return portCustodyUncertain;
+ }
+ 
++async function cleanupExitDiagnostic(exitDiagnostic, cleanupErrors) {
++  if (exitDiagnostic === null) return;
++  await captureCleanup(cleanupErrors, 'remove-before-exit-diagnostic',
++    async () => process.removeListener('beforeExit', exitDiagnostic.listener));
++  if (exitDiagnostic.error !== null) {
++    cleanupErrors.push(Object.freeze({phase: 'before-exit-diagnostic',
++      error: exitDiagnostic.error}));
++  }
++}
++
+ async function cleanupNativeWitness({gate, membershipReads, releasePromise, route,
+-  releaseOwners, group, router}, primary) {
++  releaseOwners, group, router, exitDiagnostic}, primary) {
+   const cleanupErrors = [];
++  if (exitDiagnostic !== null) {
++    exitDiagnostic.cleanupEntered = true;
++    exitDiagnostic.phase = 'cleanup';
++  }
+   if (gate !== null) gate.disarm();
+   if (gate !== null) {
+     for (const replicaId of gate.followerIds) {
+@@ -1194,12 +1251,13 @@ async function cleanupNativeWitness({gate, membershipReads, releasePromise, rout
+   await captureCleanup(cleanupErrors, 'shutdown-router', () => router.shutdown());
+   await captureCleanup(cleanupErrors, 'reset-environment',
+     async () => resetEnvironment());
++  await cleanupExitDiagnostic(exitDiagnostic, cleanupErrors);
+   finishWithCustody(primary, cleanupErrors, retainedDirectory);
+ }
+ 
+ test('the real participant release owner waits for every native voter origin ' +
+   'publication before final census and resumes the same attempt',
+-{timeout: TEST_TIMEOUT_MS}, async () => {
++{timeout: TEST_TIMEOUT_MS}, async (t) => {
+   initializeEnvironment();
+   const router = new MessageRouter({nodeId: NODE_ID,
+     bootIncarnation: TEST_BOOT_INCARNATION});
+@@ -1209,6 +1267,8 @@ test('the real participant release owner waits for every native voter origin ' +
+   let membershipReads = null;
+   let route = null;
+   let releasePromise = null;
++  let trackedRelease = null;
++  let exitDiagnostic = null;
+   let primary = null;
+ 
+   try {
+@@ -1244,12 +1304,19 @@ test('the real participant release owner waits for every native voter origin ' +
+       leader: current.leader, statuses: current.statuses, settled,
+       membershipReads});
+ 
++    exitDiagnostic = {phase: 'release-start', edgeKind: null,
++      cleanupEntered: false, trackedRelease: null, listener: null,
++      error: null, gate, membershipReads, route};
++    installBeforeExitDiagnostic(t, exitDiagnostic);
+     releasePromise = releaseOwners.releaseOnce(PARTITION_ID);
+-    const trackedRelease = track(releasePromise);
++    trackedRelease = track(releasePromise);
++    exitDiagnostic.trackedRelease = trackedRelease;
+     const releaseSettled = releasePromise.then(
+       (answer) => Object.freeze({kind: 'release-settled', answer}),
+       (error) => Object.freeze({kind: 'release-threw', error}));
++    exitDiagnostic.phase = 'release-edge';
+     const edge = await Promise.race([releaseSettled, route.entered]);
++    exitDiagnostic.edgeKind = edge.kind;
+     const held = assertHeldEdge({gate, route, group,
+       leader: current.leader, settled});
+     membershipReads.expectCurrent(held.k);
+@@ -1260,6 +1327,7 @@ test('the real participant release owner waits for every native voter origin ' +
+       proposals: current.leader.service.proposalQueue.size,
+       pendingOutcomes: current.leader.service.pendingWriteOutcomes.size,
+     });
++    exitDiagnostic.phase = 'paused-write';
+     const paused = await insert(current.leader.service, 'paused-row',
+       'must-not-commit', 'native-paused-write');
+     const afterWrite = durableView(group.dbFileOf(leaderMember));
+@@ -1289,6 +1357,7 @@ test('the real participant release owner waits for every native voter origin ' +
+     assert.equal(route.facts().observationCalls.length, MEMBER_IDS.length,
+       'the natural observation batch entered for every current member');
+ 
++    exitDiagnostic.phase = 'native-membership-capture';
+     await Promise.all(membershipReads.states.map((state) =>
+       requireTreatmentRecord(state, 'captured', state.capturedSignal.promise,
+         releaseSettled, 'real native N capture')));
+@@ -1302,9 +1371,11 @@ test('the real participant release owner waits for every native voter origin ' +
+     });
+     gate.disarm();
+     for (const replicaId of gate.followerIds) gate.restore(replicaId);
++    exitDiagnostic.phase = 'carrier-settlement';
+     await Promise.all(forwarded.map(({state, signal}) =>
+       requireOwnedSettlement(state, signal, releaseSettled,
+         'the exact retained origin carrier')));
++    exitDiagnostic.phase = 'applied-progress';
+     await Promise.all(membershipReads.states.map((state) =>
+       requireTreatmentRecord(state, 'progress', state.progressSignal.promise,
+         releaseSettled, 'real applied-progress publication')));
+@@ -1312,15 +1383,18 @@ test('the real participant release owner waits for every native voter origin ' +
+       assertPublishedFollower(state, group, held);
+     }
+     membershipReads.release();
++    exitDiagnostic.phase = 'current-membership';
+     await Promise.all(membershipReads.states.map((state) =>
+       requireTreatmentRecord(state, 'current', state.currentSignal.promise,
+         releaseSettled, 'canonical native K refresh')));
++    exitDiagnostic.phase = 'observation-route';
+     await Promise.all(membershipReads.states.map((state) =>
+       requireTreatmentRecord(state, 'routeOutcome', state.routeSignal.promise,
+         releaseSettled, 'original observation reply')));
+     for (const state of membershipReads.states) {
+       assertObservationRefresh(state, held);
+     }
++    exitDiagnostic.phase = 'release-settlement';
+     const released = await releasePromise;
+     assertFinalRelease(released, route, held);
+     assert.equal(group.services.every((service) =>
+@@ -1333,9 +1407,11 @@ test('the real participant release owner waits for every native voter origin ' +
+       assert.deepEqual(view.origin, held.enabled.origin);
+     }
+ 
++    exitDiagnostic.phase = 'post-release-write';
+     const write = await insert(current.leader.service, 'after-release',
+       'served-once', 'native-after-release-write');
+     assert.equal(write.success, true, 'the released leader serves one write');
++    exitDiagnostic.phase = 'post-release-replication';
+     assert.equal(await group.waitFor(() => {
+       const views = allDurableViews(group);
+       const expectedIndex = held.k + 1n;
+@@ -1349,5 +1425,5 @@ test('the real participant release owner waits for every native voter origin ' +
+   }
+ 
+   await cleanupNativeWitness({gate, membershipReads, releasePromise, route,
+-    releaseOwners, group, router}, primary);
++    releaseOwners, group, router, exitDiagnostic}, primary);
+ });
