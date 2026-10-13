@@ -179,19 +179,23 @@ for (const failRetirement of [false, true]) {
         this.isShutdown = true;
       },
     };
-    await t.rejects(initializeRegisteredMessageGroup({
-      messageGroup: service, messageGroupServices: services,
-      messageRouter: router, address, replicaId: REPLICA_ID,
-    }), (error) => {
-      if (failRetirement) {
-        t.equal(error.cause, primary,
-          'the original startup refusal remains the primary error');
-      } else {
-        t.equal(error, primary,
-          'successful cleanup propagates the same error object');
-      }
-      return true;
-    });
+    let observed = null;
+    try {
+      await initializeRegisteredMessageGroup({
+        messageGroup: service, messageGroupServices: services,
+        messageRouter: router, address, replicaId: REPLICA_ID,
+      });
+    } catch (error) {
+      observed = error;
+    }
+    t.ok(observed, 'initialization refusal must propagate');
+    if (failRetirement) {
+      t.equal(observed.cause, primary,
+        'the original startup refusal remains the primary error');
+    } else {
+      t.equal(observed, primary,
+        'successful cleanup propagates the same error object');
+    }
     t.equal(closes, 1, 'the exact failed runtime receives shutdown');
     if (failRetirement) {
       t.equal(services.get(REPLICA_ID), service,
