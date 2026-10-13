@@ -1,0 +1,56 @@
+lab test: adam-laptop: ordinary (1 files) cores=8 mem=15.5GiB speed x1.94
+[adam-laptop] placement-shell=1895403
+[adam-laptop] placement-head=3c5dd8fa0a06282e6fce92c6c7b73a1f03ae3e12
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2 mode:local retry: timeout: lanecap:7
+[adam-laptop] placement-pid=1895832
+[adam-laptop] # test-files planned=1
+[adam-laptop] classified lane ordinary: 1 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 77C (coretemp/Package id 0) nvme 19C (nvme/Composite) - CPU package 77C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 41C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] not ok test/partition/participant-release-native-application-order.test.js (1 assertions, 3827ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] # Subtest: the real participant release owner waits for every native voter origin publication before final census and resumes the same attempt
+[adam-laptop] not ok 1 - the real participant release owner waits for every native voter origin publication before final census and resumes the same attempt
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 2630.618283
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/3c5dd8fa0a06-mv74g96h-2062893/test/partition/participant-release-native-application-order.test.js:739:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     source-only engagement is the actual held-census refusal: {"sourceAnswer":{"outcome":"origin_replication_pending","releaseId":"5649396e008abcc8f2b36050b05eadfb23aaaf2a21df9f24e0cb9050675faaa7","partitionId":"participant-release-native-p1","phase":"release","retryAfterMs":100},"classifierOutcome":"origin_replication_pending","release":{"partitionId":"participant-release-native-p1","protocolVersion":1,"targetBuildDigest":"59255399efe0d10f77870b520249f88e16ec255b7914a059dd809dde91f515ce","configurationKey":"[[\"3389473438742960220\",\"369021139880748764\",\"7997808076048418692\"],[],[],[],false]","membershipGenerationIndex":3,"releaseId":"5649396e008abcc8f2b36050b05eadfb23aaaf2a21df9f24e0cb9050675faaa7"},"attempt":{"leaderReplicaId":"participant-release-native-p1-r1","term":1,"leaderLifecycleIncarnation":"92a80baf-0961-4a10-a549-b7569d2fb03d","deadlineAtMs":1791922685741},"n":"3","k":"4","term":"1","finalInspects":[{"callOrdinal":9,"phase":"replica_census","targetAddress":"participant-release-native-node/service/replica-handler","request":{"partitionId":"participant-release-native-p1","replicaId":"participant-release-native-p1-r1","action":"inspect","deadlineAtMs":1791922685741,"type":"PARTICIPANT_RELEASE"},"answer":{"outcome":"observed","partitionId":"participant-release-native-p1","generation":{"nodeId":"participant-release-native-node","ownerIncarnation":1,"replicaId":"participant-release-native-p1-r1","lifecycleIncarnation":"92a80baf-0961-4a10-a549-b7569d2fb03d","runtimeGeneration":1,"connectionGeneration":1,"admissionGeneration":1},"buildDigest":"59255399efe0d10f77870b520249f88e16ec255b7914a059dd809dde91f515ce","membership":{"kind":"committed","voters":["369021139880748764","3389473438742960220","7997808076048418692"],"votersOutgoing":[],"learners":[],"learnersNext":[],"appliedIndex":4,"configurationKey":"[[\"3389473438742960220\",\"369021139880748764\",\"7997808076048418692\"],[],[],[],false]","membershipGenerationIndex":3,"commitIndex":4,"term":1,"leaderId":"participant-release-native-p1-r1","gateOpen":true,"identities":{"369021139880748764":"participant-release-native-p1-r3","3389473438742960220":"participant-release-native-p1-r2","7997808076048418692":"participant-release-native-p1-r1"}},"leaderReplicaId":"participant-release-native-p1-r1","leaderAddress":"participant-release-native-node/partition/participant-release-native-p1-r1","role":"leader","confChangePending":false,"peers":[{"peerId":"3389473438742960220","replicaIdentity":"participant-release-native-p1-r2","address":"participant-release-native-node/partition/participant-release-native-p1-r2","addressStatus":"resolved","learner":false,"delivery":{"outcome":"delivered","consecutiveFailures":0}},{"peerId":"369021139880748764","replicaIdentity":"participant-release-native-p1-r3","address":"participant-release-native-node/partition/participant-release-native-p1-r3","addressStatus":"resolved","learner":false,"delivery":{"outcome":"delivered","consecutiveFailures":0}}],"origin":{"originIndex":4,"originTerm":1},"connection":{"generation":1,"servedLegacy":false},"paused":true,"rowid":{"kind":"rowid","maximum":null,"belowCeiling":true},"work":{"sqliteTransactionOpen":false,"participantStaging":false,"participantPrepared":0,"proposals":0,"pendingOutcomes":0,"appliedIndex":4,"commitIndex":4,"lastIndex":4},"topology":null,"queryCensus":null}},{"callOrdinal":10,"phase":"replica_census","targetAddress":"participant-release-native-node/service/replica-handler","request":{"partitionId":"participant-release-native-p1","replicaId":"participant-release-native-p1-r2","action":"inspect","deadlineAtMs":1791922685741,"type":"PARTICIPANT_RELEASE"},"answer":{"outcome":"observed","partitionId":"participant-release-native-p1","generation":{"nodeId":"participant-release-native-node","ownerIncarnation":1,"replicaId":"participant-release-native-p1-r2","lifecycleIncarnation":"f42d174d-e825-4e69-953f-8a14d3244c01","runtimeGeneration":1,"connectionGeneration":2,"admissionGeneration":3},"buildDigest":"59255399efe0d10f77870b520249f88e16ec255b7914a059dd809dde91f515ce","membership":{"kind":"committed","voters":["369021139880748764","3389473438742960220","7997808076048418692"],"votersOutgoing":[],"learners":[],"learnersNext":[],"appliedIndex":3,"configurationKey":"[[\"3389473438742960220\",\"369021139880748764\",\"7997808076048418692\"],[],[],[],false]","membershipGenerationIndex":3,"commitIndex":3,"term":1,"leaderId":"participant-release-native-p1-r1","gateOpen":true,"identities":{"369021139880748764":"participant-release-native-p1-r3","3389473438742960220":"participant-release-native-p1-r2","7997808076048418692":"participant-release-native-p1-r1"}},"leaderReplicaId":"participant-release-native-p1-r1","leaderAddress":"participant-release-native-node/partition/participant-release-native-p1-r1","role":"follower","confChangePending":false,"peers":[{"peerId":"7997808076048418692","replicaIdentity":"participant-release-native-p1-r1","address":"participant-release-native-node/partition/participant-release-native-p1-r1","addressStatus":"resolved","learner":false,"delivery":{"outcome":"delivered","consecutiveFailures":0}},{"peerId":"369021139880748764","replicaIdentity":"participant-release-native-p1-r3","address":"participant-release-native-node/partition/participant-release-native-p1-r3","addressStatus":"resolved","learner":false,"delivery":{"outcome":"none-observed"}}],"origin":null,"connection":{"generation":2,"servedLegacy":false},"paused":true,"rowid":{"kind":"rowid","maximum":null,"belowCeiling":true},"work":{"sqliteTransactionOpen":false,"participantStaging":false,"participantPrepared":0,"proposals":0,"pendingOutcomes":0,"appliedIndex":3,"commitIndex":3,"lastIndex":3},"topology":null,"queryCensus":null}},{"callOrdinal":11,"phase":"replica_census","targetAddress":"participant-release-native-node/service/replica-handler","request":{"partitionId":"participant-release-native-p1","replicaId":"participant-release-native-p1-r3","action":"inspect","deadlineAtMs":1791922685741,"type":"PARTICIPANT_RELEASE"},"answer":{"outcome":"observed","partitionId":"participant-release-native-p1","generation":{"nodeId":"participant-release-native-node","ownerIncarnation":1,"replicaId":"participant-release-native-p1-r3","lifecycleIncarnation":"e7c64504-913c-4a76-b7fa-b131790e9610","runtimeGeneration":1,"connectionGeneration":3,"admissionGeneration":4},"buildDigest":"59255399efe0d10f77870b520249f88e16ec255b7914a059dd809dde91f515ce","membership":{"kind":"committed","voters":["369021139880748764","3389473438742960220","7997808076048418692"],"votersOutgoing":[],"learners":[],"learnersNext":[],"appliedIndex":3,"configurationKey":"[[\"3389473438742960220\",\"369021139880748764\",\"7997808076048418692\"],[],[],[],false]","membershipGenerationIndex":3,"commitIndex":3,"term":1,"leaderId":"participant-release-native-p1-r1","gateOpen":true,"identities":{"369021139880748764":"participant-release-native-p1-r3","3389473438742960220":"participant-release-native-p1-r2","7997808076048418692":"participant-release-native-p1-r1"}},"leaderReplicaId":"participant-release-native-p1-r1","leaderAddress":"participant-release-native-node/partition/participant-release-native-p1-r1","role":"follower","confChangePending":false,"peers":[{"peerId":"7997808076048418692","replicaIdentity":"participant-release-native-p1-r1","address":"participant-release-native-node/partition/participant-release-native-p1-r1","addressStatus":"resolved","learner":false,"delivery":{"outcome":"delivered","consecutiveFailures":0}},{"peerId":"3389473438742960220","replicaIdentity":"participant-release-native-p1-r2","address":"participant-release-native-node/partition/participant-release-native-p1-r2","addressStatus":"resolved","learner":false,"delivery":{"outcome":"none-observed"}}],"origin":null,"connection":{"generation":3,"servedLegacy":false},"paused":true,"rowid":{"kind":"rowid","maximum":null,"belowCeiling":true},"work":{"sqliteTransactionOpen":false,"participantStaging":false,"participantPrepared":0,"proposals":0,"pendingOutcomes":0,"appliedIndex":3,"commitIndex":3,"lastIndex":4},"topology":null,"queryCensus":null}}]}
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]     + 'origin_replication_pending'
+[adam-laptop]     - 'release_drain_pending'
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected: 'release_drain_pending'
+[adam-laptop]   actual: 'origin_replication_pending'
+[adam-laptop]   operator: 'strictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/3c5dd8fa0a06-mv74g96h-2062893/test/partition/participant-release-native-application-order.test.js:813:14)
+[adam-laptop]     runNextTicks (node:internal/process/task_queues:64:5)
+[adam-laptop]     listOnTimeout (node:internal/timers:547:9)
+[adam-laptop]     process.processTimers (node:internal/timers:521:7)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adam-laptop]   ...
+[adam-laptop] 1..1
+[adam-laptop] # tests 1
+[adam-laptop] # suites 0
+[adam-laptop] # pass 0
+[adam-laptop] # fail 1
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 2638.491956
+[adam-laptop] # time=3827ms
+[adam-laptop] # test-files total=1 pass=0 fail=1 assertions=1
+lab test: adam-laptop: # test-files total=1 pass=0 fail=1 assertions=1
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=1 pass=0 fail=1 assertions=1

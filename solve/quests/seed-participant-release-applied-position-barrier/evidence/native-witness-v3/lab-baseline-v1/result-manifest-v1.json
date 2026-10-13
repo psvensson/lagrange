@@ -1,0 +1,63 @@
+{
+  "schema": "native-release-baseline-result/1",
+  "inputSha": "e8afaa2cfe87cfbbbb3f11ae0516b294e9d48ba4",
+  "inputTree": "995db773d0ecb3d36488101de0a12ea3dc399359",
+  "sourceTree": "4ff29d950a074768b3bcc40f6df310abda9827c0",
+  "host": "adam-laptop",
+  "result": {
+    "file": "test/partition/participant-release-native-application-order.test.js",
+    "attempt": 1,
+    "ok": false,
+    "assertions": 1,
+    "durationMs": 3872,
+    "retriedOnce": false,
+    "firstFailureLine": "not ok 1 - the real participant release owner waits for every native voter origin publication before final census and resumes the same attempt"
+  },
+  "verdict": "HOLD_EXPECTED_REFUSAL_MISMATCH",
+  "actualOutcome": "origin_replication_pending",
+  "expectedOutcome": "release_drain_pending",
+  "engagement": "All preceding held-carrier, durable leader K/K/K follower N/N/K, actual PAUSE and zero-effect write assertions completed before exact refusal assertion at frozen witness line753. No concrete N/K values were printed.",
+  "limits": "Not accepted as sealed expected baseline red, no production authorization. One canonical thermal hold occurred before execution and cleared at next check. No timing budget or retry changed.",
+  "artifacts": [
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v3/lab-baseline-v1/adam-laptop.raw.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v3/lab-baseline-v1/adam-laptop.raw.log",
+      "sha256": "e96a1deccca697ee319d206f781bad47f90ed1e279808d26eb8cc28562b2378d",
+      "bytes": 2768
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v3/lab-baseline-v1/adam-laptop.status.json",
+      "sha256": "3ffe09ecc4a1f39ac6f78caca24c95a5d1182b4dbd23662d5e5938bcc488a56f",
+      "bytes": 36
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v3/lab-baseline-v1/fleet.json",
+      "sha256": "c30af93357d0ea1ac996386f3a5923a5552a4dc637e1db39bdbc5f620754d3e6",
+      "bytes": 12698
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v3/lab-baseline-v1/input.json",
+      "sha256": "67c79d7d54c00b2f9957f9bc254998fb0ba181aac1dc18baf46f1d14142bef3c",
+      "bytes": 630
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v3/lab-baseline-v1/lab.log",
+      "sha256": "404fe176d9a2b8b841c2a72b257450a131291f975df93eaf0e9d4b7a74369bff",
+      "bytes": 3445
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v3/lab-baseline-v1/result.json",
+      "sha256": "60a708ff9347e48925bd7da5fdb4dd6d1bd9c46cb7a7709705fd2762012e548e",
+      "bytes": 62
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v3/lab-baseline-v1/test-results-adam-laptop.ndjson",
+      "sha256": "e65edd349e67408fd97e12070d542e0cfc257fc7a75759abbd203b5e9822960a",
+      "bytes": 319
+    }
+  ]
+}

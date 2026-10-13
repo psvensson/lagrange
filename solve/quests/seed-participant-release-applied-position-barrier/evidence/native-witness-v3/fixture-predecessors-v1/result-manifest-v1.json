@@ -1,0 +1,338 @@
+{
+  "schema": "native-release-fixture-predecessors/1",
+  "candidateSha": "e8afaa2cfe87cfbbbb3f11ae0516b294e9d48ba4",
+  "predecessorSha": "77e091f64fb711fbc5ca40a7915ae85f01a5cf4e",
+  "sourceTree": "4ff29d950a074768b3bcc40f6df310abda9827c0",
+  "pairs": [
+    {
+      "host": "tv-dator",
+      "file": "test/partition/partition-write-leadership-transfer.test.js",
+      "candidate": {
+        "file": "test/partition/partition-write-leadership-transfer.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 2,
+        "durationMs": 1765,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 1 - a partition write during a leadership transfer is retried and served once the leader takes writes again, never refused"
+      },
+      "predecessor": {
+        "file": "test/partition/partition-write-leadership-transfer.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 2,
+        "durationMs": 1637,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 1 - a partition write during a leadership transfer is retried and served once the leader takes writes again, never refused"
+      },
+      "canonicalFieldsEqual": true
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/query/partition-write-answer-consumers.test.js",
+      "candidate": {
+        "file": "test/query/partition-write-answer-consumers.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 2,
+        "durationMs": 1777,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 2 - F-aj: the query executor re-delivers an unknown outcome under the write's one entryId until it is settled - its client gets the original result, applied once; a router holding the code re-proposes it only under its entryId, idempotently"
+      },
+      "predecessor": {
+        "file": "test/query/partition-write-answer-consumers.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 2,
+        "durationMs": 1834,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 2 - F-aj: the query executor re-delivers an unknown outcome under the write's one entryId until it is settled - its client gets the original result, applied once; a router holding the code re-proposes it only under its entryId, idempotently"
+      },
+      "canonicalFieldsEqual": true
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/partition/partition-statement-admission.test.js",
+      "candidate": {
+        "file": "test/partition/partition-statement-admission.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 11,
+        "durationMs": 4171,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 2 - TX1 admission A2: a ceiling refusal and non-replicated inserts on each replica's connection, followed by an UPDATE, a DELETE and an ignored INSERT, leave byte-identical outcome rows on two replicas; an INSERT outcome still carries its own rowid"
+      },
+      "predecessor": {
+        "file": "test/partition/partition-statement-admission.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 11,
+        "durationMs": 3811,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 2 - TX1 admission A2: a ceiling refusal and non-replicated inserts on each replica's connection, followed by an UPDATE, a DELETE and an ignored INSERT, leave byte-identical outcome rows on two replicas; an INSERT outcome still carries its own rowid"
+      },
+      "canonicalFieldsEqual": true
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/query/unknown-outcome-redelivery-budget.test.js",
+      "candidate": {
+        "file": "test/query/unknown-outcome-redelivery-budget.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 3,
+        "durationMs": 73909,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 1 - an unknown that outlasts the budget is re-delivered with backoff - a handful of deliveries, not one per retry delay - and ends typed"
+      },
+      "predecessor": {
+        "file": "test/query/unknown-outcome-redelivery-budget.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 3,
+        "durationMs": 74152,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 1 - an unknown that outlasts the budget is re-delivered with backoff - a handful of deliveries, not one per retry delay - and ends typed"
+      },
+      "canonicalFieldsEqual": true
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/query/unknown-outcome-same-entry.test.js",
+      "candidate": {
+        "file": "test/query/unknown-outcome-same-entry.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 11,
+        "durationMs": 170996,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 1 - W1 (R6-B): a registration INSERT cut by a runtime replacement, with no authoritative read, ends ACCEPTED - one row, no UNIQUE error, never \"not confirmed\""
+      },
+      "predecessor": {
+        "file": "test/query/unknown-outcome-same-entry.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 11,
+        "durationMs": 171262,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 1 - W1 (R6-B): a registration INSERT cut by a runtime replacement, with no authoritative read, ends ACCEPTED - one row, no UNIQUE error, never \"not confirmed\""
+      },
+      "canonicalFieldsEqual": true
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/query/write-identity-instance.test.js",
+      "candidate": {
+        "file": "test/query/write-identity-instance.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 17,
+        "durationMs": 446462,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 1 - V3: a second birth of a held name after the row was deleted executes - the row exists with the new content"
+      },
+      "predecessor": {
+        "file": "test/query/write-identity-instance.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 17,
+        "durationMs": 446639,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 1 - V3: a second birth of a held name after the row was deleted executes - the row exists with the new content"
+      },
+      "canonicalFieldsEqual": true
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/partition/partition-write-leadership-transfer-committed.test.js",
+      "candidate": {
+        "file": "test/partition/partition-write-leadership-transfer-committed.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 2,
+        "durationMs": 2723,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 1 - a write the leader serves during a leadership transfer is committed: its row is stored and the log position it names holds it"
+      },
+      "predecessor": {
+        "file": "test/partition/partition-write-leadership-transfer-committed.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 2,
+        "durationMs": 3133,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 1 - a write the leader serves during a leadership transfer is committed: its row is stored and the log position it names holds it"
+      },
+      "canonicalFieldsEqual": true
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/partition/settled-replay-preserves-result.test.js",
+      "candidate": {
+        "file": "test/partition/settled-replay-preserves-result.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 6,
+        "durationMs": 2731,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 1 - W1: an INSERT in flight across a forced runtime replacement commits once, and its retry is answered applied with its row count - never success with zero rows, never a UNIQUE failure"
+      },
+      "predecessor": {
+        "file": "test/partition/settled-replay-preserves-result.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 6,
+        "durationMs": 3363,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 1 - W1: an INSERT in flight across a forced runtime replacement commits once, and its retry is answered applied with its row count - never success with zero rows, never a UNIQUE failure"
+      },
+      "canonicalFieldsEqual": true
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/query/write-exactly-once-schedules.test.js",
+      "candidate": {
+        "file": "test/query/write-exactly-once-schedules.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 2,
+        "durationMs": 62843,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 1 - (c1) two log entries for one entryId, both committed: applied once, the caller answered with the first application's result"
+      },
+      "predecessor": {
+        "file": "test/query/write-exactly-once-schedules.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 2,
+        "durationMs": 63242,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 1 - (c1) two log entries for one entryId, both committed: applied once, the caller answered with the first application's result"
+      },
+      "canonicalFieldsEqual": true
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/query/write-exactly-once-property.test.js",
+      "candidate": {
+        "file": "test/query/write-exactly-once-property.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 1,
+        "durationMs": 600026,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 1 - exactly-once property, seed 20261005: 40 logical writes under random faults",
+        "timeout": {
+          "budgetMs": 600000,
+          "elapsedMs": 600026,
+          "load1": 0.46,
+          "cores": 8,
+          "freeMemMb": 14147,
+          "machineFactor": 2.3
+        }
+      },
+      "predecessor": {
+        "file": "test/query/write-exactly-once-property.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 1,
+        "durationMs": 600053,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 1 - exactly-once property, seed 20261005: 40 logical writes under random faults",
+        "timeout": {
+          "budgetMs": 600000,
+          "elapsedMs": 600053,
+          "load1": 0.57,
+          "cores": 8,
+          "freeMemMb": 14131,
+          "machineFactor": 2.2
+        }
+      },
+      "canonicalFieldsEqual": true
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v3/fixture-predecessors-v1/native-witness-v3-fixture-predecessor-a/fleet.json",
+      "sha256": "c197e202e79c2d8953c28320da5803e20677bf36c34ae3fd5ecf49bf1efe0c4b",
+      "bytes": 13404
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v3/fixture-predecessors-v1/native-witness-v3-fixture-predecessor-a/input.json",
+      "sha256": "98d62117e30c6bb9baf0fd7e33057d4a35a1075170b268fd87e1d8455ee88ac1",
+      "bytes": 1879
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v3/fixture-predecessors-v1/native-witness-v3-fixture-predecessor-a/lab.log",
+      "sha256": "018bc89944c3a6665b969f325f73cd21ca85452efec4527d95095ecd1303df27",
+      "bytes": 113509
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v3/fixture-predecessors-v1/native-witness-v3-fixture-predecessor-a/result.json",
+      "sha256": "dc44999fd59a971c1a799e975976f97c352bc3a37a044fe024882698e4296ca7",
+      "bytes": 62
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v3/fixture-predecessors-v1/native-witness-v3-fixture-predecessor-a/test-results-tv-dator.ndjson",
+      "sha256": "05329773153d6ffd77e9de4e951d7460b1cbedf86fb077987e0439def478dabe",
+      "bytes": 2026
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v3/fixture-predecessors-v1/native-witness-v3-fixture-predecessor-a/tv-dator.raw.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v3/fixture-predecessors-v1/native-witness-v3-fixture-predecessor-a/tv-dator.raw.log",
+      "sha256": "863b78adfd167038278491948a3aad4880eb590c21d46f1a32fecdb1b125628a",
+      "bytes": 101121
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v3/fixture-predecessors-v1/native-witness-v3-fixture-predecessor-a/tv-dator.status.json",
+      "sha256": "3ffe09ecc4a1f39ac6f78caca24c95a5d1182b4dbd23662d5e5938bcc488a56f",
+      "bytes": 36
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v3/fixture-predecessors-v1/native-witness-v3-fixture-predecessor-b/fleet.json",
+      "sha256": "6cbbe3acfcd7042500cdb61c1c5bd546225b88af6e7784306b37e5a50287a28a",
+      "bytes": 13381
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v3/fixture-predecessors-v1/native-witness-v3-fixture-predecessor-b/input.json",
+      "sha256": "8c0921a53471989c671db0c5ea712e7ae6c4a7b78d973a11109b366740544ec6",
+      "bytes": 1408
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v3/fixture-predecessors-v1/native-witness-v3-fixture-predecessor-b/lab.log",
+      "sha256": "c9c95c1ce94b9499f203ab55acbbbaf7090a0ec66c23ee9b11d3d50c9546ae23",
+      "bytes": 21111
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v3/fixture-predecessors-v1/native-witness-v3-fixture-predecessor-b/lenovo-laptop.raw.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v3/fixture-predecessors-v1/native-witness-v3-fixture-predecessor-b/lenovo-laptop.raw.log",
+      "sha256": "15f3b3f6fb3e2381c0edd1efd12f878215446650d142939b95dd70f37543b4dc",
+      "bytes": 17339
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v3/fixture-predecessors-v1/native-witness-v3-fixture-predecessor-b/lenovo-laptop.status.json",
+      "sha256": "3ffe09ecc4a1f39ac6f78caca24c95a5d1182b4dbd23662d5e5938bcc488a56f",
+      "bytes": 36
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v3/fixture-predecessors-v1/native-witness-v3-fixture-predecessor-b/result.json",
+      "sha256": "269e6422438d42b8d48b69ed1b0afccb946d1b33a824e09fb427d73cb3a34435",
+      "bytes": 62
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v3/fixture-predecessors-v1/native-witness-v3-fixture-predecessor-b/test-results-lenovo-laptop.ndjson",
+      "sha256": "ed927eaed6eb344fc59f8327c1a2085e1418fa1a55b603c2b58bc7f935fd169b",
+      "bytes": 1316
+    }
+  ],
+  "verdict": "TEN_CANONICAL_FILE_FAILURES_REPRODUCED_FULL_SEMANTIC_COMPARISON_PENDING",
+  "limits": "Same-host attempt1, no retries. Equality covers canonical runner fields only, not independent full child TAP adjudication. Both property runs exhaust600000ms with healthy available resources; all failures remain unresolved system bugs, and no whole-consumer-cone green claim is made."
+}

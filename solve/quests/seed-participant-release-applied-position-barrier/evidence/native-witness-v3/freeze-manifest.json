@@ -1,0 +1,59 @@
+{
+  "schema": "native-release-boundary-witness-freeze/3",
+  "baseHead": "77e091f64fb711fbc5ca40a7915ae85f01a5cf4e",
+  "sourceTree": "4ff29d950a074768b3bcc40f6df310abda9827c0",
+  "sourceDiff": false,
+  "reviewInput": {
+    "path": "test-output/seed-native-startup-census-20261013/native-release-boundary-witness-implementation-review-v2.md",
+    "sha256": "1763ff089a7ed69db7e5d43a67427e88503657334fdd81bdc593150824ca8a73",
+    "resolvedItems": ["I7"]
+  },
+  "ownedPaths": [
+    {
+      "path": "test/partition/partition-admitted-group-fixture.js",
+      "sha256": "24d4a14f2fab2c5ee43d02846fe32280ec31f5897ae301aa5695123cf1376af0"
+    },
+    {
+      "path": "test/partition/partition-release-fixture.js",
+      "sha256": "2025703ba80ff8ab2d20bb70c00d851cd19c687578a5ba5e5e973f99cee522b1"
+    },
+    {
+      "path": "test/partition/participant-release-native-application-order.test.js",
+      "sha256": "b33ae79585109d222ffe09e0af8402d892ef38e444417eb9dd91fe9362c65dee"
+    },
+    {
+      "path": "test/shards/primary-classes.json",
+      "sha256": "4f1b4e5a47fa0eb09b9ae373ea67bbad4f05f201004406617371854109d04fc6"
+    },
+    {
+      "path": "test/shards/resource-classes.json",
+      "sha256": "d44e0f57f935727b938f407769fe3d7594bfbd11b7c8ee67ba7fc731ec1f2061"
+    },
+    {
+      "path": "test/shards/subsystem-classes.json",
+      "sha256": "36ccdc0b45203ac48f5f21af6dcaa95b686ec9da04e99a7ca2808cdc1d1e9067"
+    },
+    {
+      "path": "test/shards/impact-graph-seal.json",
+      "sha256": "5ebbf6597eb2d2accc8ecc861350265dd769bba14eb5da1641f28029533bf329"
+    }
+  ],
+  "evidence": {
+    "scopedDiff": {
+      "path": "test-output/seed-native-startup-census-20261013/native-witness-v3/scoped.diff",
+      "sha256": "e80e2135cf684f8a323c0e5eba005dfa5a728ad188104c2ab5b9de40464171e9"
+    },
+    "checks": {
+      "path": "test-output/seed-native-startup-census-20261013/native-witness-v3/checks.json",
+      "sha256": "5fc10613303c3cc1d75bf75a2bf2f19622e7932f9edbdc5120c7e86a2e1ffe49"
+    }
+  },
+  "metadata": {
+    "testCount": 2369,
+    "primaryDigest": "fnv1a32-f731fa14",
+    "resourceDigest": "fnv1a32-77e2eed6",
+    "subsystemDigest": "fnv1a32-ebdf0e25",
+    "impactSnapshotDigest": "7bb36e0e48b117f6c8c9d1c7dd58ee82291f559ef68f130d012754cb7a09d2dc"
+  },
+  "behavioralRunsByWorker": 0
+}

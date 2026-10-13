@@ -1,0 +1,50 @@
+{
+  "sha": "77e091f64fb711fbc5ca40a7915ae85f01a5cf4e",
+  "tree": "935479206a484dfb45949bf16ccaf006d06c13e1",
+  "host": "lenovo-laptop",
+  "files": [
+    "test/partition/partition-write-leadership-transfer-committed.test.js",
+    "test/partition/settled-replay-preserves-result.test.js",
+    "test/query/write-exactly-once-schedules.test.js",
+    "test/query/write-exactly-once-property.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/partition/settled-replay-preserves-result.test.js",
+        "test/query/write-exactly-once-property.test.js",
+        "test/query/write-exactly-once-schedules.test.js",
+        "test/partition/partition-write-leadership-transfer-committed.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ],
+  "costs": [
+    {
+      "file": "test/partition/settled-replay-preserves-result.test.js",
+      "jobs": 4,
+      "ms": 4805,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/write-exactly-once-property.test.js",
+      "jobs": 4,
+      "ms": 4805,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/write-exactly-once-schedules.test.js",
+      "jobs": 4,
+      "ms": 4805,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/partition-write-leadership-transfer-committed.test.js",
+      "jobs": 4,
+      "ms": 4805,
+      "lane": "ordinary"
+    }
+  ],
+  "startedAt": "2026-10-13T20:02:57.545Z"
+}

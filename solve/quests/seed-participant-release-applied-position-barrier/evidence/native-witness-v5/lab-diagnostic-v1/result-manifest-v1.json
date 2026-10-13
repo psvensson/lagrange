@@ -1,0 +1,74 @@
+{
+  "schema": "native-release-boundary-diagnostic/1",
+  "inputSha": "3c5dd8fa0a06282e6fce92c6c7b73a1f03ae3e12",
+  "tree": "dfa2e8b464f28c856bedd2c7d35327ed0cb03df4",
+  "sourceTree": "4ff29d950a074768b3bcc40f6df310abda9827c0",
+  "host": "adam-laptop",
+  "witnessSha256": "76e3f47c792691b7ee2036c5d0478bb92a1723f9ccebc73efa7ca3501b22b7d1",
+  "reviewSha256": "56bbb9ef8d684a8b2d138cb19773eb87c920f196fdd2d6fcccad9d1d092a3986",
+  "results": [
+    {
+      "file": "test/partition/participant-release-native-application-order.test.js",
+      "attempt": 1,
+      "ok": false,
+      "assertions": 1,
+      "durationMs": 3827,
+      "retriedOnce": false,
+      "firstFailureLine": "not ok 1 - the real participant release owner waits for every native voter origin publication before final census and resumes the same attempt"
+    }
+  ],
+  "actualOutcome": "origin_replication_pending",
+  "classifierOutcome": "origin_replication_pending",
+  "n": "3",
+  "k": "4",
+  "term": "1",
+  "artifacts": [
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v5/lab-diagnostic-v1/adam-laptop.raw.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v5/lab-diagnostic-v1/adam-laptop.raw.log",
+      "sha256": "031474a96391e9995b49c5679768a2a2e5f12682a3f2a8c84c992abe4077a988",
+      "bytes": 10632
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v5/lab-diagnostic-v1/adam-laptop.status.json",
+      "sha256": "3ffe09ecc4a1f39ac6f78caca24c95a5d1182b4dbd23662d5e5938bcc488a56f",
+      "bytes": 36
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v5/lab-diagnostic-v1/fleet.json",
+      "sha256": "8c134815fd7a428e33b8b610e6920152f0dab7f9be3cc87879bf31a7682239a5",
+      "bytes": 12696
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v5/lab-diagnostic-v1/input.json",
+      "sha256": "3f7a815dcd14264a97a913168a2fc0343033e1c2ca3efab74bb34bceb8ff5ad4",
+      "bytes": 630
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v5/lab-diagnostic-v1/lab.log",
+      "sha256": "0c1371b8fa685a8dd177ddfee8682a1d0b9bac43281e90ca144b4e2ed5de80ad",
+      "bytes": 11309
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v5/lab-diagnostic-v1/result.json",
+      "sha256": "f92105b5c7125b060bf5a3d6377c6d6f3ca0c54ad9e55a660c3db8d0fc1e775d",
+      "bytes": 62
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v5/lab-diagnostic-v1/test-results-adam-laptop.ndjson",
+      "sha256": "6d905e2bef9a9a8896a188c357de0f55bc5024d928dc4364bd0397f89a8ebbaa",
+      "bytes": 319
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v5/lab-diagnostic-v1/final-inspect-diagnostic-v1.json",
+      "sha256": "02f9135e25e9f7bc70f59d2cf34368fe5224abf37250ecc21ca502c104a06058",
+      "bytes": 11621
+    }
+  ],
+  "verdict": "DIAGNOSTIC_COMPLETE_EXACT_DRAIN_ACCEPTANCE_NOT_MET_PRODUCTION_HOLD",
+  "limits": "Independent evidence assessment and concrete acceptance supersession pending. Original exactDRAIN premise not weakened; positive candidate continuation unexecuted. Thermal77C pretesthold30s resolved41C before test; no body timeout or retry. Full natural final replies retained, parsing JSON is an evidence projection not a replacement result classifier."
+}

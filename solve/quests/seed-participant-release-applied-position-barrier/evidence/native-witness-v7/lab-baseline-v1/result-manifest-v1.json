@@ -1,0 +1,88 @@
+{
+  "schema": "native-release-boundary-baseline/1",
+  "inputSha": "77ead1c4ac1b3cd84aa209a9de6819fd506a79e6",
+  "tree": "f38592775244012f05a989ca7d67f7c3a26746b6",
+  "sourceTree": "4ff29d950a074768b3bcc40f6df310abda9827c0",
+  "host": "adam-laptop",
+  "witnessSha256": "d0f0469f57b77858827309eecfc039909a7bd223cb250194492fd4a61cd3c8bd",
+  "reviewSha256": "a6c0ba3977ce8aa32fd228acc66f49aad7d63b6f6f43ef4aa7b3042d87c76c85",
+  "planSha256": "09ed78505e4d5060dfd7cb3b7c094f87d3f92e5b0f8c42461a7d1280dc93e715",
+  "results": [
+    {
+      "file": "test/partition/participant-release-native-application-order.test.js",
+      "attempt": 1,
+      "ok": false,
+      "assertions": 1,
+      "durationMs": 3827,
+      "retriedOnce": false,
+      "firstFailureLine": "not ok 1 - the real participant release owner waits for every native voter origin publication before final census and resumes the same attempt"
+    }
+  ],
+  "bodyDurationMs": 2642.981478,
+  "assertion": "premature same-attempt settlement",
+  "assertionLine": 942,
+  "actualOutcome": "origin_replication_pending",
+  "classifierOutcome": "origin_replication_pending",
+  "n": "3",
+  "k": "4",
+  "term": "1",
+  "clock": {
+    "deadlineAtMs": 1791924087175,
+    "nowMs": 1791924077231,
+    "remainingMs": 9944
+  },
+  "artifacts": [
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v7/lab-baseline-v1/adam-laptop.raw.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v7/lab-baseline-v1/adam-laptop.raw.log",
+      "sha256": "2c0fc641c6aa8195bcb4e5a930f46926391f98dfe837f531644b43b4cce5b8fb",
+      "bytes": 10654
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v7/lab-baseline-v1/adam-laptop.status.json",
+      "sha256": "3ffe09ecc4a1f39ac6f78caca24c95a5d1182b4dbd23662d5e5938bcc488a56f",
+      "bytes": 36
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v7/lab-baseline-v1/diagnostic-decoding-v1.json",
+      "sha256": "03487406afede12ba344b902deee593ad772b116c5afb252198695a51eace85b",
+      "bytes": 1246
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v7/lab-baseline-v1/final-inspect-diagnostic-v1.json",
+      "sha256": "bedbad738f08ffa65be774e91fe5fcf500a5e1ae71ac8bfccf4fd952790a1665",
+      "bytes": 11726
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v7/lab-baseline-v1/fleet.json",
+      "sha256": "37934894d1a106a05223b2177dcf10afdc53df1676ec90764eaf11ef4f1ecc13",
+      "bytes": 12697
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v7/lab-baseline-v1/input.json",
+      "sha256": "8ccb73e3aa35ac8883e96cf4e0682f21de43e5f5d7990e8a10221b4fdd9386ea",
+      "bytes": 630
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v7/lab-baseline-v1/lab.log",
+      "sha256": "59a7d6ab65cd7695851d026b5b4eb6889fb1f7b78f6c59a1d1937eca038d45a0",
+      "bytes": 11219
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v7/lab-baseline-v1/result.json",
+      "sha256": "29d45c905d4af8fed54aacf70ad34506dae5db411766befb50e5de6030dbebb7",
+      "bytes": 62
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v7/lab-baseline-v1/test-results-adam-laptop.ndjson",
+      "sha256": "6d905e2bef9a9a8896a188c357de0f55bc5024d928dc4364bd0397f89a8ebbaa",
+      "bytes": 319
+    }
+  ],
+  "verdict": "NAMED_HEALTHY_PREMATURE_SETTLEMENT_RED_REACHED_INDEPENDENT_ASSESSMENT_PENDING",
+  "limits": "All guard assertions completed and diagnostic full, 9944ms original budget remains. No new symbol/setup/timeout/import failure, no candidate positive/RESUME/K+1 executed. Thermal78C pretesthold30s cleared41C before body. NodeTAP diagnostic projection uses existing parser and reversible Node escape decoding with exact roundtrip; canonical runner report remains result authority. Source and closure authorization pending independent result assessment."
+}

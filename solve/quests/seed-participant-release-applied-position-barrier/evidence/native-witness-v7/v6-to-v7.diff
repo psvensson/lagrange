@@ -1,0 +1,40 @@
+--- /tmp/session-worktree-YEMEYM/tree/test/partition/participant-release-native-application-order.test.js	2026-10-13 22:32:15.276151593 +0200
++++ test/partition/participant-release-native-application-order.test.js	2026-10-13 22:35:37.781723272 +0200
+@@ -36,6 +36,8 @@
+ import {PARTITION_WRITE_LEADERSHIP_REFUSAL as WRITE_REFUSAL} from
+   '../../src/partition/partition-write-kernel.js';
+ import {RAFT_ROLE} from '../../src/raft/constants.js';
++import {COMMITTED_MEMBERSHIP_ANSWER_KIND} from
++  '../../src/raft/raft-committed-membership-constants.js';
+ import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
+ import {
+   RAFT_RS_MESSAGE_TYPE,
+@@ -637,11 +639,14 @@
+   assert.equal(request.deadlineAtMs, pauseAnchor.attempt.deadlineAtMs);
+   assert.equal(facts?.outcome, RELEASE_OUTCOME.OBSERVED);
+   assert.equal(facts.partitionId, PARTITION_ID);
++  assert.equal(facts.generation.replicaId, request.replicaId,
++    `${replicaId}: final reply belongs to its requested member`);
+   assert.equal(sameReplicaGeneration(facts.generation, paused.generation), true,
+     `${replicaId}: final generation is the exact PAUSE generation`);
+   assert.equal(facts.buildDigest, pauseAnchor.release.targetBuildDigest);
+   assert.equal(facts.buildDigest, paused.buildDigest);
+-  assert.equal(facts.membership.kind, 'committed');
++  assert.equal(facts.membership.kind,
++    COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED);
+   assert.equal(facts.membership.term, pauseAnchor.attempt.term);
+   assert.equal(facts.membership.configurationKey,
+     pauseAnchor.release.configurationKey);
+@@ -657,8 +662,10 @@
+   assert.equal(facts.paused, true);
+   assert.deepEqual(facts.connection,
+     {generation: facts.generation.connectionGeneration, servedLegacy: false});
+-  assert.deepEqual(facts.rowid,
+-    {kind: 'rowid', maximum: null, belowCeiling: true});
++  assert.deepEqual(facts.rowid, paused.rowid,
++    `${replicaId}: final rowid census is unchanged from PAUSE`);
++  assert.equal(facts.rowid.maximum, null);
++  assert.equal(facts.rowid.belowCeiling, true);
+   assert.equal(facts.topology, null);
+   assert.equal(facts.queryCensus, null);
+   assertFinalWork(facts, held, pauseAnchor.attempt.leaderReplicaId);

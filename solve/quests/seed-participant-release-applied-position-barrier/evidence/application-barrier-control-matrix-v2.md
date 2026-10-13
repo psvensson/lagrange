@@ -1,0 +1,92 @@
+# Applied-position barrier control matrix V2
+
+Status: read-only verification design. No source, test, fixture, Quest, metadata,
+or lab input was changed or run.
+
+V1 is preserved at SHA-256
+`6fea58a18a539ab24d3f3f4199302ba231c5d76abf16e6351b5118d87c0ed995`.
+
+## Binding and allocation
+
+- Inspected HEAD:
+  `77e091f64fb711fbc5ca40a7915ae85f01a5cf4e`; production is the reviewed
+  `ffe35e77d51cbd4ba35fb30518de1307eaaa2eec` source.
+- The matrix is bound to
+  `solve/quests/seed-participant-release-applied-position-barrier/design.md`,
+  the accepted owner review
+  `evidence/owner-boundary-design-review-v1.md`, and RPC-lifetime addendum
+  `evidence/owner-boundary-design-rpc-lifetime-v1.md`.
+- The separately approved native same-promise witness plan V2 owns the real
+  three-voter MessageRouter gate, actual N/N/K durable positions, actual
+  ENABLE origin, same release promise, and post-release replicated write. This
+  matrix does not create another topology, carrier classifier, handler-registry
+  gate, durable reader, or release lifecycle fixture. F11 remains the primitive
+  step-only application proof
+  (`test/raft/raft-rs-backend/multi-replica-runtime-prerequisites.test.js:139-195`).
+- Narrow controls should use the existing registered route and controllable
+  `PartitionService` owner in
+  `test/partition/participant-release-protocol.test.js:104-236`, the actual
+  handler/service lifecycle owner in
+  `test/node/replica-handler-release-recovery.test.js:123-176`, and the
+  existing controllable port subscription/event seam
+  (`test/test-helpers/controllable-consensus-port.js:159-164,234-259,277-280`).
+  The existing committed-membership await gate is at
+  `test/node/replica-handler-release-recovery.test.js:132-143`. Leave it
+  where it is while selecting exact cases. Extract it once only if both final
+  chosen test files actually consume it; never add a speculative shared seam
+  or copy its logic.
+
+## Minimal matrix
+
+| Control | Existing proof and its limit | Smallest additional case/assertions |
+| --- | --- | --- |
+| Overall deadline versus observation/RPC deadline | Client timeout is currently computed at `src/node/participant-release-client.js:21-45`; already-spent overall requests return `UNAVAILABLE/release_deadline` at `:35-38`. The cutover and recipient independently retain the overall fence at `src/node/replica-handler-participant-cutover.js:203-207` and `src/node/replica-handler-participant-release.js:82-87`. There is no focused test of the new carried observation deadline or the RPC-only outcome. | Add one table-driven registered-route case to `participant-release-protocol.test.js` using its existing in-process transport and `VirtualTimeSource`: (a) a 30s overall deadline yields the existing 5s delivery timeout and the same absolute `observationDeadlineAtMs`; expiry at that boundary returns `UNAVAILABLE/replica_release_reply/message_timeout`, leaves admission closed, removes the passive subscription/timer effects, and permits a fresh later observation; (b) an overall deadline shorter than 5s carries that exact earlier deadline and expires as `UNAVAILABLE/release_deadline`; (c) an already-expired overall deadline performs zero delivery. Assert the original request deadline/identity fields are unchanged in every answer. Prove cleanup through existing event-listener/timer seams and a real successor request, not a new production map/count export. |
+| Queue delay consumes the RPC window | The RPC addendum requires the sender and receiver to use the existing client-budget operation and forbids a fresh receiver window. No current test measures arrival delay. | In the same client case, wrap the existing transport delivery once, capture its original arguments, advance the shared virtual clock before invoking the exact saved delivery, and then delegate unchanged. Assert the delivered timeout and carried absolute deadline came from the sender's one clock sample, the receiver has only the remainder, and expiry occurs at the carried boundary rather than arrival plus 5s. This wrapper delays only dispatch; it does not answer, classify, or inspect release facts. |
+| Matching duplicate joins and cannot renew | Existing cutover RUNS coverage proves same-build callers share one whole attempt and a mixed build cannot join (`participant-release-protocol.test.js:398-473`). It does not cover the subordinate per-replica observation record. | Add a registered `OBSERVE_APPLIED_POSITION` case in the same file. Hold the canonical facts read at the existing committed-membership await. Send two identical requests and prove one canonical facts read, one passive listener/timer effect, and identical typed answers. Send the second request after part of the original budget has elapsed and prove both expire at the starter's exact boundary. A conflicting origin/attempt/generation request must settle typed **while the starter remains pending with its original listener, timer, deadline, and eventual answer**; it cannot clean, replace, shorten, or renew the starter. After starter settlement, a fresh request must engage a new facts read. Use existing listener/timer/route effects and real successor reentry; do not export the production observation map or counters merely for the assertion, and do not assert only JavaScript promise identity through router wrappers. |
+| Wake arriving during asynchronous facts read is retained | `readParticipantReleaseFacts` awaits build and committed membership before its status/application observation (`src/partition/partition-participant-release-facts.js:85-114`). The current `deferCommittedMembership` calls the original membership owner only **after** its delay (`replica-handler-release-recovery.test.js:132-143`), so a wake during that delay can legitimately be reflected by the first returned facts. Existing tests do not distinguish that fresh first read from a genuinely stale in-flight read requiring a retained refresh. | Use two paired cases through the controllable port's existing subscription seam. **Stale in-flight case:** a narrow test gate calls the original committed-membership owner first and captures its exact immutable answer, signals that capture, then awaits continuation before returning that unaltered answer. While held, advance the canonical port state and publish one real `RAFT_EVENT.APPLIED_PROGRESS`. The first completed facts read is then stale by construction from an actual owner answer; require the retained dirty wake to cause one refresh and only that refresh to complete the observation. **Fresh-first-read case:** retain the existing after-delay gate, publish/advance while held, then let its first call of the original owner observe current state; allow success from that first read and require no unconditional reread. In both cases require no deadline spend and passive resources detached afterward. No facts are edited or fabricated, the callback is not invoked directly, and the test does not prescribe a second production loop. |
+| Handler shutdown entry and cancellation | Existing actual-handler tests prove shutdown begun during an awaited final RESUME facts read cannot reopen admission (`replica-handler-release-recovery.test.js:215-254`). Current handler cleanup sets `shuttingDown` before awaiting recovery/tasks (`src/node/replica-runtime-cleanup-custody.js:82-100`). Neither proves the new observation owner is synchronously cancelled before those awaits. | Extend the existing `withActualHandler` suite, not a new lifecycle fixture. Hold an active observation in committed-membership facts, begin actual `handler.shutdown()`, and require its route result to settle `STALE`, admission to remain CLOSED, and its passive listener/timer effects to be gone **before** releasing the held facts continuation. Then release the gate only for complete teardown and prove a later independently created handler/service can engage normally. This proves cancellation breaks the shutdown/task wait cycle rather than merely noticing shutdown after the await, without exposing the production record map. |
+| Service shutdown entry wake | Existing actual-service case sets `isShutdown` during awaited RESUME facts, but releases facts before awaiting the refusal (`replica-handler-release-recovery.test.js:256-286`). The current end-only SHUTDOWN event is emitted after asynchronous cleanup (`src/partition/partition-service-lifecycle-methods.js:159-170,215-219`). | Beside that case, hold observation facts, call actual `leader.shutdown()`, and require the new `SHUTDOWN_STARTED` edge to settle the observation `STALE` and detach it while the facts gate is still held. Assert the event is observed only after `isShutdown === true` and `shutdownSettlement` exists. Release the gate and await shutdown in independent cleanup. This is an ordering assertion on the real owner, not a fabricated shutdown flag. |
+| Generation, term, configuration, and replacement change | Final RESUME already checks the current generation/status immediately before OPEN (`partition-participant-transaction-pause.js:69-104`). Existing recovery tests cover service replacement during awaited facts (`replica-handler-release-recovery.test.js:668-706`) and mixed target build is refused (`participant-release-protocol.test.js:294-300`). No case binds the new observation's post-await validation. | Use one table-driven recipient test with the same facts gate. After registration, mutate one existing controllable owner fact per subcase: term; runtime/lifecycle generation; configuration/membership generation. Emit only the corresponding existing owner wake where one exists, release facts, and require typed `STALE`, CLOSED admission, and passive listener/timer cleanup. Add one actual `replaceLocalReplicaService` subcase by extending the existing replacement test; prove the old observation cannot consume the successor's wake through route effects and that a real successor request still engages. A changed build stays the existing `BUILD_MISMATCH`, not STALE. No observation-map export is required. |
+| Older origin and unrelated accepted work | The full classifier treats applied position as only one field: accepted work must be empty and applied/commit/last equal (`partition-participant-release-facts.js:46-65`), and query state precedes origin in `partition-participant-release-contract.js:115-137`. The current registered real-drain test already has a previously released durable origin plus one actual pending SQL proposal and proves `DRAIN_PENDING`, the exact canonical work tuple, one shared attempt, and later healing (`participant-release-protocol.test.js:354-493`). The native same-promise witness separately owns real follower N/N/K publication lag. | Do not build another native topology. Strengthen the existing real-drain test with two assertions: the stored durable origin remains the earlier origin throughout the pending proposal, and the refusal's canonical work still names that unrelated proposal while admission remains CLOSED. In the new observation-recipient table, show that reaching an older valid origin watermark returns only OBSERVED facts even when a later canonical work position exists; then exercise the existing full release route and require its canonical final/earlier work check to return `DRAIN_PENDING`. If the controllable fixture cannot express distinct applied/commit/last without fabricating a non-owner state, leave this last combination to the native same-promise witness plus the existing real-drain test rather than adding a fake index setter. |
+| Final current-control-owner refusal | Current protocol tests prove missing control fact refuses before origin and a remotely routed current fact succeeds (`participant-release-protocol.test.js:276-292`). The production owner deliberately runs the same control check again after final census and before RESUME (`replica-handler-participant-cutover.js:298-304`); that second check is not engaged by existing tests. | Extend the existing protocol fixture's real control service. Hold the new observation action after ENABLE, then shut down **only the control `PartitionService`** through its actual lifecycle; keep the shared handler, dependent service, route, and attempt alive. Complete the observation and require the canonical existing response to be `UNAVAILABLE/current_control_owner_fact`, with no second origin proposal and no RESUME. Prove it reached the final check by passively recording that the initial control release succeeded and the dependent entered OBSERVE before control shutdown; do not demand a new release-identity field from the original request, inject a control answer, wrap `releaseControlOwnerFirst`, or shut down the dependent/shared handler. A paired unchanged-control case remains CUT_OVER. |
+| Final query proof/refusal | Legacy/held query refusal is covered before ENABLE by `participant-release-protocol.test.js:327-352`; proof construction/term binding and settlement refusal are covered by `test/query/transaction-release-settlement.test.js:61-114`. Production rebuilds the proof from the fresh final local census at `replica-handler-participant-cutover.js:283-297`. No current test changes a real query owner between the pre-ENABLE proof and final census. | Keep the final query path as an explicit gap until there is an existing-owner schedule that can retain a real already-accepted coordinator settlement across the observation boundary. The smallest valid added case is in the existing participant protocol fixture: a real accepted SQL-transactions settlement is held by its existing proposal/application owner, the pre-ENABLE settlement/proof is observed, it completes or changes lineage while OBSERVE is pending, and the fresh final census must either rebuild a valid proof or return `QUERY_DRAIN_PENDING`; RESUME must not run. Direct SQLite row edits, a fabricated `queryCensus`, or replacing `settleTransactionReleaseRows` would only mirror the classifier and are not valid. If no current fixture seam can place that actual accepted work after the pre-proof without violating PAUSE, retain the source-order/static obligation and require independent implementation review rather than claiming behavioral coverage. |
+
+## Cross-cutting assertions
+
+Every added recipient case should assert the same invariants instead of growing
+parallel fixtures:
+
+1. the response retains the actual request's release/partition/action identity
+   through `releaseAnswer`; no observer result grants RESUMED or OPEN;
+2. the canonical facts reader is the only status/membership/application
+   observation; event payload is never treated as completion;
+3. admission remains CLOSED for every deadline, stale, shutdown, work, query,
+   or control refusal;
+4. listener/timer effects are discharged on terminal success, timeout,
+   replacement, service shutdown, and handler shutdown; a conflicting caller
+   leaves the starter's listener/timer/record intact until the starter's own
+   terminal settlement;
+5. a stale callback cannot remove a fresh successor observation;
+6. the existing overall RUNS promise/deadline, seed retry policy, transport
+   classifier, pause/resume guard, and final `releaseCensusDefect` are called,
+   not reimplemented in the test.
+
+## Concrete proof gaps
+
+1. No existing focused test separates RPC-only `message_timeout` from overall
+   `release_deadline`, or proves queue delay consumes the carried window.
+2. Whole-cutover RUNS joining is covered; per-replica observation joining,
+   conflict handling, nonrenewal, and successor-safe cleanup are not.
+3. No existing test distinguishes a wake reflected by a fresh first facts read
+   from a wake retained behind a captured stale in-flight owner answer.
+4. Existing shutdown/replacement tests protect final RESUME, but do not prove
+   observation cancellation settles before held facts or handler cleanup waits.
+5. Term/generation/configuration changes have no post-await observation test.
+6. Existing work and query/control tests exercise canonical refusals, but only
+   the work test currently has real accepted-work ownership. The final
+   post-observation control recheck needs one actual lifecycle case; the final
+   query-proof race lacks an honest existing fixture schedule and must not be
+   simulated with raw rows or copied classification.
+
+This matrix is planning input only. It neither authorizes production changes
+nor claims the native same-promise, startup, corpus, or main receipts.

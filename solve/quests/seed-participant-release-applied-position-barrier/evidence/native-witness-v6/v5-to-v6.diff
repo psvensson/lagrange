@@ -1,0 +1,255 @@
+--- /tmp/participant-release-native-application-order-v5.test.js	2026-10-13 22:26:42.985741532 +0200
++++ test/partition/participant-release-native-application-order.test.js	2026-10-13 22:27:50.898211278 +0200
+@@ -18,6 +18,7 @@
+   PARTICIPANT_CUTOVER_PHASE,
+   PARTICIPANT_CUTOVER_OUTCOME as RELEASE_OUTCOME,
+   PARTICIPANT_RELEASE_ACTION,
++  PARTICIPANT_RELEASE_ROUTE_SUFFIX,
+   PARTICIPANT_RELEASE_RESULT_FIELD,
+   PARTICIPANT_RELEASE_TYPE,
+ } from '../../src/partition/partition-participant-transaction-cutover-constants.js';
+@@ -396,8 +397,11 @@
+ 
+   const recordError = (error) => {
+     errorCount = Math.min(errorCount + 1, ROUTE_RECORD_CAP);
+-    if (errors.length < ROUTE_RECORD_CAP) errors.push(error);
+-    else errorOverflow = true;
++    if (errors.length < ROUTE_RECORD_CAP) {
++      errors.push(error);
++    } else {
++      errorOverflow = true;
++    }
+   };
+ 
+   const admit = () => {
+@@ -413,7 +417,8 @@
+     return false;
+   };
+ 
+-  const observeCompletion = (request, response, error, finalInspect) => {
++  const observeCompletion = (request, response, error, finalInspect,
++    callOrdinal) => {
+     try {
+       if (error !== null) throw error;
+       const answer = response[PARTICIPANT_RELEASE_RESULT_FIELD];
+@@ -423,7 +428,7 @@
+         assert.equal(pauseRecords.has(request.replicaId), false,
+           `${request.replicaId}: one PAUSE answer`);
+         pauseRecords.set(request.replicaId, Object.freeze({request: identity,
+-          answer}));
++          answer, callOrdinal}));
+         if (pauseRecords.size === MEMBER_IDS.length) {
+           pauseAnchor = validatePauseAnchor(pauseRecords,
+             {leader, statuses, settled});
+@@ -432,7 +437,7 @@
+       } else if (request.action === PARTICIPANT_RELEASE_ACTION.ENABLE) {
+         const identity = requestIdentityOf(request);
+         assert.equal(enableRecord, null, 'one ENABLE answer');
+-        enableRecord = Object.freeze({request: identity, answer});
++        enableRecord = Object.freeze({request: identity, answer, callOrdinal});
+       }
+     } catch (captureError) {
+       recordError(captureError);
+@@ -477,21 +482,26 @@
+     const observed = request?.type === PARTICIPANT_RELEASE_TYPE &&
+       request.partitionId === PARTITION_ID;
+     const captured = observed && admit();
++    const callOrdinal = matched;
+     const finalInspect = captured ?
+-      finalInspectAtCall(args[0], request, matched) : null;
++      finalInspectAtCall(args[0], request, callOrdinal) : null;
+     let result;
+     try {
+       result = Reflect.apply(originalDeliver, this, args);
+     } catch (error) {
+-      if (captured) observeCompletion(request, null, error, finalInspect);
++      if (captured) {
++        observeCompletion(request, null, error, finalInspect, callOrdinal);
++      }
+       throw error;
+     }
+     if (captured) {
+       observeAppliedPositionCall(request);
+       try {
+         void Promise.prototype.then.call(result,
+-          (response) => observeCompletion(request, response, null, finalInspect),
+-          (error) => observeCompletion(request, null, error, finalInspect));
++          (response) => observeCompletion(request, response, null, finalInspect,
++            callOrdinal),
++          (error) => observeCompletion(request, null, error, finalInspect,
++            callOrdinal));
+       } catch (captureError) {
+         recordError(captureError);
+       }
+@@ -582,19 +592,128 @@
+   return Object.freeze({enabled, n: settled.index, k, term: settled.term});
+ }
+ 
+-function finalInspectDiagnostic(answer, route, held) {
+-  const {pauseAnchor, finalInspectRecords} = route.facts();
++function assertFinalWork(facts, held, leaderReplicaId) {
++  assert.deepEqual({sqliteTransactionOpen: facts.work.sqliteTransactionOpen,
++    participantStaging: facts.work.participantStaging,
++    participantPrepared: facts.work.participantPrepared,
++    proposals: facts.work.proposals,
++    pendingOutcomes: facts.work.pendingOutcomes},
++  {sqliteTransactionOpen: false, participantStaging: false,
++    participantPrepared: 0, proposals: 0, pendingOutcomes: 0},
++  `${facts.generation.replicaId}: all non-index work is clear`);
++  const applied = positionOf(facts.work.appliedIndex);
++  const commit = positionOf(facts.work.commitIndex);
++  const last = positionOf(facts.work.lastIndex);
++  assert.equal([applied, commit, last].every((position) => position !== null),
++    true, `${facts.generation.replicaId}: published positions are integers`);
++  assert.equal(positionOf(facts.membership.appliedIndex), applied);
++  assert.equal(positionOf(facts.membership.commitIndex), commit);
++  if (facts.generation.replicaId === leaderReplicaId) {
++    assert.deepEqual([applied, commit, last], [held.k, held.k, held.k]);
++    assert.deepEqual(facts.origin, held.enabled.origin);
++    return;
++  }
++  assert.deepEqual([applied, commit], [held.n, held.n]);
++  assert.ok(last >= held.n && last <= held.k,
++    `${facts.generation.replicaId}: published last is within N..K`);
++  assert.equal(facts.origin, null,
++    `${facts.generation.replicaId}: follower origin remains unpublished`);
++}
++
++function assertFinalInspectRecord(record, context) {
++  const {pauseAnchor, current, held, expectedAddress} = context;
++  const {request, answer: facts} = record;
++  const replicaId = request.replicaId;
++  const paused = pauseAnchor.records.get(replicaId)?.answer;
++  const status = current.statuses.find(({service}) =>
++    service.replicaId === replicaId)?.status;
++  assert.ok(paused, `${replicaId}: final INSPECT retains its PAUSE anchor`);
++  assert.ok(status, `${replicaId}: final INSPECT retains its voter owner`);
++  assert.equal(record.phase, PARTICIPANT_CUTOVER_PHASE.REPLICA_CENSUS);
++  assert.equal(record.targetAddress, expectedAddress);
++  assert.equal(request.type, PARTICIPANT_RELEASE_TYPE);
++  assert.equal(request.action, PARTICIPANT_RELEASE_ACTION.INSPECT);
++  assert.equal(request.partitionId, PARTITION_ID);
++  assert.equal(request.deadlineAtMs, pauseAnchor.attempt.deadlineAtMs);
++  assert.equal(facts?.outcome, RELEASE_OUTCOME.OBSERVED);
++  assert.equal(facts.partitionId, PARTITION_ID);
++  assert.equal(sameReplicaGeneration(facts.generation, paused.generation), true,
++    `${replicaId}: final generation is the exact PAUSE generation`);
++  assert.equal(facts.buildDigest, pauseAnchor.release.targetBuildDigest);
++  assert.equal(facts.buildDigest, paused.buildDigest);
++  assert.equal(facts.membership.kind, 'committed');
++  assert.equal(facts.membership.term, pauseAnchor.attempt.term);
++  assert.equal(facts.membership.configurationKey,
++    pauseAnchor.release.configurationKey);
++  assert.equal(facts.membership.membershipGenerationIndex,
++    pauseAnchor.release.membershipGenerationIndex);
++  assert.equal(facts.membership.gateOpen, true);
++  assert.deepEqual(facts.membership.identities, paused.membership.identities);
++  assert.deepEqual(releaseMemberIds(facts.membership), [...MEMBER_IDS].sort());
++  assert.equal(facts.leaderReplicaId, pauseAnchor.attempt.leaderReplicaId);
++  assert.equal(facts.leaderAddress, current.leader.service.unifiedAddress);
++  assert.equal(facts.role, status.role);
++  assert.equal(facts.confChangePending, false);
++  assert.equal(facts.paused, true);
++  assert.deepEqual(facts.connection,
++    {generation: facts.generation.connectionGeneration, servedLegacy: false});
++  assert.deepEqual(facts.rowid,
++    {kind: 'rowid', maximum: null, belowCeiling: true});
++  assert.equal(facts.topology, null);
++  assert.equal(facts.queryCensus, null);
++  assertFinalWork(facts, held, pauseAnchor.attempt.leaderReplicaId);
++}
++
++function observeRemainingBudget(attempt, leader) {
++  const deadlineAtMs = attempt.deadlineAtMs;
++  const nowMs = leader.service.timeSource.now();
++  assert.equal(Number.isSafeInteger(deadlineAtMs), true,
++    'the original release deadline is a safe integer');
++  assert.equal(Number.isSafeInteger(nowMs), true,
++    'the release owner clock returns a safe integer');
++  const remainingMs = deadlineAtMs - nowMs;
++  assert.equal(Number.isSafeInteger(remainingMs), true,
++    'the original release remaining budget is a safe integer');
++  assert.ok(remainingMs > 0,
++    `the original release deadline remains usable (${remainingMs}ms)`);
++  return Object.freeze({deadlineAtMs, nowMs, remainingMs});
++}
++
++function finalInspectDiagnostic(answer, route, held, current) {
++  const routeFacts = route.facts();
++  const {pauseAnchor, enableRecord, finalInspectRecords} = routeFacts;
++  assert.deepEqual(routeFacts.errors, [],
++    'terminal release observation remains error-free');
++  assert.equal(routeFacts.dropped, 0,
++    'terminal release observations fit their physical cap');
++  assert.equal(routeFacts.errorOverflow, false,
++    'terminal release errors fit their physical cap');
++  assert.equal(answer.releaseId, pauseAnchor.releaseId,
++    'the refusal retains the original release id');
++  assert.equal(answer.partitionId, pauseAnchor.release.partitionId,
++    'the refusal retains the original partition');
++  assert.equal(answer.phase, PARTICIPANT_RELEASE_ACTION.RELEASE,
++    'the refusal belongs to the original outer release');
++  assert.equal(enableRecord.request.release, pauseAnchor.release,
++    'the completed ENABLE retains the original release identity');
++  assert.equal(sameAttempt(enableRecord.request.attempt,
++    pauseAnchor.attempt), true,
++  'the completed ENABLE retains the original release attempt');
+   assert.equal(finalInspectRecords.length, MEMBER_IDS.length,
+     'the final natural INSPECT retains one reply per original cohort member');
+   assert.deepEqual(finalInspectRecords.map(({request}) => request.replicaId),
+     [...MEMBER_IDS].sort(), 'the final INSPECT retains canonical cohort order');
++  assert.equal(new Set(finalInspectRecords.map(({request}) =>
++    request.replicaId)).size, MEMBER_IDS.length,
++  'the final INSPECT contains three unique original voters');
++  const expectedAddress = `${NODE_ID}${PARTICIPANT_RELEASE_ROUTE_SUFFIX}`;
++  let previousOrdinal = enableRecord.callOrdinal;
+   for (const record of finalInspectRecords) {
+-    assert.equal(record.phase, PARTICIPANT_CUTOVER_PHASE.REPLICA_CENSUS);
+-    assert.equal(record.request.action, PARTICIPANT_RELEASE_ACTION.INSPECT);
+-    assert.equal(record.request.partitionId, PARTITION_ID);
+-    assert.equal(record.answer?.outcome, RELEASE_OUTCOME.OBSERVED);
+-    assert.equal(record.answer.generation.replicaId, record.request.replicaId);
+-    assert.equal(record.answer.queryCensus, null);
++    assert.ok(record.callOrdinal > previousOrdinal,
++      'final INSPECT calls follow completed ENABLE in exact call order');
++    previousOrdinal = record.callOrdinal;
++    assertFinalInspectRecord(record,
++      {pauseAnchor, current, held, expectedAddress});
+   }
+   const census = finalInspectRecords.map(({answer: facts}) => facts);
+   const local = census.find(({generation}) =>
+@@ -603,6 +722,7 @@
+     {attempt: pauseAnchor.attempt});
+   assert.equal(defect, answer.outcome,
+     'the complete canonical classifier selects the actual source answer');
++  const clock = observeRemainingBudget(pauseAnchor.attempt, current.leader);
+   return Object.freeze({
+     sourceAnswer: answer,
+     classifierOutcome: defect,
+@@ -611,6 +731,7 @@
+     n: String(held.n),
+     k: String(held.k),
+     term: String(held.term),
++    clock,
+     finalInspects: finalInspectRecords,
+   });
+ }
+@@ -808,13 +929,12 @@
+     if (edge.kind !== 'observation') {
+       assert.equal(edge.kind, 'release-settled',
+         `the attempt must not throw (${edge.error?.message ?? edge.kind})`);
+-      const diagnostic = finalInspectDiagnostic(edge.answer, route, held);
++      const diagnostic = finalInspectDiagnostic(edge.answer, route, held,
++        current);
+       const diagnosticReport = diagnosticText(diagnostic);
+-      assert.equal(edge.answer.outcome, RELEASE_OUTCOME.DRAIN_PENDING,
+-        'source-only engagement is the actual held-census refusal: ' +
+-        diagnosticReport);
+-      assert.fail('the release attempt settled DRAIN_PENDING while both exact ' +
+-        `follower origin carriers remained held: ${diagnosticReport}`);
++      assert.fail('premature same-attempt settlement: the healthy original ' +
++        'release settled while both exact follower origin carriers remained ' +
++        `held and its deadline remained usable: ${diagnosticReport}`);
+     }
+ 
+     assert.equal(trackedRelease.settled, false,

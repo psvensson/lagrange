@@ -1,0 +1,1140 @@
+diff --git a/test/partition/partition-admitted-group-fixture.js b/test/partition/partition-admitted-group-fixture.js
+index c4a9e5eae..06ed81ea1 100644
+--- a/test/partition/partition-admitted-group-fixture.js
++++ b/test/partition/partition-admitted-group-fixture.js
+@@ -34,12 +34,13 @@ const POLL_MS = 10;
+  * Form an admitted group.
+  * @param {Object} options - {partitionId, members ([replicaId, nodeId]
+  *   pairs, the first leads), tempPrefix, serviceOptions (PartitionService
+- *   options shared by every replica: table, schema...), budgetMs}.
++ *   options shared by every replica: table, schema...), budgetMs, transport
++ *   (optional caller-owned transport)}.
+  * @return {Promise<Object>} {services, dbFileOf, addressOf, waitFor,
+  *   dispose}; `services[i]` is `members[i]`'s replica.
+  */
+ async function formAdmittedGroup({partitionId, members, tempPrefix,
+-  serviceOptions, budgetMs}) {
++  serviceOptions, budgetMs, transport = null}) {
+   const directory = fs.mkdtempSync(path.join(os.tmpdir(), tempPrefix));
+   const dbFileOf = ([replicaId]) => path.join(directory, `${replicaId}.db`);
+   const addressOf = ([replicaId, nodeId]) =>
+@@ -49,7 +50,8 @@ async function formAdmittedGroup({partitionId, members, tempPrefix,
+     service_type: SERVICE_TYPE.PARTITION, node_id: nodeId,
+     status: SERVICE_STATUS.ACTIVE,
+   });
+-  const network = createLoopbackTransport();
++  const network = transport ?? createLoopbackTransport();
++  const ownsTransport = transport === null;
+   const services = [];
+   const caches = [];
+   const waitFor = async (predicate) => {
+@@ -62,10 +64,22 @@ async function formAdmittedGroup({partitionId, members, tempPrefix,
+     }
+     return false;
+   };
+-  const dispose = async () => {
+-    network.deliver = async () => undefined;
+-    await Promise.all(services.map((service) => service.shutdown()));
+-    fs.rmSync(directory, {recursive: true, force: true});
++  const dispose = async ({retainDirectory = false} = {}) => {
++    if (ownsTransport) network.deliver = async () => undefined;
++    const settled = await Promise.allSettled(services.map((service) =>
++      service.shutdown()));
++    const failures = settled.flatMap((answer, index) =>
++      answer.status === 'rejected' ?
++        [Object.freeze({replicaId: services[index].replicaId,
++          error: answer.reason})] : []);
++    if (failures.length > 0) {
++      const aggregate = new AggregateError(failures.map(({error}) => error),
++        `group shutdown failed; retained temporary directory ${directory}`);
++      aggregate.shutdownFailures = failures;
++      aggregate.retainedDirectory = directory;
++      throw aggregate;
++    }
++    if (!retainDirectory) fs.rmSync(directory, {recursive: true, force: true});
+   };
+   const build = (member, visible, extra = {}) => {
+     const cache = new SystemTableCache();
+@@ -113,7 +127,15 @@ async function formAdmittedGroup({partitionId, members, tempPrefix,
+       }), true, `setup: replica ${members[joined][0]} is admitted`);
+     }
+   } catch (error) {
+-    await dispose();
++    try {
++      await dispose();
++    } catch (cleanupError) {
++      const aggregate = new AggregateError([error, cleanupError], error.message,
++        {cause: error});
++      aggregate.cleanupFailure = cleanupError;
++      aggregate.retainedDirectory = cleanupError.retainedDirectory ?? directory;
++      throw aggregate;
++    }
+     throw error;
+   }
+   return {services, dbFileOf, addressOf, waitFor, dispose};
+diff --git a/test/partition/partition-release-fixture.js b/test/partition/partition-release-fixture.js
+index 0bb5e497a..804af12b7 100644
+--- a/test/partition/partition-release-fixture.js
++++ b/test/partition/partition-release-fixture.js
+@@ -23,7 +23,8 @@ import {withFoundingStamp} from './partition-founding-stamp.js';
+  * and the control service. host() tracks a legitimately recreated service.
+  * @param {Array<Object>} services Initialized native partition replicas.
+  * @param {Object} options Fixture directory and bounded request duration.
+- * @return {Promise<Object>} host, release, dispose and exact release outcomes.
++ * @return {Promise<Object>} host, release/releaseOnce, dispose and exact
++ *   release outcomes.
+  */
+ async function attachPartitionReleaseOwners(services, {directory, budgetMs}) {
+   const first = services[0];
+@@ -56,11 +57,37 @@ async function attachPartitionReleaseOwners(services, {directory, budgetMs}) {
+     deferElection: true,
+   }));
+   const dispose = async () => {
+-    for (const handler of handlers.values()) {
+-      await handler.participantReleaseRecovery.shutdown();
+-      handler.unregisterFromRouter(transport);
++    const failures = [];
++    const handlerEntries = [...handlers];
++    const shutdowns = await Promise.allSettled(handlerEntries.map(([, handler]) =>
++      handler.participantReleaseRecovery.shutdown()));
++    for (const [index, answer] of shutdowns.entries()) {
++      if (answer.status === 'rejected') {
++        failures.push(Object.freeze({phase: 'release-recovery-shutdown',
++          nodeId: handlerEntries[index][0], error: answer.reason}));
++      }
++    }
++    for (const [nodeId, handler] of handlerEntries) {
++      try {
++        handler.unregisterFromRouter(transport);
++      } catch (error) {
++        failures.push(Object.freeze({phase: 'handler-unregister', nodeId,
++          error}));
++      }
++    }
++    try {
++      await control.shutdown();
++    } catch (error) {
++      failures.push(Object.freeze({phase: 'control-shutdown',
++        replicaId: control.replicaId, error}));
++    }
++    if (failures.length > 0) {
++      const aggregate = new AggregateError(failures.map(({error}) => error),
++        `release-owner shutdown failed; retained temporary directory ${directory}`);
++      aggregate.shutdownFailures = failures;
++      aggregate.retainedDirectory = directory;
++      throw aggregate;
+     }
+-    await control.shutdown();
+   };
+   try {
+     await control.initialize();
+@@ -68,33 +95,50 @@ async function attachPartitionReleaseOwners(services, {directory, budgetMs}) {
+     await control.raft.campaign();
+     assert.equal(control.raft.readStatus().role, RAFT_ROLE.LEADER);
+   } catch (error) {
+-    await dispose();
++    try {
++      await dispose();
++    } catch (cleanupError) {
++      const aggregate = new AggregateError([error, cleanupError], error.message,
++        {cause: error});
++      aggregate.cleanupFailure = cleanupError;
++      aggregate.retainedDirectory = cleanupError.retainedDirectory ?? directory;
++      throw aggregate;
++    }
+     throw error;
+   }
+-  const release = async (id) => {
++  const prepareRelease = async () => {
+     const build = await runtimeBuildProvenance();
+     assert.equal(build.state, 'measured', build.reason);
+-    const deadline = first.timeSource.now() + budgetMs;
++    return {build, deadline: first.timeSource.now() + budgetMs};
++  };
++  const invokeRelease = async (id, prepared) => {
++    const {build, deadline} = prepared;
++    const leader = [...hosted.values()].find((service) =>
++      service.partitionId === id && !service.isShutdown &&
++      service.raft?.readStatus().role === RAFT_ROLE.LEADER);
++    assert.ok(leader, `release requires the actual leader of ${id}`);
++    const answer = await handlers.get(leader.nodeId).participantReleaseRecovery
++      .releaseOperator({partitionId: id, targetBuildDigest: build.digest,
++        deadlineAtMs: deadline});
++    outcomes.push(answer);
++    return answer;
++  };
++  const releaseOnce = async (id) => invokeRelease(id, await prepareRelease());
++  const release = async (id) => {
++    const prepared = await prepareRelease();
+     let answer = null;
+     do {
+-      const leader = [...hosted.values()].find((service) =>
+-        service.partitionId === id && !service.isShutdown &&
+-        service.raft?.readStatus().role === RAFT_ROLE.LEADER);
+-      assert.ok(leader, `release requires the actual leader of ${id}`);
+-      answer = await handlers.get(leader.nodeId).participantReleaseRecovery
+-        .releaseOperator({partitionId: id, targetBuildDigest: build.digest,
+-          deadlineAtMs: deadline});
+-      outcomes.push(answer);
++      answer = await invokeRelease(id, prepared);
+       if (answer.outcome === OUTCOME.CUT_OVER) return answer;
+-      const remaining = deadline - first.timeSource.now();
++      const remaining = prepared.deadline - first.timeSource.now();
+       if (remaining <= 0 || !Number.isSafeInteger(answer.retryAfterMs)) break;
+       await delay(Math.min(answer.retryAfterMs, remaining));
+-    } while (first.timeSource.now() < deadline);
++    } while (first.timeSource.now() < prepared.deadline);
+     assert.equal(answer?.outcome, OUTCOME.CUT_OVER,
+       `real release refused: ${JSON.stringify(answer)}`);
+     return answer;
+   };
+-  return {host, release, dispose, outcomes};
++  return {host, release, releaseOnce, dispose, outcomes};
+ }
+ 
+ export {attachPartitionReleaseOwners};
+diff --git a/test/shards/impact-graph-seal.json b/test/shards/impact-graph-seal.json
+index efa12fc51..3c8ac1421 100644
+--- a/test/shards/impact-graph-seal.json
++++ b/test/shards/impact-graph-seal.json
+@@ -1,8 +1,8 @@
+ {
+   "schemaVersion": 1,
+   "importGraphSchemaVersion": "global-owner-debt-import-graph-v2",
+-  "sourceDigest": "947fa92c10e78d08fde52999d8a18d7f40c67581b6b16abd8000074f9e69c322",
+-  "producerInputDigest": "3d0cced53530791794db23879ca2ec12c497edef5f44acf19286aad361d730e6",
+-  "resolverStateDigest": "87fcb64936233d77aad278c7b02964cf0a8722ad448a7048361838ece0ada2f5",
+-  "snapshotDigest": "0864ae38afcac94b5e2a41e17946fa0fa7a0101a21f436876962a5edd78543e7"
++  "sourceDigest": "e953098941c09ba6620cac538b169b4ad942c0ae93f72b78894ac562cf654453",
++  "producerInputDigest": "f666a89661707bf08d8f66b4fb958dd7dfd142fb4687b4116ea60b739fe75e9c",
++  "resolverStateDigest": "04eb648131e064a31c179612130dc5ac4ee25e2e52c0a90ea5d011861952d106",
++  "snapshotDigest": "2bb23d231f822f509c11c36bf78c332d2e796647b229ea7827b70d505b6f8857"
+ }
+diff --git a/test/shards/primary-classes.json b/test/shards/primary-classes.json
+index b4a50dd26..b63152692 100644
+--- a/test/shards/primary-classes.json
++++ b/test/shards/primary-classes.json
+@@ -2,14 +2,14 @@
+   "schemaVersion": 1,
+   "id": "test-primary-classification",
+   "counts": {
+-    "unit": 2061,
++    "unit": 2062,
+     "integration": 97,
+     "bootstrap": 203,
+     "convergence-probe": 3,
+     "packaging": 4
+   },
+-  "censusSize": 2368,
+-  "digest": "fnv1a32-4cf6a18c",
++  "censusSize": 2369,
++  "digest": "fnv1a32-f731fa14",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
+     "test/address/address-malformed-rejection.property.test.js": "unit",
+@@ -1244,6 +1244,7 @@
+     "test/partition/participant-decision-canonical-record.test.js": "unit",
+     "test/partition/participant-envelope-admission.test.js": "unit",
+     "test/partition/participant-release-build-provenance.test.js": "unit",
++    "test/partition/participant-release-native-application-order.test.js": "unit",
+     "test/partition/participant-release-protocol.test.js": "unit",
+     "test/partition/partition-admission-redrive-wakes.test.js": "unit",
+     "test/partition/partition-cdc-generator.test.js": "unit",
+diff --git a/test/shards/resource-classes.json b/test/shards/resource-classes.json
+index e49a2f621..27b1a4644 100644
+--- a/test/shards/resource-classes.json
++++ b/test/shards/resource-classes.json
+@@ -2,13 +2,13 @@
+   "schemaVersion": 1,
+   "id": "test-resource-classification",
+   "counts": {
+-    "ordinary": 2351,
++    "ordinary": 2352,
+     "cpu-heavy": 0,
+     "external-toolchain": 14,
+     "exclusive": 3
+   },
+-  "censusSize": 2368,
+-  "digest": "fnv1a32-01c0ed90",
++  "censusSize": 2369,
++  "digest": "fnv1a32-77e2eed6",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
+     "test/address/address-malformed-rejection.property.test.js": "ordinary",
+@@ -1243,6 +1243,7 @@
+     "test/partition/participant-decision-canonical-record.test.js": "ordinary",
+     "test/partition/participant-envelope-admission.test.js": "ordinary",
+     "test/partition/participant-release-build-provenance.test.js": "ordinary",
++    "test/partition/participant-release-native-application-order.test.js": "ordinary",
+     "test/partition/participant-release-protocol.test.js": "ordinary",
+     "test/partition/partition-admission-redrive-wakes.test.js": "ordinary",
+     "test/partition/partition-cdc-generator.test.js": "ordinary",
+diff --git a/test/shards/subsystem-classes.json b/test/shards/subsystem-classes.json
+index 6c63dc508..d1858210a 100644
+--- a/test/shards/subsystem-classes.json
++++ b/test/shards/subsystem-classes.json
+@@ -18,17 +18,17 @@
+     "runtime-primitives": 22,
+     "services-runtime": 146,
+     "solver-tooling": 7,
+-    "storage-partition": 181,
++    "storage-partition": 182,
+     "storage-raft": 128,
+     "test-infrastructure": 143,
+     "transactions": 16,
+     "transport-messaging": 95,
+     "wasm-toolchain": 57
+   },
+-  "censusSize": 2368,
+-  "digest": "fnv1a32-d5489d63",
++  "censusSize": 2369,
++  "digest": "fnv1a32-ebdf0e25",
+   "observationSchemaVersion": 2,
+-  "observationDigest": "fnv1a32-c2442806",
++  "observationDigest": "fnv1a32-f06dd859",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
+     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
+@@ -1263,6 +1263,7 @@
+     "test/partition/participant-decision-canonical-record.test.js": "storage-partition",
+     "test/partition/participant-envelope-admission.test.js": "storage-partition",
+     "test/partition/participant-release-build-provenance.test.js": "storage-partition",
++    "test/partition/participant-release-native-application-order.test.js": "storage-partition",
+     "test/partition/participant-release-protocol.test.js": "storage-partition",
+     "test/partition/partition-admission-redrive-wakes.test.js": "storage-partition",
+     "test/partition/partition-cdc-generator.test.js": "storage-partition",
+@@ -8762,6 +8763,32 @@
+         "src"
+       ]
+     },
++    "test/partition/participant-release-native-application-order.test.js": {
++      "files": [
++        "src/bootstrap/system-table-schemas-constants.js",
++        "src/bootstrap/system-table-workflow-schema-definitions.js",
++        "src/partition/partition-committed-statement-outcome.js",
++        "src/partition/partition-participant-release-contract.js",
++        "src/partition/partition-participant-release-facts.js",
++        "src/partition/partition-participant-transaction-cutover-constants.js",
++        "src/partition/partition-participant-transaction-pause.js",
++        "src/partition/partition-participant-transaction-request.js",
++        "src/partition/partition-participant-transaction-store.js",
++        "src/partition/partition-service-constants.js",
++        "src/partition/partition-transaction-determinism-constants.js",
++        "src/partition/partition-transaction-determinism.js",
++        "src/partition/partition-write-kernel.js",
++        "src/raft/raft-committed-membership-constants.js",
++        "src/raft/raft-operation-port-constants.js",
++        "src/raft/raft-operation-port-request.js",
++        "src/raft/raft-rs-application-transaction-owner.js",
++        "src/raft/raft-rs-membership-transition.js",
++        "src/raft/raft-rs-ready-loop-constants.js",
++        "test/test-helpers/boot-incarnation-fixture.js",
++        "test/test-helpers/controllable-consensus-port.js",
++        "test/test-helpers/replica-handler-identity-fixture.js"
++      ]
++    },
+     "test/partition/participant-release-protocol.test.js": {
+       "files": [
+         "src/bootstrap/system-table-workflow-schema-definitions.js",
+diff --git a/test/partition/participant-release-native-application-order.test.js b/test/partition/participant-release-native-application-order.test.js
+new file mode 100644
+index 000000000..24def8a93
+--- /dev/null
++++ b/test/partition/participant-release-native-application-order.test.js
+@@ -0,0 +1,796 @@
++// The production release recipient must keep its one attempt pending after
++// ENABLE until every current native voter has published the committed origin.
++// The transport fault below acknowledges the exact commit carriers while
++// withholding their recipient handlers; it never rewrites a Raft message or
++// supplies release facts.
++
++import assert from 'node:assert/strict';
++import path from 'node:path';
++import {test} from 'node:test';
++
++import Database from 'better-sqlite3';
++
++import {formAdmittedGroup} from './partition-admitted-group-fixture.js';
++import {attachPartitionReleaseOwners} from './partition-release-fixture.js';
++import {ConfigurationManager} from '../../src/config/configuration-manager.js';
++import {LoggingService} from '../../src/logging/logging-service.js';
++import {
++  PARTICIPANT_CUTOVER_OUTCOME as RELEASE_OUTCOME,
++  PARTICIPANT_RELEASE_ACTION,
++  PARTICIPANT_RELEASE_RESULT_FIELD,
++  PARTICIPANT_RELEASE_TYPE,
++} from '../../src/partition/partition-participant-transaction-cutover-constants.js';
++import {
++  releaseCensusDefect,
++  releaseMemberIds,
++  sameReplicaGeneration,
++} from '../../src/partition/partition-participant-release-contract.js';
++import {participantCutoverPauseOf} from
++  '../../src/partition/partition-participant-transaction-pause.js';
++import {readPartitionWriteOrigin} from
++  '../../src/partition/partition-participant-transaction-store.js';
++import {PARTITION_SERVICE_OPERATION} from
++  '../../src/partition/partition-service-constants.js';
++import {PARTITION_WRITE_LEADERSHIP_REFUSAL as WRITE_REFUSAL} from
++  '../../src/partition/partition-write-kernel.js';
++import {RAFT_ROLE} from '../../src/raft/constants.js';
++import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
++import {
++  RAFT_RS_MESSAGE_TYPE,
++  RAFT_RS_TRANSPORT_PROTOCOL,
++} from '../../src/raft/raft-rs-ingress-constants.js';
++import {MessageRouter} from '../../src/transport/message-router.js';
++import {TEST_BOOT_INCARNATION} from
++  '../test-helpers/boot-incarnation-fixture.js';
++import {track} from '../test-helpers/participant-transaction-fixture.js';
++
++const NODE_ID = 'participant-release-native-node';
++const PARTITION_ID = 'participant-release-native-p1';
++const TABLE_NAME = 'participant_release_native_rows';
++const TEST_TIMEOUT_MS = 30000;
++const GROUP_BUDGET_MS = 10000;
++const CARRIER_COUNT_CAP = 64;
++const ROUTE_RECORD_CAP = 24;
++const GROUP_TIMING = Object.freeze({
++  heartbeatIntervalMs: 20,
++  electionTimeoutMinMs: 150,
++  electionTimeoutMaxMs: 300,
++});
++const MEMBER_IDS = Object.freeze([
++  `${PARTITION_ID}-r1`,
++  `${PARTITION_ID}-r2`,
++  `${PARTITION_ID}-r3`,
++]);
++const MEMBERS = Object.freeze(MEMBER_IDS.map((replicaId) =>
++  Object.freeze([replicaId, NODE_ID])));
++const INSERT_SQL = `INSERT INTO ${TABLE_NAME} (id, value) VALUES (?, ?)`;
++const SELECT_IDS_SQL = `SELECT id FROM ${TABLE_NAME} ORDER BY id`;
++
++function initializeEnvironment() {
++  ConfigurationManager.resetInstance();
++  LoggingService.resetInstance();
++  ConfigurationManager.getInstance().initialize({
++    node: {id: NODE_ID},
++    logging: {level: 'fatal'},
++    raft: GROUP_TIMING,
++  });
++  LoggingService.getInstance().initialize({level: 'fatal'});
++}
++
++function resetEnvironment() {
++  ConfigurationManager.resetInstance();
++  LoggingService.resetInstance();
++}
++
++function tableOptions() {
++  return {
++    tableId: TABLE_NAME,
++    tableName: TABLE_NAME,
++    schema: {columns: [
++      {name: 'id', type: 'TEXT', primaryKey: true},
++      {name: 'value', type: 'TEXT'},
++    ]},
++  };
++}
++
++function insert(service, id, value, entryId) {
++  return service.applyWrite({
++    type: PARTITION_SERVICE_OPERATION.INSERT,
++    sql: INSERT_SQL,
++    params: [id, value],
++    entryId,
++  });
++}
++
++function lastIndexOf(record) {
++  const entry = record.entries.at(-1);
++  const entryIndex = entry === undefined ? 0n : BigInt(entry.index);
++  const snapshotIndex = record.snapshot === null ? 0n :
++    BigInt(record.snapshot.metadata.index);
++  return entryIndex > snapshotIndex ? entryIndex : snapshotIndex;
++}
++
++// A passive read view: no operation-port command, facts read, status read or
++// tick can be caused by this helper.
++function durableView(dbPath, partitionId = PARTITION_ID) {
++  const db = new Database(dbPath, {readonly: true});
++  try {
++    const store = Object.create(RaftRsDurableStore.prototype);
++    store.db = db;
++    const record = store.readDurableRecord(partitionId);
++    return Object.freeze({
++      applied: BigInt(record.appliedIndex),
++      commit: BigInt(record.hardState?.commit ?? 0),
++      last: lastIndexOf(record),
++      term: BigInt(record.hardState?.term ?? 0),
++      origin: readPartitionWriteOrigin(db),
++      rows: db.prepare(SELECT_IDS_SQL).all().map(({id}) => id),
++    });
++  } finally {
++    db.close();
++  }
++}
++
++function allDurableViews(group) {
++  return new Map(MEMBERS.map((member) =>
++    [member[0], durableView(group.dbFileOf(member))]));
++}
++
++function settledPositionOf(views) {
++  const first = views.get(MEMBER_IDS[0]);
++  if (first === undefined || first.applied !== first.commit ||
++      first.commit !== first.last || first.origin !== null) return null;
++  for (const replicaId of MEMBER_IDS.slice(1)) {
++    const view = views.get(replicaId);
++    if (view === undefined || view.applied !== first.applied ||
++        view.commit !== first.commit || view.last !== first.last ||
++        view.term !== first.term || view.origin !== null) return null;
++  }
++  return Object.freeze({index: first.applied, term: first.term});
++}
++
++function positionOf(value) {
++  try {
++    return BigInt(value);
++  } catch {
++    return null;
++  }
++}
++
++function sameAttempt(left, right) {
++  return left?.leaderReplicaId === right?.leaderReplicaId &&
++    left?.term === right?.term &&
++    left?.leaderLifecycleIncarnation === right?.leaderLifecycleIncarnation &&
++    left?.deadlineAtMs === right?.deadlineAtMs;
++}
++
++function requestIdentityOf(request) {
++  return Object.freeze({
++    action: request.action,
++    partitionId: request.partitionId,
++    replicaId: request.replicaId,
++    releaseId: request.release.releaseId,
++    release: request.release,
++    attempt: request.attempt,
++    target: request.target,
++    origin: request.origin,
++  });
++}
++
++function sameCarrierRoute(packet, leaderPeerId, followerPeerId) {
++  return packet?.protocol === RAFT_RS_TRANSPORT_PROTOCOL &&
++    packet.groupId === PARTITION_ID &&
++    String(packet.from) === leaderPeerId &&
++    String(packet.to) === followerPeerId;
++}
++
++function sameCarrierMessage(message, leaderPeerId, followerPeerId, term) {
++  const type = message?.msgType;
++  return String(message?.from) === leaderPeerId &&
++    String(message?.to) === followerPeerId &&
++    String(message?.term) === term &&
++    (type === RAFT_RS_MESSAGE_TYPE.APPEND ||
++      type === RAFT_RS_MESSAGE_TYPE.HEARTBEAT);
++}
++
++function commitAdvancingCarrierOf(envelope, anchors) {
++  const packet = envelope?.payload;
++  if (!sameCarrierRoute(packet, anchors.leaderPeerId,
++    anchors.followerPeerId)) return null;
++  const message = packet.message;
++  if (!sameCarrierMessage(message, anchors.leaderPeerId,
++    anchors.followerPeerId, anchors.term)) return null;
++  const commit = positionOf(message.commit);
++  if (commit === null || commit <= anchors.settledIndex) return null;
++  return Object.freeze({packet, message, commit});
++}
++
++function retainCarrier(state, carrier, receiver, args, followerPeerId) {
++  if (state.matched < CARRIER_COUNT_CAP) {
++    state.matched += 1;
++  } else {
++    state.overflow = true;
++  }
++  if (state.first !== null) {
++    if (state.suppressed < CARRIER_COUNT_CAP) state.suppressed += 1;
++    else state.overflow = true;
++    return;
++  }
++  const {packet, message, commit} = carrier;
++  state.first = Object.freeze({receiver, args, followerPeerId,
++    protocol: packet.protocol, groupId: packet.groupId,
++    packetFrom: packet.from, packetTo: packet.to, commit,
++    msgType: message.msgType, term: message.term,
++    from: message.from, to: message.to});
++}
++
++function leaderStatusOf(services) {
++  const statuses = services.map((service) => Object.freeze({
++    service,
++    status: service.raft.readStatus(),
++  }));
++  const leaders = statuses.filter(({status}) => status.role === RAFT_ROLE.LEADER);
++  assert.equal(leaders.length, 1, 'setup: the real group has one leader');
++  const leader = leaders[0];
++  for (const {status} of statuses) {
++    assert.equal(status.term, leader.status.term,
++      'setup: every voter observes the current term');
++    assert.equal(status.configurationKey, leader.status.configurationKey,
++      'setup: every voter observes the current configuration');
++  }
++  return Object.freeze({leader, statuses});
++}
++
++function createCommitCarrierGate(router, {leader, followers, settled}) {
++  const states = new Map();
++  const followerIds = Object.freeze(followers.map(({service}) =>
++    service.replicaId));
++  assert.equal(followerIds.length, MEMBER_IDS.length - 1,
++    'setup: the gate owns every current follower');
++  let armed = false;
++  const leaderPeerId = String(leader.status.peerId);
++  const term = String(leader.status.term);
++
++  const restoreState = (replicaId, state) => {
++    if (state === undefined || state.restored) return;
++    if (router.getRegisteredHandler(state.address) === state.original) {
++      state.restored = true;
++      return;
++    }
++    assert.equal(router.unregisterExact(state.address, state.wrapper), true,
++      `${replicaId}: only its exact gate handler is retired`);
++    router.register(state.address, state.original);
++    assert.equal(router.getRegisteredHandler(state.address), state.original,
++      `${replicaId}: exact partition handler is restored`);
++    state.restored = true;
++  };
++
++  try {
++    for (const follower of followers) {
++      const address = follower.service.unifiedAddress;
++      const original = router.getRegisteredHandler(address);
++      assert.equal(typeof original, 'function',
++        `setup: ${follower.service.replicaId} owns its router handler`);
++      const state = {address, original, wrapper: null, first: null,
++        matched: 0, suppressed: 0, overflow: false, forwarded: false,
++        restored: false};
++      const followerPeerId = String(follower.status.peerId);
++      state.wrapper = function(...args) {
++        const carrier = armed ? commitAdvancingCarrierOf(args[0], {
++          leaderPeerId, followerPeerId, term, settledIndex: settled.index,
++        }) : null;
++        if (carrier === null) return Reflect.apply(original, this, args);
++        retainCarrier(state, carrier, this, args, followerPeerId);
++        return {acknowledged: true};
++      };
++      router.register(address, state.wrapper);
++      states.set(follower.service.replicaId, state);
++    }
++  } catch (error) {
++    const restoreErrors = [];
++    for (const [replicaId, state] of states) {
++      try {
++        restoreState(replicaId, state);
++      } catch (restoreError) {
++        restoreErrors.push(restoreError);
++      }
++    }
++    if (restoreErrors.length > 0) {
++      throw new AggregateError([error, ...restoreErrors], error.message,
++        {cause: error});
++    }
++    throw error;
++  }
++
++  return {
++    followerIds,
++    arm() {
++      armed = true;
++    },
++    disarm() {
++      armed = false;
++    },
++    facts() {
++      return followerIds.map((replicaId) => {
++        const state = states.get(replicaId);
++        return Object.freeze({replicaId, first: state.first,
++          matched: state.matched, suppressed: state.suppressed,
++          overflow: state.overflow});
++      });
++    },
++    async forward(replicaId) {
++      const state = states.get(replicaId);
++      if (state === undefined || state.forwarded) return;
++      assert.notEqual(state.first, null, `${replicaId}: first carrier exists`);
++      state.forwarded = true;
++      await Reflect.apply(state.original, state.first.receiver, state.first.args);
++    },
++    restore(replicaId) {
++      const state = states.get(replicaId);
++      restoreState(replicaId, state);
++    },
++  };
++}
++
++function validatePauseAnchor(records, {leader, statuses, settled}) {
++  assert.equal(records.size, MEMBER_IDS.length,
++    'the natural PAUSE batch contains all three voters');
++  const leaderId = leader.service.replicaId;
++  const peerByReplica = new Map(statuses.map(({service, status}) =>
++    [service.replicaId, String(status.peerId)]));
++  let first = null;
++  for (const replicaId of MEMBER_IDS) {
++    const record = records.get(replicaId);
++    assert.ok(record, `${replicaId}: PAUSE answer is present`);
++    const {request, answer} = record;
++    assert.equal(answer?.outcome, RELEASE_OUTCOME.OBSERVED,
++      `${replicaId}: PAUSE returns canonical facts`);
++    assert.equal(answer.paused, true, `${replicaId}: admission is paused`);
++    assert.equal(answer.origin, null, `${replicaId}: origin is initially absent`);
++    assert.equal(String(answer.work.appliedIndex), String(settled.index));
++    assert.equal(String(answer.work.commitIndex), String(settled.index));
++    assert.equal(String(answer.work.lastIndex), String(settled.index));
++    assert.equal(answer.leaderReplicaId, leaderId);
++    assert.equal(answer.membership.term, leader.status.term);
++    assert.equal(answer.membership.configurationKey,
++      leader.status.configurationKey);
++    assert.deepEqual(releaseMemberIds(answer.membership), [...MEMBER_IDS].sort());
++    assert.equal(answer.membership.identities[peerByReplica.get(replicaId)],
++      replicaId, `${replicaId}: committed peer identity is exact`);
++    assert.equal(sameReplicaGeneration(request.target, answer.generation), true,
++      `${replicaId}: PAUSE target is the exact current generation`);
++    assert.equal(sameReplicaGeneration(answer.generation, answer.generation),
++      true, `${replicaId}: current generation is complete`);
++    if (first === null) {
++      first = record;
++    } else {
++      assert.equal(request.releaseId, first.request.releaseId);
++      assert.equal(request.release, first.request.release);
++      assert.equal(sameAttempt(request.attempt, first.request.attempt), true);
++      assert.deepEqual(answer.membership, first.answer.membership);
++    }
++  }
++  assert.equal(first.request.attempt.leaderReplicaId, leaderId);
++  assert.equal(first.request.attempt.term, leader.status.term);
++  assert.equal(first.request.attempt.leaderLifecycleIncarnation,
++    records.get(leaderId).answer.generation.lifecycleIncarnation);
++  return Object.freeze({releaseId: first.request.releaseId,
++    release: first.request.release, attempt: first.request.attempt, records});
++}
++
++function createReleaseRouteObserver(router, {gate, leader, statuses, settled}) {
++  const originalDeliver = router.deliver;
++  const pauseRecords = new Map();
++  const observationCalls = [];
++  const errors = [];
++  const entered = Promise.withResolvers();
++  let pauseAnchor = null;
++  let enableRecord = null;
++  let matched = 0;
++  let dropped = 0;
++  let errorCount = 0;
++  let errorOverflow = false;
++  let routeOverflow = null;
++
++  const recordError = (error) => {
++    errorCount = Math.min(errorCount + 1, ROUTE_RECORD_CAP);
++    if (errors.length < ROUTE_RECORD_CAP) errors.push(error);
++    else errorOverflow = true;
++  };
++
++  const admit = () => {
++    if (matched < ROUTE_RECORD_CAP) {
++      matched += 1;
++      return true;
++    }
++    dropped = Math.min(dropped + 1, ROUTE_RECORD_CAP);
++    if (routeOverflow === null) {
++      routeOverflow = new Error('participant release route record cap exceeded');
++      entered.resolve(Object.freeze({kind: 'capture-overflow'}));
++    }
++    return false;
++  };
++
++  const observeCompletion = (request, response, error) => {
++    try {
++      if (error !== null) throw error;
++      const answer = response[PARTICIPANT_RELEASE_RESULT_FIELD];
++      const identity = requestIdentityOf(request);
++      if (request.action === PARTICIPANT_RELEASE_ACTION.PAUSE) {
++        assert.equal(pauseRecords.has(request.replicaId), false,
++          `${request.replicaId}: one PAUSE answer`);
++        pauseRecords.set(request.replicaId, Object.freeze({request: identity,
++          answer}));
++        if (pauseRecords.size === MEMBER_IDS.length) {
++          pauseAnchor = validatePauseAnchor(pauseRecords,
++            {leader, statuses, settled});
++          gate.arm();
++        }
++      } else if (request.action === PARTICIPANT_RELEASE_ACTION.ENABLE) {
++        assert.equal(enableRecord, null, 'one ENABLE answer');
++        enableRecord = Object.freeze({request: identity, answer});
++      }
++    } catch (captureError) {
++      recordError(captureError);
++    }
++  };
++
++  const observeAppliedPositionCall = (request) => {
++    const action = PARTICIPANT_RELEASE_ACTION.OBSERVE_APPLIED_POSITION;
++    if (typeof action !== 'string' || request.action !== action) return;
++    const identity = requestIdentityOf(request);
++    observationCalls.push(identity);
++    try {
++      assert.ok(pauseAnchor, 'observation follows the complete PAUSE batch');
++      assert.ok(enableRecord, 'observation follows the completed ENABLE reply');
++      assert.equal(identity.partitionId, PARTITION_ID);
++      assert.equal(identity.releaseId, pauseAnchor.releaseId);
++      assert.equal(sameAttempt(identity.attempt, pauseAnchor.attempt), true);
++      const pause = pauseAnchor.records.get(identity.replicaId);
++      assert.ok(pause, 'observation targets a current release member');
++      assert.equal(sameReplicaGeneration(identity.target,
++        pause.answer.generation), true);
++      assert.deepEqual(identity.origin, enableRecord.answer.origin);
++      entered.resolve(Object.freeze({kind: 'observation', identity}));
++    } catch (captureError) {
++      recordError(captureError);
++      entered.resolve(Object.freeze({kind: 'invalid-observation', identity}));
++    }
++  };
++
++  const wrappedDeliver = function(...args) {
++    const request = args[1];
++    const observed = request?.type === PARTICIPANT_RELEASE_TYPE &&
++      request.partitionId === PARTITION_ID;
++    const captured = observed && admit();
++    let result;
++    try {
++      result = Reflect.apply(originalDeliver, this, args);
++    } catch (error) {
++      if (captured) observeCompletion(request, null, error);
++      throw error;
++    }
++    if (captured) {
++      observeAppliedPositionCall(request);
++      try {
++        void Promise.prototype.then.call(result,
++          (response) => observeCompletion(request, response, null),
++          (error) => observeCompletion(request, null, error));
++      } catch (captureError) {
++        recordError(captureError);
++      }
++    }
++    return result;
++  };
++  router.deliver = wrappedDeliver;
++
++  return {
++    entered: entered.promise,
++    facts() {
++      const boundedErrors = routeOverflow === null ? [...errors] :
++        [...errors, routeOverflow];
++      return Object.freeze({pauseAnchor, enableRecord,
++        observationCalls: [...observationCalls], errors: boundedErrors,
++        matched, dropped, errorCount, errorOverflow});
++    },
++    restore() {
++      if (router.deliver === originalDeliver) return;
++      assert.equal(router.deliver, wrappedDeliver,
++        'only the exact release route observer is restored');
++      router.deliver = originalDeliver;
++    },
++  };
++}
++
++function assertHeldEdge({gate, route, group, leader, settled}) {
++  const routeFacts = route.facts();
++  assert.deepEqual(routeFacts.errors, [], 'route observation has no error');
++  assert.equal(routeFacts.dropped, 0,
++    'held-edge route observations fit their physical cap');
++  assert.equal(routeFacts.errorOverflow, false,
++    'held-edge route errors fit their physical cap');
++  assert.ok(routeFacts.pauseAnchor, 'the exact natural PAUSE batch armed the gate');
++  const enabled = routeFacts.enableRecord?.answer;
++  assert.equal(enabled?.outcome, RELEASE_OUTCOME.OBSERVED,
++    `ENABLE returns canonical leader facts (${JSON.stringify(enabled)})`);
++  assert.ok(enabled.origin, 'ENABLE returns the actual committed origin');
++  assert.equal(routeFacts.enableRecord.request.release,
++    routeFacts.pauseAnchor.release,
++    'ENABLE retains the exact release identity from PAUSE');
++  assert.equal(sameAttempt(routeFacts.enableRecord.request.attempt,
++    routeFacts.pauseAnchor.attempt), true,
++  'ENABLE retains the exact release attempt from PAUSE');
++  const k = BigInt(enabled.origin.originIndex);
++  assert.ok(k > settled.index, `origin ${k} advances settled ${settled.index}`);
++  assert.equal(enabled.origin.originTerm, Number(leader.status.term));
++
++  const carriers = gate.facts();
++  assert.equal(carriers.length, 2);
++  for (const carrier of carriers) {
++    assert.notEqual(carrier.first, null,
++      `${carrier.replicaId}: a first commit carrier is held`);
++    assert.equal(carrier.overflow, false,
++      `${carrier.replicaId}: retransmission accounting stays bounded`);
++    assert.equal(carrier.first.commit, k,
++      `${carrier.replicaId}: first carrier announces actual origin K`);
++    assert.equal(carrier.first.protocol, RAFT_RS_TRANSPORT_PROTOCOL);
++    assert.equal(carrier.first.groupId, PARTITION_ID);
++    assert.equal(String(carrier.first.packetFrom), String(leader.status.peerId));
++    assert.equal(String(carrier.first.packetTo), carrier.first.followerPeerId);
++    assert.equal(String(carrier.first.term), String(leader.status.term));
++    assert.equal(String(carrier.first.from), String(leader.status.peerId));
++    assert.equal(String(carrier.first.to), carrier.first.followerPeerId);
++    assert.ok(carrier.first.msgType === RAFT_RS_MESSAGE_TYPE.APPEND ||
++      carrier.first.msgType === RAFT_RS_MESSAGE_TYPE.HEARTBEAT);
++  }
++
++  const views = allDurableViews(group);
++  for (const replicaId of MEMBER_IDS) {
++    const view = views.get(replicaId);
++    assert.equal(view.term, settled.term,
++      `${replicaId}: the injected fault changes no term`);
++    if (replicaId === leader.service.replicaId) {
++      assert.deepEqual([view.applied, view.commit, view.last], [k, k, k],
++        'leader durably applies the origin before ENABLE answers');
++      assert.deepEqual(view.origin, enabled.origin,
++        'leader stores the exact origin returned by ENABLE');
++    } else {
++      assert.deepEqual([view.applied, view.commit, view.last],
++        [settled.index, settled.index, k],
++        `${replicaId}: appended origin remains unapplied while carrier is held`);
++      assert.equal(view.origin, null, `${replicaId}: no origin is published`);
++    }
++  }
++  return Object.freeze({enabled, k, term: settled.term});
++}
++
++function assertFinalRelease(answer, route, held) {
++  const routeFacts = route.facts();
++  assert.deepEqual(routeFacts.errors, [],
++    'release route observation remains error-free through RESUME');
++  assert.equal(routeFacts.dropped, 0,
++    'every participant release route observation fits its physical cap');
++  assert.equal(routeFacts.errorOverflow, false,
++    'route observation error retention fits its physical cap');
++  assert.equal(answer.outcome, RELEASE_OUTCOME.CUT_OVER,
++    `the same attempt completes (${JSON.stringify(answer)})`);
++  const {pauseAnchor, enableRecord} = routeFacts;
++  assert.equal(answer.release, pauseAnchor.release,
++    'the result retains the exact original release identity');
++  assert.equal(enableRecord.request.release, pauseAnchor.release);
++  assert.equal(answer.census.length, MEMBER_IDS.length);
++  const finalReplicaIds = answer.census.map(({generation}) =>
++    generation.replicaId);
++  assert.deepEqual([...new Set(finalReplicaIds)].sort(), [...MEMBER_IDS].sort(),
++    'the final census contains each exact member once');
++  const local = answer.census.find(({generation}) =>
++    generation.replicaId === pauseAnchor.attempt.leaderReplicaId);
++  assert.equal(releaseCensusDefect(answer.release, answer.census, local,
++    {attempt: pauseAnchor.attempt}), null,
++  'the full canonical release classifier accepts the final census');
++  const pauseRecords = pauseAnchor.records;
++  for (const facts of answer.census) {
++    const paused = pauseRecords.get(facts.generation.replicaId).answer;
++    assert.deepEqual(facts.origin, held.enabled.origin,
++      `${facts.generation.replicaId}: final origin is identical`);
++    assert.equal(sameReplicaGeneration(facts.generation,
++      paused.generation), true,
++    `${facts.generation.replicaId}: generation is unchanged`);
++    assert.equal(facts.membership.term, paused.membership.term,
++      `${facts.generation.replicaId}: membership term is unchanged`);
++    assert.equal(facts.membership.configurationKey,
++      paused.membership.configurationKey,
++      `${facts.generation.replicaId}: configuration is unchanged`);
++    assert.equal(facts.membership.membershipGenerationIndex,
++      paused.membership.membershipGenerationIndex,
++      `${facts.generation.replicaId}: membership generation is unchanged`);
++    assert.equal(facts.leaderReplicaId, paused.leaderReplicaId,
++      `${facts.generation.replicaId}: release leader is unchanged`);
++    assert.deepEqual(releaseMemberIds(facts.membership),
++      [...MEMBER_IDS].sort());
++  }
++  assert.equal(routeFacts.observationCalls.length, MEMBER_IDS.length,
++    'the applied-position phase naturally targets all three current members');
++}
++
++async function captureCleanup(errors, phase, operation) {
++  try {
++    await operation();
++    return null;
++  } catch (error) {
++    errors.push(Object.freeze({phase, error}));
++    return error;
++  }
++}
++
++function finishWithCustody(primary, cleanupErrors) {
++  if (primary !== null && cleanupErrors.length === 0) throw primary;
++  if (primary === null && cleanupErrors.length === 0) return;
++  const causes = [primary, ...cleanupErrors.map(({error}) => error)]
++    .filter((error) => error !== null);
++  const message = primary?.message ?? 'native release witness cleanup failed';
++  const aggregate = new AggregateError(causes, message, {cause: primary ?? causes[0]});
++  aggregate.cleanupFailures = cleanupErrors;
++  throw aggregate;
++}
++
++async function cleanupNativeWitness({gate, releasePromise, route,
++  releaseOwners, group, router}, primary) {
++  const cleanupErrors = [];
++  if (gate !== null) gate.disarm();
++  if (gate !== null) {
++    for (const replicaId of gate.followerIds) {
++      await captureCleanup(cleanupErrors, `forward-${replicaId}`,
++        () => gate.forward(replicaId));
++    }
++    for (const replicaId of gate.followerIds) {
++      await captureCleanup(cleanupErrors, `restore-${replicaId}`,
++        () => gate.restore(replicaId));
++    }
++  }
++  if (releasePromise !== null) {
++    await captureCleanup(cleanupErrors, 'settle-release', () => releasePromise);
++  }
++  if (route !== null) {
++    for (const error of route.facts().errors) {
++      cleanupErrors.push(Object.freeze({phase: 'release-route-observation',
++        error}));
++    }
++    await captureCleanup(cleanupErrors, 'restore-release-route',
++      () => route.restore());
++  }
++  let releaseOwnerFailure = null;
++  if (releaseOwners !== null) {
++    releaseOwnerFailure = await captureCleanup(cleanupErrors,
++      'dispose-release-owners',
++      () => releaseOwners.dispose());
++  }
++  if (group !== null) {
++    await captureCleanup(cleanupErrors, 'dispose-group', () => group.dispose({
++      retainDirectory: releaseOwnerFailure !== null ||
++        primary?.retainedDirectory !== undefined,
++    }));
++  }
++  await captureCleanup(cleanupErrors, 'shutdown-router', () => router.shutdown());
++  await captureCleanup(cleanupErrors, 'reset-environment',
++    async () => resetEnvironment());
++  finishWithCustody(primary, cleanupErrors);
++}
++
++test('the real participant release owner waits for every native voter origin ' +
++  'publication before final census and resumes the same attempt',
++{timeout: TEST_TIMEOUT_MS}, async () => {
++  initializeEnvironment();
++  const router = new MessageRouter({nodeId: NODE_ID,
++    bootIncarnation: TEST_BOOT_INCARNATION});
++  let group = null;
++  let releaseOwners = null;
++  let gate = null;
++  let route = null;
++  let releasePromise = null;
++  let primary = null;
++
++  try {
++    await router.initialize({startServer: false});
++    group = await formAdmittedGroup({
++      partitionId: PARTITION_ID,
++      members: MEMBERS,
++      tempPrefix: 'participant-release-native-',
++      serviceOptions: tableOptions(),
++      budgetMs: GROUP_BUDGET_MS,
++      transport: router,
++    });
++    assert.equal(await group.waitFor(() =>
++      settledPositionOf(allDurableViews(group)) !== null), true,
++    'setup: all three real voters have one settled native position');
++    const settled = settledPositionOf(allDurableViews(group));
++    assert.ok(settled, 'setup: settled position N is observed passively');
++    const current = leaderStatusOf(group.services);
++    releaseOwners = await attachPartitionReleaseOwners(group.services, {
++      directory: path.dirname(group.dbFileOf(MEMBERS[0])),
++      budgetMs: GROUP_BUDGET_MS,
++    });
++    gate = createCommitCarrierGate(router, {
++      leader: current.leader,
++      followers: current.statuses.filter(({status}) =>
++        status.role !== RAFT_ROLE.LEADER),
++      settled,
++    });
++    route = createReleaseRouteObserver(router, {gate,
++      leader: current.leader, statuses: current.statuses, settled});
++
++    releasePromise = releaseOwners.releaseOnce(PARTITION_ID);
++    const trackedRelease = track(releasePromise);
++    const releaseSettled = releasePromise.then(
++      (answer) => Object.freeze({kind: 'release-settled', answer}),
++      (error) => Object.freeze({kind: 'release-threw', error}));
++    const edge = await Promise.race([releaseSettled, route.entered]);
++    const held = assertHeldEdge({gate, route, group,
++      leader: current.leader, settled});
++
++    const leaderMember = [current.leader.service.replicaId];
++    const beforeWrite = durableView(group.dbFileOf(leaderMember));
++    const queueBefore = Object.freeze({
++      proposals: current.leader.service.proposalQueue.size,
++      pendingOutcomes: current.leader.service.pendingWriteOutcomes.size,
++    });
++    const paused = await insert(current.leader.service, 'paused-row',
++      'must-not-commit', 'native-paused-write');
++    const afterWrite = durableView(group.dbFileOf(leaderMember));
++    assert.equal(paused.success, false, 'the held release admits no write');
++    assert.equal(paused.failureCode, WRITE_REFUSAL.CUTOVER_PAUSED,
++      'the existing pause owner types the refusal');
++    assert.deepEqual(afterWrite, beforeWrite,
++      'the refused write changes no durable log, application row or origin');
++    assert.deepEqual({proposals: current.leader.service.proposalQueue.size,
++      pendingOutcomes: current.leader.service.pendingWriteOutcomes.size},
++    queueBefore, 'the refused write creates no proposal or pending outcome');
++
++    if (edge.kind !== 'observation') {
++      assert.equal(edge.kind, 'release-settled',
++        `the attempt must not throw (${edge.error?.message ?? edge.kind})`);
++      assert.equal(edge.answer.outcome, RELEASE_OUTCOME.DRAIN_PENDING,
++        `source-only engagement is the actual held-census refusal: ${JSON.stringify(edge.answer)}`);
++      assert.fail('the release attempt settled DRAIN_PENDING while both exact ' +
++        'follower origin carriers remained held');
++    }
++
++    assert.equal(trackedRelease.settled, false,
++      'the same release remains pending in applied-position observation');
++    assert.deepEqual(route.facts().errors, [], 'observation call is exact');
++    assert.equal(route.facts().observationCalls.length, MEMBER_IDS.length,
++      'the natural observation batch entered for every current member');
++
++    gate.disarm();
++    for (const replicaId of gate.followerIds) await gate.forward(replicaId);
++    for (const replicaId of gate.followerIds) gate.restore(replicaId);
++    const released = await releasePromise;
++    assertFinalRelease(released, route, held);
++    assert.equal(group.services.every((service) =>
++      participantCutoverPauseOf(service) === null), true,
++    'the existing RESUME owner opens every current member');
++    const afterRelease = allDurableViews(group);
++    for (const view of afterRelease.values()) {
++      assert.deepEqual([view.applied, view.commit, view.last],
++        [held.k, held.k, held.k]);
++      assert.deepEqual(view.origin, held.enabled.origin);
++    }
++
++    const write = await insert(current.leader.service, 'after-release',
++      'served-once', 'native-after-release-write');
++    assert.equal(write.success, true, 'the released leader serves one write');
++    assert.equal(await group.waitFor(() => {
++      const views = allDurableViews(group);
++      const expectedIndex = held.k + 1n;
++      return [...views.values()].every((view) =>
++        view.applied === expectedIndex && view.commit === expectedIndex &&
++        view.last === expectedIndex && view.term === held.term &&
++        JSON.stringify(view.rows) === JSON.stringify(['after-release']));
++    }), true, 'the one ordinary write creates exactly K+1 on all three voters');
++  } catch (error) {
++    primary = error;
++  }
++
++  await cleanupNativeWitness({gate, releasePromise, route, releaseOwners,
++    group, router}, primary);
++});

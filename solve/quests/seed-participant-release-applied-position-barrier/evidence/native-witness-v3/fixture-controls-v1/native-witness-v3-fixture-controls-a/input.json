@@ -1,0 +1,90 @@
+{
+  "sha": "e8afaa2cfe87cfbbbb3f11ae0516b294e9d48ba4",
+  "tree": "995db773d0ecb3d36488101de0a12ea3dc399359",
+  "host": "tv-dator",
+  "files": [
+    "test/partition/partition-runtime-reconstruction-leadership.test.js",
+    "test/node/replica-handler-leadership-transfer.test.js",
+    "test/node/replica-handler-replica-membership.test.js",
+    "test/partition/partition-write-leadership-transfer.test.js",
+    "test/query/partition-write-answer-consumers.test.js",
+    "test/query/unknown-outcome-redelivery-budget.test.js",
+    "test/query/unknown-outcome-same-entry.test.js",
+    "test/query/write-identity-instance.test.js",
+    "test/partition/partition-statement-admission.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/partition/partition-statement-admission.test.js",
+        "test/query/unknown-outcome-redelivery-budget.test.js",
+        "test/query/unknown-outcome-same-entry.test.js",
+        "test/query/write-identity-instance.test.js",
+        "test/partition/partition-runtime-reconstruction-leadership.test.js",
+        "test/query/partition-write-answer-consumers.test.js",
+        "test/node/replica-handler-leadership-transfer.test.js",
+        "test/partition/partition-write-leadership-transfer.test.js",
+        "test/node/replica-handler-replica-membership.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ],
+  "costs": [
+    {
+      "file": "test/partition/partition-statement-admission.test.js",
+      "jobs": 4,
+      "ms": 997,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/unknown-outcome-redelivery-budget.test.js",
+      "jobs": 4,
+      "ms": 997,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/unknown-outcome-same-entry.test.js",
+      "jobs": 4,
+      "ms": 997,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/write-identity-instance.test.js",
+      "jobs": 4,
+      "ms": 997,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/partition-runtime-reconstruction-leadership.test.js",
+      "jobs": 4,
+      "ms": 19377,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/partition-write-answer-consumers.test.js",
+      "jobs": 4,
+      "ms": 1188,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/node/replica-handler-leadership-transfer.test.js",
+      "jobs": 4,
+      "ms": 997,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/partition-write-leadership-transfer.test.js",
+      "jobs": 4,
+      "ms": 997,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/node/replica-handler-replica-membership.test.js",
+      "jobs": 4,
+      "ms": 708,
+      "lane": "ordinary"
+    }
+  ],
+  "startedAt": "2026-10-13T19:51:07.339Z"
+}

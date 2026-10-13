@@ -1,0 +1,308 @@
+placement-shell=1772071
+placement-head=77e091f64fb711fbc5ca40a7915ae85f01a5cf4e
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:2.2 mode:local retry: timeout: lanecap:7
+placement-pid=1772448
+# test-files planned=4
+classified lane ordinary: 4 file(s), jobs=4
+thermal: ok cpu 58C (coretemp/Package id 0) nvme unmeasured
+not ok test/partition/partition-write-leadership-transfer-committed.test.js (2 assertions, 3133ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: a write the leader serves during a leadership transfer is committed: its row is stored and the log position it names holds it
+not ok 1 - a write the leader serves during a leadership transfer is committed: its row is stored and the log position it names holds it
+  ---
+  duration_ms: 736.940115
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/77e091f64fb7-mv73ylsc-2046199/test/partition/partition-write-leadership-transfer-committed.test.js:212:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    setup: the group serves a write
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    withTransferToCutOffVoter (file:///home/peter/projects/lagrange/test-output/placement-worktrees/77e091f64fb7-mv73ylsc-2046199/test/partition/partition-write-leadership-transfer-committed.test.js:181:12)
+    async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/77e091f64fb7-mv73ylsc-2046199/test/partition/partition-write-leadership-transfer-committed.test.js:215:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: a write still deferred when its budget ends inside a transfer window is answered as the typed deferral, never success, and nothing of it is stored
+not ok 2 - a write still deferred when its budget ends inside a transfer window is answered as the typed deferral, never success, and nothing of it is stored
+  ---
+  duration_ms: 554.504674
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/77e091f64fb7-mv73ylsc-2046199/test/partition/partition-write-leadership-transfer-committed.test.js:246:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    setup: the group serves a write
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    withTransferToCutOffVoter (file:///home/peter/projects/lagrange/test-output/placement-worktrees/77e091f64fb7-mv73ylsc-2046199/test/partition/partition-write-leadership-transfer-committed.test.js:181:12)
+    async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/77e091f64fb7-mv73ylsc-2046199/test/partition/partition-write-leadership-transfer-committed.test.js:249:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 0
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1305.057854
+# time=3133ms
+not ok test/partition/settled-replay-preserves-result.test.js (6 assertions, 3363ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: W1: an INSERT in flight across a forced runtime replacement commits once, and its retry is answered applied with its row count - never success with zero rows, never a UNIQUE failure
+not ok 1 - W1: an INSERT in flight across a forced runtime replacement commits once, and its retry is answered applied with its row count - never success with zero rows, never a UNIQUE failure
+  ---
+  duration_ms: 293.213838
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/77e091f64fb7-mv73ylsc-2046199/test/partition/settled-replay-preserves-result.test.js:246:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    setup: the lone leader serves a write
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/77e091f64fb7-mv73ylsc-2046199/test/partition/settled-replay-preserves-result.test.js:254:12
+    async withLonePartitions (file:///home/peter/projects/lagrange/test-output/placement-worktrees/77e091f64fb7-mv73ylsc-2046199/test/partition/settled-replay-preserves-result.test.js:190:5)
+    async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/77e091f64fb7-mv73ylsc-2046199/test/partition/settled-replay-preserves-result.test.js:250:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: W1: a retry sent while the runtime is still being replaced is proposed, and the application answers it applied with its row count
+not ok 2 - W1: a retry sent while the runtime is still being replaced is proposed, and the application answers it applied with its row count
+  ---
+  duration_ms: 195.423702
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/77e091f64fb7-mv73ylsc-2046199/test/partition/settled-replay-preserves-result.test.js:288:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    setup
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/77e091f64fb7-mv73ylsc-2046199/test/partition/settled-replay-preserves-result.test.js:293:12
+    async withLonePartitions (file:///home/peter/projects/lagrange/test-output/placement-worktrees/77e091f64fb7-mv73ylsc-2046199/test/partition/settled-replay-preserves-result.test.js:190:5)
+    async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/77e091f64fb7-mv73ylsc-2046199/test/partition/settled-replay-preserves-result.test.js:291:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: W3: an entry committed by the restart that replays the log tail answers its retry applied with its row count
+not ok 3 - W3: an entry committed by the restart that replays the log tail answers its retry applied with its row count
+  ---
+  duration_ms: 232.512231
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/77e091f64fb7-mv73ylsc-2046199/test/partition/settled-replay-preserves-result.test.js:314:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    setup
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/77e091f64fb7-mv73ylsc-2046199/test/partition/settled-replay-preserves-result.test.js:319:12
+    async withLonePartitions (file:///home/peter/projects/lagrange/test-output/placement-worktrees/77e091f64fb7-mv73ylsc-2046199/test/partition/settled-replay-preserves-result.test.js:190:5)
+    async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/77e091f64fb7-mv73ylsc-2046199/test/partition/settled-replay-preserves-result.test.js:317:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: W2: the replay of an UPDATE of n rows, a DELETE, a multi-row INSERT, an INSERT ... RETURNING and a genuine zero-row UPDATE answers each statement's own result, in process and after a restart
+not ok 4 - W2: the replay of an UPDATE of n rows, a DELETE, a multi-row INSERT, an INSERT ... RETURNING and a genuine zero-row UPDATE answers each statement's own result, in process and after a restart
+  ---
+  duration_ms: 234.523894
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/77e091f64fb7-mv73ylsc-2046199/test/partition/settled-replay-preserves-result.test.js:349:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    setup a
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/77e091f64fb7-mv73ylsc-2046199/test/partition/settled-replay-preserves-result.test.js:356:14
+    async withLonePartitions (file:///home/peter/projects/lagrange/test-output/placement-worktrees/77e091f64fb7-mv73ylsc-2046199/test/partition/settled-replay-preserves-result.test.js:190:5)
+    async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/77e091f64fb7-mv73ylsc-2046199/test/partition/settled-replay-preserves-result.test.js:353:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: W5: an applied outcome row that retains no result answers the named not-retained state, acknowledged and without a count, never zero rows
+not ok 5 - W5: an applied outcome row that retains no result answers the named not-retained state, acknowledged and without a count, never zero rows
+  ---
+  duration_ms: 152.4311
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/77e091f64fb7-mv73ylsc-2046199/test/partition/settled-replay-preserves-result.test.js:406:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    setup
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/77e091f64fb7-mv73ylsc-2046199/test/partition/settled-replay-preserves-result.test.js:413:12
+    async withLonePartitions (file:///home/peter/projects/lagrange/test-output/placement-worktrees/77e091f64fb7-mv73ylsc-2046199/test/partition/settled-replay-preserves-result.test.js:190:5)
+    async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/77e091f64fb7-mv73ylsc-2046199/test/partition/settled-replay-preserves-result.test.js:409:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: W3: on a three-replica group a retry answered by another replica, a forwarded retry, and a retry after a leader change all answer applied with the row count
+not ok 6 - W3: on a three-replica group a retry answered by another replica, a forwarded retry, and a retry after a leader change all answer applied with the row count
+  ---
+  duration_ms: 447.424346
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/77e091f64fb7-mv73ylsc-2046199/test/partition/settled-replay-preserves-result.test.js:461:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    setup a
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/77e091f64fb7-mv73ylsc-2046199/test/partition/settled-replay-preserves-result.test.js:476:14)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 0
+# fail 6
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1566.792029
+# time=3363ms
+not ok test/query/write-exactly-once-schedules.test.js (2 assertions, 63242ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: (c1) two log entries for one entryId, both committed: applied once, the caller answered with the first application's result
+not ok 1 - (c1) two log entries for one entryId, both committed: applied once, the caller answered with the first application's result
+  ---
+  duration_ms: 30762.47351
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/77e091f64fb7-mv73ylsc-2046199/test/query/write-exactly-once-schedules.test.js:92:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    setup: the group serves a write
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/77e091f64fb7-mv73ylsc-2046199/test/query/write-exactly-once-schedules.test.js:98:12
+    async withGroupSurface (file:///home/peter/projects/lagrange/test-output/placement-worktrees/77e091f64fb7-mv73ylsc-2046199/test/query/unknown-outcome-surface-fixture.js:505:5)
+    async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/77e091f64fb7-mv73ylsc-2046199/test/query/write-exactly-once-schedules.test.js:95:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: (c2/d) the first copy on the deposed leader only, the redelivery on the new leader in the next term: the first copy is truncated, the redelivery applies once
+not ok 2 - (c2/d) the first copy on the deposed leader only, the redelivery on the new leader in the next term: the first copy is truncated, the redelivery applies once
+  ---
+  duration_ms: 30339.805501
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/77e091f64fb7-mv73ylsc-2046199/test/query/write-exactly-once-schedules.test.js:150:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    setup: the group serves a write
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/77e091f64fb7-mv73ylsc-2046199/test/query/write-exactly-once-schedules.test.js:156:12
+    async withGroupSurface (file:///home/peter/projects/lagrange/test-output/placement-worktrees/77e091f64fb7-mv73ylsc-2046199/test/query/unknown-outcome-surface-fixture.js:505:5)
+    async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/77e091f64fb7-mv73ylsc-2046199/test/query/write-exactly-once-schedules.test.js:153:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 0
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 61110.700181
+# time=63242ms
+not ok test/query/write-exactly-once-property.test.js (1 assertions, 600053ms)
+# TAP assertions failed; test process timed out after 600053ms of a 600000ms budget; at the kill load1=0.57 cores=8 freeMemMb=14131 machineFactor=2.2; test process received SIGKILL; test process exited without a status
+TAP version 13
+# Subtest: exactly-once property, seed 20261005: 40 logical writes under random faults
+not ok 1 - exactly-once property, seed 20261005: 40 logical writes under random faults
+  ---
+  duration_ms: 300002.206532
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/77e091f64fb7-mv73ylsc-2046199/test/query/write-exactly-once-property.test.js:231:3'
+  failureType: 'testTimeoutFailure'
+  error: 'test timed out after 300000ms'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# time=600053ms
+# test-files total=4 pass=0 fail=4 assertions=11
+placement-results={"file":"test/partition/partition-write-leadership-transfer-committed.test.js","attempt":1,"ok":false,"assertions":2,"durationMs":3133,"retriedOnce":false,"firstFailureLine":"not ok 1 - a write the leader serves during a leadership transfer is committed: its row is stored and the log position it names holds it"}
+placement-results={"file":"test/partition/settled-replay-preserves-result.test.js","attempt":1,"ok":false,"assertions":6,"durationMs":3363,"retriedOnce":false,"firstFailureLine":"not ok 1 - W1: an INSERT in flight across a forced runtime replacement commits once, and its retry is answered applied with its row count - never success with zero rows, never a UNIQUE failure"}
+placement-results={"file":"test/query/write-exactly-once-schedules.test.js","attempt":1,"ok":false,"assertions":2,"durationMs":63242,"retriedOnce":false,"firstFailureLine":"not ok 1 - (c1) two log entries for one entryId, both committed: applied once, the caller answered with the first application's result"}
+placement-results={"file":"test/query/write-exactly-once-property.test.js","attempt":1,"ok":false,"assertions":1,"durationMs":600053,"retriedOnce":false,"firstFailureLine":"not ok 1 - exactly-once property, seed 20261005: 40 logical writes under random faults","timeout":{"budgetMs":600000,"elapsedMs":600053,"load1":0.57,"cores":8,"freeMemMb":14131,"machineFactor":2.2}}

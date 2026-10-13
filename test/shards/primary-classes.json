@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2061,
+    "unit": 2062,
     "integration": 97,
     "bootstrap": 203,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2368,
-  "digest": "fnv1a32-4cf6a18c",
+  "censusSize": 2369,
+  "digest": "fnv1a32-f731fa14",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1244,6 +1244,7 @@
     "test/partition/participant-decision-canonical-record.test.js": "unit",
     "test/partition/participant-envelope-admission.test.js": "unit",
     "test/partition/participant-release-build-provenance.test.js": "unit",
+    "test/partition/participant-release-native-application-order.test.js": "unit",
     "test/partition/participant-release-protocol.test.js": "unit",
     "test/partition/partition-admission-redrive-wakes.test.js": "unit",
     "test/partition/partition-cdc-generator.test.js": "unit",

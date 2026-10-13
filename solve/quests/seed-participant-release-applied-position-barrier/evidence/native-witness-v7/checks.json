@@ -1,0 +1,74 @@
+{
+  "schema": "native-release-boundary-witness-checks/5",
+  "baseHead": "77e091f64fb711fbc5ca40a7915ae85f01a5cf4e",
+  "v6WitnessSha256": "d4999670285114ff87cb906c926cd922d3d6ccedaa8b3ba257a56757d12d2376",
+  "sourceTree": "4ff29d950a074768b3bcc40f6df310abda9827c0",
+  "commands": [
+    {
+      "name": "syntax-witness",
+      "command": "node --check test/partition/participant-release-native-application-order.test.js",
+      "exit": 0,
+      "log": "syntax-witness.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "eslint",
+      "command": "npx eslint test/partition/participant-release-native-application-order.test.js",
+      "exit": 0,
+      "log": "eslint.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "strict-metrics",
+      "command": "npm run test:metrics:scoped:strict -- test/partition/participant-release-native-application-order.test.js",
+      "exit": 0,
+      "log": "strict-metrics.log",
+      "logSha256": "ac9ea83b100821cf49f2368946d87b75326329617cd86011df4ee19d49bcaeef"
+    },
+    {
+      "name": "metadata-refresh",
+      "command": "npm run -s test:metadata:refresh",
+      "exit": 0,
+      "log": "metadata-refresh.log",
+      "logSha256": "a03720e0ebeed7f8c63fd77e5e3424eadcf2db9167e9026ca12d6d3fc4b8805c"
+    },
+    {
+      "name": "tracked-diff-check",
+      "command": "git diff --check -- test/partition/partition-admitted-group-fixture.js test/partition/partition-release-fixture.js test/shards/primary-classes.json test/shards/resource-classes.json test/shards/subsystem-classes.json test/shards/impact-graph-seal.json",
+      "exit": 0,
+      "log": "diff-check.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "witness-v6-diff-check",
+      "command": "git diff --no-index --check /tmp/session-worktree-YEMEYM/tree/test/partition/participant-release-native-application-order.test.js test/partition/participant-release-native-application-order.test.js",
+      "exit": 1,
+      "expectedDifferenceExit": 1,
+      "log": "witness-diff-check.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "metadata-v6-diff-check",
+      "command": "git diff --no-index --check /tmp/session-worktree-YEMEYM/tree/test/shards/impact-graph-seal.json test/shards/impact-graph-seal.json",
+      "exit": 1,
+      "expectedDifferenceExit": 1,
+      "log": "metadata-diff-check.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "source-diff",
+      "command": "git diff 3c5dd8fa0a06282e6fce92c6c7b73a1f03ae3e12 -- src",
+      "exit": 0,
+      "log": "source-diff.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "comparison": {
+    "name": "v6-to-v7",
+    "path": "v6-to-v7.diff",
+    "sha256": "7e640c0f98f4aabbddb3a6e5735339b6986f786ecabdd55c895527b3238aabd3",
+    "scopedPath": "scoped.diff",
+    "scopedSha256": "baeafeab624023f2abb903c3d1497c6ec25c645a0cc01a72ee64c5d2c0395a43"
+  },
+  "behavioralRuns": 0
+}

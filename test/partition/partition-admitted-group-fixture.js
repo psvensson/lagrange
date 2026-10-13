@@ -34,12 +34,13 @@ const POLL_MS = 10;
  * Form an admitted group.
  * @param {Object} options - {partitionId, members ([replicaId, nodeId]
  *   pairs, the first leads), tempPrefix, serviceOptions (PartitionService
- *   options shared by every replica: table, schema...), budgetMs}.
+ *   options shared by every replica: table, schema...), budgetMs, transport
+ *   (optional caller-owned transport)}.
  * @return {Promise<Object>} {services, dbFileOf, addressOf, waitFor,
  *   dispose}; `services[i]` is `members[i]`'s replica.
  */
 async function formAdmittedGroup({partitionId, members, tempPrefix,
-  serviceOptions, budgetMs}) {
+  serviceOptions, budgetMs, transport = null}) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), tempPrefix));
   const dbFileOf = ([replicaId]) => path.join(directory, `${replicaId}.db`);
   const addressOf = ([replicaId, nodeId]) =>
@@ -49,7 +50,8 @@ async function formAdmittedGroup({partitionId, members, tempPrefix,
     service_type: SERVICE_TYPE.PARTITION, node_id: nodeId,
     status: SERVICE_STATUS.ACTIVE,
   });
-  const network = createLoopbackTransport();
+  const network = transport ?? createLoopbackTransport();
+  const ownsTransport = transport === null;
   const services = [];
   const caches = [];
   const waitFor = async (predicate) => {
@@ -62,10 +64,22 @@ async function formAdmittedGroup({partitionId, members, tempPrefix,
     }
     return false;
   };
-  const dispose = async () => {
-    network.deliver = async () => undefined;
-    await Promise.all(services.map((service) => service.shutdown()));
-    fs.rmSync(directory, {recursive: true, force: true});
+  const dispose = async ({retainDirectory = false} = {}) => {
+    if (ownsTransport) network.deliver = async () => undefined;
+    const settled = await Promise.allSettled(services.map((service) =>
+      service.shutdown()));
+    const failures = settled.flatMap((answer, index) =>
+      answer.status === 'rejected' ?
+        [Object.freeze({replicaId: services[index].replicaId,
+          error: answer.reason})] : []);
+    if (failures.length > 0) {
+      const aggregate = new AggregateError(failures.map(({error}) => error),
+        `group shutdown failed; retained temporary directory ${directory}`);
+      aggregate.shutdownFailures = failures;
+      aggregate.retainedDirectory = directory;
+      throw aggregate;
+    }
+    if (!retainDirectory) fs.rmSync(directory, {recursive: true, force: true});
   };
   const build = (member, visible, extra = {}) => {
     const cache = new SystemTableCache();
@@ -113,7 +127,15 @@ async function formAdmittedGroup({partitionId, members, tempPrefix,
       }), true, `setup: replica ${members[joined][0]} is admitted`);
     }
   } catch (error) {
-    await dispose();
+    try {
+      await dispose();
+    } catch (cleanupError) {
+      const aggregate = new AggregateError([error, cleanupError], error.message,
+        {cause: error});
+      aggregate.cleanupFailure = cleanupError;
+      aggregate.retainedDirectory = cleanupError.retainedDirectory ?? directory;
+      throw aggregate;
+    }
     throw error;
   }
   return {services, dbFileOf, addressOf, waitFor, dispose};

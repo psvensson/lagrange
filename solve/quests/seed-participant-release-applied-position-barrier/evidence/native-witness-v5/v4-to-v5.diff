@@ -1,0 +1,17 @@
+--- /tmp/participant-release-native-application-order-v4.test.js	2026-10-13 22:08:36.484742449 +0200
++++ test/partition/participant-release-native-application-order.test.js	2026-10-13 22:07:50.788392196 +0200
+@@ -809,11 +809,12 @@
+       assert.equal(edge.kind, 'release-settled',
+         `the attempt must not throw (${edge.error?.message ?? edge.kind})`);
+       const diagnostic = finalInspectDiagnostic(edge.answer, route, held);
++      const diagnosticReport = diagnosticText(diagnostic);
+       assert.equal(edge.answer.outcome, RELEASE_OUTCOME.DRAIN_PENDING,
+         'source-only engagement is the actual held-census refusal: ' +
+-        diagnosticText(diagnostic));
++        diagnosticReport);
+       assert.fail('the release attempt settled DRAIN_PENDING while both exact ' +
+-        'follower origin carriers remained held');
++        `follower origin carriers remained held: ${diagnosticReport}`);
+     }
+ 
+     assert.equal(trackedRelease.settled, false,

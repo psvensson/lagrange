@@ -1,0 +1,53 @@
+placement-shell=1892957
+placement-head=e8afaa2cfe87cfbbbb3f11ae0516b294e9d48ba4
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.1 mode:local retry: timeout: lanecap:7
+placement-pid=1893383
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: hold cpu 79C (coretemp/Package id 0) nvme 19C (nvme/Composite) - CPU package 79C >= 75C, waiting 30s (poll 1/20)
+thermal: ok cpu 41C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+not ok test/partition/participant-release-native-application-order.test.js (1 assertions, 3872ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: the real participant release owner waits for every native voter origin publication before final census and resumes the same attempt
+not ok 1 - the real participant release owner waits for every native voter origin publication before final census and resumes the same attempt
+  ---
+  duration_ms: 2687.279272
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/e8afaa2cfe87-mv73jdrm-2028232/test/partition/participant-release-native-application-order.test.js:681:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    source-only engagement is the actual held-census refusal: {"outcome":"origin_replication_pending","releaseId":"5649396e008abcc8f2b36050b05eadfb23aaaf2a21df9f24e0cb9050675faaa7","partitionId":"participant-release-native-p1","phase":"release","retryAfterMs":100}
+    + actual - expected
+    
+    + 'origin_replication_pending'
+    - 'release_drain_pending'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'release_drain_pending'
+  actual: 'origin_replication_pending'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/e8afaa2cfe87-mv73jdrm-2028232/test/partition/participant-release-native-application-order.test.js:753:14)
+    runNextTicks (node:internal/process/task_queues:64:5)
+    listOnTimeout (node:internal/timers:547:9)
+    process.processTimers (node:internal/timers:521:7)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2693.78988
+# time=3872ms
+# test-files total=1 pass=0 fail=1 assertions=1
+placement-results={"file":"test/partition/participant-release-native-application-order.test.js","attempt":1,"ok":false,"assertions":1,"durationMs":3872,"retriedOnce":false,"firstFailureLine":"not ok 1 - the real participant release owner waits for every native voter origin publication before final census and resumes the same attempt"}

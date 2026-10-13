@@ -23,7 +23,8 @@ import {withFoundingStamp} from './partition-founding-stamp.js';
  * and the control service. host() tracks a legitimately recreated service.
  * @param {Array<Object>} services Initialized native partition replicas.
  * @param {Object} options Fixture directory and bounded request duration.
- * @return {Promise<Object>} host, release, dispose and exact release outcomes.
+ * @return {Promise<Object>} host, release/releaseOnce, dispose and exact
+ *   release outcomes.
  */
 async function attachPartitionReleaseOwners(services, {directory, budgetMs}) {
   const first = services[0];
@@ -56,11 +57,37 @@ async function attachPartitionReleaseOwners(services, {directory, budgetMs}) {
     deferElection: true,
   }));
   const dispose = async () => {
-    for (const handler of handlers.values()) {
-      await handler.participantReleaseRecovery.shutdown();
-      handler.unregisterFromRouter(transport);
+    const failures = [];
+    const handlerEntries = [...handlers];
+    const shutdowns = await Promise.allSettled(handlerEntries.map(([, handler]) =>
+      handler.participantReleaseRecovery.shutdown()));
+    for (const [index, answer] of shutdowns.entries()) {
+      if (answer.status === 'rejected') {
+        failures.push(Object.freeze({phase: 'release-recovery-shutdown',
+          nodeId: handlerEntries[index][0], error: answer.reason}));
+      }
     }
-    await control.shutdown();
+    for (const [nodeId, handler] of handlerEntries) {
+      try {
+        handler.unregisterFromRouter(transport);
+      } catch (error) {
+        failures.push(Object.freeze({phase: 'handler-unregister', nodeId,
+          error}));
+      }
+    }
+    try {
+      await control.shutdown();
+    } catch (error) {
+      failures.push(Object.freeze({phase: 'control-shutdown',
+        replicaId: control.replicaId, error}));
+    }
+    if (failures.length > 0) {
+      const aggregate = new AggregateError(failures.map(({error}) => error),
+        `release-owner shutdown failed; retained temporary directory ${directory}`);
+      aggregate.shutdownFailures = failures;
+      aggregate.retainedDirectory = directory;
+      throw aggregate;
+    }
   };
   try {
     await control.initialize();
@@ -68,33 +95,50 @@ async function attachPartitionReleaseOwners(services, {directory, budgetMs}) {
     await control.raft.campaign();
     assert.equal(control.raft.readStatus().role, RAFT_ROLE.LEADER);
   } catch (error) {
-    await dispose();
+    try {
+      await dispose();
+    } catch (cleanupError) {
+      const aggregate = new AggregateError([error, cleanupError], error.message,
+        {cause: error});
+      aggregate.cleanupFailure = cleanupError;
+      aggregate.retainedDirectory = cleanupError.retainedDirectory ?? directory;
+      throw aggregate;
+    }
     throw error;
   }
-  const release = async (id) => {
+  const prepareRelease = async () => {
     const build = await runtimeBuildProvenance();
     assert.equal(build.state, 'measured', build.reason);
-    const deadline = first.timeSource.now() + budgetMs;
+    return {build, deadline: first.timeSource.now() + budgetMs};
+  };
+  const invokeRelease = async (id, prepared) => {
+    const {build, deadline} = prepared;
+    const leader = [...hosted.values()].find((service) =>
+      service.partitionId === id && !service.isShutdown &&
+      service.raft?.readStatus().role === RAFT_ROLE.LEADER);
+    assert.ok(leader, `release requires the actual leader of ${id}`);
+    const answer = await handlers.get(leader.nodeId).participantReleaseRecovery
+      .releaseOperator({partitionId: id, targetBuildDigest: build.digest,
+        deadlineAtMs: deadline});
+    outcomes.push(answer);
+    return answer;
+  };
+  const releaseOnce = async (id) => invokeRelease(id, await prepareRelease());
+  const release = async (id) => {
+    const prepared = await prepareRelease();
     let answer = null;
     do {
-      const leader = [...hosted.values()].find((service) =>
-        service.partitionId === id && !service.isShutdown &&
-        service.raft?.readStatus().role === RAFT_ROLE.LEADER);
-      assert.ok(leader, `release requires the actual leader of ${id}`);
-      answer = await handlers.get(leader.nodeId).participantReleaseRecovery
-        .releaseOperator({partitionId: id, targetBuildDigest: build.digest,
-          deadlineAtMs: deadline});
-      outcomes.push(answer);
+      answer = await invokeRelease(id, prepared);
       if (answer.outcome === OUTCOME.CUT_OVER) return answer;
-      const remaining = deadline - first.timeSource.now();
+      const remaining = prepared.deadline - first.timeSource.now();
       if (remaining <= 0 || !Number.isSafeInteger(answer.retryAfterMs)) break;
       await delay(Math.min(answer.retryAfterMs, remaining));
-    } while (first.timeSource.now() < deadline);
+    } while (first.timeSource.now() < prepared.deadline);
     assert.equal(answer?.outcome, OUTCOME.CUT_OVER,
       `real release refused: ${JSON.stringify(answer)}`);
     return answer;
   };
-  return {host, release, dispose, outcomes};
+  return {host, release, releaseOnce, dispose, outcomes};
 }
 
 export {attachPartitionReleaseOwners};
