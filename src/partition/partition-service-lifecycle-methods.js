@@ -166,7 +166,7 @@ class PartitionServiceLifecycleMethods {
     this.shutdownSettlement = promise;
     const release = async () => {
       const initialization = this.initializationSettlement;
-      if (initialization) {
+      if (initialization && this.initializationOwnsCleanup !== true) {
         await Promise.allSettled([initialization]);
       }
       this.initialized = false;
