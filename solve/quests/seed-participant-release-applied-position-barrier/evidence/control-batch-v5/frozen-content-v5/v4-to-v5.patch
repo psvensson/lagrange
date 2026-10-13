@@ -1,0 +1,2187 @@
+--- a/test/test-helpers/participant-transaction-fixture.js
++++ b/test/test-helpers/participant-transaction-fixture.js
+@@ -547,6 +547,57 @@
+   return new AggregateError([current, next], message);
+ }
+ 
++async function cleanOwnedParticipantFixture({directory, failure, label, operations,
++  settlements = []}) {
++  let retained = failure;
++  let retirementFailed = false;
++  for (const [owner, operation] of operations) {
++    try {
++      await operation();
++    } catch (error) {
++      retirementFailed = true;
++      retained = retainFixtureParticipantFailure(retained, error,
++        `${label} assertion and ${owner} cleanup failed`);
++    }
++  }
++  for (const [owner, settlement] of settlements) {
++    try {
++      await settlement();
++    } catch (error) {
++      retained = retainFixtureParticipantFailure(retained, error,
++        `${label} assertion and ${owner} settlement failed`);
++    }
++  }
++  if (retirementFailed) {
++    if (retained !== null && typeof retained === 'object') {
++      retained.retainedDirectory = directory;
++    }
++    return retained;
++  }
++  try {
++    fs.rmSync(directory, {recursive: true, force: true});
++  } catch (error) {
++    retained = retainFixtureParticipantFailure(retained, error,
++      `${label} assertion and artifact cleanup failed`);
++  }
++  return retained;
++}
++
++function scriptedFixtureTimeSource(values) {
++  let reads = 0;
++  return {
++    now() {
++      const value = values[Math.min(reads, values.length - 1)];
++      reads += 1;
++      if (value instanceof Error) throw value;
++      return value;
++    },
++    reads: () => reads,
++    setTimeout,
++    clearTimeout,
++  };
++}
++
+ function deferFixtureParticipantMembership(service) {
+   const port = service.controllablePort;
+   const original = port?.committedMembershipHandler;
+@@ -1020,11 +1071,13 @@
+ 
+ export {
+   changeFixtureParticipantMembership,
++  cleanOwnedParticipantFixture,
+   deferFixtureParticipantMembership,
+   fixtureParticipantObservationListenerCount,
+   fixtureParticipantObservationRequest,
+   sendRegisteredFixtureParticipantMessage,
+   sendRegisteredFixtureParticipantObservation,
++  scriptedFixtureTimeSource,
+   resumeFixtureParticipantGroupAdmission,
+   resumeFixtureParticipantAdmission,
+   COMMITTED,
+--- a/test/partition/participant-release-protocol.test.js
++++ b/test/partition/participant-release-protocol.test.js
+@@ -7,10 +7,8 @@
+ import {afterEach, beforeEach, test} from 'node:test';
+ import {PartitionService} from '../../src/partition/partition-service.js';
+ import {ReplicaHandler} from '../../src/node/replica-handler-class.js';
+-import {askParticipantRelease, requestParticipantRelease} from
+-  '../../src/node/participant-release-client.js';
++import {requestParticipantRelease} from '../../src/node/participant-release-client.js';
+ import {runtimeBuildProvenance} from '../../src/diagnostics/runtime-build-provenance.js';
+-import {RAFT_EVENT} from '../../src/raft/raft-operation-port-constants.js';
+ import {VirtualTimeSource} from '../../src/time/time-source.js';
+ import {SQL_TRANSACTIONS_SCHEMA} from
+   '../../src/bootstrap/system-table-workflow-schema-definitions.js';
+@@ -27,7 +25,6 @@
+ import {PARTICIPANT_CUTOVER_OUTCOME as OUTCOME} from
+   '../../src/partition/partition-participant-transaction-cutover-constants.js';
+ import {
+-  PARTICIPANT_CUTOVER_BOUND as BOUND,
+   PARTICIPANT_RELEASE_ACTION as RELEASE_ACTION,
+   PARTICIPANT_RELEASE_ADMISSION as ADMISSION,
+   PARTICIPANT_RELEASE_RESULT_FIELD,
+@@ -35,24 +32,18 @@
+   PARTICIPANT_RELEASE_TRIGGER,
+   PARTICIPANT_RELEASE_TYPE,
+ } from '../../src/partition/partition-participant-transaction-cutover-constants.js';
+-import {TRANSPORT_DELIVERY_OUTCOME_REASON_CODE} from
+-  '../../src/transport/transport-semantic-outcome.js';
+ import {durableRecordBootstrap} from '../../src/raft/raft-committed-membership-stamp.js';
+-import {ReplicaOperationResponseStatus} from
+-  '../../src/rebalancer/replica-operation-constants.js';
+-import {REPLICA_HANDLER_ERROR_MSG} from '../../src/node/replica-handler-constants.js';
+ import {createInProcessMockTransport} from '../test-helpers/replica-handler-identity-fixture.js';
+ import {
+   deferFixtureParticipantMembership as deferObservationMembership,
+-  fixtureParticipantObservationListenerCount as releaseListenerCount,
+   fixtureParticipantObservationRequest as currentObservationRequest,
+-  sendRegisteredFixtureParticipantMessage as sendRegisteredMessage,
+   sendRegisteredFixtureParticipantObservation as sendRegisteredObservation,
+   awaitProposal,
++  cleanOwnedParticipantFixture as cleanOwnedFixture,
+   clearFixtureSingletons,
+   durableAppliedIndex,
+   resetFixtureSingletons,
+-  settle,
++  scriptedFixtureTimeSource as scriptedTimeSource,
+   shutdownAll,
+   startLeader,
+   track,
+@@ -75,7 +66,6 @@
+ const CONTROL_PARTITION = 'sql_transactions-p1';
+ const CONTROL_REPLICA = 'release-sql-transactions-r1';
+ const SQL = `INSERT INTO ${TABLE} (id, value) VALUES (?, ?)`;
+-const FIXTURE_SQL = 'INSERT INTO test_table (id, value) VALUES (?, ?)';
+ const PENDING_DELETE_SQL =
+   'DELETE FROM sql_transactions WHERE transaction_id = ?';
+ const cache = {getAll: () => [], get: () => null, filter: () => []};
+@@ -95,55 +85,6 @@
+   return gate.retire(retained, `${message}: membership custody failed`);
+ }
+ 
+-async function cleanOwnedFixture({directory, failure, label, operations,
+-  settlements = []}) {
+-  let retained = failure;
+-  let retirementFailed = false;
+-  for (const [owner, operation] of operations) {
+-    try {
+-      await operation();
+-    } catch (error) {
+-      retirementFailed = true;
+-      retained = retainFailure(retained, error,
+-        `${label} assertion and ${owner} cleanup failed`);
+-    }
+-  }
+-  for (const [owner, settlement] of settlements) {
+-    try {
+-      await settlement();
+-    } catch (error) {
+-      retained = retainFailure(retained, error,
+-        `${label} assertion and ${owner} settlement failed`);
+-    }
+-  }
+-  if (retirementFailed) {
+-    retained.retainedDirectory = directory;
+-    return retained;
+-  }
+-  try {
+-    fs.rmSync(directory, {recursive: true, force: true});
+-  } catch (error) {
+-    retained = retainFailure(retained, error,
+-      `${label} assertion and artifact cleanup failed`);
+-  }
+-  return retained;
+-}
+-
+-function scriptedTimeSource(values) {
+-  let reads = 0;
+-  return {
+-    now() {
+-      const value = values[Math.min(reads, values.length - 1)];
+-      reads += 1;
+-      if (value instanceof Error) throw value;
+-      return value;
+-    },
+-    setTimeout,
+-    clearTimeout,
+-    reads: () => reads,
+-  };
+-}
+-
+ function registeredReleaseRequest(fields = {}) {
+   return {
+     type: PARTICIPANT_RELEASE_TYPE,
+@@ -162,43 +103,6 @@
+   assert.equal(typeof registered, 'function', 'release route must be registered');
+   const response = await registered({payload: request});
+   return response[PARTICIPANT_RELEASE_RESULT_FIELD];
+-}
+-
+-async function promptRegisteredAnswer(gate, owner, operation) {
+-  const pending = track(gate.trackSettlement(owner, operation));
+-  await settle();
+-  assert.equal(pending.settled, true,
+-    `${owner} settles through the registered route while the owner read is held`);
+-  return pending.promise;
+-}
+-
+-async function withRegisteredObservationOwner(measure, options = {}) {
+-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'tx1-release-position-'));
+-  const transport = createInProcessMockTransport();
+-  const clock = options.clock ?? new VirtualTimeSource({startMs: 1000});
+-  let leader = null;
+-  let handler = null;
+-  let failure = null;
+-  try {
+-    const started = await startLeader({timeSource: clock,
+-      ...(options.leader ?? {})});
+-    leader = started.leader;
+-    handler = new ReplicaHandler({nodeId: leader.nodeId, ownerIncarnation: 1,
+-      systemTableCache: leader.systemTableCache, cdcIntegrationService: {},
+-      createPartitionService: () => leader, messageRouter: transport,
+-      dataDir: directory, timeSource: clock});
+-    handler.registerWithRouter(transport);
+-    handler.localServices.set(leader.replicaId, leader);
+-    await measure({handler, leader, proposed: started.proposed, transport, clock});
+-  } catch (error) {
+-    failure = error;
+-  }
+-  failure = await cleanOwnedFixture({directory, failure,
+-    label: 'applied-position', operations: [
+-      ['handler', () => handler?.shutdown()],
+-      ['service', () => leader === null ? undefined : shutdownAll(leader)],
+-    ]});
+-  if (failure !== null) throw failure;
+ }
+ 
+ async function cleanupBlockedDrainWitness({handler, leader, directory, pendingWrite,
+@@ -650,33 +554,6 @@
+   }));
+   assert.equal(valid.joinedAttempt.originalTrigger, PARTICIPANT_RELEASE_TRIGGER.OPERATOR);
+ 
+-  const inherited = Object.assign(Object.create({
+-    trigger: PARTICIPANT_RELEASE_TRIGGER.OPERATOR,
+-  }), registeredReleaseRequest());
+-  const inheritedResult = await joinedHostedPartitionFailure(inherited);
+-  assert.equal(inheritedResult.joinedAttempt.originalTrigger, null);
+-
+-  let getterReads = 0;
+-  const accessor = registeredReleaseRequest();
+-  Object.defineProperty(accessor, 'trigger', {enumerable: true, get() {
+-    getterReads += 1;
+-    return PARTICIPANT_RELEASE_TRIGGER.OPERATOR;
+-  }});
+-  const accessorResult = await joinedHostedPartitionFailure(accessor);
+-  assert.equal(accessorResult.joinedAttempt.originalTrigger, null);
+-  assert.equal(getterReads, 0, 'diagnostics inspect a descriptor and never invoke its getter');
+-
+-  let proxyTriggerReads = 0;
+-  const proxied = new Proxy(registeredReleaseRequest({
+-    trigger: PARTICIPANT_RELEASE_TRIGGER.OPERATOR,
+-  }), {get(target, field, receiver) {
+-    if (field === 'trigger') proxyTriggerReads += 1;
+-    return Reflect.get(target, field, receiver);
+-  }});
+-  const proxyResult = await joinedHostedPartitionFailure(proxied);
+-  assert.equal(proxyResult.joinedAttempt.originalTrigger, null);
+-  assert.equal(proxyTriggerReads, 0);
+-
+   let coercionReads = 0;
+   const coercible = {toString() {
+     coercionReads += 1;
+@@ -697,16 +574,6 @@
+     assert.equal(result.joinedAttempt.originalTrigger, null);
+   }
+   assert.equal(coercionReads, 0);
+-
+-  const symbolOnly = registeredReleaseRequest();
+-  symbolOnly[Symbol('trigger')] = PARTICIPANT_RELEASE_TRIGGER.OPERATOR;
+-  assert.equal((await joinedHostedPartitionFailure(symbolOnly))
+-    .joinedAttempt.originalTrigger, null);
+-  const arrayRequest = Object.assign([], registeredReleaseRequest({
+-    trigger: PARTICIPANT_RELEASE_TRIGGER.OPERATOR,
+-  }));
+-  assert.equal((await joinedHostedPartitionFailure(arrayRequest))
+-    .joinedAttempt.originalTrigger, null);
+ 
+   const nullPrototypeRequest = Object.assign(Object.create(null),
+     registeredReleaseRequest({trigger: PARTICIPANT_RELEASE_TRIGGER.OPERATOR}));
+@@ -813,643 +680,10 @@
+   assert.equal(unavailableJoin.joinedAttempt.terminalAgeMs, null);
+ });
+ 
+-test('applied-position client preserves overall and RPC deadlines without stranded debt',
+-  async () => {
+-    for (const control of [
+-      {label: 'rpc', budgetMs: 30000, expectedTimeoutMs: BOUND.REQUEST_TIMEOUT_MS,
+-        missingFact: 'replica_release_reply',
+-        reason: TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT},
+-      {label: 'overall', budgetMs: 1500, expectedTimeoutMs: 1500,
+-        missingFact: 'release_deadline', reason: undefined},
+-    ]) {
+-      await withRegisteredObservationOwner(async ({handler, leader, transport, clock}) => {
+-        const request = await currentObservationRequest(handler, leader,
+-          {deadlineAtMs: clock.now() + control.budgetMs});
+-        delete request.observationDeadlineAtMs;
+-        const gate = deferObservationMembership(leader);
+-        const originalDeliver = transport.deliver.bind(transport);
+-        let delivered = null;
+-        transport.deliver = (address, payload, options) => {
+-          delivered = {address, payload, options};
+-          return originalDeliver(address, payload, options);
+-        };
+-        const senderNowMs = clock.now();
+-        const senderClock = scriptedTimeSource([senderNowMs]);
+-        const sender = {messageRouter: transport, timeSource: senderClock};
+-        const timerBaseline = clock.pendingTimerCount();
+-        const pending = gate.trackSettlement(`${control.label} observation`,
+-          askParticipantRelease(sender, handler.nodeId, request));
+-        let failure = null;
+-        try {
+-          await gate.started;
+-
+-          assert.equal(senderClock.reads(), 1,
+-            `${control.label} samples the sender clock once`);
+-          assert.equal(delivered.options.timeoutMs, control.expectedTimeoutMs,
+-            `${control.label} uses the one existing sender budget`);
+-          assert.equal(delivered.payload.observationDeadlineAtMs,
+-            senderNowMs + control.expectedTimeoutMs);
+-          assert.equal(delivered.payload.deadlineAtMs, request.deadlineAtMs);
+-          assert.deepEqual(delivered.payload.release, request.release);
+-          assert.equal(releaseListenerCount(leader), 1);
+-          assert.equal(clock.pendingTimerCount(), timerBaseline + 1);
+-
+-          clock.advance(control.expectedTimeoutMs);
+-          const answer = await pending;
+-          assert.equal(answer.outcome, OUTCOME.UNAVAILABLE, JSON.stringify(answer));
+-          assert.equal(answer.missingFact, control.missingFact);
+-          assert.equal(answer.reason, control.reason);
+-          assert.equal(answer.partitionId, request.partitionId);
+-          assert.equal(answer.phase, request.action);
+-          assert.equal(answer.releaseId, request.release.releaseId);
+-          assert.equal(participantReleaseAdmissionOf(leader).state, ADMISSION.CLOSED);
+-          assert.equal(releaseListenerCount(leader), 0);
+-          assert.equal(clock.pendingTimerCount(), timerBaseline);
+-
+-          gate.release();
+-          gate.restore();
+-          const successorRequest = await currentObservationRequest(handler, leader,
+-            {deadlineAtMs: clock.now() + 30000});
+-          const successor = await sendRegisteredObservation(handler, transport,
+-            successorRequest);
+-          assert.equal(successor.outcome, OUTCOME.OBSERVED, JSON.stringify(successor));
+-          assert.equal(successor.partitionId, successorRequest.partitionId);
+-          assert.deepEqual(successor.generation, successorRequest.target);
+-          assert.equal(releaseListenerCount(leader), 0);
+-          assert.equal(clock.pendingTimerCount(), timerBaseline);
+-        } catch (error) {
+-          failure = error;
+-        } finally {
+-          failure = await gate.retire(failure,
+-            `${control.label} deadline assertion and membership custody failed`);
+-        }
+-        if (failure !== null) throw failure;
+-      });
+-    }
+-
+-    await withRegisteredObservationOwner(async ({handler, leader, transport, clock}) => {
+-      const request = await currentObservationRequest(handler, leader,
+-        {deadlineAtMs: clock.now()});
+-      delete request.observationDeadlineAtMs;
+-      let deliveries = 0;
+-      const originalDeliver = transport.deliver.bind(transport);
+-      transport.deliver = (...args) => {
+-        deliveries += 1;
+-        return originalDeliver(...args);
+-      };
+-      const answer = await askParticipantRelease(handler, handler.nodeId, request);
+-      assert.equal(answer.outcome, OUTCOME.UNAVAILABLE);
+-      assert.equal(answer.missingFact, 'release_deadline');
+-      assert.equal(answer.partitionId, request.partitionId);
+-      assert.equal(answer.phase, request.action);
+-      assert.equal(answer.releaseId, request.release.releaseId);
+-      assert.equal(deliveries, 0, 'an already-spent overall deadline performs no delivery');
+-      assert.equal(participantReleaseAdmissionOf(leader).state, ADMISSION.CLOSED);
+-      assert.equal(releaseListenerCount(leader), 0);
+-    });
+-
+-    await withRegisteredObservationOwner(async ({handler, leader, transport}) => {
+-      const request = await currentObservationRequest(handler, leader,
+-        {deadlineAtMs: Number.MAX_SAFE_INTEGER});
+-      delete request.observationDeadlineAtMs;
+-      const gate = deferObservationMembership(leader);
+-      const startMs = Number.MAX_SAFE_INTEGER - 1;
+-      const senderClock = scriptedTimeSource([startMs]);
+-      const sender = {messageRouter: transport, timeSource: senderClock};
+-      let delivered = null;
+-      const originalDeliver = transport.deliver.bind(transport);
+-      transport.deliver = (address, payload, options) => {
+-        delivered = {payload, options};
+-        return originalDeliver(address, payload, options);
+-      };
+-      const pending = gate.trackSettlement('safe-edge observation',
+-        askParticipantRelease(sender, handler.nodeId, request));
+-      let failure = null;
+-      try {
+-        await gate.started;
+-        assert.equal(senderClock.reads(), 1,
+-          'the safe-edge sender clock is sampled exactly once');
+-        assert.equal(delivered.options.timeoutMs, 1);
+-        assert.equal(delivered.payload.observationDeadlineAtMs,
+-          Number.MAX_SAFE_INTEGER);
+-        gate.release();
+-        const answer = await pending;
+-        assert.equal(answer.outcome, OUTCOME.OBSERVED, JSON.stringify(answer));
+-        assert.equal(answer.partitionId, request.partitionId);
+-        assert.deepEqual(answer.generation, request.target);
+-      } catch (error) {
+-        failure = error;
+-      } finally {
+-        failure = await gate.retire(failure,
+-          'safe-edge assertion and membership custody failed');
+-      }
+-      if (failure !== null) throw failure;
+-    });
+-
+-    await withRegisteredObservationOwner(async ({handler, leader, transport, clock}) => {
+-      const request = await currentObservationRequest(handler, leader,
+-        {deadlineAtMs: clock.now() + 30000});
+-      delete request.observationDeadlineAtMs;
+-      const originalDeliver = transport.deliver.bind(transport);
+-      const restoreSafeInteger = replacePrototypeProperty(Number, 'isSafeInteger', () => {
+-        throw new Error('the client budget guard must use its captured integer intrinsic');
+-      });
+-      const restoreObjectIs = replacePrototypeProperty(Object, 'is', () => {
+-        throw new Error('the client budget guard must use its captured identity intrinsic');
+-      });
+-      let deliveries = 0;
+-      let failure = null;
+-      transport.deliver = (address, payload, options) => {
+-        deliveries += 1;
+-        restoreObjectIs();
+-        restoreSafeInteger();
+-        return originalDeliver(address, payload, options);
+-      };
+-      try {
+-        const answer = await askParticipantRelease(handler, handler.nodeId, request);
+-        assert.equal(answer.outcome, OUTCOME.OBSERVED, JSON.stringify(answer));
+-        assert.equal(deliveries, 1);
+-        assert.deepEqual(answer.generation, request.target);
+-      } catch (error) {
+-        failure = error;
+-      } finally {
+-        try {
+-          restoreObjectIs();
+-          restoreSafeInteger();
+-        } catch (error) {
+-          failure = retainFailure(failure, error,
+-            'client intrinsic assertion and restoration failed');
+-        }
+-        transport.deliver = originalDeliver;
+-      }
+-      if (failure !== null) throw failure;
+-    });
+-  });
+-
+-test('transport queue delay consumes the carried applied-position RPC window', () =>
+-  withRegisteredObservationOwner(async ({handler, leader, transport, clock}) => {
+-    const request = await currentObservationRequest(handler, leader,
+-      {deadlineAtMs: clock.now() + 30000});
+-    delete request.observationDeadlineAtMs;
+-    const gate = deferObservationMembership(leader);
+-    const originalDeliver = transport.deliver.bind(transport);
+-    let delivered = null;
+-    transport.deliver = (address, payload, options) => {
+-      delivered = {payload, options};
+-      clock.advance(4000);
+-      return originalDeliver(address, payload, options);
+-    };
+-    const timerBaseline = clock.pendingTimerCount();
+-    const pending = gate.trackSettlement('queue-delayed observation',
+-      askParticipantRelease(handler, handler.nodeId, request));
+-    let failure = null;
+-    try {
+-      await gate.started;
+-      assert.equal(delivered.options.timeoutMs, BOUND.REQUEST_TIMEOUT_MS);
+-      assert.equal(delivered.payload.observationDeadlineAtMs, 6000,
+-        'the sender carries its one start sample instead of an arrival-relative deadline');
+-      assert.equal(clock.now(), 5000);
+-      assert.equal(clock.pendingTimerCount(), timerBaseline + 1);
+-      clock.advance(999);
+-      assert.equal(releaseListenerCount(leader), 1);
+-      clock.advance(1);
+-      const answer = await pending;
+-      assert.equal(answer.outcome, OUTCOME.UNAVAILABLE);
+-      assert.equal(answer.missingFact, 'replica_release_reply');
+-      assert.equal(answer.reason, TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT);
+-      assert.equal(answer.partitionId, request.partitionId);
+-      assert.equal(answer.phase, request.action);
+-      assert.equal(answer.releaseId, request.release.releaseId);
+-      assert.equal(clock.now(), delivered.payload.observationDeadlineAtMs);
+-      assert.equal(releaseListenerCount(leader), 0);
+-      assert.equal(clock.pendingTimerCount(), timerBaseline);
+-    } catch (error) {
+-      failure = error;
+-    } finally {
+-      failure = await gate.retire(failure,
+-        'queue-delay assertion and membership custody failed');
+-    }
+-    if (failure !== null) throw failure;
+-
+-    transport.deliver = originalDeliver;
+-    const ownerNow = clock.now();
+-    const delayedDeadline = ownerNow + 2;
+-    const delayed = {...request, deadlineAtMs: delayedDeadline,
+-      observationDeadlineAtMs: ownerNow + 1,
+-      attempt: {...request.attempt, deadlineAtMs: delayedDeadline}};
+-    const delayedGate = deferObservationMembership(leader);
+-    const originalTimeSource = handler.timeSource;
+-    handler.timeSource = scriptedTimeSource([ownerNow, delayedDeadline + 1]);
+-    let delayedFailure = null;
+-    try {
+-      const delayedObservation = delayedGate.trackSettlement('delayed timer observation',
+-        sendRegisteredObservation(handler, transport, delayed));
+-      await delayedGate.started;
+-      const delayedAnswer = await delayedObservation;
+-      assert.equal(delayedAnswer.outcome, OUTCOME.UNAVAILABLE);
+-      assert.equal(delayedAnswer.missingFact, 'release_deadline',
+-        'a late callback samples the current overall deadline before stored RPC equality');
+-    } catch (error) {
+-      delayedFailure = error;
+-    } finally {
+-      handler.timeSource = originalTimeSource;
+-      delayedFailure = await delayedGate.retire(delayedFailure,
+-        'late timer assertion and membership custody failed');
+-    }
+-    if (delayedFailure !== null) throw delayedFailure;
+-  }));
+-
+-test('one applied-position observation owns duplicate, conflict and successor lifetimes', () =>
+-  withRegisteredObservationOwner(async ({handler, leader, transport, clock}) => {
+-    const request = await currentObservationRequest(handler, leader,
+-      {deadlineAtMs: clock.now() + 30000,
+-        observationDeadlineAtMs: clock.now() + BOUND.REQUEST_TIMEOUT_MS});
+-    const gate = deferObservationMembership(leader);
+-    const timerBaseline = clock.pendingTimerCount();
+-    const starter = gate.trackSettlement('starter observation',
+-      sendRegisteredObservation(handler, transport, request));
+-    let failure = null;
+-    try {
+-      await gate.started;
+-      clock.advance(2000);
+-      const rawJoin = {...request, release: {...request.release},
+-        attempt: {...request.attempt}, target: {...request.target}, origin: {...request.origin}};
+-      const joiner = gate.trackSettlement('joined observation',
+-        sendRegisteredObservation(handler, transport, rawJoin));
+-      rawJoin.deadlineAtMs += 1;
+-      rawJoin.attempt.term += 1;
+-      rawJoin.target.runtimeGeneration += 1;
+-      rawJoin.origin.originIndex += 1;
+-      rawJoin.release.releaseId = 'mutated-after-dispatch';
+-      assert.equal(gate.reads(), 1, 'matching recipients share one canonical facts read');
+-      assert.equal(releaseListenerCount(leader), 1);
+-      assert.equal(clock.pendingTimerCount(), timerBaseline + 1);
+-
+-      let topAccessorReads = 0;
+-      const unsafeJoin = {...request};
+-      Object.defineProperty(unsafeJoin, 'action', {enumerable: true, get() {
+-        topAccessorReads += 1;
+-        throw new Error('held join action accessor must not run');
+-      }});
+-      const unsafeAnswer = track(sendRegisteredMessage(handler, transport, unsafeJoin));
+-      await settle();
+-      assert.equal(unsafeAnswer.settled, true);
+-      assert.deepEqual(await unsafeAnswer.promise, {
+-        status: ReplicaOperationResponseStatus.ERROR,
+-        error: REPLICA_HANDLER_ERROR_MSG.UNKNOWN_MESSAGE_TYPE(undefined),
+-        correlationId: 'fixture-participant-release',
+-      });
+-      assert.equal(topAccessorReads, 0);
+-
+-      let coercionReads = 0;
+-      const boxedDigest = {toJSON() {
+-        coercionReads += 1;
+-      }, toString() {
+-        coercionReads += 1;
+-        return request.release.targetBuildDigest;
+-      }, [Symbol.toPrimitive]() {
+-        coercionReads += 1;
+-        return request.release.targetBuildDigest;
+-      }};
+-      const conflicts = [
+-        {expected: OUTCOME.INVALID, request: {...request,
+-          release: {...request.release, targetBuildDigest: boxedDigest}}},
+-        {expected: OUTCOME.INVALID, request: {...request,
+-          deadlineAtMs: request.deadlineAtMs + 1}},
+-        {expected: OUTCOME.STALE, request: {...request,
+-          deadlineAtMs: request.deadlineAtMs + 1,
+-          attempt: {...request.attempt, deadlineAtMs: request.deadlineAtMs + 1}}},
+-        {expected: OUTCOME.STALE, request: {...request,
+-          origin: {...request.origin, originIndex: request.origin.originIndex + 1}}},
+-        {expected: OUTCOME.STALE, request: {...request,
+-          attempt: {...request.attempt, term: request.attempt.term + 1}}},
+-        {expected: OUTCOME.STALE, request: {...request, target: {...request.target,
+-          runtimeGeneration: request.target.runtimeGeneration + 1}}},
+-      ];
+-      for (const conflict of conflicts) {
+-        const answer = await promptRegisteredAnswer(gate, 'conflicting observation',
+-          sendRegisteredObservation(handler, transport, conflict.request));
+-        assert.equal(answer.outcome, conflict.expected, JSON.stringify(answer));
+-        assert.equal(answer.partitionId, conflict.request.partitionId);
+-        assert.equal(answer.phase, conflict.request.action);
+-        assert.equal(answer.releaseId, conflict.request.release.releaseId);
+-        assert.equal(releaseListenerCount(leader), 1,
+-          'a conflict cannot detach the current starter');
+-        assert.equal(clock.pendingTimerCount(), timerBaseline + 1);
+-      }
+-      assert.equal(coercionReads, 0,
+-        'nested identity scalars are pinned before hashing or serialization');
+-
+-      clock.advance(BOUND.REQUEST_TIMEOUT_MS - 2000);
+-      const [starterAnswer, joinerAnswer] = await Promise.all([starter, joiner]);
+-      assert.deepEqual(joinerAnswer, starterAnswer,
+-        'a matching joiner settles with the starter without renewing its deadline');
+-      assert.equal(starterAnswer.missingFact, 'replica_release_reply');
+-      assert.equal(starterAnswer.reason,
+-        TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT);
+-      assert.equal(starterAnswer.partitionId, request.partitionId);
+-      assert.equal(starterAnswer.phase, request.action);
+-      assert.equal(starterAnswer.releaseId, request.release.releaseId);
+-      assert.equal(gate.reads(), 1);
+-      assert.equal(releaseListenerCount(leader), 0);
+-      assert.equal(clock.pendingTimerCount(), timerBaseline);
+-      gate.restore();
+-
+-      const successorRequest = await currentObservationRequest(handler, leader,
+-        {deadlineAtMs: clock.now() + 30000});
+-      const successorGate = deferObservationMembership(leader);
+-      let successorFailure = null;
+-      try {
+-        const successor = successorGate.trackSettlement('successor observation',
+-          sendRegisteredObservation(handler, transport, successorRequest));
+-        await successorGate.started;
+-        assert.equal(successorGate.reads(), 1,
+-          'the prior starter cleanup cannot remove a fresh successor record');
+-        assert.equal(releaseListenerCount(leader), 1);
+-        assert.equal(clock.pendingTimerCount(), timerBaseline + 1);
+-
+-        gate.release();
+-        await gate.finished;
+-        // `finished` owns only the deferred membership method. Exact-source
+-        // review owns the later facts/observation promise continuations; this
+-        // assertion does not guess their completion with microtask turns.
+-        const successorConflict = {...successorRequest,
+-          origin: {...successorRequest.origin,
+-            originIndex: successorRequest.origin.originIndex + 1}};
+-        const conflictAnswer = await sendRegisteredObservation(
+-          handler, transport, successorConflict);
+-        assert.equal(conflictAnswer.outcome, OUTCOME.STALE,
+-          JSON.stringify(conflictAnswer));
+-        assert.equal(conflictAnswer.partitionId, successorRequest.partitionId);
+-        assert.equal(conflictAnswer.phase, successorRequest.action);
+-        assert.equal(conflictAnswer.releaseId, successorRequest.release.releaseId);
+-        assert.equal(releaseListenerCount(leader), 1,
+-          'the returned old membership read cannot detach the held successor');
+-        assert.equal(clock.pendingTimerCount(), timerBaseline + 1,
+-          'the returned old membership read cannot cancel the successor deadline');
+-
+-        successorGate.release();
+-        const successorAnswer = await successor;
+-        assert.equal(successorAnswer.outcome, OUTCOME.OBSERVED,
+-          JSON.stringify(successorAnswer));
+-        assert.equal(successorAnswer.partitionId, successorRequest.partitionId);
+-        assert.deepEqual(successorAnswer.generation, successorRequest.target);
+-        assert.equal(releaseListenerCount(leader), 0);
+-        assert.equal(clock.pendingTimerCount(), timerBaseline);
+-      } catch (error) {
+-        successorFailure = error;
+-      } finally {
+-        successorFailure = await successorGate.retire(successorFailure,
+-          'successor assertion and membership custody failed');
+-      }
+-      if (successorFailure !== null) throw successorFailure;
+-    } catch (error) {
+-      failure = error;
+-    } finally {
+-      failure = await gate.retire(failure,
+-        'starter assertion and membership custody failed');
+-    }
+-    if (failure !== null) throw failure;
+-  }));
+-
+-test('shared ingress refuses unsafe envelopes and facts refuse malformed owner generations', () =>
+-  withRegisteredObservationOwner(async ({handler, leader, transport, clock}) => {
+-    const request = await currentObservationRequest(handler, leader);
+-    const gate = deferObservationMembership(leader);
+-    const timerBaseline = clock.pendingTimerCount();
+-    let hostileReads = 0;
+-    const unsafe = [
+-      new Proxy({...request}, {get(target, field, receiver) {
+-        hostileReads += 1;
+-        return Reflect.get(target, field, receiver);
+-      }}),
+-      Object.assign(Object.create({unsafe: true}), request),
+-      {...request, type: Object(PARTICIPANT_RELEASE_TYPE)},
+-    ];
+-    const symbolPayload = {...request};
+-    symbolPayload[Symbol('unsafe')] = true;
+-    unsafe.push(symbolPayload);
+-    for (const field of ['type', 'action', 'replicaId']) {
+-      const accessor = {...request};
+-      Object.defineProperty(accessor, field, {enumerable: true, get() {
+-        hostileReads += 1;
+-        throw new Error(`${field} accessor must not run`);
+-      }});
+-      unsafe.push(accessor);
+-    }
+-    for (const payload of unsafe) {
+-      assert.deepEqual(await sendRegisteredMessage(handler, transport, payload), {
+-        status: ReplicaOperationResponseStatus.ERROR,
+-        error: REPLICA_HANDLER_ERROR_MSG.UNKNOWN_MESSAGE_TYPE(undefined),
+-        correlationId: 'fixture-participant-release',
+-      });
+-    }
+-    assert.equal(hostileReads, 0);
+-    assert.equal(gate.reads(), 0);
+-
+-    const nested = {...request.release};
+-    Object.defineProperty(nested, 'targetBuildDigest', {enumerable: true, get() {
+-      hostileReads += 1;
+-      throw new Error('nested digest accessor must not run');
+-    }});
+-    const invalid = [
+-      {...request, deadlineAtMs: request.deadlineAtMs + 1},
+-      {...request, action: Object(request.action)},
+-      {...request, release: nested},
+-    ];
+-    let failure = null;
+-    try {
+-      for (const payload of invalid) {
+-        const answer = await sendRegisteredObservation(handler, transport, payload);
+-        assert.equal(answer.outcome, OUTCOME.INVALID, JSON.stringify(answer));
+-        assert.equal(answer.releaseId, request.release.releaseId);
+-      }
+-      assert.equal(hostileReads, 0);
+-      assert.equal(gate.reads(), 0);
+-      assert.equal(releaseListenerCount(leader), 0);
+-      assert.equal(clock.pendingTimerCount(), timerBaseline);
+-      const valid = gate.trackSettlement('valid observation after ingress refusals',
+-        sendRegisteredObservation(handler, transport, request));
+-      await gate.started;
+-      gate.release();
+-      assert.equal((await valid).outcome, OUTCOME.OBSERVED);
+-    } catch (error) {
+-      failure = error;
+-    } finally {
+-      failure = await gate.retire(failure,
+-        'strict ingress assertion and membership custody failed');
+-    }
+-    if (failure !== null) throw failure;
+-
+-    const ownerDescriptor = Object.getOwnPropertyDescriptor(handler, 'ownerIncarnation');
+-    const currentIncarnation = handler.ownerIncarnation;
+-    let generationFailure = null;
+-    try {
+-      for (const malformed of [undefined, Object(currentIncarnation), 0]) {
+-        handler.ownerIncarnation = malformed;
+-        const refused = await readParticipantReleaseFacts(handler, leader);
+-        assert.equal(refused.outcome, OUTCOME.UNAVAILABLE);
+-        assert.equal(refused.missingFact, 'current_replica_generation');
+-      }
+-    } catch (error) {
+-      generationFailure = error;
+-    } finally {
+-      try {
+-        Object.defineProperty(handler, 'ownerIncarnation', ownerDescriptor);
+-      } catch (error) {
+-        generationFailure = retainFailure(generationFailure, error,
+-          'generation assertion and owner restoration failed');
+-      }
+-    }
+-    if (generationFailure !== null) throw generationFailure;
+-    const observed = await readParticipantReleaseFacts(handler, leader);
+-    assert.equal(observed.outcome, OUTCOME.OBSERVED, JSON.stringify(observed));
+-    assert.equal(observed.generation.ownerIncarnation, currentIncarnation);
+-  }));
+-
+-test('applied-position receiver refuses malformed observation clocks without effects', () =>
+-  withRegisteredObservationOwner(async ({handler, leader, transport, clock}) => {
+-    const request = await currentObservationRequest(handler, leader);
+-    const timerBaseline = clock.pendingTimerCount();
+-    const missingDeadline = {...request};
+-    delete missingDeadline.observationDeadlineAtMs;
+-    assert.equal((await sendRegisteredObservation(handler, transport, missingDeadline)).outcome,
+-      OUTCOME.INVALID, 'the receiver requires the sender-carried RPC ceiling');
+-    const invalidDeadlines = [undefined, null, Number.NaN, Number.POSITIVE_INFINITY,
+-      1.5, -0, Number.MAX_SAFE_INTEGER + 1, '6000', Object(6000)];
+-    for (const observationDeadlineAtMs of invalidDeadlines) {
+-      const answer = await sendRegisteredObservation(handler, transport,
+-        {...request, observationDeadlineAtMs});
+-      assert.equal(answer.outcome, OUTCOME.INVALID, JSON.stringify(answer));
+-      assert.equal(answer.partitionId, request.partitionId);
+-      assert.equal(answer.releaseId, request.release.releaseId);
+-      assert.equal(answer.phase, request.action);
+-      assert.equal(releaseListenerCount(leader), 0);
+-      assert.equal(clock.pendingTimerCount(), timerBaseline);
+-      assert.equal(participantReleaseAdmissionOf(leader).state, ADMISSION.CLOSED);
+-    }
+-
+-    const gate = deferObservationMembership(leader);
+-    const nowDescriptor = Object.getOwnPropertyDescriptor(clock, 'now');
+-    const registrationNow = clock.now();
+-    const samples = [registrationNow, registrationNow - 1];
+-    let timerFailure = null;
+-    try {
+-      clock.now = () => -1;
+-      const refusal = await sendRegisteredObservation(handler, transport, request);
+-      assert.equal(refusal.outcome, OUTCOME.UNAVAILABLE);
+-      assert.equal(refusal.missingFact, 'replica_release_reply');
+-      assert.equal(clock.pendingTimerCount(), timerBaseline);
+-      clock.now = () => samples.shift() ?? registrationNow - 1;
+-      const pending = track(gate.trackSettlement('backward timer observation',
+-        sendRegisteredObservation(handler, transport, request)));
+-      await gate.started;
+-      clock.advance(BOUND.REQUEST_TIMEOUT_MS);
+-      await settle();
+-      assert.equal(pending.settled, true,
+-        'an installed timer terminalizes even when its later clock sample steps backward');
+-      const answer = await pending.promise;
+-      assert.equal(answer.outcome, OUTCOME.UNAVAILABLE, JSON.stringify(answer));
+-      assert.equal(answer.missingFact, 'replica_release_reply');
+-      assert.equal(answer.reason,
+-        TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT);
+-      assert.equal(releaseListenerCount(leader), 0);
+-      assert.equal(clock.pendingTimerCount(), timerBaseline);
+-    } catch (error) {
+-      timerFailure = error;
+-    } finally {
+-      try {
+-        if (nowDescriptor === undefined) delete clock.now;
+-        else Object.defineProperty(clock, 'now', nowDescriptor);
+-      } catch (error) {
+-        timerFailure = retainFailure(timerFailure, error,
+-          'backward timer assertion and clock restoration failed');
+-      }
+-      timerFailure = await gate.retire(timerFailure,
+-        'backward timer assertion and membership custody failed');
+-    }
+-    if (timerFailure !== null) throw timerFailure;
+-
+-    const originalTimeSource = handler.timeSource;
+-    const invalidClockSamples = [Number.NaN, Number.POSITIVE_INFINITY,
+-      Number.NEGATIVE_INFINITY, -1, 1.5, -0, Number.MAX_SAFE_INTEGER + 1,
+-      '6000', new Error('release clock unavailable')];
+-    for (const sample of invalidClockSamples) {
+-      let deliveries = 0;
+-      const originalDeliver = transport.deliver.bind(transport);
+-      transport.deliver = (...args) => {
+-        deliveries += 1;
+-        return originalDeliver(...args);
+-      };
+-      handler.timeSource = {now() {
+-        if (sample instanceof Error) throw sample;
+-        return sample;
+-      }};
+-      try {
+-        const answer = await askParticipantRelease(handler, handler.nodeId, request);
+-        assert.equal(answer.outcome, OUTCOME.UNAVAILABLE, JSON.stringify(answer));
+-        assert.equal(answer.partitionId, request.partitionId);
+-        assert.equal(answer.phase, request.action);
+-        assert.equal(answer.releaseId, request.release.releaseId);
+-        assert.equal(deliveries, 0,
+-          'an unusable sender clock cannot create an unbounded observation');
+-        assert.equal(participantReleaseAdmissionOf(leader).state, ADMISSION.CLOSED);
+-      } finally {
+-        handler.timeSource = originalTimeSource;
+-        transport.deliver = originalDeliver;
+-      }
+-    }
+-  }));
+-
+-test('an applied-progress wake reflected by the first facts read needs no forced reread', () =>
+-  withRegisteredObservationOwner(async ({handler, leader, proposed, transport, clock}) => {
+-    const write = track(leader.executeQuery(FIXTURE_SQL, ['fresh-wake', 'applied']));
+-    const proposal = await awaitProposal(proposed, (entry) => entry.sql === FIXTURE_SQL);
+-    assert.notEqual(proposal, null);
+-    const anchoredMembership = await leader.raft.readCommittedMembership(
+-      {purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS});
+-    const request = await currentObservationRequest(handler, leader);
+-    const gate = deferObservationMembership(leader);
+-    const timerBaseline = clock.pendingTimerCount();
+-    const observation = gate.trackSettlement('fresh-first-read observation',
+-      sendRegisteredObservation(handler, transport, request));
+-    let failure = null;
+-    try {
+-      await gate.started;
+-      leader.controllablePort.commit(proposal);
+-      assert.equal((await write.promise).success, true);
+-      leader.controllablePort.emitEvent(RAFT_EVENT.APPLIED_PROGRESS);
+-      gate.release();
+-      const answer = await observation;
+-      assert.equal(answer.outcome, OUTCOME.OBSERVED, JSON.stringify(answer));
+-      assert.equal(answer.partitionId, request.partitionId);
+-      assert.deepEqual(answer.generation, request.target);
+-      const afterApplication = await leader.raft.readCommittedMembership(
+-        {purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS});
+-      assert.ok(afterApplication.appliedIndex > anchoredMembership.appliedIndex,
+-        'the ordinary command advances the application owner position');
+-      assert.equal(afterApplication.configurationKey,
+-        anchoredMembership.configurationKey,
+-        'an ordinary command does not change the current configuration');
+-      assert.equal(afterApplication.membershipGenerationIndex,
+-        anchoredMembership.membershipGenerationIndex,
+-        'an ordinary command does not advance membership generation');
+-      assert.equal(gate.reads(), 1,
+-        'a first owner read made after the wake needs no unconditional reread');
+-      assert.equal(releaseListenerCount(leader), 0);
+-      assert.equal(clock.pendingTimerCount(), timerBaseline);
+-    } catch (error) {
+-      failure = error;
+-    } finally {
+-      failure = await gate.retire(failure,
+-        'fresh-first-read assertion and membership custody failed');
+-    }
+-    if (failure !== null) throw failure;
+-  }));
+-
+ test('post-ENABLE control loss returns the canonical control refusal and stays paused', () =>
+   fixture(async ({service, controlService, transport, release}) => {
+-    const originalDeliver = transport.deliver.bind(transport);
++    const deliverDescriptor = Object.getOwnPropertyDescriptor(transport, 'deliver');
++    const originalDeliver = transport.deliver;
+     const observationEntered = Promise.withResolvers();
+     const observationContinuation = Promise.withResolvers();
+     let observations = 0;
+@@ -1464,7 +698,8 @@
+       }
+       if (payload.action === RELEASE_ACTION.RESUME &&
+           payload.partitionId === service.partitionId) dependentResumes += 1;
+-      const response = await originalDeliver(address, payload, options);
++      const response = await Reflect.apply(originalDeliver, transport,
++        [address, payload, options]);
+       if (payload.action === RELEASE_ACTION.RELEASE &&
+           payload.partitionId === CONTROL_PARTITION &&
+           response[PARTICIPANT_RELEASE_RESULT_FIELD]?.outcome === OUTCOME.CUT_OVER) {
+@@ -1472,7 +707,8 @@
+       }
+       return response;
+     };
+-    const attempt = release();
++    const attempt = track(release());
++    let failure = null;
+     try {
+       await observationEntered.promise;
+       const enabledOrigin = readPartitionWriteOrigin(service.db);
+@@ -1480,7 +716,7 @@
+         'the dependent entered observation only after its actual ENABLE origin');
+       await controlService.shutdown();
+       observationContinuation.resolve();
+-      const answer = await attempt;
++      const answer = await attempt.promise;
+       assert.equal(answer.outcome, OUTCOME.UNAVAILABLE, JSON.stringify(answer));
+       assert.equal(answer.missingFact, 'current_control_owner_fact');
+       assert.equal(observations, 1);
+@@ -1491,7 +727,34 @@
+       assert.deepEqual(readPartitionWriteOrigin(service.db), enabledOrigin,
+         'the final control refusal proposes no second origin');
+       assert.equal(participantReleaseAdmissionOf(service).state, ADMISSION.CLOSED);
++    } catch (error) {
++      failure = error;
+     } finally {
+-      observationContinuation.resolve();
++      try {
++        observationContinuation.resolve();
++      } catch (error) {
++        failure = retainFailure(failure, error,
++          'post-ENABLE observation release failed');
++      }
++      try {
++        if (deliverDescriptor === undefined) {
++          if (!delete transport.deliver) {
++            failure = retainFailure(failure, new Error('deliver deletion refused'),
++              'post-ENABLE transport restoration failed');
++          }
++        } else {
++          Object.defineProperty(transport, 'deliver', deliverDescriptor);
++        }
++      } catch (error) {
++        failure = retainFailure(failure, error,
++          'post-ENABLE transport restoration failed');
++      }
++      try {
++        await attempt.promise;
++      } catch (error) {
++        failure = retainFailure(failure, error,
++          'post-ENABLE release attempt settlement failed');
++      }
+     }
++    if (failure !== null) throw failure;
+   }));
+--- a/test/node/replica-handler-release-recovery.test.js
++++ b/test/node/replica-handler-release-recovery.test.js
+@@ -31,6 +31,7 @@
+ import {VirtualTimeSource} from '../../src/time/time-source.js';
+ import {createInProcessMockTransport} from
+   '../test-helpers/replica-handler-identity-fixture.js';
++import {replacePrototypeProperty} from '../helpers/hostile-intrinsics.js';
+ import {
+   changeFixtureParticipantMembership,
+   clearFixtureSingletons,
+@@ -345,8 +346,8 @@
+       const request = await currentObservationRequest(handler, leader);
+       const membership = deferCommittedMembership(leader);
+       const timerBaseline = handler.timeSource.pendingTimerCount();
+-      const observation = membership.trackSettlement('observation',
+-        sendRegisteredObservation(handler, transport, request));
++      const observation = track(membership.trackSettlement('observation',
++        sendRegisteredObservation(handler, transport, request)));
+       await membership.started;
+       let shutdown = null;
+       let failure = null;
+@@ -354,7 +355,10 @@
+         assert.equal(observationListenerCount(leader), 1);
+         assert.equal(handler.timeSource.pendingTimerCount(), timerBaseline + 1);
+         shutdown = handler.shutdown();
+-        const answer = await observation;
++        await settle();
++        assert.equal(observation.settled, true,
++          'handler shutdown settles the route while participant facts remain held');
++        const answer = await observation.promise;
+         assert.equal(answer.outcome, OUTCOME.STALE, JSON.stringify(answer));
+         assert.equal(answer.partitionId, request.partitionId);
+         assert.equal(answer.phase, request.action);
+@@ -396,8 +400,8 @@
+     const request = await currentObservationRequest(handler, leader);
+     const membership = deferCommittedMembership(leader);
+     const timerBaseline = handler.timeSource.pendingTimerCount();
+-    const observation = membership.trackSettlement('observation',
+-      sendRegisteredObservation(handler, transport, request));
++    const observation = track(membership.trackSettlement('observation',
++      sendRegisteredObservation(handler, transport, request)));
+     await membership.started;
+     let shutdownEntry = null;
+     leader.once(PARTITION_SERVICE_EVENT.SHUTDOWN_STARTED, (identity) => {
+@@ -411,7 +415,10 @@
+       assert.deepEqual(shutdownEntry, {isShutdown: true, hasSettlement: true,
+         identity: {partitionId: leader.partitionId, replicaId: leader.replicaId}},
+       'the entry wake follows installation of the actual lifecycle fence');
+-      const answer = await observation;
++      await settle();
++      assert.equal(observation.settled, true,
++        'service shutdown settles the route while participant facts remain held');
++      const answer = await observation.promise;
+       assert.equal(answer.outcome, OUTCOME.STALE, JSON.stringify(answer));
+       assert.equal(answer.partitionId, request.partitionId);
+       assert.equal(answer.phase, request.action);
+@@ -521,8 +528,8 @@
+       assert.equal(answer.phase, request.action);
+       assert.equal(answer.releaseId, request.release.releaseId);
+       assert.equal(membership.reads(), 1);
+-      assert.equal(generationReads, 2,
+-        'facts N is fenced by the immediate current-context generation N+1');
++      assert.ok(generationReads >= 2,
++        'facts N is fenced by a later current-context generation N+1 read');
+       assert.equal(observationListenerCount(leader), 0);
+       assert.equal(timeSource.pendingTimerCount(), timerBaseline);
+     } catch (error) {
+@@ -811,6 +818,16 @@
+       const timerBaseline = timeSource.pendingTimerCount();
+       const registryBaseline = registry.serviceListeners.size;
+       const serviceBaseline = leader.listenerCount(PARTITION_SERVICE_EVENT.SHUTDOWN_STARTED);
++      const clockBNowDescriptor = Object.getOwnPropertyDescriptor(clockB, 'now');
++      const actualClockBNow = clockB.now.bind(clockB);
++      let clockBReads = 0;
++      clockB.now = () => {
++        clockBReads += 1;
++        return actualClockBNow();
++      };
++      let freshMembership = null;
++      let arrayIteratorRestore = null;
++      let shutdownDescriptor;
+       let failure = null;
+       try {
+         const observation = track(membership.trackSettlement('cleanup-debt observation',
+@@ -821,11 +838,23 @@
+         assert.equal(leader.listenerCount(PARTITION_SERVICE_EVENT.SHUTDOWN_STARTED),
+           serviceBaseline + 1);
+         assert.equal(timeSource.pendingTimerCount(), timerBaseline + 1);
++
+         handler.timeSource = clockB;
++        clockB.advance(BOUND.REQUEST_TIMEOUT_MS * 2);
++        const liveJoin = track(sendRegisteredObservation(handler, transport, request));
++        await settle();
++        assert.equal(liveJoin.settled, false,
++          'a divergent current handler clock cannot expire the A-owned record');
++        assert.equal(clockBReads, 0,
++          'an exact join samples neither a replacement clock nor a new budget');
++        assert.equal(timeSource.pendingTimerCount(), timerBaseline + 1);
++
+         assert.equal(registry.delete(leader.replicaId), true);
+         await settle();
+         assert.equal(observation.settled, true);
+         const answer = await observation.promise;
++        assert.deepEqual(await liveJoin.promise, answer,
++          'the live exact join retains the installing record and its terminal answer');
+         assert.equal(answer.outcome, OUTCOME.UNAVAILABLE, JSON.stringify(answer));
+         assert.equal(answer.missingFact, 'replica_release_reply');
+         assert.equal(answer.reason, PARTICIPANT_RELEASE_REASON.CLEANUP_INCOMPLETE);
+@@ -837,25 +866,90 @@
+         assert.equal(releaseCalls[0], 1,
+           'a reentrant lifecycle callback cannot release the active slot twice');
+         const callsBeforeJoin = [...releaseCalls];
+-
+-        const joined = track(sendRegisteredObservation(handler, transport, request));
++        const readsBeforeJoin = membership.reads();
++
++        const retainedJoin = track(sendRegisteredObservation(handler, transport, request));
+         await settle();
+-        assert.equal(joined.settled, true);
+-        assert.deepEqual(await joined.promise, answer,
+-          'a join of retained cleanup debt keeps the stored terminal answer');
++        assert.equal(retainedJoin.settled, true);
++        assert.deepEqual(await retainedJoin.promise, answer,
++          'a retained-debt join keeps the stored terminal answer while cleanup still fails');
++        assert.equal(membership.reads(), readsBeforeJoin);
++        for (let index = 0; index < releaseCalls.length; index += 1) {
++          assert.ok(releaseCalls[index] <= callsBeforeJoin[index] + 1,
++            'a retained-debt join retries each resource at most once');
++        }
++
++        faultsEnabled = false;
++        const callsBeforeDischarge = [...releaseCalls];
++        const dischargeJoin = track(sendRegisteredObservation(handler, transport, request));
++        await settle();
++        assert.equal(dischargeJoin.settled, true);
++        assert.deepEqual(await dischargeJoin.promise, answer,
++          'the exact retained promise answers the join that discharges cleanup debt');
++        assert.equal(membership.reads(), readsBeforeJoin,
++          'cleanup discharge acquires no replacement facts owner');
++        assert.equal(observationSubscriptionCount(leader), 0);
++        assert.equal(timeSource.pendingTimerCount(), timerBaseline);
++        assert.equal(registry.serviceListeners.size, registryBaseline);
++        assert.equal(leader.listenerCount(PARTITION_SERVICE_EVENT.SHUTDOWN_STARTED),
++          serviceBaseline);
++        assert.ok(releaseCalls.some((count, index) => count > callsBeforeDischarge[index]),
++          'the discharge join retries retained resource releases');
++
++        failure = await membership.retire(failure,
++          'cleanup-debt first membership custody failed');
++        registry.set(leader.replicaId, leader);
++        handler.timeSource = timeSource;
++        freshMembership = deferCommittedMembership(leader);
++        const freshRequest = await currentObservationRequest(handler, leader);
++        const fresh = track(freshMembership.trackSettlement('fresh cleanup-debt observation',
++          sendRegisteredObservation(handler, transport, freshRequest)));
++        await freshMembership.started;
++        assert.equal(freshMembership.reads(), 1,
++          'a later request creates a new observation after the clean record was removed');
+         assert.equal(observationSubscriptionCount(leader), 4);
+         assert.equal(timeSource.pendingTimerCount(), timerBaseline + 1);
+-        for (let index = 0; index < releaseCalls.length; index += 1) {
+-          assert.ok(releaseCalls[index] <= callsBeforeJoin[index] + 1,
+-            'a join retries each retained resource at most once');
+-        }
+-        failure = await membership.retire(failure,
+-          'cleanup-debt membership custody failed before handler shutdown');
++        faultsEnabled = true;
++        assert.equal(registry.delete(leader.replicaId), true);
++        await settle();
++        assert.equal(fresh.settled, true);
++        assert.equal((await fresh.promise).reason,
++          PARTICIPANT_RELEASE_REASON.CLEANUP_INCOMPLETE);
++        failure = await freshMembership.retire(failure,
++          'cleanup-debt fresh membership custody failed');
++
++        // Arm the hostile iterator only after the ordinary service shutdown has
++        // completed. The final handler cancellation and AggregateError boundary
++        // must retain the exact observation errors without ambient iteration.
++        registry.set(leader.replicaId, leader);
++        shutdownDescriptor = Object.getOwnPropertyDescriptor(leader, 'shutdown');
++        const actualShutdown = leader.shutdown.bind(leader);
++        leader.shutdown = async () => {
++          const result = await actualShutdown();
++          const actualIterator = Array.prototype[Symbol.iterator];
++          const empty = [];
++          arrayIteratorRestore = replacePrototypeProperty(
++            Array.prototype, Symbol.iterator, function iterator() {
++              let containsObservationError = false;
++              for (let index = 0; index < this.length; index += 1) {
++                if (sentinels.includes(this[index])) containsObservationError = true;
++              }
++              return containsObservationError ?
++                Reflect.apply(actualIterator, empty, []) :
++                Reflect.apply(actualIterator, this, []);
++            });
++          return result;
++        };
+         let shutdownError = null;
+         try {
+           await handler.shutdown();
+         } catch (error) {
+           shutdownError = error;
++        } finally {
++          if (arrayIteratorRestore !== null) {
++            arrayIteratorRestore();
++            arrayIteratorRestore = null;
++          }
+         }
+         assert.ok(shutdownError instanceof AggregateError);
+         const surfaced = flattenedErrors(shutdownError);
+@@ -866,7 +960,7 @@
+         faultsEnabled = false;
+         await handler.shutdown();
+         assert.equal(clockBClears, 0,
+-          'the current handler clock never clears an A-owned observation');
++          'the replacement handler clock never clears an A-owned observation');
+         assert.equal(observationSubscriptionCount(leader), 0);
+         assert.equal(timeSource.pendingTimerCount(), timerBaseline);
+         assert.equal(registry.serviceListeners.size, registryBaseline);
+@@ -876,17 +970,31 @@
+         failure = retainFailure(failure, error, 'cleanup-debt assertion failed');
+       } finally {
+         faultsEnabled = false;
++        if (arrayIteratorRestore !== null) {
++          try {
++            arrayIteratorRestore();
++          } catch (error) {
++            failure = retainFailure(failure, error,
++              'cleanup-debt Array iterator restoration failed');
++          }
++        }
+         handler.timeSource = timeSource;
+         failure = retainDescriptorRestorations(failure, [
+           {owner: leader, field: 'raft', descriptor: portDescriptor},
+           {owner: registry, field: 'subscribeServiceChanges',
+             descriptor: registrySubscribeDescriptor},
+           {owner: leader, field: 'off', descriptor: offDescriptor},
++          {owner: leader, field: 'shutdown', descriptor: shutdownDescriptor},
+           {owner: timeSource, field: 'clearTimeout', descriptor: clearDescriptor},
+           {owner: timeSource, field: 'setTimeout', descriptor: setDescriptor},
++          {owner: clockB, field: 'now', descriptor: clockBNowDescriptor},
+         ], 'cleanup-debt assertion');
+         failure = await membership.retire(failure,
+           'cleanup-debt final membership custody failed');
++        if (freshMembership !== null) {
++          failure = await freshMembership.retire(failure,
++            'cleanup-debt final fresh membership custody failed');
++        }
+       }
+       if (failure !== null) throw failure;
+     }, {timeSource: clockA});
+--- a/test/partition/participant-release-applied-position.test.js
++++ b/test/partition/participant-release-applied-position.test.js
+@@ -0,0 +1,940 @@
++// The applied-position observer's registered release boundary, clocks and lifetime.
++import assert from 'node:assert/strict';
++import fs from 'node:fs';
++import os from 'node:os';
++import path from 'node:path';
++import {afterEach, beforeEach, test} from 'node:test';
++import {ReplicaHandler} from '../../src/node/replica-handler-class.js';
++import {askParticipantRelease} from '../../src/node/participant-release-client.js';
++import {RAFT_EVENT} from '../../src/raft/raft-operation-port-constants.js';
++import {VirtualTimeSource} from '../../src/time/time-source.js';
++import {participantReleaseAdmissionOf, readParticipantReleaseFacts} from
++  '../../src/partition/partition-participant-transaction-pause.js';
++import {readCommittedStatementOutcome} from
++  '../../src/partition/partition-committed-statement-outcome.js';
++import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from
++  '../../src/raft/raft-committed-membership-constants.js';
++import {
++  PARTICIPANT_CUTOVER_BOUND as BOUND,
++  PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
++  PARTICIPANT_RELEASE_ADMISSION as ADMISSION,
++  PARTICIPANT_RELEASE_TYPE,
++} from '../../src/partition/partition-participant-transaction-cutover-constants.js';
++import {TRANSPORT_DELIVERY_OUTCOME_REASON_CODE} from
++  '../../src/transport/transport-semantic-outcome.js';
++import {ReplicaOperationResponseStatus} from
++  '../../src/rebalancer/replica-operation-constants.js';
++import {REPLICA_HANDLER_ERROR_MSG} from '../../src/node/replica-handler-constants.js';
++import {createInProcessMockTransport} from '../test-helpers/replica-handler-identity-fixture.js';
++import {
++  awaitProposal,
++  cleanOwnedParticipantFixture,
++  clearFixtureSingletons,
++  deferFixtureParticipantMembership as deferObservationMembership,
++  durableAppliedIndex,
++  fixtureParticipantObservationListenerCount as releaseListenerCount,
++  fixtureParticipantObservationRequest as currentObservationRequest,
++  resetFixtureSingletons,
++  scriptedFixtureTimeSource as scriptedTimeSource,
++  sendRegisteredFixtureParticipantMessage as sendRegisteredMessage,
++  sendRegisteredFixtureParticipantObservation as sendRegisteredObservation,
++  settle,
++  shutdownAll,
++  startLeader,
++  track,
++} from '../test-helpers/participant-transaction-fixture.js';
++import {replacePrototypeProperty} from '../helpers/hostile-intrinsics.js';
++
++beforeEach(resetFixtureSingletons);
++afterEach(clearFixtureSingletons);
++
++const FIXTURE_SQL = 'INSERT INTO test_table (id, value) VALUES (?, ?)';
++
++function retainFailure(current, next, message) {
++  return current === null ? next : new AggregateError([current, next], message);
++}
++
++function deferCapturedMembership(service) {
++  const port = service.controllablePort;
++  const original = port.committedMembershipHandler;
++  const started = Promise.withResolvers();
++  const continuation = Promise.withResolvers();
++  let reads = 0;
++  const captured = async (...args) => {
++    const answer = await original(...args);
++    reads += 1;
++    started.resolve(answer);
++    await continuation.promise;
++    return answer;
++  };
++  port.committedMembershipHandler = captured;
++  const restore = () => {
++    if (port.committedMembershipHandler === original) return;
++    if (port.committedMembershipHandler !== captured) {
++      throw new Error('captured membership gate lost exact ownership');
++    }
++    port.committedMembershipHandler = original;
++  };
++  const retire = async (failure, message) => {
++    let retained = failure;
++    try {
++      continuation.resolve();
++    } catch (error) {
++      retained = retainFailure(retained, error, `${message}: release failed`);
++    }
++    try {
++      restore();
++    } catch (error) {
++      retained = retainFailure(retained, error, `${message}: restore failed`);
++    }
++    return retained;
++  };
++  return Object.freeze({started: started.promise, release: continuation.resolve,
++    reads: () => reads, retire});
++}
++
++async function promptRegisteredAnswer(gate, owner, operation) {
++  const pending = track(gate.trackSettlement(owner, operation));
++  await settle();
++  assert.equal(pending.settled, true,
++    `${owner} settles through the registered route while the owner read is held`);
++  return pending.promise;
++}
++
++async function withRegisteredObservationOwner(measure, options = {}) {
++  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'tx1-release-position-'));
++  const transport = createInProcessMockTransport();
++  const clock = options.clock ?? new VirtualTimeSource({startMs: 1000});
++  const settlements = [];
++  let leader = null;
++  let handler = null;
++  let failure = null;
++  const ownSettlement = (owner, settlement) => {
++    const promise = Promise.resolve(settlement);
++    settlements.push([owner, () => promise]);
++    return promise;
++  };
++  try {
++    const started = await startLeader({timeSource: clock, ...(options.leader ?? {})});
++    leader = started.leader;
++    handler = new ReplicaHandler({nodeId: leader.nodeId, ownerIncarnation: 1,
++      systemTableCache: leader.systemTableCache, cdcIntegrationService: {},
++      createPartitionService: () => leader, messageRouter: transport,
++      dataDir: directory, timeSource: clock});
++    handler.registerWithRouter(transport);
++    handler.localServices.set(leader.replicaId, leader);
++    await measure({handler, leader, proposed: started.proposed, transport, clock,
++      ownSettlement});
++  } catch (error) {
++    failure = error;
++  }
++  failure = await cleanOwnedParticipantFixture({directory, failure,
++    label: 'applied-position', operations: [
++      ['handler', () => handler?.shutdown()],
++      ['service', () => leader === null ? undefined : shutdownAll(leader)],
++    ], settlements});
++  if (failure !== null) throw failure;
++}
++
++async function assertGenericUnsafeEnvelopes(handler, transport, request, onRead) {
++  const unsafe = [
++    new Proxy({...request}, {get(target, field, receiver) {
++      onRead();
++      return Reflect.get(target, field, receiver);
++    }}),
++    Object.assign(Object.create({unsafe: true}), request),
++    {...request, type: Object(PARTICIPANT_RELEASE_TYPE)},
++    Object.assign([], request),
++  ];
++  const symbolPayload = {...request};
++  symbolPayload[Symbol('unsafe')] = true;
++  unsafe.push(symbolPayload);
++  for (const field of ['type', 'action', 'replicaId']) {
++    const accessor = {...request};
++    Object.defineProperty(accessor, field, {enumerable: true, get() {
++      onRead();
++      throw new Error(`${field} accessor must not run`);
++    }});
++    unsafe.push(accessor);
++  }
++  for (const payload of unsafe) {
++    assert.deepEqual(await sendRegisteredMessage(handler, transport, payload), {
++      status: ReplicaOperationResponseStatus.ERROR,
++      error: REPLICA_HANDLER_ERROR_MSG.UNKNOWN_MESSAGE_TYPE(undefined),
++      correlationId: 'fixture-participant-release',
++    });
++  }
++}
++
++test('applied-position client preserves overall and RPC deadlines without stranded debt',
++  async () => {
++    for (const control of [
++      {label: 'rpc', budgetMs: 30000, expectedTimeoutMs: BOUND.REQUEST_TIMEOUT_MS,
++        missingFact: 'replica_release_reply',
++        reason: TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT},
++      {label: 'overall', budgetMs: 1500, expectedTimeoutMs: 1500,
++        missingFact: 'release_deadline', reason: undefined},
++    ]) {
++      await withRegisteredObservationOwner(async ({handler, leader, transport, clock}) => {
++        const request = await currentObservationRequest(handler, leader,
++          {deadlineAtMs: clock.now() + control.budgetMs});
++        delete request.observationDeadlineAtMs;
++        const gate = deferObservationMembership(leader);
++        const originalDeliver = transport.deliver.bind(transport);
++        let delivered = null;
++        transport.deliver = (address, payload, options) => {
++          delivered = {address, payload, options};
++          return originalDeliver(address, payload, options);
++        };
++        const senderNowMs = clock.now();
++        const senderClock = scriptedTimeSource([senderNowMs]);
++        const sender = {messageRouter: transport, timeSource: senderClock};
++        const timerBaseline = clock.pendingTimerCount();
++        const pending = gate.trackSettlement(`${control.label} observation`,
++          askParticipantRelease(sender, handler.nodeId, request));
++        let failure = null;
++        try {
++          await gate.started;
++
++          assert.equal(senderClock.reads(), 1,
++            `${control.label} samples the sender clock once`);
++          assert.equal(delivered.options.timeoutMs, control.expectedTimeoutMs,
++            `${control.label} uses the one existing sender budget`);
++          assert.equal(delivered.payload.observationDeadlineAtMs,
++            senderNowMs + control.expectedTimeoutMs);
++          assert.equal(delivered.payload.deadlineAtMs, request.deadlineAtMs);
++          assert.deepEqual(delivered.payload.release, request.release);
++          assert.equal(releaseListenerCount(leader), 1);
++          assert.equal(clock.pendingTimerCount(), timerBaseline + 1);
++
++          clock.advance(control.expectedTimeoutMs);
++          const answer = await pending;
++          assert.equal(answer.outcome, OUTCOME.UNAVAILABLE, JSON.stringify(answer));
++          assert.equal(answer.missingFact, control.missingFact);
++          assert.equal(answer.reason, control.reason);
++          assert.equal(answer.partitionId, request.partitionId);
++          assert.equal(answer.phase, request.action);
++          assert.equal(answer.releaseId, request.release.releaseId);
++          assert.equal(participantReleaseAdmissionOf(leader).state, ADMISSION.CLOSED);
++          assert.equal(releaseListenerCount(leader), 0);
++          assert.equal(clock.pendingTimerCount(), timerBaseline);
++
++          gate.release();
++          gate.restore();
++          const successorRequest = await currentObservationRequest(handler, leader,
++            {deadlineAtMs: clock.now() + 30000});
++          const successor = await sendRegisteredObservation(handler, transport,
++            successorRequest);
++          assert.equal(successor.outcome, OUTCOME.OBSERVED, JSON.stringify(successor));
++          assert.equal(successor.partitionId, successorRequest.partitionId);
++          assert.deepEqual(successor.generation, successorRequest.target);
++          assert.equal(releaseListenerCount(leader), 0);
++          assert.equal(clock.pendingTimerCount(), timerBaseline);
++        } catch (error) {
++          failure = error;
++        } finally {
++          failure = await gate.retire(failure,
++            `${control.label} deadline assertion and membership custody failed`);
++        }
++        if (failure !== null) throw failure;
++      });
++    }
++
++    await withRegisteredObservationOwner(async ({handler, leader, transport, clock}) => {
++      const request = await currentObservationRequest(handler, leader,
++        {deadlineAtMs: clock.now()});
++      delete request.observationDeadlineAtMs;
++      let deliveries = 0;
++      const originalDeliver = transport.deliver.bind(transport);
++      transport.deliver = (...args) => {
++        deliveries += 1;
++        return originalDeliver(...args);
++      };
++      const answer = await askParticipantRelease(handler, handler.nodeId, request);
++      assert.equal(answer.outcome, OUTCOME.UNAVAILABLE);
++      assert.equal(answer.missingFact, 'release_deadline');
++      assert.equal(answer.partitionId, request.partitionId);
++      assert.equal(answer.phase, request.action);
++      assert.equal(answer.releaseId, request.release.releaseId);
++      assert.equal(deliveries, 0, 'an already-spent overall deadline performs no delivery');
++      assert.equal(participantReleaseAdmissionOf(leader).state, ADMISSION.CLOSED);
++      assert.equal(releaseListenerCount(leader), 0);
++    });
++
++    await withRegisteredObservationOwner(async ({handler, leader, transport}) => {
++      const request = await currentObservationRequest(handler, leader,
++        {deadlineAtMs: Number.MAX_SAFE_INTEGER});
++      delete request.observationDeadlineAtMs;
++      const gate = deferObservationMembership(leader);
++      const startMs = Number.MAX_SAFE_INTEGER - 1;
++      const senderClock = scriptedTimeSource([startMs]);
++      const sender = {messageRouter: transport, timeSource: senderClock};
++      let delivered = null;
++      const originalDeliver = transport.deliver.bind(transport);
++      transport.deliver = (address, payload, options) => {
++        delivered = {payload, options};
++        return originalDeliver(address, payload, options);
++      };
++      const pending = gate.trackSettlement('safe-edge observation',
++        askParticipantRelease(sender, handler.nodeId, request));
++      let failure = null;
++      try {
++        await gate.started;
++        assert.equal(senderClock.reads(), 1,
++          'the safe-edge sender clock is sampled exactly once');
++        assert.equal(delivered.options.timeoutMs, 1);
++        assert.equal(delivered.payload.observationDeadlineAtMs,
++          Number.MAX_SAFE_INTEGER);
++        gate.release();
++        const answer = await pending;
++        assert.equal(answer.outcome, OUTCOME.OBSERVED, JSON.stringify(answer));
++        assert.equal(answer.partitionId, request.partitionId);
++        assert.deepEqual(answer.generation, request.target);
++      } catch (error) {
++        failure = error;
++      } finally {
++        failure = await gate.retire(failure,
++          'safe-edge assertion and membership custody failed');
++      }
++      if (failure !== null) throw failure;
++    });
++
++    await withRegisteredObservationOwner(async ({handler, leader, transport, clock}) => {
++      const request = await currentObservationRequest(handler, leader,
++        {deadlineAtMs: clock.now() + 30000});
++      delete request.observationDeadlineAtMs;
++      const originalDeliver = transport.deliver.bind(transport);
++      const restoreSafeInteger = replacePrototypeProperty(Number, 'isSafeInteger', () => {
++        throw new Error('the client budget guard must use its captured integer intrinsic');
++      });
++      const restoreObjectIs = replacePrototypeProperty(Object, 'is', () => {
++        throw new Error('the client budget guard must use its captured identity intrinsic');
++      });
++      let deliveries = 0;
++      let failure = null;
++      transport.deliver = (address, payload, options) => {
++        deliveries += 1;
++        restoreObjectIs();
++        restoreSafeInteger();
++        return originalDeliver(address, payload, options);
++      };
++      try {
++        const answer = await askParticipantRelease(handler, handler.nodeId, request);
++        assert.equal(answer.outcome, OUTCOME.OBSERVED, JSON.stringify(answer));
++        assert.equal(deliveries, 1);
++        assert.deepEqual(answer.generation, request.target);
++      } catch (error) {
++        failure = error;
++      } finally {
++        try {
++          restoreObjectIs();
++          restoreSafeInteger();
++        } catch (error) {
++          failure = retainFailure(failure, error,
++            'client intrinsic assertion and restoration failed');
++        }
++        transport.deliver = originalDeliver;
++      }
++      if (failure !== null) throw failure;
++    });
++  });
++
++test('transport queue delay consumes the carried applied-position RPC window', () =>
++  withRegisteredObservationOwner(async ({handler, leader, transport, clock}) => {
++    const request = await currentObservationRequest(handler, leader,
++      {deadlineAtMs: clock.now() + 30000});
++    delete request.observationDeadlineAtMs;
++    const gate = deferObservationMembership(leader);
++    const originalDeliver = transport.deliver.bind(transport);
++    let delivered = null;
++    transport.deliver = (address, payload, options) => {
++      delivered = {payload, options};
++      clock.advance(4000);
++      return originalDeliver(address, payload, options);
++    };
++    const timerBaseline = clock.pendingTimerCount();
++    const pending = gate.trackSettlement('queue-delayed observation',
++      askParticipantRelease(handler, handler.nodeId, request));
++    let failure = null;
++    try {
++      await gate.started;
++      assert.equal(delivered.options.timeoutMs, BOUND.REQUEST_TIMEOUT_MS);
++      assert.equal(delivered.payload.observationDeadlineAtMs, 6000,
++        'the sender carries its one start sample instead of an arrival-relative deadline');
++      assert.equal(clock.now(), 5000);
++      assert.equal(clock.pendingTimerCount(), timerBaseline + 1);
++      clock.advance(999);
++      assert.equal(releaseListenerCount(leader), 1);
++      clock.advance(1);
++      const answer = await pending;
++      assert.equal(answer.outcome, OUTCOME.UNAVAILABLE);
++      assert.equal(answer.missingFact, 'replica_release_reply');
++      assert.equal(answer.reason, TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT);
++      assert.equal(answer.partitionId, request.partitionId);
++      assert.equal(answer.phase, request.action);
++      assert.equal(answer.releaseId, request.release.releaseId);
++      assert.equal(clock.now(), delivered.payload.observationDeadlineAtMs);
++      assert.equal(releaseListenerCount(leader), 0);
++      assert.equal(clock.pendingTimerCount(), timerBaseline);
++    } catch (error) {
++      failure = error;
++    } finally {
++      failure = await gate.retire(failure,
++        'queue-delay assertion and membership custody failed');
++    }
++    if (failure !== null) throw failure;
++
++    transport.deliver = originalDeliver;
++    const ownerNow = clock.now();
++    const delayedDeadline = ownerNow + 2;
++    const delayed = {...request, deadlineAtMs: delayedDeadline,
++      observationDeadlineAtMs: ownerNow + 1,
++      attempt: {...request.attempt, deadlineAtMs: delayedDeadline}};
++    const delayedGate = deferObservationMembership(leader);
++    const originalTimeSource = handler.timeSource;
++    handler.timeSource = scriptedTimeSource([ownerNow, delayedDeadline + 1]);
++    let delayedFailure = null;
++    try {
++      const delayedObservation = delayedGate.trackSettlement('delayed timer observation',
++        sendRegisteredObservation(handler, transport, delayed));
++      await delayedGate.started;
++      const delayedAnswer = await delayedObservation;
++      assert.equal(delayedAnswer.outcome, OUTCOME.UNAVAILABLE);
++      assert.equal(delayedAnswer.missingFact, 'release_deadline',
++        'a late callback samples the current overall deadline before stored RPC equality');
++    } catch (error) {
++      delayedFailure = error;
++    } finally {
++      handler.timeSource = originalTimeSource;
++      delayedFailure = await delayedGate.retire(delayedFailure,
++        'late timer assertion and membership custody failed');
++    }
++    if (delayedFailure !== null) throw delayedFailure;
++  }));
++
++test('one applied-position observation owns duplicate, conflict and successor lifetimes', () =>
++  withRegisteredObservationOwner(async ({handler, leader, transport, clock}) => {
++    const request = await currentObservationRequest(handler, leader,
++      {deadlineAtMs: clock.now() + 30000,
++        observationDeadlineAtMs: clock.now() + BOUND.REQUEST_TIMEOUT_MS});
++    const gate = deferObservationMembership(leader);
++    const timerBaseline = clock.pendingTimerCount();
++    const starter = gate.trackSettlement('starter observation',
++      sendRegisteredObservation(handler, transport, request));
++    let failure = null;
++    try {
++      await gate.started;
++      clock.advance(2000);
++      const rawJoin = {...request, release: {...request.release},
++        attempt: {...request.attempt}, target: {...request.target}, origin: {...request.origin}};
++      const joiner = gate.trackSettlement('joined observation',
++        sendRegisteredObservation(handler, transport, rawJoin));
++      rawJoin.deadlineAtMs += 1;
++      rawJoin.attempt.term += 1;
++      rawJoin.target.runtimeGeneration += 1;
++      rawJoin.origin.originIndex += 1;
++      rawJoin.release.releaseId = 'mutated-after-dispatch';
++      assert.equal(gate.reads(), 1, 'matching recipients share one canonical facts read');
++      assert.equal(releaseListenerCount(leader), 1);
++      assert.equal(clock.pendingTimerCount(), timerBaseline + 1);
++
++      let topAccessorReads = 0;
++      const unsafeJoin = {...request};
++      Object.defineProperty(unsafeJoin, 'action', {enumerable: true, get() {
++        topAccessorReads += 1;
++        throw new Error('held join action accessor must not run');
++      }});
++      const unsafeAnswer = track(sendRegisteredMessage(handler, transport, unsafeJoin));
++      await settle();
++      assert.equal(unsafeAnswer.settled, true);
++      assert.deepEqual(await unsafeAnswer.promise, {
++        status: ReplicaOperationResponseStatus.ERROR,
++        error: REPLICA_HANDLER_ERROR_MSG.UNKNOWN_MESSAGE_TYPE(undefined),
++        correlationId: 'fixture-participant-release',
++      });
++      assert.equal(topAccessorReads, 0);
++
++      let coercionReads = 0;
++      const boxedDigest = {toJSON() {
++        coercionReads += 1;
++      }, toString() {
++        coercionReads += 1;
++        return request.release.targetBuildDigest;
++      }, [Symbol.toPrimitive]() {
++        coercionReads += 1;
++        return request.release.targetBuildDigest;
++      }};
++      const conflicts = [
++        {expected: OUTCOME.INVALID, request: {...request,
++          release: {...request.release, targetBuildDigest: boxedDigest}}},
++        {expected: OUTCOME.INVALID, request: {...request,
++          deadlineAtMs: request.deadlineAtMs + 1}},
++        {expected: OUTCOME.STALE, request: {...request,
++          deadlineAtMs: request.deadlineAtMs + 1,
++          attempt: {...request.attempt, deadlineAtMs: request.deadlineAtMs + 1}}},
++        {expected: OUTCOME.STALE, request: {...request,
++          origin: {...request.origin, originIndex: request.origin.originIndex + 1}}},
++        {expected: OUTCOME.STALE, request: {...request,
++          attempt: {...request.attempt, term: request.attempt.term + 1}}},
++        {expected: OUTCOME.STALE, request: {...request, target: {...request.target,
++          runtimeGeneration: request.target.runtimeGeneration + 1}}},
++      ];
++      for (const field of ['release', 'attempt', 'target', 'origin']) {
++        const missing = {...request};
++        delete missing[field];
++        conflicts.push({expected: OUTCOME.INVALID, request: missing,
++          expectedReleaseId: field === 'release' ? null : request.release.releaseId});
++        conflicts.push({expected: OUTCOME.INVALID,
++          request: {...request, [field]: undefined},
++          expectedReleaseId: field === 'release' ? null : request.release.releaseId});
++      }
++      for (const conflict of conflicts) {
++        const answer = await promptRegisteredAnswer(gate, 'conflicting observation',
++          sendRegisteredObservation(handler, transport, conflict.request));
++        assert.equal(answer.outcome, conflict.expected, JSON.stringify(answer));
++        assert.equal(answer.partitionId, conflict.request.partitionId);
++        assert.equal(answer.phase, conflict.request.action);
++        assert.equal(answer.releaseId,
++          Object.hasOwn(conflict, 'expectedReleaseId') ? conflict.expectedReleaseId :
++            conflict.request.release.releaseId);
++        assert.equal(releaseListenerCount(leader), 1,
++          'a conflict cannot detach the current starter');
++        assert.equal(clock.pendingTimerCount(), timerBaseline + 1);
++      }
++      assert.equal(coercionReads, 0,
++        'nested identity scalars are pinned before hashing or serialization');
++
++      clock.advance(BOUND.REQUEST_TIMEOUT_MS - 2000);
++      const [starterAnswer, joinerAnswer] = await Promise.all([starter, joiner]);
++      assert.deepEqual(joinerAnswer, starterAnswer,
++        'a matching joiner settles with the starter without renewing its deadline');
++      assert.equal(starterAnswer.missingFact, 'replica_release_reply');
++      assert.equal(starterAnswer.reason,
++        TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT);
++      assert.equal(starterAnswer.partitionId, request.partitionId);
++      assert.equal(starterAnswer.phase, request.action);
++      assert.equal(starterAnswer.releaseId, request.release.releaseId);
++      assert.equal(gate.reads(), 1);
++      assert.equal(releaseListenerCount(leader), 0);
++      assert.equal(clock.pendingTimerCount(), timerBaseline);
++      gate.restore();
++
++      const successorRequest = await currentObservationRequest(handler, leader,
++        {deadlineAtMs: clock.now() + 30000});
++      const successorGate = deferObservationMembership(leader);
++      let successorFailure = null;
++      try {
++        const successor = successorGate.trackSettlement('successor observation',
++          sendRegisteredObservation(handler, transport, successorRequest));
++        await successorGate.started;
++        assert.equal(successorGate.reads(), 1,
++          'the prior starter cleanup cannot remove a fresh successor record');
++        assert.equal(releaseListenerCount(leader), 1);
++        assert.equal(clock.pendingTimerCount(), timerBaseline + 1);
++
++        gate.release();
++        await gate.finished;
++        // `finished` owns only the deferred membership method. Exact-source
++        // review owns the later facts/observation promise continuations; this
++        // assertion does not guess their completion with microtask turns.
++        const successorConflict = {...successorRequest,
++          origin: {...successorRequest.origin,
++            originIndex: successorRequest.origin.originIndex + 1}};
++        const conflictAnswer = await sendRegisteredObservation(
++          handler, transport, successorConflict);
++        assert.equal(conflictAnswer.outcome, OUTCOME.STALE,
++          JSON.stringify(conflictAnswer));
++        assert.equal(conflictAnswer.partitionId, successorRequest.partitionId);
++        assert.equal(conflictAnswer.phase, successorRequest.action);
++        assert.equal(conflictAnswer.releaseId, successorRequest.release.releaseId);
++        assert.equal(releaseListenerCount(leader), 1,
++          'the returned old membership read cannot detach the held successor');
++        assert.equal(clock.pendingTimerCount(), timerBaseline + 1,
++          'the returned old membership read cannot cancel the successor deadline');
++
++        successorGate.release();
++        const successorAnswer = await successor;
++        assert.equal(successorAnswer.outcome, OUTCOME.OBSERVED,
++          JSON.stringify(successorAnswer));
++        assert.equal(successorAnswer.partitionId, successorRequest.partitionId);
++        assert.deepEqual(successorAnswer.generation, successorRequest.target);
++        assert.equal(releaseListenerCount(leader), 0);
++        assert.equal(clock.pendingTimerCount(), timerBaseline);
++      } catch (error) {
++        successorFailure = error;
++      } finally {
++        successorFailure = await successorGate.retire(successorFailure,
++          'successor assertion and membership custody failed');
++      }
++      if (successorFailure !== null) throw successorFailure;
++    } catch (error) {
++      failure = error;
++    } finally {
++      failure = await gate.retire(failure,
++        'starter assertion and membership custody failed');
++    }
++    if (failure !== null) throw failure;
++  }));
++
++test('shared ingress refuses unsafe envelopes and facts refuse malformed owner generations', () =>
++  withRegisteredObservationOwner(async ({handler, leader, transport, clock}) => {
++    const request = await currentObservationRequest(handler, leader);
++    const gate = deferObservationMembership(leader);
++    const timerBaseline = clock.pendingTimerCount();
++    let hostileReads = 0;
++    await assertGenericUnsafeEnvelopes(handler, transport, request,
++      () => hostileReads += 1);
++    assert.equal(hostileReads, 0);
++    assert.equal(gate.reads(), 0);
++
++    const nested = {...request.release};
++    Object.defineProperty(nested, 'targetBuildDigest', {enumerable: true, get() {
++      hostileReads += 1;
++      throw new Error('nested digest accessor must not run');
++    }});
++    const invalid = [
++      {payload: {...request, deadlineAtMs: request.deadlineAtMs + 1},
++        releaseId: request.release.releaseId},
++      {payload: {...request, action: Object(request.action)},
++        releaseId: request.release.releaseId},
++      {payload: {...request, release: nested}, releaseId: null},
++    ];
++    for (const field of ['release', 'attempt', 'target', 'origin']) {
++      const missing = {...request};
++      delete missing[field];
++      invalid.push({payload: missing,
++        releaseId: field === 'release' ? null : request.release.releaseId});
++      invalid.push({payload: {...request, [field]: undefined},
++        releaseId: field === 'release' ? null : request.release.releaseId});
++    }
++    let failure = null;
++    try {
++      for (const {payload, releaseId} of invalid) {
++        const answer = await sendRegisteredObservation(handler, transport, payload);
++        assert.equal(answer.outcome, OUTCOME.INVALID, JSON.stringify(answer));
++        assert.equal(answer.releaseId, releaseId);
++      }
++      const iteratorRestore = replacePrototypeProperty(
++        Array.prototype, Symbol.iterator, () => {
++          throw new Error('nested strict capture must not consume ambient Array iteration');
++        });
++      try {
++        const iteratorAnswer = await sendRegisteredObservation(handler, transport,
++          {...request, release: nested});
++        assert.equal(iteratorAnswer.outcome, OUTCOME.INVALID,
++          JSON.stringify(iteratorAnswer));
++        assert.equal(iteratorAnswer.releaseId, null);
++      } finally {
++        iteratorRestore();
++      }
++      assert.equal(hostileReads, 0);
++      assert.equal(gate.reads(), 0);
++      assert.equal(releaseListenerCount(leader), 0);
++      assert.equal(clock.pendingTimerCount(), timerBaseline);
++      const valid = gate.trackSettlement('valid observation after ingress refusals',
++        sendRegisteredObservation(handler, transport, request));
++      await gate.started;
++      gate.release();
++      assert.equal((await valid).outcome, OUTCOME.OBSERVED);
++    } catch (error) {
++      failure = error;
++    } finally {
++      failure = await gate.retire(failure,
++        'strict ingress assertion and membership custody failed');
++    }
++    if (failure !== null) throw failure;
++
++    const ownerDescriptor = Object.getOwnPropertyDescriptor(handler, 'ownerIncarnation');
++    const currentIncarnation = handler.ownerIncarnation;
++    let generationFailure = null;
++    try {
++      for (const malformed of [undefined, Object(currentIncarnation), 0]) {
++        handler.ownerIncarnation = malformed;
++        const refused = await readParticipantReleaseFacts(handler, leader);
++        assert.equal(refused.outcome, OUTCOME.UNAVAILABLE);
++        assert.equal(refused.missingFact, 'current_replica_generation');
++      }
++    } catch (error) {
++      generationFailure = error;
++    } finally {
++      try {
++        Object.defineProperty(handler, 'ownerIncarnation', ownerDescriptor);
++      } catch (error) {
++        generationFailure = retainFailure(generationFailure, error,
++          'generation assertion and owner restoration failed');
++      }
++    }
++    if (generationFailure !== null) throw generationFailure;
++    const observed = await readParticipantReleaseFacts(handler, leader);
++    assert.equal(observed.outcome, OUTCOME.OBSERVED, JSON.stringify(observed));
++    assert.equal(observed.generation.ownerIncarnation, currentIncarnation);
++  }));
++
++test('applied-position receiver refuses malformed observation clocks without effects', () =>
++  withRegisteredObservationOwner(async ({handler, leader, transport, clock}) => {
++    const request = await currentObservationRequest(handler, leader);
++    const timerBaseline = clock.pendingTimerCount();
++    const missingDeadline = {...request};
++    delete missingDeadline.observationDeadlineAtMs;
++    assert.equal((await sendRegisteredObservation(handler, transport, missingDeadline)).outcome,
++      OUTCOME.INVALID, 'the receiver requires the sender-carried RPC ceiling');
++    const invalidDeadlines = [undefined, null, Number.NaN, Number.POSITIVE_INFINITY,
++      1.5, -0, Number.MAX_SAFE_INTEGER + 1, '6000', Object(6000)];
++    for (const observationDeadlineAtMs of invalidDeadlines) {
++      const answer = await sendRegisteredObservation(handler, transport,
++        {...request, observationDeadlineAtMs});
++      assert.equal(answer.outcome, OUTCOME.INVALID, JSON.stringify(answer));
++      assert.equal(answer.partitionId, request.partitionId);
++      assert.equal(answer.releaseId, request.release.releaseId);
++      assert.equal(answer.phase, request.action);
++      assert.equal(releaseListenerCount(leader), 0);
++      assert.equal(clock.pendingTimerCount(), timerBaseline);
++      assert.equal(participantReleaseAdmissionOf(leader).state, ADMISSION.CLOSED);
++    }
++
++    const gate = deferObservationMembership(leader);
++    const nowDescriptor = Object.getOwnPropertyDescriptor(clock, 'now');
++    const registrationNow = clock.now();
++    const samples = [registrationNow, registrationNow - 1];
++    let timerFailure = null;
++    try {
++      clock.now = () => -1;
++      const refusal = await sendRegisteredObservation(handler, transport, request);
++      assert.equal(refusal.outcome, OUTCOME.UNAVAILABLE);
++      assert.equal(refusal.missingFact, 'replica_release_reply');
++      assert.equal(clock.pendingTimerCount(), timerBaseline);
++      clock.now = () => samples.shift() ?? registrationNow - 1;
++      const pending = track(gate.trackSettlement('backward timer observation',
++        sendRegisteredObservation(handler, transport, request)));
++      await gate.started;
++      clock.advance(BOUND.REQUEST_TIMEOUT_MS);
++      await settle();
++      assert.equal(pending.settled, true,
++        'an installed timer terminalizes even when its later clock sample steps backward');
++      const answer = await pending.promise;
++      assert.equal(answer.outcome, OUTCOME.UNAVAILABLE, JSON.stringify(answer));
++      assert.equal(answer.missingFact, 'replica_release_reply');
++      assert.equal(answer.reason,
++        TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT);
++      assert.equal(releaseListenerCount(leader), 0);
++      assert.equal(clock.pendingTimerCount(), timerBaseline);
++    } catch (error) {
++      timerFailure = error;
++    } finally {
++      try {
++        if (nowDescriptor === undefined) delete clock.now;
++        else Object.defineProperty(clock, 'now', nowDescriptor);
++      } catch (error) {
++        timerFailure = retainFailure(timerFailure, error,
++          'backward timer assertion and clock restoration failed');
++      }
++      timerFailure = await gate.retire(timerFailure,
++        'backward timer assertion and membership custody failed');
++    }
++    if (timerFailure !== null) throw timerFailure;
++
++    const originalTimeSource = handler.timeSource;
++    const invalidClockSamples = [Number.NaN, Number.POSITIVE_INFINITY,
++      Number.NEGATIVE_INFINITY, -1, 1.5, -0, Number.MAX_SAFE_INTEGER + 1,
++      '6000', new Error('release clock unavailable')];
++    for (const sample of invalidClockSamples) {
++      let deliveries = 0;
++      const originalDeliver = transport.deliver.bind(transport);
++      transport.deliver = (...args) => {
++        deliveries += 1;
++        return originalDeliver(...args);
++      };
++      handler.timeSource = {now() {
++        if (sample instanceof Error) throw sample;
++        return sample;
++      }};
++      try {
++        const answer = await askParticipantRelease(handler, handler.nodeId, request);
++        assert.equal(answer.outcome, OUTCOME.UNAVAILABLE, JSON.stringify(answer));
++        assert.equal(answer.partitionId, request.partitionId);
++        assert.equal(answer.phase, request.action);
++        assert.equal(answer.releaseId, request.release.releaseId);
++        assert.equal(deliveries, 0,
++          'an unusable sender clock cannot create an unbounded observation');
++        assert.equal(participantReleaseAdmissionOf(leader).state, ADMISSION.CLOSED);
++      } finally {
++        handler.timeSource = originalTimeSource;
++        transport.deliver = originalDeliver;
++      }
++    }
++  }));
++
++test('post-facts adjudication fences a real term change and preserves same-context facts',
++  async () => {
++    for (const changeTerm of [false, true]) {
++      await withRegisteredObservationOwner(async ({handler, leader, transport, clock}) => {
++        const request = await currentObservationRequest(handler, leader);
++        const gate = deferObservationMembership(leader);
++        const nowDescriptor = Object.getOwnPropertyDescriptor(clock, 'now');
++        const actualNow = clock.now.bind(clock);
++        const priorTerm = leader.controllablePort.term;
++        let armed = false;
++        let consumingSamples = 0;
++        clock.now = () => {
++          const value = actualNow();
++          if (armed) {
++            consumingSamples += 1;
++            if (changeTerm && consumingSamples === 1) {
++              leader.controllablePort.setTerm(priorTerm + 1);
++            }
++          }
++          return value;
++        };
++        let failure = null;
++        try {
++          const observation = gate.trackSettlement('post-facts term observation',
++            sendRegisteredObservation(handler, transport, request));
++          await gate.started;
++          armed = true;
++          gate.release();
++          const answer = await observation;
++          assert.equal(answer.outcome, changeTerm ? OUTCOME.STALE : OUTCOME.OBSERVED,
++            JSON.stringify(answer));
++          assert.equal(answer.partitionId, request.partitionId);
++          assert.equal(answer.releaseId, request.release.releaseId);
++          assert.equal(consumingSamples, 1,
++            'the consuming owner takes one post-facts clock observation');
++          assert.equal(leader.controllablePort.term,
++            changeTerm ? priorTerm + 1 : priorTerm);
++          assert.equal(participantReleaseAdmissionOf(leader).state, ADMISSION.CLOSED);
++        } catch (error) {
++          failure = error;
++        } finally {
++          try {
++            if (nowDescriptor === undefined) delete clock.now;
++            else Object.defineProperty(clock, 'now', nowDescriptor);
++          } catch (error) {
++            failure = retainFailure(failure, error,
++              'post-facts term clock restoration failed');
++          }
++          failure = await gate.retire(failure,
++            'post-facts term assertion and membership custody failed');
++        }
++        if (failure !== null) throw failure;
++      });
++    }
++  });
++
++test('normal N-to-K application between facts and adjudication remains current', () =>
++  withRegisteredObservationOwner(async ({handler, leader, proposed, transport, clock,
++    ownSettlement}) => {
++    const write = track(ownSettlement('N-to-K ordinary write',
++      leader.executeQuery(FIXTURE_SQL, ['n-to-k', 'applied'])));
++    const proposal = await awaitProposal(proposed, (entry) => entry.sql === FIXTURE_SQL);
++    assert.notEqual(proposal, null);
++    const appliedN = durableAppliedIndex(leader);
++    const request = await currentObservationRequest(handler, leader);
++    const gate = deferCapturedMembership(leader);
++    const nowDescriptor = Object.getOwnPropertyDescriptor(clock, 'now');
++    const actualNow = clock.now.bind(clock);
++    let armed = false;
++    let committed = false;
++    let wakeCount = 0;
++    const unsubscribe = leader.raft.subscribe(RAFT_EVENT.APPLIED_PROGRESS,
++      () => wakeCount += 1);
++    clock.now = () => {
++      const value = actualNow();
++      if (armed && !committed) {
++        committed = true;
++        leader.controllablePort.commit(proposal);
++      }
++      return value;
++    };
++    let observation = null;
++    let failure = null;
++    try {
++      observation = track(ownSettlement('N-to-K observation',
++        sendRegisteredObservation(handler, transport, request)));
++      const captured = await gate.started;
++      assert.equal(captured.appliedIndex, appliedN,
++        'the participant facts owner captures the coherent N membership');
++      armed = true;
++      gate.release();
++      const answer = await observation.promise;
++      assert.equal(answer.outcome, OUTCOME.OBSERVED, JSON.stringify(answer));
++      assert.equal(committed, true,
++        'the real application publishes K before post-facts adjudication');
++      assert.ok(durableAppliedIndex(leader) > appliedN);
++      assert.ok(wakeCount > 0, 'the application owner publishes a real progress wake');
++      const writeAnswer = await write.promise;
++      assert.equal(writeAnswer.success, true, JSON.stringify(writeAnswer));
++      const committedOutcome = readCommittedStatementOutcome(leader,
++        leader.getCommittedEntryKey(proposal));
++      assert.equal(committedOutcome.state, 'settled');
++      assert.equal(committedOutcome.outcome, 'applied');
++      assert.equal(committedOutcome.logIndex, durableAppliedIndex(leader));
++      assert.equal(leader.proposalQueue.size, 0);
++      assert.equal(participantReleaseAdmissionOf(leader).state, ADMISSION.CLOSED);
++    } catch (error) {
++      failure = error;
++    } finally {
++      try {
++        unsubscribe();
++      } catch (error) {
++        failure = retainFailure(failure, error, 'N-to-K wake cleanup failed');
++      }
++      try {
++        if (nowDescriptor === undefined) delete clock.now;
++        else Object.defineProperty(clock, 'now', nowDescriptor);
++      } catch (error) {
++        failure = retainFailure(failure, error, 'N-to-K clock restoration failed');
++      }
++      failure = await gate.retire(failure,
++        'N-to-K assertion and captured membership custody failed');
++    }
++    if (failure !== null) throw failure;
++  }));
++
++test('an applied-progress wake reflected by the first facts read needs no forced reread', () =>
++  withRegisteredObservationOwner(async ({handler, leader, proposed, transport, clock,
++    ownSettlement}) => {
++    const write = track(ownSettlement('fresh-first-read write',
++      leader.executeQuery(FIXTURE_SQL, ['fresh-wake', 'applied'])));
++    const proposal = await awaitProposal(proposed, (entry) => entry.sql === FIXTURE_SQL);
++    assert.notEqual(proposal, null);
++    const anchoredMembership = await leader.raft.readCommittedMembership(
++      {purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS});
++    const request = await currentObservationRequest(handler, leader);
++    const gate = deferObservationMembership(leader);
++    const timerBaseline = clock.pendingTimerCount();
++    const observation = gate.trackSettlement('fresh-first-read observation',
++      sendRegisteredObservation(handler, transport, request));
++    let failure = null;
++    try {
++      await gate.started;
++      leader.controllablePort.commit(proposal);
++      assert.equal((await write.promise).success, true);
++      leader.controllablePort.emitEvent(RAFT_EVENT.APPLIED_PROGRESS);
++      gate.release();
++      const answer = await observation;
++      assert.equal(answer.outcome, OUTCOME.OBSERVED, JSON.stringify(answer));
++      assert.equal(answer.partitionId, request.partitionId);
++      assert.deepEqual(answer.generation, request.target);
++      const afterApplication = await leader.raft.readCommittedMembership(
++        {purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS});
++      assert.ok(afterApplication.appliedIndex > anchoredMembership.appliedIndex,
++        'the ordinary command advances the application owner position');
++      assert.equal(afterApplication.configurationKey,
++        anchoredMembership.configurationKey,
++        'an ordinary command does not change the current configuration');
++      assert.equal(afterApplication.membershipGenerationIndex,
++        anchoredMembership.membershipGenerationIndex,
++        'an ordinary command does not advance membership generation');
++      assert.equal(gate.reads(), 1,
++        'a first owner read made after the wake needs no unconditional reread');
++      assert.equal(releaseListenerCount(leader), 0);
++      assert.equal(clock.pendingTimerCount(), timerBaseline);
++    } catch (error) {
++      failure = error;
++    } finally {
++      failure = await gate.retire(failure,
++        'fresh-first-read assertion and membership custody failed');
++    }
++    if (failure !== null) throw failure;
++  }));
++

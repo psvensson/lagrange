@@ -1,0 +1,3 @@
+$ npx eslint test/test-helpers/participant-transaction-fixture.js test/partition/participant-release-protocol.test.js test/node/replica-handler-release-recovery.test.js test/partition/participant-release-applied-position.test.js
+
+exit=0

@@ -1,0 +1,39 @@
+{
+  "commit": "7596c52c23e0b9167356d4841c5975ebcafd83ca",
+  "tree": "b80b251f0421d6a1718ebbdc66fb56dd8312f958",
+  "sourceTree": "f9aa09877e019d0bc5645a5ada751de7d47d7e2c",
+  "remoteRefsVerified": [
+    "refs/heads/continue/rs-raft-applied-position-controls-20261013",
+    "refs/heads/continue/rs-raft-applied-position-controls-v5a-20261014"
+  ],
+  "testPaths": [
+    {
+      "path": "test/test-helpers/participant-transaction-fixture.js",
+      "sha256": "48c385ffd2ac0df93214af165feb608e679c566faa09b41f473f4a688e5a3e53",
+      "bytes": 47920,
+      "lines": 1172
+    },
+    {
+      "path": "test/partition/participant-release-protocol.test.js",
+      "sha256": "41c00e05c22a714babbcf0943794d52108ec06114bcb232094ddcba84e719c9c",
+      "bytes": 36941,
+      "lines": 760
+    },
+    {
+      "path": "test/node/replica-handler-release-recovery.test.js",
+      "sha256": "158bd7f029485af2e98974252b348f35b0a23358197d952210295c4ac7df4095",
+      "bytes": 64124,
+      "lines": 1415
+    },
+    {
+      "path": "test/partition/participant-release-applied-position.test.js",
+      "sha256": "68d1a5bc9447ca21d92e930cd1a55db6e44f105fb533488e19ce2726a6ae34ab",
+      "bytes": 43553,
+      "lines": 939
+    }
+  ],
+  "contentReview": "PENDING",
+  "behavior": "UNRUN; source in controls worktree is pre-feature and is not a behavioral input",
+  "candidateSourceCommit": "25a2cd6d8f7c88df392d9efe0af312268ad3efcf",
+  "correctionNegativeSourceCommit": "be8a54cbbd270501c50ac573c54f251dd9e4f35c"
+}

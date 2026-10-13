@@ -1,0 +1,4 @@
+$ git diff --no-index --check /dev/null test/partition/participant-release-applied-position.test.js
+
+exit=1
+expected=1

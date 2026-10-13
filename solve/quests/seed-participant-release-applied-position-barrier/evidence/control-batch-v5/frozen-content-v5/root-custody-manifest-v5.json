@@ -1,0 +1,104 @@
+{
+  "schema": "root-control-custody/1",
+  "at": "2026-10-13T23:40:14.574030+00:00",
+  "sourceWorktree": "/mnt/data/peter/projects/.worktrees/rs-raft-applied-position-controls-20261013",
+  "controlPaths": [
+    {
+      "path": "test/test-helpers/participant-transaction-fixture.js",
+      "sha256": "48c385ffd2ac0df93214af165feb608e679c566faa09b41f473f4a688e5a3e53",
+      "bytes": 47920,
+      "lines": 1172
+    },
+    {
+      "path": "test/partition/participant-release-protocol.test.js",
+      "sha256": "41c00e05c22a714babbcf0943794d52108ec06114bcb232094ddcba84e719c9c",
+      "bytes": 36941,
+      "lines": 760
+    },
+    {
+      "path": "test/node/replica-handler-release-recovery.test.js",
+      "sha256": "158bd7f029485af2e98974252b348f35b0a23358197d952210295c4ac7df4095",
+      "bytes": 64124,
+      "lines": 1415
+    },
+    {
+      "path": "test/partition/participant-release-applied-position.test.js",
+      "sha256": "39c7523e13f4110b1bbf8ec536b7f9a9dd2504f489a438f22e9f04b9997764a5",
+      "bytes": 43554,
+      "lines": 940
+    }
+  ],
+  "artifacts": [
+    {
+      "artifact": "solve/quests/seed-participant-release-applied-position-barrier/evidence/control-batch-v5/frozen-content-v5/base-to-v5.numstat",
+      "sha256": "e86aea8199140b744fb4ef2138fcd4eadd0f334a4dbf12d30520c50c7e18b0fb",
+      "bytes": 244
+    },
+    {
+      "artifact": "solve/quests/seed-participant-release-applied-position-barrier/evidence/control-batch-v5/frozen-content-v5/base-to-v5.patch",
+      "sha256": "137add026d1e861aaf313492c31f4de34263f138405bca8893a3b1fc9306836e",
+      "bytes": 131183
+    },
+    {
+      "artifact": "solve/quests/seed-participant-release-applied-position-barrier/evidence/control-batch-v5/frozen-content-v5/control-batch-v5.md",
+      "sha256": "5ccedf136ffde9ddb5d9546a985f833f2f38a928a34e9fba43903056385bbb67",
+      "bytes": 5758
+    },
+    {
+      "artifact": "solve/quests/seed-participant-release-applied-position-barrier/evidence/control-batch-v5/frozen-content-v5/diff-check.log",
+      "sha256": "0503d7c5a0b5a5d16cebc9a050c0f1d121e154d5e7e1a210ff396edb32063f38",
+      "bytes": 27
+    },
+    {
+      "artifact": "solve/quests/seed-participant-release-applied-position-barrier/evidence/control-batch-v5/frozen-content-v5/eslint.log",
+      "sha256": "aac279b53dd5b8b41636ff02a3a7396a83aef0dd25eb283a2bb25420f32f49e6",
+      "bytes": 237
+    },
+    {
+      "artifact": "solve/quests/seed-participant-release-applied-position-barrier/evidence/control-batch-v5/frozen-content-v5/file-size.log",
+      "sha256": "7d65b2b5394028eb01efa4f5dd98d6011c4453f31854d1eb1a67b704feece0b4",
+      "bytes": 2403
+    },
+    {
+      "artifact": "solve/quests/seed-participant-release-applied-position-barrier/evidence/control-batch-v5/frozen-content-v5/frozen-control-batch-v5-hashes.json",
+      "sha256": "8f2426d7823041862dde3fd7ebcf99f358e4f6bb1e777598d5795b0cd5a0fb47",
+      "bytes": 4270
+    },
+    {
+      "artifact": "solve/quests/seed-participant-release-applied-position-barrier/evidence/control-batch-v5/frozen-content-v5/line-counts.log",
+      "sha256": "49105f3f5868e4011757820156032568e5a6ae12f57c5362c5cdbadae3159a06",
+      "bytes": 489
+    },
+    {
+      "artifact": "solve/quests/seed-participant-release-applied-position-barrier/evidence/control-batch-v5/frozen-content-v5/scoped-metrics.log",
+      "sha256": "a331b4dc5d0469ddeee2a609f0d959e14933116baaa507d2cf9ba3a6ee87d156",
+      "bytes": 721
+    },
+    {
+      "artifact": "solve/quests/seed-participant-release-applied-position-barrier/evidence/control-batch-v5/frozen-content-v5/syntax-participant-release-applied-position.test.log",
+      "sha256": "5beabd17e0862692ac720ec1b462ec6f718d6e9286238fcfd83e5ea16d2ddf78",
+      "bytes": 83
+    },
+    {
+      "artifact": "solve/quests/seed-participant-release-applied-position-barrier/evidence/control-batch-v5/frozen-content-v5/syntax-participant-release-protocol.test.log",
+      "sha256": "98caf73d764c59fee05a5e40a204ce006890c0efc8c73075b4bf7a4f1b12a4c5",
+      "bytes": 75
+    },
+    {
+      "artifact": "solve/quests/seed-participant-release-applied-position-barrier/evidence/control-batch-v5/frozen-content-v5/syntax-participant-transaction-fixture.log",
+      "sha256": "6f09498ab019b64bc5c9c14fc957005821f0e01a94df6828abb7a8241bd1ab3c",
+      "bytes": 76
+    },
+    {
+      "artifact": "solve/quests/seed-participant-release-applied-position-barrier/evidence/control-batch-v5/frozen-content-v5/syntax-replica-handler-release-recovery.test.log",
+      "sha256": "f765e80dc94ecd4569cb79ccf358c6773f3b253a2d8ff8f4b32f6da120d5c64a",
+      "bytes": 74
+    },
+    {
+      "artifact": "solve/quests/seed-participant-release-applied-position-barrier/evidence/control-batch-v5/frozen-content-v5/v4-to-v5.patch",
+      "sha256": "a2043c95c480ce7a6f2da3a3ce689f6ce6b79b9fd37ce5e8b7ff0beea80d9927",
+      "bytes": 102817
+    }
+  ],
+  "claim": "Four frozen test files; content review pending and behavior unrun; source input pre-feature and not a behavioral target."
+}

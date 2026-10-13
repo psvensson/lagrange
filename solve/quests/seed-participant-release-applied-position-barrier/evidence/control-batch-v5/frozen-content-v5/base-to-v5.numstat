@@ -1,0 +1,4 @@
+760	42	test/node/replica-handler-release-recovery.test.js
+201	120	test/partition/participant-release-protocol.test.js
+328	46	test/test-helpers/participant-transaction-fixture.js
+940	0	test/partition/participant-release-applied-position.test.js
