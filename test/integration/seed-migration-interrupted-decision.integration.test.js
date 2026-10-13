@@ -15,6 +15,8 @@ const DISK = fileURLToPath(new URL('./helpers/tx1-migration-disk-reader.js',
   import.meta.url));
 const READER = fileURLToPath(new URL('./helpers/tx1-in-doubt-decision-reader.js',
   import.meta.url));
+const DISK_REREAD = fileURLToPath(new URL(
+  './helpers/tx1-postkill-authority-replay.js', import.meta.url));
 
 test('TX1 M1: a real COMMIT decision and held prepared participants survive seed process loss',
   {timeout: 185000}, async (t) => {
@@ -76,9 +78,42 @@ test('TX1 M1: a real COMMIT decision and held prepared participants survive seed
       assert.equal(recovered.recoveryDiscovered, true);
       assert.equal(recovered.participants, 2);
       assert.equal(recovered.fanoutCalls, 0);
+      // A separate process rereads the actual SQLite files again, then
+      // attempts the recorded bound COMMIT with no live participant transport.
+      const transactionRequests = marker.requests.slice(6, 9);
+      const participantRequests = marker.requests.slice(9, 12);
+      assert.equal(new Set(transactionRequests.map((row) => row.partitionId)).size, 1);
+      assert.equal(new Set(participantRequests.map((row) => row.partitionId)).size, 1);
+      assert.notEqual(transactionRequests[0].partitionId,
+        participantRequests[0].partitionId);
+      const reread = spawnSync(process.execPath, [DISK_REREAD], {
+        input: JSON.stringify({transactionId: marker.transactionId,
+          transactionRequests, participantRequests}),
+        encoding: 'utf8', timeout: 15000, maxBuffer: 2 * 1024 * 1024,
+      });
+      assert.equal(reread.error, undefined, reread.stderr);
+      assert.equal(reread.status, 0, reread.stderr);
+      const bridge = JSON.parse(reread.stdout);
+      assert.equal(bridge.kind, 'TX1_M1_POSTKILL_DISK_REREAD');
+      assert.equal(bridge.transactionId, marker.transactionId);
+      assert.equal(bridge.physicalReplicaFiles, 6);
+      assert.equal(bridge.forgedRollbackIgnored, true);
+      assert.equal(bridge.unavailableHeld, true);
+      assert.equal(bridge.malformedAuthorityHeld, true);
+      assert.equal(bridge.boundCommitAttempts, 2);
+      assert.equal(bridge.rollbackCalls, 0);
+      assert.equal(bridge.decisionWrites, 0);
+      assert.equal(bridge.durableRowsUnchanged, true);
+      assert.equal(bridge.liveParticipantReplayCertified, false);
       t.diagnostic(JSON.stringify({kind: 'TX1_UNDELIVERED_DECISION',
         transactionId: marker.transactionId, replicaFiles: 12,
         durableDecisionReadBack: true, cacheDiscoveryCannotDecide: true,
+        diskRereadBridge: {physicalReplicaFiles: bridge.physicalReplicaFiles,
+          scans: bridge.scans, forgedRollbackIgnored: bridge.forgedRollbackIgnored,
+          invalidHeld: bridge.malformedAuthorityHeld,
+          boundCommitAttempts: bridge.boundCommitAttempts,
+          rollbackCalls: bridge.rollbackCalls,
+          durableRowsUnchanged: bridge.durableRowsUnchanged},
         effectsNotApplied: true,
         fanoutReplayCertified: false}));
     } finally {
