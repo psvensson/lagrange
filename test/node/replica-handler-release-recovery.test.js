@@ -8,10 +8,13 @@ import {EventEmitter} from 'node:events';
 import {afterEach, beforeEach, test} from 'node:test';
 import {ReplicaHandler} from '../../src/node/replica-handler-class.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
-import {RAFT_OPERATION_OUTCOME} from '../../src/raft/raft-operation-port-constants.js';
+import {RAFT_EVENT, RAFT_OPERATION_OUTCOME} from
+  '../../src/raft/raft-operation-port-constants.js';
 import {PARTITION_SERVICE_EVENT} from '../../src/partition/partition-service-constants.js';
 import {releaseIdentityOf} from
   '../../src/partition/partition-participant-release-contract.js';
+import {COMMITTED_MEMBERSHIP_ANSWER_KIND, COMMITTED_MEMBERSHIP_REFUSAL} from
+  '../../src/raft/raft-committed-membership-constants.js';
 import {
   participantReleaseAdmissionOf,
   raiseParticipantCutoverPause,
@@ -23,14 +26,22 @@ import {
   PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
   PARTICIPANT_RELEASE_LOG,
   PARTICIPANT_RELEASE_ADMISSION as ADMISSION,
+  PARTICIPANT_RELEASE_REASON,
 } from '../../src/partition/partition-participant-transaction-cutover-constants.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {createInProcessMockTransport} from
   '../test-helpers/replica-handler-identity-fixture.js';
 import {
+  changeFixtureParticipantMembership,
   clearFixtureSingletons,
+  deferFixtureParticipantMembership as deferCommittedMembership,
+  fixtureParticipantObservationListenerCount as observationListenerCount,
+  fixtureParticipantObservationRequest as currentObservationRequest,
   resetFixtureSingletons,
+  sendRegisteredFixtureParticipantObservation as sendRegisteredObservation,
+  settle,
   startLeader,
+  track,
 } from '../test-helpers/participant-transaction-fixture.js';
 
 beforeEach(resetFixtureSingletons);
@@ -47,6 +58,23 @@ function currentReleaseOf(facts) {
 
 function retainFailure(current, next, message) {
   return current === null ? next : new AggregateError([current, next], message);
+}
+
+function retainDescriptorRestorations(failure, restorations, message) {
+  let retained = failure;
+  for (const {owner, field, descriptor} of restorations) {
+    try {
+      if (descriptor === undefined) {
+        if (!delete owner[field]) throw new Error(`${String(field)} deletion refused`);
+      } else {
+        Object.defineProperty(owner, field, descriptor);
+      }
+    } catch (error) {
+      retained = retainFailure(retained, error,
+        `${message}: ${String(field)} restoration failed`);
+    }
+  }
+  return retained;
 }
 
 async function settleOwnerTurns() {
@@ -91,6 +119,18 @@ function ownerLogger(reports) {
   }};
 }
 
+function observationSubscriptionCount(service) {
+  return [RAFT_EVENT.APPLIED_PROGRESS, RAFT_EVENT.TERM_CHANGE,
+    RAFT_EVENT.LEADER_CHANGE, RAFT_EVENT.MEMBERSHIP_CHANGED]
+    .reduce((count, eventName) => count +
+      (service.controllablePort.listeners.get(eventName)?.size ?? 0), 0);
+}
+
+function flattenedErrors(error) {
+  return error instanceof AggregateError ?
+    error.errors.flatMap((nested) => flattenedErrors(nested)) : [error];
+}
+
 async function withRecoveryHandler(measure, suppliedTimeSource = null) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'release-recovery-cadence-'));
   const timeSource = suppliedTimeSource ?? new VirtualTimeSource();
@@ -128,49 +168,60 @@ async function currentResumeRequest(handler, service) {
   return {release, census: [facts]};
 }
 
-function deferCommittedMembership(service) {
-  const original = service.controllablePort.committedMembershipHandler;
-  assert.equal(typeof original, 'function');
-  const started = Promise.withResolvers();
-  const continuation = Promise.withResolvers();
-  service.controllablePort.committedMembershipHandler = async (...args) => {
-    started.resolve();
-    await continuation.promise;
-    return original(...args);
-  };
-  return {started: started.promise, release: continuation.resolve};
-}
-
-async function withActualHandler(measure) {
+async function withActualHandler(measure, options = {}) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'release-recovery-owner-'));
   const transport = createInProcessMockTransport();
-  const {leader} = await startLeader();
-  const handler = new ReplicaHandler({
-    nodeId: leader.nodeId,
-    ownerIncarnation: 1,
-    systemTableCache: leader.systemTableCache,
-    cdcIntegrationService: {},
-    createPartitionService: () => leader,
-    messageRouter: transport,
-    dataDir: directory,
-    timeSource: new VirtualTimeSource({startMs: leader.timeSource.now()}),
-  });
-  handler.localServices.set(leader.replicaId, leader);
+  let leader = null;
+  let handler = null;
   let failure = null;
   try {
-    await measure({handler, leader});
+    ({leader} = await startLeader(options.leader));
+    const handlerTimeSource = options.timeSource ??
+      new VirtualTimeSource({startMs: leader.timeSource.now()});
+    handler = new ReplicaHandler({
+      nodeId: leader.nodeId,
+      ownerIncarnation: 1,
+      systemTableCache: leader.systemTableCache,
+      cdcIntegrationService: {},
+      createPartitionService: () => leader,
+      messageRouter: transport,
+      dataDir: directory,
+      timeSource: handlerTimeSource,
+    });
+    handler.registerWithRouter(transport);
+    handler.localServices.set(leader.replicaId, leader);
+    await measure({handler, leader, transport, timeSource: handlerTimeSource});
   } catch (error) {
     failure = error;
   }
-  try {
-    await handler.shutdown();
-  } catch (error) {
-    failure = retainFailure(failure, error, 'release lifecycle assertion and cleanup failed');
+  let shutdownFailed = false;
+  if (handler !== null) {
+    try {
+      await handler.shutdown();
+    } catch (error) {
+      shutdownFailed = true;
+      failure = retainFailure(failure, error,
+        'release lifecycle assertion and handler cleanup failed');
+    }
   }
-  try {
-    fs.rmSync(directory, {recursive: true, force: true});
-  } catch (error) {
-    failure = retainFailure(failure, error, 'release lifecycle assertion and artifact cleanup failed');
+  if (leader !== null) {
+    try {
+      await leader.shutdown();
+    } catch (error) {
+      shutdownFailed = true;
+      failure = retainFailure(failure, error,
+        'release lifecycle assertion and service cleanup failed');
+    }
+  }
+  if (!shutdownFailed) {
+    try {
+      fs.rmSync(directory, {recursive: true, force: true});
+    } catch (error) {
+      failure = retainFailure(failure, error,
+        'release lifecycle assertion and artifact cleanup failed');
+    }
+  } else if (failure !== null) {
+    failure.retainedDirectory = directory;
   }
   if (failure !== null) throw failure;
 }
@@ -221,7 +272,8 @@ test('handler shutdown begun during awaited release facts cannot reopen admissio
     let shutdown = null;
     let failure = null;
     try {
-      const resume = resumeParticipantCutoverAdmission(handler, leader, request);
+      const resume = membership.trackSettlement('resume',
+        resumeParticipantCutoverAdmission(handler, leader, request));
       await membership.started;
       shutdown = handler.shutdown();
       assert.equal(handler.shuttingDown, true,
@@ -237,7 +289,8 @@ test('handler shutdown begun during awaited release facts cannot reopen admissio
     } catch (error) {
       failure = error;
     } finally {
-      membership.release();
+      failure = await membership.retire(failure,
+        'shutdown-race assertion and membership gate cleanup failed');
       operationHold.resolve();
       handler.operationTasks.delete(operationHold.promise);
       if (shutdown !== null) {
@@ -260,7 +313,8 @@ test('service shutdown begun during awaited release facts returns stale and stay
     let shutdown = null;
     let failure = null;
     try {
-      const resume = resumeParticipantCutoverAdmission(handler, leader, request);
+      const resume = membership.trackSettlement('resume',
+        resumeParticipantCutoverAdmission(handler, leader, request));
       await membership.started;
       shutdown = leader.shutdown();
       assert.equal(leader.isShutdown, true,
@@ -271,7 +325,8 @@ test('service shutdown begun during awaited release facts returns stale and stay
     } catch (error) {
       failure = error;
     } finally {
-      membership.release();
+      failure = await membership.retire(failure,
+        'service-shutdown assertion and membership gate cleanup failed');
       if (shutdown !== null) {
         try {
           await shutdown;
@@ -283,6 +338,559 @@ test('service shutdown begun during awaited release facts returns stale and stay
     }
     if (failure !== null) throw failure;
   }));
+
+test('handler shutdown cancels an applied-position observation before held facts release',
+  async () => {
+    await withActualHandler(async ({handler, leader, transport}) => {
+      const request = await currentObservationRequest(handler, leader);
+      const membership = deferCommittedMembership(leader);
+      const timerBaseline = handler.timeSource.pendingTimerCount();
+      const observation = membership.trackSettlement('observation',
+        sendRegisteredObservation(handler, transport, request));
+      await membership.started;
+      let shutdown = null;
+      let failure = null;
+      try {
+        assert.equal(observationListenerCount(leader), 1);
+        assert.equal(handler.timeSource.pendingTimerCount(), timerBaseline + 1);
+        shutdown = handler.shutdown();
+        const answer = await observation;
+        assert.equal(answer.outcome, OUTCOME.STALE, JSON.stringify(answer));
+        assert.equal(answer.partitionId, request.partitionId);
+        assert.equal(answer.phase, request.action);
+        assert.equal(answer.releaseId, request.release.releaseId);
+        assert.equal(participantReleaseAdmissionOf(leader).state, ADMISSION.CLOSED);
+        assert.equal(observationListenerCount(leader), 0);
+        assert.equal(handler.timeSource.pendingTimerCount(), timerBaseline);
+      } catch (error) {
+        failure = error;
+      } finally {
+        failure = await membership.retire(failure,
+          'observation cancellation and membership gate cleanup failed');
+        if (shutdown !== null) {
+          try {
+            await shutdown;
+          } catch (error) {
+            failure = retainFailure(failure, error,
+              'observation cancellation and handler shutdown failed');
+          }
+        }
+      }
+      if (failure !== null) throw failure;
+    });
+
+    await withActualHandler(async ({handler, leader, transport}) => {
+      const request = await currentObservationRequest(handler, leader);
+      const answer = await sendRegisteredObservation(handler, transport,
+        request);
+      assert.equal(answer.outcome, OUTCOME.OBSERVED, JSON.stringify(answer));
+      assert.equal(answer.partitionId, request.partitionId);
+      assert.deepEqual(answer.generation, request.target);
+      assert.equal(observationListenerCount(leader), 0,
+        'an independent successor handler owns a fresh observation lifetime');
+    });
+  });
+
+test('service shutdown entry wakes and cancels observation before held facts release',
+  async () => withActualHandler(async ({handler, leader, transport}) => {
+    const request = await currentObservationRequest(handler, leader);
+    const membership = deferCommittedMembership(leader);
+    const timerBaseline = handler.timeSource.pendingTimerCount();
+    const observation = membership.trackSettlement('observation',
+      sendRegisteredObservation(handler, transport, request));
+    await membership.started;
+    let shutdownEntry = null;
+    leader.once(PARTITION_SERVICE_EVENT.SHUTDOWN_STARTED, (identity) => {
+      shutdownEntry = {isShutdown: leader.isShutdown,
+        hasSettlement: leader.shutdownSettlement instanceof Promise, identity};
+    });
+    let shutdown = null;
+    let failure = null;
+    try {
+      shutdown = leader.shutdown();
+      assert.deepEqual(shutdownEntry, {isShutdown: true, hasSettlement: true,
+        identity: {partitionId: leader.partitionId, replicaId: leader.replicaId}},
+      'the entry wake follows installation of the actual lifecycle fence');
+      const answer = await observation;
+      assert.equal(answer.outcome, OUTCOME.STALE, JSON.stringify(answer));
+      assert.equal(answer.partitionId, request.partitionId);
+      assert.equal(answer.phase, request.action);
+      assert.equal(answer.releaseId, request.release.releaseId);
+      assert.equal(participantReleaseAdmissionOf(leader).state, ADMISSION.CLOSED);
+      assert.equal(observationListenerCount(leader), 0);
+      assert.equal(handler.timeSource.pendingTimerCount(), timerBaseline);
+    } catch (error) {
+      failure = error;
+    } finally {
+      failure = await membership.retire(failure,
+        'observation cancellation and membership gate cleanup failed');
+      if (shutdown !== null) {
+        try {
+          await shutdown;
+        } catch (error) {
+          failure = retainFailure(failure, error,
+            'observation cancellation and service shutdown failed');
+        }
+      }
+    }
+    if (failure !== null) throw failure;
+  }));
+
+test('post-await term and generation changes keep applied-position observation stale',
+  async () => {
+    const controls = [
+      {label: 'term', mutate(port) {
+        port.term += 1;
+        port.emitEvent(RAFT_EVENT.TERM_CHANGE, port.term);
+      }},
+      {label: 'runtime generation', mutate(port) {
+        port.runtimeGeneration += 1;
+      }},
+      {label: 'lifecycle incarnation', mutate(port) {
+        port.lifecycleIncarnation += 1;
+      }},
+      {label: 'current configuration', mutate(port, service) {
+        const before = {configurationKey: port.configurationKey,
+          membershipGenerationIndex: port.membershipGenerationIndex};
+        const after = changeFixtureParticipantMembership(service);
+        assert.notEqual(after.configurationKey, before.configurationKey);
+        assert.equal(after.membershipGenerationIndex, port.committedIndex,
+          'the changed ConfState retains the actual applied membership position');
+        assert.equal(after.memberIds.length, 2);
+        assert.equal(after.memberIds.includes(service.replicaId), true);
+        port.emitEvent(RAFT_EVENT.MEMBERSHIP_CHANGED, {});
+      }},
+    ];
+    for (const control of controls) {
+      await withActualHandler(async ({handler, leader, transport}) => {
+        const request = await currentObservationRequest(handler, leader);
+        const membership = deferCommittedMembership(leader);
+        const timerBaseline = handler.timeSource.pendingTimerCount();
+        const observation = membership.trackSettlement(`${control.label} observation`,
+          sendRegisteredObservation(handler, transport, request));
+        let failure = null;
+        try {
+          await membership.started;
+          control.mutate(leader.controllablePort, leader);
+          membership.release();
+          const answer = await observation;
+          assert.equal(answer.outcome, OUTCOME.STALE,
+            `${control.label}: ${JSON.stringify(answer)}`);
+          assert.equal(answer.partitionId, request.partitionId);
+          assert.equal(answer.phase, request.action);
+          assert.equal(answer.releaseId, request.release.releaseId);
+          assert.equal(participantReleaseAdmissionOf(leader).state, ADMISSION.CLOSED);
+          assert.equal(observationListenerCount(leader), 0);
+          assert.equal(handler.timeSource.pendingTimerCount(), timerBaseline);
+        } catch (error) {
+          failure = error;
+        } finally {
+          failure = await membership.retire(failure,
+            `${control.label} assertion and membership gate cleanup failed`);
+        }
+        if (failure !== null) throw failure;
+      });
+    }
+  });
+
+test('follower reentry revalidates the latest generation after canonical facts',
+  () => withActualHandler(async ({handler, leader, transport, timeSource}) => {
+    const port = leader.controllablePort;
+    port.setRole(RAFT_ROLE.FOLLOWER);
+    port.setLeaderObservation('remote-leader-r2', 'remote-leader-address');
+    const request = await currentObservationRequest(handler, leader);
+    assert.equal(request.attempt.leaderReplicaId, 'remote-leader-r2');
+    const membership = deferCommittedMembership(leader);
+    const timerBaseline = timeSource.pendingTimerCount();
+    const descriptor = Object.getOwnPropertyDescriptor(port, 'runtimeGeneration');
+    const capturedGeneration = descriptor.value;
+    let generationReads = 0;
+    Object.defineProperty(port, 'runtimeGeneration', {configurable: true, get() {
+      generationReads += 1;
+      return generationReads === 1 ? capturedGeneration : capturedGeneration + 1;
+    }});
+    let failure = null;
+    try {
+      const observation = membership.trackSettlement('follower reentry observation',
+        sendRegisteredObservation(handler, transport, request));
+      await membership.started;
+      membership.release();
+      const answer = await observation;
+      assert.equal(answer.outcome, OUTCOME.STALE, JSON.stringify(answer));
+      assert.equal(answer.partitionId, request.partitionId);
+      assert.equal(answer.phase, request.action);
+      assert.equal(answer.releaseId, request.release.releaseId);
+      assert.equal(membership.reads(), 1);
+      assert.equal(generationReads, 2,
+        'facts N is fenced by the immediate current-context generation N+1');
+      assert.equal(observationListenerCount(leader), 0);
+      assert.equal(timeSource.pendingTimerCount(), timerBaseline);
+    } catch (error) {
+      failure = error;
+    } finally {
+      failure = retainDescriptorRestorations(failure,
+        [{owner: port, field: 'runtimeGeneration', descriptor}],
+        'follower reentry assertion');
+      failure = await membership.retire(failure,
+        'follower reentry assertion and membership custody failed');
+    }
+    if (failure !== null) throw failure;
+  }));
+
+test('dirty terminal membership refusal stays unavailable unless current lineage changes',
+  async () => {
+    for (const changedGeneration of [false, true]) {
+      await withActualHandler(async ({handler, leader, transport, timeSource}) => {
+        const request = await currentObservationRequest(handler, leader);
+        const port = leader.controllablePort;
+        const membershipDescriptor = Object.getOwnPropertyDescriptor(
+          port, 'committedMembershipHandler');
+        const refused = () => Object.freeze({kind: COMMITTED_MEMBERSHIP_ANSWER_KIND.REFUSED,
+          reason: COMMITTED_MEMBERSHIP_REFUSAL.MEMBERSHIP_UNREADABLE});
+        port.committedMembershipHandler = refused;
+        const membership = deferCommittedMembership(leader);
+        const timerBaseline = timeSource.pendingTimerCount();
+        let failure = null;
+        try {
+          const observation = membership.trackSettlement('typed unavailable observation',
+            sendRegisteredObservation(handler, transport, request));
+          await membership.started;
+          leader.controllablePort.emitEvent(RAFT_EVENT.APPLIED_PROGRESS);
+          if (changedGeneration) port.runtimeGeneration += 1;
+          membership.release();
+          const answer = await observation;
+          assert.equal(answer.outcome, changedGeneration ? OUTCOME.STALE : OUTCOME.UNAVAILABLE,
+            JSON.stringify(answer));
+          assert.equal(answer.partitionId, request.partitionId);
+          assert.equal(answer.phase, request.action);
+          assert.equal(answer.releaseId, request.release.releaseId);
+          if (!changedGeneration) {
+            assert.equal(answer.missingFact, 'committed_membership_witness');
+            assert.equal(answer.reason, COMMITTED_MEMBERSHIP_REFUSAL.MEMBERSHIP_UNREADABLE);
+          }
+          assert.equal(membership.reads(), 1,
+            'a dirty terminal refusal is never relabelled as refreshable stale-applied facts');
+          assert.equal(observationListenerCount(leader), 0);
+          assert.equal(timeSource.pendingTimerCount(), timerBaseline);
+        } catch (error) {
+          failure = error;
+        } finally {
+          failure = await membership.retire(failure,
+            'typed unavailable assertion and membership custody failed');
+          if (port.committedMembershipHandler !== refused) {
+            failure = retainFailure(failure,
+              new Error('typed unavailable test lost membership owner'),
+              'typed unavailable membership restoration failed');
+          }
+          failure = retainDescriptorRestorations(failure,
+            [{owner: port, field: 'committedMembershipHandler',
+              descriptor: membershipDescriptor}],
+            'typed unavailable assertion');
+        }
+        if (failure !== null) throw failure;
+      });
+    }
+  });
+
+test('registry replacement and deletion promptly retire old observers before held facts return',
+  async () => {
+    for (const mutation of ['replace', 'delete']) {
+      await withActualHandler(async ({handler, leader, transport, timeSource}) => {
+        const request = await currentObservationRequest(handler, leader);
+        const membership = deferCommittedMembership(leader);
+        const timerBaseline = timeSource.pendingTimerCount();
+        const oldObservation = track(membership.trackSettlement(`${mutation} observation`,
+          sendRegisteredObservation(handler, transport, request)));
+        await membership.started;
+        let replacement = null;
+        let failure = null;
+        try {
+          ({leader: replacement} = await startLeader());
+          if (mutation === 'replace') {
+            handler.replaceLocalReplicaService(leader.replicaId, replacement);
+          } else {
+            assert.equal(handler.localServices.delete(leader.replicaId), true);
+          }
+          await settle();
+          assert.equal(oldObservation.settled, true,
+            `${mutation} settles through the registered route while facts remain held`);
+          const oldAnswer = await oldObservation.promise;
+          assert.equal(oldAnswer.outcome, OUTCOME.STALE, JSON.stringify(oldAnswer));
+          assert.equal(oldAnswer.partitionId, request.partitionId);
+          assert.equal(oldAnswer.phase, request.action);
+          assert.equal(oldAnswer.releaseId, request.release.releaseId);
+          assert.equal(observationListenerCount(leader), 0);
+          assert.equal(timeSource.pendingTimerCount(), timerBaseline);
+          if (mutation === 'delete') {
+            handler.localServices.set(leader.replicaId, replacement);
+          }
+          const successorRequest = await currentObservationRequest(handler, replacement);
+          const successor = await sendRegisteredObservation(handler, transport,
+            successorRequest);
+          assert.equal(successor.outcome, OUTCOME.OBSERVED, JSON.stringify(successor));
+          assert.deepEqual(successor.generation, successorRequest.target);
+          assert.equal(handler.localServices.get(leader.replicaId), replacement);
+        } catch (error) {
+          failure = error;
+        } finally {
+          failure = await membership.retire(failure,
+            `${mutation} observation and membership gate cleanup failed`);
+          try {
+            await leader.shutdown();
+          } catch (error) {
+            failure = retainFailure(failure, error,
+              `${mutation} observation and old-service cleanup failed`);
+          }
+          if (replacement !== null &&
+              handler.localServices.get(leader.replicaId) !== replacement) {
+            try {
+              await replacement.shutdown();
+            } catch (error) {
+              failure = retainFailure(failure, error,
+                `${mutation} observation and successor cleanup failed`);
+            }
+          }
+        }
+        if (failure !== null) throw failure;
+      });
+    }
+  });
+
+test('synchronous acquisition cancellation retires late subscription and timer handles',
+  async () => {
+    for (const phase of ['subscription', 'timer']) {
+      const clock = new VirtualTimeSource({startMs: 1000});
+      await withActualHandler(async ({handler, leader, transport, timeSource}) => {
+        const request = await currentObservationRequest(handler, leader);
+        const membership = deferCommittedMembership(leader);
+        const portDescriptor = Object.getOwnPropertyDescriptor(leader, 'raft');
+        const actualPort = leader.raft;
+        const registryBaseline = handler.localServices.serviceListeners.size;
+        const serviceBaseline = leader.listenerCount(PARTITION_SERVICE_EVENT.SHUTDOWN_STARTED);
+        let subscriptionAcquisitions = 0;
+        let subscriptionReleases = 0;
+        let timerAcquisitions = 0;
+        let clearedTimer = null;
+        const wrappedPort = Object.freeze({...actualPort,
+          subscribe(eventName, listener) {
+            const unsubscribe = actualPort.subscribe(eventName, listener);
+            subscriptionAcquisitions += 1;
+            if (phase === 'subscription' && subscriptionAcquisitions === 1) {
+              handler.localServices.delete(leader.replicaId);
+            }
+            return () => {
+              subscriptionReleases += 1;
+              if (phase === 'timer' && subscriptionAcquisitions === 4 &&
+                  eventName === RAFT_EVENT.APPLIED_PROGRESS) unsubscribe();
+              return unsubscribe();
+            };
+          }});
+        Object.defineProperty(leader, 'raft', {...portDescriptor, value: wrappedPort});
+        const setTimeoutDescriptor = Object.getOwnPropertyDescriptor(timeSource, 'setTimeout');
+        const clearTimeoutDescriptor = Object.getOwnPropertyDescriptor(timeSource, 'clearTimeout');
+        const actualSetTimeout = timeSource.setTimeout.bind(timeSource);
+        const actualClearTimeout = timeSource.clearTimeout.bind(timeSource);
+        timeSource.setTimeout = (callback, delay, ...args) => {
+          const handle = actualSetTimeout(callback, delay, ...args);
+          timerAcquisitions += 1;
+          if (phase === 'timer') handler.localServices.delete(leader.replicaId);
+          return handle;
+        };
+        timeSource.clearTimeout = (handle) => {
+          clearedTimer = handle;
+          return actualClearTimeout(handle);
+        };
+        const timerBaseline = timeSource.pendingTimerCount();
+        let failure = null;
+        try {
+          const observation = track(membership.trackSettlement(`${phase} acquisition`,
+            sendRegisteredObservation(handler, transport, request)));
+          await settle();
+          assert.equal(observation.settled, true,
+            `${phase} cancellation settles without waiting for a facts read`);
+          assert.equal((await observation.promise).outcome, OUTCOME.STALE);
+          assert.equal(membership.reads(), 0);
+          assert.equal(subscriptionAcquisitions, phase === 'subscription' ? 1 : 4);
+          assert.equal(subscriptionReleases, subscriptionAcquisitions);
+          assert.equal(timerAcquisitions, phase === 'timer' ? 1 : 0);
+          assert.equal(timeSource.pendingTimerCount(), timerBaseline);
+          assert.equal(observationSubscriptionCount(leader), 0);
+          assert.equal(handler.localServices.serviceListeners.size, registryBaseline);
+          assert.equal(leader.listenerCount(PARTITION_SERVICE_EVENT.SHUTDOWN_STARTED),
+            serviceBaseline);
+          if (phase === 'timer') assert.notEqual(clearedTimer, null);
+        } catch (error) {
+          failure = error;
+        } finally {
+          failure = retainDescriptorRestorations(failure, [
+            {owner: leader, field: 'raft', descriptor: portDescriptor},
+            {owner: timeSource, field: 'setTimeout', descriptor: setTimeoutDescriptor},
+            {owner: timeSource, field: 'clearTimeout', descriptor: clearTimeoutDescriptor},
+          ], `${phase} acquisition assertion`);
+          failure = await membership.retire(failure,
+            `${phase} acquisition assertion and membership custody failed`);
+        }
+        if (failure !== null) throw failure;
+      }, {timeSource: clock});
+    }
+  });
+
+test('cleanup debt retains all seven acquired resources on the installing scheduler',
+  () => {
+    const clockA = new VirtualTimeSource({startMs: 1000});
+    const clockB = new VirtualTimeSource({startMs: 2000});
+    return withActualHandler(async ({handler, leader, transport, timeSource}) => {
+      const request = await currentObservationRequest(handler, leader);
+      const membership = deferCommittedMembership(leader);
+      const portDescriptor = Object.getOwnPropertyDescriptor(leader, 'raft');
+      const actualPort = leader.raft;
+      const sentinels = Array.from({length: 7}, (_, index) => index === 6 ? null :
+        new Error(`observation cleanup sentinel ${index + 1}`));
+      const releaseCalls = Array(7).fill(0);
+      let faultsEnabled = true;
+      let reenteredCleanup = false;
+      let timerHandle = null;
+      const wrappedPort = Object.freeze({...actualPort,
+        subscribe(eventName, listener) {
+          const index = [RAFT_EVENT.APPLIED_PROGRESS, RAFT_EVENT.TERM_CHANGE,
+            RAFT_EVENT.LEADER_CHANGE, RAFT_EVENT.MEMBERSHIP_CHANGED].indexOf(eventName);
+          const unsubscribe = actualPort.subscribe(eventName, listener);
+          return () => {
+            releaseCalls[index] += 1;
+            if (index === 0 && !reenteredCleanup) {
+              reenteredCleanup = true;
+              handler.localServices.set(leader.replicaId, leader);
+              handler.localServices.delete(leader.replicaId);
+            }
+            if (faultsEnabled) throw sentinels[index];
+            return unsubscribe();
+          };
+        }});
+      Object.defineProperty(leader, 'raft', {...portDescriptor, value: wrappedPort});
+      const registry = handler.localServices;
+      const registrySubscribeDescriptor = Object.getOwnPropertyDescriptor(
+        registry, 'subscribeServiceChanges');
+      const actualRegistrySubscribe = registry.subscribeServiceChanges.bind(registry);
+      registry.subscribeServiceChanges = (listener) => {
+        const unsubscribe = actualRegistrySubscribe(listener);
+        return () => {
+          releaseCalls[4] += 1;
+          if (faultsEnabled) throw sentinels[4];
+          return unsubscribe();
+        };
+      };
+      const offDescriptor = Object.getOwnPropertyDescriptor(leader, 'off');
+      const actualOff = leader.off.bind(leader);
+      leader.off = (eventName, listener) => {
+        if (eventName === PARTITION_SERVICE_EVENT.SHUTDOWN_STARTED) {
+          releaseCalls[5] += 1;
+          if (faultsEnabled) throw sentinels[5];
+        }
+        return actualOff(eventName, listener);
+      };
+      const clearDescriptor = Object.getOwnPropertyDescriptor(timeSource, 'clearTimeout');
+      const actualClear = timeSource.clearTimeout.bind(timeSource);
+      timeSource.clearTimeout = (handle) => {
+        releaseCalls[6] += 1;
+        assert.equal(handle, timerHandle, 'cleanup retains the exact A-owned timer handle');
+        if (faultsEnabled) throw sentinels[6];
+        return actualClear(handle);
+      };
+      const setDescriptor = Object.getOwnPropertyDescriptor(timeSource, 'setTimeout');
+      const actualSet = timeSource.setTimeout.bind(timeSource);
+      timeSource.setTimeout = (...args) => {
+        timerHandle = actualSet(...args);
+        return timerHandle;
+      };
+      let clockBClears = 0;
+      const clockBClear = clockB.clearTimeout.bind(clockB);
+      clockB.clearTimeout = (handle) => {
+        clockBClears += 1;
+        return clockBClear(handle);
+      };
+      const timerBaseline = timeSource.pendingTimerCount();
+      const registryBaseline = registry.serviceListeners.size;
+      const serviceBaseline = leader.listenerCount(PARTITION_SERVICE_EVENT.SHUTDOWN_STARTED);
+      let failure = null;
+      try {
+        const observation = track(membership.trackSettlement('cleanup-debt observation',
+          sendRegisteredObservation(handler, transport, request)));
+        await membership.started;
+        assert.equal(observationSubscriptionCount(leader), 4);
+        assert.equal(registry.serviceListeners.size, registryBaseline + 1);
+        assert.equal(leader.listenerCount(PARTITION_SERVICE_EVENT.SHUTDOWN_STARTED),
+          serviceBaseline + 1);
+        assert.equal(timeSource.pendingTimerCount(), timerBaseline + 1);
+        handler.timeSource = clockB;
+        assert.equal(registry.delete(leader.replicaId), true);
+        await settle();
+        assert.equal(observation.settled, true);
+        const answer = await observation.promise;
+        assert.equal(answer.outcome, OUTCOME.UNAVAILABLE, JSON.stringify(answer));
+        assert.equal(answer.missingFact, 'replica_release_reply');
+        assert.equal(answer.reason, PARTICIPANT_RELEASE_REASON.CLEANUP_INCOMPLETE);
+        assert.equal(participantReleaseAdmissionOf(leader).state, ADMISSION.CLOSED);
+        assert.deepEqual(releaseCalls.map((count) => count > 0), Array(7).fill(true),
+          'every acquired resource is attempted despite independent failures');
+        assert.equal(reenteredCleanup, true,
+          'one owned release synchronously reenters the same lifecycle record');
+        assert.equal(releaseCalls[0], 1,
+          'a reentrant lifecycle callback cannot release the active slot twice');
+        const callsBeforeJoin = [...releaseCalls];
+
+        const joined = track(sendRegisteredObservation(handler, transport, request));
+        await settle();
+        assert.equal(joined.settled, true);
+        assert.deepEqual(await joined.promise, answer,
+          'a join of retained cleanup debt keeps the stored terminal answer');
+        assert.equal(observationSubscriptionCount(leader), 4);
+        assert.equal(timeSource.pendingTimerCount(), timerBaseline + 1);
+        for (let index = 0; index < releaseCalls.length; index += 1) {
+          assert.ok(releaseCalls[index] <= callsBeforeJoin[index] + 1,
+            'a join retries each retained resource at most once');
+        }
+        failure = await membership.retire(failure,
+          'cleanup-debt membership custody failed before handler shutdown');
+        let shutdownError = null;
+        try {
+          await handler.shutdown();
+        } catch (error) {
+          shutdownError = error;
+        }
+        assert.ok(shutdownError instanceof AggregateError);
+        const surfaced = flattenedErrors(shutdownError);
+        for (const sentinel of sentinels) {
+          assert.equal(surfaced.filter((error) => error === sentinel).length, 1,
+            'handler shutdown retains each first resource error exactly once');
+        }
+        faultsEnabled = false;
+        await handler.shutdown();
+        assert.equal(clockBClears, 0,
+          'the current handler clock never clears an A-owned observation');
+        assert.equal(observationSubscriptionCount(leader), 0);
+        assert.equal(timeSource.pendingTimerCount(), timerBaseline);
+        assert.equal(registry.serviceListeners.size, registryBaseline);
+        assert.equal(leader.listenerCount(PARTITION_SERVICE_EVENT.SHUTDOWN_STARTED),
+          serviceBaseline);
+      } catch (error) {
+        failure = retainFailure(failure, error, 'cleanup-debt assertion failed');
+      } finally {
+        faultsEnabled = false;
+        handler.timeSource = timeSource;
+        failure = retainDescriptorRestorations(failure, [
+          {owner: leader, field: 'raft', descriptor: portDescriptor},
+          {owner: registry, field: 'subscribeServiceChanges',
+            descriptor: registrySubscribeDescriptor},
+          {owner: leader, field: 'off', descriptor: offDescriptor},
+          {owner: timeSource, field: 'clearTimeout', descriptor: clearDescriptor},
+          {owner: timeSource, field: 'setTimeout', descriptor: setDescriptor},
+        ], 'cleanup-debt assertion');
+        failure = await membership.retire(failure,
+          'cleanup-debt final membership custody failed');
+      }
+      if (failure !== null) throw failure;
+    }, {timeSource: clockA});
+  });
 
 test('host-held recovery uses the fixed owner cadence and never reads retryAfterMs',
   async () => withRecoveryHandler(async ({handler, timeSource, reports}) => {
@@ -671,7 +1279,8 @@ test('service replacement during awaited facts cannot reopen the stale object',
     let replacement = null;
     let failure = null;
     try {
-      const resume = resumeParticipantCutoverAdmission(handler, leader, request);
+      const resume = membership.trackSettlement('resume',
+        resumeParticipantCutoverAdmission(handler, leader, request));
       await membership.started;
       ({leader: replacement} = await startLeader());
       handler.localServices.set(leader.replicaId, replacement);
@@ -683,7 +1292,8 @@ test('service replacement during awaited facts cannot reopen the stale object',
     } catch (error) {
       failure = error;
     } finally {
-      membership.release();
+      failure = await membership.retire(failure,
+        'replacement-race assertion and membership gate cleanup failed');
       if (handler.localServices.get(leader.replicaId) !== leader) {
         try {
           await leader.shutdown();

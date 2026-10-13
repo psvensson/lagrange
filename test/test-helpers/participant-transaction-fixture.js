@@ -16,6 +16,7 @@ import Database from 'better-sqlite3';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {RAFT_EVENT} from '../../src/raft/raft-operation-port-constants.js';
 import {deepFreeze} from '../../src/raft/raft-operation-port.js';
 import {deriveRaftRsPeerId} from '../../src/raft/raft-rs-peer-identity.js';
 import {raftRsConfStateKey} from '../../src/raft/raft-rs-conf-state-key.js';
@@ -32,11 +33,19 @@ import {readCommittedStatementOutcome} from
   '../../src/partition/partition-committed-statement-outcome.js';
 import {releaseIdentityOf, releaseMemberIds} from
   '../../src/partition/partition-participant-release-contract.js';
-import {readParticipantReleaseFacts, resumeParticipantCutoverAdmission} from
+import {raiseParticipantCutoverPause, readParticipantReleaseFacts,
+  resumeParticipantCutoverAdmission} from
   '../../src/partition/partition-participant-transaction-pause.js';
 import {enableParticipantTransactionAdmission} from
   '../../src/partition/partition-participant-transaction-request.js';
-import {PARTICIPANT_CUTOVER_OUTCOME} from
+import {
+  PARTICIPANT_CUTOVER_BOUND,
+  PARTICIPANT_CUTOVER_OUTCOME,
+  PARTICIPANT_RELEASE_ACTION,
+  PARTICIPANT_RELEASE_RESULT_FIELD,
+  PARTICIPANT_RELEASE_ROUTE_SUFFIX,
+  PARTICIPANT_RELEASE_TYPE,
+} from
   '../../src/partition/partition-participant-transaction-cutover-constants.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
   '../../src/partition/partition-write-kernel.js';
@@ -394,47 +403,100 @@ function createReplica(replicaId, extra = {}) {
       {transactionDeterminismSelfCheck: extra.determinismSelfCheck} : {}),
   }, new ControllableConsensusPort());
 }
+
+async function retireFixtureParticipants(replicas, failure, message) {
+  try {
+    await shutdownAll(...replicas);
+  } catch (error) {
+    return retainFixtureParticipantFailure(failure, error, message);
+  }
+  return failure;
+}
+
 // Start a replica; unless `extra.generationOrigin` is false, a fresh one
 // applies the partition's generation origin first, at GENERATION_ORIGIN_INDEX
 // (transaction admission enabled on the partition, design 0.0.13).
 async function startReplica(replicaId, extra) {
   const replica = createReplica(replicaId, extra);
-  await replica.initialize();
-  if (extra?.generationOrigin !== false && originOf(replica) === null) {
-    replica.controllablePort.committedIndex = GENERATION_ORIGIN_INDEX - 1;
-    applyCommitted(replica, originCommandOf());
+  try {
+    await replica.initialize();
+    if (extra?.generationOrigin !== false && originOf(replica) === null) {
+      replica.controllablePort.committedIndex = GENERATION_ORIGIN_INDEX - 1;
+      applyCommitted(replica, originCommandOf());
+    }
+    return replica;
+  } catch (error) {
+    throw await retireFixtureParticipants([replica], error,
+      'fixture participant startup and service cleanup failed');
   }
-  return replica;
 }
 async function startLeader(extra) {
   const leader = await startReplica(REPLICAS[0], extra);
-  leader.role = 'leader';
-  leader.isLeader = true;
-  leader.leaderId = leader.replicaId;
-  leader.controllablePort.setRole(RAFT_ROLE.LEADER);
-  const proposed = [];
-  leader.controllablePort.setProposeHandler(async (entry) => {
-    proposed.push({...entry});
-  });
-  if (extra?.generationOrigin !== false && extra?.releaseAdmission !== false) {
-    await resumeFixtureParticipantAdmission(leader);
+  try {
+    leader.role = 'leader';
+    leader.isLeader = true;
+    leader.leaderId = leader.replicaId;
+    leader.controllablePort.setRole(RAFT_ROLE.LEADER);
+    const proposed = [];
+    leader.controllablePort.setProposeHandler(async (entry) => {
+      proposed.push({...entry});
+    });
+    if (extra?.generationOrigin !== false && extra?.releaseAdmission !== false) {
+      await resumeFixtureParticipantAdmission(leader);
+    }
+    return {leader, proposed};
+  } catch (error) {
+    throw await retireFixtureParticipants([leader], error,
+      'fixture participant leader setup and service cleanup failed');
   }
-  return {leader, proposed};
+}
+
+function setFixtureParticipantMembership(leader, memberIds,
+  membershipGenerationIndex) {
+  const port = leader.controllablePort;
+  if (!port || !Array.isArray(memberIds) || memberIds.length === 0 ||
+      !Number.isSafeInteger(membershipGenerationIndex) ||
+      membershipGenerationIndex < 0) {
+    throw new Error('fixture participant membership requires current members and generation');
+  }
+  const identities = {};
+  const voters = memberIds.map((replicaId) => {
+    const peerId = deriveRaftRsPeerId(replicaId);
+    identities[peerId] = replicaId;
+    return peerId;
+  });
+  const confState = deepFreeze({voters, votersOutgoing: [], learners: [],
+    learnersNext: []});
+  port.fixtureParticipantMembership = deepFreeze({confState, identities});
+  port.configurationKey = raftRsConfStateKey(confState);
+  port.membershipGenerationIndex = membershipGenerationIndex;
+}
+
+function changeFixtureParticipantMembership(leader, replicaId = REPLICAS[1]) {
+  const current = leader.controllablePort?.fixtureParticipantMembership;
+  if (!current) throw new Error('fixture participant membership is not installed');
+  const memberIds = current.confState.voters.map((peerId) =>
+    current.identities[peerId]);
+  if (!memberIds.includes(replicaId)) memberIds.push(replicaId);
+  setFixtureParticipantMembership(leader, memberIds,
+    leader.controllablePort.committedIndex);
+  return deepFreeze({configurationKey: leader.controllablePort.configurationKey,
+    membershipGenerationIndex: leader.controllablePort.membershipGenerationIndex,
+    memberIds: [...memberIds]});
 }
 
 async function resumeFixtureParticipantAdmission(leader) {
   const port = leader.controllablePort;
   if (port) {
-    const peerId = deriveRaftRsPeerId(leader.replicaId);
-    const confState = {voters: [peerId], votersOutgoing: [], learners: [], learnersNext: []};
-    const configurationKey = raftRsConfStateKey(confState);
-    port.configurationKey = configurationKey;
-    port.membershipGenerationIndex = port.committedIndex;
+    setFixtureParticipantMembership(leader, [leader.replicaId],
+      port.committedIndex);
     port.committedMembershipHandler = () => deepFreeze({
       kind: COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED,
-      ...confState, identities: {[peerId]: leader.replicaId},
+      ...port.fixtureParticipantMembership.confState,
+      identities: port.fixtureParticipantMembership.identities,
       appliedIndex: port.committedIndex, commitIndex: port.committedIndex,
-      configurationKey, membershipGenerationIndex: port.committedIndex,
+      configurationKey: port.configurationKey,
+      membershipGenerationIndex: port.membershipGenerationIndex,
       term: port.term, leaderId: leader.replicaId, gateOpen: true,
     });
   }
@@ -472,6 +534,136 @@ async function resumeFixtureParticipantAdmission(leader) {
 function participantFixtureHandlerOf(service) {
   return {nodeId: service.nodeId, ownerIncarnation: 1,
     localServices: new Map([[service.replicaId, service]])};
+}
+
+function fixtureParticipantObservationListenerCount(service) {
+  return service.controllablePort.listeners
+    .get(RAFT_EVENT.APPLIED_PROGRESS)?.size ?? 0;
+}
+
+function retainFixtureParticipantFailure(current, next, message) {
+  if (current === null) return next;
+  if (current === next) return current;
+  return new AggregateError([current, next], message);
+}
+
+function deferFixtureParticipantMembership(service) {
+  const port = service.controllablePort;
+  const original = port?.committedMembershipHandler;
+  if (typeof original !== 'function') {
+    throw new Error('fixture participant membership owner is not installed');
+  }
+  const started = Promise.withResolvers();
+  const continuation = Promise.withResolvers();
+  const finished = Promise.withResolvers();
+  const settlements = [];
+  let reads = 0;
+  const deferred = async (...args) => {
+    reads += 1;
+    started.resolve();
+    try {
+      await continuation.promise;
+      return await original(...args);
+    } finally {
+      finished.resolve();
+    }
+  };
+  port.committedMembershipHandler = deferred;
+  const release = continuation.resolve;
+  const restore = () => {
+    if (port.committedMembershipHandler === original) return;
+    if (port.committedMembershipHandler !== deferred) {
+      throw new Error('fixture participant membership gate lost exact ownership');
+    }
+    port.committedMembershipHandler = original;
+  };
+  const trackSettlement = (owner, settlement) => {
+    const promise = Promise.resolve(settlement);
+    const observed = promise.then(
+      (value) => ({status: 'fulfilled', value}),
+      (reason) => ({status: 'rejected', reason}),
+    );
+    settlements.push(Object.freeze({owner, observed}));
+    return promise;
+  };
+  const retire = async (failure = null,
+    message = 'fixture participant membership custody failed') => {
+    let retained = failure;
+    try {
+      release();
+    } catch (error) {
+      retained = retainFixtureParticipantFailure(retained, error,
+        `${message}: release failed`);
+    }
+    for (const {owner, observed} of settlements) {
+      const answer = await observed;
+      if (answer.status === 'rejected') {
+        retained = retainFixtureParticipantFailure(retained, answer.reason,
+          `${message}: ${owner} settlement failed`);
+      }
+    }
+    if (reads > 0) {
+      try {
+        await finished.promise;
+      } catch (error) {
+        retained = retainFixtureParticipantFailure(retained, error,
+          `${message}: membership settlement failed`);
+      }
+    }
+    try {
+      restore();
+    } catch (error) {
+      retained = retainFixtureParticipantFailure(retained, error,
+        `${message}: restore failed`);
+    }
+    return retained;
+  };
+  return Object.freeze({started: started.promise, finished: finished.promise,
+    release, reads: () => reads, restore, trackSettlement, retire});
+}
+
+async function fixtureParticipantObservationRequest(handler, service, fields = {}) {
+  raiseParticipantCutoverPause(service);
+  const facts = await readParticipantReleaseFacts(handler, service);
+  if (facts.outcome !== PARTICIPANT_CUTOVER_OUTCOME.OBSERVED) {
+    throw new Error(`fixture participant facts unavailable: ${JSON.stringify(facts)}`);
+  }
+  const release = releaseIdentityOf({partitionId: service.partitionId,
+    targetBuildDigest: facts.buildDigest,
+    configurationKey: facts.membership.configurationKey,
+    membershipGenerationIndex: facts.membership.membershipGenerationIndex});
+  if (release === null) throw new Error('fixture participant release identity unavailable');
+  const deadlineAtMs = fields.deadlineAtMs ?? handler.timeSource.now() + 30000;
+  return {type: PARTICIPANT_RELEASE_TYPE, partitionId: service.partitionId,
+    replicaId: service.replicaId, release,
+    attempt: {leaderReplicaId: facts.leaderReplicaId,
+      leaderLifecycleIncarnation: facts.generation.lifecycleIncarnation,
+      term: facts.membership.term, deadlineAtMs},
+    target: facts.generation,
+    action: PARTICIPANT_RELEASE_ACTION.OBSERVE_APPLIED_POSITION,
+    origin: facts.origin,
+    deadlineAtMs,
+    observationDeadlineAtMs: fields.observationDeadlineAtMs ??
+      Math.min(deadlineAtMs,
+        handler.timeSource.now() + PARTICIPANT_CUTOVER_BOUND.REQUEST_TIMEOUT_MS),
+    ...fields};
+}
+
+async function sendRegisteredFixtureParticipantObservation(handler, transport,
+  request) {
+  const response = await sendRegisteredFixtureParticipantMessage(handler, transport,
+    request);
+  return response[PARTICIPANT_RELEASE_RESULT_FIELD];
+}
+
+async function sendRegisteredFixtureParticipantMessage(handler, transport,
+  payload, correlationId = 'fixture-participant-release') {
+  const registered = transport.getRegisteredHandler(
+    `${handler.nodeId}${PARTICIPANT_RELEASE_ROUTE_SUFFIX}`);
+  if (typeof registered !== 'function') {
+    throw new Error('fixture participant release route is not registered');
+  }
+  return registered({payload, correlationId});
 }
 
 function sameExactMemberIds(actual, expected) {
@@ -545,22 +737,33 @@ async function resumeFixtureParticipantGroupAdmission(services, waitFor) {
   return {origin, release, census, outcomes};
 }
 async function shutdownAll(...replicas) {
-  for (const replica of replicas) {
-    try {
-      await replica?.shutdown();
-    } catch {
-      // The facts were measured before shutdown.
-    }
+  const owned = replicas.filter((replica) => replica != null);
+  const settled = await Promise.allSettled(owned.map((replica) =>
+    replica.shutdown()));
+  const failures = settled.flatMap((answer, index) =>
+    answer.status === 'rejected' ?
+      [Object.freeze({replicaId: owned[index].replicaId, error: answer.reason})] : []);
+  if (failures.length > 0) {
+    const error = new AggregateError(failures.map(({error: cause}) => cause),
+      'fixture participant shutdown failed');
+    error.shutdownFailures = failures;
+    throw error;
   }
 }
 // Run `measure(leader, proposed)` on a fresh fixture leader and shut it down.
 async function onFixtureLeader(measure, extra) {
   const {leader, proposed} = await startLeader(extra);
+  let result;
+  let failure = null;
   try {
-    return await measure(leader, proposed);
-  } finally {
-    await shutdownAll(leader);
+    result = await measure(leader, proposed);
+  } catch (error) {
+    failure = error;
   }
+  failure = await retireFixtureParticipants([leader], failure,
+    'fixture participant assertion and service cleanup failed');
+  if (failure !== null) throw failure;
+  return result;
 }
 // The configuration and logging singletons a participant witness resets
 // around each test: fresh before it, cleared after it.
@@ -696,12 +899,17 @@ async function commitOrdinaryWrite(leader, proposed, entryId, row) {
 }
 async function stagedLeaderTransaction(identity, rows, extra) {
   const {leader, proposed} = await startLeader(extra);
-  const begun = await send(leader, beginMessage(identity));
-  const staged = [];
-  for (const row of rows) {
-    staged.push(await send(leader, queryMessage(identity, INSERT_SQL, [row.id, row.value])));
+  try {
+    const begun = await send(leader, beginMessage(identity));
+    const staged = [];
+    for (const row of rows) {
+      staged.push(await send(leader, queryMessage(identity, INSERT_SQL, [row.id, row.value])));
+    }
+    return {leader, proposed, begun, staged};
+  } catch (error) {
+    throw await retireFixtureParticipants([leader], error,
+      'fixture participant staging and service cleanup failed');
   }
-  return {leader, proposed, begun, staged};
 }
 
 
@@ -735,16 +943,24 @@ const notCommitted = (state) => ({outcome: PARTICIPANT_COMMIT_OUTCOME.NOT_COMMIT
 
 // Run `measure(replica)` on two fresh follower replicas and return both facts.
 async function onTwoReplicas(measure) {
-  const replicas = [await startReplica(REPLICAS[1]), await startReplica(REPLICAS[2])];
+  const replicas = [];
+  let result;
+  let failure = null;
   try {
+    replicas.push(await startReplica(REPLICAS[1]));
+    replicas.push(await startReplica(REPLICAS[2]));
     const perReplica = [];
     for (const replica of replicas) {
       perReplica.push(await measure(replica));
     }
-    return perReplica;
-  } finally {
-    await shutdownAll(...replicas);
+    result = perReplica;
+  } catch (error) {
+    failure = error;
   }
+  failure = await retireFixtureParticipants(replicas, failure,
+    'two-replica assertion and service cleanup failed');
+  if (failure !== null) throw failure;
+  return result;
 }
 // Record `selectSql` (one row) inside every rs-raft applied-state write of the
 // same application transaction, into tx1_v3_probe.
@@ -764,17 +980,23 @@ const GENERATION_SQL =
 async function pendingPrepareAnswer(extra, interrupt) {
   const tx = identityOf(`a11-${extra?.label ?? 'x'}`);
   const {leader, proposed} = await stagedLeaderTransaction(tx, [ROW], extra);
+  let result;
+  let failure = null;
   try {
     const prepare = track(send(leader, prepareMessage(tx)));
     const prepareCommand = await awaitProposal(proposed, isPrepareCommand);
     const settledBefore = prepare.settled;
     const interruption = prepareCommand ? interrupt(leader, prepareCommand) : null;
     await settleTicks();
-    return {prepareProposed: prepareCommand !== null, settledBefore, interruption,
+    result = {prepareProposed: prepareCommand !== null, settledBefore, interruption,
       answer: prepare.settled ? pick(prepare.value, UNKNOWN_FIELDS) : null};
-  } finally {
-    await shutdownAll(leader);
+  } catch (error) {
+    failure = error;
   }
+  failure = await retireFixtureParticipants([leader], failure,
+    'pending prepare assertion and service cleanup failed');
+  if (failure !== null) throw failure;
+  return result;
 }
 
 const commitDecision = (tx, prepareCommand) =>
@@ -797,6 +1019,12 @@ async function decidedOnTwoReplicas(tx, operations, setup) {
 }
 
 export {
+  changeFixtureParticipantMembership,
+  deferFixtureParticipantMembership,
+  fixtureParticipantObservationListenerCount,
+  fixtureParticipantObservationRequest,
+  sendRegisteredFixtureParticipantMessage,
+  sendRegisteredFixtureParticipantObservation,
   resumeFixtureParticipantGroupAdmission,
   resumeFixtureParticipantAdmission,
   COMMITTED,
@@ -875,6 +1103,7 @@ export {
   removeStorageFault,
   rowCount,
   send,
+  settle,
   settleTicks,
   sha256,
   shutdownAll,
