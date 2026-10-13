@@ -46,7 +46,7 @@ jobs:
           from pathlib import Path
           p=Path('src/bootstrap/shared/message-group-transport-handler.js')
           s=p.read_text()
-          anchor='  requireReplicaHandlerRetirement(reported);\\n'
+          anchor='  requireReplicaHandlerRetirement(reported);'
           assert s.count(anchor)==1, 'exact guard removal must be witnessed'
           p.write_text(s.replace(anchor, '', 1))
           PY
