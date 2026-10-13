@@ -42,7 +42,8 @@ import {
   originCommandOf, originOf, outcomeOf, pick, plantAppliedStateFailure, prepareCommandOf,
   prepareMessage, queryMessage, removeAppliedStateFailure, rowCount, send, settleTicks,
   sha256, shutdownAll, startLeader, startReplica, statementOutcomeOf, statementState,
-  temporaryDbPath, track, transactionOperationOutcomes, txMessage,
+  resumeFixtureParticipantAdmission, temporaryDbPath, track, transactionOperationOutcomes,
+  txMessage,
 } from '../test-helpers/participant-transaction-fixture.js';
 
 // The admission owner's codes for the two commands (partition-participant-
@@ -57,6 +58,7 @@ const CODE = Object.freeze({
   IDENTITY_MISMATCH: 'participant_transaction_identity_mismatch',
   NOT_ACTIVE: 'participant_transaction_not_active',
   ORIGIN_PENDING: 'participant_transaction_generation_origin_pending',
+  CUTOVER_PAUSED: 'participant_transaction_cutover_paused',
 });
 // The REFUSED causes these witnesses name (design 2.3, 6.2, 0.0.13).
 const CAUSE = Object.freeze({
@@ -488,9 +490,9 @@ test('TX1 inc3 origin: a database written before the generation origin existed, 
   }
 });
 
-test('TX1 inc3 origin: until the generation origin has applied on the leader a BEGIN carrying ' +
-  'a transactionId is refused generation_origin_pending; enabling transactions proposes the ' +
-  'origin once, and BEGIN is admitted once it has applied', () => onLeader(
+test('TX1 inc3 origin and release: enabling proposes the origin once but BEGIN remains ' +
+  'cutover_paused before and after its commit until the existing release owner resumes ' +
+  'the current controlled-port observation', () => onLeader(
   async (leader, proposed) => {
     const tx = identityOf('o2');
     const facts = {begin: pick(await send(leader, beginMessage(tx)), ['success', 'failureCode']),
@@ -504,12 +506,16 @@ test('TX1 inc3 origin: until the generation origin has applied on the leader a B
     facts.again = pick(await enableParticipantTransactionAdmission(leader),
       ['success', 'alreadyEnabled', 'originIndex']);
     facts.proposed = proposed.map((entry) => entry.type);
+    facts.originAlone = pick(await send(leader, beginMessage(tx)), ['success', 'failureCode']);
+    await resumeFixtureParticipantAdmission(leader);
     facts.beginAfter = pick(await send(leader, beginMessage(tx)), ['success', 'state']);
-    assert.deepEqual(facts, {begin: {success: false, failureCode: CODE.ORIGIN_PENDING},
+    assert.deepEqual(facts, {begin: {success: false, failureCode: CODE.CUTOVER_PAUSED},
       stagingOpen: false, answeredBeforeApply: false, originApply: null,
       enabled: {success: true, originIndex: 1, originTerm: 1},
       again: {success: true, alreadyEnabled: true, originIndex: 1},
-      proposed: [V3.GENERATION_ORIGIN_COMMAND], beginAfter: {success: true, state: ACTIVE}},
+      proposed: [V3.GENERATION_ORIGIN_COMMAND],
+      originAlone: {success: false, failureCode: CODE.CUTOVER_PAUSED},
+      beginAfter: {success: true, state: ACTIVE}},
     'no transaction reads a base before the origin it counts from is committed here');
   }, {generationOrigin: false}));
 

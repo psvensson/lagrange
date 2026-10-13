@@ -20,6 +20,8 @@ import {
   PARTICIPANT_TRANSACTION_FAILURE_CODE as CODE,
 } from './partition-participant-transaction-constants.js';
 
+import {isExecutionEnvelope} from './partition-transaction-execution-envelope.js';
+
 const DECISIONS = Object.freeze(Object.values(DECISION));
 
 function isNonEmptyString(value) {
@@ -353,7 +355,10 @@ function isPinnedParticipantCommand(command) {
   if (command.type === COMMAND.GENERATION_ORIGIN) {
     return isPinnedGenerationOrigin(command);
   }
-  if (!carriesPinnedIdentity(command)) {
+  // Only preproposal admission asks this predicate. Already-committed apply
+  // retains diagnostic-only envelope handling, including historical records.
+  if (!carriesPinnedIdentity(command) ||
+      !isExecutionEnvelope(command.executionEnvelope)) {
     return false;
   }
   return command.type === COMMAND.PREPARE ?
