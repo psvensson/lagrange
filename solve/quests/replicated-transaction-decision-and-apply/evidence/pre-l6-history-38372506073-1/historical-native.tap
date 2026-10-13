@@ -1,0 +1,17 @@
+TAP version 13
+# Subtest: pinned pre-L6: acknowledged LOCAL_STAGING PREPARE disappears on process loss
+ok 1 - pinned pre-L6: acknowledged LOCAL_STAGING PREPARE disappears on process loss
+  ---
+  duration_ms: 456.967277
+  type: 'test'
+  ...
+# {"kind":"TX1_PRE_L6_PROCESS_LOSS","sourceSha":"2a21e39cec4bbba941dafc2034b1bc038d9e31db","legacyBeginAdmitted":true,"oldPrepareAcknowledged":true,"preparedState":"local-staging","sqliteTransactionHeldUntilKill":true,"preKillConsensusProposals":0,"historicalPreparedReconstructed":false,"uncommittedWriteSurvived":false,"crossBuildMigrationCertified":false,"requiredAction":"quiesce and settle admitted legacy sessions before cutover"}
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 756.720416

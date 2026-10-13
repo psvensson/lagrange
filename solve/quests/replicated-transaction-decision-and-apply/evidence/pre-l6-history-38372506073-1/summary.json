@@ -1,0 +1,34 @@
+{
+  "oldSourceSha": "2a21e39cec4bbba941dafc2034b1bc038d9e31db",
+  "historicalEvidenceCommit": "e6b444b70f8da4ddd530e0edf2fc824b52cbdc67",
+  "checks": {
+    "exact-historical-source": true,
+    "genuine-legacy-admission": true,
+    "local-staging-prepared": true,
+    "no-consensus-prepare": true,
+    "real-process-loss": true,
+    "lost-after-crash": true,
+    "scope-honest": true,
+    "native-one-case": true,
+    "exit-green": true
+  },
+  "receipt": {
+    "kind": "TX1_PRE_L6_PROCESS_LOSS",
+    "sourceSha": "2a21e39cec4bbba941dafc2034b1bc038d9e31db",
+    "legacyBeginAdmitted": true,
+    "oldPrepareAcknowledged": true,
+    "preparedState": "local-staging",
+    "sqliteTransactionHeldUntilKill": true,
+    "preKillConsensusProposals": 0,
+    "historicalPreparedReconstructed": false,
+    "uncommittedWriteSurvived": false,
+    "crossBuildMigrationCertified": false,
+    "requiredAction": "quiesce and settle admitted legacy sessions before cutover"
+  },
+  "genuineHistoricalLegacySessionProved": true,
+  "historicalMigrationSafetyProved": false,
+  "legacyRetirementAuthorized": false,
+  "sourceCurrentCandidateCertified": false,
+  "mergeReady": false,
+  "scope": "pre-L6 controlled consensus port, production legacy request wire, real SQLite, SIGKILL and restarted old owner; establishes volatile LOCAL_STAGING loss, not cross-build migration or native quorum"
+}
