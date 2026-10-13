@@ -20,8 +20,11 @@ import {MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR} from
   '../../src/message-group/message-group-service-row-owner.js';
 import {activateMessageGroupServiceRows} from
   '../../src/bootstrap/shared/message-group-service-activation.js';
-import {retireMessageGroupTransportHandler} from
-  '../../src/bootstrap/shared/message-group-transport-handler.js';
+import {
+  initializeRegisteredMessageGroup,
+  messageGroupCreationAlreadySettled,
+  retireMessageGroupTransportHandler,
+} from '../../src/bootstrap/shared/message-group-transport-handler.js';
 import {REPLICA_HANDLER_RETIREMENT_OUTCOME} from
   '../../src/node/replica-transport-handler-identity.js';
 import {runSerializedReplicaMutation} from
@@ -134,6 +137,77 @@ test('MG retirement refuses completion without exact handler identity API',
     t.equal(errors.length, 1, 'the same owner reports the typed refusal');
     t.equal(errors[0].evidence.replicaId, REPLICA_ID);
   });
+
+for (const failRetirement of [false, true]) {
+  test('MG creation failure ' +
+    (failRetirement ? 'retains unretired handler under host custody' :
+      'retires registered handler before returning the primary refusal'),
+  async (t) => {
+    const primary = Object.assign(new Error('refused during native initialization'),
+      {code: 'CONSENSUS_INIT_REFUSED'});
+    const registered = new Map();
+    const address = ADDRESS;
+    const handler = () => {};
+    const router = {
+      register(key, callback) {
+        registered.set(key, callback);
+      },
+      ...(failRetirement ? {} : {
+        getRegisteredHandler(key) {
+          return registered.get(key) || null;
+        },
+        unregisterExact(key, callback) {
+          if (registered.get(key) !== callback) return false;
+          registered.delete(key);
+          return true;
+        },
+      }),
+    };
+    router.register(address, handler);
+    const services = new Map();
+    let closes = 0;
+    const service = {
+      transportHandler: handler,
+      logger: {error() {}},
+      initialized: false,
+      isShutdown: false,
+      async initialize() {
+        throw primary;
+      },
+      async shutdown() {
+        closes += 1;
+        this.isShutdown = true;
+      },
+    };
+    await t.rejects(initializeRegisteredMessageGroup({
+      messageGroup: service, messageGroupServices: services,
+      messageRouter: router, address, replicaId: REPLICA_ID,
+    }), (error) => {
+      if (failRetirement) {
+        t.equal(error.cause, primary,
+          'the original startup refusal remains the primary error');
+      } else {
+        t.equal(error, primary,
+          'successful cleanup propagates the same error object');
+      }
+      return true;
+    });
+    t.equal(closes, 1, 'the exact failed runtime receives shutdown');
+    if (failRetirement) {
+      t.equal(services.get(REPLICA_ID), service,
+        'failed cleanup is reachable through the existing host map');
+      t.equal(registered.get(address), handler,
+        'identity refusal never removes the callback by address');
+      t.throws(() => messageGroupCreationAlreadySettled(services, REPLICA_ID),
+        {code: 'MESSAGE_GROUP_CREATE_CLEANUP_REQUIRED'},
+        'a cleanup-debt object must not masquerade as CREATED');
+    } else {
+      t.equal(services.has(REPLICA_ID), false,
+        'completed cleanup never publishes a failed service');
+      t.equal(registered.has(address), false);
+    }
+  });
+}
 
 test('MG N2 (1): the exact generation handler is registered -> ACTIVE',
   async (t) => {
