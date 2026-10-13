@@ -29,14 +29,14 @@ jobs:
           set -euo pipefail
           mkdir -p "$OUT"
           git rev-parse HEAD > "$OUT/candidate-sha.txt"
-          git rev-parse HEAD^ > "$OUT/baseline-sha.txt"
+          git rev-parse HEAD^^^ > "$OUT/baseline-sha.txt"
           npm ci > "$OUT/install.log" 2>&1
       - name: Parent source must fail the unchanged race witness
         shell: bash
         run: |
           set -euo pipefail
           BASE="$RUNNER_TEMP/claim-race-baseline"
-          git worktree add --detach "$BASE" HEAD^
+          git worktree add --detach "$BASE" HEAD^^^
           cp "$TEST" "$BASE/$TEST"
           ln -s "$GITHUB_WORKSPACE/node_modules" "$BASE/node_modules"
           set +e
