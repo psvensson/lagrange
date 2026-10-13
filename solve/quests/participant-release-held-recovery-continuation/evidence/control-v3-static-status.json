@@ -1,0 +1,42 @@
+[
+  {
+    "name": "decision-boundaries",
+    "exe": "node",
+    "args": [
+      "scripts/check-guideline-decision-boundaries.js",
+      "src/node/replica-handler-release-recovery.js",
+      "src/partition/partition-participant-transaction-pause.js"
+    ],
+    "inputSha": "c2307d3dc827d8c1293ad3a87ed8f3753f324b8b",
+    "status": 1,
+    "signal": null,
+    "startedAt": "2026-10-13T15:21:29.472Z",
+    "finishedAt": "2026-10-13T15:21:29.526Z"
+  },
+  {
+    "name": "dependencies",
+    "exe": "npm",
+    "args": [
+      "run",
+      "test:deps"
+    ],
+    "inputSha": "c2307d3dc827d8c1293ad3a87ed8f3753f324b8b",
+    "status": 3,
+    "signal": null,
+    "startedAt": "2026-10-13T15:21:29.526Z",
+    "finishedAt": "2026-10-13T15:21:37.116Z"
+  },
+  {
+    "name": "unused-export-ratchet",
+    "exe": "npm",
+    "args": [
+      "run",
+      "test:unused:ratchet"
+    ],
+    "inputSha": "c2307d3dc827d8c1293ad3a87ed8f3753f324b8b",
+    "status": 1,
+    "signal": null,
+    "startedAt": "2026-10-13T15:21:37.116Z",
+    "finishedAt": "2026-10-13T15:21:48.129Z"
+  }
+]

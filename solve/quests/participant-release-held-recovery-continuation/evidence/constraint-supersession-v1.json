@@ -1,0 +1,31 @@
+{
+  "schema": "quest-constraint-supersession/1",
+  "questId": "participant-release-held-recovery-continuation",
+  "recordedAt": "2026-10-13T14:33:30.704Z",
+  "constraintId": "existing-runtime-budgets",
+  "originalText": "Keep the existing healthy 10000 ms group bound and production retry/cutover budgets. A fully spent healthy bound is red. Validate any port-provided retry duration and schedule it on the release owner's existing clock without a tight loop or deadline conversion across clocks.",
+  "replacementText": "Keep the existing healthy 10000 ms group bound and production retry/cutover budgets. A fully spent healthy bound is red. Retain canonical host-held observation debt at the existing fixed PARTICIPANT_CUTOVER_BOUND.RECOVERY_RETRY_MS cadence on the release owner clock. This owner must never read, coerce, validate, compare, add or schedule from status.retryAfterMs; prove that field observationally inert, including throwing accessors and hostile values. The unchanged raft-rs runtime remains sole owner of the reconstruction not-before gate and core-entry permission.",
+  "reason": "Independent design review rejected consuming port-provided durations because safe integers can overflow platform timers or now+delay. Fixed existing cadence avoids a second duration-policy owner. The original wording is superseded explicitly; absence of consumption does not satisfy the old validation/scheduling requirement.",
+  "correction": "The sentence in design-approved.md claiming the original duration-validation constraint is satisfied by making the field inert is superseded by this record. Technical design approval supports the replacement behavior, not that interpretation of the original text.",
+  "decisionOwner": "root integrating the authorized continuation; independent technical review subagent:/root/tx1_deletion_design_vet",
+  "approvedDesignSha256": "880dc634dcffe4b7944b68fb15c38e9c7a4d0c605fb4fd56505d0497f04469ed",
+  "independentReviewSha256": "8679fe824dd9ddfacc6400a4527e10f6f27970f84f6c7e9a795153929f92b2fa",
+  "sealedAcceptanceUnchanged": {
+    "statement": "When an initialized hosted partition loses its raft-rs host during an existing-origin participant release, the registered participant release recovery owner retains one bounded continuation while the canonical port status says the group is held by host recovery. The existing raft-rs runtime owner reconstructs and replays the group; only a later fresh observation of an actual current leader may enter the unchanged current origin, build, membership, generation, drain, census and resume release path. A healthy follower remains event-driven, recovery stays single-flight and bounded, and replacement or shutdown cannot reopen stale service admission.",
+    "epic": "raft-rs-full-cutover",
+    "doneWhen": {
+      "probe": "test-receipt",
+      "args": {
+        "file": "solve/quests/participant-release-held-recovery-continuation/evidence/receipt.json",
+        "requiredReceipts": [
+          "deferred-healed-group-recovers-without-external-actuation",
+          "typed-held-status-retains-one-bounded-owner-wake",
+          "healthy-nonheld-service-remains-event-driven",
+          "canonical-release-authority-and-durable-replay-preserved",
+          "single-flight-replacement-shutdown-and-regression-cone-preserved"
+        ]
+      }
+    }
+  },
+  "history": "Original quest, design artifacts and append-only log retained unchanged. The probe, statement, epic, five receipts and healthy budgets are neither weakened nor reinterpreted."
+}

@@ -1,0 +1,152 @@
+lab test: carinas-windows: ordinary (1 files) cores=12 mem=7.5GiB speed x1.59
+[carinas-windows] placement-shell=1253214
+[carinas-windows] placement-head=cee78b3a92fc942fb9214e61cf6a5c96f2b3c567
+[carinas-windows] placement-link=node_modules
+[carinas-windows] placement-link=data/examples
+[carinas-windows] placement-prepared=import-graph
+[carinas-windows] placement-env=factor:1.6 mode:local retry: timeout: lanecap:11
+[carinas-windows] placement-pid=1253644
+[carinas-windows] # test-files planned=1
+[carinas-windows] classified lane ordinary: 1 file(s), jobs=4
+[carinas-windows] thermal: unmeasurable (no sensors)
+[carinas-windows] not ok test/node/replica-handler-release-recovery.test.js (15 assertions, 5973ms)
+[carinas-windows] # TAP assertions failed; test process exited 1
+[carinas-windows] TAP version 13
+[carinas-windows] # Subtest: current live resume opens once and a wrong release ID preserves that OPEN proof
+[carinas-windows] ok 1 - current live resume opens once and a wrong release ID preserves that OPEN proof
+[carinas-windows]   ---
+[carinas-windows]   duration_ms: 4461.200457
+[carinas-windows]   type: 'test'
+[carinas-windows]   ...
+[carinas-windows] # Subtest: shutdown reentered by the OPEN proof status read refuses idempotent resume
+[carinas-windows] ok 2 - shutdown reentered by the OPEN proof status read refuses idempotent resume
+[carinas-windows]   ---
+[carinas-windows]   duration_ms: 49.842493
+[carinas-windows]   type: 'test'
+[carinas-windows]   ...
+[carinas-windows] # Subtest: handler shutdown begun during awaited release facts cannot reopen admission
+[carinas-windows] ok 3 - handler shutdown begun during awaited release facts cannot reopen admission
+[carinas-windows]   ---
+[carinas-windows]   duration_ms: 32.839814
+[carinas-windows]   type: 'test'
+[carinas-windows]   ...
+[carinas-windows] # Subtest: service shutdown begun during awaited release facts returns stale and stays closed
+[carinas-windows] ok 4 - service shutdown begun during awaited release facts returns stale and stays closed
+[carinas-windows]   ---
+[carinas-windows]   duration_ms: 30.734053
+[carinas-windows]   type: 'test'
+[carinas-windows]   ...
+[carinas-windows] # Subtest: host-held recovery uses the fixed owner cadence and never reads retryAfterMs
+[carinas-windows] ok 5 - host-held recovery uses the fixed owner cadence and never reads retryAfterMs
+[carinas-windows]   ---
+[carinas-windows]   duration_ms: 27.211202
+[carinas-windows]   type: 'test'
+[carinas-windows]   ...
+[carinas-windows] # Subtest: ordered hosted observations prefer a leader and retain no earlier held debt
+[carinas-windows] ok 6 - ordered hosted observations prefer a leader and retain no earlier held debt
+[carinas-windows]   ---
+[carinas-windows]   duration_ms: 24.098339
+[carinas-windows]   type: 'test'
+[carinas-windows]   ...
+[carinas-windows] # Subtest: no-leader observation gives canonical held status precedence over unavailable status
+[carinas-windows] ok 7 - no-leader observation gives canonical held status precedence over unavailable status
+[carinas-windows]   ---
+[carinas-windows]   duration_ms: 22.469013
+[carinas-windows]   type: 'test'
+[carinas-windows]   ...
+[carinas-windows] # Subtest: healthy nonleaders do not poll while malformed status is typed and event-driven
+[carinas-windows] ok 8 - healthy nonleaders do not poll while malformed status is typed and event-driven
+[carinas-windows]   ---
+[carinas-windows]   duration_ms: 22.500403
+[carinas-windows]   type: 'test'
+[carinas-windows]   ...
+[carinas-windows] # Subtest: release recovery caps running observations at four and drains the fifth in-lane
+[carinas-windows] ok 9 - release recovery caps running observations at four and drains the fifth in-lane
+[carinas-windows]   ---
+[carinas-windows]   duration_ms: 21.002147
+[carinas-windows]   type: 'test'
+[carinas-windows]   ...
+[carinas-windows] # Subtest: replacement before a held wake observes only the current registry object
+[carinas-windows] ok 10 - replacement before a held wake observes only the current registry object
+[carinas-windows]   ---
+[carinas-windows]   duration_ms: 22.666748
+[carinas-windows]   type: 'test'
+[carinas-windows]   ...
+[carinas-windows] # Subtest: last registry removal discharges its timer and a later registration reports afresh
+[carinas-windows] not ok 11 - last registry removal discharges its timer and a later registration reports afresh
+[carinas-windows]   ---
+[carinas-windows]   duration_ms: 23.27786
+[carinas-windows]   type: 'test'
+[carinas-windows]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/cee78b3a92fc-mv6t7hdt-1762623/test/node/replica-handler-release-recovery.test.js:557:1'
+[carinas-windows]   failureType: 'testCodeFailure'
+[carinas-windows]   error: |-
+[carinas-windows]     removing the last hosted service discharges its volatile wake
+[carinas-windows]     
+[carinas-windows]     1 !== 0
+[carinas-windows]     
+[carinas-windows]   code: 'ERR_ASSERTION'
+[carinas-windows]   name: 'AssertionError'
+[carinas-windows]   expected: 0
+[carinas-windows]   actual: 1
+[carinas-windows]   operator: 'strictEqual'
+[carinas-windows]   stack: |-
+[carinas-windows]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/cee78b3a92fc-mv6t7hdt-1762623/test/node/replica-handler-release-recovery.test.js:573:12
+[carinas-windows]     async withRecoveryHandler (file:///home/peter/projects/lagrange/test-output/placement-worktrees/cee78b3a92fc-mv6t7hdt-1762623/test/node/replica-handler-release-recovery.test.js:106:5)
+[carinas-windows]     async Test.run (node:internal/test_runner/test:1054:7)
+[carinas-windows]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[carinas-windows]   ...
+[carinas-windows] # Subtest: shutdown retained in the registry clears its report before current reentry
+[carinas-windows] not ok 12 - shutdown retained in the registry clears its report before current reentry
+[carinas-windows]   ---
+[carinas-windows]   duration_ms: 21.24645
+[carinas-windows]   type: 'test'
+[carinas-windows]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/cee78b3a92fc-mv6t7hdt-1762623/test/node/replica-handler-release-recovery.test.js:588:1'
+[carinas-windows]   failureType: 'testCodeFailure'
+[carinas-windows]   error: |-
+[carinas-windows]     a current service is not throttled by a stopped prior hosted lifetime
+[carinas-windows]     
+[carinas-windows]     1 !== 2
+[carinas-windows]     
+[carinas-windows]   code: 'ERR_ASSERTION'
+[carinas-windows]   name: 'AssertionError'
+[carinas-windows]   expected: 2
+[carinas-windows]   actual: 1
+[carinas-windows]   operator: 'strictEqual'
+[carinas-windows]   stack: |-
+[carinas-windows]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/cee78b3a92fc-mv6t7hdt-1762623/test/node/replica-handler-release-recovery.test.js:612:12
+[carinas-windows]     async withRecoveryHandler (file:///home/peter/projects/lagrange/test-output/placement-worktrees/cee78b3a92fc-mv6t7hdt-1762623/test/node/replica-handler-release-recovery.test.js:106:5)
+[carinas-windows]     async Test.run (node:internal/test_runner/test:1054:7)
+[carinas-windows]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[carinas-windows]   ...
+[carinas-windows] # Subtest: timer registration failure is visible and claims no scheduled wake
+[carinas-windows] ok 13 - timer registration failure is visible and claims no scheduled wake
+[carinas-windows]   ---
+[carinas-windows]   duration_ms: 21.812275
+[carinas-windows]   type: 'test'
+[carinas-windows]   ...
+[carinas-windows] # Subtest: direct recovery shutdown clears held debt and ignores later owner events
+[carinas-windows] ok 14 - direct recovery shutdown clears held debt and ignores later owner events
+[carinas-windows]   ---
+[carinas-windows]   duration_ms: 21.715943
+[carinas-windows]   type: 'test'
+[carinas-windows]   ...
+[carinas-windows] # Subtest: service replacement during awaited facts cannot reopen the stale object
+[carinas-windows] ok 15 - service replacement during awaited facts cannot reopen the stale object
+[carinas-windows]   ---
+[carinas-windows]   duration_ms: 30.03197
+[carinas-windows]   type: 'test'
+[carinas-windows]   ...
+[carinas-windows] 1..15
+[carinas-windows] # tests 15
+[carinas-windows] # suites 0
+[carinas-windows] # pass 13
+[carinas-windows] # fail 2
+[carinas-windows] # cancelled 0
+[carinas-windows] # skipped 0
+[carinas-windows] # todo 0
+[carinas-windows] # duration_ms 4842.331442
+[carinas-windows] # time=5973ms
+[carinas-windows] # test-files total=1 pass=0 fail=1 assertions=15
+lab test: carinas-windows: # test-files total=1 pass=0 fail=1 assertions=15
+lab test: carinas-windows: results copied to test-output/reports/test-results-carinas-windows.ndjson
+# test-files total=1 pass=0 fail=1 assertions=15

@@ -1,0 +1,1182 @@
+{
+  "schema": "release-continuation-final-lab-pair/1",
+  "recordedAt": "2026-10-13T15:23:25.613Z",
+  "candidate": "cd589405e6febadf7dbef339b6806e15426e837f",
+  "sourceControl": "c2307d3dc827d8c1293ad3a87ed8f3753f324b8b",
+  "pair": "source-revert-pair-v3.json",
+  "candidateSummary": {
+    "files": 17,
+    "passed": 17,
+    "failed": 0,
+    "assertions": 219
+  },
+  "controlSummary": {
+    "files": 17,
+    "passed": 15,
+    "failed": 2,
+    "assertions": 219
+  },
+  "runs": [
+    {
+      "host": "tv-dator",
+      "files": [
+        "test/partition/partition-runtime-reconstruction-leadership.test.js"
+      ],
+      "rawTap": true,
+      "sha": "cd589405e6febadf7dbef339b6806e15426e837f",
+      "kind": "candidate-v3",
+      "startedAt": "2026-10-13T15:17:18.600Z",
+      "code": 0,
+      "finishedAt": "2026-10-13T15:18:18.437Z",
+      "summary": {
+        "files": 1,
+        "passed": 1,
+        "failed": 0,
+        "assertions": 20
+      },
+      "measured": {
+        "tests": 20,
+        "pass": 20,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0,
+        "topLevelCases": [
+          {
+            "passed": true,
+            "number": 1,
+            "name": "W-B6-2/W-B6-4: a lone leader whose election runs on its own clock does not lead during an environmental failure and serves the next write after it heals; its sibling is untouched",
+            "durationMs": 2455.165129
+          },
+          {
+            "passed": true,
+            "number": 2,
+            "name": "W-B6-2/W-B6-4: a lone leader with a deferred election (the seed's system partitions) does the same",
+            "durationMs": 1170.220289
+          },
+          {
+            "passed": true,
+            "number": 3,
+            "name": "W-B6-1: a persistent host failure of one partition never touches its sibling, and its reconstruction is attempted at most once per retry window",
+            "durationMs": 2143.766387
+          },
+          {
+            "passed": true,
+            "number": 4,
+            "name": "W-B6-3: a follower's persistence failure reconstructs only the follower's group; the leader keeps serving and the follower catches up after the heal",
+            "durationMs": 3107.587115
+          },
+          {
+            "passed": true,
+            "number": 5,
+            "name": "W-B6-3: a leader's persistence failure reconstructs only the leader's group; after the heal exactly one replica leads and every replica observes the leadership its port reports",
+            "durationMs": 3319.734965
+          },
+          {
+            "passed": true,
+            "number": 6,
+            "name": "W-B6-5: a core failure (the shared WASM instance trapped) still replaces the runtime and resumes every group exactly once",
+            "durationMs": 143.823977
+          },
+          {
+            "passed": true,
+            "number": 7,
+            "name": "F-aa: a follower whose store cannot persist the leader's appends is reconstructed at most once per retry window while the leader serves; after the heal it catches up, and a failure after a quiet window starts afresh",
+            "durationMs": 5899.933258
+          },
+          {
+            "passed": true,
+            "number": 8,
+            "name": "F-aa: a lone leader whose store cannot append a proposal is reconstructed at most once per retry window however fast a client retries, and its own term and log grow only with its reconstructions",
+            "durationMs": 2094.626706
+          },
+          {
+            "passed": true,
+            "number": 9,
+            "name": "F-aa: a failure within one window of a successful reconstruction is the same failure and is held; a failure more than one window after the last one starts afresh and is attempted at once",
+            "durationMs": 2251.238105
+          },
+          {
+            "passed": true,
+            "number": 10,
+            "name": "F-z: a pending write released when its leader stops leading is answered with its true state, and a retry with its entryId is idempotent",
+            "durationMs": 4078.122607
+          }
+        ]
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "files": [
+        "test/node/replica-handler-release-recovery.test.js"
+      ],
+      "rawTap": true,
+      "sha": "cd589405e6febadf7dbef339b6806e15426e837f",
+      "kind": "candidate-v3",
+      "startedAt": "2026-10-13T15:17:18.600Z",
+      "code": 0,
+      "finishedAt": "2026-10-13T15:17:57.760Z",
+      "summary": {
+        "files": 1,
+        "passed": 1,
+        "failed": 0,
+        "assertions": 15
+      },
+      "measured": {
+        "tests": 15,
+        "pass": 15,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0,
+        "topLevelCases": [
+          {
+            "passed": true,
+            "number": 1,
+            "name": "current live resume opens once and a wrong release ID preserves that OPEN proof",
+            "durationMs": 4682.747094
+          },
+          {
+            "passed": true,
+            "number": 2,
+            "name": "shutdown reentered by the OPEN proof status read refuses idempotent resume",
+            "durationMs": 48.965139
+          },
+          {
+            "passed": true,
+            "number": 3,
+            "name": "handler shutdown begun during awaited release facts cannot reopen admission",
+            "durationMs": 32.369527
+          },
+          {
+            "passed": true,
+            "number": 4,
+            "name": "service shutdown begun during awaited release facts returns stale and stays closed",
+            "durationMs": 32.375357
+          },
+          {
+            "passed": true,
+            "number": 5,
+            "name": "host-held recovery uses the fixed owner cadence and never reads retryAfterMs",
+            "durationMs": 23.261175
+          },
+          {
+            "passed": true,
+            "number": 6,
+            "name": "ordered hosted observations prefer a leader and retain no earlier held debt",
+            "durationMs": 23.819685
+          },
+          {
+            "passed": true,
+            "number": 7,
+            "name": "no-leader observation gives canonical held status precedence over unavailable status",
+            "durationMs": 26.15383
+          },
+          {
+            "passed": true,
+            "number": 8,
+            "name": "healthy nonleaders do not poll while malformed status is typed and event-driven",
+            "durationMs": 22.92191
+          },
+          {
+            "passed": true,
+            "number": 9,
+            "name": "release recovery caps running observations at four and drains the fifth in-lane",
+            "durationMs": 22.451457
+          },
+          {
+            "passed": true,
+            "number": 10,
+            "name": "replacement before a held wake observes only the current registry object",
+            "durationMs": 21.765935
+          },
+          {
+            "passed": true,
+            "number": 11,
+            "name": "last registry removal discharges its timer and a later registration reports afresh",
+            "durationMs": 22.189679
+          },
+          {
+            "passed": true,
+            "number": 12,
+            "name": "shutdown retained in the registry clears its report before current reentry",
+            "durationMs": 23.70659
+          },
+          {
+            "passed": true,
+            "number": 13,
+            "name": "timer registration failure is visible and claims no scheduled wake",
+            "durationMs": 21.52638
+          },
+          {
+            "passed": true,
+            "number": 14,
+            "name": "direct recovery shutdown clears held debt and ignores later owner events",
+            "durationMs": 19.91555
+          },
+          {
+            "passed": true,
+            "number": 15,
+            "name": "service replacement during awaited facts cannot reopen the stale object",
+            "durationMs": 28.43896
+          }
+        ]
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "files": [
+        "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+        "test/raft/raft-rs-backend/operation-port-throw-containment.test.js",
+        "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js",
+        "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js",
+        "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+        "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
+        "test/raft/raft-rs-backend/startup-cleanup.integration.test.js",
+        "test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js"
+      ],
+      "sha": "cd589405e6febadf7dbef339b6806e15426e837f",
+      "kind": "candidate-v3",
+      "startedAt": "2026-10-13T15:17:18.600Z",
+      "code": 0,
+      "finishedAt": "2026-10-13T15:18:19.345Z",
+      "summary": {
+        "files": 8,
+        "passed": 8,
+        "failed": 0,
+        "assertions": 101
+      },
+      "measured": [
+        {
+          "file": "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 7,
+          "durationMs": 890,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/raft/raft-rs-backend/operation-port-throw-containment.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 4,
+          "durationMs": 988,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 5,
+          "durationMs": 6349,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 4,
+          "durationMs": 1802,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 16,
+          "durationMs": 2106,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 27,
+          "durationMs": 3769,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 8,
+          "durationMs": 3748,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/raft/raft-rs-backend/startup-cleanup.integration.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 30,
+          "durationMs": 3720,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        }
+      ]
+    },
+    {
+      "host": "lenovo-laptop",
+      "files": [
+        "test/partition/committed-statement-outcome.test.js",
+        "test/partition/partition-unreadable-durable-record.test.js",
+        "test/partition/partition-participant-transaction-apply.test.js",
+        "test/partition/partition-participant-transaction-staging.test.js",
+        "test/partition/participant-envelope-admission.test.js",
+        "test/partition/participant-release-protocol.test.js",
+        "test/partition/partition-participant-release-admission.test.js"
+      ],
+      "sha": "cd589405e6febadf7dbef339b6806e15426e837f",
+      "kind": "candidate-v3",
+      "startedAt": "2026-10-13T15:17:18.600Z",
+      "code": 0,
+      "finishedAt": "2026-10-13T15:18:29.811Z",
+      "summary": {
+        "files": 7,
+        "passed": 7,
+        "failed": 0,
+        "assertions": 83
+      },
+      "measured": [
+        {
+          "file": "test/partition/participant-envelope-admission.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 2,
+          "durationMs": 1985,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/partition/partition-participant-release-admission.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 4,
+          "durationMs": 5789,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/partition/participant-release-protocol.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 7,
+          "durationMs": 7644,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/partition/partition-participant-transaction-apply.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 27,
+          "durationMs": 6783,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/partition/committed-statement-outcome.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 18,
+          "durationMs": 10188,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/partition/partition-participant-transaction-staging.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 19,
+          "durationMs": 7966,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/partition/partition-unreadable-durable-record.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 6,
+          "durationMs": 13098,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        }
+      ]
+    },
+    {
+      "host": "tv-dator",
+      "files": [
+        "test/partition/partition-runtime-reconstruction-leadership.test.js"
+      ],
+      "rawTap": true,
+      "sha": "c2307d3dc827d8c1293ad3a87ed8f3753f324b8b",
+      "kind": "source-revert-v3",
+      "startedAt": "2026-10-13T15:19:33.909Z",
+      "code": 1,
+      "finishedAt": "2026-10-13T15:20:46.939Z",
+      "summary": {
+        "files": 1,
+        "passed": 0,
+        "failed": 1,
+        "assertions": 20
+      },
+      "measured": {
+        "tests": 20,
+        "pass": 19,
+        "fail": 1,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0,
+        "topLevelCases": [
+          {
+            "passed": true,
+            "number": 1,
+            "name": "W-B6-2/W-B6-4: a lone leader whose election runs on its own clock does not lead during an environmental failure and serves the next write after it heals; its sibling is untouched",
+            "durationMs": 2492.355897
+          },
+          {
+            "passed": false,
+            "number": 2,
+            "name": "W-B6-2/W-B6-4: a lone leader with a deferred election (the seed's system partitions) does the same",
+            "durationMs": 10181.186015
+          },
+          {
+            "passed": true,
+            "number": 3,
+            "name": "W-B6-1: a persistent host failure of one partition never touches its sibling, and its reconstruction is attempted at most once per retry window",
+            "durationMs": 2157.324358
+          },
+          {
+            "passed": true,
+            "number": 4,
+            "name": "W-B6-3: a follower's persistence failure reconstructs only the follower's group; the leader keeps serving and the follower catches up after the heal",
+            "durationMs": 3133.095705
+          },
+          {
+            "passed": true,
+            "number": 5,
+            "name": "W-B6-3: a leader's persistence failure reconstructs only the leader's group; after the heal exactly one replica leads and every replica observes the leadership its port reports",
+            "durationMs": 3135.489898
+          },
+          {
+            "passed": true,
+            "number": 6,
+            "name": "W-B6-5: a core failure (the shared WASM instance trapped) still replaces the runtime and resumes every group exactly once",
+            "durationMs": 147.540962
+          },
+          {
+            "passed": true,
+            "number": 7,
+            "name": "F-aa: a follower whose store cannot persist the leader's appends is reconstructed at most once per retry window while the leader serves; after the heal it catches up, and a failure after a quiet window starts afresh",
+            "durationMs": 5905.605248
+          },
+          {
+            "passed": true,
+            "number": 8,
+            "name": "F-aa: a lone leader whose store cannot append a proposal is reconstructed at most once per retry window however fast a client retries, and its own term and log grow only with its reconstructions",
+            "durationMs": 2154.479335
+          },
+          {
+            "passed": true,
+            "number": 9,
+            "name": "F-aa: a failure within one window of a successful reconstruction is the same failure and is held; a failure more than one window after the last one starts afresh and is attempted at once",
+            "durationMs": 2243.928405
+          },
+          {
+            "passed": true,
+            "number": 10,
+            "name": "F-z: a pending write released when its leader stops leading is answered with its true state, and a retry with its entryId is idempotent",
+            "durationMs": 4122.160767
+          }
+        ]
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "files": [
+        "test/node/replica-handler-release-recovery.test.js"
+      ],
+      "rawTap": true,
+      "sha": "c2307d3dc827d8c1293ad3a87ed8f3753f324b8b",
+      "kind": "source-revert-v3",
+      "startedAt": "2026-10-13T15:19:33.907Z",
+      "code": 1,
+      "finishedAt": "2026-10-13T15:20:15.502Z",
+      "summary": {
+        "files": 1,
+        "passed": 0,
+        "failed": 1,
+        "assertions": 15
+      },
+      "measured": {
+        "tests": 15,
+        "pass": 3,
+        "fail": 12,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0,
+        "topLevelCases": [
+          {
+            "passed": true,
+            "number": 1,
+            "name": "current live resume opens once and a wrong release ID preserves that OPEN proof",
+            "durationMs": 3220.719304
+          },
+          {
+            "passed": false,
+            "number": 2,
+            "name": "shutdown reentered by the OPEN proof status read refuses idempotent resume",
+            "durationMs": 51.997062
+          },
+          {
+            "passed": false,
+            "number": 3,
+            "name": "handler shutdown begun during awaited release facts cannot reopen admission",
+            "durationMs": 29.983516
+          },
+          {
+            "passed": false,
+            "number": 4,
+            "name": "service shutdown begun during awaited release facts returns stale and stays closed",
+            "durationMs": 30.682564
+          },
+          {
+            "passed": false,
+            "number": 5,
+            "name": "host-held recovery uses the fixed owner cadence and never reads retryAfterMs",
+            "durationMs": 21.418857
+          },
+          {
+            "passed": true,
+            "number": 6,
+            "name": "ordered hosted observations prefer a leader and retain no earlier held debt",
+            "durationMs": 24.514617
+          },
+          {
+            "passed": false,
+            "number": 7,
+            "name": "no-leader observation gives canonical held status precedence over unavailable status",
+            "durationMs": 22.473841
+          },
+          {
+            "passed": false,
+            "number": 8,
+            "name": "healthy nonleaders do not poll while malformed status is typed and event-driven",
+            "durationMs": 21.365786
+          },
+          {
+            "passed": false,
+            "number": 9,
+            "name": "release recovery caps running observations at four and drains the fifth in-lane",
+            "durationMs": 20.967198
+          },
+          {
+            "passed": false,
+            "number": 10,
+            "name": "replacement before a held wake observes only the current registry object",
+            "durationMs": 19.724729
+          },
+          {
+            "passed": false,
+            "number": 11,
+            "name": "last registry removal discharges its timer and a later registration reports afresh",
+            "durationMs": 21.090142
+          },
+          {
+            "passed": false,
+            "number": 12,
+            "name": "shutdown retained in the registry clears its report before current reentry",
+            "durationMs": 20.488399
+          },
+          {
+            "passed": false,
+            "number": 13,
+            "name": "timer registration failure is visible and claims no scheduled wake",
+            "durationMs": 22.052711
+          },
+          {
+            "passed": false,
+            "number": 14,
+            "name": "direct recovery shutdown clears held debt and ignores later owner events",
+            "durationMs": 21.177217
+          },
+          {
+            "passed": true,
+            "number": 15,
+            "name": "service replacement during awaited facts cannot reopen the stale object",
+            "durationMs": 28.870702
+          }
+        ]
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "files": [
+        "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+        "test/raft/raft-rs-backend/operation-port-throw-containment.test.js",
+        "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js",
+        "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js",
+        "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+        "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
+        "test/raft/raft-rs-backend/startup-cleanup.integration.test.js",
+        "test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js"
+      ],
+      "sha": "c2307d3dc827d8c1293ad3a87ed8f3753f324b8b",
+      "kind": "source-revert-v3",
+      "startedAt": "2026-10-13T15:19:33.907Z",
+      "code": 0,
+      "finishedAt": "2026-10-13T15:21:08.068Z",
+      "summary": {
+        "files": 8,
+        "passed": 8,
+        "failed": 0,
+        "assertions": 101
+      },
+      "measured": [
+        {
+          "file": "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 7,
+          "durationMs": 922,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/raft/raft-rs-backend/operation-port-throw-containment.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 4,
+          "durationMs": 1012,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 5,
+          "durationMs": 6116,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 4,
+          "durationMs": 1842,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 16,
+          "durationMs": 2083,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 27,
+          "durationMs": 3776,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 8,
+          "durationMs": 3760,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/raft/raft-rs-backend/startup-cleanup.integration.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 30,
+          "durationMs": 3638,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        }
+      ]
+    },
+    {
+      "host": "lenovo-laptop",
+      "files": [
+        "test/partition/committed-statement-outcome.test.js",
+        "test/partition/partition-unreadable-durable-record.test.js",
+        "test/partition/partition-participant-transaction-apply.test.js",
+        "test/partition/partition-participant-transaction-staging.test.js",
+        "test/partition/participant-envelope-admission.test.js",
+        "test/partition/participant-release-protocol.test.js",
+        "test/partition/partition-participant-release-admission.test.js"
+      ],
+      "sha": "c2307d3dc827d8c1293ad3a87ed8f3753f324b8b",
+      "kind": "source-revert-v3",
+      "startedAt": "2026-10-13T15:19:33.907Z",
+      "code": 0,
+      "finishedAt": "2026-10-13T15:20:47.405Z",
+      "summary": {
+        "files": 7,
+        "passed": 7,
+        "failed": 0,
+        "assertions": 83
+      },
+      "measured": [
+        {
+          "file": "test/partition/participant-envelope-admission.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 2,
+          "durationMs": 1975,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/partition/partition-participant-release-admission.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 4,
+          "durationMs": 5791,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/partition/participant-release-protocol.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 7,
+          "durationMs": 7711,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/partition/partition-participant-transaction-apply.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 27,
+          "durationMs": 6769,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/partition/committed-statement-outcome.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 18,
+          "durationMs": 10070,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/partition/partition-participant-transaction-staging.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 19,
+          "durationMs": 7999,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/partition/partition-unreadable-durable-record.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 6,
+          "durationMs": 13259,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        }
+      ]
+    }
+  ],
+  "cloneFacts": [
+    {
+      "group": "src-scripts",
+      "reportSha256": "42b9c4e2f589430df133d8a6d1933e0938c57bcb589c9f6fecb6f9f92544094d",
+      "total": {
+        "lines": 637905,
+        "tokens": 4366468,
+        "sources": 2135,
+        "clones": 47,
+        "duplicatedLines": 1462,
+        "duplicatedTokens": 11793,
+        "percentage": 0.23,
+        "percentageTokens": 0.27,
+        "newDuplicatedLines": 0,
+        "newClones": 0
+      },
+      "touchedClones": []
+    },
+    {
+      "group": "test",
+      "reportSha256": "8ac8de45c6a0165f65bf288abd11ab8c68cb89b38ce792f3c954878552dc6170",
+      "total": {
+        "lines": 877043,
+        "tokens": 7036640,
+        "sources": 2742,
+        "clones": 697,
+        "duplicatedLines": 26415,
+        "duplicatedTokens": 195659,
+        "percentage": 3.01,
+        "percentageTokens": 2.78,
+        "newDuplicatedLines": 0,
+        "newClones": 0
+      },
+      "touchedClones": []
+    }
+  ],
+  "scopedDecisionViolations": [
+    {
+      "filePath": "src/node/replica-handler-release-recovery.js",
+      "line": 269,
+      "column": 7,
+      "functionName": "createParticipantReleaseRecovery",
+      "kind": "local_retry_loop",
+      "reason": "local retry loops using while, do-while, or for statement are forbidden; use canonical retry registries or owners instead",
+      "ruleReference": "system guidelines.md §7.1 and §9.7 Local retry loop guardrails"
+    }
+  ],
+  "artifacts": [
+    {
+      "file": "candidate-v3-tv-dator-input.json",
+      "sha256": "4341f5ae623fb4755c7a4570a21979d38cf025d66b9c1c8995c2d763b2767b0b",
+      "bytes": 256
+    },
+    {
+      "file": "candidate-v3-tv-dator-status.json",
+      "sha256": "e5548a11ae4b82a2272f33d13df98f89415cd303dc738994918427af15941847",
+      "bytes": 60
+    },
+    {
+      "file": "candidate-v3-tv-dator.log",
+      "sha256": "b7a8a48ce1382f496236138bb037bb52b22cb769dc5cc814c64c1f39d26d407d",
+      "bytes": 1136
+    },
+    {
+      "file": "candidate-v3-tv-dator.tap",
+      "sha256": "cf14625f55392cecafe82252440be7a6323bad3a785a68e558b3487cda4613f2",
+      "bytes": 7386
+    },
+    {
+      "file": "candidate-v3-carinas-windows-input.json",
+      "sha256": "206bc35e10f10cd5940b19988edf5422700d8bdcfc102b66ab4a46aa03fb75f2",
+      "bytes": 247
+    },
+    {
+      "file": "candidate-v3-carinas-windows-status.json",
+      "sha256": "b9d05ed21a0f60a8ab5967547c54f50049cd0f18c405a7fd188ba415738f369c",
+      "bytes": 60
+    },
+    {
+      "file": "candidate-v3-carinas-windows.log",
+      "sha256": "a3493bd01f6f24b72556cc6e0a7ec72b8d45aade735a6558b1ab1afdb2b07af1",
+      "bytes": 1003
+    },
+    {
+      "file": "candidate-v3-carinas-windows.tap",
+      "sha256": "a5cd1df62b79a18bd45abe3fbc51bb8ed8801d3c6df70d0f3711f6fd2b8c6a82",
+      "bytes": 3499
+    },
+    {
+      "file": "candidate-v3-adam-laptop-input.json",
+      "sha256": "e91dc12dd17f9ef13f6fc633bba57745719102c0191316802e555cc8f7d0fc54",
+      "bytes": 763
+    },
+    {
+      "file": "candidate-v3-adam-laptop-status.json",
+      "sha256": "1bf25025274555a7a44af578efb2a1d51e64617d23f21a1475d6db78bc757f32",
+      "bytes": 60
+    },
+    {
+      "file": "candidate-v3-adam-laptop.log",
+      "sha256": "8b95a2aed40ccdcd525f12da49217f7b00a85c68765d69c737aac5be1aea460f",
+      "bytes": 1961
+    },
+    {
+      "file": "candidate-v3-adam-laptop.ndjson",
+      "sha256": "d11c75c1fc32c9690b5fec44cb188c1cd8888cc9cd659920f6b940d6dfc6ba53",
+      "bytes": 1421
+    },
+    {
+      "file": "candidate-v3-lenovo-laptop-input.json",
+      "sha256": "5e13552eb30b0f643c226ec005c55870924549e8e262dd9ee56e03c005755711",
+      "bytes": 625
+    },
+    {
+      "file": "candidate-v3-lenovo-laptop-status.json",
+      "sha256": "7494313c4c505fa0ae21e7bc2c61e6b9985195b703a74ab765d824400bd57689",
+      "bytes": 60
+    },
+    {
+      "file": "candidate-v3-lenovo-laptop.log",
+      "sha256": "c8f0c90176345a8a8dfc13f0c3dc7c873c653cf13fc890d81159a6775aef655e",
+      "bytes": 1822
+    },
+    {
+      "file": "candidate-v3-lenovo-laptop.ndjson",
+      "sha256": "456de4611e41253e08ab8cb631f9fdc01c73c15aa4e96eebfe688af6dffc6297",
+      "bytes": 1182
+    },
+    {
+      "file": "source-revert-v3-tv-dator-input.json",
+      "sha256": "941a44725bafb8c36b7cb4f463bfdd2efcd7bb303a580dc67f8f7af2961084e7",
+      "bytes": 260
+    },
+    {
+      "file": "source-revert-v3-tv-dator-status.json",
+      "sha256": "068a5114e5b5f5d2dc79f94f887847024af511cea3de2fd3601ee4e9c75a459a",
+      "bytes": 60
+    },
+    {
+      "file": "source-revert-v3-tv-dator.log",
+      "sha256": "72de9de42332ab3746765c9c599897670363d36dfc3e516ef4436c00b97c51f4",
+      "bytes": 11710
+    },
+    {
+      "file": "source-revert-v3-tv-dator.tap",
+      "sha256": "4ba3c4ba6d94f9f2d9bf7899fabe293c96eca19e8a193588c9331f180bdb413b",
+      "bytes": 8807
+    },
+    {
+      "file": "source-revert-v3-carinas-windows-input.json",
+      "sha256": "7bc7f97a4191161dd543e70611d23669d4980dad72061a27e58a6b3165e7546a",
+      "bytes": 251
+    },
+    {
+      "file": "source-revert-v3-carinas-windows-status.json",
+      "sha256": "77618479b47d46fd985ad142c33298c9275f41685407527e462f52378eb6a24b",
+      "bytes": 60
+    },
+    {
+      "file": "source-revert-v3-carinas-windows.log",
+      "sha256": "a5e388f10097c1e86c894f7dd596fe5b4330014cd72f9faa0d6cbbab22fb1769",
+      "bytes": 21884
+    },
+    {
+      "file": "source-revert-v3-carinas-windows.tap",
+      "sha256": "f18f2a648666ee006ffbf56373d56742ec0aba8973af0a9cd7e05094a27d09ee",
+      "bytes": 15070
+    },
+    {
+      "file": "source-revert-v3-adam-laptop-input.json",
+      "sha256": "38dad899b8b7cd769e38754deef231562c44feda8e1aef185ade10e3eb1d67ce",
+      "bytes": 767
+    },
+    {
+      "file": "source-revert-v3-adam-laptop-status.json",
+      "sha256": "9c9d4cface0f57c6cc470d3964fb1dab3795587fbb00b51798d75e16bb95274c",
+      "bytes": 60
+    },
+    {
+      "file": "source-revert-v3-adam-laptop.log",
+      "sha256": "82cde1642ed2b5a54993af13637e65ef1fc1c88c282df1847afbeecd97a2bf4e",
+      "bytes": 2098
+    },
+    {
+      "file": "source-revert-v3-adam-laptop.ndjson",
+      "sha256": "981a8e2f38753fafe5e671c5423a49101e5b4bea2356cab1fa6d9567ddcaec71",
+      "bytes": 1422
+    },
+    {
+      "file": "source-revert-v3-lenovo-laptop-input.json",
+      "sha256": "309795adbf4f9a023f6f1bf6ca30d493d01dd0b684afb568d5eddb5fd7281832",
+      "bytes": 629
+    },
+    {
+      "file": "source-revert-v3-lenovo-laptop-status.json",
+      "sha256": "bd69121c21ea70c7a4c9bdcff9bc7998375142cb2e5db088a37e70c7b2afdfc4",
+      "bytes": 60
+    },
+    {
+      "file": "source-revert-v3-lenovo-laptop.log",
+      "sha256": "da9d6ff340b0b2e590b54d83f6f72e89a20842cf6476cf4b79907c63f30167fa",
+      "bytes": 1822
+    },
+    {
+      "file": "source-revert-v3-lenovo-laptop.ndjson",
+      "sha256": "0a179a3ce9fb57f6a7f09ffcecd1dcc012366c09489c9e4f6fbe8ce203adfac5",
+      "bytes": 1182
+    },
+    {
+      "file": "candidate-input-v3.json",
+      "sha256": "15874fd949cfc8a267d58c01c905f0743e25ccd21865199b82cd8a1141ad2d4e",
+      "bytes": 1917
+    },
+    {
+      "file": "source-revert-input-v3.json",
+      "sha256": "dfa3a38f1157172043ab033adcfbb58cc34000ac287eb2845307e27641cec7f2",
+      "bytes": 1921
+    },
+    {
+      "file": "source-revert-pair-v3.json",
+      "sha256": "bdc878af0451923fdfbd717169ade773ee33a1de9d4e63f8f1d87a8067d7dc01",
+      "bytes": 4359
+    },
+    {
+      "file": "candidate-v3-final-metadata-refresh.log",
+      "sha256": "988bb7c7e3b922b1a215404fb3b6095d37597b6bcd20506a18c25b39e2f6efce",
+      "bytes": 788
+    },
+    {
+      "file": "candidate-v3-static-dependencies.log",
+      "sha256": "719864bd84b4f89f2147f87726fcbdd529090dcee885375fa20f67d83cee83b7",
+      "bytes": 815
+    },
+    {
+      "file": "candidate-v3-static-duplication.json",
+      "sha256": "cb1b90cf7673ca3f667a8bb21c485895a380b5d1d92e56be3fd646d08d38cdc5",
+      "bytes": 333
+    },
+    {
+      "file": "candidate-v3-static-duplication.log",
+      "sha256": "8b6436c74c48cdee9b59db433f8aee1eab5fa493fd34766c6025ab5dd2799a95",
+      "bytes": 1837
+    },
+    {
+      "file": "candidate-v3-static-eslint.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "file": "candidate-v3-static-file-size.log",
+      "sha256": "681d5b303722668ada3f30b4060a2d32b57399f0e838867f73f28cca1b2700f5",
+      "bytes": 103
+    },
+    {
+      "file": "candidate-v3-static-guideline-ambient-intrinsics.log",
+      "sha256": "8c2aefa99064b65f9e747bad50f147e1ef6a70dbef483fa64da51b288aa8b9da",
+      "bytes": 127
+    },
+    {
+      "file": "candidate-v3-static-guideline-boundary-mode-contracts.log",
+      "sha256": "fb9e9df1743814f1b6c5fafa9f6746766bed54aa902336abc6f8e016591809aa",
+      "bytes": 77
+    },
+    {
+      "file": "candidate-v3-static-guideline-decision-boundaries.log",
+      "sha256": "3511763189d010dccbca250f1a533964884efb4752cb91305db475cf79361902",
+      "bytes": 193
+    },
+    {
+      "file": "candidate-v3-static-guideline-deferred-outcomes.log",
+      "sha256": "f760062a2b0463dc0599ec6d395072d8d8c994f7797d262c1f91a9551a34eee2",
+      "bytes": 82
+    },
+    {
+      "file": "candidate-v3-static-guideline-hot-path-diagnostics.log",
+      "sha256": "af062f667598d15051778c4bd46ed1fa95633948f34c1ff2d8f0dd85368aeb45",
+      "bytes": 128
+    },
+    {
+      "file": "candidate-v3-static-guideline-literals.log",
+      "sha256": "916883dfd5eca3b390eb286120b1733332b6496edd2edcf17669e5f3a98b3a63",
+      "bytes": 126
+    },
+    {
+      "file": "candidate-v3-static-guideline-silent-catch.log",
+      "sha256": "a63bec4da772bcebe3a9b62f28e9f765d1d046321d6f46a384cb3e9147c37032",
+      "bytes": 112
+    },
+    {
+      "file": "candidate-v3-static-impact-contracts.log",
+      "sha256": "f856960c2f04c80cd289c26a8e0da3561ba829e651d0a87a8dc103c0bc599601",
+      "bytes": 228
+    },
+    {
+      "file": "candidate-v3-static-metrics.log",
+      "sha256": "7bca7426bb88818f00db2c82f2f50946cb9713a575a06b1ed7681830360173f1",
+      "bytes": 139
+    },
+    {
+      "file": "candidate-v3-static-registry-and-deps.json",
+      "sha256": "81efc46216982f500eb3a4ae3f09ba61d2660a95c7ec4dbffcbe83f6d3e91e08",
+      "bytes": 2000
+    },
+    {
+      "file": "candidate-v3-static-scoped-static.json",
+      "sha256": "9a476b94d5b569397c608dd24d6ca349c4005543f2fd4da4efa7ab632772006a",
+      "bytes": 6584
+    },
+    {
+      "file": "candidate-v3-static-shards.log",
+      "sha256": "bab8293b9dda73d143c010ae613b56a1eb6396a6ef0d6f43df4fb63186b5f1d6",
+      "bytes": 547
+    },
+    {
+      "file": "candidate-v3-static-syntax-0.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "file": "candidate-v3-static-syntax-1.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "file": "candidate-v3-static-syntax-2.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "file": "candidate-v3-static-syntax-3.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "file": "candidate-v3-static-unused-export-ratchet.log",
+      "sha256": "21b7634e6f8330523e478a9b7f71bab95fa3583b9f96c8e0898e02377066a070",
+      "bytes": 1063
+    },
+    {
+      "file": "candidate-v3-static-unused-production.log",
+      "sha256": "877a64255313f4a90be916e292103ef6d4637c063b1c91e9943c775e1aa8e028",
+      "bytes": 86
+    },
+    {
+      "file": "candidate-v3-static-unused.log",
+      "sha256": "901c9b43692caa7c6d7260e8b6a6256c3998c910f34ab52bfdd4fa4d0ac6be02",
+      "bytes": 1333
+    },
+    {
+      "file": "control-v3-static-decision-boundaries.log",
+      "sha256": "3511763189d010dccbca250f1a533964884efb4752cb91305db475cf79361902",
+      "bytes": 193
+    },
+    {
+      "file": "control-v3-static-dependencies.log",
+      "sha256": "9ce9116b0aa029c28d21ba284f02d3bbbdc6bfef2ff036585228fb8f9748e707",
+      "bytes": 815
+    },
+    {
+      "file": "control-v3-static-status.json",
+      "sha256": "f098f4b978b1beb0c3e0130311ea019c8bf0c730f045873a0937c3f01bda1406",
+      "bytes": 1056
+    },
+    {
+      "file": "control-v3-static-unused-export-ratchet.log",
+      "sha256": "21b7634e6f8330523e478a9b7f71bab95fa3583b9f96c8e0898e02377066a070",
+      "bytes": 1063
+    }
+  ],
+  "limits": [
+    "Physical candidate deferred case1170.220289ms; same-host source-only native negative10181.186015ms spends unchanged10000ms healthy bound and retains passive0core/0consensus. Scheduled sibling control and all15 surrounding regression files green on both.",
+    "Focused15green candidate versus3green12behavioral negatives on sourcecontrol, no timeout/cancel/skip. The two lifetime-specific cleanup defects were measured separately on unchanged V2production at cee78b3 (13pass2fail); fullsourcecontrol fails their earlier held-observation premise and is not attributed as a direct lifetime-discharge negative.",
+    "Focused controllable semantic ports measure actual handler/pause lifecycle and owner scheduling, not native consensus. The companion native witness measures real physical fault/reconstruction/replay.",
+    "Source-only pair differs exactlytwo source files; all other tracked bytes identical. Each file ran once per placement; source-control thermal gate on adam preceded execution and was not bypassed.",
+    "Full duplication has0clones touching changed4JSfiles; source47/1462 equals baseline, test697/26415 exceeds line baseline26369. Whole dependency/unused and existing fresh-create local_retry_loop remain red; no ratchet or timeout is raised.",
+    "This is a17-file focused paired proof, not current main, full corpus, release or integrated startup acceptance. Independent final review remains required."
+  ]
+}

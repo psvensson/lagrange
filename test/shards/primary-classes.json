@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2060,
+    "unit": 2061,
     "integration": 97,
     "bootstrap": 202,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2366,
-  "digest": "fnv1a32-32c0a5c1",
+  "censusSize": 2367,
+  "digest": "fnv1a32-43538b29",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1158,6 +1158,7 @@
     "test/node/replica-handler-leadership-transfer.test.js": "unit",
     "test/node/replica-handler-membership-relay.test.js": "unit",
     "test/node/replica-handler-owner-path-bypass.test.js": "unit",
+    "test/node/replica-handler-release-recovery.test.js": "unit",
     "test/node/replica-handler-replacement-election-already-leader.test.js": "unit",
     "test/node/replica-handler-replica-membership.test.js": "unit",
     "test/node/replica-handler-voter-ready-wait-bound-spent.test.js": "unit",

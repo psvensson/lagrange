@@ -1,0 +1,47 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "participant-release-held-recovery-continuation",
+  "status": "fail",
+  "generatedAt": "2026-10-13T15:37:48.817Z",
+  "baselineHead": "d35d8828c630d1b9675b47f511c477b3cc9ee991",
+  "stage": "Focused behavioral proof independently approved; inherited static gate and whole Quest remain HOLD",
+  "candidate": "cd589405e6febadf7dbef339b6806e15426e837f",
+  "sourceControl": "c2307d3dc827d8c1293ad3a87ed8f3753f324b8b",
+  "pairedResult": "paired-result-v3.json",
+  "pairedResultSha256": "a09c2b0a9973597fbdb485ea0fff61331da5c6cc1c938ec9d7b31a7355fb2f01",
+  "historicalBaseline": "receipt-passive-baseline-v1.json",
+  "receipts": [
+    {
+      "id": "deferred-healed-group-recovers-without-external-actuation",
+      "passed": true,
+      "reason": "At immutable cd589405e6febadf7dbef339b6806e15426e837f, the unchanged passive native witness recovers the deferred singleton in1170.220289ms within the original10000ms bound. Exact same-host source-only c2307d3dc827d8c1293ad3a87ed8f3753f324b8b fails the original release assertion at10181.186015ms with zero post-heal reconstruction or consensus activity. No test status read, tick, sleep or repeated release supplies progress."
+    },
+    {
+      "id": "typed-held-status-retains-one-bounded-owner-wake",
+      "passed": true,
+      "reason": "Focused15-case owner witness on carinas-windows proves one retained shared timer, fixed1000ms owner cadence, before-boundary refusal, full30s observation/report bounds, no retryAfterMs access, held/unavailable precedence, coalescing and max4. Native companion engages actual storage failure and runtime reconstruction. Host-owned not-before and canonical held classifier remain the only authority."
+    },
+    {
+      "id": "healthy-nonheld-service-remains-event-driven",
+      "passed": true,
+      "reason": "Focused exact candidate proves ordinary followers and candidates have no periodic debt. Null/malformed/uninitialized observations are typed and event-driven. First current leader short-circuits ordered observations; stale services do not remain release authority."
+    },
+    {
+      "id": "canonical-release-authority-and-durable-replay-preserved",
+      "passed": true,
+      "reason": "Candidate native and15 surrounding regression files preserve real APPLICATION/SQLITE_FULL durability refusal, paused write/no-new-log, exact healed replay, sibling isolation and current canonical release. Lifecycle tests pair live and wrong-release-ID OPEN controls with actual handler/service shutdown and replacement refusal. Scope is the declared recovery interaction, not whole transaction/snapshot custody."
+    },
+    {
+      "id": "single-flight-replacement-shutdown-and-regression-cone-preserved",
+      "passed": false,
+      "reason": "Behavioral and exact source-only evidence is complete for17 files, including separate test-first V2production lifetime negatives and final corrected positives. However the static gate is RED: inherited fresh-create local_retry_loop in the touched recovery owner; same3 whole dependency findings and1463unused exports in candidate/control; test duplication26415 exceeds26369 while zero clone groups touch changed files. Final independent report approves the bounded behavioral proof and preserves this static HOLD. Broader gate repair remains required. No waiver, Quest land, full corpus or main merge is authorized."
+    }
+  ],
+  "claimCeiling": "This mutable receipt projects measured evidence. It does not supersede the sealed Quest, explicit design corrections or append-only log; source approval and all landing/publication gates remain independent.",
+  "independentReview": {
+    "file": "implementation-review-v3.md",
+    "sha256": "b86a953cf45b62742bf5b19cc4e23f83038f3ff6d0fe8d0eaf3ec1e97bd3f495",
+    "verifier": "subagent:/root/tx1_deletion_design_vet",
+    "verdict": "approve bounded source/test/interaction and behavioral evidence; whole closure HOLD"
+  }
+}

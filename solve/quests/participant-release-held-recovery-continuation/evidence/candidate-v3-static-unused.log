@@ -1,0 +1,21 @@
+
+> lagrange-server@0.2.6 test:unused
+> knip --exclude exports,duplicates
+
+Unused files (4)
+src/rebalancer/replica-operation-message-group-learner-successor.js
+src/rebalancer/replica-operation-message-group-promotion.js        
+test/raft/raft-rs-backend/runtime-load-recovery-child.js           
+test/raft/raft-rs-backend/runtime-replacement-review-child.js      
+Unlisted binaries (4)
+test/rebalancer/operation-progress-store.test.js         .github/workflows/cutover-contract-first.yml
+test/rebalancer/operation-progress-store.test.js         .github/workflows/cutover-owner-entry.yml   
+test/raft/snapshot-catchup-end-to-end.test.js            .github/workflows/cutover-owner-entry.yml   
+test/rebalancer/reservation-file-backed-restart.test.js  .github/workflows/cutover-workflow-crash.yml
+Configuration hints (6)
+node-fetch                               knip.json  Remove from ignoreDependencies   
+test/**/*.test-part-*.js                 knip.json  Refine entry pattern (no matches)
+src/sea-entry.js!                        knip.json  Remove redundant entry pattern   
+src/index.js!                            knip.json  Remove redundant entry pattern   
+src/cli/bin/lagrange-admin.js!           knip.json  Remove redundant entry pattern   
+test/storage-load/run-storage-load.js    knip.json  Remove redundant entry pattern   

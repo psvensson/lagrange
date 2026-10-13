@@ -1,0 +1,61 @@
+{
+  "schema": "solve-quest/2",
+  "id": "participant-release-held-recovery-continuation",
+  "class": "product",
+  "epic": "raft-rs-full-cutover",
+  "statement": "When an initialized hosted partition loses its raft-rs host during an existing-origin participant release, the registered participant release recovery owner retains one bounded continuation while the canonical port status says the group is held by host recovery. The existing raft-rs runtime owner reconstructs and replays the group; only a later fresh observation of an actual current leader may enter the unchanged current origin, build, membership, generation, drain, census and resume release path. A healthy follower remains event-driven, recovery stays single-flight and bounded, and replacement or shutdown cannot reopen stale service admission.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/participant-release-held-recovery-continuation/evidence/receipt.json",
+      "requiredReceipts": [
+        "deferred-healed-group-recovers-without-external-actuation",
+        "typed-held-status-retains-one-bounded-owner-wake",
+        "healthy-nonheld-service-remains-event-driven",
+        "canonical-release-authority-and-durable-replay-preserved",
+        "single-flight-replacement-shutdown-and-regression-cone-preserved"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "one-recovery-and-release-owner",
+      "statement": "Reuse the raft-rs runtime's existing reconstruction path, the write kernel's canonical held-status classifier, the release recovery owner's existing pending/running/timer state and the canonical participant cutover. Add no second release algorithm, timer, election driver, ledger or status interpretation."
+    },
+    {
+      "id": "wake-is-not-authority",
+      "statement": "A retained wake carries no release permission. Reopening still requires a freshly observed current leader and the unchanged durable origin, measured build, live service identity, membership, generation, drain, query settlement and exact census checks."
+    },
+    {
+      "id": "honest-passive-red",
+      "statement": "The sealed red must use the real registered ReplicaHandler and raft-rs owners. It may passively observe owner events and actual-core reconstruction, but must not manually call readStatus after healing, sleep for a typed retry, tick the core, repeat operator release, alter pause state or otherwise supply the missing actuation."
+    },
+    {
+      "id": "existing-runtime-budgets",
+      "statement": "Keep the existing healthy 10000 ms group bound and production retry/cutover budgets. A fully spent healthy bound is red. Validate any port-provided retry duration and schedule it on the release owner's existing clock without a tight loop or deadline conversion across clocks."
+    },
+    {
+      "id": "ordinary-followers-do-not-poll",
+      "statement": "Only the canonical typed host-held outcome retains recovery debt. An ordinary follower, candidate, absent service, invalid status or service with no current identity remains event-driven and cannot become a polling release authority."
+    },
+    {
+      "id": "lifecycle-and-concurrency",
+      "statement": "Preserve per-partition single-flight, the global concurrency limit, event coalescing, current-service revalidation after await, service replacement safety and shutdown cancellation/settlement."
+    },
+    {
+      "id": "bounded-follow-on",
+      "statement": "Do not absorb TX1 deletion, M1 provisioning, W1 unknown-phase recovery, C2 rebalancer cleanup, FreshMG activation, snapshot custody or unrelated startup policy. Source changes require category-complete independent design and implementation review plus exact locked-lab source-revert proof."
+    }
+  ],
+  "verificationTemplates": [
+    "admission-gating",
+    "recovery-replay",
+    "sweep-timer",
+    "concurrency-serialization",
+    "owner-interaction",
+    "harness-fidelity",
+    "retry-loops",
+    "formation-circularity"
+  ],
+  "sealedAt": "d35d8828c630d1b9675b47f511c477b3cc9ee991"
+}

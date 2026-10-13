@@ -1,0 +1,53 @@
+{
+  "schema": "release-continuation-design-correction/1",
+  "id": "R5-existing-coupled-pair-representation",
+  "recordedAt": "2026-10-13T14:59:10.317Z",
+  "oldRegistrySha256": "e00896adddb2631b700b96d47397d3220091d49adb72daace44f5b2e23dcdf75",
+  "newRegistrySha256": "63f610be8f25c15fbd981e04bb631c8dc7419087356e2dc84d008812d18bea33",
+  "supersedes": "Approved design880dc634 R5 instruction to add host-held-release-continuation and participant-cutover-lifecycle-resume as two new endpoint IDs. The original design and failed0b input remain unchanged historical evidence.",
+  "reason": "Canonical impact-contract-registry validator requires exactly two non-overlapping endpoints; candidate0b audit failed. The guard remains unchanged.",
+  "replacement": "Keep existing named contract and exactly its two original endpoint IDs. The ready-persistence-and-reconstruction endpoint additionally owns the held-status classifier, release continuation queue and membership relay. The application-and-progress-transaction endpoint additionally owns canonical cutover/facts/census/pause-resume and cleanup custody. All semantic owners, decision table, primary/regression witnesses, scopes and acceptance remain unchanged.",
+  "endpointIds": [
+    "ready-persistence-and-reconstruction",
+    "application-and-progress-transaction"
+  ],
+  "endpoints": [
+    {
+      "id": "ready-persistence-and-reconstruction",
+      "owners": [
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/raft/raft-rs-runtime-tuning.js",
+        "src/raft/raft-rs-durable-store.js",
+        "src/raft/raft-rs-binding-owner.js",
+        "src/raft/raft-rs-runtime-owner-constants.js",
+        "src/raft/raft-rs-runtime-faults.js",
+        "src/partition/partition-write-kernel.js",
+        "src/node/replica-handler-release-recovery.js",
+        "src/node/replica-handler-membership-relay.js"
+      ]
+    },
+    {
+      "id": "application-and-progress-transaction",
+      "owners": [
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/partition/partition-service-raft-init-base.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-committed-command-admission.js",
+        "src/partition/partition-service-write-metrics-base.js",
+        "src/partition/partition-participant-transaction-apply.js",
+        "src/partition/partition-participant-transaction-store.js",
+        "src/partition/partition-transaction-execution-envelope.js",
+        "src/partition/partition-participant-transaction-bytes.js",
+        "src/node/replica-handler-participant-cutover.js",
+        "src/partition/partition-participant-release-facts.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/node/replica-runtime-cleanup-custody.js"
+      ]
+    }
+  ],
+  "independentReview": "subagent:/root/tx1_deletion_design_vet full50 batch R4 endorses this correction; final exact-byte review still required.",
+  "acceptanceChanged": false,
+  "checkerRelaxed": false
+}

@@ -1,0 +1,15 @@
+[
+  {
+    "name": "duplication",
+    "exe": "node",
+    "args": [
+      "scripts/check-duplication.js"
+    ],
+    "inputSha": "cd589405e6febadf7dbef339b6806e15426e837f",
+    "status": 1,
+    "signal": null,
+    "startedAt": "2026-10-13T15:18:31.461Z",
+    "finishedAt": "2026-10-13T15:20:35.973Z",
+    "log": "duplication.log"
+  }
+]

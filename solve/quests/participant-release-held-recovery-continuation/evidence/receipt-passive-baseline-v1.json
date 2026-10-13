@@ -1,0 +1,64 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "participant-release-held-recovery-continuation",
+  "status": "fail",
+  "generatedAt": "2026-10-13T13:49:07.172Z",
+  "baselineHead": "d35d8828c630d1b9675b47f511c477b3cc9ee991",
+  "stage": "Passive current-source diagnostic red measured on locked lab; production repair and independent design approval pending",
+  "receipts": [
+    {
+      "id": "deferred-healed-group-recovers-without-external-actuation",
+      "passed": false,
+      "reason": "RED on locked tv-dator at immutable input d0ae6f839cca24e2372daffc5ee981d76b207d48: exact d35 production plus passive diagnostic 9ece4577... ran 20 assertions, 19 passed and one failed. Scheduled control passed in 2381.31443 ms. Deferred singleton spent the unchanged 10000 ms healthy bound, failed in 10183.671715 ms and reported zero target reconstructions and zero target consensus events after healing. No post-heal status read, sleep, tick or operator release supplied progress."
+    },
+    {
+      "id": "typed-held-status-retains-one-bounded-owner-wake",
+      "passed": false,
+      "reason": "RED by source census: dispatch deletes due debt before reconcile, and the normal no-leader return retains none even when the port's canonical typed status says host recovery holds the group. No approved production repair or focused retryAfter/clock witness exists."
+    },
+    {
+      "id": "healthy-nonheld-service-remains-event-driven",
+      "passed": false,
+      "reason": "Unmeasured for the proposed change. Acceptance requires an ordinary follower/candidate nonpolling control paired with the held-status case."
+    },
+    {
+      "id": "canonical-release-authority-and-durable-replay-preserved",
+      "passed": false,
+      "reason": "Historical V5 evidence preserves the real durable failure and sibling controls but final healed replay/release is red. Acceptance requires current origin/build/service/member/generation/census and exact-once replay proof after the repair."
+    },
+    {
+      "id": "single-flight-replacement-shutdown-and-regression-cone-preserved",
+      "passed": false,
+      "reason": "No candidate exists. Event coalescing, max-four concurrency, per-partition single-flight, current-service replacement, shutdown settlement, source-only revert and static/impact gates remain required."
+    }
+  ],
+  "historicalWitnessSha256": "8f63c5e1ba41b8973a8a90f79c94eb33bffef8f65706e21ad4457cbe1ff65124",
+  "historicalEvidence": {
+    "review": "solve/quests/tx1-single-path-alpha/evidence/implementation-review-v5-recovery-hold.md",
+    "reviewSha256": "37522bcb3c46d77e4accca063999e11ae93be576c9a849310b7f7b3d6b5ae0b0",
+    "candidateTapSha256": "893f275afcbaa52502dda5eb305b81f29c3b54d99a5f495bee8a769e3191de78",
+    "predecessorSourceTapSha256": "271d7399a426f943fd7ec660bec6d2f6f28e4d1200e580882f550cf9f7c5081a"
+  },
+  "currentRelevantBytes": {
+    "src/node/replica-handler-release-recovery.js": "07594e7e2aeaae7305c0f39eddd6d5e6227a08e4de659e28b6e19a24125a41e3",
+    "src/partition/partition-write-kernel.js": "4541661a341e923466abe9132c3276455b31787266f0a58b5c6dbe74a1dc65f9",
+    "src/raft/raft-rs-runtime-owner.js": "b6cf3a1138030e75f23cb83eeeb31f1bc9080a8d72c414a160320217e556b1b5",
+    "src/partition/partition-service-raft-init-base.js": "62db32d5c42df8f001a4070e42a5badcd74db9429e07fe11abc62e987a4b9b94",
+    "src/partition/partition-participant-transaction-pause.js": "cfaed57de5d72786ac528eab1dc93fdd13411c1ce2a854f682569582df3fc85e",
+    "test/partition/partition-runtime-reconstruction-leadership.test.js": "8f63c5e1ba41b8973a8a90f79c94eb33bffef8f65706e21ad4457cbe1ff65124"
+  },
+  "currentSourceDiagnostic": {
+    "measured": true,
+    "machine": "tv-dator",
+    "immutableInput": "d0ae6f839cca24e2372daffc5ee981d76b207d48",
+    "sourceHead": "d35d8828c630d1b9675b47f511c477b3cc9ee991",
+    "diagnosticTestSha256": "9ece45774ac62fad32e965f227b9e886140e21b5c8bdcd8a0fb6f7c12bd7d2e7",
+    "assertions": {"total": 20, "passed": 19, "failed": 1},
+    "scheduledControlDurationMs": 2381.31443,
+    "deferredCaseDurationMs": 10183.671715,
+    "passiveTrace": {"reconstructions": 0, "consensus": []},
+    "result": "passive-baseline-result.json",
+    "rawLog": "passive-baseline-tv-dator.log",
+    "rawLogSha256": "ae86bec0fc21246f1d3152877f051b04f7847b3087302b1b66c628febc5c3be6"
+  }
+}

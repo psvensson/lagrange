@@ -1,0 +1,111 @@
+{
+  "schema": "release-continuation-source-revert-pair/1",
+  "candidate": {
+    "schema": "release-continuation-input/1",
+    "kind": "candidate-v2",
+    "sha": "0b7147e5096c926450c61be101f42a17dc68f46a",
+    "tree": "7585ccb5a90607f0841736df3099e0266c87811d",
+    "parent": "d35d8828c630d1b9675b47f511c477b3cc9ee991",
+    "worktree": "/tmp/session-worktree-cmHob1/tree",
+    "files": [
+      {
+        "file": "architecture/contracts/authority-and-recovery.md",
+        "sha256": "128538d75429c1d31b9cb7aa245eef9392ef14f7ee948c925086582a972a1ae5"
+      },
+      {
+        "file": "src/node/replica-handler-release-recovery.js",
+        "sha256": "eee652ff8432d03fde329d89e05586a3a41ead1e5040e0598c6337984add06c5"
+      },
+      {
+        "file": "src/partition/partition-participant-transaction-pause.js",
+        "sha256": "0ce1938d2fb1ac20d6f96e64fa39e29dec64e4c44dbc242238067d8c1a1737be"
+      },
+      {
+        "file": "test/node/replica-handler-release-recovery.test.js",
+        "sha256": "47dc220e8d4125c83ce68f246cc91c1f18c55d57a0bcdd6518049dbeb63569dd"
+      },
+      {
+        "file": "test/partition/partition-runtime-reconstruction-leadership.test.js",
+        "sha256": "9ece45774ac62fad32e965f227b9e886140e21b5c8bdcd8a0fb6f7c12bd7d2e7"
+      },
+      {
+        "file": "test/shards/impact-contracts.json",
+        "sha256": "e00896adddb2631b700b96d47397d3220091d49adb72daace44f5b2e23dcdf75"
+      },
+      {
+        "file": "test/shards/impact-graph-seal.json",
+        "sha256": "7281aa3dacc7e7ff4e23da222b1fda386604182f5de841d52704e52043dbfc5f"
+      },
+      {
+        "file": "test/shards/primary-classes.json",
+        "sha256": "e8cc7f82909c4cbaae58882354f761f92350bdba5546df386e30df3ed753dbee"
+      },
+      {
+        "file": "test/shards/resource-classes.json",
+        "sha256": "d32ef500be06912bd32434990a77f01bf6426b32c9cd67bcbd245bb1aa2bc7ed"
+      },
+      {
+        "file": "test/shards/subsystem-classes.json",
+        "sha256": "d2beddc9ae0a7af15a826b72bdf1f58d55c899b08b5b6587a2a80a2fd58a5087"
+      }
+    ],
+    "createdAt": "2026-10-13T14:47:56.157Z"
+  },
+  "control": {
+    "schema": "release-continuation-input/1",
+    "kind": "source-revert-v2",
+    "sha": "6a6a67b440bf7dc9e2d38bad6764adda171a1846",
+    "tree": "6974b59ff57774fb0850a22e96c8d913cfe12611",
+    "parent": "d35d8828c630d1b9675b47f511c477b3cc9ee991",
+    "worktree": "/tmp/session-worktree-GaxRZz/tree",
+    "files": [
+      {
+        "file": "architecture/contracts/authority-and-recovery.md",
+        "sha256": "128538d75429c1d31b9cb7aa245eef9392ef14f7ee948c925086582a972a1ae5"
+      },
+      {
+        "file": "src/node/replica-handler-release-recovery.js",
+        "sha256": "07594e7e2aeaae7305c0f39eddd6d5e6227a08e4de659e28b6e19a24125a41e3"
+      },
+      {
+        "file": "src/partition/partition-participant-transaction-pause.js",
+        "sha256": "cfaed57de5d72786ac528eab1dc93fdd13411c1ce2a854f682569582df3fc85e"
+      },
+      {
+        "file": "test/node/replica-handler-release-recovery.test.js",
+        "sha256": "47dc220e8d4125c83ce68f246cc91c1f18c55d57a0bcdd6518049dbeb63569dd"
+      },
+      {
+        "file": "test/partition/partition-runtime-reconstruction-leadership.test.js",
+        "sha256": "9ece45774ac62fad32e965f227b9e886140e21b5c8bdcd8a0fb6f7c12bd7d2e7"
+      },
+      {
+        "file": "test/shards/impact-contracts.json",
+        "sha256": "e00896adddb2631b700b96d47397d3220091d49adb72daace44f5b2e23dcdf75"
+      },
+      {
+        "file": "test/shards/impact-graph-seal.json",
+        "sha256": "7281aa3dacc7e7ff4e23da222b1fda386604182f5de841d52704e52043dbfc5f"
+      },
+      {
+        "file": "test/shards/primary-classes.json",
+        "sha256": "e8cc7f82909c4cbaae58882354f761f92350bdba5546df386e30df3ed753dbee"
+      },
+      {
+        "file": "test/shards/resource-classes.json",
+        "sha256": "d32ef500be06912bd32434990a77f01bf6426b32c9cd67bcbd245bb1aa2bc7ed"
+      },
+      {
+        "file": "test/shards/subsystem-classes.json",
+        "sha256": "d2beddc9ae0a7af15a826b72bdf1f58d55c899b08b5b6587a2a80a2fd58a5087"
+      }
+    ],
+    "createdAt": "2026-10-13T14:47:57.105Z"
+  },
+  "differingPaths": [
+    "src/node/replica-handler-release-recovery.js",
+    "src/partition/partition-participant-transaction-pause.js"
+  ],
+  "allNonSourceTrackedBytesIdentical": true,
+  "recordedAt": "2026-10-13T14:47:57.108Z"
+}

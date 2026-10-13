@@ -1,0 +1,213 @@
+[
+  {
+    "name": "syntax-0",
+    "exe": "node",
+    "args": [
+      "--check",
+      "src/node/replica-handler-release-recovery.js"
+    ],
+    "inputSha": "cd589405e6febadf7dbef339b6806e15426e837f",
+    "status": 0,
+    "signal": null,
+    "startedAt": "2026-10-13T15:18:31.461Z",
+    "finishedAt": "2026-10-13T15:18:31.477Z",
+    "log": "syntax-0.log"
+  },
+  {
+    "name": "syntax-1",
+    "exe": "node",
+    "args": [
+      "--check",
+      "src/partition/partition-participant-transaction-pause.js"
+    ],
+    "inputSha": "cd589405e6febadf7dbef339b6806e15426e837f",
+    "status": 0,
+    "signal": null,
+    "startedAt": "2026-10-13T15:18:31.477Z",
+    "finishedAt": "2026-10-13T15:18:31.491Z",
+    "log": "syntax-1.log"
+  },
+  {
+    "name": "syntax-2",
+    "exe": "node",
+    "args": [
+      "--check",
+      "test/node/replica-handler-release-recovery.test.js"
+    ],
+    "inputSha": "cd589405e6febadf7dbef339b6806e15426e837f",
+    "status": 0,
+    "signal": null,
+    "startedAt": "2026-10-13T15:18:31.491Z",
+    "finishedAt": "2026-10-13T15:18:31.506Z",
+    "log": "syntax-2.log"
+  },
+  {
+    "name": "syntax-3",
+    "exe": "node",
+    "args": [
+      "--check",
+      "test/partition/partition-runtime-reconstruction-leadership.test.js"
+    ],
+    "inputSha": "cd589405e6febadf7dbef339b6806e15426e837f",
+    "status": 0,
+    "signal": null,
+    "startedAt": "2026-10-13T15:18:31.571Z",
+    "finishedAt": "2026-10-13T15:18:31.587Z",
+    "log": "syntax-3.log"
+  },
+  {
+    "name": "eslint",
+    "exe": "./node_modules/.bin/eslint",
+    "args": [
+      "src/node/replica-handler-release-recovery.js",
+      "src/partition/partition-participant-transaction-pause.js",
+      "test/node/replica-handler-release-recovery.test.js",
+      "test/partition/partition-runtime-reconstruction-leadership.test.js"
+    ],
+    "inputSha": "cd589405e6febadf7dbef339b6806e15426e837f",
+    "status": 0,
+    "signal": null,
+    "startedAt": "2026-10-13T15:18:31.587Z",
+    "finishedAt": "2026-10-13T15:18:33.737Z",
+    "log": "eslint.log"
+  },
+  {
+    "name": "metrics",
+    "exe": "node",
+    "args": [
+      "scripts/check-scoped-ratchets.js",
+      "--strict",
+      "src/node/replica-handler-release-recovery.js",
+      "src/partition/partition-participant-transaction-pause.js"
+    ],
+    "inputSha": "cd589405e6febadf7dbef339b6806e15426e837f",
+    "status": 0,
+    "signal": null,
+    "startedAt": "2026-10-13T15:18:33.737Z",
+    "finishedAt": "2026-10-13T15:18:34.631Z",
+    "log": "metrics.log"
+  },
+  {
+    "name": "file-size",
+    "exe": "node",
+    "args": [
+      "scripts/check-file-size-thresholds.js",
+      "--strict",
+      "src/node/replica-handler-release-recovery.js",
+      "src/partition/partition-participant-transaction-pause.js",
+      "test/node/replica-handler-release-recovery.test.js",
+      "test/partition/partition-runtime-reconstruction-leadership.test.js"
+    ],
+    "inputSha": "cd589405e6febadf7dbef339b6806e15426e837f",
+    "status": 0,
+    "signal": null,
+    "startedAt": "2026-10-13T15:18:34.631Z",
+    "finishedAt": "2026-10-13T15:18:34.651Z",
+    "log": "file-size.log"
+  },
+  {
+    "name": "guideline-literals",
+    "exe": "node",
+    "args": [
+      "scripts/check-guideline-literals.js",
+      "src/node/replica-handler-release-recovery.js",
+      "src/partition/partition-participant-transaction-pause.js"
+    ],
+    "inputSha": "cd589405e6febadf7dbef339b6806e15426e837f",
+    "status": 0,
+    "signal": null,
+    "startedAt": "2026-10-13T15:18:34.651Z",
+    "finishedAt": "2026-10-13T15:18:34.701Z",
+    "log": "guideline-literals.log"
+  },
+  {
+    "name": "guideline-decision-boundaries",
+    "exe": "node",
+    "args": [
+      "scripts/check-guideline-decision-boundaries.js",
+      "src/node/replica-handler-release-recovery.js",
+      "src/partition/partition-participant-transaction-pause.js"
+    ],
+    "inputSha": "cd589405e6febadf7dbef339b6806e15426e837f",
+    "status": 1,
+    "signal": null,
+    "startedAt": "2026-10-13T15:18:34.701Z",
+    "finishedAt": "2026-10-13T15:18:34.757Z",
+    "log": "guideline-decision-boundaries.log"
+  },
+  {
+    "name": "guideline-silent-catch",
+    "exe": "node",
+    "args": [
+      "scripts/check-guideline-silent-catch.js",
+      "src/node/replica-handler-release-recovery.js",
+      "src/partition/partition-participant-transaction-pause.js"
+    ],
+    "inputSha": "cd589405e6febadf7dbef339b6806e15426e837f",
+    "status": 0,
+    "signal": null,
+    "startedAt": "2026-10-13T15:18:34.757Z",
+    "finishedAt": "2026-10-13T15:18:34.804Z",
+    "log": "guideline-silent-catch.log"
+  },
+  {
+    "name": "guideline-boundary-mode-contracts",
+    "exe": "node",
+    "args": [
+      "scripts/check-guideline-boundary-mode-contracts.js",
+      "src/node/replica-handler-release-recovery.js",
+      "src/partition/partition-participant-transaction-pause.js"
+    ],
+    "inputSha": "cd589405e6febadf7dbef339b6806e15426e837f",
+    "status": 0,
+    "signal": null,
+    "startedAt": "2026-10-13T15:18:34.804Z",
+    "finishedAt": "2026-10-13T15:18:34.840Z",
+    "log": "guideline-boundary-mode-contracts.log"
+  },
+  {
+    "name": "guideline-hot-path-diagnostics",
+    "exe": "node",
+    "args": [
+      "scripts/check-guideline-hot-path-diagnostics.js",
+      "src/node/replica-handler-release-recovery.js",
+      "src/partition/partition-participant-transaction-pause.js"
+    ],
+    "inputSha": "cd589405e6febadf7dbef339b6806e15426e837f",
+    "status": 0,
+    "signal": null,
+    "startedAt": "2026-10-13T15:18:34.840Z",
+    "finishedAt": "2026-10-13T15:18:34.875Z",
+    "log": "guideline-hot-path-diagnostics.log"
+  },
+  {
+    "name": "guideline-deferred-outcomes",
+    "exe": "node",
+    "args": [
+      "scripts/check-guideline-deferred-outcomes.js",
+      "src/node/replica-handler-release-recovery.js",
+      "src/partition/partition-participant-transaction-pause.js"
+    ],
+    "inputSha": "cd589405e6febadf7dbef339b6806e15426e837f",
+    "status": 0,
+    "signal": null,
+    "startedAt": "2026-10-13T15:18:34.875Z",
+    "finishedAt": "2026-10-13T15:18:34.915Z",
+    "log": "guideline-deferred-outcomes.log"
+  },
+  {
+    "name": "guideline-ambient-intrinsics",
+    "exe": "node",
+    "args": [
+      "scripts/check-guideline-ambient-intrinsics.js",
+      "src/node/replica-handler-release-recovery.js",
+      "src/partition/partition-participant-transaction-pause.js"
+    ],
+    "inputSha": "cd589405e6febadf7dbef339b6806e15426e837f",
+    "status": 0,
+    "signal": null,
+    "startedAt": "2026-10-13T15:18:34.915Z",
+    "finishedAt": "2026-10-13T15:18:34.954Z",
+    "log": "guideline-ambient-intrinsics.log"
+  }
+]

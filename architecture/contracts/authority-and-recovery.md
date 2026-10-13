@@ -50,6 +50,33 @@ obligation. Permanent refusal is explicit and cannot disguise an endlessly
 retrying operation. Recovery may preserve an unresolved obligation after the
 ordinary request has settled; it must not invent success to release it.
 
+### Participant release observes a held runtime through one continuation
+
+The replica handler's participant-release recovery queue is the volatile
+continuation owner for hosted partitions whose Raft runtime reports the
+canonical host-held status. It reuses the write kernel's held-status
+classifier and the existing `PARTICIPANT_CUTOVER_BOUND.RECOVERY_RETRY_MS`
+cadence. It does not consume the runtime status's relative `retryAfterMs`,
+drive a Raft tick or core operation, or grant release. The Raft runtime keeps
+sole ownership of its reconstruction not-before instant, durable record read,
+committed replay and consensus announcement.
+
+Each observation reads current hosted services in registry order and stops at
+the first current leader. Without a leader, any canonical held observation
+retains one partition debt; healthy followers and candidates, absent services,
+and unavailable or malformed status remain event-driven. The tracked-service
+registry and consensus relay are wakes only. A later leader still must pass the
+existing durable-origin, measured-build, complete-census and cutover owners.
+
+The participant pause/resume owner remains the only owner of the final OPEN
+mutation. Both an idempotent OPEN answer and a final mutation require a live
+handler, a live service and the exact service object still registered for its
+replica. Handler shutdown, service shutdown or replacement closes the stale
+object and returns the existing stale outcome. A different release identity
+against an otherwise current valid OPEN proof is stale without revoking that
+proof. Recovery shutdown removes only volatile observation debt; it cannot
+weaken origin, generation, membership, transaction-drain or lifecycle fences.
+
 ### Every abstraction reduces the reasoning required
 
 A new subsystem earns its existence through a distinct responsibility or
