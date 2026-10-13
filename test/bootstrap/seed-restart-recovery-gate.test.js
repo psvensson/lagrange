@@ -11,7 +11,8 @@
  * unconditional DURABLE_SEED while the rest of the change remains.
  */
 
-import {mkdtemp, rm} from 'node:fs/promises';
+import {mkdir, mkdtemp, rm} from 'node:fs/promises';
+import Database from 'better-sqlite3';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {test} from '../../src/test-helpers/tap.js';
@@ -265,3 +266,54 @@ test('a pre-identity persisted seed role (no cluster-id) refuses to serve ' +
   );
   t.equal(decision.mode, 'fail');
 });
+
+
+test('durable nodes rows without seed-role hints cannot rebootstrap fresh ' +
+  'after a process loss', async (t) => {
+  const dataDir = await mkdtemp(join(tmpdir(), 'seed-no-hints-recovery-'));
+  t.after(() => rm(dataDir, {recursive: true, force: true}));
+  const nodesDir = join(dataDir, 'partitions', 'nodes-p1');
+  await mkdir(nodesDir, {recursive: true});
+  // Same physical path and table read by the production durable-nodes owner.
+  const db = new Database(join(nodesDir, 'nodes-p1-r1.db'));
+  try {
+    db.exec('CREATE TABLE nodes (node_id TEXT PRIMARY KEY, ' +
+      'node_address TEXT NOT NULL)');
+    db.prepare('INSERT INTO nodes (node_id, node_address) VALUES (?, ?)')
+      .run(LOCAL_NODE_ID, LOCAL_NODE_ADDRESS);
+  } finally {
+    db.close();
+  }
+
+  const decision = await resolveAutoRejoinStartupDecision({
+    dataDir,
+    nodeId: LOCAL_NODE_ID,
+    nodeAddress: LOCAL_NODE_ADDRESS,
+    probePeerAddress: async () => false,
+  });
+  t.equal(decision.state, 'seed_recovery_proof_missing',
+    'a readable nodes Raft replica with no hints cannot authorize genesis');
+  t.equal(decision.mode, 'fail', 'no seed serving without recovery proof');
+  t.equal(decision.durableStateDetected, true,
+    'a durable nodes-table record is still present after process loss');
+  t.equal(decision.source, 'durable_nodes_table',
+    'the startup decision names the actual surviving source');
+  t.equal(decision.membershipOwnerOutcome.outcomeType,
+    MEMBERSHIP_OWNER_OUTCOME_TYPE.BLOCKED_STARTUP,
+    'the existing membership owner rejects unproved startup');
+});
+
+test('a genuinely empty directory remains eligible for fresh bootstrap',
+  async (t) => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'seed-recovery-virgin-'));
+    t.after(() => rm(dataDir, {recursive: true, force: true}));
+    const decision = await resolveAutoRejoinStartupDecision({
+      dataDir,
+      nodeId: LOCAL_NODE_ID,
+      nodeAddress: LOCAL_NODE_ADDRESS,
+      probePeerAddress: async () => false,
+    });
+    t.equal(decision.state, 'fresh_seed');
+    t.equal(decision.mode, 'seed');
+    t.equal(decision.durableStateDetected, false);
+  });
