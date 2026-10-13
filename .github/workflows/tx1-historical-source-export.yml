@@ -1,0 +1,35 @@
+name: tx1-historical-source-export
+on:
+  push:
+    branches: [review/tx1-legacy-history-20261013]
+    paths: [.github/workflows/tx1-historical-source-export.yml]
+permissions:
+  contents: read
+jobs:
+  historical-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Export immutable pre-L6 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p test-output/tx1-history-export
+          EXPECTED=2a21e39cec4bbba941dafc2034b1bc038d9e31db
+          test "$(git rev-parse HEAD^)" = "$EXPECTED"
+          git rev-parse HEAD > test-output/tx1-history-export/EXPORT_SHA
+          git rev-parse HEAD^ > test-output/tx1-history-export/PRE_L6_SOURCE_SHA
+          git archive HEAD^ | gzip -n -6 > test-output/tx1-history-export/pre-l6.tar.gz
+          sha256sum test-output/tx1-history-export/pre-l6.tar.gz > test-output/tx1-history-export/SHA256SUMS
+          tar -xOzf test-output/tx1-history-export/pre-l6.tar.gz package-lock.json | sha256sum > test-output/tx1-history-export/LOCK_SHA256
+          test -z "$(git status --porcelain)"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: tx1-historical-source-${{ github.run_id }}
+          path: test-output/tx1-history-export/
+          retention-days: 7
+          if-no-files-found: error
