@@ -2,7 +2,10 @@ name: rs-raft-no-hints-seed-gate
 on:
   push:
     branches: [resume/rs-raft-runtime-recovery-20261012]
-    paths: [.github/workflows/rs-raft-no-hints-seed-gate.yml]
+    paths:
+      - .github/workflows/rs-raft-no-hints-seed-gate.yml
+      - src/bootstrap/rejoin-hints.js
+      - test/bootstrap/seed-restart-recovery-gate.test.js
 permissions:
   contents: read
 jobs:
