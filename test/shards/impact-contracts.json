@@ -32,7 +32,8 @@
         "test/partition/participant-decision-canonical-record.test.js",
         "test/partition/partition-unreadable-durable-record.test.js",
         "test/integration/seed-migration-cutover-persisted.integration.test.js",
-        "test/integration/seed-migration-process-loss.integration.test.js"
+        "test/integration/seed-migration-process-loss.integration.test.js",
+        "test/integration/seed-migration-interrupted-decision.integration.test.js"
       ]
     },
     "transaction-workflow-recovery-ownership": {
@@ -46,7 +47,8 @@
         "test/workflow/durable-workflow-coordinator.test.js",
         "test/workflow/durable-workflow-recovery-identity.test.js",
         "test/integration/seed-migration-cutover-persisted.integration.test.js",
-        "test/integration/seed-migration-process-loss.integration.test.js"
+        "test/integration/seed-migration-process-loss.integration.test.js",
+        "test/integration/seed-migration-interrupted-decision.integration.test.js"
       ]
     },
     "wit-world-interface": {
@@ -1047,7 +1049,8 @@
         "test/partition/participant-decision-canonical-record.test.js",
         "test/partition/partition-unreadable-durable-record.test.js",
         "test/integration/seed-migration-cutover-persisted.integration.test.js",
-        "test/integration/seed-migration-process-loss.integration.test.js"
+        "test/integration/seed-migration-process-loss.integration.test.js",
+        "test/integration/seed-migration-interrupted-decision.integration.test.js"
       ]
     },
     "transaction-workflow-recovery-ownership": {
@@ -1072,7 +1075,8 @@
         "test/workflow/durable-workflow-coordinator.test.js",
         "test/workflow/durable-workflow-recovery-identity.test.js",
         "test/integration/seed-migration-cutover-persisted.integration.test.js",
-        "test/integration/seed-migration-process-loss.integration.test.js"
+        "test/integration/seed-migration-process-loss.integration.test.js",
+        "test/integration/seed-migration-interrupted-decision.integration.test.js"
       ]
     },
     "seed-registration-election-scheduling": {
