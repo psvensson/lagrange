@@ -22,7 +22,8 @@ import {
 import {PARTICIPANT_RELEASE_ACTION, PARTICIPANT_RELEASE_RESULT_FIELD,
   PARTICIPANT_RELEASE_TYPE} from
   '../partition/partition-participant-transaction-cutover-constants.js';
-import {receiveParticipantRelease} from './replica-handler-participant-release.js';
+import {captureParticipantReleaseDispatch, receiveParticipantRelease} from
+  './replica-handler-participant-release.js';
 import {runParticipantCutover} from './replica-handler-participant-cutover.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
@@ -133,21 +134,31 @@ function assignReplicaHandlerLifecycleMethods(ReplicaHandler) {
      */
     async handleMessage(envelope) {
       const {payload, correlationId} = envelope;
-      const type = payload?.[ReplicaOperationField.TYPE];
+      const captured = captureParticipantReleaseDispatch(payload);
+      if (captured.kind === 'malformed') {
+        await this.awaitRemovedReplicaCleanupAdmissionBarrier();
+        const response = await dispatchReplicaMessage(this, undefined, null);
+        return {...response, correlationId};
+      }
+      const type = captured.kind === 'release' ? PARTICIPANT_RELEASE_TYPE :
+        captured.type;
       // Release reads/pause/recovery stay available during bootstrap. The
       // reopen action still asks retained-storage admission before closing
       // anything; this does not authorize create/remove/storage shortcuts.
       if (type === PARTICIPANT_RELEASE_TYPE) {
-        const response = payload.action === PARTICIPANT_RELEASE_ACTION.RELEASE ?
-          await runParticipantCutover(this, payload) :
-          await receiveParticipantRelease(this, payload);
+        const {request, refusal, observationValidated} = captured;
+        const response = refusal ??
+          (request.action === PARTICIPANT_RELEASE_ACTION.RELEASE ?
+            await runParticipantCutover(this, request) :
+            await receiveParticipantRelease(this, request,
+              observationValidated));
         return {acknowledged: true, [PARTICIPANT_RELEASE_RESULT_FIELD]: response, correlationId};
       }
       await this.awaitRemovedReplicaCleanupAdmissionBarrier();
       this.logger.debug(REPLICA_HANDLER_LOG_MSG.MESSAGE_RECEIVED, {
         type,
         correlationId,
-        operationId: payload?.operationId,
+        operationId: captured.operationId,
       });
       const response = await dispatchReplicaMessage(this, type, payload);
       // Include correlationId in response for RPC matching; a request's

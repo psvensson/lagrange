@@ -13,7 +13,8 @@ import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
 import {deepFreeze} from '../raft/raft-operation-port.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from './partition-write-kernel.js';
 import {participantConnectionStampOf} from './partition-participant-transaction-connection.js';
-import {releaseCensusDefect, sameReplicaGeneration} from './partition-participant-release-contract.js';
+import {participantReleaseGenerationValid, releaseCensusDefect,
+  sameReplicaGeneration} from './partition-participant-release-contract.js';
 import {hasParticipantSession} from './partition-participant-transaction-session.js';
 import {readPreparedParticipantIds, readPartitionWriteOrigin} from
   './partition-participant-transaction-store.js';
@@ -73,45 +74,103 @@ function replicaGenerationOf(handler, service, status) {
     admissionGeneration: admission.generation});
 }
 
-function generationAvailable(generation) {
-  return typeof generation.nodeId === 'string' && generation.nodeId.length > 0 &&
-    typeof generation.replicaId === 'string' && generation.replicaId.length > 0 &&
-    generation.lifecycleIncarnation !== null && generation.lifecycleIncarnation !== undefined &&
-    [generation.ownerIncarnation, generation.runtimeGeneration, generation.connectionGeneration]
-      .every((value) => Number.isSafeInteger(value) && value > 0);
+function participantReleaseFactsAssessment(answer, context = null,
+  refreshEligible = false) {
+  return deepFreeze({answer, context, refreshEligible});
+}
+
+function hostedReleaseService(handler, service) {
+  return service?.initialized === true && service.isShutdown !== true &&
+    handler.localServices.get(service.replicaId) === service;
+}
+
+function committedMembershipAvailable(membership, status) {
+  return membership.kind === COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED &&
+    status.outcome === RAFT_OPERATION_OUTCOME.CORE_OK;
+}
+
+function releaseFactsContext(build, generation, paused, status) {
+  return deepFreeze({buildDigest: build.digest, generation, paused,
+    term: status.term, leaderReplicaId: status.leaderId,
+    configurationKey: status.configurationKey,
+    membershipGenerationIndex: status.membershipGenerationIndex,
+    appliedIndex: status.appliedIndex});
+}
+
+function membershipAssessment(membership, status, context,
+  requireMembershipGeneration) {
+  const sameBaseLineage = membership.configurationKey === status.configurationKey &&
+    membership.term === status.term;
+  const sameMembershipGeneration = membership.membershipGenerationIndex ===
+    status.membershipGenerationIndex;
+  const current = sameBaseLineage && membership.appliedIndex === status.appliedIndex &&
+    (!requireMembershipGeneration || sameMembershipGeneration);
+  if (current) return null;
+  const refreshEligible = requireMembershipGeneration && sameBaseLineage &&
+    sameMembershipGeneration && membership.appliedIndex < status.appliedIndex;
+  return participantReleaseFactsAssessment(
+    unavailable(FACT.MEMBERSHIP, membership.reason ?? status.reason),
+    refreshEligible ? context : null, refreshEligible);
+}
+
+function observedReleaseFacts(service, build, membership, status, generation, paused) {
+  return deepFreeze({outcome: OUTCOME.OBSERVED,
+    partitionId: service.partitionId,
+    generation, buildDigest: build.digest, membership,
+    leaderReplicaId: status.leaderId, leaderAddress: status.leaderAddress,
+    role: status.role, confChangePending: status.confChangePending,
+    peers: status.peers, origin: readPartitionWriteOrigin(service.db),
+    connection: participantConnectionStampOf(service.db),
+    paused,
+    rowid: readRowidCensus(service), work: readAcceptedWork(service, membership, status),
+    topology: topologyTransitionOf(service),
+    queryCensus: service.tableName === TABLES.SQL_TRANSACTIONS ?
+      readTransactionReleaseCensus(service.db) : null});
+}
+
+async function readParticipantReleaseFactsAssessment(handler, service,
+  purpose = COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS,
+  requireMembershipGeneration = false) {
+  if (!hostedReleaseService(handler, service)) {
+    return participantReleaseFactsAssessment(unavailable(FACT.HOSTED));
+  }
+  const build = await runtimeBuildProvenance();
+  if (build.state !== RUNTIME_BUILD_STATE.MEASURED) {
+    return participantReleaseFactsAssessment(unavailable(FACT.BUILD, build.reason));
+  }
+  try {
+    const membership = await service.raft.readCommittedMembership({purpose});
+    const status = service.raft.readStatus();
+    if (!committedMembershipAvailable(membership, status)) {
+      return participantReleaseFactsAssessment(
+        unavailable(FACT.MEMBERSHIP, membership.reason ?? status.reason));
+    }
+    const generation = replicaGenerationOf(handler, service, status);
+    if (!participantReleaseGenerationValid(generation)) {
+      return participantReleaseFactsAssessment(unavailable(FACT.GENERATION));
+    }
+    const paused = participantCutoverPauseOf(service) !== null;
+    const context = releaseFactsContext(build, generation, paused, status);
+    const refused = membershipAssessment(membership, status, context,
+      requireMembershipGeneration);
+    return refused ?? participantReleaseFactsAssessment(
+      observedReleaseFacts(service, build, membership, status, generation, paused),
+      context);
+  } catch (error) {
+    return participantReleaseFactsAssessment(
+      unavailable(FACT.MEMBERSHIP, String(error?.message ?? error)));
+  }
+}
+
+async function readParticipantReleaseObservationAssessment(handler, service) {
+  return readParticipantReleaseFactsAssessment(handler, service,
+    COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS, true);
 }
 
 async function readParticipantReleaseFacts(handler, service,
   purpose = COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS) {
-  if (!service?.initialized || service.isShutdown ||
-      handler.localServices.get(service.replicaId) !== service) return unavailable(FACT.HOSTED);
-  const build = await runtimeBuildProvenance();
-  if (build.state !== RUNTIME_BUILD_STATE.MEASURED) return unavailable(FACT.BUILD, build.reason);
-  try {
-    const membership = await service.raft.readCommittedMembership({purpose});
-    const status = service.raft.readStatus();
-    if (membership.kind !== COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED ||
-        status.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK ||
-        membership.configurationKey !== status.configurationKey ||
-        membership.term !== status.term || membership.appliedIndex !== status.appliedIndex) {
-      return unavailable(FACT.MEMBERSHIP, membership.reason ?? status.reason);
-    }
-    const generation = replicaGenerationOf(handler, service, status);
-    if (!generationAvailable(generation)) return unavailable(FACT.GENERATION);
-    return deepFreeze({outcome: OUTCOME.OBSERVED, partitionId: service.partitionId,
-      generation, buildDigest: build.digest, membership,
-      leaderReplicaId: status.leaderId, leaderAddress: status.leaderAddress,
-      role: status.role, confChangePending: status.confChangePending,
-      peers: status.peers, origin: readPartitionWriteOrigin(service.db),
-      connection: participantConnectionStampOf(service.db),
-      paused: participantCutoverPauseOf(service) !== null,
-      rowid: readRowidCensus(service), work: readAcceptedWork(service, membership, status),
-      topology: topologyTransitionOf(service),
-      queryCensus: service.tableName === TABLES.SQL_TRANSACTIONS ?
-        readTransactionReleaseCensus(service.db) : null});
-  } catch (error) {
-    return unavailable(FACT.MEMBERSHIP, String(error?.message ?? error));
-  }
+  return (await readParticipantReleaseFactsAssessment(handler, service,
+    purpose)).answer;
 }
 
 const ADMISSIONS = new WeakMap();
@@ -219,5 +278,7 @@ function pausedWriteAnswerOf(service) {
 export {
   invalidateParticipantReleaseAdmission, participantCutoverPauseOf,
   participantReleaseAdmissionOf, pausedWriteAnswerOf, raiseParticipantCutoverPause,
-  readParticipantReleaseFacts, resumeParticipantCutoverAdmission,
+  readParticipantReleaseFacts, readParticipantReleaseObservationAssessment,
+  replicaGenerationOf as participantReleaseReplicaGenerationOf,
+  resumeParticipantCutoverAdmission,
 };

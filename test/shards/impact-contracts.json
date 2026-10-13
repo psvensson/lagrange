@@ -652,7 +652,8 @@
         "test/partition/participant-envelope-admission.test.js",
         "test/node/replica-handler-release-recovery.test.js",
         "test/partition/participant-release-protocol.test.js",
-        "test/bootstrap/seed-participant-release-failure-projection.test.js"
+        "test/bootstrap/seed-participant-release-failure-projection.test.js",
+        "test/partition/participant-release-native-application-order.test.js"
       ]
     },
     "partition-raft-operation-port": {
@@ -1594,7 +1595,8 @@
         "test/partition/participant-envelope-admission.test.js",
         "test/node/replica-handler-release-recovery.test.js",
         "test/partition/participant-release-protocol.test.js",
-        "test/bootstrap/seed-participant-release-failure-projection.test.js"
+        "test/bootstrap/seed-participant-release-failure-projection.test.js",
+        "test/partition/participant-release-native-application-order.test.js"
       ]
     },
     "partition-raft-operation-port": {
