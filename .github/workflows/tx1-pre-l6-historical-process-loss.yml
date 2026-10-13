@@ -1,0 +1,139 @@
+name: tx1-pre-l6-historical-process-loss
+on:
+  push:
+    branches: [review/tx1-legacy-history-20261013]
+    paths: [.github/workflows/tx1-pre-l6-historical-process-loss.yml]
+permissions:
+  contents: read
+jobs:
+  historical-obligation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    permissions:
+      contents: write
+    env:
+      BASE: 2a21e39cec4bbba941dafc2034b1bc038d9e31db
+      BRANCH: review/tx1-legacy-history-20261013
+      TEST: test/partition/tx1-pre-l6-history.integration.test.js
+      CHILD: test/partition/tx1-pre-l6-history-child.js
+      OUT: test-output/tx1-pre-l6-obligation
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Confirm historical source and exact test hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git merge-base HEAD "$BASE")" = "$BASE"
+          git diff --exit-code "$BASE" HEAD -- src
+          test "$(git hash-object "$CHILD")" = 4fa420185403ada4b24debcbd5943f6dbe388797
+          test "$(git hash-object "$TEST")" = 10944e117cd532f2000308d7fa999737fa57f53e
+          npm ci > "$OUT/install.log" 2>&1
+          node --check "$TEST"
+          node --check "$CHILD"
+          node_modules/.bin/eslint "$TEST" "$CHILD" > "$OUT/eslint.log" 2>&1
+          git rev-parse HEAD > "$OUT/source-sha.txt"
+      - name: Actual old request-wire PREPARE, kill, raw disk and reopened owner
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          node --test "$TEST" > "$OUT/historical-native.tap" 2>&1
+          printf '%s\n' "$?" > "$OUT/test-exit.txt"
+          tail -55 "$OUT/historical-native.tap"
+      - name: Classify only measured historical loss, not cross-build approval
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os,re
+          from pathlib import Path
+          e=Path(os.environ['OUT'])
+          tap=(e/'historical-native.tap').read_text()
+          def count(k):
+              x=re.search(r'^# '+k+r' (\d+)$',tap,re.M)
+              return int(x.group(1)) if x else None
+          line=next((x[2:] for x in tap.splitlines()
+              if x.startswith('# {') and '"kind":"TX1_PRE_L6_PROCESS_LOSS"' in x),None)
+          receipt=json.loads(line) if line else {}
+          checks={
+            'exact-historical-source':receipt.get('sourceSha')==os.environ['BASE'],
+            'genuine-legacy-admission':receipt.get('legacyBeginAdmitted') is True,
+            'local-staging-prepared':receipt.get('oldPrepareAcknowledged') is True and
+                receipt.get('preparedState')=='local-staging',
+            'no-consensus-prepare':receipt.get('preKillConsensusProposals')==0,
+            'real-process-loss':receipt.get('sqliteTransactionHeldUntilKill') is True,
+            'lost-after-crash':receipt.get('historicalPreparedReconstructed') is False and
+                receipt.get('uncommittedWriteSurvived') is False,
+            'scope-honest':receipt.get('crossBuildMigrationCertified') is False,
+            'native-one-case':count('tests')==count('pass')==1 and
+                all(count(k)==0 for k in ['fail','cancelled','skipped','todo']),
+            'exit-green':(e/'test-exit.txt').read_text().strip()=='0',
+          }
+          summary={'oldSourceSha':os.environ['BASE'],
+              'historicalEvidenceCommit':(e/'source-sha.txt').read_text().strip(),
+              'checks':checks,'receipt':receipt,
+              'genuineHistoricalLegacySessionProved':all(checks.values()),
+              'historicalMigrationSafetyProved':False,
+              'legacyRetirementAuthorized':False,
+              'sourceCurrentCandidateCertified':False,'mergeReady':False,
+              'scope':'pre-L6 controlled consensus port, production legacy request wire, real SQLite, SIGKILL and restarted old owner; establishes volatile LOCAL_STAGING loss, not cross-build migration or native quorum'}
+          (e/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+          print(json.dumps(summary,indent=2))
+          assert summary['genuineHistoricalLegacySessionProved']
+          PY
+      - name: Retain historical evidence only on its review branch
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEST="solve/quests/replicated-transaction-decision-and-apply/evidence/pre-l6-history-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$DEST"
+          cp -a "$OUT/." "$DEST/"
+          find "$DEST" -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > "$DEST/SHA256SUMS"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$DEST"
+          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'Review-only TX1: retain genuine historical LOCAL_STAGING crash-loss evidence'
+          test "$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)" = "$GITHUB_SHA"
+          HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=$HEADER" push origin "HEAD:refs/heads/$BRANCH"
+      - name: Preserve failure output too
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p "$OUT"
+          git status --porcelain > "$OUT/status.txt"
+          git diff "$BASE" HEAD -- src > "$OUT/historical-source-delta.patch"
+          find "$OUT" -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > "$OUT/SHA256SUMS"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: tx1-pre-l6-history-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-output/tx1-pre-l6-obligation/
+          retention-days: 30
+          if-no-files-found: error
+      - name: Fail closed if historical admission evidence is absent
+        if: always()
+        shell: bash
+        run: |
+          test -f "$OUT/summary.json"
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          x=json.loads((Path(os.environ['OUT'])/'summary.json').read_text())
+          assert x['genuineHistoricalLegacySessionProved']
+          assert x['legacyRetirementAuthorized'] is False
+          PY
