@@ -1,0 +1,43 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "seed-participant-release-native-startup-census",
+  "status": "fail",
+  "base": "ffe35e77d51cbd4ba35fb30518de1307eaaa2eec",
+  "generatedAt": "2026-10-13T17:56:59.114290+00:00",
+  "receipts": [
+    {
+      "id": "actual-rejected-census-and-owner",
+      "passed": false,
+      "detail": "Unproved. Existing exact V2 startup evidence is red; actual rejected final-census work and any reviewed repair remain absent."
+    },
+    {
+      "id": "engaged-real-owner-regression",
+      "passed": false,
+      "detail": "Unproved. Existing exact V2 startup evidence is red; actual rejected final-census work and any reviewed repair remain absent."
+    },
+    {
+      "id": "fresh-seed-startup-at-existing-bounds",
+      "passed": false,
+      "detail": "Unproved. Existing exact V2 startup evidence is red; actual rejected final-census work and any reviewed repair remain absent."
+    },
+    {
+      "id": "recovery-and-interaction-preserved",
+      "passed": false,
+      "detail": "Unproved. Existing exact V2 startup evidence is red; actual rejected final-census work and any reviewed repair remain absent."
+    },
+    {
+      "id": "independent-review-and-static-gates",
+      "passed": false,
+      "detail": "Unproved. Existing exact V2 startup evidence is red; actual rejected final-census work and any reviewed repair remain absent."
+    }
+  ],
+  "inheritedEvidence": {
+    "candidate": "3231b1311ad79fb933d059877c97fc296b951e5d",
+    "manifest": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/paired-result-v2.json",
+    "manifestSha256": "f384ac8e64005fbcc6e4b1240c7fb7ce9940f38a1243848d21a3a0554dd1d38a",
+    "positiveFiles": 18,
+    "positiveRunnerAssertions": 225,
+    "startupRedFiles": 2
+  },
+  "limit": "Initial all-false seal only; no repair, causal attribution or acceptance claimed."
+}
