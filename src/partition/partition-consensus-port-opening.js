@@ -58,11 +58,19 @@ async function refusePartitionConsensusStartup(service, answer) {
 
 async function cleanupRefusedPartitionStartup(service, primary) {
   service.startupFailure = primary;
+  // If an external shutdown already owns teardown, initialization must reject
+  // and let that owner continue after the joined initialization settles.
+  if (service.shutdownSettlement) {
+    throw primary;
+  }
+  service.initializationOwnsCleanup = true;
   try {
     await service.shutdown();
   } catch (cleanup) {
     service.startupFailure = withRaftOpeningCleanupFailure(primary, cleanup);
     throw service.startupFailure;
+  } finally {
+    service.initializationOwnsCleanup = false;
   }
   throw primary;
 }
