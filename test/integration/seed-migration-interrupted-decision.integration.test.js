@@ -70,13 +70,16 @@ test('TX1 M1: a real COMMIT decision and held prepared participants survive seed
       });
       assert.equal(rebuilt.status, 0, rebuilt.stderr);
       const recovered = JSON.parse(rebuilt.stdout);
-      assert.equal(recovered.decision, 'COMMIT');
+      assert.equal(recovered.durableDecisionOnDisk, 'COMMIT');
+      assert.equal(recovered.adoptedDecisionWithoutAuthority, false,
+        'untrusted snapshot never authorizes COMMIT fanout');
       assert.equal(recovered.recoveryDiscovered, true);
       assert.equal(recovered.participants, 2);
       assert.equal(recovered.fanoutCalls, 0);
       t.diagnostic(JSON.stringify({kind: 'TX1_UNDELIVERED_DECISION',
         transactionId: marker.transactionId, replicaFiles: 12,
-        sameDecisionRecovered: true, effectsNotApplied: true,
+        durableDecisionReadBack: true, cacheDiscoveryCannotDecide: true,
+        effectsNotApplied: true,
         fanoutReplayCertified: false}));
     } finally {
       if (ended === null) {
