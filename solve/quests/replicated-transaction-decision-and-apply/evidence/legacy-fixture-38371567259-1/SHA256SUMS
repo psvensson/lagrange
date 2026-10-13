@@ -1,0 +1,13 @@
+37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570  solve/quests/replicated-transaction-decision-and-apply/evidence/legacy-fixture-38371567259-1/boundary.json
+c98ac4c89021aa3fde88549ac6869079df1881c7b71f098ce0759948dc7382d7  solve/quests/replicated-transaction-decision-and-apply/evidence/legacy-fixture-38371567259-1/candidate-sha.txt
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  solve/quests/replicated-transaction-decision-and-apply/evidence/legacy-fixture-38371567259-1/current-tx1-exit.txt
+b07624682423d423e03e2369470934433d5de3b5616282960302158b7d957d01  solve/quests/replicated-transaction-decision-and-apply/evidence/legacy-fixture-38371567259-1/current-tx1.log
+3f8238f4dcf09b1d6d2102957f84d24852cd2cb61fd0a647921e2602d2b3cb23  solve/quests/replicated-transaction-decision-and-apply/evidence/legacy-fixture-38371567259-1/impact.log
+9155102d43113241a2a5086875e4bfbc59365479de6ae8e27bd1146b98b50789  solve/quests/replicated-transaction-decision-and-apply/evidence/legacy-fixture-38371567259-1/install.log
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  solve/quests/replicated-transaction-decision-and-apply/evidence/legacy-fixture-38371567259-1/lint.log
+5c660d03dec7f0b1d74fe9c4efbb82f45d7ece3bf3612a2e21f8427b6e432758  solve/quests/replicated-transaction-decision-and-apply/evidence/legacy-fixture-38371567259-1/metadata.log
+e5e6d1ac4a137467869083aed6bdadf915ef314d9a204592150fa531eed7124c  solve/quests/replicated-transaction-decision-and-apply/evidence/legacy-fixture-38371567259-1/summary.json
+ec389be52b1898eb59ace84b870e29b512b506efc8c9e6bd0d068f4232446980  solve/quests/replicated-transaction-decision-and-apply/evidence/legacy-fixture-38371567259-1/superseded-old-assertions.log
+4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865  solve/quests/replicated-transaction-decision-and-apply/evidence/legacy-fixture-38371567259-1/superseded-old-exit.txt
+ab67480a8c82dd7e1ff70c0eb91e94437df60103414ced4e3e08bb88d3343c98  solve/quests/replicated-transaction-decision-and-apply/evidence/legacy-fixture-38371567259-1/tap/.tap/test-results/test/partition/partition-legacy-session-statement-admission.test.js.tap
+5b4901770bb015e787037aa42e679b554a0f0dcc01177cb8cb16719ccbe49e9b  solve/quests/replicated-transaction-decision-and-apply/evidence/legacy-fixture-38371567259-1/tap/.tap/test-results/test/partition/partition-participant-transaction-staging.test.js.tap
