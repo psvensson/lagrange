@@ -1,0 +1,74 @@
+{
+  "source": "9ba9a1941b2326d0d0bcfa49c581cc2fcf74af8d",
+  "candidate": "25a2cd6d8f7c88df392d9efe0af312268ad3efcf",
+  "comparisons": [
+    {
+      "target": "src-scripts",
+      "candidateRawSha256": "2750170ccdaa9724fb0b2e75ebc205b1bdd3a35e20c24b0f061333b37ab1897e",
+      "candidateGzipSha256": "97697bcf499787c82e8dfaa5044af0b1ec1ee89fc3b012c8cfbb61faff907cea",
+      "candidateCloneGroups": 47,
+      "sourceCloneGroups": 47,
+      "candidateOnlyExactClones": [],
+      "sourceOnlyExactClones": [],
+      "candidateStatistics": {
+        "lines": 638106,
+        "tokens": 4369345,
+        "sources": 2134,
+        "clones": 47,
+        "duplicatedLines": 1462,
+        "duplicatedTokens": 11793,
+        "percentage": 0.23,
+        "percentageTokens": 0.27,
+        "newDuplicatedLines": 0,
+        "newClones": 0
+      },
+      "sourceStatistics": {
+        "lines": 637271,
+        "tokens": 4360388,
+        "sources": 2133,
+        "clones": 47,
+        "duplicatedLines": 1462,
+        "duplicatedTokens": 11793,
+        "percentage": 0.23,
+        "percentageTokens": 0.27,
+        "newDuplicatedLines": 0,
+        "newClones": 0
+      }
+    },
+    {
+      "target": "test",
+      "candidateRawSha256": "81a0707c4140cb777dd13cc0f6f62c5d3f66d400207d342d2a713e625cd6b75a",
+      "candidateGzipSha256": "88fba1bee335a15f7b0e060202d2c727beda0cd8e975c9bccfd4278bcd45d35f",
+      "candidateCloneGroups": 697,
+      "sourceCloneGroups": 698,
+      "candidateOnlyExactClones": [],
+      "sourceOnlyExactClones": [
+        "{\"fragmentSha256\": \"9f56f42a4a62b095808dc32c9f3291ee088d1e5b6b038ca4690443b5eac1c9e2\", \"lines\": 30, \"pair\": [[\"test/partition/participant-release-native-application-order.test.js\", 80, 109], [\"test/partition/partition-write-typed-releases.test.js\", 93, 122]]}"
+      ],
+      "candidateStatistics": {
+        "lines": 878430,
+        "tokens": 7051607,
+        "sources": 2743,
+        "clones": 697,
+        "duplicatedLines": 26415,
+        "duplicatedTokens": 195659,
+        "percentage": 3.01,
+        "percentageTokens": 2.77,
+        "newDuplicatedLines": 0,
+        "newClones": 0
+      },
+      "sourceStatistics": {
+        "lines": 879414,
+        "tokens": 7063028,
+        "sources": 2744,
+        "clones": 698,
+        "duplicatedLines": 26444,
+        "duplicatedTokens": 195865,
+        "percentage": 3.01,
+        "percentageTokens": 2.77,
+        "newDuplicatedLines": 0,
+        "newClones": 0
+      }
+    }
+  ]
+}

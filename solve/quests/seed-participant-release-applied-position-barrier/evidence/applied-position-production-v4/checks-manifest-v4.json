@@ -1,0 +1,81 @@
+{
+  "binding": {
+    "head": "eda09027839a06b1d25cfa28dd06c894c1523574",
+    "v3": "7a755cf833b342c275ff5138e087a97832e28c2d",
+    "reviewSha256": "4169231929e4346cdceb349773c55d21c80f68b51a454b77d41831680f989989"
+  },
+  "checks": [
+    {
+      "name": "syntax",
+      "command": "node --check src/node/replica-runtime-cleanup-custody.js",
+      "classification": "pass",
+      "exitCode": 0,
+      "log": "syntax-v4.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "status": "syntax-v4.status",
+      "statusSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "name": "eslint",
+      "command": "npx eslint src/node/replica-runtime-cleanup-custody.js",
+      "classification": "pass",
+      "exitCode": 0,
+      "log": "eslint-v4.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "status": "eslint-v4.status",
+      "statusSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "name": "complexity",
+      "command": "npm run test:complexity:scoped:strict -- src/node/replica-runtime-cleanup-custody.js",
+      "classification": "inherited-hold",
+      "exitCode": 1,
+      "log": "complexity-v4.log",
+      "logSha256": "ed6ae9b3fe4bf48dd0dd6e6cdce7e896abe223efe209dc2caae8e3724959a65d",
+      "status": "complexity-v4.status",
+      "statusSha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "name": "cognitive",
+      "command": "npm run test:complexity:cognitive:scoped:strict -- src/node/replica-runtime-cleanup-custody.js",
+      "classification": "pass",
+      "exitCode": 0,
+      "log": "cognitive-v4.log",
+      "logSha256": "d062bd4d5a0237bba9c6b49a9b0431fddc697ca9a317785484404ec34b360356",
+      "status": "cognitive-v4.status",
+      "statusSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "name": "literals",
+      "command": "npm run audit:guideline:literals -- src/node/replica-runtime-cleanup-custody.js",
+      "classification": "pass",
+      "exitCode": 0,
+      "log": "literals-v4.log",
+      "logSha256": "6de900e50ef6e3112ae00398abd9cf5448e74b404fe0c44397e7ec5b810c3e5b",
+      "status": "literals-v4.status",
+      "statusSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "name": "cycles",
+      "command": "npm run test:cycles:strict",
+      "classification": "pass",
+      "exitCode": 0,
+      "log": "cycles-v4.log",
+      "logSha256": "d4702ebb774fe29047412a0ce342f6e0e9bee0b3446184f5eebe7ca532385998",
+      "status": "cycles-v4.status",
+      "statusSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "name": "diff",
+      "command": "git diff --check",
+      "classification": "pass",
+      "exitCode": 0,
+      "log": "diff-check-v4.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "status": "diff-check-v4.status",
+      "statusSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    }
+  ],
+  "behavioralTestsRun": false,
+  "metadataRefreshed": false
+}

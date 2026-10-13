@@ -1,0 +1,82 @@
+{
+  "schema": "root-static-evidence/1",
+  "at": "2026-10-13T23:35:02.935743+00:00",
+  "head": "25a2cd6d8f7c88df392d9efe0af312268ad3efcf",
+  "artifacts": [
+    {
+      "artifact": "solve/quests/seed-participant-release-applied-position-barrier/evidence/applied-position-production-v4/root-static-v1/deps.json",
+      "sha256": "6c57e23dc007745dd9d1c4c1e0bdebba07a550029346a8d1c90e13e5e3cca5a0",
+      "bytes": 244
+    },
+    {
+      "artifact": "solve/quests/seed-participant-release-applied-position-barrier/evidence/applied-position-production-v4/root-static-v1/deps.log",
+      "sha256": "19ea24e806e1d21b8da97444d26c52aefbb040a4036e6008e1ca81d86b98e39a",
+      "bytes": 80
+    },
+    {
+      "artifact": "solve/quests/seed-participant-release-applied-position-barrier/evidence/applied-position-production-v4/root-static-v1/duplication-candidate-v4-src-scripts.json.gz",
+      "sha256": "97697bcf499787c82e8dfaa5044af0b1ec1ee89fc3b012c8cfbb61faff907cea",
+      "bytes": 54822
+    },
+    {
+      "artifact": "solve/quests/seed-participant-release-applied-position-barrier/evidence/applied-position-production-v4/root-static-v1/duplication-candidate-v4-test.json.gz",
+      "sha256": "88fba1bee335a15f7b0e060202d2c727beda0cd8e975c9bccfd4278bcd45d35f",
+      "bytes": 230275
+    },
+    {
+      "artifact": "solve/quests/seed-participant-release-applied-position-barrier/evidence/applied-position-production-v4/root-static-v1/duplication-exact-comparison-v1.json",
+      "sha256": "a1df4f1a907ccc3ee1509a5f0f29bd1e310eb115c9b50856ddd2ffc8204022e9",
+      "bytes": 2473
+    },
+    {
+      "artifact": "solve/quests/seed-participant-release-applied-position-barrier/evidence/applied-position-production-v4/root-static-v1/duplication-source-9ba9-src-scripts.json.gz",
+      "sha256": "a69bc101ee3374228e1ddcb6b16d5063db0da4e1af9f45e695eb98e53e613ad3",
+      "bytes": 54813
+    },
+    {
+      "artifact": "solve/quests/seed-participant-release-applied-position-barrier/evidence/applied-position-production-v4/root-static-v1/duplication-source-9ba9-test.json.gz",
+      "sha256": "87cf6f0e3efd7d1a1135e40f1544394bc16bb9abb23a5a136b7afbc434c30b32",
+      "bytes": 230575
+    },
+    {
+      "artifact": "solve/quests/seed-participant-release-applied-position-barrier/evidence/applied-position-production-v4/root-static-v1/duplication-source-9ba9.json",
+      "sha256": "e09635c250545e769a2746aced95545484cab300b7d0c3b972143794b3117ae9",
+      "bytes": 767
+    },
+    {
+      "artifact": "solve/quests/seed-participant-release-applied-position-barrier/evidence/applied-position-production-v4/root-static-v1/duplication-source-9ba9.log",
+      "sha256": "638eb8f623127ae9f71078f7844046512002ddf3696ce6a60e2e05304e779f25",
+      "bytes": 1837
+    },
+    {
+      "artifact": "solve/quests/seed-participant-release-applied-position-barrier/evidence/applied-position-production-v4/root-static-v1/duplication.json",
+      "sha256": "fb8cda97d02da547a3bbd96b30ccff39350fc4739cefcdc9e3fd8b4d91283b51",
+      "bytes": 251
+    },
+    {
+      "artifact": "solve/quests/seed-participant-release-applied-position-barrier/evidence/applied-position-production-v4/root-static-v1/duplication.log",
+      "sha256": "8b6436c74c48cdee9b59db433f8aee1eab5fa493fd34766c6025ab5dd2799a95",
+      "bytes": 1837
+    },
+    {
+      "artifact": "solve/quests/seed-participant-release-applied-position-barrier/evidence/applied-position-production-v4/root-static-v1/shards.json",
+      "sha256": "8903a6ac6f4a8e82540348224d4e7cc24d721870a28213e4c80b34d3a50dd28d",
+      "bytes": 247
+    },
+    {
+      "artifact": "solve/quests/seed-participant-release-applied-position-barrier/evidence/applied-position-production-v4/root-static-v1/shards.log",
+      "sha256": "524e855b15fdfa024fa8ba694275e5734ed76ecf2c49ba08242af8cf407d0f51",
+      "bytes": 290
+    },
+    {
+      "artifact": "solve/quests/seed-participant-release-applied-position-barrier/evidence/applied-position-production-v4/root-static-v1/unused.json",
+      "sha256": "f100abc3969b96fe195b091daaca71640b6e03b0a1a860ada139bc98c9fb2146",
+      "bytes": 254
+    },
+    {
+      "artifact": "solve/quests/seed-participant-release-applied-position-barrier/evidence/applied-position-production-v4/root-static-v1/unused.log",
+      "sha256": "4419819fccd38d29405373a885394487887128b8c0ec4f53e9f1cf85aecba017",
+      "bytes": 978
+    }
+  ]
+}

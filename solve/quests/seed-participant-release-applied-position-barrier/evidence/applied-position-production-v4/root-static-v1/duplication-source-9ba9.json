@@ -1,0 +1,24 @@
+{
+  "sha": "9ba9a1941b2326d0d0bcfa49c581cc2fcf74af8d",
+  "command": [
+    "npm",
+    "run",
+    "-s",
+    "test:duplication"
+  ],
+  "startedAt": "2026-10-13T23:32:05.038164+00:00",
+  "finishedAt": "2026-10-13T23:33:55.861839+00:00",
+  "exitCode": 1,
+  "reports": [
+    {
+      "artifact": "duplication-source-9ba9-src-scripts.json.gz",
+      "rawSha256": "c4cb37c6042902b29db25fe342352f7adcdad1eae9d787308522bd936efb9028",
+      "gzipSha256": "a69bc101ee3374228e1ddcb6b16d5063db0da4e1af9f45e695eb98e53e613ad3"
+    },
+    {
+      "artifact": "duplication-source-9ba9-test.json.gz",
+      "rawSha256": "3563067122e06cf412bc94a479ff197f3a0f1a1d868c0b290627eea36b917aa6",
+      "gzipSha256": "87cf6f0e3efd7d1a1135e40f1544394bc16bb9abb23a5a136b7afbc434c30b32"
+    }
+  ]
+}

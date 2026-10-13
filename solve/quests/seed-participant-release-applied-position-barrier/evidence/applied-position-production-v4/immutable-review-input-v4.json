@@ -1,0 +1,46 @@
+{
+  "status": "UNREVIEWED_SOURCE_INPUT",
+  "commit": "25a2cd6d8f7c88df392d9efe0af312268ad3efcf",
+  "snapshotPath": "/tmp/session-worktree-V4kCPL/tree",
+  "tree": "8e96670c7ec9d81332e52b68b1cf9f6af255d790",
+  "srcTree": "7cf388f79e6afccf3d4311a475147147106e15a5",
+  "baseline": "9ba9a1941b2326d0d0bcfa49c581cc2fcf74af8d",
+  "rejectedV3": "7a755cf833b342c275ff5138e087a97832e28c2d",
+  "sourceManifestSha256": "4daebb3978eba80e8e3603a3fc112be1bdc48f39d4ecf589071042e53e9d150b",
+  "rootCustodySha256": "a34b9912a0c4c60836efbe7b0a22c9800304b1127f8823ab119ecdc29facaefb",
+  "canonicalMetadataRefreshExit": 0,
+  "metadataRefreshLogSha256": "e307668a373f3fdd7a356cc6cf9c2b547006408fec5677c6aabbbbde3abfab05",
+  "generatedChangedPaths": [
+    "test/shards/impact-graph-seal.json"
+  ],
+  "nativeSourceControl": "c12840725e12c87855b2942566313ecee37bc487",
+  "nativeWitnessAndFixtureChecks": [
+    {
+      "path": "test/partition/participant-release-native-application-order.test.js",
+      "sha256": "01518ea0132c2806d268c265e642fd9e2a54a3f05568ef49256f8acf4698c8c2",
+      "sameAsSourceControl": true
+    },
+    {
+      "path": "test/partition/partition-admitted-group-fixture.js",
+      "sha256": "24d4a14f2fab2c5ee43d02846fe32280ec31f5897ae301aa5695123cf1376af0",
+      "sameAsSourceControl": true
+    },
+    {
+      "path": "test/partition/partition-release-fixture.js",
+      "sha256": "2025703ba80ff8ab2d20bb70c00d851cd19c687578a5ba5e5e973f99cee522b1",
+      "sameAsSourceControl": true
+    },
+    {
+      "path": "test/test-helpers/participant-transaction-fixture.js",
+      "sha256": "893c19be739a1b7a7fc4ee369987d13792d245d9cb683e0791c54c82464adb58",
+      "sameAsSourceControl": true
+    },
+    {
+      "path": "test/test-helpers/boot-incarnation-fixture.js",
+      "sha256": "3e1eaa8192c8b5d2e083dc7391e7e522152349e101d3b10373a35817253a9ee4",
+      "sameAsSourceControl": true
+    }
+  ],
+  "behavioralRuns": [],
+  "note": "HC-only correction, other17 source/registry bytes same as reviewed V3. Committed source only is immutable review input; copied uncommitted root evidence excluded. Exact native direct fixture inputs same as c128; future fixture integration invalidates comparison. All five Quest receipts remain false."
+}

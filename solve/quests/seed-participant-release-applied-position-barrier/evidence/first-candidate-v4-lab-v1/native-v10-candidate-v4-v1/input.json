@@ -1,0 +1,26 @@
+{
+  "sha": "25a2cd6d8f7c88df392d9efe0af312268ad3efcf",
+  "tree": "8e96670c7ec9d81332e52b68b1cf9f6af255d790",
+  "host": "adam-laptop",
+  "files": [
+    "test/partition/participant-release-native-application-order.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/partition/participant-release-native-application-order.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ],
+  "costs": [
+    {
+      "file": "test/partition/participant-release-native-application-order.test.js",
+      "jobs": 4,
+      "ms": 10000,
+      "lane": "ordinary"
+    }
+  ],
+  "startedAt": "2026-10-13T23:30:09.073Z"
+}

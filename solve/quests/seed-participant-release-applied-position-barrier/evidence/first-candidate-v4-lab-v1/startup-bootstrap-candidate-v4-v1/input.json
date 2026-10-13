@@ -1,0 +1,26 @@
+{
+  "sha": "25a2cd6d8f7c88df392d9efe0af312268ad3efcf",
+  "tree": "8e96670c7ec9d81332e52b68b1cf9f6af255d790",
+  "host": "adams-gamla",
+  "files": [
+    "test/bootstrap/node-bootstrap-consistency.property.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/bootstrap/node-bootstrap-consistency.property.test.js"
+      ],
+      "jobs": 2,
+      "resourceClass": "bootstrap"
+    }
+  ],
+  "costs": [
+    {
+      "file": "test/bootstrap/node-bootstrap-consistency.property.test.js",
+      "jobs": 2,
+      "ms": 20018,
+      "lane": "bootstrap"
+    }
+  ],
+  "startedAt": "2026-10-13T23:30:09.101Z"
+}
