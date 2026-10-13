@@ -1,0 +1,5 @@
+Cognitive complexity violations (threshold: 20):
+
+../../../../../../tmp/release-cycle-baseline-77e091f/src/node/replica-handler-participant-cutover.js:203:16 Refactor this function to reduce its Cognitive Complexity from 23 to the 20 allowed.
+
+1 violation(s) found.

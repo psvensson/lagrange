@@ -1,0 +1,5 @@
+
+> lagrange-server@0.2.6 test:metadata-gateway:audit
+> node scripts/check-unified-system-metadata-gateway.js
+
+[unified-system-metadata-gateway] ok

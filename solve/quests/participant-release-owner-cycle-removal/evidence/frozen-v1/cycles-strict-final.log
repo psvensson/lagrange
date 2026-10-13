@@ -1,0 +1,5 @@
+
+> lagrange-server@0.2.6 test:cycles:strict
+> node scripts/check-circular-dependencies.js --strict
+
+No circular dependencies detected.
