@@ -230,6 +230,7 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.isShutdown = false;
     this.startupFailure = null;
     this.initializationSettlement = null;
+    this.initializationOwnsCleanup = false;
     this.shutdownSettlement = null;
     this.isLeader = false;
     // Minted and ended only at the leadership edge
