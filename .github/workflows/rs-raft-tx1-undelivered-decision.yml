@@ -8,6 +8,7 @@ on:
       - test/integration/seed-migration-cutover-persisted.integration.test.js
       - test/integration/helpers/tx1-in-doubt-decision-reader.js
       - test/integration/helpers/tx1-postkill-authority-replay.js
+      - test/integration/helpers/tx1-postkill-seed-startup.js
       - test/shards/impact-contracts.json
 permissions:
   contents: read
@@ -44,8 +45,9 @@ jobs:
           node --check "$WITNESS"
           node --check test/integration/helpers/tx1-in-doubt-decision-reader.js
           node --check test/integration/helpers/tx1-postkill-authority-replay.js
+          node --check test/integration/helpers/tx1-postkill-seed-startup.js
           node --check test/integration/seed-migration-cutover-persisted.integration.test.js
-          node_modules/.bin/eslint "$WITNESS"             test/integration/helpers/tx1-in-doubt-decision-reader.js             test/integration/helpers/tx1-postkill-authority-replay.js             test/integration/seed-migration-cutover-persisted.integration.test.js             > "$OUT/eslint.log" 2>&1
+          node_modules/.bin/eslint "$WITNESS"             test/integration/helpers/tx1-in-doubt-decision-reader.js             test/integration/helpers/tx1-postkill-authority-replay.js             test/integration/helpers/tx1-postkill-seed-startup.js             test/integration/seed-migration-cutover-persisted.integration.test.js             > "$OUT/eslint.log" 2>&1
           npm run -s audit:impact-contracts > "$OUT/impact.log" 2>&1
           git diff --exit-code -- src
           git diff --check
@@ -98,6 +100,9 @@ jobs:
               'exact-bound-commit-request':receipt.get('diskRereadBridge',{}).get('boundCommitAttempts')==2 and
                   receipt.get('diskRereadBridge',{}).get('rollbackCalls')==0,
               'no-offline-persistence':receipt.get('diskRereadBridge',{}).get('durableRowsUnchanged') is True,
+              'seed-restart-held':receipt.get('seedStartupAdmission',{}).get('durableStateDetected') is True and
+                  receipt.get('seedStartupAdmission',{}).get('servingAuthorized') is False and
+                  receipt.get('seedStartupAdmission',{}).get('outcome')=='blocked_startup',
               'honest-scope':receipt.get('fanoutReplayCertified') is False,
               'canonical-test-success':(e/'native-exit.txt').read_text().strip()=='0',
           }
