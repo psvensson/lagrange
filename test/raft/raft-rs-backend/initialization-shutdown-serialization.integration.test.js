@@ -127,6 +127,9 @@ test('ReplicaHandler releases CREATE claim when shutdown cleanup rejects', async
     handler.shuttingDown = true;
     return service;
   });
+  // This controlled host boundary is about post-construction shutdown
+  // ownership, not control-plane prior-existence availability.
+  handler.replicaStateMachine.getControlPlaneSystemTableGateway = null;
   handler.getReplicaCreateAdmissionOwner = () =>
     releaseOwner(claim, () => { releases += 1; });
   handler.resolveReplicaContextWithRetry = async () => ({
