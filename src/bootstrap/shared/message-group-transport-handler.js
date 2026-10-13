@@ -1,5 +1,6 @@
 import {
   reportReplicaHandlerRetirement,
+  requireReplicaHandlerRetirement,
   retireReplicaTransportHandler,
 } from '../../node/replica-transport-handler-identity.js';
 import {ADDRESS, ENTITY_TYPE} from '../../constants/index.js';
@@ -50,10 +51,12 @@ async function retireMessageGroupTransportHandler(retirement) {
   });
   // A refusal needs a registered handler, so the replica (and its logger)
   // exists whenever there is something to report.
-  return reportReplicaHandlerRetirement(messageGroup?.logger, {
+  const reported = reportReplicaHandlerRetirement(messageGroup?.logger, {
     address: retirement.address,
     replicaId: retirement.replicaId,
   }, outcome);
+  requireReplicaHandlerRetirement(reported);
+  return reported;
 }
 
 /**
