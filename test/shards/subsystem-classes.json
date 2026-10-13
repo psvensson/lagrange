@@ -28,7 +28,7 @@
   "censusSize": 2371,
   "digest": "fnv1a32-6c4b8408",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-41f3426e",
+  "observationDigest": "fnv1a32-7a072d85",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -7566,6 +7566,7 @@
       "files": [
         "test/integration/helpers/tx1-in-doubt-decision-reader.js",
         "test/integration/helpers/tx1-migration-disk-reader.js",
+        "test/integration/helpers/tx1-postkill-authority-replay.js",
         "test/integration/seed-migration-cutover-persisted.integration.test.js"
       ]
     },
