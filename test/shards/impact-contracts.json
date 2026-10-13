@@ -624,7 +624,6 @@
         "src/node/participant-release-diagnostic-observation.js",
         "src/bootstrap/bootstrap-service-seed-workflow.js",
         "src/node/participant-release-client.js",
-        "src/partition/partition-participant-release-facts.js",
         "src/partition/partition-participant-release-contract.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/node/replica-runtime-cleanup-custody.js"
@@ -1557,7 +1556,6 @@
             "src/node/participant-release-diagnostic-observation.js",
             "src/bootstrap/bootstrap-service-seed-workflow.js",
             "src/node/participant-release-client.js",
-            "src/partition/partition-participant-release-facts.js",
             "src/partition/partition-participant-release-contract.js",
             "src/partition/partition-participant-transaction-pause.js",
             "src/node/replica-runtime-cleanup-custody.js"

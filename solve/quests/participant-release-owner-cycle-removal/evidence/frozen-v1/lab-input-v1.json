@@ -1,0 +1,11 @@
+{
+  "schema": "participant-release-cycle-lab-input/1",
+  "sha": "b1d7116c11102725ce34f4d18021f924851b9efe",
+  "tree": "96dd319f69fda9f7c62d42c30a315ecd73c3ba0f",
+  "parent": "77e091f64fb711fbc5ca40a7915ae85f01a5cf4e",
+  "frozenManifestSha256": "91a528e3b68647f0b1bd6a810ecc72296af89b2be9fd1a4b864c37efed81074a",
+  "scopedDiffSha256": "df25d75371a39d3783d6c564ef86dc69b4fbea33cd337f792796c19d44cee59a",
+  "snapshotPath": "/tmp/session-worktree-Hcgr2k/tree",
+  "labStatus": "NOT_RUN",
+  "evidenceLimit": "Immutable input verified against all 11 frozen paths; no behavioral or Quest acceptance implied."
+}

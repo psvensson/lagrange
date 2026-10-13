@@ -1,0 +1,2 @@
+{"file":"test/partition/participant-release-build-provenance.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":2311,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-participant-release-admission.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":2405,"retriedOnce":false,"firstFailureLine":null}

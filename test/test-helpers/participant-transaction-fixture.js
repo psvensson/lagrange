@@ -30,11 +30,9 @@ import {
 import {QUERY_OPERATION} from '../../src/query/query-constants.js';
 import {readCommittedStatementOutcome} from
   '../../src/partition/partition-committed-statement-outcome.js';
-import {readParticipantReleaseFacts} from
-  '../../src/partition/partition-participant-release-facts.js';
 import {releaseIdentityOf, releaseMemberIds} from
   '../../src/partition/partition-participant-release-contract.js';
-import {resumeParticipantCutoverAdmission} from
+import {readParticipantReleaseFacts, resumeParticipantCutoverAdmission} from
   '../../src/partition/partition-participant-transaction-pause.js';
 import {enableParticipantTransactionAdmission} from
   '../../src/partition/partition-participant-transaction-request.js';
