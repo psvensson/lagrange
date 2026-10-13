@@ -15,7 +15,7 @@ mkdir -p "$lab_dir"
 exec 9>"$lab_dir/machine.lock"
 flock -w 3600 9 || { echo "::error::Shared home runner remained busy for 60 minutes." >&2; exit 98; }
 guard="$lab_dir/runner-thermal-guard.mjs"
-pin="53ec4f0bcc0601522ba64a4b3d352a906206a7af"
+pin="1a745134891a848438172bb14a5d608225206bd7"
 if [[ ! -r "$guard" ]] || [[ "$(git hash-object "$guard")" != "$pin" ]]; then
   echo "::error::Missing or mismatched pinned shared thermal guard: $guard" >&2
   exit 97
