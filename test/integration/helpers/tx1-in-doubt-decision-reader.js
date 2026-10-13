@@ -30,15 +30,18 @@ coordinator.recoverFromSystemTables({transactions, participants,
   writeOperations: []});
 const restored = coordinator.workflowCoordinator.getWorkflowById(transactionId);
 assert.ok(restored, 'the exact durable transaction identity is recovered');
-assert.equal(restored.decision?.decision, 'COMMIT',
-  'recovery retains the recorded decision rather than choosing rollback');
+// A snapshot can discover an ID, but it cannot authorize a COMMIT decision.
+// The live recovery owner must reread it through the authoritative gateway.
+assert.equal(restored.decision, null,
+  'snapshot discovery must not adopt an unverified COMMIT decision');
 assert.equal(restored.participants.size, 2);
 assert.equal(restored.frozenParticipantCount, 2);
 assert.equal(restored.recoveryDiscovered, true);
 assert.equal(coordinator.recoveredTransactionIds.has(transactionId), true);
 assert.equal(fanoutCalls, 0);
 process.stdout.write(JSON.stringify({transactionId,
-  status: restored.status, decision: restored.decision.decision,
+  status: restored.status, durableDecisionOnDisk: transactions[0].decision,
+  adoptedDecisionWithoutAuthority: restored.decision !== null,
   participants: restored.participants.size, frozen: restored.frozenParticipantCount,
   recoveryDiscovered: restored.recoveryDiscovered, fanoutCalls,
   replayAttempted: false, coordinatorRestarted: false}));
