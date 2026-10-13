@@ -23,8 +23,11 @@ const RELEASE_PROOF_FIELDS = Object.freeze(['kind', 'releaseId', 'term',
   'rowGenerationDigest', 'transactions']);
 const RELEASE_PROOF_RESULT_FIELDS = Object.freeze(['transactionId', 'decision',
   'decisionDigest', 'terminalStatus', 'participantIds']);
+const numberIsSafeInteger = Number.isSafeInteger;
 const nonempty = (value) => typeof value === 'string' && value.length > 0;
-const ordinal = (value) => Number.isSafeInteger(value) && value >= 0;
+const ordinal = (value) => numberIsSafeInteger(value) && value >= 0;
+const positiveInteger = (value) => numberIsSafeInteger(value) && value > 0;
+const incarnation = (value) => nonempty(value) || positiveInteger(value);
 
 function exactRecord(value, fields) {
   return value !== null && typeof value === 'object' && !Array.isArray(value) &&
@@ -69,6 +72,16 @@ function releaseIdentityValid(release) {
 function sameReplicaGeneration(left, right) {
   return left != null && right != null &&
     GENERATION_FIELDS.every((field) => left[field] != null && left[field] === right[field]);
+}
+
+function participantReleaseGenerationValid(generation) {
+  return generation !== null && typeof generation === 'object' &&
+    nonempty(generation.nodeId) && nonempty(generation.replicaId) &&
+    positiveInteger(generation.ownerIncarnation) &&
+    incarnation(generation.lifecycleIncarnation) &&
+    positiveInteger(generation.runtimeGeneration) &&
+    positiveInteger(generation.connectionGeneration) &&
+    positiveInteger(generation.admissionGeneration);
 }
 
 function releaseMemberIds(membership) {
@@ -185,6 +198,7 @@ function releaseAnswer(outcome, request = {}, fields = {}) {
 }
 
 export {isReleaseDrained, originEqual, releaseAnswer, releaseCensusDefect,
-  releaseFactsDefect, releaseIdentityOf, releaseIdentityValid, releaseMemberIds,
+  participantReleaseGenerationValid, releaseFactsDefect, releaseIdentityOf,
+  releaseIdentityValid, releaseMemberIds,
   sameReplicaGeneration,
   transactionReleaseProofValid};

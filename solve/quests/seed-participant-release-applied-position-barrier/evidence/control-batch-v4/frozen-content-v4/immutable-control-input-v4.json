@@ -1,0 +1,26 @@
+{
+  "status": "UNREVIEWED_TEST_ONLY_INPUT",
+  "commit": "ce69f3acb911a8f648c01f96b17334478ab9f511",
+  "tree": "f909eb57aa4846882138266639962b9ce59f3c21",
+  "srcTree": "f9aa09877e019d0bc5645a5ada751de7d47d7e2c",
+  "snapshotPath": "/tmp/session-worktree-y7BULy/tree",
+  "files": {
+    "test/test-helpers/participant-transaction-fixture.js": {
+      "sha256": "970eeb24172fbc1796f5b45c7111df5a60606329f8df8231f51ccde240edeb97",
+      "bytes": 46471,
+      "lines": 1119
+    },
+    "test/partition/participant-release-protocol.test.js": {
+      "sha256": "d6bdf6c1115d905e2c908c049e5169ccf12ea0fa3c73c0983a2affca6daf6dc5",
+      "bytes": 71480,
+      "lines": 1497
+    },
+    "test/node/replica-handler-release-recovery.test.js": {
+      "sha256": "7ade79211ffc30d18aa56b5e1182df3d377f0b9b9e4bdd1d9c5c62badbeacdbd",
+      "bytes": 58687,
+      "lines": 1307
+    }
+  },
+  "sourceSupportsNewAction": false,
+  "behavioralRuns": []
+}

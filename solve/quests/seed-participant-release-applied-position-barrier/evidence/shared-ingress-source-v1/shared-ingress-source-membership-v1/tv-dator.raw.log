@@ -1,0 +1,19 @@
+placement-shell=462063
+placement-head=9ba9a1941b2326d0d0bcfa49c581cc2fcf74af8d
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.4 mode:local retry: timeout: lanecap:11
+placement-pid=462475
+# test-files planned=2
+classified lane ordinary: 2 file(s), jobs=4
+thermal: ok cpu 62C (coretemp/Package id 0) nvme 41C (nvme/Sensor 1)
+ok test/node/replica-handler-replica-membership.test.js (1 assertions, 1018ms)
+ok test/node/replica-handler-leadership-transfer.test.js (3 assertions, 1467ms)
+# test-files total=2 pass=2 fail=0 assertions=4
+placement-results={"file":"test/node/replica-handler-replica-membership.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1018,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/node/replica-handler-leadership-transfer.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":1467,"retriedOnce":false,"firstFailureLine":null}

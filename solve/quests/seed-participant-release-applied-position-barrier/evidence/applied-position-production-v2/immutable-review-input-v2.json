@@ -1,0 +1,17 @@
+{
+  "status": "UNREVIEWED_SOURCE_INPUT",
+  "commit": "be8a54cbbd270501c50ac573c54f251dd9e4f35c",
+  "snapshotPath": "/tmp/session-worktree-7wUvpP/tree",
+  "tree": "f00be5e95926dc152e0862965a41d673a6702dad",
+  "srcTree": "1382406d83de3e9ebcde92b9d2ccb7266e8d6538",
+  "baseline": "9ba9a1941b2326d0d0bcfa49c581cc2fcf74af8d",
+  "rejectedV1": "bb976f03b1dca9989cfd990af7f188e490ac5243",
+  "sourceManifestSha256": "a13ccf5e654e2aa4cd8571a8e145cba5c8b1b6759e821d230ade3e493dd3e703",
+  "rootCustodySha256": "1164eaf4d13e0a5de63261274697218fd2c63a5d4f7bbed8c446e254b1e6a6c4",
+  "canonicalMetadataRefreshExit": 0,
+  "generatedChangedPaths": [
+    "test/shards/impact-graph-seal.json"
+  ],
+  "behavioralRuns": [],
+  "note": "Committed source only is immutable review/lab input. Uncommitted copied root evidence in snapshot is outside that committed input. Main remains ef99 preservation head with frozen V2 source dirty. All five Quest receipts remain false."
+}

@@ -4,7 +4,8 @@ import {AddressManager} from '../address/address-manager.js';
 import {classifyTransportDeliveryOutcome, isDeliveredTransportDeliveryOutcome,
   TRANSPORT_DELIVERY_OUTCOME_REASON_CODE} from
   '../transport/transport-semantic-outcome.js';
-import {participantReleaseClockMeasured, readParticipantReleaseClock} from
+import {participantReleaseClockMeasured, participantReleaseSafeClockInteger,
+  readParticipantReleaseClock} from
   './participant-release-diagnostic-observation.js';
 import {releaseAnswer} from '../partition/partition-participant-release-contract.js';
 import {PARTICIPANT_CUTOVER_BOUND as BOUND, PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
@@ -12,6 +13,11 @@ import {PARTICIPANT_CUTOVER_BOUND as BOUND, PARTICIPANT_CUTOVER_OUTCOME as OUTCO
   PARTICIPANT_RELEASE_RESULT_FIELD, PARTICIPANT_RELEASE_ROUTE_SUFFIX,
   PARTICIPANT_RELEASE_TYPE} from
   '../partition/partition-participant-transaction-cutover-constants.js';
+
+const mathMax = Math.max;
+const mathMin = Math.min;
+const objectFreeze = Object.freeze;
+const objectIs = Object.is;
 
 function releaseNodeOfAddress(address) {
   try {
@@ -30,27 +36,36 @@ function requestTimeoutMs(owner, request) {
   if (!Number.isSafeInteger(request?.deadlineAtMs)) {
     return BOUND.REQUEST_TIMEOUT_MS;
   }
-  return Math.max(0, Math.min(BOUND.REQUEST_TIMEOUT_MS,
-    request.deadlineAtMs - ownerNow(owner)));
+  return cappedRequestTimeoutMs(ownerNow(owner), request.deadlineAtMs);
 }
 
-function validParticipantReleaseDeadline(value) {
-  return Number.isSafeInteger(value) && value >= 0 && !Object.is(value, -0);
+function participantReleaseAbsoluteClockValid(value) {
+  return participantReleaseSafeClockInteger(value) && value >= 0 &&
+    !objectIs(value, -0);
+}
+
+function cappedRequestTimeoutMs(nowMs, deadlineAtMs) {
+  return mathMax(0, mathMin(BOUND.REQUEST_TIMEOUT_MS, deadlineAtMs - nowMs));
 }
 
 function participantReleaseRequestBudget(owner, deadlineAtMs,
   ceilingAtMs = deadlineAtMs) {
   const observation = readParticipantReleaseClock(owner?.timeSource);
   if (!participantReleaseClockMeasured(observation) ||
-      !validParticipantReleaseDeadline(deadlineAtMs) ||
-      !validParticipantReleaseDeadline(ceilingAtMs) ||
+      !participantReleaseAbsoluteClockValid(observation.value) ||
+      !participantReleaseAbsoluteClockValid(deadlineAtMs) ||
+      !participantReleaseAbsoluteClockValid(ceilingAtMs) ||
       ceilingAtMs > deadlineAtMs) return null;
-  const cappedAtMs = observation.value + BOUND.REQUEST_TIMEOUT_MS;
-  const remainingMs = Math.min(deadlineAtMs, ceilingAtMs, cappedAtMs) - observation.value;
-  if (!Number.isSafeInteger(cappedAtMs) || !Number.isSafeInteger(remainingMs)) return null;
-  const observationDeadlineAtMs = Math.min(deadlineAtMs, ceilingAtMs, cappedAtMs);
-  return Object.freeze({nowMs: observation.value, observationDeadlineAtMs,
-    timeoutMs: Math.max(0, remainingMs)});
+  const overallRemainingMs = mathMax(0, deadlineAtMs - observation.value);
+  const ceilingRemainingMs = mathMax(0, ceilingAtMs - observation.value);
+  if (!participantReleaseSafeClockInteger(overallRemainingMs) ||
+      !participantReleaseSafeClockInteger(ceilingRemainingMs)) return null;
+  const timeoutMs = cappedRequestTimeoutMs(0,
+    mathMin(overallRemainingMs, ceilingRemainingMs));
+  const observationDeadlineAtMs = observation.value + timeoutMs;
+  if (!participantReleaseAbsoluteClockValid(observationDeadlineAtMs)) return null;
+  return objectFreeze({nowMs: observation.value, observationDeadlineAtMs,
+    timeoutMs});
 }
 
 function observationUnavailable(request, nodeId, reason = null) {
@@ -124,5 +139,6 @@ async function requestParticipantRelease(owner, request) {
     {...payload, replicaId: first.leaderReplicaId});
 }
 
-export {askParticipantRelease, participantReleaseRequestBudget,
+export {askParticipantRelease, participantReleaseAbsoluteClockValid,
+  participantReleaseRequestBudget,
   releaseNodeOfAddress, requestParticipantRelease};

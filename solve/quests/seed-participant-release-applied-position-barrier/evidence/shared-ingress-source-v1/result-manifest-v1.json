@@ -1,0 +1,135 @@
+{
+  "schema": "shared-ingress-source-lab-results/1",
+  "inputSha": "9ba9a1941b2326d0d0bcfa49c581cc2fcf74af8d",
+  "sourceTree": "b09288511757fd86ef92553ac235c8d0fed0b345",
+  "runs": [
+    {
+      "tag": "shared-ingress-source-handler-v1",
+      "host": "lenovo-laptop",
+      "results": [
+        {
+          "file": "test/node/replica-handler.test.js",
+          "attempt": 1,
+          "ok": false,
+          "assertions": 105,
+          "durationMs": 4304,
+          "retriedOnce": false,
+          "firstFailureLine": "not ok 3 - test unfinished"
+        }
+      ]
+    },
+    {
+      "tag": "shared-ingress-source-membership-v1",
+      "host": "tv-dator",
+      "results": [
+        {
+          "file": "test/node/replica-handler-replica-membership.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 1,
+          "durationMs": 1018,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/node/replica-handler-leadership-transfer.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 3,
+          "durationMs": 1467,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        }
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/shared-ingress-source-v1/shared-ingress-source-handler-v1/failed-assertions.json",
+      "sha256": "0d81427354fd24c39ecdce9e2728896ea18e1038045c40f8ee4d72b31e01bbc6",
+      "bytes": 1463
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/shared-ingress-source-v1/shared-ingress-source-handler-v1/fleet.json",
+      "sha256": "43d2f8980558e413dc0e35c455e1a64878808e89de51aa4a0f8bc7385a78aef8",
+      "bytes": 12680
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/shared-ingress-source-v1/shared-ingress-source-handler-v1/input.json",
+      "sha256": "5d7dd65c5dd47149482979e5c5d4c9c7e6b31ed99b58fc5b8388596c7cf1a71f",
+      "bytes": 529
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/shared-ingress-source-v1/shared-ingress-source-handler-v1/lab.log",
+      "sha256": "63cb7dcf93f7e7616669417207807f587b7c1560810001e256a1622f4254a11f",
+      "bytes": 17431
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/shared-ingress-source-v1/shared-ingress-source-handler-v1/lenovo-laptop.raw.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/shared-ingress-source-v1/shared-ingress-source-handler-v1/lenovo-laptop.raw.log",
+      "sha256": "56b46e4e023a9acc26598eaf96b67778f722d6158680f3c55470f268f7f8f6e1",
+      "bytes": 14282
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/shared-ingress-source-v1/shared-ingress-source-handler-v1/lenovo-laptop.status.json",
+      "sha256": "3ffe09ecc4a1f39ac6f78caca24c95a5d1182b4dbd23662d5e5938bcc488a56f",
+      "bytes": 36
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/shared-ingress-source-v1/shared-ingress-source-handler-v1/result.json",
+      "sha256": "dc5cef9137b7568f63f736deaed48def5d6d3fbd7809a32eb2ffa0802a01f058",
+      "bytes": 62
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/shared-ingress-source-v1/shared-ingress-source-handler-v1/test-results-lenovo-laptop.ndjson",
+      "sha256": "43ac37278212e2f6836087c74782f46c2c8628ddfe88685e0128f3b3267b56e5",
+      "bytes": 171
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/shared-ingress-source-v1/shared-ingress-source-membership-v1/fleet.json",
+      "sha256": "f050b4c61b2d421a43f06a120ce4713acadab6c77aa583e4102ff8597ac93a21",
+      "bytes": 12698
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/shared-ingress-source-v1/shared-ingress-source-membership-v1/input.json",
+      "sha256": "25c9c5ed39e25bf1ef7f774e558eb1fdcd20feb2581e2379f07c6c8754067e3a",
+      "bytes": 849
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/shared-ingress-source-v1/shared-ingress-source-membership-v1/lab.log",
+      "sha256": "9495cc47f6a0d9f54993c96cb956ee2573257418d1cbe8cf69b21e89f271ba3f",
+      "bytes": 1208
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/shared-ingress-source-v1/shared-ingress-source-membership-v1/result.json",
+      "sha256": "4f020dbd24eb4734300dd6d0930fa9491c63e10dc2ed2ee223b6d15002dda071",
+      "bytes": 62
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/shared-ingress-source-v1/shared-ingress-source-membership-v1/test-results-tv-dator.ndjson",
+      "sha256": "b0bc5fbfa0e4a41f7871ce8c90020cabd04a85e7d76b70912d6f6fa142fbb7c2",
+      "bytes": 327
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/shared-ingress-source-v1/shared-ingress-source-membership-v1/tv-dator.raw.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/shared-ingress-source-v1/shared-ingress-source-membership-v1/tv-dator.raw.log",
+      "sha256": "715ae317fbec0477b4d69fba932ddcfa18348ccf81e81fcb9c2a78cdbabc8756",
+      "bytes": 1109
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/shared-ingress-source-v1/shared-ingress-source-membership-v1/tv-dator.status.json",
+      "sha256": "f67f647bb544af538d33b715ae91a9f95a5c95eef71ec0aa1d071b7e2cccb231",
+      "bytes": 36
+    }
+  ],
+  "verdict": "BASELINE_MIXED_NO_CANDIDATE_PROOF",
+  "qualification": "Membership and transfer owners4assertions green; handler suite unfinished after CREATE correlation/INITIATED checks, REMOVE and later queued children not executed. No timeout or regression attribution; same-host candidate comparison required."
+}

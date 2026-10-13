@@ -1,0 +1,10 @@
+Scanned 16 JavaScript files
+Found 32 new literal-guideline violations
+Top files:
+- src/node/participant-release-applied-position-observation.js: 10
+- src/node/replica-handler-participant-release.js: 8
+- src/node/replica-handler-participant-cutover.js: 6
+- src/partition/partition-participant-release-contract.js: 4
+- src/node/participant-release-client.js: 3
+- src/node/replica-handler-lifecycle-methods.js: 1
+Matched 0 inherited literal-guideline baseline violations

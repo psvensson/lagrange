@@ -1,0 +1,11 @@
+ ...icipant-release-applied-position-observation.js | 341 ++++++++++++++-------
+ src/node/participant-release-client.js             |  44 ++-
+ .../participant-release-diagnostic-observation.js  |   1 +
+ src/node/replica-handler-lifecycle-methods.js      |  23 +-
+ src/node/replica-handler-participant-release.js    | 222 +++++++++++++-
+ src/node/replica-runtime-cleanup-custody.js        |   1 +
+ .../partition-participant-release-contract.js      |  18 +-
+ ...on-participant-transaction-cutover-constants.js |   4 +
+ .../partition-participant-transaction-pause.js     | 123 ++++++--
+ test/shards/impact-contracts.json                  |   6 +-
+ 10 files changed, 601 insertions(+), 182 deletions(-)

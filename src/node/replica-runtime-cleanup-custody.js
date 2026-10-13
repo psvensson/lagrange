@@ -120,6 +120,7 @@ function shutdownReplicaHandler(handler, options) {
         }
       }
     }
+    failures.push(...cancelParticipantAppliedPositionObservations(handler));
     if (failures.length > 0) throw new AggregateError(failures, RUNTIME_SHUTDOWN_FAILED);
     handler.creationProgressByReplica.clear();
     handler.inProgressOperations.clear();

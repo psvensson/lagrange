@@ -119,6 +119,7 @@ function participantReleaseSeedBudgetObservation(start, terminal, budgetMs) {
 export {
   captureParticipantReleaseDiagnosticTrigger,
   observeParticipantReleaseClockValue,
+  safeClockInteger as participantReleaseSafeClockInteger,
   participantReleaseClockMeasured,
   participantReleaseAttemptAgeObservation,
   participantReleaseSeedBudgetObservation,

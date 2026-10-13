@@ -1,0 +1,1421 @@
+diff --git a/src/node/participant-release-applied-position-observation.js b/src/node/participant-release-applied-position-observation.js
+new file mode 100644
+index 000000000..9a3f31b1d
+--- /dev/null
++++ b/src/node/participant-release-applied-position-observation.js
+@@ -0,0 +1,338 @@
++// One bounded passive observation per currently hosted replica. Wakes carry
++// no authority: every pass asks the canonical recipient for a fresh decision.
++import {RAFT_EVENT} from '../raft/constants.js';
++import {PARTITION_SERVICE_EVENT} from
++  '../partition/partition-service-constants.js';
++import {originEqual, releaseAnswer, sameReplicaGeneration} from
++  '../partition/partition-participant-release-contract.js';
++import {PARTICIPANT_CUTOVER_BOUND as BOUND,
++  PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
++  PARTICIPANT_RELEASE_REASON as REASON} from
++  '../partition/partition-participant-transaction-cutover-constants.js';
++import {TRANSPORT_DELIVERY_OUTCOME_REASON_CODE} from
++  '../transport/transport-semantic-outcome.js';
++import {participantReleaseAbsoluteClockValid, participantReleaseRequestBudget} from
++  './participant-release-client.js';
++import {participantReleaseClockMeasured, readParticipantReleaseClock} from
++  './participant-release-diagnostic-observation.js';
++
++const OBSERVATIONS = new WeakMap();
++const reflectApply = Reflect.apply;
++const SLOT_STATE = Object.freeze({
++  RETIRED: 'retired', PENDING: 'pending', OWNED: 'owned', FAILED: 'failed',
++});
++const RAFT_WAKE_EVENTS = Object.freeze([
++  RAFT_EVENT.APPLIED_PROGRESS, RAFT_EVENT.TERM_CHANGE,
++  RAFT_EVENT.LEADER_CHANGE, RAFT_EVENT.MEMBERSHIP_CHANGED,
++]);
++const REFRESH_AGAIN = Symbol('refresh-again');
++const WAIT_FOR_WAKE = Symbol('wait-for-wake');
++
++function sameAttempt(left, right) {
++  return left.term === right.term &&
++    left.leaderReplicaId === right.leaderReplicaId &&
++    left.leaderLifecycleIncarnation === right.leaderLifecycleIncarnation &&
++    left.deadlineAtMs === right.deadlineAtMs;
++}
++
++function matchingObservation(record, request) {
++  return record.request.action === request.action &&
++    record.request.partitionId === request.partitionId &&
++    record.request.replicaId === request.replicaId &&
++    record.request.release.releaseId === request.release.releaseId &&
++    record.request.deadlineAtMs === request.deadlineAtMs &&
++    record.request.observationDeadlineAtMs === request.observationDeadlineAtMs &&
++    sameAttempt(record.request.attempt, request.attempt) &&
++    sameReplicaGeneration(record.request.target, request.target) &&
++    originEqual(record.request.origin, request.origin);
++}
++
++function unavailable(request, reason = null) {
++  return releaseAnswer(OUTCOME.UNAVAILABLE, request,
++    {missingFact: 'replica_release_reply',
++      ...(reason === null ? {} : {reason}),
++      retryAfterMs: BOUND.PAUSE_RETRY_AFTER_MS});
++}
++
++function newSlot(name) {
++  return {name, state: SLOT_STATE.RETIRED, release: null,
++    releasing: false, hasError: false, error: null};
++}
++
++function newResourceSlots() {
++  return [
++    ...RAFT_WAKE_EVENTS.map((eventName) => newSlot(`raft:${eventName}`)),
++    newSlot('service-registry'), newSlot('service-shutdown'), newSlot('timer'),
++  ];
++}
++
++function currentCleanupErrors(record) {
++  return record.resources.flatMap((slot) =>
++    slot.state === SLOT_STATE.FAILED && slot.hasError ? [slot.error] : []);
++}
++
++function cleanupSlot(slot) {
++  if (slot.state === SLOT_STATE.RETIRED || slot.state === SLOT_STATE.PENDING ||
++      slot.releasing) return;
++  if (slot.release === null) return;
++  slot.releasing = true;
++  try {
++    slot.release();
++    slot.state = SLOT_STATE.RETIRED;
++    slot.release = null;
++    slot.hasError = false;
++    slot.error = null;
++  } catch (error) {
++    slot.state = SLOT_STATE.FAILED;
++    if (!slot.hasError) {
++      slot.hasError = true;
++      slot.error = error;
++    }
++  } finally {
++    slot.releasing = false;
++  }
++}
++
++function removeExactRecord(record) {
++  const records = OBSERVATIONS.get(record.handler);
++  if (records?.get(record.request.replicaId) !== record) return;
++  records.delete(record.request.replicaId);
++  if (records.size === 0) OBSERVATIONS.delete(record.handler);
++}
++
++function finishRecord(record) {
++  for (const slot of record.resources) cleanupSlot(slot);
++  if (record.installing || record.resources.some((slot) =>
++    slot.state === SLOT_STATE.PENDING || slot.releasing)) return;
++  const failures = currentCleanupErrors(record);
++  if (!record.settled) {
++    record.settled = true;
++    record.resolve(failures.length === 0 ? record.terminalAnswer :
++      unavailable(record.request, REASON.CLEANUP_INCOMPLETE));
++  }
++  if (failures.length === 0) removeExactRecord(record);
++}
++
++function terminal(record, answer) {
++  if (record.active) {
++    record.active = false;
++    record.terminalAnswer = answer;
++  }
++  finishRecord(record);
++}
++
++function lifecycleCurrent(record) {
++  return record.active && record.handler.shuttingDown !== true &&
++    record.service.isShutdown !== true && record.service.initialized === true &&
++    record.service.raft === record.port &&
++    record.handler.localServices.get(record.request.replicaId) === record.service;
++}
++
++function clockAnswer(record) {
++  const observed = readParticipantReleaseClock(record.scheduler);
++  if (!participantReleaseClockMeasured(observed) ||
++      !participantReleaseAbsoluteClockValid(observed.value)) {
++    return unavailable(record.request);
++  }
++  if (observed.value >= record.request.deadlineAtMs) {
++    return releaseAnswer(OUTCOME.UNAVAILABLE, record.request,
++      {missingFact: 'release_deadline'});
++  }
++  return observed.value >= record.deadlineAtMs ? unavailable(record.request,
++    TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT) : null;
++}
++
++async function observeOnce(record) {
++  record.dirty = false;
++  if (!lifecycleCurrent(record)) return releaseAnswer(OUTCOME.STALE, record.request);
++  const decision = await record.decide(record.handler, record.service,
++    record.request, record.port);
++  if (!record.active) return WAIT_FOR_WAKE;
++  if (!lifecycleCurrent(record)) return releaseAnswer(OUTCOME.STALE, record.request);
++  const expired = clockAnswer(record);
++  if (expired !== null) return expired;
++  const {answer, refreshEligible} = decision;
++  if (answer.outcome !== OUTCOME.OBSERVED) {
++    return refreshEligible && record.dirty ? REFRESH_AGAIN : answer;
++  }
++  if (answer.membership.appliedIndex >= record.request.origin.originIndex) return answer;
++  return record.dirty ? REFRESH_AGAIN : WAIT_FOR_WAKE;
++}
++
++async function refresh(record) {
++  if (record.refreshing || !record.active) return;
++  record.refreshing = true;
++  try {
++    while (record.active) {
++      const result = await observeOnce(record);
++      if (result === REFRESH_AGAIN) continue;
++      if (result !== WAIT_FOR_WAKE) terminal(record, result);
++      break;
++    }
++  } catch (error) {
++    terminal(record, releaseAnswer(OUTCOME.INVALID, record.request,
++      {reason: String(error?.message ?? error)}));
++  } finally {
++    record.refreshing = false;
++    if (record.active && record.dirty) void refresh(record);
++  }
++}
++
++function wake(record) {
++  if (!record.active) {
++    finishRecord(record);
++    return;
++  }
++  record.dirty = true;
++  if (record.installing) return;
++  void refresh(record);
++}
++
++function acquireSlot(record, slot, acquire) {
++  slot.state = SLOT_STATE.PENDING;
++  try {
++    const release = acquire();
++    if (typeof release !== 'function') throw new TypeError(`${slot.name} release missing`);
++    slot.release = release;
++    slot.state = SLOT_STATE.OWNED;
++    if (!record.active) finishRecord(record);
++    else if (!lifecycleCurrent(record)) {
++      terminal(record, releaseAnswer(OUTCOME.STALE, record.request));
++    }
++  } catch (error) {
++    slot.state = SLOT_STATE.FAILED;
++    if (!slot.hasError) {
++      slot.hasError = true;
++      slot.error = error;
++    }
++    terminal(record, unavailable(record.request));
++  }
++  return record.active;
++}
++
++function raftSubscription(record, slot, eventName) {
++  return acquireSlot(record, slot, () => record.port.subscribe(eventName,
++    () => wake(record)));
++}
++
++function registrySubscription(record, slot) {
++  return acquireSlot(record, slot, () =>
++    record.handler.localServices.subscribeServiceChanges((change) => {
++      if (change.replicaId !== record.request.replicaId) return;
++      if (change.service !== record.service) {
++        terminal(record, releaseAnswer(OUTCOME.STALE, record.request));
++        return;
++      }
++      wake(record);
++    }));
++}
++
++function serviceShutdownSubscription(record, slot) {
++  return acquireSlot(record, slot, () => {
++    const service = record.service;
++    const remove = typeof service.off === 'function' ? service.off : service.removeListener;
++    if (typeof service.on !== 'function' || typeof remove !== 'function') {
++      throw new TypeError('service shutdown listener owner unavailable');
++    }
++    const listener = () => terminal(record, releaseAnswer(OUTCOME.STALE, record.request));
++    reflectApply(service.on, service, [PARTITION_SERVICE_EVENT.SHUTDOWN_STARTED, listener]);
++    return () => reflectApply(remove, service,
++      [PARTITION_SERVICE_EVENT.SHUTDOWN_STARTED, listener]);
++  });
++}
++
++function timerSubscription(record, slot) {
++  slot.state = SLOT_STATE.PENDING;
++  let fired = false;
++  try {
++    const handle = record.scheduler.setTimeout(() => {
++      fired = true;
++      slot.state = SLOT_STATE.RETIRED;
++      slot.release = null;
++      const answer = clockAnswer(record) ?? unavailable(record.request,
++        TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT);
++      terminal(record, answer);
++    }, record.timeoutMs);
++    if (!fired) {
++      slot.release = () => record.scheduler.clearTimeout(handle);
++      slot.state = SLOT_STATE.OWNED;
++      handle?.unref?.();
++    }
++    if (!record.active) finishRecord(record);
++    else if (!lifecycleCurrent(record)) {
++      terminal(record, releaseAnswer(OUTCOME.STALE, record.request));
++    }
++  } catch (error) {
++    slot.state = SLOT_STATE.FAILED;
++    if (!slot.hasError) {
++      slot.hasError = true;
++      slot.error = error;
++    }
++    terminal(record, unavailable(record.request));
++  }
++}
++
++function installObservation(record) {
++  record.installing = true;
++  let index = 0;
++  for (const eventName of RAFT_WAKE_EVENTS) {
++    if (!raftSubscription(record, record.resources[index], eventName)) break;
++    index += 1;
++  }
++  if (record.active && registrySubscription(record, record.resources[4]) &&
++      serviceShutdownSubscription(record, record.resources[5])) {
++    timerSubscription(record, record.resources[6]);
++  }
++  record.installing = false;
++  if (record.active) void refresh(record);
++  else finishRecord(record);
++}
++
++function newObservation(handler, service, request, decide, records) {
++  const scheduler = handler.timeSource;
++  const budget = participantReleaseRequestBudget({timeSource: scheduler},
++    request.deadlineAtMs, request.observationDeadlineAtMs);
++  if (budget === null) return unavailable(request);
++  if (budget.timeoutMs <= 0) {
++    return budget.nowMs >= request.deadlineAtMs ?
++      releaseAnswer(OUTCOME.UNAVAILABLE, request, {missingFact: 'release_deadline'}) :
++      unavailable(request, TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT);
++  }
++  if (records === undefined) {
++    records = new Map();
++    OBSERVATIONS.set(handler, records);
++  }
++  const settlement = Promise.withResolvers();
++  const record = {handler, service, port: service.raft, scheduler, request, decide,
++    resolve: settlement.resolve, promise: settlement.promise,
++    deadlineAtMs: budget.observationDeadlineAtMs, timeoutMs: budget.timeoutMs,
++    active: true, settled: false, terminalAnswer: null, dirty: false,
++    refreshing: false, installing: false, resources: newResourceSlots()};
++  records.set(request.replicaId, record);
++  installObservation(record);
++  return record.promise;
++}
++
++function observeParticipantAppliedPosition(handler, service, request, decide) {
++  const records = OBSERVATIONS.get(handler);
++  const current = records?.get(request.replicaId);
++  if (current !== undefined) {
++    const promise = current.promise;
++    const matches = matchingObservation(current, request);
++    if (matches && !current.active) finishRecord(current);
++    return matches ? promise : releaseAnswer(OUTCOME.STALE, request);
++  }
++  return newObservation(handler, service, request, decide, records);
++}
++
++function cancelParticipantAppliedPositionObservations(handler) {
++  const records = OBSERVATIONS.get(handler);
++  if (records === undefined) return [];
++  for (const record of [...records.values()]) {
++    terminal(record, releaseAnswer(OUTCOME.STALE, record.request));
++  }
++  return [...records.values()].flatMap(currentCleanupErrors);
++}
++
++export {cancelParticipantAppliedPositionObservations,
++  observeParticipantAppliedPosition};
+diff --git a/src/node/participant-release-client.js b/src/node/participant-release-client.js
+index a5e59f178..2fe9bb4e5 100644
+--- a/src/node/participant-release-client.js
++++ b/src/node/participant-release-client.js
+@@ -1,8 +1,12 @@
+ // One client for the release lifecycle route. Node hints select where to
+ // ask; only the answering consensus owner can name the current leader.
+ import {AddressManager} from '../address/address-manager.js';
+-import {classifyTransportDeliveryOutcome, isDeliveredTransportDeliveryOutcome} from
++import {classifyTransportDeliveryOutcome, isDeliveredTransportDeliveryOutcome,
++  TRANSPORT_DELIVERY_OUTCOME_REASON_CODE} from
+   '../transport/transport-semantic-outcome.js';
++import {participantReleaseClockMeasured, participantReleaseSafeClockInteger,
++  readParticipantReleaseClock} from
++  './participant-release-diagnostic-observation.js';
+ import {releaseAnswer} from '../partition/partition-participant-release-contract.js';
+ import {PARTICIPANT_CUTOVER_BOUND as BOUND, PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
+   PARTICIPANT_RELEASE_ACTION as ACTION, PARTICIPANT_RELEASE_PRIORITY,
+@@ -10,6 +14,11 @@ import {PARTICIPANT_CUTOVER_BOUND as BOUND, PARTICIPANT_CUTOVER_OUTCOME as OUTCO
+   PARTICIPANT_RELEASE_TYPE} from
+   '../partition/partition-participant-transaction-cutover-constants.js';
+ 
++const mathMax = Math.max;
++const mathMin = Math.min;
++const objectFreeze = Object.freeze;
++const objectIs = Object.is;
++
+ function releaseNodeOfAddress(address) {
+   try {
+     return AddressManager.getInstance().getNodeId(address);
+@@ -27,31 +36,97 @@ function requestTimeoutMs(owner, request) {
+   if (!Number.isSafeInteger(request?.deadlineAtMs)) {
+     return BOUND.REQUEST_TIMEOUT_MS;
+   }
+-  return Math.max(0, Math.min(BOUND.REQUEST_TIMEOUT_MS,
+-    request.deadlineAtMs - ownerNow(owner)));
++  return cappedRequestTimeoutMs(ownerNow(owner), request.deadlineAtMs);
++}
++
++function participantReleaseAbsoluteClockValid(value) {
++  return participantReleaseSafeClockInteger(value) && value >= 0 &&
++    !objectIs(value, -0);
++}
++
++function cappedRequestTimeoutMs(nowMs, deadlineAtMs) {
++  return mathMax(0, mathMin(BOUND.REQUEST_TIMEOUT_MS, deadlineAtMs - nowMs));
++}
++
++function participantReleaseRequestBudget(owner, deadlineAtMs,
++  ceilingAtMs = deadlineAtMs) {
++  const observation = readParticipantReleaseClock(owner?.timeSource);
++  if (!participantReleaseClockMeasured(observation) ||
++      !participantReleaseAbsoluteClockValid(observation.value) ||
++      !participantReleaseAbsoluteClockValid(deadlineAtMs) ||
++      !participantReleaseAbsoluteClockValid(ceilingAtMs) ||
++      ceilingAtMs > deadlineAtMs) return null;
++  const overallRemainingMs = mathMax(0, deadlineAtMs - observation.value);
++  const ceilingRemainingMs = mathMax(0, ceilingAtMs - observation.value);
++  if (!participantReleaseSafeClockInteger(overallRemainingMs) ||
++      !participantReleaseSafeClockInteger(ceilingRemainingMs)) return null;
++  const timeoutMs = cappedRequestTimeoutMs(0,
++    mathMin(overallRemainingMs, ceilingRemainingMs));
++  const observationDeadlineAtMs = observation.value + timeoutMs;
++  if (!participantReleaseAbsoluteClockValid(observationDeadlineAtMs)) return null;
++  return objectFreeze({nowMs: observation.value, observationDeadlineAtMs,
++    timeoutMs});
++}
++
++function observationUnavailable(request, nodeId, reason = null) {
++  return releaseAnswer(OUTCOME.UNAVAILABLE, request,
++    {missingFact: 'replica_release_reply', owner: nodeId,
++      ...(reason === null ? {} : {reason}), retryAfterMs: BOUND.PAUSE_RETRY_AFTER_MS});
++}
++
++function prepareParticipantReleaseRequest(owner, nodeId, request) {
++  if (request.action !== ACTION.OBSERVE_APPLIED_POSITION) {
++    return {request, timeoutMs: requestTimeoutMs(owner, request), observation: false};
++  }
++  const budget = participantReleaseRequestBudget(owner, request.deadlineAtMs);
++  if (budget === null) return {answer: observationUnavailable(request, nodeId)};
++  const dispatched = {...request,
++    observationDeadlineAtMs: budget.observationDeadlineAtMs};
++  if (budget.timeoutMs > 0) {
++    return {request: dispatched, timeoutMs: budget.timeoutMs, observation: true};
++  }
++  const answer = budget.nowMs < request.deadlineAtMs ?
++    observationUnavailable(dispatched, nodeId,
++      TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT) :
++    releaseAnswer(OUTCOME.UNAVAILABLE, dispatched,
++      {missingFact: 'release_deadline', owner: nodeId});
++  return {answer};
++}
++
++function participantReleaseDeliveryAnswer(response, prepared, nodeId) {
++  const result = response[PARTICIPANT_RELEASE_RESULT_FIELD];
++  if (isDeliveredTransportDeliveryOutcome(response) && response.noHandler !== true &&
++      result && typeof result === 'object') return result;
++  return prepared.observation &&
++    response.reasonCode === TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT ?
++    observationUnavailable(prepared.request, nodeId, response.reasonCode) :
++    observationUnavailable(prepared.request, nodeId);
+ }
+ 
+ async function askParticipantRelease(owner, nodeId, request) {
+-  const timeoutMs = requestTimeoutMs(owner, request);
+-  if (timeoutMs <= 0) {
++  const prepared = prepareParticipantReleaseRequest(owner, nodeId, request);
++  if (prepared.answer !== undefined) {
++    return prepared.answer;
++  }
++  if (prepared.timeoutMs <= 0) {
+     return releaseAnswer(OUTCOME.UNAVAILABLE, request,
+       {missingFact: 'release_deadline', owner: nodeId});
+   }
+   try {
+     const response = classifyTransportDeliveryOutcome(await owner.messageRouter.deliver(
+       `${nodeId}${PARTICIPANT_RELEASE_ROUTE_SUFFIX}`,
+-      {...request, type: PARTICIPANT_RELEASE_TYPE},
++      {...prepared.request, type: PARTICIPANT_RELEASE_TYPE},
+       {targetNodeId: nodeId, deliveryPriority: PARTICIPANT_RELEASE_PRIORITY,
+-        timeoutMs}));
+-    const result = response[PARTICIPANT_RELEASE_RESULT_FIELD];
+-    return isDeliveredTransportDeliveryOutcome(response) && response.noHandler !== true &&
+-      result && typeof result === 'object' ? result : releaseAnswer(OUTCOME.UNAVAILABLE, request,
+-        {missingFact: 'replica_release_reply', owner: nodeId,
+-          retryAfterMs: BOUND.PAUSE_RETRY_AFTER_MS});
++        timeoutMs: prepared.timeoutMs}));
++    return participantReleaseDeliveryAnswer(response, prepared, nodeId);
+   } catch (error) {
+-    return releaseAnswer(OUTCOME.UNAVAILABLE, request,
+-      {missingFact: 'replica_release_reply', owner: nodeId,
+-        reason: String(error?.message ?? error), retryAfterMs: BOUND.PAUSE_RETRY_AFTER_MS});
++    const delivery = classifyTransportDeliveryOutcome(error);
++    return prepared.observation &&
++      delivery.reasonCode === TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT ?
++      observationUnavailable(prepared.request, nodeId, delivery.reasonCode) :
++      releaseAnswer(OUTCOME.UNAVAILABLE, prepared.request,
++        {missingFact: 'replica_release_reply', owner: nodeId,
++          reason: String(error?.message ?? error), retryAfterMs: BOUND.PAUSE_RETRY_AFTER_MS});
+   }
+ }
+ 
+@@ -64,4 +139,6 @@ async function requestParticipantRelease(owner, request) {
+     {...payload, replicaId: first.leaderReplicaId});
+ }
+ 
+-export {askParticipantRelease, releaseNodeOfAddress, requestParticipantRelease};
++export {askParticipantRelease, participantReleaseAbsoluteClockValid,
++  participantReleaseRequestBudget,
++  releaseNodeOfAddress, requestParticipantRelease};
+diff --git a/src/node/participant-release-diagnostic-observation.js b/src/node/participant-release-diagnostic-observation.js
+index ee92456d4..2e7638e8d 100644
+--- a/src/node/participant-release-diagnostic-observation.js
++++ b/src/node/participant-release-diagnostic-observation.js
+@@ -57,7 +57,7 @@ function clockUnavailable(observation) {
+   return observation?.state === CLOCK_STATE.UNAVAILABLE;
+ }
+ 
+-function clockMeasured(observation) {
++function participantReleaseClockMeasured(observation) {
+   return observation?.state === CLOCK_STATE.MEASURED;
+ }
+ 
+@@ -65,8 +65,9 @@ function unsafeObservationState(left, right, third = null) {
+   if (clockUnavailable(left) || clockUnavailable(right) || clockUnavailable(third)) {
+     return CLOCK_STATE.UNAVAILABLE;
+   }
+-  return clockMeasured(left) && clockMeasured(right) &&
+-    (third === null || clockMeasured(third)) ? null : CLOCK_STATE.UNSAFE;
++  return participantReleaseClockMeasured(left) &&
++    participantReleaseClockMeasured(right) &&
++    (third === null || participantReleaseClockMeasured(third)) ? null : CLOCK_STATE.UNSAFE;
+ }
+ 
+ function safeDifference(later, earlier) {
+@@ -118,6 +119,8 @@ function participantReleaseSeedBudgetObservation(start, terminal, budgetMs) {
+ export {
+   captureParticipantReleaseDiagnosticTrigger,
+   observeParticipantReleaseClockValue,
++  safeClockInteger as participantReleaseSafeClockInteger,
++  participantReleaseClockMeasured,
+   participantReleaseAttemptAgeObservation,
+   participantReleaseSeedBudgetObservation,
+   readParticipantReleaseClock,
+diff --git a/src/node/replica-handler-lifecycle-methods.js b/src/node/replica-handler-lifecycle-methods.js
+index 6c0f482cb..77ef403a0 100644
+--- a/src/node/replica-handler-lifecycle-methods.js
++++ b/src/node/replica-handler-lifecycle-methods.js
+@@ -22,7 +22,8 @@ import {
+ import {PARTICIPANT_RELEASE_ACTION, PARTICIPANT_RELEASE_RESULT_FIELD,
+   PARTICIPANT_RELEASE_TYPE} from
+   '../partition/partition-participant-transaction-cutover-constants.js';
+-import {receiveParticipantRelease} from './replica-handler-participant-release.js';
++import {captureParticipantReleaseDispatch, receiveParticipantRelease} from
++  './replica-handler-participant-release.js';
+ import {runParticipantCutover} from './replica-handler-participant-cutover.js';
+ 
+ const LOCAL_STR_CONSTRUCTOR = 'constructor';
+@@ -133,21 +134,31 @@ function assignReplicaHandlerLifecycleMethods(ReplicaHandler) {
+      */
+     async handleMessage(envelope) {
+       const {payload, correlationId} = envelope;
+-      const type = payload?.[ReplicaOperationField.TYPE];
++      const captured = captureParticipantReleaseDispatch(payload);
++      if (captured.kind === 'malformed') {
++        await this.awaitRemovedReplicaCleanupAdmissionBarrier();
++        const response = await dispatchReplicaMessage(this, undefined, null);
++        return {...response, correlationId};
++      }
++      const type = captured.kind === 'release' ? PARTICIPANT_RELEASE_TYPE :
++        captured.type;
+       // Release reads/pause/recovery stay available during bootstrap. The
+       // reopen action still asks retained-storage admission before closing
+       // anything; this does not authorize create/remove/storage shortcuts.
+       if (type === PARTICIPANT_RELEASE_TYPE) {
+-        const response = payload.action === PARTICIPANT_RELEASE_ACTION.RELEASE ?
+-          await runParticipantCutover(this, payload) :
+-          await receiveParticipantRelease(this, payload);
++        const {request, refusal, observationValidated} = captured;
++        const response = refusal ??
++          (request.action === PARTICIPANT_RELEASE_ACTION.RELEASE ?
++            await runParticipantCutover(this, request) :
++            await receiveParticipantRelease(this, request,
++              observationValidated));
+         return {acknowledged: true, [PARTICIPANT_RELEASE_RESULT_FIELD]: response, correlationId};
+       }
+       await this.awaitRemovedReplicaCleanupAdmissionBarrier();
+       this.logger.debug(REPLICA_HANDLER_LOG_MSG.MESSAGE_RECEIVED, {
+         type,
+         correlationId,
+-        operationId: payload?.operationId,
++        operationId: captured.operationId,
+       });
+       const response = await dispatchReplicaMessage(this, type, payload);
+       // Include correlationId in response for RPC matching; a request's
+diff --git a/src/node/replica-handler-participant-cutover.js b/src/node/replica-handler-participant-cutover.js
+index e5ea68eb1..1571b2651 100644
+--- a/src/node/replica-handler-participant-cutover.js
++++ b/src/node/replica-handler-participant-cutover.js
+@@ -66,6 +66,17 @@ function unavailableCensus(census) {
+   return census.find((facts) => facts.outcome !== OUTCOME.OBSERVED) ?? null;
+ }
+ 
++async function enableAndObserveCohort(handler, release, attempt, census, local,
++  queryDrainProof) {
++  const enabled = await askParticipantRelease(handler, handler.nodeId,
++    requestFor(release, attempt, ACTION.ENABLE, local,
++      {census, queryDrainProof}));
++  if (enabled.outcome !== OUTCOME.OBSERVED) return enabled;
++  const applied = await actOnCohort(handler, release, attempt,
++    ACTION.OBSERVE_APPLIED_POSITION, census, {origin: enabled.origin});
++  return unavailableCensus(applied);
++}
++
+ async function actOnCohort(handler, release, attempt, action, census, fields = {}) {
+   return Promise.all(census.map((facts) => askParticipantRelease(handler,
+     facts.generation.nodeId, requestFor(release, attempt, action, facts, fields))));
+@@ -274,10 +285,9 @@ async function runCutoverAttempt(handler, request) {
+   const defect = releaseCensusDefect(release, census, local, {originRequired: false,
+     attempt, queryDrainProof: queryRelease.queryDrainProof});
+   if (defect !== null) return attemptRefusal({...request, release}, defect);
+-  const enabled = await askParticipantRelease(handler, handler.nodeId,
+-    requestFor(release, attempt, ACTION.ENABLE, local,
+-      {census, queryDrainProof: queryRelease.queryDrainProof}));
+-  if (enabled.outcome !== OUTCOME.OBSERVED) return enabled;
++  const application = await enableAndObserveCohort(handler, release, attempt,
++    census, local, queryRelease.queryDrainProof);
++  if (application !== null) return application;
+   census = await readCohort(handler, service.partitionId, cohort,
+     request.deadlineAtMs);
+   unavailable = unavailableCensus(census);
+diff --git a/src/node/replica-handler-participant-release.js b/src/node/replica-handler-participant-release.js
+index b7783fc6e..32659fb6c 100644
+--- a/src/node/replica-handler-participant-release.js
++++ b/src/node/replica-handler-participant-release.js
+@@ -2,18 +2,154 @@
+ // mutation checks the canonical release, leader term and exact target
+ // lifetime. Reopen uses retained-storage admission and the production factory.
+ import {RAFT_ROLE} from '../raft/constants.js';
++import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
+ import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from '../raft/raft-committed-membership-constants.js';
+ import {buildReplacementServiceOptions} from '../partition/partition-reopen-options.js';
+-import {isReleaseDrained, releaseAnswer, releaseCensusDefect, releaseIdentityValid,
+-  sameReplicaGeneration} from
++import {isReleaseDrained, originEqual, participantReleaseGenerationValid,
++  releaseAnswer, releaseCensusDefect, releaseIdentityValid, sameReplicaGeneration} from
+   '../partition/partition-participant-release-contract.js';
+-import {raiseParticipantCutoverPause, readParticipantReleaseFacts,
+-  resumeParticipantCutoverAdmission} from
++import {participantCutoverPauseOf, participantReleaseReplicaGenerationOf,
++  raiseParticipantCutoverPause, readParticipantReleaseFacts,
++  readParticipantReleaseObservationAssessment, resumeParticipantCutoverAdmission} from
+   '../partition/partition-participant-transaction-pause.js';
+ import {enableParticipantTransactionAdmission} from
+   '../partition/partition-participant-transaction-request.js';
+-import {PARTICIPANT_RELEASE_ACTION as ACTION, PARTICIPANT_CUTOVER_OUTCOME as OUTCOME} from
++import {PARTICIPANT_RELEASE_ACTION as ACTION, PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
++  PARTICIPANT_RELEASE_TYPE} from
+   '../partition/partition-participant-transaction-cutover-constants.js';
++import {observeParticipantAppliedPosition} from
++  './participant-release-applied-position-observation.js';
++import {participantReleaseSafeClockInteger} from
++  './participant-release-diagnostic-observation.js';
++import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
++
++const objectFreeze = Object.freeze;
++const objectHasOwn = Object.hasOwn;
++const RELEASE_NESTED_FIELDS = objectFreeze(['release', 'attempt', 'target', 'origin']);
++
++function nonempty(value) {
++  return typeof value === 'string' && value.length > 0;
++}
++
++function positiveInteger(value) {
++  return participantReleaseSafeClockInteger(value) && value > 0;
++}
++
++function validIncarnation(value) {
++  return nonempty(value) || positiveInteger(value);
++}
++
++function actionRequiresIdentity(action) {
++  return action === ACTION.PAUSE || action === ACTION.REOPEN ||
++    action === ACTION.ENABLE || action === ACTION.OBSERVE_APPLIED_POSITION ||
++    action === ACTION.RESUME;
++}
++
++function releaseScalarsValid(release) {
++  return release !== null && nonempty(release.partitionId) &&
++    nonempty(release.targetBuildDigest) && nonempty(release.configurationKey) &&
++    nonempty(release.releaseId) &&
++    participantReleaseSafeClockInteger(release.protocolVersion) &&
++    participantReleaseSafeClockInteger(release.membershipGenerationIndex) &&
++    release.membershipGenerationIndex >= 0;
++}
++
++function attemptScalarsValid(attempt) {
++  return attempt !== null && positiveInteger(attempt.term) &&
++    nonempty(attempt.leaderReplicaId) &&
++    validIncarnation(attempt.leaderLifecycleIncarnation) &&
++    participantReleaseSafeClockInteger(attempt.deadlineAtMs) &&
++    attempt.deadlineAtMs >= 0;
++}
++
++function originScalarsValid(origin) {
++  return origin !== null && positiveInteger(origin.originIndex) &&
++    positiveInteger(origin.originTerm) && originEqual(origin, origin);
++}
++
++function safeInvalidRequest(request) {
++  const releaseId = typeof request.release?.releaseId === 'string' ?
++    request.release.releaseId : null;
++  return objectFreeze({
++    action: typeof request.action === 'string' ? request.action : null,
++    partitionId: typeof request.partitionId === 'string' ? request.partitionId : null,
++    release: releaseId === null ? null : objectFreeze({releaseId}),
++  });
++}
++
++function invalidReleaseDispatch(request) {
++  return objectFreeze({kind: 'release', request,
++    refusal: releaseAnswer(OUTCOME.INVALID, safeInvalidRequest(request)),
++    observationValidated: false});
++}
++
++function captureReleaseNestedRecords(request) {
++  let valid = true;
++  for (const field of RELEASE_NESTED_FIELDS) {
++    if (!objectHasOwn(request, field) || request[field] === null ||
++        request[field] === undefined) continue;
++    const nested = copyStrictOwnDataRecord(request[field]);
++    request[field] = nested === null ? null : objectFreeze(nested);
++    if (nested === null) valid = false;
++  }
++  return valid;
++}
++
++function releaseRequestIdentityValid(request) {
++  if (!actionRequiresIdentity(request.action)) return true;
++  const scalarsValid = nonempty(request.partitionId) && nonempty(request.replicaId) &&
++    releaseScalarsValid(request.release) && attemptScalarsValid(request.attempt) &&
++    participantReleaseGenerationValid(request.target) &&
++    participantReleaseSafeClockInteger(request.deadlineAtMs) &&
++    request.deadlineAtMs >= 0;
++  const originValid = request.action !== ACTION.OBSERVE_APPLIED_POSITION ||
++    originScalarsValid(request.origin);
++  return scalarsValid && originValid && releaseIdentityValid(request.release);
++}
++
++function observationDeadlineTupleValid(request) {
++  return participantReleaseSafeClockInteger(request.deadlineAtMs) &&
++    request.deadlineAtMs >= 0 &&
++    participantReleaseSafeClockInteger(request.observationDeadlineAtMs) &&
++    request.observationDeadlineAtMs >= 0 &&
++    request.observationDeadlineAtMs <= request.deadlineAtMs &&
++    request.deadlineAtMs === request.attempt?.deadlineAtMs;
++}
++
++function observationIdentityTupleValid(request) {
++  return nonempty(request.partitionId) && nonempty(request.replicaId) &&
++    request.partitionId === request.release?.partitionId &&
++    request.replicaId === request.target?.replicaId;
++}
++
++function observationRequestCoherent(request) {
++  return observationIdentityTupleValid(request) &&
++    observationDeadlineTupleValid(request);
++}
++
++function captureParticipantReleaseDispatch(payload) {
++  const request = copyStrictOwnDataRecord(payload);
++  if (request === null || typeof request.type !== 'string') {
++    return objectFreeze({kind: 'malformed'});
++  }
++  if (request.type !== PARTICIPANT_RELEASE_TYPE) {
++    return objectFreeze({kind: 'ordinary', type: request.type,
++      operationId: request.operationId});
++  }
++  const nestedValid = captureReleaseNestedRecords(request);
++  const captured = objectFreeze(request);
++  if (!nestedValid || typeof captured.action !== 'string') {
++    return invalidReleaseDispatch(captured);
++  }
++  if (!releaseRequestIdentityValid(captured)) return invalidReleaseDispatch(captured);
++  if (captured.action !== ACTION.OBSERVE_APPLIED_POSITION) {
++    return objectFreeze({kind: 'release', request: captured, refusal: null,
++      observationValidated: false});
++  }
++  return observationRequestCoherent(captured) ? objectFreeze({kind: 'release',
++    request: captured, refusal: null, observationValidated: true}) :
++    invalidReleaseDispatch(captured);
++}
+ 
+ function attemptMatches(request, facts) {
+   return request.attempt?.term === facts.membership.term &&
+@@ -56,9 +192,6 @@ async function executeReleaseAction(handler, service, request, facts) {
+   case ACTION.PAUSE:
+     raiseParticipantCutoverPause(service);
+     return readParticipantReleaseFacts(handler, service);
+-  case ACTION.DRAIN:
+-    return isReleaseDrained(facts.work) ? facts :
+-      releaseAnswer(OUTCOME.DRAIN_PENDING, request, {facts});
+   case ACTION.REOPEN:
+     return reopenReplica(handler, service, request, facts);
+   case ACTION.ENABLE: {
+@@ -79,10 +212,113 @@ async function executeReleaseAction(handler, service, request, facts) {
+   }
+ }
+ 
+-async function receiveParticipantRelease(handler, request) {
++function releaseRequestIdentityRefusal(service, request, facts) {
++  if (!releaseIdentityValid(request.release) ||
++      request.release.partitionId !== service.partitionId) {
++    return releaseAnswer(OUTCOME.INVALID, request);
++  }
++  const generationMatches = sameReplicaGeneration(request.target, facts.generation) &&
++    attemptMatches(request, facts);
++  const pauseMatches = request.action === ACTION.PAUSE || facts.paused === true ||
++    request.action === ACTION.RESUME;
++  return generationMatches && pauseMatches ? null :
++    releaseAnswer(OUTCOME.STALE, request);
++}
++
++function releaseStatusMatches(service, request, status) {
++  const statusMatches = status.term === request.attempt.term &&
++    status.leaderId === request.attempt.leaderReplicaId &&
++    status.configurationKey === request.release.configurationKey;
++  const leaderLifecycleMatches = service.replicaId !== request.attempt.leaderReplicaId ||
++    status.lifecycleIncarnation === request.attempt.leaderLifecycleIncarnation;
++  return statusMatches && leaderLifecycleMatches;
++}
++
++function releaseRequestRefusal(_handler, service, request, facts) {
++  if (facts.outcome !== OUTCOME.OBSERVED) return facts;
++  const identityRefusal = releaseRequestIdentityRefusal(service, request, facts);
++  if (identityRefusal !== null) return identityRefusal;
++  // A release request always closes new work even on a mixed-build node.
++  if (request.action === ACTION.PAUSE) raiseParticipantCutoverPause(service);
++  if (facts.buildDigest !== request.release.targetBuildDigest) {
++    return releaseAnswer(OUTCOME.BUILD_MISMATCH, request);
++  }
++  const status = service.raft.readStatus();
++  return releaseStatusMatches(service, request, status) ? null :
++    releaseAnswer(OUTCOME.STALE, request);
++}
++
++function observationAnswer(request, answer) {
++  const {outcome, ...fields} = answer;
++  return releaseAnswer(outcome, request, fields);
++}
++
++function observationLifecycleCurrent(handler, service, request, expectedPort) {
++  return handler.shuttingDown !== true && service.initialized === true &&
++    service.isShutdown !== true && service.raft === expectedPort &&
++    handler.localServices.get(request.replicaId) === service;
++}
++
++function observationStatusMatches(handler, service, request, context, status) {
++  const generation = participantReleaseReplicaGenerationOf(handler, service, status);
++  if (!participantReleaseGenerationValid(generation) ||
++      !sameReplicaGeneration(request.target, generation) ||
++      !sameReplicaGeneration(context.generation, generation)) return false;
++  return releaseStatusMatches(service, request, status) &&
++    status.membershipGenerationIndex === request.release.membershipGenerationIndex &&
++    status.term === context.term && status.leaderId === context.leaderReplicaId &&
++    status.configurationKey === context.configurationKey &&
++    status.membershipGenerationIndex === context.membershipGenerationIndex &&
++    status.appliedIndex === context.appliedIndex;
++}
++
++function observationContextMatches(handler, service, request, context, expectedPort) {
++  if (!observationLifecycleCurrent(handler, service, request, expectedPort)) return false;
++  if (context.buildDigest !== request.release.targetBuildDigest ||
++      context.paused !== true || participantCutoverPauseOf(service) === null) return false;
++  const status = expectedPort.readStatus();
++  if (status.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) return false;
++  return observationStatusMatches(handler, service, request, context, status) &&
++    observationLifecycleCurrent(handler, service, request, expectedPort);
++}
++
++async function participantReleaseObservationDecision(handler, service, request,
++  expectedPort) {
++  const assessment = await readParticipantReleaseObservationAssessment(handler, service);
++  if (!observationLifecycleCurrent(handler, service, request, expectedPort)) {
++    return {answer: releaseAnswer(OUTCOME.STALE, request), refreshEligible: false};
++  }
++  if (assessment.context === null) {
++    return {answer: observationAnswer(request, assessment.answer), refreshEligible: false};
++  }
++  if (!observationContextMatches(handler, service, request, assessment.context,
++    expectedPort)) {
++    return {answer: releaseAnswer(OUTCOME.STALE, request), refreshEligible: false};
++  }
++  return {answer: observationAnswer(request, assessment.answer),
++    refreshEligible: assessment.refreshEligible};
++}
++
++function requestDeadlineSpent(handler, request) {
++  return request.action !== ACTION.OBSERVE_APPLIED_POSITION &&
++    Number.isSafeInteger(request.deadlineAtMs) &&
++    handler.timeSource.now() >= request.deadlineAtMs;
++}
++
++async function receiveCurrentParticipantRelease(handler, service, request) {
++  const purpose = request.action === ACTION.INSPECT && request.leaderCohort === true ?
++    COMMITTED_MEMBERSHIP_READ_PURPOSE.RETIREMENT :
++    COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS;
++  const facts = await readParticipantReleaseFacts(handler, service, purpose);
++  if (request.action === ACTION.INSPECT) return facts;
++  const refusal = releaseRequestRefusal(handler, service, request, facts);
++  return refusal ?? executeReleaseAction(handler, service, request, facts);
++}
++
++async function receiveParticipantRelease(handler, request,
++  observationValidated = false) {
+   try {
+-    if (Number.isSafeInteger(request.deadlineAtMs) &&
+-        handler.timeSource.now() >= request.deadlineAtMs) {
++    if (requestDeadlineSpent(handler, request)) {
+       return releaseAnswer(OUTCOME.UNAVAILABLE, request,
+         {missingFact: 'release_deadline'});
+     }
+@@ -90,40 +326,15 @@ async function receiveParticipantRelease(handler, request) {
+     if (!service || service.partitionId !== request.partitionId) {
+       return releaseAnswer(OUTCOME.UNAVAILABLE, request, {missingFact: 'hosted_replica'});
+     }
+-    const purpose = request.action === ACTION.INSPECT && request.leaderCohort === true ?
+-      COMMITTED_MEMBERSHIP_READ_PURPOSE.RETIREMENT :
+-      COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS;
+-    const facts = await readParticipantReleaseFacts(handler, service, purpose);
+-    if (request.action === ACTION.INSPECT || facts.outcome !== OUTCOME.OBSERVED) return facts;
+-    if (!releaseIdentityValid(request.release) ||
+-        request.release.partitionId !== service.partitionId) {
+-      return releaseAnswer(OUTCOME.INVALID, request);
+-    }
+-    if (!sameReplicaGeneration(request.target, facts.generation) ||
+-        !attemptMatches(request, facts)) {
+-      return releaseAnswer(OUTCOME.STALE, request);
+-    }
+-    if (request.action !== ACTION.PAUSE && facts.paused !== true &&
+-        request.action !== ACTION.RESUME) {
+-      return releaseAnswer(OUTCOME.STALE, request);
+-    }
+-    // A release request always closes new work even on a mixed-build node.
+-    if (request.action === ACTION.PAUSE) raiseParticipantCutoverPause(service);
+-    if (facts.buildDigest !== request.release.targetBuildDigest) {
+-      return releaseAnswer(OUTCOME.BUILD_MISMATCH, request);
+-    }
+-    const status = service.raft.readStatus();
+-    if (status.term !== request.attempt.term ||
+-        status.leaderId !== request.attempt.leaderReplicaId ||
+-        status.configurationKey !== request.release.configurationKey ||
+-        (service.replicaId === request.attempt.leaderReplicaId &&
+-          status.lifecycleIncarnation !== request.attempt.leaderLifecycleIncarnation)) {
+-      return releaseAnswer(OUTCOME.STALE, request);
++    if (request.action === ACTION.OBSERVE_APPLIED_POSITION) {
++      if (!observationValidated) return releaseAnswer(OUTCOME.INVALID, request);
++      return observeParticipantAppliedPosition(handler, service, request,
++        participantReleaseObservationDecision);
+     }
+-    return executeReleaseAction(handler, service, request, facts);
++    return receiveCurrentParticipantRelease(handler, service, request);
+   } catch (error) {
+     return releaseAnswer(OUTCOME.INVALID, request, {reason: String(error?.message ?? error)});
+   }
+ }
+ 
+-export {receiveParticipantRelease};
++export {captureParticipantReleaseDispatch, receiveParticipantRelease};
+diff --git a/src/node/replica-runtime-cleanup-custody.js b/src/node/replica-runtime-cleanup-custody.js
+index b4bff966e..94f4c8c3b 100644
+--- a/src/node/replica-runtime-cleanup-custody.js
++++ b/src/node/replica-runtime-cleanup-custody.js
+@@ -5,6 +5,8 @@ import {withRaftOpeningCleanupFailure} from '../raft/raft-operation-port.js';
+ import {REPLICA_CLEANUP_ERROR_CODE} from './replica-cleanup-constants.js';
+ import {REPLICA_HANDLER_EVENT, REPLICA_HANDLER_LOG_MSG} from './replica-handler-constants.js';
+ import {ReplicaStatus} from '../rebalancer/replica-status.js';
++import {cancelParticipantAppliedPositionObservations} from
++  './participant-release-applied-position-observation.js';
+ 
+ const RUNTIME_CLEANUP_PENDING = 'Replica runtime cleanup is still pending';
+ const RUNTIME_SHUTDOWN_FAILED = 'Replica handler still owns failed runtime shutdowns';
+@@ -85,6 +87,7 @@ function shutdownReplicaHandler(handler, options) {
+   handler.initialized = false;
+   const {promise, resolve, reject} = Promise.withResolvers();
+   handler.shutdownPromise = promise;
++  cancelParticipantAppliedPositionObservations(handler);
+   const release = async () => {
+     handler.logger.info(REPLICA_HANDLER_LOG_MSG.SHUTTING_DOWN, {nodeId: handler.nodeId});
+     handler.replicaCreateAdmissionRecoveryRearmOwner.cancel();
+@@ -117,6 +120,7 @@ function shutdownReplicaHandler(handler, options) {
+         }
+       }
+     }
++    failures.push(...cancelParticipantAppliedPositionObservations(handler));
+     if (failures.length > 0) throw new AggregateError(failures, RUNTIME_SHUTDOWN_FAILED);
+     handler.creationProgressByReplica.clear();
+     handler.inProgressOperations.clear();
+diff --git a/src/partition/partition-participant-release-contract.js b/src/partition/partition-participant-release-contract.js
+index bdb7ae33b..f188e1cac 100644
+--- a/src/partition/partition-participant-release-contract.js
++++ b/src/partition/partition-participant-release-contract.js
+@@ -23,8 +23,11 @@ const RELEASE_PROOF_FIELDS = Object.freeze(['kind', 'releaseId', 'term',
+   'rowGenerationDigest', 'transactions']);
+ const RELEASE_PROOF_RESULT_FIELDS = Object.freeze(['transactionId', 'decision',
+   'decisionDigest', 'terminalStatus', 'participantIds']);
++const numberIsSafeInteger = Number.isSafeInteger;
+ const nonempty = (value) => typeof value === 'string' && value.length > 0;
+-const ordinal = (value) => Number.isSafeInteger(value) && value >= 0;
++const ordinal = (value) => numberIsSafeInteger(value) && value >= 0;
++const positiveInteger = (value) => numberIsSafeInteger(value) && value > 0;
++const incarnation = (value) => nonempty(value) || positiveInteger(value);
+ 
+ function exactRecord(value, fields) {
+   return value !== null && typeof value === 'object' && !Array.isArray(value) &&
+@@ -71,6 +74,16 @@ function sameReplicaGeneration(left, right) {
+     GENERATION_FIELDS.every((field) => left[field] != null && left[field] === right[field]);
+ }
+ 
++function participantReleaseGenerationValid(generation) {
++  return generation !== null && typeof generation === 'object' &&
++    nonempty(generation.nodeId) && nonempty(generation.replicaId) &&
++    positiveInteger(generation.ownerIncarnation) &&
++    incarnation(generation.lifecycleIncarnation) &&
++    positiveInteger(generation.runtimeGeneration) &&
++    positiveInteger(generation.connectionGeneration) &&
++    positiveInteger(generation.admissionGeneration);
++}
++
+ function releaseMemberIds(membership) {
+   if (!membership || !Array.isArray(membership.voters) || membership.voters.length === 0 ||
+       !Array.isArray(membership.learners) || membership.votersOutgoing?.length !== 0 ||
+@@ -184,6 +197,8 @@ function releaseAnswer(outcome, request = {}, fields = {}) {
+     phase: request.action ?? null, ...fields});
+ }
+ 
+-export {isReleaseDrained, releaseAnswer, releaseCensusDefect, releaseFactsDefect, releaseIdentityOf,
+-  releaseIdentityValid, releaseMemberIds, sameReplicaGeneration,
++export {isReleaseDrained, originEqual, releaseAnswer, releaseCensusDefect,
++  participantReleaseGenerationValid, releaseFactsDefect, releaseIdentityOf,
++  releaseIdentityValid, releaseMemberIds,
++  sameReplicaGeneration,
+   transactionReleaseProofValid};
+diff --git a/src/partition/partition-participant-transaction-cutover-constants.js b/src/partition/partition-participant-transaction-cutover-constants.js
+index fba779f0d..c24163d74 100644
+--- a/src/partition/partition-participant-transaction-cutover-constants.js
++++ b/src/partition/partition-participant-transaction-cutover-constants.js
+@@ -5,11 +5,12 @@ const PARTICIPANT_RELEASE_TYPE = 'PARTICIPANT_RELEASE';
+ const PARTICIPANT_RELEASE_RESULT_FIELD = 'releaseResult';
+ const PARTICIPANT_RELEASE_VERSION = 1;
+ const PARTICIPANT_RELEASE_ACTION = Object.freeze({
+-  RELEASE: 'release', INSPECT: 'inspect', PAUSE: 'pause', DRAIN: 'drain',
+-  REOPEN: 'reopen', ENABLE: 'enable', RESUME: 'resume',
++  RELEASE: 'release', INSPECT: 'inspect', PAUSE: 'pause',
++  REOPEN: 'reopen', ENABLE: 'enable',
++  OBSERVE_APPLIED_POSITION: 'observe_applied_position', RESUME: 'resume',
+ });
+ const PARTICIPANT_CUTOVER_PHASE = Object.freeze({
+-  INSPECT: 'inspect', PAUSE: 'pause', DRAIN: 'drain', REOPEN: 'reopen',
++  INSPECT: 'inspect', PAUSE: 'pause', REOPEN: 'reopen',
+   ROWID_CENSUS: 'rowid_census', ENABLE: 'enable', REPLICA_CENSUS: 'replica_census',
+   RESUME: 'resume',
+ });
+@@ -27,6 +28,9 @@ const PARTICIPANT_CUTOVER_OUTCOME = Object.freeze({
+   CENSUS_REFUSED: 'release_census_refused',
+ });
+ const PARTICIPANT_RELEASE_ADMISSION = Object.freeze({CLOSED: 'closed', OPEN: 'open'});
++const PARTICIPANT_RELEASE_REASON = Object.freeze({
++  CLEANUP_INCOMPLETE: 'participant_release_cleanup_incomplete',
++});
+ const PARTICIPANT_CUTOVER_BOUND = Object.freeze({
+   DRAIN_DEADLINE_MS: 30000, REPLICA_CENSUS_DEADLINE_MS: 30000,
+   REQUEST_TIMEOUT_MS: 5000, POLL_INTERVAL_MS: 20, QUIET_POLLS: 2,
+@@ -44,4 +48,5 @@ export {
+   PARTICIPANT_RELEASE_ACTION, PARTICIPANT_RELEASE_ADMISSION, PARTICIPANT_RELEASE_PRIORITY,
+   PARTICIPANT_RELEASE_RESULT_FIELD, PARTICIPANT_RELEASE_ROUTE_SUFFIX, PARTICIPANT_RELEASE_TRIGGER,
+   PARTICIPANT_RELEASE_TYPE, PARTICIPANT_RELEASE_VERSION, PARTICIPANT_RELEASE_LOG,
++  PARTICIPANT_RELEASE_REASON,
+ };
+diff --git a/src/partition/partition-participant-transaction-pause.js b/src/partition/partition-participant-transaction-pause.js
+index 8675e135e..c3c46dd0e 100644
+--- a/src/partition/partition-participant-transaction-pause.js
++++ b/src/partition/partition-participant-transaction-pause.js
+@@ -13,7 +13,8 @@ import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
+ import {deepFreeze} from '../raft/raft-operation-port.js';
+ import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from './partition-write-kernel.js';
+ import {participantConnectionStampOf} from './partition-participant-transaction-connection.js';
+-import {releaseCensusDefect, sameReplicaGeneration} from './partition-participant-release-contract.js';
++import {participantReleaseGenerationValid, releaseCensusDefect,
++  sameReplicaGeneration} from './partition-participant-release-contract.js';
+ import {hasParticipantSession} from './partition-participant-transaction-session.js';
+ import {readPreparedParticipantIds, readPartitionWriteOrigin} from
+   './partition-participant-transaction-store.js';
+@@ -73,47 +74,105 @@ function replicaGenerationOf(handler, service, status) {
+     admissionGeneration: admission.generation});
+ }
+ 
+-function generationAvailable(generation) {
+-  return typeof generation.nodeId === 'string' && generation.nodeId.length > 0 &&
+-    typeof generation.replicaId === 'string' && generation.replicaId.length > 0 &&
+-    generation.lifecycleIncarnation !== null && generation.lifecycleIncarnation !== undefined &&
+-    [generation.ownerIncarnation, generation.runtimeGeneration, generation.connectionGeneration]
+-      .every((value) => Number.isSafeInteger(value) && value > 0);
++function participantReleaseFactsAssessment(answer, context = null,
++  refreshEligible = false) {
++  return deepFreeze({answer, context, refreshEligible});
+ }
+ 
+-async function readParticipantReleaseFacts(handler, service,
+-  purpose = COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS) {
+-  if (!service?.initialized || service.isShutdown ||
+-      handler.localServices.get(service.replicaId) !== service) return unavailable(FACT.HOSTED);
++function hostedReleaseService(handler, service) {
++  return service?.initialized === true && service.isShutdown !== true &&
++    handler.localServices.get(service.replicaId) === service;
++}
++
++function committedMembershipAvailable(membership, status) {
++  return membership.kind === COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED &&
++    status.outcome === RAFT_OPERATION_OUTCOME.CORE_OK;
++}
++
++function releaseFactsContext(build, generation, paused, status) {
++  return deepFreeze({buildDigest: build.digest, generation, paused,
++    term: status.term, leaderReplicaId: status.leaderId,
++    configurationKey: status.configurationKey,
++    membershipGenerationIndex: status.membershipGenerationIndex,
++    appliedIndex: status.appliedIndex});
++}
++
++function membershipAssessment(membership, status, context,
++  requireMembershipGeneration) {
++  const sameBaseLineage = membership.configurationKey === status.configurationKey &&
++    membership.term === status.term;
++  const sameMembershipGeneration = membership.membershipGenerationIndex ===
++    status.membershipGenerationIndex;
++  const current = sameBaseLineage && membership.appliedIndex === status.appliedIndex &&
++    (!requireMembershipGeneration || sameMembershipGeneration);
++  if (current) return null;
++  const refreshEligible = requireMembershipGeneration && sameBaseLineage &&
++    sameMembershipGeneration && membership.appliedIndex < status.appliedIndex;
++  return participantReleaseFactsAssessment(
++    unavailable(FACT.MEMBERSHIP, membership.reason ?? status.reason),
++    refreshEligible ? context : null, refreshEligible);
++}
++
++function observedReleaseFacts(service, build, membership, status, generation, paused) {
++  return deepFreeze({outcome: OUTCOME.OBSERVED,
++    partitionId: service.partitionId,
++    generation, buildDigest: build.digest, membership,
++    leaderReplicaId: status.leaderId, leaderAddress: status.leaderAddress,
++    role: status.role, confChangePending: status.confChangePending,
++    peers: status.peers, origin: readPartitionWriteOrigin(service.db),
++    connection: participantConnectionStampOf(service.db),
++    paused,
++    rowid: readRowidCensus(service), work: readAcceptedWork(service, membership, status),
++    topology: topologyTransitionOf(service),
++    queryCensus: service.tableName === TABLES.SQL_TRANSACTIONS ?
++      readTransactionReleaseCensus(service.db) : null});
++}
++
++async function readParticipantReleaseFactsAssessment(handler, service,
++  purpose = COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS,
++  requireMembershipGeneration = false) {
++  if (!hostedReleaseService(handler, service)) {
++    return participantReleaseFactsAssessment(unavailable(FACT.HOSTED));
++  }
+   const build = await runtimeBuildProvenance();
+-  if (build.state !== RUNTIME_BUILD_STATE.MEASURED) return unavailable(FACT.BUILD, build.reason);
++  if (build.state !== RUNTIME_BUILD_STATE.MEASURED) {
++    return participantReleaseFactsAssessment(unavailable(FACT.BUILD, build.reason));
++  }
+   try {
+     const membership = await service.raft.readCommittedMembership({purpose});
+     const status = service.raft.readStatus();
+-    if (membership.kind !== COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED ||
+-        status.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK ||
+-        membership.configurationKey !== status.configurationKey ||
+-        membership.term !== status.term || membership.appliedIndex !== status.appliedIndex) {
+-      return unavailable(FACT.MEMBERSHIP, membership.reason ?? status.reason);
++    if (!committedMembershipAvailable(membership, status)) {
++      return participantReleaseFactsAssessment(
++        unavailable(FACT.MEMBERSHIP, membership.reason ?? status.reason));
+     }
+     const generation = replicaGenerationOf(handler, service, status);
+-    if (!generationAvailable(generation)) return unavailable(FACT.GENERATION);
+-    return deepFreeze({outcome: OUTCOME.OBSERVED, partitionId: service.partitionId,
+-      generation, buildDigest: build.digest, membership,
+-      leaderReplicaId: status.leaderId, leaderAddress: status.leaderAddress,
+-      role: status.role, confChangePending: status.confChangePending,
+-      peers: status.peers, origin: readPartitionWriteOrigin(service.db),
+-      connection: participantConnectionStampOf(service.db),
+-      paused: participantCutoverPauseOf(service) !== null,
+-      rowid: readRowidCensus(service), work: readAcceptedWork(service, membership, status),
+-      topology: topologyTransitionOf(service),
+-      queryCensus: service.tableName === TABLES.SQL_TRANSACTIONS ?
+-        readTransactionReleaseCensus(service.db) : null});
++    if (!participantReleaseGenerationValid(generation)) {
++      return participantReleaseFactsAssessment(unavailable(FACT.GENERATION));
++    }
++    const paused = participantCutoverPauseOf(service) !== null;
++    const context = releaseFactsContext(build, generation, paused, status);
++    const refused = membershipAssessment(membership, status, context,
++      requireMembershipGeneration);
++    return refused ?? participantReleaseFactsAssessment(
++      observedReleaseFacts(service, build, membership, status, generation, paused),
++      context);
+   } catch (error) {
+-    return unavailable(FACT.MEMBERSHIP, String(error?.message ?? error));
++    return participantReleaseFactsAssessment(
++      unavailable(FACT.MEMBERSHIP, String(error?.message ?? error)));
+   }
+ }
+ 
++async function readParticipantReleaseObservationAssessment(handler, service) {
++  return readParticipantReleaseFactsAssessment(handler, service,
++    COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS, true);
++}
++
++async function readParticipantReleaseFacts(handler, service,
++  purpose = COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS) {
++  return (await readParticipantReleaseFactsAssessment(handler, service,
++    purpose)).answer;
++}
++
+ const ADMISSIONS = new WeakMap();
+ let nextAdmissionGeneration = 0;
+ 
+@@ -219,5 +278,7 @@ function pausedWriteAnswerOf(service) {
+ export {
+   invalidateParticipantReleaseAdmission, participantCutoverPauseOf,
+   participantReleaseAdmissionOf, pausedWriteAnswerOf, raiseParticipantCutoverPause,
+-  readParticipantReleaseFacts, resumeParticipantCutoverAdmission,
++  readParticipantReleaseFacts, readParticipantReleaseObservationAssessment,
++  replicaGenerationOf as participantReleaseReplicaGenerationOf,
++  resumeParticipantCutoverAdmission,
+ };
+diff --git a/src/partition/partition-service-constants.js b/src/partition/partition-service-constants.js
+index bce7cf18f..2bd22c119 100644
+--- a/src/partition/partition-service-constants.js
++++ b/src/partition/partition-service-constants.js
+@@ -222,6 +222,7 @@ const PARTITION_SERVICE_EVENT = Object.freeze({
+   CDC_EVENT: 'cdcEvent',
+   CDC_CATCHUP_STARTED: 'cdcCatchupStarted',
+   CDC_CATCHUP_COMPLETED: 'cdcCatchupCompleted',
++  SHUTDOWN_STARTED: 'shutdownStarted',
+   SHUTDOWN: 'shutdown',
+   CONSENSUS_OBSERVED: 'consensusObserved',
+ });
+diff --git a/src/partition/partition-service-lifecycle-methods.js b/src/partition/partition-service-lifecycle-methods.js
+index fe28f631d..72ac27521 100644
+--- a/src/partition/partition-service-lifecycle-methods.js
++++ b/src/partition/partition-service-lifecycle-methods.js
+@@ -165,6 +165,10 @@ class PartitionServiceLifecycleMethods {
+     const {promise, resolve, reject} = Promise.withResolvers();
+     this.shutdownSettlement = promise;
+     const release = async () => {
++      this.emit(PARTITION_SERVICE_EVENT.SHUTDOWN_STARTED, {
++        partitionId: this.partitionId,
++        replicaId: this.replicaId,
++      });
+       const initialization = this.initializationSettlement;
+       if (initialization && this.initializationOwnsCleanup !== true) {
+         await Promise.allSettled([initialization]);
+diff --git a/src/raft/raft-operation-port-constants.js b/src/raft/raft-operation-port-constants.js
+index 3172d44aa..04b1805b4 100644
+--- a/src/raft/raft-operation-port-constants.js
++++ b/src/raft/raft-operation-port-constants.js
+@@ -8,6 +8,9 @@ const RAFT_EVENT = Object.freeze({
+   LEADER_CHANGE: 'leader change',
+   COMMIT: 'commit',
+   TERM_CHANGE: 'term change',
++  // A payload-free wake emitted after the runtime successfully publishes a
++  // newly applied position. Consumers re-read their canonical owner.
++  APPLIED_PROGRESS: 'applied progress',
+   COMMITTED_PREFIX_DIVERGENCE: 'committed prefix divergence',
+   // The group's applied ConfState differs from the one last announced, or
+   // this is the first announcement since the group was (re)constructed or
+diff --git a/src/raft/raft-rs-operation-port.js b/src/raft/raft-rs-operation-port.js
+index 0dbc197ae..6a41b2392 100644
+--- a/src/raft/raft-rs-operation-port.js
++++ b/src/raft/raft-rs-operation-port.js
+@@ -64,6 +64,7 @@ const EVENTS = new Set([
+   RAFT_EVENT.CANDIDATE,
+   RAFT_EVENT.LEADER_CHANGE,
+   RAFT_EVENT.TERM_CHANGE,
++  RAFT_EVENT.APPLIED_PROGRESS,
+   RAFT_EVENT.COMMITTED_PREFIX_DIVERGENCE,
+   RAFT_EVENT.MEMBERSHIP_CHANGED,
+   RAFT_EVENT.GATE_OPENED,
+diff --git a/src/raft/raft-rs-runtime-owner-constants.js b/src/raft/raft-rs-runtime-owner-constants.js
+index f763b7069..d5a61b0a0 100644
+--- a/src/raft/raft-rs-runtime-owner-constants.js
++++ b/src/raft/raft-rs-runtime-owner-constants.js
+@@ -66,6 +66,7 @@ const RUNTIME_COMMAND = Object.freeze({
+ const RUNTIME_EVENT = Object.freeze({
+   TERM_CHANGE: RAFT_EVENT.TERM_CHANGE,
+   LEADER_CHANGE: RAFT_EVENT.LEADER_CHANGE,
++  APPLIED_PROGRESS: RAFT_EVENT.APPLIED_PROGRESS,
+   MEMBERSHIP_CHANGED: RAFT_EVENT.MEMBERSHIP_CHANGED,
+   CONF_CHANGE_APPLIED: RAFT_EVENT.CONF_CHANGE_APPLIED,
+ });
+diff --git a/src/raft/raft-rs-runtime-owner.js b/src/raft/raft-rs-runtime-owner.js
+index f0db04b81..e5cb033ff 100644
+--- a/src/raft/raft-rs-runtime-owner.js
++++ b/src/raft/raft-rs-runtime-owner.js
+@@ -486,6 +486,8 @@ function openGroupInCurrentRuntime(group, opening) {
+   // Every (re)construction and restore announces its first observed
+   // configuration again: a listener's baseline must be level-correct.
+   group.announcedConfStateKey = CONF_STATE_NOT_ANNOUNCED;
++  group.announcedAppliedRuntimeGeneration = null;
++  group.announcedAppliedIndex = null;
+   if (!opening.restore) {
+     const confState = invokeCore(group, CORE_OPERATION.CONF_STATE);
+     if (!confState.ok) {
+@@ -1234,6 +1236,7 @@ function announce(group, expectedGeneration) {
+   const before = group.lastStatus;
+   group.lastStatus = now;
+   const observed = recordStatusObservation(group, expectedGeneration, now);
++  announceAppliedProgress(group, expectedGeneration, observed);
+   if (before && now.raftState !== before.raftState) {
+     group.emit(ROLE[now.raftState] || ROLE[0]);
+   }
+@@ -1258,6 +1261,15 @@ function announce(group, expectedGeneration) {
+   }
+ }
+ 
++function announceAppliedProgress(group, expectedGeneration, observed) {
++  if (!observed.ok ||
++      (group.announcedAppliedRuntimeGeneration === expectedGeneration &&
++        observed.value.appliedIndex <= group.announcedAppliedIndex)) return;
++  group.announcedAppliedRuntimeGeneration = expectedGeneration;
++  group.announcedAppliedIndex = observed.value.appliedIndex;
++  group.emit(RUNTIME_EVENT.APPLIED_PROGRESS);
++}
++
+ // A conf-change proposal is taken only at the leader's port; one the core
+ // would drop is deferred typed - read from the core's status and
+ // configuration in this turn (verification V2, round 2 F-1).
+@@ -1834,6 +1846,8 @@ function createRuntimeDispatcher(request) {
+     lastStatus: null,
+     statusObservation: null,
+     announcedConfStateKey: CONF_STATE_NOT_ANNOUNCED,
++    announcedAppliedRuntimeGeneration: null,
++    announcedAppliedIndex: null,
+     health: USABLE,
+     pendingRuntimeResume: null,
+     runtimeResumeTimer: null,
+diff --git a/test/shards/impact-contracts.json b/test/shards/impact-contracts.json
+index 63488c350..fb82bdf05 100644
+--- a/test/shards/impact-contracts.json
++++ b/test/shards/impact-contracts.json
+@@ -597,10 +597,12 @@
+       ]
+     },
+     "raft-rs-runtime-application-transaction": {
+-      "description": "Ready processing and the application transaction owner keep application effects, partition progress, raft-rs applied progress, ConfState and each statement's durable outcome coherent across host failure and reconstruction; failure scope follows failure class (a core failure replaces the runtime and resumes every group once, a host failure reconstructs its own group and touches no other group; a failure within one retry window of the last instant the previous one held the group is the same persisting failure, whatever its class and whether or not a reconstruction succeeded in between, so the group is reconstructed at most once per window while it persists - at most ceil(span / window) + 1 reconstructions over any span - and a failure more than one window after the last one starts afresh; a group healed inside a window serves again only after it, so its first write after a heal waits up to one window), a durable record that cannot be read where a group is opened or reconstructed (a missing table, SQLITE_IOERR, SQLITE_CORRUPT) is that group's own typed host failure of phase durable-record-read and never a throw, a record that lost a table is never recreated empty (the record's tables are created in one transaction of the store's own, whole or not at all, so a partial schema only ever comes from outside), a replica whose record cannot be read at open is refused at initialization, typed and naming the phase and the table, whatever its replica count (healing in place is for a group that fails while it runs), a throw the runtime did not type is contained by the port as the group's typed host failure, a group without a usable host announces no role so its partition does not lead, a reconstructed sole voter leads again, a retry is answered from its durable outcome, and the admission owner refuses before consensus (and before a session stages it) every command the application would refuse or never answer. Shared native replacement holds entry until every registered group is reconstructed or explicitly held; callbacks cannot use stale handles or cached healthy observations. A failed shared reload owns one captured clock and existing election-derived retry window, shared by all callers; caller changes cannot renew or bypass it. Resumption uses each existing group queue; close discharges exact-handle obligations and final close releases the shared retry record. The registered participant release recovery owner visits current hosted services once in registry order and stops at the first actual leader. With no leader, the write kernel canonical host-held classifier retains one partition observation debt at the existing RECOVERY_RETRY_MS cadence; status.retryAfterMs is never consumed. Ordinary followers and candidates remain event-driven; null or unclassifiable status is typed UNAVAILABLE without a self wake. The existing queue coalesces events, permits at most four running attempts, throttles unchanged reports, and clears pending/report state after the last service is removed. Held reports preserve the blocked group, replica and failure cause. A timer-registration failure visibly reports UNAVAILABLE and discharges the unscheduled debt until a real event. Only fresh leader, durable origin, measured build and canonical release facts may enter cutover; absent origin or build remains OPERATOR_REQUIRED. Runtime not-before, reconstruction and durable replay remain runtime-owned. Canonical pause/resume refuses handler shutdown, service shutdown or registry replacement before idempotent OPEN and final mutation; stale lifecycle remains CLOSED, while a wrong release ID against an otherwise valid current OPEN returns STALE without revoking it. Existing generation, term, configuration, runtime, drain and census fences remain mandatory; a wake never grants release authority.",
++      "description": "Ready processing and the application transaction owner keep application effects, partition progress, raft-rs applied progress, ConfState and each statement's durable outcome coherent across host failure and reconstruction; failure scope follows failure class (a core failure replaces the runtime and resumes every group once, a host failure reconstructs its own group and touches no other group; a failure within one retry window of the last instant the previous one held the group is the same persisting failure, whatever its class and whether or not a reconstruction succeeded in between, so the group is reconstructed at most once per window while it persists - at most ceil(span / window) + 1 reconstructions over any span - and a failure more than one window after the last one starts afresh; a group healed inside a window serves again only after it, so its first write after a heal waits up to one window), a durable record that cannot be read where a group is opened or reconstructed (a missing table, SQLITE_IOERR, SQLITE_CORRUPT) is that group's own typed host failure of phase durable-record-read and never a throw, a record that lost a table is never recreated empty (the record's tables are created in one transaction of the store's own, whole or not at all, so a partial schema only ever comes from outside), a replica whose record cannot be read at open is refused at initialization, typed and naming the phase and the table, whatever its replica count (healing in place is for a group that fails while it runs), a throw the runtime did not type is contained by the port as the group's typed host failure, a group without a usable host announces no role so its partition does not lead, a reconstructed sole voter leads again, a retry is answered from its durable outcome, and the admission owner refuses before consensus (and before a session stages it) every command the application would refuse or never answer. Shared native replacement holds entry until every registered group is reconstructed or explicitly held; callbacks cannot use stale handles or cached healthy observations. A failed shared reload owns one captured clock and existing election-derived retry window, shared by all callers; caller changes cannot renew or bypass it. Resumption uses each existing group queue; close discharges exact-handle obligations and final close releases the shared retry record. The registered participant release recovery owner visits current hosted services once in registry order and stops at the first actual leader. With no leader, the write kernel canonical host-held classifier retains one partition observation debt at the existing RECOVERY_RETRY_MS cadence; status.retryAfterMs is never consumed. Ordinary followers and candidates remain event-driven; null or unclassifiable status is typed UNAVAILABLE without a self wake. The existing queue coalesces events, permits at most four running attempts, throttles unchanged reports, and clears pending/report state after the last service is removed. Held reports preserve the blocked group, replica and failure cause. A timer-registration failure visibly reports UNAVAILABLE and discharges the unscheduled debt until a real event. Only fresh leader, durable origin, measured build and canonical release facts may enter cutover; absent origin or build remains OPERATOR_REQUIRED. After ENABLE, one bounded passive applied-position observation per current replica waits on runtime publication under the original RPC and attempt deadlines; every wake re-reads canonical facts and grants no release authority. Runtime not-before, reconstruction and durable replay remain runtime-owned. Canonical pause/resume refuses handler shutdown, service shutdown or registry replacement before idempotent OPEN and final mutation; stale lifecycle remains CLOSED, while a wrong release ID against an otherwise valid current OPEN returns STALE without revoking it. Existing generation, term, configuration, runtime, drain and census fences remain mandatory; a wake never grants release authority.",
+       "owners": [
+         "src/raft/raft-rs-runtime-owner.js",
+         "src/raft/raft-rs-runtime-tuning.js",
++        "src/raft/raft-rs-operation-port.js",
++        "src/raft/raft-operation-port-constants.js",
+         "src/raft/raft-rs-durable-store.js",
+         "src/raft/raft-rs-application-transaction-owner.js",
+         "src/partition/partition-service-raft-init-base.js",
+@@ -621,11 +623,16 @@
+         "src/node/replica-handler-release-recovery.js",
+         "src/node/replica-handler-membership-relay.js",
+         "src/node/replica-handler-participant-cutover.js",
++        "src/node/replica-handler-participant-release.js",
++        "src/node/participant-release-applied-position-observation.js",
+         "src/node/participant-release-diagnostic-observation.js",
+         "src/bootstrap/bootstrap-service-seed-workflow.js",
+         "src/node/participant-release-client.js",
+         "src/partition/partition-participant-release-contract.js",
++        "src/partition/partition-participant-transaction-cutover-constants.js",
+         "src/partition/partition-participant-transaction-pause.js",
++        "src/partition/partition-service-constants.js",
++        "src/partition/partition-service-lifecycle-methods.js",
+         "src/node/replica-runtime-cleanup-custody.js"
+       ],
+       "tests": [
+@@ -645,7 +652,8 @@
+         "test/partition/participant-envelope-admission.test.js",
+         "test/node/replica-handler-release-recovery.test.js",
+         "test/partition/participant-release-protocol.test.js",
+-        "test/bootstrap/seed-participant-release-failure-projection.test.js"
++        "test/bootstrap/seed-participant-release-failure-projection.test.js",
++        "test/partition/participant-release-native-application-order.test.js"
+       ]
+     },
+     "partition-raft-operation-port": {
+@@ -1523,13 +1531,15 @@
+       ]
+     },
+     "raft-rs-runtime-application-transaction": {
+-      "description": "The Ready owner and application transaction owner must agree on the durable point from which recovery may replay without duplicating application effects or splitting applied progress from ConfState. Current host-held observations and lifecycle-fenced participant admission are part of the same recovery boundary: the existing release queue retains bounded observation debt without duplicating runtime reconstruction policy or release authority; the canonical resume owner revalidates current handler, service and registry before OPEN.",
++      "description": "The Ready owner and application transaction owner must agree on the durable point from which recovery may replay without duplicating application effects or splitting applied progress from ConfState. Current host-held observations and lifecycle-fenced participant admission are part of the same recovery boundary: the existing release queue retains bounded observation debt without duplicating runtime reconstruction policy or release authority; after ENABLE, one passive applied-position observation per current replica consumes the original bounded deadline and re-reads canonical facts before the existing final census; the canonical resume owner revalidates current handler, service and registry before OPEN.",
+       "endpoints": [
+         {
+           "id": "ready-persistence-and-reconstruction",
+           "owners": [
+             "src/raft/raft-rs-runtime-owner.js",
+             "src/raft/raft-rs-runtime-tuning.js",
++            "src/raft/raft-rs-operation-port.js",
++            "src/raft/raft-operation-port-constants.js",
+             "src/raft/raft-rs-durable-store.js",
+             "src/raft/raft-rs-binding-owner.js",
+             "src/raft/raft-rs-runtime-owner-constants.js",
+@@ -1553,11 +1563,16 @@
+             "src/partition/partition-transaction-execution-envelope.js",
+             "src/partition/partition-participant-transaction-bytes.js",
+             "src/node/replica-handler-participant-cutover.js",
++            "src/node/replica-handler-participant-release.js",
++            "src/node/participant-release-applied-position-observation.js",
+             "src/node/participant-release-diagnostic-observation.js",
+             "src/bootstrap/bootstrap-service-seed-workflow.js",
+             "src/node/participant-release-client.js",
+             "src/partition/partition-participant-release-contract.js",
++            "src/partition/partition-participant-transaction-cutover-constants.js",
+             "src/partition/partition-participant-transaction-pause.js",
++            "src/partition/partition-service-constants.js",
++            "src/partition/partition-service-lifecycle-methods.js",
+             "src/node/replica-runtime-cleanup-custody.js"
+           ]
+         }
+@@ -1580,7 +1595,8 @@
+         "test/partition/participant-envelope-admission.test.js",
+         "test/node/replica-handler-release-recovery.test.js",
+         "test/partition/participant-release-protocol.test.js",
+-        "test/bootstrap/seed-participant-release-failure-projection.test.js"
++        "test/bootstrap/seed-participant-release-failure-projection.test.js",
++        "test/partition/participant-release-native-application-order.test.js"
+       ]
+     },
+     "partition-raft-operation-port": {
