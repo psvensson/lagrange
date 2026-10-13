@@ -42,7 +42,14 @@ jobs:
         run: |
           set +e
           set -uo pipefail
-          git show 94eff7a94589448a1cf959e1ceea3a0e33c1e05c^:src/bootstrap/shared/message-group-transport-handler.js > src/bootstrap/shared/message-group-transport-handler.js
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/bootstrap/shared/message-group-transport-handler.js')
+          s=p.read_text()
+          anchor='  requireReplicaHandlerRetirement(reported);\\n'
+          assert s.count(anchor)==1, 'exact guard removal must be witnessed'
+          p.write_text(s.replace(anchor, '', 1))
+          PY
           npm run -s test:file -- "$TEST" > "$OUT/source-revert.log" 2>&1
           printf '%s\n' "$?" > "$OUT/source-revert-exit.txt"
           git restore --source=HEAD src/bootstrap/shared/message-group-transport-handler.js
@@ -61,7 +68,9 @@ jobs:
         run: |
           set -euo pipefail
           test "$(cat "$OUT/source-revert-exit.txt")" -ne 0
-          grep -q 'retirement refuses completion without exact handler identity API' "$OUT/source-revert.log"
+          grep -q 'MG retirement refuses completion without exact handler identity API' "$OUT/source-revert.log"
+          grep -q 'assertions' "$OUT/source-revert.log"
+          ! grep -q 'SyntaxError:' "$OUT/source-revert.log"
           git status --porcelain > "$OUT/worktree.txt"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
