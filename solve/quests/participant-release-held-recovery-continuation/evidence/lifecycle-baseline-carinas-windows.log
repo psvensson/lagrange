@@ -1,0 +1,60 @@
+lab test: carinas-windows: ordinary (1 files) cores=12 mem=7.5GiB speed x1.58
+[carinas-windows] placement-shell=1245815
+[carinas-windows] placement-head=13c0485109d535c66325b12f044f7fb2fd85b3aa
+[carinas-windows] placement-link=node_modules
+[carinas-windows] placement-link=data/examples
+[carinas-windows] placement-prepared=import-graph
+[carinas-windows] placement-env=factor:1.6 mode:local retry: timeout: lanecap:11
+[carinas-windows] placement-pid=1246245
+[carinas-windows] # test-files planned=1
+[carinas-windows] classified lane ordinary: 1 file(s), jobs=4
+[carinas-windows] thermal: unmeasurable (no sensors)
+[carinas-windows] not ok test/node/replica-handler-release-recovery.test.js (2 assertions, 5690ms)
+[carinas-windows] # TAP assertions failed; test process exited 1
+[carinas-windows] TAP version 13
+[carinas-windows] # Subtest: current live resume opens once and a wrong release ID preserves that OPEN proof
+[carinas-windows] ok 1 - current live resume opens once and a wrong release ID preserves that OPEN proof
+[carinas-windows]   ---
+[carinas-windows]   duration_ms: 4445.480429
+[carinas-windows]   type: 'test'
+[carinas-windows]   ...
+[carinas-windows] # Subtest: handler shutdown begun during awaited release facts cannot reopen admission
+[carinas-windows] not ok 2 - handler shutdown begun during awaited release facts cannot reopen admission
+[carinas-windows]   ---
+[carinas-windows]   duration_ms: 49.905757
+[carinas-windows]   type: 'test'
+[carinas-windows]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/13c0485109d5-mv6s1mv9-1714347/test/node/replica-handler-release-recovery.test.js:105:1'
+[carinas-windows]   failureType: 'testCodeFailure'
+[carinas-windows]   error: |-
+[carinas-windows]     shutdown started during the facts await refuses the final resume
+[carinas-windows]     + actual - expected
+[carinas-windows]     
+[carinas-windows]     + 'resumed'
+[carinas-windows]     - 'release_generation_changed'
+[carinas-windows]          ^
+[carinas-windows]     
+[carinas-windows]   code: 'ERR_ASSERTION'
+[carinas-windows]   name: 'AssertionError'
+[carinas-windows]   expected: 'release_generation_changed'
+[carinas-windows]   actual: 'resumed'
+[carinas-windows]   operator: 'strictEqual'
+[carinas-windows]   stack: |-
+[carinas-windows]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/13c0485109d5-mv6s1mv9-1714347/test/node/replica-handler-release-recovery.test.js:131:14
+[carinas-windows]     async withActualHandler (file:///home/peter/projects/lagrange/test-output/placement-worktrees/13c0485109d5-mv6s1mv9-1714347/test/node/replica-handler-release-recovery.test.js:73:5)
+[carinas-windows]     async Test.run (node:internal/test_runner/test:1054:7)
+[carinas-windows]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[carinas-windows]   ...
+[carinas-windows] 1..2
+[carinas-windows] # tests 2
+[carinas-windows] # suites 0
+[carinas-windows] # pass 1
+[carinas-windows] # fail 1
+[carinas-windows] # cancelled 0
+[carinas-windows] # skipped 0
+[carinas-windows] # todo 0
+[carinas-windows] # duration_ms 4502.30205
+[carinas-windows] # time=5690ms
+[carinas-windows] # test-files total=1 pass=0 fail=1 assertions=2
+lab test: carinas-windows: # test-files total=1 pass=0 fail=1 assertions=2
+lab test: carinas-windows: results copied to test-output/reports/test-results-carinas-windows.ndjson
+# test-files total=1 pass=0 fail=1 assertions=2

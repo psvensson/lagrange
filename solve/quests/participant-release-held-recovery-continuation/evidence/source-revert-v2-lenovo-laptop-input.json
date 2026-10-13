@@ -1,0 +1,15 @@
+{
+  "host": "lenovo-laptop",
+  "files": [
+    "test/partition/committed-statement-outcome.test.js",
+    "test/partition/partition-unreadable-durable-record.test.js",
+    "test/partition/partition-participant-transaction-apply.test.js",
+    "test/partition/partition-participant-transaction-staging.test.js",
+    "test/partition/participant-envelope-admission.test.js",
+    "test/partition/participant-release-protocol.test.js",
+    "test/partition/partition-participant-release-admission.test.js"
+  ],
+  "sha": "6a6a67b440bf7dc9e2d38bad6764adda171a1846",
+  "kind": "source-revert-v2",
+  "startedAt": "2026-10-13T14:54:57.070Z"
+}

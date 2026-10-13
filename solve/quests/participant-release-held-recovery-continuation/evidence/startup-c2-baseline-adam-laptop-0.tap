@@ -1,0 +1,53 @@
+TAP version 13
+# Subtest: real release route pauses initial writes, applies origin, censuses and resumes; registry and consensus triggers recover a recreated service from the same durable origin
+ok 1 - real release route pauses initial writes, applies origin, censuses and resumes; registry and consensus triggers recover a recreated service from the same durable origin
+  ---
+  duration_ms: 2506.117507
+  type: 'test'
+  ...
+# Subtest: no-origin release without fresh storage or operator authority stays closed
+ok 2 - no-origin release without fresh storage or operator authority stays closed
+  ---
+  duration_ms: 85.666426
+  type: 'test'
+  ...
+# Subtest: dependent release stays closed without a reconstructed current control owner fact
+ok 3 - dependent release stays closed without a reconstructed current control owner fact
+  ---
+  duration_ms: 46.753228
+  type: 'test'
+  ...
+# Subtest: dependent release consumes an exact remotely routed current control owner fact
+ok 4 - dependent release consumes an exact remotely routed current control owner fact
+  ---
+  duration_ms: 97.5244
+  type: 'test'
+  ...
+# Subtest: mixed target build is refused and cannot lower admission
+ok 5 - mixed target build is refused and cannot lower admission
+  ---
+  duration_ms: 69.428747
+  type: 'test'
+  ...
+# Subtest: control cohort origin installs the fixed coordinator schema atomically and its replay repairs a missing enforcer without changing the durable origin
+ok 6 - control cohort origin installs the fixed coordinator schema atomically and its replay repairs a missing enforcer without changing the durable origin
+  ---
+  duration_ms: 68.268436
+  type: 'test'
+  ...
+# Subtest: control cohort preserves unreconstructible legacy rows and reports exact activation debt
+ok 7 - control cohort preserves unreconstructible legacy rows and reports exact activation debt
+  ---
+  duration_ms: 50.939444
+  type: 'test'
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2955.706378
+# time=4084ms

@@ -1,0 +1,56 @@
+{
+  "schema": "release-continuation-lifecycle-baseline/1",
+  "sha": "13c0485109d535c66325b12f044f7fb2fd85b3aa",
+  "tree": "e37f39905d0e36697fc130e83c5c06e65c637a3d",
+  "parent": "d35d8828c630d1b9675b47f511c477b3cc9ee991",
+  "host": "carinas-windows",
+  "testSha256": "6673b330900330b9bb0b223b56e63a855fedb8bb77f4d725ca036f466551034a",
+  "productionDiff": "",
+  "tests": 2,
+  "passed": 1,
+  "failed": 1,
+  "controls": [
+    {
+      "name": "current live resume and wrong-ID preserve OPEN",
+      "passed": true,
+      "durationMs": 4445.480429
+    },
+    {
+      "name": "actual shutdown during awaited membership facts",
+      "passed": false,
+      "durationMs": 49.905757,
+      "actual": "resumed",
+      "expected": "release_generation_changed"
+    }
+  ],
+  "engagement": "Actual ReplicaHandler.shutdown sets lifecycle flag while service remains in its real registry, a controllable truthful semantic-port membership await resumes through actual facts/resume owner. The intended stale rejection assertion fails. This focused witness is not a native Raft reconstruction proof.",
+  "rawTap": "Copied by canonical lab API from .tap/test-results/test/node/replica-handler-release-recovery.test.js.tap; renamed the destination from its default .ndjson suffix to .tap without changing bytes.",
+  "priorPlacement": "carina rejected before execution because not in inventory; no behavioral evidence from rejected placement.",
+  "artifacts": [
+    {
+      "file": "lifecycle-baseline-input.json",
+      "sha256": "b18a53bb15f81ee26888b6fcdf6a88bc022d18d1c87d9da71d0ac6a5e8b067c8"
+    },
+    {
+      "file": "lifecycle-baseline-carinas-windows-input.json",
+      "sha256": "06e53b94d61baa43595695e429d7d56a57787a8da73c4434af02b60d60248d14"
+    },
+    {
+      "file": "lifecycle-baseline-carinas-windows-status.json",
+      "sha256": "f655e4a433a62eb0163a6eda6ed83e280101bb9ebb2705d6d2a3509fb24bef85"
+    },
+    {
+      "file": "lifecycle-baseline-carinas-windows.log",
+      "sha256": "d50f4bc0bebbf19cf4281e7dab652137c31d2d43a05d6faaae541b7b4f582130"
+    },
+    {
+      "file": "lifecycle-baseline-carinas-windows.tap",
+      "sha256": "d378c1faf00cf9d2f6a5ca94f5a9382cd69bc8b59afec875dd257833d759fde5"
+    },
+    {
+      "file": "lifecycle-baseline-carina-placement-rejected.log",
+      "sha256": "fd3bff2ab9e327de0d627f8aa8f7cc7f18add178b4fbf89fb8365a904dcd405c"
+    }
+  ],
+  "recordedAt": "2026-10-13T14:32:00.268Z"
+}

@@ -1,0 +1,10 @@
+{
+  "host": "tv-dator",
+  "files": [
+    "test/partition/partition-runtime-reconstruction-leadership.test.js"
+  ],
+  "rawTap": true,
+  "sha": "c2307d3dc827d8c1293ad3a87ed8f3753f324b8b",
+  "kind": "source-revert-v3",
+  "startedAt": "2026-10-13T15:19:33.909Z"
+}

@@ -1,0 +1,90 @@
+{
+  "schema": "release-startup-composition-input/1",
+  "kind": "integrated-candidate-v1",
+  "sha": "6c27b10b6f3c8093f4baab149f20b6a79524aecf",
+  "tree": "16b56845ffd6479c727240514aaa11f8cc63b210",
+  "parents": [
+    "406ceac1c40bdf57da1a6668806d0f3b38526cb9",
+    "f6c48301221877c534a3f669f5a91a7a8a1edd29"
+  ],
+  "worktree": "/tmp/session-worktree-GFS44r/tree",
+  "files": [
+    {
+      "file": "architecture/contracts/authority-and-recovery.md",
+      "sha256": "128538d75429c1d31b9cb7aa245eef9392ef14f7ee948c925086582a972a1ae5"
+    },
+    {
+      "file": "solve/changes/global-owner-debt-inventory/inventory.json",
+      "sha256": "cbdf66ffe121ab24e06cb5cdd9eb7e5d33a81cb4f2ea2caaaf2d99d8b4aea3bf"
+    },
+    {
+      "file": "src/node/replica-handler-release-recovery.js",
+      "sha256": "1e35f7fff07e87ec0da7ebe0c14e23ffedc9bb83a650b559bc1b4d5b0965ee23"
+    },
+    {
+      "file": "src/partition/partition-participant-transaction-pause.js",
+      "sha256": "0ce1938d2fb1ac20d6f96e64fa39e29dec64e4c44dbc242238067d8c1a1737be"
+    },
+    {
+      "file": "src/rebalancer/replica-operation-message-group-membership-authorization.js",
+      "sha256": "9f78cfb0f3ef0ef1742661179e21e117381acba9e0038b7f309a8074875cb39f"
+    },
+    {
+      "file": "src/rebalancer/replica-operation-message-group-membership-permit.js",
+      "sha256": "a7c2fc03e8fd66e279e77a13c28a1a868cffe18a10f63aaa49714ab23b5e0ab0"
+    },
+    {
+      "file": "test/bootstrap/node-bootstrap-consistency.property.test.js",
+      "sha256": "df78abc52898eb758433956a84cf459ca80ebfd27da7e3b08b43bb1dc45ddab3"
+    },
+    {
+      "file": "test/convergence/dt6-learner-promotion-progress-proof.test.js",
+      "sha256": "d187747cf606f6c79fa6f05286967c9a448a519a3d7697677516d4d03082bfc0"
+    },
+    {
+      "file": "test/integration/helpers/cluster-test-helpers.js",
+      "sha256": "7c0a270c24c39f67b56bad6707fd9b0fbeb59b10d650c982bc4abb55380fa031"
+    },
+    {
+      "file": "test/integration/message-group-membership-claim-cache.integration.test.js",
+      "sha256": "cacf237059ee99f449ca938691e0df80b8b587e9594acb4dca5a84506c32b70a"
+    },
+    {
+      "file": "test/node/replica-handler-release-recovery.test.js",
+      "sha256": "979653087fdee7931ac1d9caaab57dd18685153296ed271a851210fdf0435f76"
+    },
+    {
+      "file": "test/partition/participant-release-protocol.test.js",
+      "sha256": "de77149e3070c6cc42bd566e1f54c6ad3d676809be90008592caee18e0ec00a9"
+    },
+    {
+      "file": "test/partition/partition-runtime-reconstruction-leadership.test.js",
+      "sha256": "9ece45774ac62fad32e965f227b9e886140e21b5c8bdcd8a0fb6f7c12bd7d2e7"
+    },
+    {
+      "file": "test/rebalancer/message-group-membership-branch-authorization.test.js",
+      "sha256": "ea98ca5fb883a66ba42595bcb7332b210dc4937031175b40bb5c5c95b30bfcaa"
+    },
+    {
+      "file": "test/shards/impact-contracts.json",
+      "sha256": "63f610be8f25c15fbd981e04bb631c8dc7419087356e2dc84d008812d18bea33"
+    },
+    {
+      "file": "test/shards/impact-graph-seal.json",
+      "sha256": "4c103d0239efe6ef45362ba9e33d0e60685e766580cd55ac654fd70d9a4902ba"
+    },
+    {
+      "file": "test/shards/primary-classes.json",
+      "sha256": "e8cc7f82909c4cbaae58882354f761f92350bdba5546df386e30df3ed753dbee"
+    },
+    {
+      "file": "test/shards/resource-classes.json",
+      "sha256": "d32ef500be06912bd32434990a77f01bf6426b32c9cd67bcbd245bb1aa2bc7ed"
+    },
+    {
+      "file": "test/shards/subsystem-classes.json",
+      "sha256": "ceff860e40f240938d3feb292933e6f9f130b1106fb82db37d8b6b72e1a55f7d"
+    }
+  ],
+  "createdAt": "2026-10-13T15:44:42.253Z"
+}

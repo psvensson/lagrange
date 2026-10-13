@@ -1,0 +1,16 @@
+{
+  "host": "adam-laptop",
+  "files": [
+    "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+    "test/raft/raft-rs-backend/operation-port-throw-containment.test.js",
+    "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js",
+    "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js",
+    "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+    "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
+    "test/raft/raft-rs-backend/startup-cleanup.integration.test.js",
+    "test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js"
+  ],
+  "sha": "6a6a67b440bf7dc9e2d38bad6764adda171a1846",
+  "kind": "source-revert-v2",
+  "startedAt": "2026-10-13T14:54:57.070Z"
+}

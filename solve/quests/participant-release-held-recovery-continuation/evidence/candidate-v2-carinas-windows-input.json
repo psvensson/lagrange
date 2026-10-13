@@ -1,0 +1,10 @@
+{
+  "host": "carinas-windows",
+  "files": [
+    "test/node/replica-handler-release-recovery.test.js"
+  ],
+  "rawTap": true,
+  "sha": "0b7147e5096c926450c61be101f42a17dc68f46a",
+  "kind": "candidate-v2",
+  "startedAt": "2026-10-13T14:49:39.768Z"
+}

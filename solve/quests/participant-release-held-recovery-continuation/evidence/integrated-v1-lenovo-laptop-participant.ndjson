@@ -1,0 +1,6 @@
+{"file":"test/partition/participant-envelope-admission.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":1941,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-participant-release-admission.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":5721,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-participant-transaction-apply.test.js","attempt":1,"ok":true,"assertions":27,"durationMs":7134,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/committed-statement-outcome.test.js","attempt":1,"ok":true,"assertions":18,"durationMs":9465,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-participant-transaction-staging.test.js","attempt":1,"ok":true,"assertions":19,"durationMs":8728,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-unreadable-durable-record.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":13074,"retriedOnce":false,"firstFailureLine":null}

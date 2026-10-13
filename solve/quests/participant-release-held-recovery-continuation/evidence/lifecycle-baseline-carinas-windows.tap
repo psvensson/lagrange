@@ -1,0 +1,43 @@
+TAP version 13
+# Subtest: current live resume opens once and a wrong release ID preserves that OPEN proof
+ok 1 - current live resume opens once and a wrong release ID preserves that OPEN proof
+  ---
+  duration_ms: 4445.480429
+  type: 'test'
+  ...
+# Subtest: handler shutdown begun during awaited release facts cannot reopen admission
+not ok 2 - handler shutdown begun during awaited release facts cannot reopen admission
+  ---
+  duration_ms: 49.905757
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/13c0485109d5-mv6s1mv9-1714347/test/node/replica-handler-release-recovery.test.js:105:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    shutdown started during the facts await refuses the final resume
+    + actual - expected
+    
+    + 'resumed'
+    - 'release_generation_changed'
+         ^
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'release_generation_changed'
+  actual: 'resumed'
+  operator: 'strictEqual'
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/13c0485109d5-mv6s1mv9-1714347/test/node/replica-handler-release-recovery.test.js:131:14
+    async withActualHandler (file:///home/peter/projects/lagrange/test-output/placement-worktrees/13c0485109d5-mv6s1mv9-1714347/test/node/replica-handler-release-recovery.test.js:73:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 1
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4502.30205
+# time=5690ms

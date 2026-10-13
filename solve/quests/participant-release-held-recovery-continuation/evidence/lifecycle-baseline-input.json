@@ -1,0 +1,12 @@
+{
+  "schema": "release-continuation-input/1",
+  "kind": "lifecycle-current-source-red",
+  "sha": "13c0485109d535c66325b12f044f7fb2fd85b3aa",
+  "tree": "e37f39905d0e36697fc130e83c5c06e65c637a3d",
+  "parent": "d35d8828c630d1b9675b47f511c477b3cc9ee991",
+  "worktree": "/tmp/session-worktree-l6ISYB/tree",
+  "file": "test/node/replica-handler-release-recovery.test.js",
+  "testSha256": "6673b330900330b9bb0b223b56e63a855fedb8bb77f4d725ca036f466551034a",
+  "productionDiff": "",
+  "createdAt": "2026-10-13T14:20:01.106Z"
+}

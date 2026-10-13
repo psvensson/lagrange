@@ -1,0 +1,15 @@
+{
+  "host": "lenovo-laptop",
+  "sha": "6c27b10b6f3c8093f4baab149f20b6a79524aecf",
+  "kind": "integrated-v1",
+  "name": "participant",
+  "files": [
+    "test/partition/committed-statement-outcome.test.js",
+    "test/partition/partition-unreadable-durable-record.test.js",
+    "test/partition/partition-participant-transaction-apply.test.js",
+    "test/partition/partition-participant-transaction-staging.test.js",
+    "test/partition/participant-envelope-admission.test.js",
+    "test/partition/partition-participant-release-admission.test.js"
+  ],
+  "startedAt": "2026-10-13T15:45:51.158Z"
+}

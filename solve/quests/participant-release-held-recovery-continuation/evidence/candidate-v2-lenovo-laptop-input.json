@@ -1,0 +1,15 @@
+{
+  "host": "lenovo-laptop",
+  "files": [
+    "test/partition/committed-statement-outcome.test.js",
+    "test/partition/partition-unreadable-durable-record.test.js",
+    "test/partition/partition-participant-transaction-apply.test.js",
+    "test/partition/partition-participant-transaction-staging.test.js",
+    "test/partition/participant-envelope-admission.test.js",
+    "test/partition/participant-release-protocol.test.js",
+    "test/partition/partition-participant-release-admission.test.js"
+  ],
+  "sha": "0b7147e5096c926450c61be101f42a17dc68f46a",
+  "kind": "candidate-v2",
+  "startedAt": "2026-10-13T14:49:39.776Z"
+}

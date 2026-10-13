@@ -1,0 +1,344 @@
+[
+  {
+    "name": "(controller)",
+    "controller": true,
+    "capability": {
+      "probedAt": 1791906564057,
+      "bootId": "d2c9b4c6-056a-4eb5-8e3f-c66d624c3c82",
+      "repoPath": "/mnt/data/peter/projects/.worktrees/rs-raft-c2-recovery-integration-20261013",
+      "nodePath": "/home/peter/.nvm/versions/node/v22.23.2/bin/node",
+      "cores": 20,
+      "memKiB": 32664788,
+      "nodeVersion": "v22.23.2",
+      "tools": {
+        "git": true,
+        "docker": true,
+        "helm": true,
+        "wasm-tools": true,
+        "psql": true,
+        "g++": true,
+        "java": true,
+        "rg": true,
+        "jq": true
+      },
+      "dockerReachable": true,
+      "repo": {
+        "present": true,
+        "head": "406ceac1c40bdf57da1a6668806d0f3b38526cb9",
+        "lockGraphSha256": "0b49533effbed7e3577dd212628a99e56c630068f76a9dc148cfc8dc96b28bf0",
+        "nodeModules": true,
+        "dependenciesCurrent": true
+      },
+      "movielensSha256": null,
+      "cpuSampleMs": 162,
+      "machineLock": {
+        "state": "free",
+        "record": null,
+        "holder": null,
+        "holderPidAlive": null
+      }
+    },
+    "error": null,
+    "sameMachineAs": null,
+    "readiness": {
+      "ready": true,
+      "missing": [],
+      "gaps": [
+        "movielens-dataset-missing"
+      ]
+    }
+  },
+  {
+    "name": "tv-dator",
+    "controller": false,
+    "capability": {
+      "probedAt": 1791906564648,
+      "bootId": "9c9e76b2-708e-4aa0-b920-34d36843d261",
+      "repoPath": "/home/peter/projects/lagrange",
+      "nodePath": "/home/peter/.nvm/versions/node/v22.23.2/bin/node",
+      "cores": 12,
+      "memKiB": 16127896,
+      "nodeVersion": "v22.23.2",
+      "tools": {
+        "git": true,
+        "docker": true,
+        "helm": true,
+        "wasm-tools": true,
+        "psql": true,
+        "g++": true,
+        "java": true,
+        "rg": true,
+        "jq": true
+      },
+      "dockerReachable": true,
+      "repo": {
+        "present": true,
+        "head": "83a81f49b703ac99296a44bf9885ef72cd785fd6",
+        "lockGraphSha256": "0b49533effbed7e3577dd212628a99e56c630068f76a9dc148cfc8dc96b28bf0",
+        "nodeModules": true,
+        "dependenciesCurrent": true
+      },
+      "movielensSha256": "06416e597f82b7342361e41163890c81036900f418ad91315590814211dca490",
+      "cpuSampleMs": 213,
+      "machineLock": {
+        "state": "free",
+        "record": null,
+        "holder": null,
+        "holderPidAlive": null
+      }
+    },
+    "error": null,
+    "sameMachineAs": null,
+    "readiness": {
+      "ready": true,
+      "missing": [],
+      "gaps": []
+    }
+  },
+  {
+    "name": "main-linux",
+    "controller": false,
+    "capability": {
+      "probedAt": 1791906564215,
+      "bootId": "d2c9b4c6-056a-4eb5-8e3f-c66d624c3c82",
+      "repoPath": "/home/peter/projects/lagrange",
+      "nodePath": "/home/peter/.nvm/versions/node/v22.23.2/bin/node",
+      "cores": 20,
+      "memKiB": 32664788,
+      "nodeVersion": "v22.23.2",
+      "tools": {
+        "git": true,
+        "docker": true,
+        "helm": true,
+        "wasm-tools": true,
+        "psql": true,
+        "g++": true,
+        "java": true,
+        "rg": true,
+        "jq": true
+      },
+      "dockerReachable": true,
+      "repo": {
+        "present": true,
+        "head": "0996d7576516af24f5f4d3e1e9aee37c775aabae",
+        "lockGraphSha256": "10d8d016b13a932c86542c3612d548f0b311cfc0c20bd169bfd04514b31b1b86",
+        "nodeModules": true,
+        "dependenciesCurrent": true
+      },
+      "movielensSha256": "06416e597f82b7342361e41163890c81036900f418ad91315590814211dca490",
+      "cpuSampleMs": 160,
+      "machineLock": {
+        "state": "free",
+        "record": null,
+        "holder": null,
+        "holderPidAlive": null
+      }
+    },
+    "error": null,
+    "sameMachineAs": "(controller)",
+    "readiness": {
+      "ready": false,
+      "missing": [
+        "dependency-graph-differs"
+      ],
+      "gaps": []
+    }
+  },
+  {
+    "name": "lenovo-laptop",
+    "controller": false,
+    "capability": {
+      "probedAt": 1791906564920,
+      "bootId": "18581133-d0d9-4dec-a3f8-266562235699",
+      "repoPath": "/home/peter/projects/lagrange",
+      "nodePath": "/home/peter/.nvm/versions/node/v22.23.2/bin/node",
+      "cores": 8,
+      "memKiB": 16282476,
+      "nodeVersion": "v22.23.2",
+      "tools": {
+        "git": true,
+        "docker": true,
+        "helm": true,
+        "wasm-tools": true,
+        "psql": true,
+        "g++": true,
+        "java": true,
+        "rg": true,
+        "jq": true
+      },
+      "dockerReachable": true,
+      "repo": {
+        "present": true,
+        "head": "83a81f49b703ac99296a44bf9885ef72cd785fd6",
+        "lockGraphSha256": "0b49533effbed7e3577dd212628a99e56c630068f76a9dc148cfc8dc96b28bf0",
+        "nodeModules": true,
+        "dependenciesCurrent": true
+      },
+      "movielensSha256": "06416e597f82b7342361e41163890c81036900f418ad91315590814211dca490",
+      "cpuSampleMs": 363,
+      "machineLock": {
+        "state": "free",
+        "record": null,
+        "holder": null,
+        "holderPidAlive": null
+      }
+    },
+    "error": null,
+    "sameMachineAs": null,
+    "readiness": {
+      "ready": true,
+      "missing": [],
+      "gaps": []
+    }
+  },
+  {
+    "name": "adam-laptop",
+    "controller": false,
+    "capability": {
+      "probedAt": 1791906565281,
+      "bootId": "a60faf43-3629-4ec0-8c83-cae6cf186de3",
+      "repoPath": "/home/peter/projects/lagrange",
+      "nodePath": "/home/peter/.nvm/versions/node/v22.23.2/bin/node",
+      "cores": 8,
+      "memKiB": 16217216,
+      "nodeVersion": "v22.23.2",
+      "tools": {
+        "git": true,
+        "docker": true,
+        "helm": true,
+        "wasm-tools": true,
+        "psql": true,
+        "g++": true,
+        "java": true,
+        "rg": true,
+        "jq": true
+      },
+      "dockerReachable": true,
+      "repo": {
+        "present": true,
+        "head": "83a81f49b703ac99296a44bf9885ef72cd785fd6",
+        "lockGraphSha256": "0b49533effbed7e3577dd212628a99e56c630068f76a9dc148cfc8dc96b28bf0",
+        "nodeModules": true,
+        "dependenciesCurrent": true
+      },
+      "movielensSha256": "06416e597f82b7342361e41163890c81036900f418ad91315590814211dca490",
+      "cpuSampleMs": 479,
+      "machineLock": {
+        "state": "busy",
+        "record": "{\"project\":\"lagrange\",\"agent\":\"lagrange:peter-System-Product-Name:1823321\",\"controller\":\"peter-System-Product-Name\",\"purpose\":\"test:ordinary,exclusive\",\"sha\":\"6c27b10b6f3c8093f4baab149f20b6a79524aecf\",\"startedAt\":\"2026-10-13T15:48:24Z\",\"expectedMinutes\":3,\"pid\":1873615}",
+        "holder": {
+          "project": "lagrange",
+          "agent": "lagrange:peter-System-Product-Name:1823321",
+          "controller": "peter-System-Product-Name",
+          "purpose": "test:ordinary,exclusive",
+          "sha": "6c27b10b6f3c8093f4baab149f20b6a79524aecf",
+          "startedAt": "2026-10-13T15:48:24Z",
+          "expectedMinutes": 3,
+          "pid": 1873615
+        },
+        "holderPidAlive": true
+      }
+    },
+    "error": null,
+    "sameMachineAs": null,
+    "readiness": {
+      "ready": true,
+      "missing": [],
+      "gaps": []
+    }
+  },
+  {
+    "name": "adams-gamla",
+    "controller": false,
+    "capability": {
+      "probedAt": 1791906565567,
+      "bootId": "d7288037-0a8a-4144-a3c4-80101d565062",
+      "repoPath": "/home/peter/projects/lagrange",
+      "nodePath": "/home/peter/.nvm/versions/node/v22.23.2/bin/node",
+      "cores": 4,
+      "memKiB": 16315860,
+      "nodeVersion": "v22.23.2",
+      "tools": {
+        "git": true,
+        "docker": true,
+        "helm": true,
+        "wasm-tools": true,
+        "psql": true,
+        "g++": true,
+        "java": true,
+        "rg": true,
+        "jq": true
+      },
+      "dockerReachable": true,
+      "repo": {
+        "present": true,
+        "head": "83a81f49b703ac99296a44bf9885ef72cd785fd6",
+        "lockGraphSha256": "0b49533effbed7e3577dd212628a99e56c630068f76a9dc148cfc8dc96b28bf0",
+        "nodeModules": true,
+        "dependenciesCurrent": true
+      },
+      "movielensSha256": "06416e597f82b7342361e41163890c81036900f418ad91315590814211dca490",
+      "cpuSampleMs": 323,
+      "machineLock": {
+        "state": "free",
+        "record": null,
+        "holder": null,
+        "holderPidAlive": null
+      }
+    },
+    "error": null,
+    "sameMachineAs": null,
+    "readiness": {
+      "ready": true,
+      "missing": [],
+      "gaps": []
+    }
+  },
+  {
+    "name": "carinas-windows",
+    "controller": false,
+    "capability": {
+      "probedAt": 1791906565000,
+      "bootId": "39f29cba-50fb-4de7-92f8-e70c4390adcc",
+      "repoPath": "/home/peter/projects/lagrange",
+      "nodePath": "/home/peter/.nvm/versions/node/v22.23.2/bin/node",
+      "cores": 12,
+      "memKiB": 7819920,
+      "nodeVersion": "v22.23.2",
+      "tools": {
+        "git": true,
+        "docker": true,
+        "helm": true,
+        "wasm-tools": true,
+        "psql": true,
+        "g++": true,
+        "java": true,
+        "rg": true,
+        "jq": true
+      },
+      "dockerReachable": true,
+      "repo": {
+        "present": true,
+        "head": "585aaa93a5a534668f846f2374694e1e6d15fc39",
+        "lockGraphSha256": "0b49533effbed7e3577dd212628a99e56c630068f76a9dc148cfc8dc96b28bf0",
+        "nodeModules": true,
+        "dependenciesCurrent": true
+      },
+      "movielensSha256": "06416e597f82b7342361e41163890c81036900f418ad91315590814211dca490",
+      "cpuSampleMs": 258,
+      "machineLock": {
+        "state": "free",
+        "record": null,
+        "holder": null,
+        "holderPidAlive": null
+      }
+    },
+    "error": null,
+    "sameMachineAs": null,
+    "readiness": {
+      "ready": true,
+      "missing": [],
+      "gaps": []
+    }
+  }
+]

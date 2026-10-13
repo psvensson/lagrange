@@ -1,0 +1,36 @@
+TAP version 13
+{"level":50,"time":"2026-10-13T15:48:18.331Z","nodeId":"membership-claim-cache-seed","pid":1873100,"subsystem":"bootstrap","nodeId":"membership-claim-cache-seed","phase":"partitions","duration":10255,"error":"Seed participant release failed: {\"partitionId\":\"call_activation_leases-p1\",\"answer\":{\"outcome\":\"release_drain_pending\",\"releaseId\":\"e24ebfb38c755d92115226125c1d680c68e7e805ca6324e1a8ec447979ad425d\",\"partitionId\":\"call_activation_leases-p1\",\"phase\":\"release\",\"retryAfterMs\":100}}","stack":"Error: Seed participant release failed: {\"partitionId\":\"call_activation_leases-p1\",\"answer\":{\"outcome\":\"release_drain_pending\",\"releaseId\":\"e24ebfb38c755d92115226125c1d680c68e7e805ca6324e1a8ec447979ad425d\",\"partitionId\":\"call_activation_leases-p1\",\"phase\":\"release\",\"retryAfterMs\":100}}\n    at BootstrapService.releaseSeedParticipantCohorts (file:///home/peter/projects/lagrange/test-output/placement-worktrees/6c27b10b6f3c-mv6utivm-1823321/src/bootstrap/bootstrap-service-seed-workflow.js:295:17)\n    at runNextTicks (node:internal/process/task_queues:64:5)\n    at listOnTimeout (node:internal/timers:547:9)\n    at process.processTimers (node:internal/timers:521:7)\n    at async Object.run (file:///home/peter/projects/lagrange/test-output/placement-worktrees/6c27b10b6f3c-mv6utivm-1823321/src/bootstrap/bootstrap-service-seed-workflow.js:359:13)\n    at async StartupPipelineRunner.runWorkflow (file:///home/peter/projects/lagrange/test-output/placement-worktrees/6c27b10b6f3c-mv6utivm-1823321/src/bootstrap/pipeline/startup-pipeline-runner.js:169:9)\n    at async BootstrapService.bootstrap (file:///home/peter/projects/lagrange/test-output/placement-worktrees/6c27b10b6f3c-mv6utivm-1823321/src/bootstrap/bootstrap-service-seed-workflow.js:473:9)\n    at async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/6c27b10b6f3c-mv6utivm-1823321/test/integration/message-group-membership-claim-cache.integration.test.js:271:16)\n    at async Test.run (node:internal/test_runner/test:1054:7)\n    at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)","servicesCreated":138,"msg":"Bootstrap failed"}
+{"schema":"membership-cache-timing/2","budgetMs":30000,"elapsedMs":10928,"fixtureReplicaStaggerDelayMs":0,"timings":[{"phase":"bootstrap","elapsedMs":10890},{"phase":"teardown-start","elapsedMs":10892},{"phase":"bootstrap-stopped","elapsedMs":10914},{"phase":"cleanup-complete","elapsedMs":10928}]}
+# Subtest: repository failed and successful T1 cases share one SQL/Raft/cache seed
+not ok 1 - repository failed and successful T1 cases share one SQL/Raft/cache seed
+  ---
+  duration_ms: 10930.718125
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/6c27b10b6f3c-mv6utivm-1823321/test/integration/message-group-membership-claim-cache.integration.test.js:256:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    "Seed participant release failed: {\"partitionId\":\"call_activation_leases-p1\",\"answer\":{\"outcome\":\"release_drain_pending\",\"releaseId\":\"e24ebfb38c755d92115226125c1d680c68e7e805ca6324e1a8ec447979ad425d\",\"partitionId\":\"call_activation_leases-p1\",\"phase\":\"release\",\"retryAfterMs\":100}}"
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/6c27b10b6f3c-mv6utivm-1823321/test/integration/message-group-membership-claim-cache.integration.test.js:273:14)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 10937.977998
+# time=12647ms

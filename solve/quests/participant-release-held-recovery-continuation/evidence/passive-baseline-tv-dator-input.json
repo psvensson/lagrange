@@ -1,0 +1,14 @@
+{
+  "schema": "release-continuation-input/1",
+  "kind": "passive-current-source-red",
+  "sha": "d0ae6f839cca24e2372daffc5ee981d76b207d48",
+  "tree": "df3852e5e646d200462c72da8db565db5135345b",
+  "parent": "d35d8828c630d1b9675b47f511c477b3cc9ee991",
+  "worktree": "/tmp/session-worktree-1lGoIZ/tree",
+  "file": "test/partition/partition-runtime-reconstruction-leadership.test.js",
+  "testSha256": "9ece45774ac62fad32e965f227b9e886140e21b5c8bdcd8a0fb6f7c12bd7d2e7",
+  "productionDiff": "",
+  "createdAt": "2026-10-13T13:46:15.074Z",
+  "host": "tv-dator",
+  "startedAt": "2026-10-13T13:46:36.398Z"
+}

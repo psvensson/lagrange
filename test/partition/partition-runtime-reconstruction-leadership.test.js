@@ -86,6 +86,7 @@ import {PARTITION_SETTLED_REPLAY} from
   '../../src/partition/partition-committed-statement-outcome-constants.js';
 
 const {
+  PARTITION_SERVICE_EVENT,
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_OPERATION,
 } = partitionConstants;
@@ -271,6 +272,31 @@ function stopCountingReconstructions() {
   setActualCoreEntryObserver(null);
 }
 
+// Passive observations of the current recovery owners after a fault heals.
+// The core observer receives entries the runtime has already chosen to make;
+// the service listener receives consensus events the live port already
+// emitted. Neither callback calls the port, ticks it, or changes release
+// admission.
+function observeRecoveryContinuation(service) {
+  const reconstructions = countReconstructions(service.partitionId);
+  const consensus = [];
+  const observeConsensus = (event) => consensus.push({
+    leaderReplicaId: event?.leaderReplicaId ?? null,
+    term: event?.term ?? null,
+    commitIndex: event?.commitIndex ?? null,
+    appliedIndex: event?.appliedIndex ?? null,
+    configurationObserved: event?.confState !== undefined,
+  });
+  service.on(PARTITION_SERVICE_EVENT.CONSENSUS_OBSERVED, observeConsensus);
+  return {
+    facts: () => ({reconstructions: reconstructions.count, consensus}),
+    stop() {
+      service.off(PARTITION_SERVICE_EVENT.CONSENSUS_OBSERVED, observeConsensus);
+      stopCountingReconstructions();
+    },
+  };
+}
+
 // The entry ids of the proposals a group's durable log holds, decoded by the
 // proposal codec.
 function durableEntryIds(dbPath, groupId) {
@@ -368,6 +394,7 @@ async function loneLeaderCase(partitionId, extraOptions) {
   await withLonePartitions(extraOptions, async (open) => {
     const {partition, dbPath} = await open(partitionId);
     const sibling = await open(`${partitionId}-sibling`);
+    let recoveryObservation = null;
     const setup = await insert(partition, 'row-0', 'setup', 'entry-setup');
     assert.equal(setup.success, true, 'setup: the lone leader serves a write');
     assert.equal((await insert(sibling.partition, 's-0', 'setup',
@@ -412,15 +439,11 @@ async function loneLeaderCase(partitionId, extraOptions) {
       assert.equal(durableRecordOf(dbPath, partitionId).entries.length,
         entriesDuring, 'W-B6-4: nothing was proposed (entriesAdded 0)');
 
+      recoveryObservation = observeRecoveryContinuation(partition);
       healApplicationLimit(partition.db);
-      const beforeHeal = partition.raft.readStatus();
-      if (beforeHeal.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
-      // The next attempt is due when the typed outcome says so.
-        await sleep(assertRecoveryOutcome(beforeHeal, retryWindowOf(partition),
-          'the outage').retryAfterMs + 1);
-      }
       assert.equal(await waitForParticipantRelease(partition), true,
-        'the registered release owner revalidates the healed group');
+        'the registered release owner revalidates the healed group; passive ' +
+        `owner trace ${JSON.stringify(recoveryObservation.facts())}`);
       const next = await insert(partition, 'row-2', 'healed', 'entry-healed');
       const status = partition.raft.readStatus();
       assert.equal(next.success, true,
@@ -440,6 +463,7 @@ async function loneLeaderCase(partitionId, extraOptions) {
         siblingBefore, 'W-B6-2: the sibling was never touched (+0 term, +0 ' +
       'log entries, same hard state and runtime generation)');
     } finally {
+      recoveryObservation?.stop();
       healApplicationLimit(partition.db);
     }
   });

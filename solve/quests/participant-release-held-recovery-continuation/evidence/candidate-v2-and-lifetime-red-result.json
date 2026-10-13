@@ -1,0 +1,564 @@
+{
+  "schema": "release-continuation-lab-v2-and-lifetime-red/1",
+  "recordedAt": "2026-10-13T15:05:16.587Z",
+  "candidate": "0b7147e5096c926450c61be101f42a17dc68f46a",
+  "sourceControl": "6a6a67b440bf7dc9e2d38bad6764adda171a1846",
+  "candidateSummary": {
+    "files": 17,
+    "passed": 17,
+    "failed": 0,
+    "runnerAssertions": 217
+  },
+  "controlSummary": {
+    "files": 16,
+    "passed": 15,
+    "failed": 1,
+    "runnerAssertions": 204
+  },
+  "candidateDeferredDurationMs": 1172.861214,
+  "controlDeferredDurationMs": 10148.292829,
+  "controlPassiveTrace": {
+    "reconstructions": 0,
+    "consensus": []
+  },
+  "controlLimit": "16 control files executed; the focused node file awaits its final identical-test source control. Do not describe this as a17-file complete control.",
+  "lifetimeRed": {
+    "sha": "cee78b3a92fc942fb9214e61cf6a5c96f2b3c567",
+    "sourceUnchangedFromCandidate": true,
+    "testSha256": "d55f6f15b31ae57645ec40deaca181e665b7f934220be008e442357c8b96100f",
+    "total": 15,
+    "passed": 13,
+    "failed": 2,
+    "engagement": [
+      "Last current registry removal leaves pending timer1, expected0.",
+      "Shutdown-retained service leaves old report throttle; same-identity current reentry emits1 total report, expected2."
+    ],
+    "cancelled": 0,
+    "skipped": 0,
+    "timeout": false
+  },
+  "static": "V2 shard audit passes2367 census. V2 impact registry fails exact-two-endpoint schema; explicit R4 correction retains originaltwo IDs, sameowners/witnesses, no guard relaxation, and corrected audit passes62contracts33pairs.",
+  "results": [
+    {
+      "kind": "candidate-v2",
+      "host": "tv-dator",
+      "records": [
+        {
+          "file": "test/partition/partition-runtime-reconstruction-leadership.test.js",
+          "assertions": 20,
+          "passed": 20,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "ok": true
+        }
+      ]
+    },
+    {
+      "kind": "candidate-v2",
+      "host": "carinas-windows",
+      "records": [
+        {
+          "file": "test/node/replica-handler-release-recovery.test.js",
+          "assertions": 13,
+          "passed": 13,
+          "failed": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "ok": true
+        }
+      ]
+    },
+    {
+      "kind": "candidate-v2",
+      "host": "adam-laptop",
+      "records": [
+        {
+          "file": "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 7,
+          "durationMs": 912,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/raft/raft-rs-backend/operation-port-throw-containment.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 4,
+          "durationMs": 1009,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 5,
+          "durationMs": 6204,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 4,
+          "durationMs": 1811,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 16,
+          "durationMs": 2036,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 27,
+          "durationMs": 3646,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 8,
+          "durationMs": 3657,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/raft/raft-rs-backend/startup-cleanup.integration.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 30,
+          "durationMs": 3583,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        }
+      ]
+    },
+    {
+      "kind": "candidate-v2",
+      "host": "lenovo-laptop",
+      "records": [
+        {
+          "file": "test/partition/participant-envelope-admission.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 2,
+          "durationMs": 1982,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/partition/partition-participant-release-admission.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 4,
+          "durationMs": 5768,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/partition/participant-release-protocol.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 7,
+          "durationMs": 7573,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/partition/partition-participant-transaction-apply.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 27,
+          "durationMs": 7177,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/partition/committed-statement-outcome.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 18,
+          "durationMs": 9968,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/partition/partition-participant-transaction-staging.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 19,
+          "durationMs": 8017,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/partition/partition-unreadable-durable-record.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 6,
+          "durationMs": 12858,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        }
+      ]
+    },
+    {
+      "kind": "source-revert-v2",
+      "host": "tv-dator",
+      "records": [
+        {
+          "file": "test/partition/partition-runtime-reconstruction-leadership.test.js",
+          "assertions": 20,
+          "passed": 19,
+          "failed": 1,
+          "cancelled": 0,
+          "skipped": 0,
+          "ok": false
+        }
+      ]
+    },
+    {
+      "kind": "source-revert-v2",
+      "host": "adam-laptop",
+      "records": [
+        {
+          "file": "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 7,
+          "durationMs": 885,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/raft/raft-rs-backend/operation-port-throw-containment.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 4,
+          "durationMs": 1000,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 5,
+          "durationMs": 6134,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 4,
+          "durationMs": 1798,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 16,
+          "durationMs": 2112,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 27,
+          "durationMs": 3668,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 8,
+          "durationMs": 3679,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/raft/raft-rs-backend/startup-cleanup.integration.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 30,
+          "durationMs": 3667,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        }
+      ]
+    },
+    {
+      "kind": "source-revert-v2",
+      "host": "lenovo-laptop",
+      "records": [
+        {
+          "file": "test/partition/participant-envelope-admission.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 2,
+          "durationMs": 1984,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/partition/partition-participant-release-admission.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 4,
+          "durationMs": 5909,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/partition/participant-release-protocol.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 7,
+          "durationMs": 7615,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/partition/partition-participant-transaction-apply.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 27,
+          "durationMs": 6660,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/partition/committed-statement-outcome.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 18,
+          "durationMs": 10000,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/partition/partition-participant-transaction-staging.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 19,
+          "durationMs": 7974,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/partition/partition-unreadable-durable-record.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 6,
+          "durationMs": 13569,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        }
+      ]
+    },
+    {
+      "kind": "lifetime-baseline-v3",
+      "host": "carinas-windows",
+      "records": [
+        {
+          "file": "test/node/replica-handler-release-recovery.test.js",
+          "assertions": 15,
+          "passed": 13,
+          "failed": 2,
+          "cancelled": 0,
+          "skipped": 0,
+          "ok": false
+        }
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "file": "candidate-input-v2.json",
+      "sha256": "1cdb3418e475b8c931f4d5e12865bbd2dd64d80205270db487a02d69dc22f590"
+    },
+    {
+      "file": "source-revert-input-v2.json",
+      "sha256": "87e3cab0b7db37d07e55d1cc6926cada2dd34f3dd6668101e5d83cf7bd5b79cb"
+    },
+    {
+      "file": "source-revert-pair-v2.json",
+      "sha256": "280c82846e7fddddb0dc4998b0eddb70f1740ee650ab5aa9a93705962df24f38"
+    },
+    {
+      "file": "lifetime-baseline-input-v3.json",
+      "sha256": "ef4e251356d834ed060e07e4220f256f93ef1f9481e261cba43d4ee135f9d9fc"
+    },
+    {
+      "file": "candidate-v2-tv-dator-input.json",
+      "sha256": "a40c7cbfa85ec408edc94a43bed156ff84435c0f65aa732738fe9cbebc6ecfed"
+    },
+    {
+      "file": "candidate-v2-tv-dator-status.json",
+      "sha256": "248c19b7f8b04c48c62d01a0cfa6f884fef971f9b32a09cbc2fe6e02f4a8f98a"
+    },
+    {
+      "file": "candidate-v2-tv-dator.log",
+      "sha256": "c5ef5935666e451f58206fa56b4917b2946ee1fdadbf1c00c3b5a210fc1fc9b7"
+    },
+    {
+      "file": "candidate-v2-tv-dator.tap",
+      "sha256": "886b827b88cecacf0f6916e8315282093ac105b4e0ecbb75d1a904d717a93b74"
+    },
+    {
+      "file": "candidate-v2-carinas-windows-input.json",
+      "sha256": "641e3dff16fb5d80cfd7fdb39ce4c3c4a3745a987ad1631c31601d0f0895762b"
+    },
+    {
+      "file": "candidate-v2-carinas-windows-status.json",
+      "sha256": "291ac2b37921366ea9e6e3b68c074ddec9638dfb02028518983d0fcf2a4049f9"
+    },
+    {
+      "file": "candidate-v2-carinas-windows.log",
+      "sha256": "9ca4da6ed780463df4d4715ac600abd9ae5f591bc75938732c3bbb7652ebc925"
+    },
+    {
+      "file": "candidate-v2-carinas-windows.tap",
+      "sha256": "de18224a75ada733d82377772debd616f662d2064eed7cd42d1c76a92a13cb1c"
+    },
+    {
+      "file": "candidate-v2-adam-laptop-input.json",
+      "sha256": "cafbb9a62a809b8412a4532ddf55901787f27558c48df86fb218dbde479fdcd2"
+    },
+    {
+      "file": "candidate-v2-adam-laptop-status.json",
+      "sha256": "702a3d0c0487e3f7a10953f0cd8c0fdc6944940c6a6046597f16d2761bcb8b1e"
+    },
+    {
+      "file": "candidate-v2-adam-laptop.log",
+      "sha256": "804b3d495f1eeb6a6b7f741e5fe7e7650e3602c41f99ae747001aca3c650058f"
+    },
+    {
+      "file": "candidate-v2-adam-laptop.ndjson",
+      "sha256": "83d8d1031274cb302b1c02d3911910536bae0475995f74988694dbb99f1deafb"
+    },
+    {
+      "file": "candidate-v2-lenovo-laptop-input.json",
+      "sha256": "077167dd6b404d8f7c1912dbf2a187e5484594fd6827bcce14f1206153b4867f"
+    },
+    {
+      "file": "candidate-v2-lenovo-laptop-status.json",
+      "sha256": "aaa5f630025222b147bdc9ae03372d42108f9d79344e859f7cb7af922ab6e9ab"
+    },
+    {
+      "file": "candidate-v2-lenovo-laptop.log",
+      "sha256": "fa521974e8ccd8359d6500c1a6c851ad5e095aef9d387be0501d1f91b9d122bb"
+    },
+    {
+      "file": "candidate-v2-lenovo-laptop.ndjson",
+      "sha256": "be4d2019099ba0f532ae0a456633ae08d7f9bcc69a01dd1b49269c934ef7c909"
+    },
+    {
+      "file": "source-revert-v2-tv-dator-input.json",
+      "sha256": "0c0d4aed4aef48b9220766382917560c0859946a9c6bd6030a1eda7f450ad152"
+    },
+    {
+      "file": "source-revert-v2-tv-dator-status.json",
+      "sha256": "4332e3affa9f0dab8652524429148bd3f5ec858ed2970c3fd662d4b2bdd0c92f"
+    },
+    {
+      "file": "source-revert-v2-tv-dator.log",
+      "sha256": "cc667305dbc8028b3b779dda0187a44c55f8ab0086d73a245cc636608c60a4cb"
+    },
+    {
+      "file": "source-revert-v2-tv-dator.tap",
+      "sha256": "ebda25ce6f5a74d1705bb0d55ea792514c1b7c3a335eefd5003d60ddd20aa886"
+    },
+    {
+      "file": "source-revert-v2-adam-laptop-input.json",
+      "sha256": "38f5de37a5ac42576452fc88cdfc6044ad44deb3eacce631231aeeae60a96273"
+    },
+    {
+      "file": "source-revert-v2-adam-laptop-status.json",
+      "sha256": "7683ea19e086bd2c35ea952b0d7a9a16f3cee265c3d55a91433aabe1cef81f28"
+    },
+    {
+      "file": "source-revert-v2-adam-laptop.log",
+      "sha256": "5aa92e3f69143c84cb6fc0434dd0b18a6a64d787c6ec1809b2026bc8439d7d00"
+    },
+    {
+      "file": "source-revert-v2-adam-laptop.ndjson",
+      "sha256": "e04fc0a033084475301c5c45b756011e7891a98b0cb0b9f78c54c30dc154402e"
+    },
+    {
+      "file": "source-revert-v2-lenovo-laptop-input.json",
+      "sha256": "abc36c2700a8f7894ccb2214de84baafc99630508a731eb90667be01720695d1"
+    },
+    {
+      "file": "source-revert-v2-lenovo-laptop-status.json",
+      "sha256": "5a6c245a985a43160bc42bdf1ddb922107de6fa73c198c03ec34777d6b77c9a5"
+    },
+    {
+      "file": "source-revert-v2-lenovo-laptop.log",
+      "sha256": "0c1aa556f15f9cfb25b7fcf0b2482dd58854b09b8127fc644722a6a98c04e9dd"
+    },
+    {
+      "file": "source-revert-v2-lenovo-laptop.ndjson",
+      "sha256": "b7654940b75aba6f049a29f5610774e76a76cd7e988e1bc836805ffb75ef249a"
+    },
+    {
+      "file": "lifetime-baseline-v3-carinas-windows-input.json",
+      "sha256": "154d0057cb305ae06f3b8f6711e9894c4822855fe0858dc619f0bdef0844d194"
+    },
+    {
+      "file": "lifetime-baseline-v3-carinas-windows-status.json",
+      "sha256": "e9f72a00504e407a0a8a11bcc5fb278f2010383e4e0eed2a1321923dd933262d"
+    },
+    {
+      "file": "lifetime-baseline-v3-carinas-windows.log",
+      "sha256": "fd9a791bd30703ce4af5400f77d9c30eccfaf723ab683d5a6ca86fc0ee68362c"
+    },
+    {
+      "file": "lifetime-baseline-v3-carinas-windows.tap",
+      "sha256": "865e9d7f8af3e3b97ca5cef290028314ea1d9320c787beca97c136d05e9dc399"
+    },
+    {
+      "file": "candidate-v1-metadata-refresh.log",
+      "sha256": "d44c588f5b409078b4bb6f7502b48202af4c3a086d59440acbfed8b2581ab5d3"
+    },
+    {
+      "file": "candidate-v2-metadata-refresh.log",
+      "sha256": "e080f5c1d46e20b67180e8ab0d21f7d0383309fb9dfb1d15255b5df89c7fa973"
+    },
+    {
+      "file": "candidate-v2-shards.log",
+      "sha256": "bab8293b9dda73d143c010ae613b56a1eb6396a6ef0d6f43df4fb63186b5f1d6"
+    },
+    {
+      "file": "candidate-v2-impact-contracts.log",
+      "sha256": "ed90d7065dc4429519ca9bc02ef3a626e06c99ce4eb44604336bb72fdf176123"
+    },
+    {
+      "file": "candidate-v3-impact-contracts.log",
+      "sha256": "f856960c2f04c80cd289c26a8e0da3561ba829e651d0a87a8dc103c0bc599601"
+    }
+  ],
+  "closure": "HOLD: source candidate has measured lifetime defects despite17file green. Root admitted test-first minimal shared-owner cleanup only after V3 red. Prior source/test review R1-R4 requires revision; final exact-byte review and new17-file lab proof remain pending."
+}

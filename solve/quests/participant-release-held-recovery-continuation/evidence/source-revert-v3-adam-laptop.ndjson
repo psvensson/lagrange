@@ -1,0 +1,8 @@
+{"file":"test/raft/raft-rs-backend/operation-port-ready-recovery.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":922,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/operation-port-throw-containment.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":1012,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":6116,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":1842,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/runtime-opening-history.integration.test.js","attempt":1,"ok":true,"assertions":16,"durationMs":2083,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js","attempt":1,"ok":true,"assertions":27,"durationMs":3776,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js","attempt":1,"ok":true,"assertions":8,"durationMs":3760,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/startup-cleanup.integration.test.js","attempt":1,"ok":true,"assertions":30,"durationMs":3638,"retriedOnce":false,"firstFailureLine":null}

@@ -1,0 +1,51 @@
+{
+  "schema": "release-continuation-input/1",
+  "kind": "candidate-v3",
+  "sha": "cd589405e6febadf7dbef339b6806e15426e837f",
+  "tree": "11f617117cc648f22cc8ba34d8364773a22c9914",
+  "parent": "d35d8828c630d1b9675b47f511c477b3cc9ee991",
+  "worktree": "/tmp/session-worktree-dR6S70/tree",
+  "files": [
+    {
+      "file": "architecture/contracts/authority-and-recovery.md",
+      "sha256": "128538d75429c1d31b9cb7aa245eef9392ef14f7ee948c925086582a972a1ae5"
+    },
+    {
+      "file": "src/node/replica-handler-release-recovery.js",
+      "sha256": "1e35f7fff07e87ec0da7ebe0c14e23ffedc9bb83a650b559bc1b4d5b0965ee23"
+    },
+    {
+      "file": "src/partition/partition-participant-transaction-pause.js",
+      "sha256": "0ce1938d2fb1ac20d6f96e64fa39e29dec64e4c44dbc242238067d8c1a1737be"
+    },
+    {
+      "file": "test/node/replica-handler-release-recovery.test.js",
+      "sha256": "979653087fdee7931ac1d9caaab57dd18685153296ed271a851210fdf0435f76"
+    },
+    {
+      "file": "test/partition/partition-runtime-reconstruction-leadership.test.js",
+      "sha256": "9ece45774ac62fad32e965f227b9e886140e21b5c8bdcd8a0fb6f7c12bd7d2e7"
+    },
+    {
+      "file": "test/shards/impact-contracts.json",
+      "sha256": "63f610be8f25c15fbd981e04bb631c8dc7419087356e2dc84d008812d18bea33"
+    },
+    {
+      "file": "test/shards/impact-graph-seal.json",
+      "sha256": "035ef0575ed357ef2e20fec9aeeae0f156c8ff240dadfcd2a39edb3feaa09196"
+    },
+    {
+      "file": "test/shards/primary-classes.json",
+      "sha256": "e8cc7f82909c4cbaae58882354f761f92350bdba5546df386e30df3ed753dbee"
+    },
+    {
+      "file": "test/shards/resource-classes.json",
+      "sha256": "d32ef500be06912bd32434990a77f01bf6426b32c9cd67bcbd245bb1aa2bc7ed"
+    },
+    {
+      "file": "test/shards/subsystem-classes.json",
+      "sha256": "d2beddc9ae0a7af15a826b72bdf1f58d55c899b08b5b6587a2a80a2fd58a5087"
+    }
+  ],
+  "createdAt": "2026-10-13T15:16:26.622Z"
+}

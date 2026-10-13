@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 116,
     "architecture-governance": 19,
-    "bootstrap-membership": 309,
+    "bootstrap-membership": 310,
     "cdc-metadata": 63,
     "cli-tooling": 96,
     "control-plane": 214,
@@ -25,10 +25,10 @@
     "transport-messaging": 95,
     "wasm-toolchain": 57
   },
-  "censusSize": 2366,
-  "digest": "fnv1a32-60d1fa44",
+  "censusSize": 2367,
+  "digest": "fnv1a32-649d9e29",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-84129bda",
+  "observationDigest": "fnv1a32-6d2608a5",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1177,6 +1177,7 @@
     "test/node/replica-handler-leadership-transfer.test.js": "bootstrap-membership",
     "test/node/replica-handler-membership-relay.test.js": "bootstrap-membership",
     "test/node/replica-handler-owner-path-bypass.test.js": "bootstrap-membership",
+    "test/node/replica-handler-release-recovery.test.js": "bootstrap-membership",
     "test/node/replica-handler-replacement-election-already-leader.test.js": "bootstrap-membership",
     "test/node/replica-handler-replica-membership.test.js": "bootstrap-membership",
     "test/node/replica-handler-voter-ready-wait-bound-spent.test.js": "bootstrap-membership",
@@ -8352,6 +8353,27 @@
         "test/node/replica-handler-bootstrap-stamps.js",
         "test/node/replica-handler-owner-path-admission-fixture.js",
         "test/test-helpers/lifecycle-state-store.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/node/replica-handler-release-recovery.test.js": {
+      "files": [
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-release-facts.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },

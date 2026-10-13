@@ -1,0 +1,11 @@
+{
+  "host": "adam-laptop",
+  "sha": "6c27b10b6f3c8093f4baab149f20b6a79524aecf",
+  "kind": "integrated-v1",
+  "name": "claim",
+  "files": [
+    "test/integration/message-group-membership-claim-cache.integration.test.js"
+  ],
+  "rawTap": true,
+  "startedAt": "2026-10-13T15:47:03.047Z"
+}

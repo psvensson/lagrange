@@ -1,0 +1,16 @@
+lab test: carinas-windows: ordinary (1 files) cores=12 mem=7.5GiB speed x1.63
+[carinas-windows] placement-shell=1250729
+[carinas-windows] placement-head=0b7147e5096c926450c61be101f42a17dc68f46a
+[carinas-windows] placement-link=node_modules
+[carinas-windows] placement-link=data/examples
+[carinas-windows] placement-prepared=import-graph
+[carinas-windows] placement-env=factor:1.7 mode:local retry: timeout: lanecap:11
+[carinas-windows] placement-pid=1251159
+[carinas-windows] # test-files planned=1
+[carinas-windows] classified lane ordinary: 1 file(s), jobs=4
+[carinas-windows] thermal: unmeasurable (no sensors)
+[carinas-windows] ok test/node/replica-handler-release-recovery.test.js (13 assertions, 5891ms)
+[carinas-windows] # test-files total=1 pass=1 fail=0 assertions=13
+lab test: carinas-windows: # test-files total=1 pass=1 fail=0 assertions=13
+lab test: carinas-windows: results copied to test-output/reports/test-results-carinas-windows.ndjson
+# test-files total=1 pass=1 fail=0 assertions=13

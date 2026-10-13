@@ -597,7 +597,7 @@
       ]
     },
     "raft-rs-runtime-application-transaction": {
-      "description": "Ready processing and the application transaction owner keep application effects, partition progress, raft-rs applied progress, ConfState and each statement's durable outcome coherent across host failure and reconstruction; failure scope follows failure class (a core failure replaces the runtime and resumes every group once, a host failure reconstructs its own group and touches no other group; a failure within one retry window of the last instant the previous one held the group is the same persisting failure, whatever its class and whether or not a reconstruction succeeded in between, so the group is reconstructed at most once per window while it persists - at most ceil(span / window) + 1 reconstructions over any span - and a failure more than one window after the last one starts afresh; a group healed inside a window serves again only after it, so its first write after a heal waits up to one window), a durable record that cannot be read where a group is opened or reconstructed (a missing table, SQLITE_IOERR, SQLITE_CORRUPT) is that group's own typed host failure of phase durable-record-read and never a throw, a record that lost a table is never recreated empty (the record's tables are created in one transaction of the store's own, whole or not at all, so a partial schema only ever comes from outside), a replica whose record cannot be read at open is refused at initialization, typed and naming the phase and the table, whatever its replica count (healing in place is for a group that fails while it runs), a throw the runtime did not type is contained by the port as the group's typed host failure, a group without a usable host announces no role so its partition does not lead, a reconstructed sole voter leads again, a retry is answered from its durable outcome, and the admission owner refuses before consensus (and before a session stages it) every command the application would refuse or never answer. Shared native replacement holds entry until every registered group is reconstructed or explicitly held; callbacks cannot use stale handles or cached healthy observations. A failed shared reload owns one captured clock and existing election-derived retry window, shared by all callers; caller changes cannot renew or bypass it. Resumption uses each existing group queue; close discharges exact-handle obligations and final close releases the shared retry record.",
+      "description": "Ready processing and the application transaction owner keep application effects, partition progress, raft-rs applied progress, ConfState and each statement's durable outcome coherent across host failure and reconstruction; failure scope follows failure class (a core failure replaces the runtime and resumes every group once, a host failure reconstructs its own group and touches no other group; a failure within one retry window of the last instant the previous one held the group is the same persisting failure, whatever its class and whether or not a reconstruction succeeded in between, so the group is reconstructed at most once per window while it persists - at most ceil(span / window) + 1 reconstructions over any span - and a failure more than one window after the last one starts afresh; a group healed inside a window serves again only after it, so its first write after a heal waits up to one window), a durable record that cannot be read where a group is opened or reconstructed (a missing table, SQLITE_IOERR, SQLITE_CORRUPT) is that group's own typed host failure of phase durable-record-read and never a throw, a record that lost a table is never recreated empty (the record's tables are created in one transaction of the store's own, whole or not at all, so a partial schema only ever comes from outside), a replica whose record cannot be read at open is refused at initialization, typed and naming the phase and the table, whatever its replica count (healing in place is for a group that fails while it runs), a throw the runtime did not type is contained by the port as the group's typed host failure, a group without a usable host announces no role so its partition does not lead, a reconstructed sole voter leads again, a retry is answered from its durable outcome, and the admission owner refuses before consensus (and before a session stages it) every command the application would refuse or never answer. Shared native replacement holds entry until every registered group is reconstructed or explicitly held; callbacks cannot use stale handles or cached healthy observations. A failed shared reload owns one captured clock and existing election-derived retry window, shared by all callers; caller changes cannot renew or bypass it. Resumption uses each existing group queue; close discharges exact-handle obligations and final close releases the shared retry record. The registered participant release recovery owner visits current hosted services once in registry order and stops at the first actual leader. With no leader, the write kernel canonical host-held classifier retains one partition observation debt at the existing RECOVERY_RETRY_MS cadence; status.retryAfterMs is never consumed. Ordinary followers and candidates remain event-driven; null or unclassifiable status is typed UNAVAILABLE without a self wake. The existing queue coalesces events, permits at most four running attempts, throttles unchanged reports, and clears pending/report state after the last service is removed. Held reports preserve the blocked group, replica and failure cause. A timer-registration failure visibly reports UNAVAILABLE and discharges the unscheduled debt until a real event. Only fresh leader, durable origin, measured build and canonical release facts may enter cutover; absent origin or build remains OPERATOR_REQUIRED. Runtime not-before, reconstruction and durable replay remain runtime-owned. Canonical pause/resume refuses handler shutdown, service shutdown or registry replacement before idempotent OPEN and final mutation; stale lifecycle remains CLOSED, while a wrong release ID against an otherwise valid current OPEN returns STALE without revoking it. Existing generation, term, configuration, runtime, drain and census fences remain mandatory; a wake never grants release authority.",
       "owners": [
         "src/raft/raft-rs-runtime-owner.js",
         "src/raft/raft-rs-runtime-tuning.js",
@@ -616,7 +616,15 @@
         "src/partition/partition-transaction-execution-envelope.js",
         "src/raft/raft-rs-binding-owner.js",
         "src/raft/raft-rs-runtime-owner-constants.js",
-        "src/raft/raft-rs-runtime-faults.js"
+        "src/raft/raft-rs-runtime-faults.js",
+        "src/partition/partition-write-kernel.js",
+        "src/node/replica-handler-release-recovery.js",
+        "src/node/replica-handler-membership-relay.js",
+        "src/node/replica-handler-participant-cutover.js",
+        "src/partition/partition-participant-release-facts.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/node/replica-runtime-cleanup-custody.js"
       ],
       "tests": [
         "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
@@ -632,7 +640,9 @@
         "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
         "test/raft/raft-rs-backend/startup-cleanup.integration.test.js",
         "test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js",
-        "test/partition/participant-envelope-admission.test.js"
+        "test/partition/participant-envelope-admission.test.js",
+        "test/node/replica-handler-release-recovery.test.js",
+        "test/partition/participant-release-protocol.test.js"
       ]
     },
     "partition-raft-operation-port": {
@@ -1510,7 +1520,7 @@
       ]
     },
     "raft-rs-runtime-application-transaction": {
-      "description": "The Ready owner and application transaction owner must agree on the durable point from which recovery may replay without duplicating application effects or splitting applied progress from ConfState.",
+      "description": "The Ready owner and application transaction owner must agree on the durable point from which recovery may replay without duplicating application effects or splitting applied progress from ConfState. Current host-held observations and lifecycle-fenced participant admission are part of the same recovery boundary: the existing release queue retains bounded observation debt without duplicating runtime reconstruction policy or release authority; the canonical resume owner revalidates current handler, service and registry before OPEN.",
       "endpoints": [
         {
           "id": "ready-persistence-and-reconstruction",
@@ -1520,7 +1530,10 @@
             "src/raft/raft-rs-durable-store.js",
             "src/raft/raft-rs-binding-owner.js",
             "src/raft/raft-rs-runtime-owner-constants.js",
-            "src/raft/raft-rs-runtime-faults.js"
+            "src/raft/raft-rs-runtime-faults.js",
+            "src/partition/partition-write-kernel.js",
+            "src/node/replica-handler-release-recovery.js",
+            "src/node/replica-handler-membership-relay.js"
           ]
         },
         {
@@ -1535,7 +1548,12 @@
             "src/partition/partition-participant-transaction-apply.js",
             "src/partition/partition-participant-transaction-store.js",
             "src/partition/partition-transaction-execution-envelope.js",
-            "src/partition/partition-participant-transaction-bytes.js"
+            "src/partition/partition-participant-transaction-bytes.js",
+            "src/node/replica-handler-participant-cutover.js",
+            "src/partition/partition-participant-release-facts.js",
+            "src/partition/partition-participant-release-contract.js",
+            "src/partition/partition-participant-transaction-pause.js",
+            "src/node/replica-runtime-cleanup-custody.js"
           ]
         }
       ],
@@ -1554,7 +1572,9 @@
         "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
         "test/raft/raft-rs-backend/startup-cleanup.integration.test.js",
         "test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js",
-        "test/partition/participant-envelope-admission.test.js"
+        "test/partition/participant-envelope-admission.test.js",
+        "test/node/replica-handler-release-recovery.test.js",
+        "test/partition/participant-release-protocol.test.js"
       ]
     },
     "partition-raft-operation-port": {

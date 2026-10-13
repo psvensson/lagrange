@@ -1,0 +1,35 @@
+{
+  "schema": "release-startup-intersection-plan/1",
+  "recordedAt": "2026-10-13T15:27:56.890Z",
+  "baseSha": "406ceac1c40bdf57da1a6668806d0f3b38526cb9",
+  "recoveryCandidate": "cd589405e6febadf7dbef339b6806e15426e837f",
+  "authority": "Existing C2/recovery Quests and operator continuation; no new startup policy repair is authorized by this plan",
+  "witnesses": [
+    {
+      "host": "adam-laptop",
+      "file": "test/partition/participant-release-protocol.test.js",
+      "engagement": "operator cutover, replacement remains paused, current-owner automatic recovery clears pause, same durable origin, post-recovery write",
+      "sha256": "de77149e3070c6cc42bd566e1f54c6ad3d676809be90008592caee18e0ec00a9"
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/integration/message-group-membership-claim-cache.integration.test.js",
+      "engagement": "bootstrap resolves before cache and FAILED/REMOVED bodies; inherited seed release error is setup not intended body",
+      "sha256": "cacf237059ee99f449ca938691e0df80b8b587e9594acb4dca5a84506c32b70a"
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/bootstrap/node-bootstrap-consistency.property.test.js",
+      "engagement": "each original bootstrap resolves before HTTP/join bodies; retain23leaf authority positive control and fixture controls",
+      "sha256": "df78abc52898eb758433956a84cf459ca80ebfd27da7e3b08b43bb1dc45ddab3"
+    }
+  ],
+  "execution": "Run exactC2 baseline once perfile on named lockedhost; run exact integratedC2+reviewedrecovery once perfile on samehost with identical testbytes. Adam files serial. Preserve existing healthy and internal deadlines and rawTAP. Stop treating filegreen alone as engagedbodyproof.",
+  "interpretations": [
+    "Direct recovery green plus same seed setup failures establishes retained existing-origin behavior without measured seed closure.",
+    "Seed now reaches body only in integrated input establishes an interaction, not a unique cause; retain exact failure phase and earliest newly reached assertion.",
+    "A later body failure after bootstrap is new engagement, not a seed bootstrap pass for the wholefile.",
+    "Direct recovery red blocks integration claim; neither seeds nor C2 orphan paths are inferred causes without owner evidence."
+  ],
+  "claimCeiling": "No complete corpus, fresh-identity membership, snapshot/CDC custody, crash-recovery certification or main readiness is established by this3-file intersection."
+}

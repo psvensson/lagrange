@@ -1,0 +1,4 @@
+
+> lagrange-server@0.2.6 test:unused:prod
+> knip --production --include dependencies
+
