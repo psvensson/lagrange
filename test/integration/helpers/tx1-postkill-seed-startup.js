@@ -5,6 +5,9 @@
  */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import path from 'node:path';
+import {readDurableNodesTableSnapshot, readDurableServicesIdentitySnapshot} from
+  '../../../src/bootstrap/rejoin-hints-durable-evidence.js';
 import {
   readPersistedLocalClusterId,
   readRejoinHints,
@@ -23,6 +26,25 @@ const decision = await resolveAutoRejoinStartupDecision({
   dataDir, nodeId, nodeAddress, expectedClusterId: clusterId || undefined,
   probePeerAddress: async () => false,
 });
+const partitionRoot = path.join(dataDir, 'partitions');
+const topLevel = fs.readdirSync(dataDir).sort();
+const partitions = fs.existsSync(partitionRoot) ?
+  fs.readdirSync(partitionRoot).sort() : [];
+const nodes = await readDurableNodesTableSnapshot({dataDir, nodeId, nodeAddress});
+const services = await readDurableServicesIdentitySnapshot(dataDir);
+console.error('TX1_M1_SEED_STARTUP_DIAGNOSTIC ' + JSON.stringify({
+  durableStateDetected: decision.durableStateDetected,
+  state: decision.state,
+  outcome: decision.membershipOwnerOutcome?.outcomeType,
+  hintsPresent: hints !== null,
+  topLevel, partitions,
+  nodes: {hasDurableNodesTable: nodes.hasDurableNodesTable,
+    clusterNodeCount: nodes.clusterNodeCount,
+    matchedLocalIdentity: nodes.matchedLocalIdentity,
+    durableEvidenceUnreadable: nodes.durableEvidenceUnreadable},
+  services: {state: services.state, rowCount: services.rows?.length,
+    conflicting: services.conflicting, empty: services.empty},
+}));
 assert.equal(decision.durableStateDetected, true,
   'twelve existing SQLite files cannot become a fresh seed');
 assert.notEqual(decision.mode, 'seed',
