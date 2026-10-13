@@ -10,6 +10,8 @@ import {MessageGroupService} from '../../message-group/message-group-service.js'
 import {seedReplicaIdentityExisted} from
   '../seed-startup-storage-admission.js';
 import {
+  initializeRegisteredMessageGroup,
+  messageGroupCreationAlreadySettled,
   registerMessageGroupTransportHandler,
   retireMessageGroupTransportHandler,
 } from '../shared/message-group-transport-handler.js';
@@ -139,7 +141,8 @@ class SeedMessageGroupsPhase {
         UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
       );
 
-    if (d.getMessageGroupServices().has(options.replicaId)) {
+    if (messageGroupCreationAlreadySettled(
+      d.getMessageGroupServices(), options.replicaId)) {
       return {status: SERVICE_LIFECYCLE_STATE.CREATED};
     }
 
@@ -180,7 +183,10 @@ class SeedMessageGroupsPhase {
       resolveLane: () => d.getReplicaStateMachine?.() || null,
     });
 
-    await messageGroup.initialize();
+    await initializeRegisteredMessageGroup({messageGroup,
+      messageGroupServices: d.getMessageGroupServices(),
+      messageRouter: d.getMessageRouter(),
+      address: unifiedAddress, replicaId: options.replicaId});
 
     if (typeof d.attachMessageGroupService === 'function') {
       d.attachMessageGroupService(messageGroup);
