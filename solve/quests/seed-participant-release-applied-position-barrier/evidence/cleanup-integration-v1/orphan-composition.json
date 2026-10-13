@@ -1,0 +1,13 @@
+{
+  "schema": "reviewed-cleanup-composition/1",
+  "parent": "735de20d45b4052ef1e63d03534651ac476f5889",
+  "merged": "b8e36a97c46c5d0743aa34a95de18abadfc0bca7",
+  "orphanSourceSha256": "bb14a25315c011df931a0de1755dcc2ee7d08ff7c3e200b677e880ac2cb8fead",
+  "cycleExactBytesPreserved": true,
+  "nativeV7ExactBytesPreserved": true,
+  "metadataProducer": "npm run -s test:metadata:refresh",
+  "inventoryProducer": "node scripts/generate-global-owner-debt-inventory.js",
+  "producerExit": 0,
+  "producerLogSha256": "8a3eeb7830377a15c4fbd8a48648cbb178572834a46fb80d55cfa6db91af30a9",
+  "limitations": "Fresh import graph, seal and inventory; cached complexity/cycle/duplication reports from immediately prior cycle composition are inputs as supported by canonical generator. Deleted orphan function was below complexity thresholds, with no import or clone changes claimed. No integrated behavior, full static, startup or main proof. All known red gates remain open."
+}
