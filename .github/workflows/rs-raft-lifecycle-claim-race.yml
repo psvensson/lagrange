@@ -2,7 +2,17 @@ name: rs-raft-lifecycle-claim-race
 on:
   push:
     branches: [resume/rs-raft-runtime-recovery-20261012]
-    paths: [.github/workflows/rs-raft-lifecycle-claim-race.yml]
+    paths:
+      - .github/workflows/rs-raft-lifecycle-claim-race.yml
+      - src/node/replica-handler-create-methods.js
+      - src/partition/partition-service-core-base.js
+      - src/partition/partition-service-raft-init-base.js
+      - src/partition/partition-service-lifecycle-methods.js
+      - src/partition/partition-consensus-port-opening.js
+      - src/message-group/message-group-service-state.js
+      - src/message-group/message-group-service-raft-lifecycle.js
+      - src/message-group/message-group-service-cache-and-lifecycle-runtime-methods.js
+      - test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js
 permissions:
   contents: read
 jobs:
