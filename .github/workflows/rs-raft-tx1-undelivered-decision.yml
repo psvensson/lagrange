@@ -86,7 +86,8 @@ jobs:
                   all(count(k)==0 for k in ('cancelled','skipped','todo')),
               'child-was-killed-before-fanout':receipt.get('kind')==
                   'TX1_UNDELIVERED_DECISION' and receipt.get('replicaFiles')==12,
-              'immutable-decision-held':receipt.get('sameDecisionRecovered') is True,
+              'immutable-decision-readback':receipt.get('durableDecisionReadBack') is True,
+              'snapshot-authority-fenced':receipt.get('cacheDiscoveryCannotDecide') is True,
               'no-effects-applied':receipt.get('effectsNotApplied') is True,
               'honest-scope':receipt.get('fanoutReplayCertified') is False,
               'canonical-test-success':(e/'native-exit.txt').read_text().strip()=='0',
