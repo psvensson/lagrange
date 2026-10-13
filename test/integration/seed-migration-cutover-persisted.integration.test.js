@@ -148,6 +148,100 @@ async (t) => {
     const altered = await seedEngine.executeQuery(M1_SQL.ALTER_ADD_COLUMN);
     assert.equal(altered.success, true, `ALTER TABLE through the seed engine: ${altered.error}`);
     const {migrationId, tableId} = altered;
+    const decisionKillMarker = process.env.LAGRANGE_TX1_M1_DECISION_KILL_MARKER_PATH;
+    if (decisionKillMarker) {
+      // The production coordinator reaches its first physical COMMIT call
+      // only after its immutable decision has been persisted.
+      const {promise: commitEntered, resolve: recordCommitEntered} = Promise.withResolvers();
+      const originalCommitParticipant = seedEngine.transactionCoordinator.commitParticipant;
+      let physicalCommitCalls = 0;
+      seedEngine.transactionCoordinator.commitParticipant = async (...args) => {
+        physicalCommitCalls += 1;
+        recordCommitEntered(args[1]);
+        // The parent kills the process before forwarding any participant COMMIT.
+        await new Promise(() => {});
+        return originalCommitParticipant(...args);
+      };
+      const advancing = seedEngine.migrationCoordinator.advanceMigration(migrationId);
+      advancing.catch(() => {});
+      assert.equal(await Promise.race([
+        commitEntered.then(() => true),
+        new Promise((resolve) => setTimeout(() => resolve(false), 60000)),
+      ]), true, 'production coordinator must enter COMMIT delivery');
+      assert.equal(physicalCommitCalls, 1, 'the first COMMIT is gated');
+      const controlRows = await readLocal(PARTITION_OF.transactions,
+        M1_SQL.SELECT_TRANSACTIONS, [`${CUTOVER_SESSION_PREFIX}${migrationId}`]);
+      assert.equal(controlRows.length, 1, 'one durable coordinator row');
+      const tx = controlRows[0];
+      assert.equal(tx.decision, 'COMMIT', 'decision is durable before fanout');
+      assert.notEqual(tx.status, TRANSACTION_STATUS.COMMITTED);
+      assert.equal(tx.frozen_participant_count, 2);
+      const selections = [
+        [PARTITION_OF.tables, M1_SQL.SELECT_TABLE, [tableId]],
+        [PARTITION_OF.migrationPartitions, M1_SQL.SELECT_PARTITION_MIGRATIONS,
+          [migrationId]],
+        [PARTITION_OF.transactions,
+          `SELECT * FROM ${TABLES.SQL_TRANSACTIONS} WHERE transaction_id = ?`,
+          [tx.transaction_id]],
+        [PARTITION_OF.participants,
+          `SELECT * FROM ${TABLES.SQL_TRANSACTION_PARTICIPANTS} WHERE transaction_id = ?`,
+          [tx.transaction_id]],
+      ];
+      const requests = [];
+      const expectedRows = [];
+      const observedEffects = [];
+      for (const [partitionId, sql, params] of selections) {
+        const group = replicas.filter((replica) => getPartitionId(replica) === partitionId);
+        assert.equal(group.length, 3, 'each witness group has three real SQLite replicas');
+        const expected = await readLocal(partitionId, sql, params);
+        assert.ok(expected.length > 0, 'each durable observation must be populated');
+        assert.equal(await waitFor(async () => {
+          const current = await Promise.all(group.map(async (replica) =>
+            (await replica.executeLocalQuery(sql, params)).rows));
+          return current.every((rows) => JSON.stringify(rows) === JSON.stringify(expected));
+        }, ROUTABLE_WAIT_MS, POLL_INTERVAL_MS), true,
+        'all three replicas converge on the same pre-fanout state');
+        if (partitionId === PARTITION_OF.tables ||
+            partitionId === PARTITION_OF.migrationPartitions) {
+          observedEffects.push({partitionId, rows: expected});
+        }
+        for (const replica of group) {
+          assert.ok(path.isAbsolute(replica.dbPath) &&
+            replica.dbPath.startsWith(dataDir + path.sep));
+          requests.push({replicaId: replica.replicaId, dbPath: replica.dbPath,
+            partitionId, sql, params});
+          expectedRows.push({replicaId: replica.replicaId, rows: expected});
+        }
+      }
+      const prepared = expectedRows.filter((row, index) =>
+        requests[index].partitionId === PARTITION_OF.participants)[0]?.rows || [];
+      assert.equal(prepared.length, 2);
+      assert.ok(prepared.every((row) => row.prepared_digest &&
+        row.status !== 'COMMITTED'), 'both prepared participants remain undecided');
+      const schema = JSON.parse(observedEffects[0].rows[0].schema_definition);
+      assert.equal((schema.columns || []).some((column) => column.name === ADDED_COLUMN),
+        false, 'tables update must not apply before participant COMMIT');
+      assert.ok(observedEffects[1].rows.every((row) =>
+        row.status !== MIGRATION_STATUS.COMPLETED),
+      'migration-partition update must not apply before participant COMMIT');
+      assert.equal(new Set(requests.map((request) => request.dbPath)).size, 12);
+      const marker = {schemaVersion: 1, kind: 'TX1_M1_COMMIT_DECIDED_UNDELIVERED',
+        pid: process.pid, transactionId: tx.transaction_id, dataDir,
+        requests, expectedRows, persistedDecision: tx,
+        neverDeliveredCommitCalls: physicalCommitCalls,
+        pendingOpenHandles: new Set(requests.map((request) => request.dbPath)).size,
+        effectRowsNotApplied: true, coordinatorRestarted: false};
+      const writingPath = decisionKillMarker + '.writing';
+      const markerFd = fs.openSync(writingPath, 'wx', 0o600);
+      try {
+        fs.writeFileSync(markerFd, JSON.stringify(marker) + '\n');
+        fs.fsyncSync(markerFd);
+      } finally {
+        fs.closeSync(markerFd);
+      }
+      fs.renameSync(writingPath, decisionKillMarker);
+      await new Promise(() => {});
+    }
     const advanced = await seedEngine.migrationCoordinator.advanceMigration(migrationId);
 
     const [tableRow] = await readLocal(PARTITION_OF.tables, M1_SQL.SELECT_TABLE, [tableId]);
