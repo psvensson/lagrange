@@ -392,7 +392,7 @@ test('TX1 inc4 hold sweep: a PREPARED row past the hold window is reported once 
 test('TX1 inc4 L6 fences: on an admission-enabled partition a legacy BEGIN is refused; a ' +
   'sessionId-only PREPARE, COMMIT, ROLLBACK or QUERY naming a participant session is refused ' +
   'and touches nothing; a sessionId-only outcome read never answers NOT_COMMITTED for a ' +
-  'participant\'s session; a participant BEGIN is refused while a legacy session is open',
+  'participant\'s session; a refused direct legacy BEGIN leaves participant admission intact',
 () => onLeader(async (leader, proposed) => {
   const sessionId = 's-fenced';
   const tx = identityOf('i4-fenced', {sessionId});
@@ -420,20 +420,28 @@ test('TX1 inc4 L6 fences: on an admission-enabled partition a legacy BEGIN is re
   facts.ordinaryProposals = proposed.filter((entry) => entry.sql !== undefined).length;
   facts.rows = leader.db.prepare(`SELECT COUNT(*) AS count FROM ${TABLE}`).get().count;
   const legacyFenced = {success: false, failureCode: CODE.LEGACY_SESSION_FENCED};
-  // The participant side of the fence: a legacy session opened on the
-  // connection (directly; the TRANSACTION route refuses it here).
+  // The current direct legacy entry point also consumes the L6 fence.
+  // A refused BEGIN cannot manufacture an active legacy session and must
+  // not prevent an otherwise-admitted participant BEGIN on that replica.
   await onLeader(async (other) => {
-    await other.beginTransaction('legacy-open', 1);
-    facts.participantBeginUnderLegacy = fenced(await send(other,
+    const legacy = await other.beginTransaction('legacy-open', 1);
+    facts.refusedDirectLegacy = fenced(legacy);
+    facts.legacyConnectionOpen = other.db.inTransaction;
+    facts.participantBeginAfterRefusal = fenced(await send(other,
       beginMessage(identityOf('i4-under-legacy'))));
-    await other.rollbackTransaction('legacy-open');
+    facts.legacySessionsAfterRefusal = other.activeTransactions.size;
+    await send(other, txMessage(PARTITION_SERVICE_OPERATION.ROLLBACK,
+      identityOf('i4-under-legacy')));
   });
   assert.deepEqual(facts, {legacyBegin: legacyFenced,
     legacyControls: [legacyFenced, legacyFenced, legacyFenced], legacyQuery: legacyFenced,
     outcomeWhileStaging: PARTICIPANT_COMMIT_OUTCOME.UNKNOWN, prepareApply: null,
     outcomeWhilePrepared: PARTICIPANT_COMMIT_OUTCOME.UNKNOWN,
     outcomeOfUnknownSession: PARTICIPANT_COMMIT_OUTCOME.NOT_COMMITTED, ordinaryProposals: 0,
-    rows: 0, participantBeginUnderLegacy: {success: false, failureCode: CODE.ALREADY_ACTIVE}},
+    rows: 0,
+    refusedDirectLegacy: {success: false, failureCode: CODE.LEGACY_SESSION_FENCED},
+    legacyConnectionOpen: false, legacySessionsAfterRefusal: 0,
+    participantBeginAfterRefusal: {success: true, failureCode: null}},
   'the two protocols never touch one partition at once');
 }));
 

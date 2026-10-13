@@ -26,14 +26,12 @@ import {
 } from '../../src/partition/partition-statement-admission-constants.js';
 import {PARTICIPANT_TRANSACTION_FAILURE_CODE as CODE} from
   '../../src/partition/partition-participant-transaction-constants.js';
-import {enableParticipantTransactionAdmission} from
-  '../../src/partition/partition-participant-transaction-request.js';
 import {participantConnectionStampOf} from
   '../../src/partition/partition-participant-transaction-connection.js';
 import {
   INSERT_SQL, OTHER_ROW, REPLICAS, ROW, TABLE, V3, applyCommitted, awaitProposal,
   beginMessage, clearFixtureSingletons, decisionCommandOf, durableAppliedIndex, identityOf,
-  isPrepareCommand, ordinaryWriteOf, outcomeOf, pick, prepareMessage, queryMessage,
+  isPrepareCommand, ordinaryWriteOf, originOf, outcomeOf, pick, prepareMessage, queryMessage,
   resetFixtureSingletons, send, settleTicks, shutdownAll, startLeader, startReplica,
   temporaryDbPath, track,
 } from '../test-helpers/participant-transaction-fixture.js';
@@ -70,8 +68,9 @@ afterEach(clearFixtureSingletons);
 // of `statements` through the query wire, each of `direct` through the
 // session's write entry point itself (executeTransactionWrite).
 async function inLegacySession(partition, statements, direct = []) {
-  await send(partition, legacyMessage(PARTITION_SERVICE_OPERATION.BEGIN_TRANSACTION,
-    LEGACY_SESSION, {transactionEpoch: LEGACY_EPOCH}));
+  const begin = answerOf(await send(partition, legacyMessage(
+    PARTITION_SERVICE_OPERATION.BEGIN_TRANSACTION,
+    LEGACY_SESSION, {transactionEpoch: LEGACY_EPOCH})));
   const answers = [];
   for (const [sql, params] of statements) {
     answers.push(answerOf(await send(partition, legacyQuery(sql, params))));
@@ -85,15 +84,13 @@ async function inLegacySession(partition, statements, direct = []) {
   }
   const committed = (await send(partition, legacyMessage(PARTITION_SERVICE_OPERATION.COMMIT,
     LEGACY_SESSION, {transactionEpoch: LEGACY_EPOCH})))?.success;
-  return {answers, ...(direct.length > 0 ? {direct: directAnswers} : {}), committed};
+  return {begin, answers, ...(direct.length > 0 ? {direct: directAnswers} : {}), committed};
 }
 
-test('TX1 inc4 B1: a legacy session statement is admitted by the statement-admission owner ' +
-  'before any prepare, on the query wire and at the session\'s write entry point alike: a ' +
-  'PRAGMA, TEMP DDL shadowing the own table and a TEMP trigger are refused statement_kind ' +
-  'and leave the connection as it was; a read is admitted by the read rules; an admitted ' +
-  'write still stages', async () => {
-  const {leader} = await startLeader({generationOrigin: false});
+test('TX1 current cutover: a refused legacy BEGIN does not admit its unsafe ' +
+  'session operations or contaminate the connection; a read remains admitted ' +
+  'but ordinary writes remain paused until owner release', async () => {
+  const {leader, proposed} = await startLeader({generationOrigin: false});
   try {
     const session = await inLegacySession(leader, [[UNORDERED_SELECTS, []],
       ['PRAGMA query_only = 1', []], [TEMP_SHADOW, []], [TEMP_TRIGGER, []],
@@ -101,14 +98,20 @@ test('TX1 inc4 B1: a legacy session statement is admitted by the statement-admis
       [`SELECT COUNT(*) AS count FROM ${TABLE}`, []], [INSERT_SQL, [ROW.id, ROW.value]]],
     [UNORDERED_SELECTS, TEMP_SHADOW, TEMP_TRIGGER]);
     const kind = refusedAt(PARTITION_STATEMENT_REFUSAL_LAYER.STATEMENT_KIND);
-    const admitted = {success: true, failureCode: null, refusalLayer: null};
+    const admittedRead = {success: true, failureCode: null, refusalLayer: null};
+    const paused = {success: false, failureCode: 'partition_write_cutover_paused',
+      refusalLayer: null};
+    const noSession = {success: false, failureCode: null, refusalLayer: null};
     assert.deepEqual({...session, connection: connectionStateOf(leader),
-      rows: leader.db.prepare(`SELECT id, value FROM ${TABLE}`).all()}, {
+      rows: leader.db.prepare(`SELECT id, value FROM ${TABLE}`).all(),
+      legacyActive: leader.isInTransaction(), proposed: proposed.length}, {
+      begin: {success: false, failureCode: CODE.CUTOVER_PAUSED, refusalLayer: null},
       answers: [kind, kind, kind, kind,
-        refusedAt(PARTITION_STATEMENT_REFUSAL_LAYER.STATEMENT_FUNCTION), admitted, admitted],
-      direct: [kind, kind, kind], committed: true, connection: CLEAN_CONNECTION,
-      rows: [{id: ROW.id, value: ROW.value}]},
-    'nothing a legacy session sends can change the shared connection');
+        refusedAt(PARTITION_STATEMENT_REFUSAL_LAYER.STATEMENT_FUNCTION),
+        admittedRead, paused],
+      direct: [noSession, noSession, noSession], committed: false,
+      connection: CLEAN_CONNECTION, rows: [], legacyActive: false, proposed: 0},
+    'the refused BEGIN is observed; no unsafe statement opens a legacy transaction');
   } finally {
     await shutdownAll(leader);
   }
@@ -125,7 +128,6 @@ function plantUnguardedLegacyState(partition, statements) {
 }
 const UNGUARDED_STATE = Object.freeze([TEMP_TRIGGER, TEMP_SHADOW, UNORDERED_SELECTS,
   'PRAGMA query_only = 1']);
-const isOriginCommand = (entry) => entry.type === V3.GENERATION_ORIGIN_COMMAND;
 const SEED_ROWS = Object.freeze([['a', 'first'], ['b', 'second'], ['c', 'third']]);
 const rowsOf = (replica) => replica.db.prepare(`SELECT id, value FROM main.${TABLE} ORDER BY id`)
   .all().map((row) => `${row.id}=${row.value}`);
@@ -136,80 +138,59 @@ function resumed(replica) {
   return replica;
 }
 
-test('TX1 inc4 L6 cutover (owner ruling 2026-10-11, boundary A): the four contamination ' +
-  'channels sent through the real legacy entry point are refused; enabling participant ' +
-  'admission on the connection that served that legacy session is refused ' +
-  'connection_served_legacy and proposes nothing; after the cutover reopens the replicas ' +
-  'through the lifecycle owner, enable proposes the origin and a participant transaction ' +
-  'commits identical rows on them, while a replica left unreopened with an unguarded path\'s ' +
-  'state commits different ones', async () => {
+test('TX1 cutover lifecycle: retained connection-only contamination is removed ' +
+  'by reopening, but reopening alone never releases new transaction admission',
+async () => {
   const paths = [temporaryDbPath(), temporaryDbPath(), temporaryDbPath()];
   const legacyEra = {generationOrigin: false};
   let {leader, proposed} = await startLeader({...legacyEra, dbPath: paths[0].dbPath});
   let follower = await startReplica(REPLICAS[1], {...legacyEra, dbPath: paths[1].dbPath});
-  const unreopened = await startReplica(REPLICAS[2], {...legacyEra, dbPath: paths[2].dbPath});
+  const unreopened = await startReplica(REPLICAS[2], {...legacyEra,
+    dbPath: paths[2].dbPath});
   try {
     for (const replica of [leader, follower, unreopened]) {
       for (const [id, value] of SEED_ROWS) {
-        applyCommitted(replica, ordinaryWriteOf(`seed-${id}`, {id, value}));
+        assert.equal(applyCommitted(replica, ordinaryWriteOf(`seed-${id}`,
+          {id, value})), null);
       }
     }
-    const facts = {legacy: (await inLegacySession(leader, [[UNORDERED_SELECTS, []],
-      ['PRAGMA query_only = 1', []], [TEMP_TRIGGER, []], [TEMP_SHADOW, []]])).answers,
-    afterLegacy: connectionStateOf(leader)};
-    plantUnguardedLegacyState(leader, UNGUARDED_STATE);
-    plantUnguardedLegacyState(follower, UNGUARDED_STATE);
+    const first = await inLegacySession(leader, [[UNORDERED_SELECTS, []],
+      ['PRAGMA query_only = 1', []], [TEMP_TRIGGER, []], [TEMP_SHADOW, []]]);
+    assert.equal(first.begin.failureCode, CODE.CUTOVER_PAUSED);
+    assert.equal(first.committed, false);
+    assert.deepEqual(first.answers, Array(4).fill(refusedAt(
+      PARTITION_STATEMENT_REFUSAL_LAYER.STATEMENT_KIND)));
+    assert.deepEqual(connectionStateOf(leader), CLEAN_CONNECTION);
+
+    // These deliberately direct SQL changes represent a pre-L6 connection.
+    // Current code never admits their entry point; this models what only an
+    // older in-process connection could hold, NOT an admitted legacy session.
+    for (const replica of [leader, follower]) {
+      plantUnguardedLegacyState(replica, UNGUARDED_STATE);
+      assert.deepEqual(connectionStateOf(replica),
+        {reverseUnorderedSelects: 1, queryOnly: 1, tempObjects: 3});
+    }
     plantUnguardedLegacyState(unreopened, [UNORDERED_SELECTS]);
-    facts.beforeReopen = [connectionStateOf(leader), connectionStateOf(follower)];
-    facts.enableBeforeReopen = pick(await enableParticipantTransactionAdmission(leader),
-      ['success', 'failureCode']);
-    facts.originsBeforeReopen = proposed.filter(isOriginCommand).length;
-    // The cutover's step: every replica that could hold such state is reopened
-    // through the lifecycle owner (shut down, then initialized on its database).
+    const oldRows = [leader, follower, unreopened].map(rowsOf);
     await shutdownAll(leader, follower);
     ({leader, proposed} = await startLeader({...legacyEra, dbPath: paths[0].dbPath}));
     resumed(leader);
     follower = resumed(await startReplica(REPLICAS[1], {...legacyEra,
       dbPath: paths[1].dbPath}));
-    facts.afterReopen = [connectionStateOf(leader), connectionStateOf(follower)];
-    const enabled = track(enableParticipantTransactionAdmission(leader));
-    const origin = await awaitProposal(proposed, isOriginCommand);
-    facts.originApply = origin === null ? 'not proposed' : [leader, follower, unreopened]
-      .map((replica) => applyCommitted(replica, origin));
-    await settleTicks();
-    facts.enabled = enabled.settled ? pick(enabled.value, ['success', 'failureCode']) :
-      'pending';
-    const tx = identityOf('i4-cutover');
-    facts.begin = pick(await send(leader, beginMessage(tx)), ['success', 'failureCode']);
-    facts.staged = [];
-    for (const [sql, params] of [[`INSERT OR IGNORE INTO ${TABLE} (id, value) SELECT 'dup', ` +
-      `value FROM ${TABLE}`, []], [INSERT_SQL, ['n', 'new']]]) {
-      facts.staged.push(answerOf(await send(leader, queryMessage(tx, sql, params))));
-    }
-    track(send(leader, prepareMessage(tx)));
-    const prepare = await awaitProposal(proposed, isPrepareCommand);
-    facts.applies = prepare === null ? 'not proposed' : [leader, follower, unreopened].map(
-      (replica) => [applyCommitted(replica, prepare), applyCommitted(replica,
-        decisionCommandOf(tx, V3.DECISION.COMMIT, prepare.preparedDigest))]);
-    facts.outcomes = [];
-    for (const replica of [leader, follower, unreopened]) {
-      facts.outcomes.push((await outcomeOf(replica, tx)).outcome);
-    }
-    facts.rows = [rowsOf(leader), rowsOf(follower), rowsOf(unreopened)];
-    const unguarded = {reverseUnorderedSelects: 1, queryOnly: 1, tempObjects: 3};
-    const admitted = {success: true, failureCode: null, refusalLayer: null};
-    const cleanRows = ['a=first', 'b=second', 'c=third', 'dup=first', 'n=new'];
-    assert.deepEqual(facts, {
-      legacy: Array(4).fill(refusedAt(PARTITION_STATEMENT_REFUSAL_LAYER.STATEMENT_KIND)),
-      afterLegacy: CLEAN_CONNECTION, beforeReopen: [unguarded, unguarded],
-      enableBeforeReopen: {success: false, failureCode: CODE.CONNECTION_SERVED_LEGACY},
-      originsBeforeReopen: 0, afterReopen: [CLEAN_CONNECTION, CLEAN_CONNECTION],
-      originApply: [null, null, null], enabled: {success: true, failureCode: null},
-      begin: {success: true, failureCode: null}, staged: [admitted, admitted],
-      applies: [[null, null], [null, null], [null, null]],
-      outcomes: Array(3).fill(PARTICIPANT_COMMIT_OUTCOME.COMMITTED),
-      rows: [cleanRows, cleanRows, ['a=first', 'b=second', 'c=third', 'dup=third', 'n=new']]},
-    'prevention closes the legacy channels; only the reopen cleans what a connection holds');
+    assert.deepEqual([connectionStateOf(leader), connectionStateOf(follower)],
+      [CLEAN_CONNECTION, CLEAN_CONNECTION],
+      'exact lifecycle reopen clears TEMP/PRAGMA connection residue');
+    assert.equal(connectionStateOf(unreopened).reverseUnorderedSelects, 1,
+      'the unreopened connection remains contaminated, not implicitly healed');
+    assert.deepEqual([leader, follower, unreopened].map(rowsOf), oldRows,
+      'reopening never changes preexisting committed user data');
+    assert.equal(originOf(leader), null);
+    assert.equal(originOf(follower), null);
+    const begin = await send(leader, beginMessage(identityOf('i4-cutover-held')));
+    assert.equal(begin.success, false);
+    assert.equal(begin.failureCode, CODE.CUTOVER_PAUSED,
+      'only the release owner—not connection reopen—grants participant BEGIN');
+    assert.equal(proposed.length, 0, 'no origin or transaction is proposed');
   } finally {
     await shutdownAll(leader, follower, unreopened);
     for (const {directory} of paths) {
@@ -218,9 +199,8 @@ test('TX1 inc4 L6 cutover (owner ruling 2026-10-11, boundary A): the four contam
   }
 });
 
-test('TX1 inc4 connection stamp (boundary A): a connection the lifecycle owner never stamped ' +
-  'counts as having served the legacy path; each open stamps a new, clean generation, and ' +
-  'only a legacy BEGIN the L6 fence lets through marks it', async () => {
+test('TX1 connection stamp: an unknown connection is unsafe, but refused ' +
+  'legacy BEGIN cannot mark a clean opened generation as served', async () => {
   const unstamped = new Database(':memory:');
   const {leader} = await startLeader({generationOrigin: false});
   const follower = await startReplica(REPLICAS[1], {generationOrigin: false});
@@ -229,13 +209,17 @@ test('TX1 inc4 connection stamp (boundary A): a connection the lifecycle owner n
     const facts = {unstamped: participantConnectionStampOf(unstamped),
       opened: [stampOf(leader).servedLegacy, stampOf(follower).servedLegacy],
       newGeneration: stampOf(follower).generation > stampOf(leader).generation};
-    await send(leader, legacyMessage(PARTITION_SERVICE_OPERATION.BEGIN_TRANSACTION,
-      LEGACY_SESSION, {transactionEpoch: LEGACY_EPOCH}));
-    await send(leader, legacyMessage(PARTITION_SERVICE_OPERATION.ROLLBACK, LEGACY_SESSION));
-    facts.afterLegacy = [stampOf(leader).servedLegacy, stampOf(follower).servedLegacy];
-    assert.deepEqual(facts, {unstamped: {generation: null, servedLegacy: true},
-      opened: [false, false], newGeneration: true, afterLegacy: [true, false]},
-    'a connection is clean for admission only when its whole history is known');
+    facts.refusedBegin = answerOf(await send(leader,
+      legacyMessage(PARTITION_SERVICE_OPERATION.BEGIN_TRANSACTION,
+        LEGACY_SESSION, {transactionEpoch: LEGACY_EPOCH})));
+    facts.afterLegacy = [stampOf(leader).servedLegacy,
+      stampOf(follower).servedLegacy];
+    assert.deepEqual(facts, {
+      unstamped: {generation: null, servedLegacy: true},
+      opened: [false, false], newGeneration: true,
+      refusedBegin: {success: false, failureCode: CODE.CUTOVER_PAUSED,
+        refusalLayer: null}, afterLegacy: [false, false]},
+    'a rejected session never becomes a history/contamination fact');
   } finally {
     unstamped.close();
     await shutdownAll(leader, follower);
