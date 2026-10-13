@@ -1,0 +1,67 @@
+name: rs-raft-message-group-retirement
+on:
+  push:
+    branches: [resume/rs-raft-runtime-recovery-20261012]
+    paths:
+      - .github/workflows/rs-raft-message-group-retirement.yml
+permissions:
+  contents: read
+jobs:
+  handler-retirement-proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      OUT: test-output/message-group-retirement-proof
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+      TEST: test/bootstrap/message-group-activation-handler-boundary.test.js
+      ORIGINAL: 4fa5d82ed6aec481c0f9f857157ebd5f5dbe9a5b
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install locked deps
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/candidate-sha.txt"
+          npm ci > "$OUT/install.log" 2>&1
+          npm run -s test:metadata:refresh > "$OUT/metadata.log" 2>&1
+      - name: Source-only revert falsifies refusal
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          git show 94eff7a94589448a1cf959e1ceea3a0e33c1e05c^:src/bootstrap/shared/message-group-transport-handler.js > src/bootstrap/shared/message-group-transport-handler.js
+          npm run -s test:file -- "$TEST" > "$OUT/source-revert.log" 2>&1
+          printf '%s\n' "$?" > "$OUT/source-revert-exit.txt"
+          git restore --source=HEAD src/bootstrap/shared/message-group-transport-handler.js
+          git diff --exit-code -- src
+      - name: Candidate and related activation/release regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run -s test:file --             test/bootstrap/message-group-activation-handler-boundary.test.js             test/node/message-group-executor-activation-handler-boundary.test.js             test/node/replica-runtime-cleanup-custody.integration.test.js             > "$OUT/candidate.log" 2>&1
+          node_modules/.bin/eslint             src/bootstrap/shared/message-group-transport-handler.js             test/bootstrap/message-group-activation-handler-boundary.test.js             > "$OUT/eslint.log" 2>&1
+          node --input-type=module -e "import {auditRaftRsOperationBoundary} from './scripts/checks/raft-rs-operation-boundary-audit.js'; const a=auditRaftRsOperationBoundary({root:process.cwd()}); console.log(JSON.stringify(a,null,2)); process.exitCode=a.length?1:0;" > "$OUT/boundary.json"
+          git diff --check
+          git diff --exit-code -- src
+      - name: Fail closed when baseline is not red
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(cat "$OUT/source-revert-exit.txt")" -ne 0
+          grep -q 'retirement refuses completion without exact handler identity API' "$OUT/source-revert.log"
+          git status --porcelain > "$OUT/worktree.txt"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: rs-raft-message-group-retirement-${{ github.run_id }}
+          path: test-output/message-group-retirement-proof/
+          retention-days: 30
