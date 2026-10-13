@@ -14,16 +14,19 @@ import {SQL_TRANSACTIONS_SCHEMA} from
   '../../src/bootstrap/system-table-workflow-schema-definitions.js';
 import {readTransactionSchemaEnforcement} from
   '../../src/query/distributed/distributed-transaction-schema-enforcement.js';
-import {participantCutoverPauseOf, readParticipantReleaseFacts} from
+import {participantCutoverPauseOf, participantReleaseAdmissionOf,
+  readParticipantReleaseFacts} from
   '../../src/partition/partition-participant-transaction-pause.js';
 import {readPartitionWriteOrigin} from '../../src/partition/partition-participant-transaction-store.js';
-import {isReleaseDrained} from '../../src/partition/partition-participant-release-contract.js';
+import {readCommittedStatementOutcome} from
+  '../../src/partition/partition-committed-statement-outcome.js';
 import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from
   '../../src/raft/raft-committed-membership-constants.js';
 import {PARTICIPANT_CUTOVER_OUTCOME as OUTCOME} from
   '../../src/partition/partition-participant-transaction-cutover-constants.js';
 import {
   PARTICIPANT_RELEASE_ACTION as RELEASE_ACTION,
+  PARTICIPANT_RELEASE_ADMISSION as ADMISSION,
   PARTICIPANT_RELEASE_RESULT_FIELD,
   PARTICIPANT_RELEASE_ROUTE_SUFFIX,
   PARTICIPANT_RELEASE_TRIGGER,
@@ -32,9 +35,15 @@ import {
 import {durableRecordBootstrap} from '../../src/raft/raft-committed-membership-stamp.js';
 import {createInProcessMockTransport} from '../test-helpers/replica-handler-identity-fixture.js';
 import {
+  deferFixtureParticipantMembership as deferObservationMembership,
+  fixtureParticipantObservationRequest as currentObservationRequest,
+  sendRegisteredFixtureParticipantObservation as sendRegisteredObservation,
   awaitProposal,
+  cleanOwnedParticipantFixture as cleanOwnedFixture,
   clearFixtureSingletons,
+  durableAppliedIndex,
   resetFixtureSingletons,
+  scriptedFixtureTimeSource as scriptedTimeSource,
   shutdownAll,
   startLeader,
   track,
@@ -65,19 +74,15 @@ function retainFailure(current, next, message) {
   return current === null ? next : new AggregateError([current, next], message);
 }
 
-function scriptedTimeSource(values) {
-  let reads = 0;
-  return {
-    now() {
-      const value = values[Math.min(reads, values.length - 1)];
-      reads += 1;
-      if (value instanceof Error) throw value;
-      return value;
-    },
-    setTimeout,
-    clearTimeout,
-    reads: () => reads,
-  };
+async function retireMembershipAndIntrinsic(gate, restore, failure, message) {
+  let retained = failure;
+  try {
+    if (restore !== null) restore();
+  } catch (error) {
+    retained = retainFailure(retained, error,
+      `${message}: ambient intrinsic restoration failed`);
+  }
+  return gate.retire(retained, `${message}: membership custody failed`);
 }
 
 function registeredReleaseRequest(fields = {}) {
@@ -98,6 +103,17 @@ async function sendRegisteredRelease(handler, transport, request) {
   assert.equal(typeof registered, 'function', 'release route must be registered');
   const response = await registered({payload: request});
   return response[PARTICIPANT_RELEASE_RESULT_FIELD];
+}
+
+async function cleanupBlockedDrainWitness({handler, leader, directory, pendingWrite,
+  failure}) {
+  return cleanOwnedFixture({directory, failure,
+    label: 'blocked-drain', operations: [
+      ['handler', () => handler.shutdown()],
+      ['service', () => shutdownAll(leader)],
+    ], settlements: pendingWrite === null ? [] : [
+      ['pending write', () => pendingWrite.promise],
+    ]});
 }
 
 async function withEmptyRegisteredHandler(timeSource, measure) {
@@ -168,14 +184,17 @@ async function fixture(measure, table = {tableId: TABLE, tableName: TABLE,
   } : null;
   const cdcIntegrationService = topologyOwner === null ? {} :
     {sqlQueryEngine: {queryExecutor: {bootstrapTopologySnapshotOwner: topologyOwner}}};
-  const handler = new ReplicaHandler({nodeId: NODE, ownerIncarnation: 1,
-    systemTableCache: cache, cdcIntegrationService, createPartitionService: create,
-    messageRouter: transport, dataDir: directory});
-  handler.registerWithRouter(transport);
-  let service = create();
+  let handler = null;
+  let service = null;
   let controlService = null;
   let controlHandler = null;
+  let failure = null;
   try {
+    handler = new ReplicaHandler({nodeId: NODE, ownerIncarnation: 1,
+      systemTableCache: cache, cdcIntegrationService, createPartitionService: create,
+      messageRouter: transport, dataDir: directory});
+    handler.registerWithRouter(transport);
+    service = create();
     if (table.tableName !== SQL_TRANSACTIONS_SCHEMA.tableName &&
         fixtureOptions.includeControl !== false) {
       const controlNodeId = fixtureOptions.remoteControl === true ?
@@ -221,17 +240,22 @@ async function fixture(measure, table = {tableId: TABLE, tableName: TABLE,
         partitionId: PARTITION, targetBuildDigest,
         deadlineAtMs: handler.timeSource.now() + 30000,
       });
-    await measure({handler, service, controlService, release, create, replace: (next) => {
-      service = next;
-      handler.replaceLocalReplicaService(REPLICA, next);
-    }});
-  } finally {
-    await handler.participantReleaseRecovery.shutdown();
-    await controlHandler?.participantReleaseRecovery.shutdown();
-    await service.shutdown();
-    await controlService?.shutdown();
-    fs.rmSync(directory, {recursive: true, force: true});
+    await measure({handler, service, controlService, transport, release, create,
+      replace: (next) => {
+        service = next;
+        handler.replaceLocalReplicaService(REPLICA, next);
+      }});
+  } catch (error) {
+    failure = error;
   }
+  failure = await cleanOwnedFixture({directory, failure,
+    label: 'participant release', operations: [
+      ['local release recovery', () => handler?.participantReleaseRecovery.shutdown()],
+      ['control release recovery', () => controlHandler?.participantReleaseRecovery.shutdown()],
+      ['dependent service', () => service?.shutdown()],
+      ['control service', () => controlService?.shutdown()],
+    ]});
+  if (failure !== null) throw failure;
 }
 
 test('real release route pauses initial writes, applies origin, censuses and resumes; ' +
@@ -370,7 +394,6 @@ test('registered participant release projects one real blocked drain and older j
     let restoreSafeInteger = null;
     let pendingWrite = null;
     let proposal = null;
-    let proposalCommitted = false;
     try {
       const build = await runtimeBuildProvenance();
       assert.equal(build.state, 'measured', build.reason);
@@ -381,6 +404,9 @@ test('registered participant release projects one real blocked drain and older j
       });
       assert.equal(initial.outcome, OUTCOME.CUT_OVER, JSON.stringify(initial));
       assert.equal(Object.hasOwn(initial, 'joinedAttempt'), false);
+      const durableOrigin = readPartitionWriteOrigin(leader.db);
+      assert.notEqual(durableOrigin, null);
+      const appliedBeforeWrite = durableAppliedIndex(leader);
 
       const absentId = 'd'.repeat(32);
       pendingWrite = track(leader.executeQuery(PENDING_DELETE_SQL, [absentId]));
@@ -393,21 +419,29 @@ test('registered participant release projects one real blocked drain and older j
       assert.equal(leader.db.prepare(
         'SELECT COUNT(*) AS count FROM sql_transactions WHERE transaction_id = ?',
       ).get(absentId).count, 0);
+      assert.deepEqual(readPartitionWriteOrigin(leader.db), durableOrigin,
+        'accepted work does not replace the earlier durable origin watermark');
 
-      const originalMembership = leader.controllablePort.committedMembershipHandler;
-      assert.equal(typeof originalMembership, 'function');
-      const gateStarted = Promise.withResolvers();
-      const gateContinuation = Promise.withResolvers();
-      let gateOpen = false;
-      let blockedMembershipReads = 0;
-      leader.controllablePort.committedMembershipHandler = async (...args) => {
-        if (!gateOpen) {
-          blockedMembershipReads += 1;
-          gateStarted.resolve();
-          await gateContinuation.promise;
-        }
-        return originalMembership(...args);
-      };
+      leader.controllablePort.setTerm(durableOrigin.originTerm + 1);
+      const observationRequest = await currentObservationRequest(handler, leader);
+      assert.ok(durableOrigin.originTerm < observationRequest.attempt.term,
+        'the durable origin predates the current controlled consensus term');
+      const observed = await sendRegisteredObservation(handler, transport,
+        observationRequest);
+      assert.equal(observed.outcome, OUTCOME.OBSERVED, JSON.stringify(observed));
+      assert.equal(observed.partitionId, observationRequest.partitionId);
+      assert.deepEqual(observed.generation, observationRequest.target);
+      assert.deepEqual(observed.origin, durableOrigin,
+        'the progress answer reports the earlier durable origin by content');
+      assert.equal(observed.membership.term, observationRequest.attempt.term);
+      assert.equal(observed.membership.appliedIndex, durableOrigin.originIndex);
+      assert.equal(observed.work.proposals, 1);
+      assert.equal(pendingWrite.settled, false);
+      assert.equal(participantReleaseAdmissionOf(leader).state, ADMISSION.CLOSED,
+        'an observed watermark does not grant release around accepted later work');
+
+      const gate = deferObservationMembership(leader);
+      let releaseFailure = null;
       try {
         const authorization = handler.participantReleaseAuthorizationOwner
           .authorizeOperator({partitionId: leader.partitionId,
@@ -415,9 +449,10 @@ test('registered participant release projects one real blocked drain and older j
         const request = registeredReleaseRequest({partitionId: leader.partitionId,
           targetBuildDigest: build.digest, trigger: PARTICIPANT_RELEASE_TRIGGER.OPERATOR,
           deadlineAtMs: clock.now() + 30000, authorization});
-        const starter = sendRegisteredRelease(handler, transport, request);
-        await gateStarted.promise;
-        assert.equal(blockedMembershipReads, 1,
+        const starter = gate.trackSettlement('starter release',
+          sendRegisteredRelease(handler, transport, request));
+        await gate.started;
+        assert.equal(gate.reads(), 1,
           'one cutover attempt reaches the gated membership owner');
 
         const mixed = await sendRegisteredRelease(handler, transport,
@@ -430,19 +465,20 @@ test('registered participant release projects one real blocked drain and older j
         restoreSafeInteger = replacePrototypeProperty(Number, 'isSafeInteger', () => {
           throw new Error('ambient Number.isSafeInteger must not be read by join projection');
         });
-        const joiner = sendRegisteredRelease(handler, transport, {...request});
+        const joiner = gate.trackSettlement('joined release',
+          sendRegisteredRelease(handler, transport, {...request}));
         await Promise.resolve();
         restoreSafeInteger();
         restoreSafeInteger = null;
-        gateOpen = true;
-        gateContinuation.resolve();
+        gate.release();
+        gate.restore();
 
         const [starterAnswer, joinerAnswer] = await Promise.all([starter, joiner]);
         assert.equal(starterAnswer.outcome, OUTCOME.DRAIN_PENDING,
           JSON.stringify(starterAnswer));
         assert.equal(joinerAnswer.outcome, OUTCOME.DRAIN_PENDING,
           JSON.stringify(joinerAnswer));
-        assert.equal(blockedMembershipReads, 1,
+        assert.equal(gate.reads(), 1,
           'the same-build caller must share the first attempt');
         assert.equal(Object.hasOwn(starterAnswer, 'joinedAttempt'), false);
         assert.deepEqual(joinerAnswer.blockedDrain, starterAnswer.blockedDrain);
@@ -456,9 +492,11 @@ test('registered participant release projects one real blocked drain and older j
         assert.deepEqual(starterAnswer.blockedDrain,
           {generation: canonicalFacts.generation, work: canonicalFacts.work},
           'the refusal projects the complete generation and work from the one canonical fact');
-        assert.equal(isReleaseDrained(starterAnswer.blockedDrain?.work), false);
         assert.equal(starterAnswer.blockedDrain?.work?.proposals, 1);
         assert.equal(starterAnswer.blockedDrain?.generation?.replicaId, leader.replicaId);
+        assert.deepEqual(readPartitionWriteOrigin(leader.db), durableOrigin);
+        assert.equal(participantReleaseAdmissionOf(leader).state, ADMISSION.CLOSED,
+          'an older applied origin never grants admission around unrelated work');
         assert.equal(joinerAnswer.joinedAttempt?.originalTrigger,
           PARTICIPANT_RELEASE_TRIGGER.OPERATOR);
         assert.equal(typeof joinerAnswer.joinedAttempt?.clockState, 'string');
@@ -471,17 +509,28 @@ test('registered participant release projects one real blocked drain and older j
         assert.deepEqual(settledAnswer, starterAnswer,
           'removing only caller projection recovers the exact shared answer');
         assert.notEqual(joinedAttempt, null);
+      } catch (error) {
+        releaseFailure = error;
       } finally {
-        restoreSafeInteger?.();
-        gateOpen = true;
-        gateContinuation.resolve();
-        leader.controllablePort.committedMembershipHandler = originalMembership;
+        releaseFailure = await retireMembershipAndIntrinsic(gate,
+          restoreSafeInteger, releaseFailure, 'release assertion');
+        restoreSafeInteger = null;
       }
+      if (releaseFailure !== null) throw releaseFailure;
 
       leader.controllablePort.commit(proposal);
-      proposalCommitted = true;
       const writeAnswer = await pendingWrite.promise;
       assert.equal(writeAnswer.success, true, JSON.stringify(writeAnswer));
+      assert.equal(writeAnswer.changes, 0,
+        'the absent-row DELETE is a real successful zero-row application');
+      const committed = readCommittedStatementOutcome(leader,
+        leader.getCommittedEntryKey(proposal));
+      assert.equal(committed.state, 'settled');
+      assert.equal(committed.outcome, 'applied');
+      assert.equal(committed.logIndex, durableAppliedIndex(leader));
+      assert.equal(committed.logIndex, appliedBeforeWrite + 1);
+      assert.equal(committed.term, observationRequest.attempt.term);
+      assert.equal(committed.changes, 0);
       assert.equal(leader.proposalQueue.size, 0);
       const healed = await handler.participantReleaseRecovery.releaseOperator({
         partitionId: leader.partitionId,
@@ -494,29 +543,8 @@ test('registered participant release projects one real blocked drain and older j
     } catch (error) {
       failure = error;
     }
-    try {
-      if (proposal !== null && proposalCommitted === false) {
-        leader.controllablePort.commit(proposal);
-        proposalCommitted = true;
-      }
-      if (pendingWrite !== null) await pendingWrite.promise;
-    } catch (error) {
-      failure = retainFailure(failure, error,
-        'blocked-drain assertion and pending-write settlement failed');
-    }
-    try {
-      await handler.shutdown();
-    } catch (error) {
-      failure = retainFailure(failure, error,
-        'blocked-drain assertion and handler cleanup failed');
-    }
-    try {
-      await shutdownAll(leader);
-      fs.rmSync(directory, {recursive: true, force: true});
-    } catch (error) {
-      failure = retainFailure(failure, error,
-        'blocked-drain assertion and artifact cleanup failed');
-    }
+    failure = await cleanupBlockedDrainWitness({handler, leader, directory,
+      pendingWrite, failure});
     if (failure !== null) throw failure;
   });
 
@@ -525,33 +553,6 @@ test('registered failed joins bound triggers without getters or coercion', async
     trigger: PARTICIPANT_RELEASE_TRIGGER.OPERATOR,
   }));
   assert.equal(valid.joinedAttempt.originalTrigger, PARTICIPANT_RELEASE_TRIGGER.OPERATOR);
-
-  const inherited = Object.assign(Object.create({
-    trigger: PARTICIPANT_RELEASE_TRIGGER.OPERATOR,
-  }), registeredReleaseRequest());
-  const inheritedResult = await joinedHostedPartitionFailure(inherited);
-  assert.equal(inheritedResult.joinedAttempt.originalTrigger, null);
-
-  let getterReads = 0;
-  const accessor = registeredReleaseRequest();
-  Object.defineProperty(accessor, 'trigger', {enumerable: true, get() {
-    getterReads += 1;
-    return PARTICIPANT_RELEASE_TRIGGER.OPERATOR;
-  }});
-  const accessorResult = await joinedHostedPartitionFailure(accessor);
-  assert.equal(accessorResult.joinedAttempt.originalTrigger, null);
-  assert.equal(getterReads, 0, 'diagnostics inspect a descriptor and never invoke its getter');
-
-  let proxyTriggerReads = 0;
-  const proxied = new Proxy(registeredReleaseRequest({
-    trigger: PARTICIPANT_RELEASE_TRIGGER.OPERATOR,
-  }), {get(target, field, receiver) {
-    if (field === 'trigger') proxyTriggerReads += 1;
-    return Reflect.get(target, field, receiver);
-  }});
-  const proxyResult = await joinedHostedPartitionFailure(proxied);
-  assert.equal(proxyResult.joinedAttempt.originalTrigger, null);
-  assert.equal(proxyTriggerReads, 0);
 
   let coercionReads = 0;
   const coercible = {toString() {
@@ -574,16 +575,6 @@ test('registered failed joins bound triggers without getters or coercion', async
   }
   assert.equal(coercionReads, 0);
 
-  const symbolOnly = registeredReleaseRequest();
-  symbolOnly[Symbol('trigger')] = PARTICIPANT_RELEASE_TRIGGER.OPERATOR;
-  assert.equal((await joinedHostedPartitionFailure(symbolOnly))
-    .joinedAttempt.originalTrigger, null);
-  const arrayRequest = Object.assign([], registeredReleaseRequest({
-    trigger: PARTICIPANT_RELEASE_TRIGGER.OPERATOR,
-  }));
-  assert.equal((await joinedHostedPartitionFailure(arrayRequest))
-    .joinedAttempt.originalTrigger, null);
-
   const nullPrototypeRequest = Object.assign(Object.create(null),
     registeredReleaseRequest({trigger: PARTICIPANT_RELEASE_TRIGGER.OPERATOR}));
   assert.equal((await joinedHostedPartitionFailure(nullPrototypeRequest))
@@ -595,15 +586,26 @@ test('registered failed joins bound triggers without getters or coercion', async
     pollutePrototypeProperty(Map.prototype, 'participantReleaseDiagnosticPollution', 3),
     pollutePrototypeProperty(Set.prototype, 'participantReleaseDiagnosticPollution', 4),
   ];
+  let pollutionFailure = null;
   try {
     const polluted = await joinedHostedPartitionFailure(registeredReleaseRequest({
       trigger: PARTICIPANT_RELEASE_TRIGGER.OPERATOR,
     }));
     assert.equal(polluted.joinedAttempt.originalTrigger,
       PARTICIPANT_RELEASE_TRIGGER.OPERATOR);
+  } catch (error) {
+    pollutionFailure = error;
   } finally {
-    for (let index = restores.length - 1; index >= 0; index -= 1) restores[index]();
+    for (let index = restores.length - 1; index >= 0; index -= 1) {
+      try {
+        restores[index]();
+      } catch (error) {
+        pollutionFailure = retainFailure(pollutionFailure, error,
+          'hostile prototype assertion and restoration failed');
+      }
+    }
   }
+  if (pollutionFailure !== null) throw pollutionFailure;
 });
 
 test('registered failed joins type invalid and backward owner clock observations', async () => {
@@ -677,3 +679,82 @@ test('registered failed joins type invalid and backward owner clock observations
   assert.equal(unavailableJoin.joinedAttempt.joinAgeMs, null);
   assert.equal(unavailableJoin.joinedAttempt.terminalAgeMs, null);
 });
+
+test('post-ENABLE control loss returns the canonical control refusal and stays paused', () =>
+  fixture(async ({service, controlService, transport, release}) => {
+    const deliverDescriptor = Object.getOwnPropertyDescriptor(transport, 'deliver');
+    const originalDeliver = transport.deliver;
+    const observationEntered = Promise.withResolvers();
+    const observationContinuation = Promise.withResolvers();
+    let observations = 0;
+    let successfulControlReleases = 0;
+    let dependentResumes = 0;
+    transport.deliver = async (address, payload, options) => {
+      if (payload.action === RELEASE_ACTION.OBSERVE_APPLIED_POSITION &&
+          payload.partitionId === service.partitionId) {
+        observations += 1;
+        observationEntered.resolve();
+        await observationContinuation.promise;
+      }
+      if (payload.action === RELEASE_ACTION.RESUME &&
+          payload.partitionId === service.partitionId) dependentResumes += 1;
+      const response = await Reflect.apply(originalDeliver, transport,
+        [address, payload, options]);
+      if (payload.action === RELEASE_ACTION.RELEASE &&
+          payload.partitionId === CONTROL_PARTITION &&
+          response[PARTICIPANT_RELEASE_RESULT_FIELD]?.outcome === OUTCOME.CUT_OVER) {
+        successfulControlReleases += 1;
+      }
+      return response;
+    };
+    const attempt = track(release());
+    let failure = null;
+    try {
+      await observationEntered.promise;
+      const enabledOrigin = readPartitionWriteOrigin(service.db);
+      assert.notEqual(enabledOrigin, null,
+        'the dependent entered observation only after its actual ENABLE origin');
+      await controlService.shutdown();
+      observationContinuation.resolve();
+      const answer = await attempt.promise;
+      assert.equal(answer.outcome, OUTCOME.UNAVAILABLE, JSON.stringify(answer));
+      assert.equal(answer.missingFact, 'current_control_owner_fact');
+      assert.equal(observations, 1);
+      assert.equal(successfulControlReleases, 1,
+        'the initial control release succeeded before the dependent observation');
+      assert.equal(dependentResumes, 0,
+        'the final current-control refusal is reached before any RESUME action');
+      assert.deepEqual(readPartitionWriteOrigin(service.db), enabledOrigin,
+        'the final control refusal proposes no second origin');
+      assert.equal(participantReleaseAdmissionOf(service).state, ADMISSION.CLOSED);
+    } catch (error) {
+      failure = error;
+    } finally {
+      try {
+        observationContinuation.resolve();
+      } catch (error) {
+        failure = retainFailure(failure, error,
+          'post-ENABLE observation release failed');
+      }
+      try {
+        if (deliverDescriptor === undefined) {
+          if (!delete transport.deliver) {
+            failure = retainFailure(failure, new Error('deliver deletion refused'),
+              'post-ENABLE transport restoration failed');
+          }
+        } else {
+          Object.defineProperty(transport, 'deliver', deliverDescriptor);
+        }
+      } catch (error) {
+        failure = retainFailure(failure, error,
+          'post-ENABLE transport restoration failed');
+      }
+      try {
+        await attempt.promise;
+      } catch (error) {
+        failure = retainFailure(failure, error,
+          'post-ENABLE release attempt settlement failed');
+      }
+    }
+    if (failure !== null) throw failure;
+  }));
