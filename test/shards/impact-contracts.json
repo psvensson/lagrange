@@ -620,7 +620,8 @@
         "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
         "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
         "test/raft/raft-rs-backend/startup-cleanup.integration.test.js",
-        "test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js"
+        "test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js",
+        "test/partition/participant-envelope-admission.test.js"
       ]
     },
     "partition-raft-operation-port": {
@@ -1507,7 +1508,8 @@
             "src/partition/partition-service-write-metrics-base.js",
             "src/partition/partition-participant-transaction-apply.js",
             "src/partition/partition-participant-transaction-store.js",
-            "src/partition/partition-transaction-execution-envelope.js"
+            "src/partition/partition-transaction-execution-envelope.js",
+            "src/partition/partition-participant-transaction-bytes.js"
           ]
         }
       ],
@@ -1525,7 +1527,8 @@
         "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
         "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
         "test/raft/raft-rs-backend/startup-cleanup.integration.test.js",
-        "test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js"
+        "test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js",
+        "test/partition/participant-envelope-admission.test.js"
       ]
     },
     "partition-raft-operation-port": {

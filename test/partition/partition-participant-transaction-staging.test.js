@@ -40,7 +40,8 @@ import {
   identityOf, isPrepareCommand, onFixtureLeader as onLeader, operationOf, ordinaryWriteOf,
   originCommandOf, originOf, outcomeOf, pick, plantAppliedStateFailure, prepareCommandOf,
   prepareMessage, queryMessage, removeAppliedStateFailure, resetFixtureSingletons, send,
-  settleTicks, shutdownAll, startLeader, startReplica, temporaryDbPath, track, txMessage,
+  resumeFixtureParticipantAdmission, settleTicks, shutdownAll, startLeader, startReplica,
+  temporaryDbPath, track, txMessage,
 } from '../test-helpers/participant-transaction-fixture.js';
 
 const NOT_LEADER = 'partition_write_not_leader';
@@ -266,7 +267,7 @@ test('TX1 inc4 list version: a command stamped with the previous classifier list
 
 test('TX1 inc4 self-check: it runs once as the replica becomes the leader of an admission-' +
   'enabled partition, before any BEGIN, and is memoized per connection; a partition whose ' +
-  'origin has not applied runs it at its first BEGIN instead', async () => {
+  'origin arrives later stays paused without running it, then checks its first released BEGIN', async () => {
   const calls = {enabled: [], pending: []};
   const spying = (list) => (db, options) => {
     list.push(options.tableName);
@@ -285,11 +286,17 @@ test('TX1 inc4 self-check: it runs once as the replica becomes the leader of an 
     facts.pendingAtLeadership = calls.pending.length;
     leader.controllablePort.committedIndex = 0;
     applyCommitted(leader, originCommandOf());
+    facts.pendingPaused = pick(await send(leader, beginMessage(identityOf('i4-sc-c'))),
+      ['success', 'failureCode']);
+    facts.callsWhilePaused = calls.pending.length;
+    await resumeFixtureParticipantAdmission(leader);
     facts.pendingBegin = (await send(leader, beginMessage(identityOf('i4-sc-c'))))?.success;
     facts.pendingAfterBegin = calls.pending.length;
   }, {determinismSelfCheck: spying(calls.pending), generationOrigin: false});
   assert.deepEqual(facts, {enabledAtLeadership: 1, begins: [true, true, true],
-    enabledAfterBegins: 1, pendingAtLeadership: 0, pendingBegin: true, pendingAfterBegin: 1},
+    enabledAfterBegins: 1, pendingAtLeadership: 0,
+    pendingPaused: {success: false, failureCode: CODE.CUTOVER_PAUSED}, callsWhilePaused: 0,
+    pendingBegin: true, pendingAfterBegin: 1},
   'the classifier is proven live on the running binary before anything stages');
 });
 
@@ -459,8 +466,8 @@ test('TX1 inc4 BEGIN fences: a non-leader refuses BEGIN NOT_LEADER and stages no
 });
 
 test('TX1 inc4 origin columns: a generation table created before the origin columns existed ' +
-  'gets them at open; BEGIN stays refused generation_origin_pending until the origin ' +
-  'applies, which resets g', async () => {
+  'gets them at open; the origin resets g but BEGIN remains paused until the existing ' +
+  'release owner resumes the current observation', async () => {
   const {directory, dbPath} = temporaryDbPath();
   const facts = {};
   try {
@@ -483,6 +490,9 @@ test('TX1 inc4 origin columns: a generation table created before the origin colu
       leader.controllablePort.committedIndex = 0;
       facts.originApply = applyCommitted(leader, originCommandOf(PARTITION_ID));
       facts.after = {origin: originOf(leader), generation: generationOf(leader)};
+      facts.originAlone = pick(await send(leader, beginMessage(identityOf('i4-col'))),
+        ['success', 'failureCode']);
+      await resumeFixtureParticipantAdmission(leader);
       facts.beginAfter = pick(await send(leader, beginMessage(identityOf('i4-col'))),
         ['success', 'failureCode']);
     }, {dbPath, generationOrigin: false});
@@ -491,8 +501,9 @@ test('TX1 inc4 origin columns: a generation table created before the origin colu
   }
   assert.deepEqual(facts, {columns: ['singleton', 'generation', 'origin_index', 'origin_term'],
     before: {origin: null, generation: 5},
-    beginBefore: {success: false, failureCode: CODE.GENERATION_ORIGIN_PENDING},
+    beginBefore: {success: false, failureCode: CODE.CUTOVER_PAUSED},
     originApply: null, after: {origin: 1, generation: 0},
+    originAlone: {success: false, failureCode: CODE.CUTOVER_PAUSED},
     beginAfter: {success: true, failureCode: null}},
   'an old generation table is upgraded at open, never read as an origin');
 });
@@ -639,6 +650,7 @@ async () => {
     }
     const facts = {setup: [...applyOnBoth(originCommandOf()),
       ...applyOnBoth(ordinaryWriteOf('o1-seed', ROW))]};
+    await resumeFixtureParticipantAdmission(leader);
     // The leader's first BEGIN runs the self-check, which plants a row at
     // the rowid ceiling and rolls it back.
     const tx = identityOf('i4-outcome-rowid');

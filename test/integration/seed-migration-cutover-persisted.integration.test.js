@@ -18,9 +18,20 @@
  * tables (tables-p1) and schema_migration_partitions
  * (schema_migration_partitions-p1) in one transaction. Every fact is read back
  * from the partitions' local committed state, never from the cache. Nothing is
- * mocked.
+ * mocked. Fixture scheduling is accelerated, but release uses the existing
+ * production seed budget and the real disk-derived membership decision.
+ * The four system-table groups' three local replicas must then agree, close
+ * cleanly, and retain the same rows in a separate read-only process. This is
+ * same-host RF3 plus orderly-close persistence, not coordinator crash recovery.
  */
 import assert from 'node:assert/strict';
+import {spawnSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {resolveAutoRejoinStartupDecision} from '../../src/bootstrap/rejoin-hints.js';
+import {BOOTSTRAP_DEFAULT} from '../../src/bootstrap/bootstrap-constants.js';
 import {test} from 'node:test';
 import {
   INITIAL_PARTITION_IDS,
@@ -90,17 +101,28 @@ function userTableRoutable(systemTableCache) {
 test('TX1 M1: the schema-migration cutover on the production seed-hydration engine persists ' +
   'its two-participant transaction (tables-p1 and schema_migration_partitions-p1) with a ' +
   'durable COMMITTED decision, and both cutover UPDATEs apply', {timeout: TEST_TIMEOUT_MS},
-async () => {
+async (t) => {
   initializeTestEnvironment({nodeId: SEED_NODE_ID});
   const wsPort = getUniquePort();
-  const bootstrapService = await createVirginSeedBootstrapService({nodeId: SEED_NODE_ID,
-    nodeAddress: `ws://localhost:${wsPort}`, wsPort, config: TEST_CONFIG.bootstrap});
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tx1-m1-authorized-'));
+  const nodeAddress = `ws://localhost:${wsPort}`;
+  let bootstrapService = null;
   let bootstrapResult = null;
   let setupEngine = null;
   let seedApi = null;
   try {
+    const startupDecision = await resolveAutoRejoinStartupDecision({
+      dataDir, nodeId: SEED_NODE_ID, nodeAddress,
+    });
+    assert.equal(startupDecision.mode, 'seed');
+    assert.equal(startupDecision.durableStateDetected, false);
+    bootstrapService = await createVirginSeedBootstrapService({nodeId: SEED_NODE_ID,
+      dataDir, nodeAddress, wsPort, config: {...TEST_CONFIG.bootstrap,
+        leadershipWaitTimeoutMs: BOOTSTRAP_DEFAULT.leadershipWaitTimeoutMs},
+      membershipOwnerOutcome: startupDecision.membershipOwnerOutcome});
     bootstrapResult = await bootstrapService.bootstrap();
-    assert.equal(bootstrapResult.success, true, 'the seed must bootstrap');
+    assert.equal(bootstrapResult.success, true,
+      `the seed must bootstrap: ${bootstrapResult.error ?? 'no error detail'}`);
     const replicas = getPartitionServices(bootstrapResult, bootstrapService);
     const localReplica = (partitionId) =>
       replicas.find((service) => getPartitionId(service) === partitionId);
@@ -185,9 +207,63 @@ async () => {
     }, 'migration-coordinator-stage-methods.js:507-545 commits BEGIN..COMMIT on the seed ' +
       'engine; its sql_transactions row must be persisted with the decision, never skipped ' +
       '(sql-query-engine.js:115-117)');
+
+    // These are the actual system-table replicas, not the single-connection
+    // gateway double used by the smaller coordinator reconstruction fixture.
+    const selections = [
+      [PARTITION_OF.tables, M1_SQL.SELECT_TABLE, [tableId]],
+      [PARTITION_OF.migrationPartitions, M1_SQL.SELECT_PARTITION_MIGRATIONS, [migrationId]],
+      [PARTITION_OF.transactions, M1_SQL.SELECT_TRANSACTIONS,
+        [`${CUTOVER_SESSION_PREFIX}${migrationId}`]],
+      [PARTITION_OF.participants, M1_SQL.SELECT_PARTICIPANTS,
+        [transactionRows[0].transaction_id]],
+    ];
+    const requests = [];
+    const expectedDiskRows = [];
+    const retainedReplicas = [];
+    for (const [partitionId, sql, params] of selections) {
+      const group = replicas.filter((replica) => getPartitionId(replica) === partitionId);
+      assert.equal(group.length, 3, 'each M1 system-table group has three real local replicas');
+      const expected = await readLocal(partitionId, sql, params);
+      assert.ok(expected.length > 0, 'every persisted-state observation must be populated');
+      assert.equal(await waitFor(async () => {
+        const current = await Promise.all(group.map(async (replica) =>
+          (await replica.executeLocalQuery(sql, params)).rows));
+        return current.every((rows) => JSON.stringify(rows) === JSON.stringify(expected));
+      }, ROUTABLE_WAIT_MS, POLL_INTERVAL_MS), true,
+      'the committed system-table rows must reach all replicas before shutdown');
+      for (const replica of group) {
+        assert.ok(path.isAbsolute(replica.dbPath) &&
+          replica.dbPath.startsWith(dataDir + path.sep), 'use the exact real replica file');
+        requests.push({replicaId: replica.replicaId, dbPath: replica.dbPath, sql, params});
+        expectedDiskRows.push({replicaId: replica.replicaId, rows: expected});
+        retainedReplicas.push(replica);
+      }
+    }
+    assert.equal(new Set(requests.map((request) => request.dbPath)).size, 12,
+      'the four RF3 system groups must use twelve independent SQLite files');
+    await setupEngine.shutdown();
+    await seedApi.shutdown();
+    await bootstrapService.shutdown();
+    assert.ok(retainedReplicas.every((replica) => !replica.db || !replica.db.open),
+      'a live connection cannot stand in for orderly persisted-state proof');
+    const diskRead = spawnSync(process.execPath, [fileURLToPath(new URL(
+      './helpers/tx1-migration-disk-reader.js', import.meta.url))], {
+      input: JSON.stringify(requests), encoding: 'utf8', timeout: 10000,
+    });
+    assert.equal(diskRead.error, undefined, 'the independent disk-reader process must run');
+    assert.equal(diskRead.signal, null, 'the disk reader must not be killed');
+    assert.equal(diskRead.status, 0, diskRead.stderr);
+    assert.deepEqual(JSON.parse(diskRead.stdout), expectedDiskRows,
+      'the real coordinator decision, participant list and two cutover effects survive close');
+    t.diagnostic(JSON.stringify({kind: 'TX1_M1_PERSISTENCE',
+      replicaFiles: requests.length, distinctFiles: new Set(requests.map((r) => r.dbPath)).size,
+      transactionId: transactionRows[0].transaction_id, cutoverTransactions: transactions,
+      independentlyReadAfterShutdown: true, coordinatorRestarted: false}));
   } finally {
     await setupEngine?.shutdown();
     await gracefulShutdown(bootstrapService, bootstrapResult, seedApi);
     await cleanupTestEnvironment();
+    fs.rmSync(dataDir, {recursive: true, force: true});
   }
 });

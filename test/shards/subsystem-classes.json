@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 146,
     "solver-tooling": 7,
-    "storage-partition": 182,
+    "storage-partition": 183,
     "storage-raft": 127,
     "test-infrastructure": 143,
     "transactions": 18,
     "transport-messaging": 95,
     "wasm-toolchain": 57
   },
-  "censusSize": 2367,
-  "digest": "fnv1a32-91bb71c9",
+  "censusSize": 2368,
+  "digest": "fnv1a32-489eddf6",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-7991dba4",
+  "observationDigest": "fnv1a32-191b2db1",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1258,6 +1258,7 @@
     "test/partition/message-handler-registry-routing.property.test.js": "storage-partition",
     "test/partition/message-handler-registry.test.js": "storage-partition",
     "test/partition/participant-decision-canonical-record.test.js": "storage-partition",
+    "test/partition/participant-envelope-admission.test.js": "storage-partition",
     "test/partition/participant-release-build-provenance.test.js": "storage-partition",
     "test/partition/participant-release-protocol.test.js": "storage-partition",
     "test/partition/partition-admission-redrive-wakes.test.js": "storage-partition",
@@ -7550,7 +7551,8 @@
     "test/integration/seed-migration-cutover-persisted.integration.test.js": {
       "files": [
         "src/bootstrap/seed-startup-storage-admission.js",
-        "src/query/distributed/distributed-transaction-coordinator.js"
+        "src/query/distributed/distributed-transaction-coordinator.js",
+        "test/integration/helpers/tx1-migration-disk-reader.js"
       ]
     },
     "test/integration/seed-node-bootstrap.integration.test.js": {
@@ -8576,6 +8578,27 @@
     "test/partition/participant-decision-canonical-record.test.js": {
       "files": [
         "src/partition/partition-participant-transaction-bytes.js"
+      ]
+    },
+    "test/partition/participant-envelope-admission.test.js": {
+      "files": [
+        "src/partition/partition-committed-command-admission.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-release-facts.js",
+        "src/partition/partition-participant-transaction-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/partition/participant-release-build-provenance.test.js": {
