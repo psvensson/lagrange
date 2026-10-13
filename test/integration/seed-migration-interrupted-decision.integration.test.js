@@ -17,6 +17,8 @@ const READER = fileURLToPath(new URL('./helpers/tx1-in-doubt-decision-reader.js'
   import.meta.url));
 const DISK_REREAD = fileURLToPath(new URL(
   './helpers/tx1-postkill-authority-replay.js', import.meta.url));
+const STARTUP_ADMISSION = fileURLToPath(new URL(
+  './helpers/tx1-postkill-seed-startup.js', import.meta.url));
 
 test('TX1 M1: a real COMMIT decision and held prepared participants survive seed process loss',
   {timeout: 185000}, async (t) => {
@@ -105,6 +107,18 @@ test('TX1 M1: a real COMMIT decision and held prepared participants survive seed
       assert.equal(bridge.decisionWrites, 0);
       assert.equal(bridge.durableRowsUnchanged, true);
       assert.equal(bridge.liveParticipantReplayCertified, false);
+      // A killed single-host seed cannot manufacture serving authority from
+      // its colocated RF3 records. Consult the production rejoin owner.
+      const startup = spawnSync(process.execPath, [STARTUP_ADMISSION], {
+        input: JSON.stringify({dataDir: marker.dataDir}),
+        encoding: 'utf8', timeout: 15000, maxBuffer: 2 * 1024 * 1024,
+      });
+      assert.equal(startup.error, undefined, startup.stderr);
+      assert.equal(startup.status, 0, startup.stderr);
+      const admission = JSON.parse(startup.stdout);
+      assert.equal(admission.kind, 'TX1_M1_POSTKILL_SEED_ADMISSION');
+      assert.equal(admission.durableStateDetected, true);
+      assert.equal(admission.servingAuthorized, false);
       t.diagnostic(JSON.stringify({kind: 'TX1_UNDELIVERED_DECISION',
         transactionId: marker.transactionId, replicaFiles: 12,
         durableDecisionReadBack: true, cacheDiscoveryCannotDecide: true,
@@ -114,6 +128,10 @@ test('TX1 M1: a real COMMIT decision and held prepared participants survive seed
           boundCommitAttempts: bridge.boundCommitAttempts,
           rollbackCalls: bridge.rollbackCalls,
           durableRowsUnchanged: bridge.durableRowsUnchanged},
+        seedStartupAdmission: {state: admission.state,
+          outcome: admission.outcome, reason: admission.reason,
+          durableStateDetected: admission.durableStateDetected,
+          servingAuthorized: admission.servingAuthorized},
         effectsNotApplied: true,
         fanoutReplayCertified: false}));
     } finally {
