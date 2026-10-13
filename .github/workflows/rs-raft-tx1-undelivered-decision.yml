@@ -1,0 +1,149 @@
+name: rs-raft-tx1-undelivered-decision
+on:
+  push:
+    branches: [resume/rs-raft-runtime-recovery-20261012]
+    paths: [.github/workflows/rs-raft-tx1-undelivered-decision.yml]
+permissions:
+  contents: read
+jobs:
+  in-doubt-proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    permissions:
+      contents: write
+    env:
+      OUT: test-output/tx1-undelivered-decision
+      WITNESS: test/integration/seed-migration-interrupted-decision.integration.test.js
+      BRANCH: resume/rs-raft-runtime-recovery-20261012
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Pin exact sources and verify static boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/candidate-sha.txt"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          npm ci > "$OUT/install.log" 2>&1
+          npm run -s test:metadata:refresh > "$OUT/metadata.log" 2>&1
+          node --check "$WITNESS"
+          node --check test/integration/helpers/tx1-in-doubt-decision-reader.js
+          node --check test/integration/seed-migration-cutover-persisted.integration.test.js
+          node_modules/.bin/eslint "$WITNESS"             test/integration/helpers/tx1-in-doubt-decision-reader.js             test/integration/seed-migration-cutover-persisted.integration.test.js             > "$OUT/eslint.log" 2>&1
+          npm run -s audit:impact-contracts > "$OUT/impact.log" 2>&1
+          git diff --exit-code -- src
+          git diff --check
+          git diff --name-only > "$OUT/generated-paths.txt"
+          while IFS= read -r changed; do
+            case "$changed" in test/shards/*) ;; *)
+              echo "unexpected source mutation: $changed" >&2
+              exit 1;;
+            esac
+          done < "$OUT/generated-paths.txt"
+      - name: Exercise real pre-fanout COMMIT and kill before delivery
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          npm run -s test:file -- "$WITNESS" > "$OUT/native.log" 2>&1
+          printf '%s\n' "$?" > "$OUT/native-exit.txt"
+          mkdir -p "$OUT/tap"
+          cp ".tap/test-results/$WITNESS.tap" "$OUT/tap/native.tap" 2>/dev/null
+          tail -70 "$OUT/native.log"
+      - name: Record semantic disposition
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os,re
+          from pathlib import Path
+          e=Path(os.environ['OUT'])
+          tap=e/'tap/native.tap'
+          text=tap.read_text() if tap.exists() else ''
+          def count(k):
+              m=re.search(r'^# '+k+r' (\d+)\s*$',text,re.M)
+              return int(m.group(1)) if m else None
+          detail=next((s[2:] for s in text.splitlines()
+              if s.startswith('# {') and '"kind":"TX1_UNDELIVERED_DECISION"' in s),None)
+          receipt=json.loads(detail) if detail else {}
+          checks={
+              'ran-native-case':count('tests')==1,
+              'assertions-green':count('pass')==1 and count('fail')==0 and
+                  all(count(k)==0 for k in ('cancelled','skipped','todo')),
+              'child-was-killed-before-fanout':receipt.get('kind')==
+                  'TX1_UNDELIVERED_DECISION' and receipt.get('replicaFiles')==12,
+              'immutable-decision-held':receipt.get('sameDecisionRecovered') is True,
+              'no-effects-applied':receipt.get('effectsNotApplied') is True,
+              'honest-scope':receipt.get('fanoutReplayCertified') is False,
+              'canonical-test-success':(e/'native-exit.txt').read_text().strip()=='0',
+          }
+          summary={'head':(e/'candidate-sha.txt').read_text().strip(),
+              'checks':checks,'receipt':receipt,
+              'counts':{k:count(k) for k in ('tests','pass','fail','cancelled','skipped','todo')},
+              'focusedProofPassed':all(checks.values()),'independentApproval':False,
+              'mergeReady':False,'scope':'real RF3 same-host coordinator COMMIT persisted before participant delivery; SIGKILL; read-only reconstruction. Full production cold restart/replay remains unproved.'}
+          (e/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+          print(json.dumps(summary,indent=2))
+          PY
+      - name: Preserve receipts on the work branch if exact witness passes
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          a=json.loads((Path(os.environ['OUT'])/'summary.json').read_text())
+          assert a['focusedProofPassed']
+          PY
+          git diff --exit-code -- src
+          DEST="solve/quests/replicated-transaction-decision-and-apply/evidence/in-doubt-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$DEST"
+          cp -a "$OUT/." "$DEST/"
+          find "$DEST" -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > "$DEST/SHA256SUMS"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- test/shards "$DEST"
+          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'WIP TX1: retain native in-doubt COMMIT process-loss proof'
+          REMOTE="$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)"
+          test "$REMOTE" = "$GITHUB_SHA"
+          HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=$HEADER" push origin "HEAD:refs/heads/$BRANCH"
+      - name: Preserve failed and incomplete evidence too
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p "$OUT"
+          git status --porcelain > "$OUT/status.txt"
+          git diff -- src > "$OUT/unpublished-production.patch"
+          find "$OUT" -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > "$OUT/SHA256SUMS"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: rs-raft-tx1-undelivered-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-output/tx1-undelivered-decision/
+          retention-days: 30
+          if-no-files-found: error
+      - name: Keep unproved recovery visible
+        if: always()
+        shell: bash
+        run: |
+          test -f "$OUT/summary.json"
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          s=json.loads((Path(os.environ['OUT'])/'summary.json').read_text())
+          assert s['focusedProofPassed']
+          assert s['independentApproval'] is False and s['mergeReady'] is False
+          PY
