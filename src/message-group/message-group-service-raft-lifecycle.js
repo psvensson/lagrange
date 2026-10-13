@@ -169,15 +169,15 @@ function assignRaftLifecycle(serviceClass) {
      * @return {Promise<void>}
      */
     initialize() {
-      if (this.initializationSettlement) {
-        return this.initializationSettlement;
-      }
       if (this.startupFailure !== null) {
         return Promise.reject(this.startupFailure);
       }
       if (this.isShutdown) {
         return Promise.reject(
           Object.assign(new Error(SERVICE_SHUTDOWN), {code: SERVICE_SHUTDOWN}));
+      }
+      if (this.initializationSettlement) {
+        return this.initializationSettlement;
       }
       if (this.initialized) {
         return Promise.resolve();
