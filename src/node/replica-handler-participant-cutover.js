@@ -26,7 +26,8 @@ import {TRANSACTION_RELEASE_CENSUS_STATE} from
 import {TRANSACTION_SCHEMA_ENFORCEMENT_STATE} from
   '../query/distributed/distributed-transaction-schema-enforcement.js';
 import {PARTICIPANT_RELEASE_ACTION as ACTION, PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
-  PARTICIPANT_CUTOVER_BOUND as BOUND} from
+  PARTICIPANT_CUTOVER_BOUND as BOUND,
+  PARTICIPANT_RELEASE_MISSING_FACT as MISSING_FACT} from
   '../partition/partition-participant-transaction-cutover-constants.js';
 
 const RUNS = new WeakMap();
@@ -160,7 +161,7 @@ async function releaseControlOwnerFirst(handler, service, request) {
     topologyOwner?.resolveCanonicalPartitionLeaderNodeId?.(partitionId) ?? null;
   if (typeof nodeId !== 'string' || nodeId.length === 0) {
     return attemptRefusal(request, OUTCOME.UNAVAILABLE,
-      {missingFact: 'current_control_owner_fact'});
+      {missingFact: MISSING_FACT.CURRENT_CONTROL_OWNER});
   }
   const authorization = handler.participantReleaseAuthorizationOwner
     .authorizeControlFrom(request.authorization, partitionId,
@@ -174,7 +175,7 @@ async function releaseControlOwnerFirst(handler, service, request) {
   }
   if (!controlReleaseAnswerValid(answer, request.targetBuildDigest)) {
     return attemptRefusal(request, OUTCOME.UNAVAILABLE,
-      {missingFact: 'current_control_owner_fact', controlPartitionId: partitionId,
+      {missingFact: MISSING_FACT.CURRENT_CONTROL_OWNER, controlPartitionId: partitionId,
         controlNodeId: nodeId, controlOutcome: answer?.outcome ?? null});
   }
   return null;
@@ -213,12 +214,12 @@ async function runCutoverAttempt(handler, request) {
   if (Number.isSafeInteger(request.deadlineAtMs) &&
       handler.timeSource.now() >= request.deadlineAtMs) {
     return attemptRefusal(request, OUTCOME.UNAVAILABLE,
-      {missingFact: 'release_deadline'});
+      {missingFact: MISSING_FACT.RELEASE_DEADLINE});
   }
   const service = localLeader(handler, request);
   if (service === null) {
     return attemptRefusal(request, OUTCOME.UNAVAILABLE,
-      {missingFact: 'hosted_partition'});
+      {missingFact: MISSING_FACT.HOSTED_PARTITION});
   }
   const status = service.raft.readStatus();
   if (status.role !== RAFT_ROLE.LEADER) {
@@ -231,7 +232,7 @@ async function runCutoverAttempt(handler, request) {
         {partitionId: service.partitionId,
           targetBuildDigest: request.targetBuildDigest})) {
     return releaseAnswer(OUTCOME.OPERATOR_REQUIRED, request,
-      {missingFact: 'fresh_storage_or_operator_authority'});
+      {missingFact: MISSING_FACT.FRESH_STORAGE_OR_OPERATOR_AUTHORITY});
   }
   const controlOwner = await releaseControlOwnerFirst(handler, service, request);
   if (controlOwner !== null) return controlOwner;
@@ -252,7 +253,7 @@ async function runCutoverAttempt(handler, request) {
   const cohort = cohortOf(handler, own);
   if (cohort === null) {
     return attemptRefusal(request, OUTCOME.UNAVAILABLE,
-      {missingFact: 'committed_replica_routes'});
+      {missingFact: MISSING_FACT.COMMITTED_REPLICA_ROUTES});
   }
   let census = await readCohort(handler, service.partitionId, cohort,
     request.deadlineAtMs);

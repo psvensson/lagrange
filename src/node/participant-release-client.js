@@ -10,6 +10,7 @@ import {participantReleaseClockMeasured, participantReleaseSafeClockInteger,
 import {releaseAnswer} from '../partition/partition-participant-release-contract.js';
 import {PARTICIPANT_CUTOVER_BOUND as BOUND, PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
   PARTICIPANT_RELEASE_ACTION as ACTION, PARTICIPANT_RELEASE_PRIORITY,
+  PARTICIPANT_RELEASE_MISSING_FACT as MISSING_FACT,
   PARTICIPANT_RELEASE_RESULT_FIELD, PARTICIPANT_RELEASE_ROUTE_SUFFIX,
   PARTICIPANT_RELEASE_TYPE} from
   '../partition/partition-participant-transaction-cutover-constants.js';
@@ -48,8 +49,7 @@ function cappedRequestTimeoutMs(nowMs, deadlineAtMs) {
   return mathMax(0, mathMin(BOUND.REQUEST_TIMEOUT_MS, deadlineAtMs - nowMs));
 }
 
-function participantReleaseRequestBudget(owner, deadlineAtMs,
-  ceilingAtMs = deadlineAtMs) {
+function participantReleaseRequestBudget(owner, deadlineAtMs, ceilingAtMs) {
   const observation = readParticipantReleaseClock(owner?.timeSource);
   if (!participantReleaseClockMeasured(observation) ||
       !participantReleaseAbsoluteClockValid(observation.value) ||
@@ -70,7 +70,7 @@ function participantReleaseRequestBudget(owner, deadlineAtMs,
 
 function observationUnavailable(request, nodeId, reason = null) {
   return releaseAnswer(OUTCOME.UNAVAILABLE, request,
-    {missingFact: 'replica_release_reply', owner: nodeId,
+    {missingFact: MISSING_FACT.REPLICA_RELEASE_REPLY, owner: nodeId,
       ...(reason === null ? {} : {reason}), retryAfterMs: BOUND.PAUSE_RETRY_AFTER_MS});
 }
 
@@ -78,7 +78,8 @@ function prepareParticipantReleaseRequest(owner, nodeId, request) {
   if (request.action !== ACTION.OBSERVE_APPLIED_POSITION) {
     return {request, timeoutMs: requestTimeoutMs(owner, request), observation: false};
   }
-  const budget = participantReleaseRequestBudget(owner, request.deadlineAtMs);
+  const budget = participantReleaseRequestBudget(owner, request.deadlineAtMs,
+    request.deadlineAtMs);
   if (budget === null) return {answer: observationUnavailable(request, nodeId)};
   const dispatched = {...request,
     observationDeadlineAtMs: budget.observationDeadlineAtMs};
@@ -89,7 +90,7 @@ function prepareParticipantReleaseRequest(owner, nodeId, request) {
     observationUnavailable(dispatched, nodeId,
       TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT) :
     releaseAnswer(OUTCOME.UNAVAILABLE, dispatched,
-      {missingFact: 'release_deadline', owner: nodeId});
+      {missingFact: MISSING_FACT.RELEASE_DEADLINE, owner: nodeId});
   return {answer};
 }
 
@@ -110,7 +111,7 @@ async function askParticipantRelease(owner, nodeId, request) {
   }
   if (prepared.timeoutMs <= 0) {
     return releaseAnswer(OUTCOME.UNAVAILABLE, request,
-      {missingFact: 'release_deadline', owner: nodeId});
+      {missingFact: MISSING_FACT.RELEASE_DEADLINE, owner: nodeId});
   }
   try {
     const response = classifyTransportDeliveryOutcome(await owner.messageRouter.deliver(
@@ -125,7 +126,7 @@ async function askParticipantRelease(owner, nodeId, request) {
       delivery.reasonCode === TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT ?
       observationUnavailable(prepared.request, nodeId, delivery.reasonCode) :
       releaseAnswer(OUTCOME.UNAVAILABLE, prepared.request,
-        {missingFact: 'replica_release_reply', owner: nodeId,
+        {missingFact: MISSING_FACT.REPLICA_RELEASE_REPLY, owner: nodeId,
           reason: String(error?.message ?? error), retryAfterMs: BOUND.PAUSE_RETRY_AFTER_MS});
   }
 }

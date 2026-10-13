@@ -1,0 +1,12 @@
+   374 src/node/participant-release-applied-position-observation.js
+   145 src/node/participant-release-client.js
+   127 src/node/participant-release-diagnostic-observation.js
+   237 src/node/replica-handler-constants.js
+   194 src/node/replica-handler-lifecycle-methods.js
+   355 src/node/replica-handler-participant-cutover.js
+   348 src/node/replica-handler-participant-release.js
+   141 src/node/replica-runtime-cleanup-custody.js
+   204 src/partition/partition-participant-release-contract.js
+    61 src/partition/partition-participant-transaction-cutover-constants.js
+   284 src/partition/partition-participant-transaction-pause.js
+  2470 total

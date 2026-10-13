@@ -18,6 +18,7 @@ import {
   REPLICA_HANDLER_DEFAULT,
   REPLICA_HANDLER_ERROR_MSG,
   REPLICA_HANDLER_LOG_MSG,
+  REPLICA_HANDLER_PARTICIPANT_RELEASE_DISPATCH_KIND as DISPATCH_KIND,
 } from './replica-handler-constants.js';
 import {PARTICIPANT_RELEASE_ACTION, PARTICIPANT_RELEASE_RESULT_FIELD,
   PARTICIPANT_RELEASE_TYPE} from
@@ -135,12 +136,12 @@ function assignReplicaHandlerLifecycleMethods(ReplicaHandler) {
     async handleMessage(envelope) {
       const {payload, correlationId} = envelope;
       const captured = captureParticipantReleaseDispatch(payload);
-      if (captured.kind === 'malformed') {
+      if (captured.kind === DISPATCH_KIND.MALFORMED) {
         await this.awaitRemovedReplicaCleanupAdmissionBarrier();
         const response = await dispatchReplicaMessage(this, undefined, null);
         return {...response, correlationId};
       }
-      const type = captured.kind === 'release' ? PARTICIPANT_RELEASE_TYPE :
+      const type = captured.kind === DISPATCH_KIND.RELEASE ? PARTICIPANT_RELEASE_TYPE :
         captured.type;
       // Release reads/pause/recovery stay available during bootstrap. The
       // reopen action still asks retained-storage admission before closing

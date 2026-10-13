@@ -1,0 +1,43 @@
+{
+  "topOwners": [
+    [
+      "src/node/replica-handler-lifecycle-methods.js",
+      1
+    ],
+    [
+      "src/node/replica-handler-constants.js",
+      1
+    ]
+  ],
+  "endpointIds": [
+    "ready-persistence-and-reconstruction",
+    "application-and-progress-transaction"
+  ],
+  "applicationEndpointOwners": [
+    [
+      "src/node/replica-handler-lifecycle-methods.js",
+      1
+    ],
+    [
+      "src/node/replica-handler-constants.js",
+      1
+    ]
+  ],
+  "witnessForms": [
+    [
+      "test/node/replica-handler.test.js",
+      1,
+      1
+    ],
+    [
+      "test/node/replica-handler-leadership-transfer.test.js",
+      1,
+      1
+    ],
+    [
+      "test/node/replica-handler-replica-membership.test.js",
+      1,
+      1
+    ]
+  ]
+}
