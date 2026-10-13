@@ -45,9 +45,13 @@ for (const kind of ['partition', 'message-group']) {
     const service = buildService(fixture, kind);
     const create = service.createOperationPort.bind(service);
     let enteredResolve;
-    const entered = new Promise((resolve) => { enteredResolve = resolve; });
+    const entered = new Promise((resolve) => {
+      enteredResolve = resolve;
+    });
     let releaseCampaign;
-    const gate = new Promise((resolve) => { releaseCampaign = resolve; });
+    const gate = new Promise((resolve) => {
+      releaseCampaign = resolve;
+    });
     service.createOperationPort = (request) => {
       const port = create(request);
       const campaign = port.campaign;
@@ -86,7 +90,9 @@ test('ReplicaHandler rechecks shutdown after awaited cleanup before CREATE mutat
   const claim = Object.freeze({claim: 'cleanup-wait'});
   let releases = 0;
   handler.getReplicaCreateAdmissionOwner = () =>
-    releaseOwner(claim, () => { releases += 1; });
+    releaseOwner(claim, () => {
+      releases += 1;
+    });
   handler.settlePendingReplicaRuntimeCleanup = async () => {
     handler.shuttingDown = true;
   };
@@ -131,7 +137,9 @@ test('ReplicaHandler releases CREATE claim when shutdown cleanup rejects', async
   // ownership, not control-plane prior-existence availability.
   handler.replicaStateMachine.getControlPlaneSystemTableGateway = null;
   handler.getReplicaCreateAdmissionOwner = () =>
-    releaseOwner(claim, () => { releases += 1; });
+    releaseOwner(claim, () => {
+      releases += 1;
+    });
   handler.resolveReplicaContextWithRetry = async () => ({
     tableName: 'claim_table', tableId: 'claim_table', schema: null,
     keyRange: null, leaderAddress: null, replicaIds: ['claim-r2'],
