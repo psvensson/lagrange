@@ -1,0 +1,16 @@
+37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570  solve/quests/replicated-transaction-decision-and-apply/evidence/m1-sigkill-38359565911-1/boundary.json
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  solve/quests/replicated-transaction-decision-and-apply/evidence/m1-sigkill-38359565911-1/eslint.log
+a63ac1daf62e6471ab1691b577a3f409e86cea57c8b4dc8b537b44a3cc9a40b7  solve/quests/replicated-transaction-decision-and-apply/evidence/m1-sigkill-38359565911-1/generated-paths.txt
+442c679ec39ef649cfecc8d2e43491edd0d5a8f08d8f4fa9f9bffff9e31fa879  solve/quests/replicated-transaction-decision-and-apply/evidence/m1-sigkill-38359565911-1/impact.log
+9155102d43113241a2a5086875e4bfbc59365479de6ae8e27bd1146b98b50789  solve/quests/replicated-transaction-decision-and-apply/evidence/m1-sigkill-38359565911-1/install.log
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  solve/quests/replicated-transaction-decision-and-apply/evidence/m1-sigkill-38359565911-1/m1-control.exit
+65dc48cb802b5b501477a6984973dd606e42b844ec0e88514e9d008af5f792c2  solve/quests/replicated-transaction-decision-and-apply/evidence/m1-sigkill-38359565911-1/m1-control.log
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  solve/quests/replicated-transaction-decision-and-apply/evidence/m1-sigkill-38359565911-1/m1-sigkill.exit
+85f501a9dd113125019ed914bc60014f8edfc5ed681a15f21df49d90d3e5836d  solve/quests/replicated-transaction-decision-and-apply/evidence/m1-sigkill-38359565911-1/m1-sigkill.log
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  solve/quests/replicated-transaction-decision-and-apply/evidence/m1-sigkill-38359565911-1/metadata-whitespace.txt
+6e3d7ed84928c22d1a1b21fc94d46c0cc01c10e3a328bf00bc60dbc23a7084cf  solve/quests/replicated-transaction-decision-and-apply/evidence/m1-sigkill-38359565911-1/metadata.log
+810d5b75c1237035dc6a9b1ae69d2ca776e073557f9c64b8163fd9165c79607d  solve/quests/replicated-transaction-decision-and-apply/evidence/m1-sigkill-38359565911-1/pretest-worktree.txt
+e5839bf82ba19f91f2b2abfa76f54008ec80ad13344ad614d8f1fe5091500fa2  solve/quests/replicated-transaction-decision-and-apply/evidence/m1-sigkill-38359565911-1/source-sha.txt
+16c6c00b5d2c244f9fe4d06192ec8e530f10c4d0363d4dd0fd6ce02b785cdcde  solve/quests/replicated-transaction-decision-and-apply/evidence/m1-sigkill-38359565911-1/summary.json
+cda0ce4cbc69a7cdfd981615a722610dc166f6d85a4bfa0db2f364e2b1acfb7f  solve/quests/replicated-transaction-decision-and-apply/evidence/m1-sigkill-38359565911-1/tap/m1-control.tap
+e902a2bd0341857a23272c7d99ae309b8cd45e0a7f3f32a324ab6dc91046508d  solve/quests/replicated-transaction-decision-and-apply/evidence/m1-sigkill-38359565911-1/tap/m1-sigkill.tap

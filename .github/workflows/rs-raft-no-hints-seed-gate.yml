@@ -1,0 +1,78 @@
+name: rs-raft-no-hints-seed-gate
+on:
+  push:
+    branches: [resume/rs-raft-runtime-recovery-20261012]
+    paths:
+      - .github/workflows/rs-raft-no-hints-seed-gate.yml
+      - src/bootstrap/rejoin-hints.js
+      - test/bootstrap/seed-restart-recovery-gate.test.js
+permissions:
+  contents: read
+jobs:
+  seed-recovery-cone:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    env:
+      OUT: test-output/rs-raft-no-hints-seed
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Locked setup, source identity and static boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/sha.txt"
+          npm ci > "$OUT/install.log" 2>&1
+          npm run -s test:metadata:refresh > "$OUT/metadata.log" 2>&1
+          node --check src/bootstrap/rejoin-hints.js
+          node --check test/bootstrap/seed-restart-recovery-gate.test.js
+          node_modules/.bin/eslint src/bootstrap/rejoin-hints.js \
+            test/bootstrap/seed-restart-recovery-gate.test.js \
+            > "$OUT/eslint.log" 2>&1
+          npm run -s audit:impact-contracts > "$OUT/impact.log" 2>&1
+          git diff --exit-code -- src
+          git diff --check
+      - name: Four existing bootstrap owner-test files
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          npm run -s test:file -- \
+            test/bootstrap/cluster-identity.test.js \
+            test/bootstrap/rejoin-hints.test.js \
+            test/bootstrap/replica-evidence-conflict.test.js \
+            test/bootstrap/seed-restart-recovery-gate.test.js \
+            > "$OUT/bootstrap-cone.log" 2>&1
+          printf '%s\n' "$?" > "$OUT/bootstrap-cone.exit"
+          tail -65 "$OUT/bootstrap-cone.log"
+      - name: Retain semantic result and fail if tests did not finish successfully
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p "$OUT"
+          git status --porcelain > "$OUT/status.txt"
+          find "$OUT" -type f ! -name SHA256SUMS -print0 | sort -z |
+            xargs -0 sha256sum > "$OUT/SHA256SUMS"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: rs-raft-no-hints-seed-${{ github.run_id }}
+          path: test-output/rs-raft-no-hints-seed/
+          retention-days: 30
+          if-no-files-found: error
+      - name: Fail closed on owner-cone regressions
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "$OUT/bootstrap-cone.exit"
+          test "$(cat "$OUT/bootstrap-cone.exit")" = 0

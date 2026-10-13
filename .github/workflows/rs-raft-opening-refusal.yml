@@ -1,0 +1,97 @@
+name: rs-raft-opening-refusal
+on:
+  push:
+    branches: [resume/rs-raft-runtime-recovery-20261012]
+    paths:
+      - .github/workflows/rs-raft-opening-refusal.yml
+      - scripts/quest-evidence/prepare-opening-refusal.py
+      - scripts/quest-evidence/run-opening-refusal-proof.py
+      - test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-opening-refusal-20261012
+  cancel-in-progress: false
+jobs:
+  exact-proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    permissions:
+      contents: write
+    env:
+      BRANCH: resume/rs-raft-runtime-recovery-20261012
+      EVIDENCE: test-output/opening-refusal-ci
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Bind input and locked dependencies
+        id: install
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          mkdir -p "$EVIDENCE"
+          git rev-parse HEAD > "$EVIDENCE/input-sha.txt"
+          npm ci > "$EVIDENCE/install.log" 2>&1
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+      - name: Measure exact source baseline candidate revert and regression gates
+        if: steps.install.outcome == 'success'
+        shell: bash
+        run: python3 scripts/quest-evidence/run-opening-refusal-proof.py
+      - name: Preserve committed WIP and every measured result without merging
+        if: always() && steps.install.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$EVIDENCE/candidate-sha.txt"
+          git diff --exit-code -- src test
+          DEST="solve/quests/replicated-transaction-decision-and-apply/evidence/opening-refusal-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$DEST"
+          cp -a "$EVIDENCE/." "$DEST/"
+          find "$DEST" -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > "$DEST/SHA256SUMS"
+          git add -- "$DEST"
+          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'WIP rs-raft: retain exact startup refusal source and native proof evidence'
+          REMOTE=$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)
+          test "$REMOTE" = "$GITHUB_SHA"
+          HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=$HEADER" push origin "HEAD:refs/heads/$BRANCH"
+          test "$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)" = "$(git rev-parse HEAD)"
+          git rev-parse HEAD > "$EVIDENCE/published-sha.txt"
+      - name: Retain source and diagnostics even when a gate fails
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p "$EVIDENCE"
+          git status --porcelain > "$EVIDENCE/final-status.txt"
+          git diff -- src test > "$EVIDENCE/uncommitted.patch"
+          find "$EVIDENCE" -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > "$EVIDENCE/SHA256SUMS"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: rs-raft-opening-refusal-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-output/opening-refusal-ci/
+          retention-days: 30
+          if-no-files-found: error
+      - name: Keep unresolved static gates visible
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          p = Path(os.environ['EVIDENCE']) / 'summary.json'
+          assert p.is_file(), 'Incomplete proof; inspect retained diagnostics'
+          summary = json.loads(p.read_text())
+          assert summary['allRunGatesPassed'], 'Source approval is withheld; unresolved gates remain red'
+          PY

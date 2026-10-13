@@ -284,6 +284,11 @@ class MessageGroupService extends EventEmitter {
       null;
     // State
     this.initialized = false;
+    this.startupFailure = null;
+    this.isShutdown = false;
+    this.initializationSettlement = null;
+    this.shutdownSettlement = null;
+    this.consensusCloseSettlement = null;
     this.isLeader = false;
     this.leaderActivationGate = new LeaderActivationGate({
       holdoffMs: this.leaderActivationStabilizationMs,

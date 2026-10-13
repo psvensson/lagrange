@@ -35,6 +35,12 @@ import {test} from 'node:test';
 import Database from 'better-sqlite3';
 
 import {formAdmittedGroup} from './partition-admitted-group-fixture.js';
+import {attachPartitionReleaseOwners} from './partition-release-fixture.js';
+import {createLoopbackTransport, waitForCondition} from
+  './partition-service-test-support.js';
+import {participantCutoverPauseOf} from
+  '../../src/partition/partition-participant-transaction-pause.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {answerOf, countEscapes} from
   '../raft/raft-rs-backend/process-escape-counter.js';
 import {ConfigurationManager} from
@@ -255,18 +261,29 @@ async function withLonePartitions(body) {
   quietEnvironment();
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), TEMP_PREFIX));
   const services = [];
+  const transport = createLoopbackTransport();
+  let releaseOwners = null;
   const open = async (partitionId, extra = {}) => {
     const dbPath = path.join(directory, `${partitionId}-${DB_FILE}`);
     const partition = new PartitionService(withFoundingStamp({
-      ...loneOptions(partitionId, dbPath), ...extra}));
+      ...loneOptions(partitionId, dbPath), transport,
+      systemTableCache: new SystemTableCache(), ...extra}));
     services.push(partition);
     await partition.initialize();
     partition.startElection();
-    return {partition, dbPath};
+    if (releaseOwners === null) {
+      releaseOwners = await attachPartitionReleaseOwners(services,
+        {directory, budgetMs: GROUP_BUDGET_MS});
+    } else {
+      releaseOwners.host(partition);
+    }
+    await releaseOwners.release(partitionId);
+    return {partition, dbPath, releaseOwners};
   };
   try {
-    await body({open, directory});
+    await body({open, directory, release: (id) => releaseOwners.release(id)});
   } finally {
+    await releaseOwners?.dispose();
     for (const service of services) {
       await service.shutdown();
     }
@@ -323,13 +340,13 @@ async function loneLeaderUnreadableCase(escapes) {
 
     const entriesBefore = logEntryCount(dbPath, partition.partitionId);
     const refused = await insert(partition, 'row-x', 'held', 'e-held');
-    assert.ok(typeof REFUSAL?.CONSENSUS_RECOVERY_REQUIRED === 'string' &&
-      refused.failureCode === REFUSAL.CONSENSUS_RECOVERY_REQUIRED,
-    'a write to the held group is refused with the kernel\'s typed code ' +
-      `(${JSON.stringify(refused)})`);
-    assert.equal(refused.consensus?.phase,
-      runtimeConstants.RUNTIME_PHASE.DURABLE_RECORD_READ,
-      'the refusal carries the durable-record-read phase');
+    // Release's newer admission contract takes precedence at the application
+    // boundary; the exact storage failure remains the operation port's answer.
+    assert.equal(refused.failureCode, REFUSAL.CUTOVER_PAUSED,
+      `invalidated release refuses the unproposed write (${JSON.stringify(refused)})`);
+    assert.equal(refused.deferRetry, true);
+    assertHeldOnUnreadableRecord(answerOf(() => partition.raft.readStatus()),
+      'the port retains the exact storage failure behind release admission');
     assert.equal(logEntryCount(dbPath, partition.partitionId), entriesBefore,
       'nothing was proposed');
     assert.deepEqual(untouchedFacts(sibling.partition, sibling.dbPath),
@@ -344,6 +361,9 @@ async function loneLeaderUnreadableCase(escapes) {
     restoreAppliedRecord(new RaftRsDurableStore(partition.db),
       partition.partitionId, saved);
     await sleep(window + WINDOW_MARGIN_MS);
+    assert.equal(await waitForCondition(() =>
+      participantCutoverPauseOf(partition) === null, GROUP_BUDGET_MS), true,
+    'the existing registered release owner must revalidate after native recovery');
     const healed = await insert(partition, 'row-2', 'healed', 'e-healed');
     assert.equal(healed.success, true, 'the restored group serves a ' +
       `write without a restart (${JSON.stringify(healed)})`);
@@ -410,6 +430,9 @@ test('F-ah: a follower whose durable record becomes unreadable is held ' +
     partitionId, members, tempPrefix: TEMP_PREFIX,
     serviceOptions: tableOptions(), budgetMs: GROUP_BUDGET_MS,
   });
+  const releaseOwners = await attachPartitionReleaseOwners(group.services,
+    {directory: path.dirname(group.dbFileOf(members[0])), budgetMs: GROUP_BUDGET_MS});
+  await releaseOwners.release(partitionId);
   const {services, dbFileOf, waitFor} = group;
   const [leader, follower] = services;
   const escapes = countEscapes();
@@ -451,6 +474,7 @@ test('F-ah: a follower whose durable record becomes unreadable is held ' +
     assert.deepEqual(escapes.escaped, [],
       'nothing escaped while the follower was held');
   } finally {
+    await releaseOwners.dispose();
     await group.dispose();
     escapes.stop();
     resetEnvironment();
@@ -477,6 +501,9 @@ test('F-ap: a follower restarted while its record table is missing is ' +
     partitionId, members, tempPrefix: TEMP_PREFIX,
     serviceOptions: tableOptions(), budgetMs: GROUP_BUDGET_MS,
   });
+  const releaseOwners = await attachPartitionReleaseOwners(group.services,
+    {directory: path.dirname(group.dbFileOf(members[0])), budgetMs: GROUP_BUDGET_MS});
+  await releaseOwners.release(partitionId);
   const {services, dbFileOf, waitFor} = group;
   const [leader, follower] = services;
   const dbPath = dbFileOf(members[1]);
@@ -538,6 +565,7 @@ test('F-ap: a follower restarted while its record table is missing is ' +
     const restored = new PartitionService(withFoundingStamp(restartOptions));
     restarts.push(restored);
     await restored.initialize();
+    releaseOwners.host(restored);
     restored.startElection();
     assert.equal(await waitFor(() => rowIds(dbPath).length === 2), true,
       'the restored follower catches up on the write it missed ' +
@@ -554,6 +582,7 @@ test('F-ap: a follower restarted while its record table is missing is ' +
     for (const restart of restarts) {
       await restart.shutdown();
     }
+    await releaseOwners.dispose();
     await group.dispose();
     resetEnvironment();
   }
@@ -615,6 +644,12 @@ test('F-ah: a core failure restores every readable group; a group whose ' +
       assertHeldOnUnreadableRecord(
         answerOf(() => damaged.partition.raft.readStatus()), 'the damaged ' +
         'group');
+      assert.notEqual(participantCutoverPauseOf(sibling.partition), null,
+        'a replacement runtime cannot inherit the old write grant');
+      assert.equal(await waitForCondition(() =>
+        [sibling, victim].every(({partition}) =>
+          participantCutoverPauseOf(partition) === null), GROUP_BUDGET_MS), true,
+      'the registered release owners revalidate both readable groups');
       assert.equal((await insert(sibling.partition, 's-1', 'after',
         's-after')).success, true, 'the sibling serves a write');
       assert.equal((await insert(victim.partition, 'v-1', 'after',

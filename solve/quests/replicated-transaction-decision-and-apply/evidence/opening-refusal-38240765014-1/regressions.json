@@ -1,0 +1,573 @@
+{
+  "exit": 0,
+  "cases": [
+    {
+      "file": "test/raft/raft-rs-backend/operation-port-provenance.test.js",
+      "name": "core and host outcomes are separated by execution provenance",
+      "passed": true,
+      "durationMs": 200.163637,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+      "name": "Ready snapshot entries and hard state share one SQLite commit point",
+      "passed": true,
+      "durationMs": 15.429655,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+      "name": "every Ready delivery failure is a per-peer outcome and never reconstructs the group",
+      "passed": true,
+      "durationMs": 148.05746,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+      "name": "application effects and durable applied progress commit atomically",
+      "passed": true,
+      "durationMs": 28.335856,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+      "name": "an async committed membership applier cannot advance durable progress",
+      "passed": true,
+      "durationMs": 1.501289,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+      "name": "runtime replacement cannot re-enter a Ready generation suspended in host delivery",
+      "passed": true,
+      "durationMs": 106.148368,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+      "name": "runtime traps and temporary host unavailability preserve logical identity",
+      "passed": true,
+      "durationMs": 124.501133,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+      "name": "closing a recovery-required group frees its node exactly once",
+      "passed": true,
+      "durationMs": 15.883519,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/operation-port-throw-containment.test.js",
+      "name": "F-ah (b): a throw inside the port's own scheduled ticks is the group's typed host failure - nothing escapes the timer, one reconstruction per window",
+      "passed": true,
+      "durationMs": 85.592879,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/operation-port-throw-containment.test.js",
+      "name": "F-ah (b): a throw inside a port operation the caller asked for is answered as the group's typed host failure, never rethrown",
+      "passed": true,
+      "durationMs": 208.604713,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/operation-port-throw-containment.test.js",
+      "name": "a sole voter's own RemoveNode is refused typed at the leader's port: nothing is proposed and the group keeps leading and committing",
+      "passed": true,
+      "durationMs": 9.26335,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/operation-port-throw-containment.test.js",
+      "name": "a committed configuration change the core refuses to apply holds its group as a typed application failure, never an unexpected throw",
+      "passed": true,
+      "durationMs": 224.094568,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/operation-port-lifecycle.test.js",
+      "name": "the core-entry instrument counts every binding call and catches an ungated mutant",
+      "passed": true,
+      "durationMs": 61.602461,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/operation-port-lifecycle.test.js",
+      "name": "step is local admission and retirement prevents queued core entry",
+      "passed": true,
+      "durationMs": 23.445198,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/operation-port-lifecycle.test.js",
+      "name": "malformed ingress is refused locally without core entry",
+      "passed": true,
+      "durationMs": 16.167247,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/operation-port-lifecycle.test.js",
+      "name": "durable retirement refuses every active operation before core entry after restart",
+      "passed": true,
+      "durationMs": 41.883642,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/operation-port-lifecycle.test.js",
+      "name": "a durable Raft record without a matching lifecycle record fails closed",
+      "passed": true,
+      "durationMs": 19.989675,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js",
+      "name": "a delayed G1 retirement callback lands on G1 only; G2 stays running",
+      "passed": true,
+      "durationMs": 5.255947,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js",
+      "name": "duplicate, post-close and post-recreation G1 work is a typed stale result, never a retirement of G2",
+      "passed": true,
+      "durationMs": 0.54185,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js",
+      "name": "a runtime handle for a different logical replica is refused",
+      "passed": true,
+      "durationMs": 0.393965,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js",
+      "name": "real raft-rs ports: old-generation removal after the name is reused leaves the new generation serving",
+      "passed": true,
+      "durationMs": 73.070724,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js",
+      "name": "a delayed G1 close cannot unregister the G2 peer-reservation owner",
+      "passed": true,
+      "durationMs": 0.55788,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js",
+      "name": "registry operation census: exact-generation only, no logical lookup",
+      "passed": true,
+      "durationMs": 173.169698,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/durable-rejoin-record-refusal.test.js",
+      "name": "T5: every durable-rejoin restore plan opens from the durable record, the rows being its address book only",
+      "passed": true,
+      "durationMs": 2.981138,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/durable-rejoin-record-refusal.test.js",
+      "name": "T5: a rejoin without a durable record is refused DURABLE_RECORD_MISSING, typed and non-retryable, and opens no group",
+      "passed": true,
+      "durationMs": 132.142649,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/durable-rejoin-record-refusal.test.js",
+      "name": "T5: a rejoin with a durable record restores its own configuration, not the planted rows; an unreadable record is a retryable host failure at the same phase",
+      "passed": true,
+      "durationMs": 161.717455,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/durable-rejoin-record-refusal.test.js",
+      "name": "T5: the rejoin skips a replica refused for holding no record and still aborts on any other restore failure",
+      "passed": true,
+      "durationMs": 1.00827,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/durable-rejoin-record-refusal.test.js",
+      "name": "T5 (C2): a pre-gate durable record is refused typed and non-retryable (DURABLE_RECORD_INCOMPATIBLE), never retried forever",
+      "passed": true,
+      "durationMs": 94.682879,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/restart-from-durable-record.test.js",
+      "name": "a restart reconstructs what the core itself held before the crash",
+      "passed": true,
+      "durationMs": 145.212536,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/restart-from-durable-record.test.js",
+      "name": "what a restart reconstructs is exactly what the durable bytes hold",
+      "passed": true,
+      "durationMs": 68.551114,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/restart-from-durable-record.test.js",
+      "name": "the restore path cannot reach a cache, a service or a system table",
+      "passed": true,
+      "durationMs": 474.317609,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/restart-from-durable-record.test.js",
+      "name": "poisoning every cache in the same database changes nothing",
+      "passed": true,
+      "durationMs": 95.920004,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/partition-construction-seam.test.js",
+      "name": "the partition service builds the port it runs on through its one factory",
+      "passed": true,
+      "durationMs": 159.870536,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/partition-construction-seam.test.js",
+      "name": "no production module replaces the partition operation-port factory",
+      "passed": true,
+      "durationMs": 168.503574,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/partition-construction-seam.test.js",
+      "name": "the request carries the partition requirements and no retired field",
+      "passed": true,
+      "durationMs": 9.781455,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/partition-construction-seam.test.js",
+      "name": "the rs-raft backend returns the frozen semantic port contract",
+      "passed": true,
+      "durationMs": 3.05229,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/partition-construction-seam.test.js",
+      "name": "a single-replica partition observes rs-raft leadership through the port",
+      "passed": true,
+      "durationMs": 8.966015,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/partition-construction-seam.test.js",
+      "name": "the rs-raft operation port refuses missing named requirements",
+      "passed": true,
+      "durationMs": 4.010036,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/participation-gate.test.js",
+      "name": "T4 (H6, |D|=2): a target below its gate on the silent-skew prefix never campaigns - O-d: its durable term and vote are unchanged",
+      "passed": true,
+      "durationMs": 538.040327,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/participation-gate.test.js",
+      "name": "T4 (commit lag): a caught-up target between j and its own AddNode does not lead, and its gate opens in the drain that applies the AddNode; the scheduling asked for while closed ticks it from the start (a learner core never campaigns)",
+      "passed": true,
+      "durationMs": 205.151446,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/participation-gate.test.js",
+      "name": "T4 (H1 + self): a runtime reconstruction at the transient sole-voter index of the target never leads",
+      "passed": true,
+      "durationMs": 147.701943,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/participation-gate.test.js",
+      "name": "T4 (restart between j and a): a target restarted from its durable record below its admission restores its gate closed and does not lead",
+      "passed": true,
+      "durationMs": 220.43047,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/participation-gate.test.js",
+      "name": "B12: R-1a waits on a witness below its gate (whose view, folded at C_j, no longer transiently shows a committed voter absent), and retires only once the gate is open",
+      "passed": true,
+      "durationMs": 104.476821,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-trap-and-restore.test.js",
+      "name": "a trap marks the runtime unhealthy and its groups restore",
+      "passed": true,
+      "durationMs": 152.904285,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/message-group-on-raft-rs.test.js",
+      "name": "message group constructs only the raft-rs operation port",
+      "passed": true,
+      "durationMs": 365.809141,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/message-group-on-raft-rs.test.js",
+      "name": "message group proposal commits and applies through raft-rs",
+      "passed": true,
+      "durationMs": 390.596939,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/message-group-on-raft-rs.test.js",
+      "name": "message group membership comes from committed ConfState",
+      "passed": true,
+      "durationMs": 1745.200997,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/message-group-on-raft-rs.test.js",
+      "name": "message group role and leader publication comes from raft-rs",
+      "passed": true,
+      "durationMs": 297.36156,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/message-group-on-raft-rs.test.js",
+      "name": "message group restart preserves term vote and configuration",
+      "passed": true,
+      "durationMs": 704.592995,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/message-group-on-raft-rs.test.js",
+      "name": "message group replica joining an existing group with no record is refused durable-record-missing at startup",
+      "passed": true,
+      "durationMs": 340.889344,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js",
+      "name": "worker consensus path and its replica base are deleted",
+      "passed": true,
+      "durationMs": 1.290566,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js",
+      "name": "wasm service replica requires its own durable file",
+      "passed": true,
+      "durationMs": 73.647087,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js",
+      "name": "wasm service group commits and applies kv writes through raft-rs",
+      "passed": true,
+      "durationMs": 324.504882,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js",
+      "name": "wasm service replica restart preserves kv and consensus state",
+      "passed": true,
+      "durationMs": 608.341619,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/partition/partition-port-refusal-outcomes.test.js",
+      "name": "F-f: a single-replica partition whose port refuses its campaign fails initialization closed with a typed outcome",
+      "passed": true,
+      "durationMs": 154.943002,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/partition/partition-port-refusal-outcomes.test.js",
+      "name": "F-f: production construction over an inert rs-raft record (no lifecycle row) fails initialization closed with the port's own reason",
+      "passed": true,
+      "durationMs": 129.147549,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/partition/partition-port-refusal-outcomes.test.js",
+      "name": "F-h: peer admission records the port's actual answer - proposed, refused with its reason, deferred, or queued and then settled",
+      "passed": true,
+      "durationMs": 128.301054,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/partition/partition-port-refusal-outcomes.test.js",
+      "name": "F-h: the services-cache reconcile records a refused admission as refused, with the port's reason",
+      "passed": true,
+      "durationMs": 72.360599,
+      "limitMs": 2000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+      "name": "native runtime opening: partition unhealthy initialization is typed, cleans up, and can retry",
+      "passed": true,
+      "durationMs": 139.356411,
+      "limitMs": 30000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+      "name": "native runtime opening: partition backoff initialization is typed, cleans up, and can retry",
+      "passed": true,
+      "durationMs": 88.016311,
+      "limitMs": 30000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+      "name": "native runtime opening: message-group unhealthy initialization is typed, cleans up, and can retry",
+      "passed": true,
+      "durationMs": 68.081012,
+      "limitMs": 30000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+      "name": "native runtime opening: message-group backoff initialization is typed, cleans up, and can retry",
+      "passed": true,
+      "durationMs": 68.230309,
+      "limitMs": 30000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+      "name": "native runtime opening: wasm-service unhealthy initialization is typed, cleans up, and can retry",
+      "passed": true,
+      "durationMs": 60.500112,
+      "limitMs": 30000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+      "name": "native runtime opening: wasm-service backoff initialization is typed, cleans up, and can retry",
+      "passed": true,
+      "durationMs": 58.112531,
+      "limitMs": 30000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+      "name": "native runtime opening: unhealthy refusal preserves absence of a reservation owner",
+      "passed": true,
+      "durationMs": 69.086285,
+      "limitMs": 30000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+      "name": "native runtime opening: unhealthy refusal preserves an existing reservation owner",
+      "passed": true,
+      "durationMs": 56.864855,
+      "limitMs": 30000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+      "name": "native runtime opening: replacing refusal preserves absence of a reservation owner",
+      "passed": true,
+      "durationMs": 52.249291,
+      "limitMs": 30000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+      "name": "native runtime opening: replacing refusal preserves an existing reservation owner",
+      "passed": true,
+      "durationMs": 52.285489,
+      "limitMs": 30000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js",
+      "name": "shared runtime load recovery through production ports: control",
+      "passed": true,
+      "durationMs": 374.022499,
+      "limitMs": 30000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js",
+      "name": "shared runtime load recovery through production ports: missing-glue",
+      "passed": true,
+      "durationMs": 370.784291,
+      "limitMs": 30000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js",
+      "name": "shared runtime load recovery through production ports: changed-glue",
+      "passed": true,
+      "durationMs": 361.475069,
+      "limitMs": 30000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js",
+      "name": "shared runtime load recovery through production ports: repeated-refusal",
+      "passed": true,
+      "durationMs": 359.085572,
+      "limitMs": 30000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js",
+      "name": "shared runtime independent-review witness: control",
+      "passed": true,
+      "durationMs": 391.443351,
+      "limitMs": 30000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js",
+      "name": "shared runtime independent-review witness: partial-restore",
+      "passed": true,
+      "durationMs": 380.898398,
+      "limitMs": 30000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js",
+      "name": "shared runtime independent-review witness: reentrant-restore",
+      "passed": true,
+      "durationMs": 376.969825,
+      "limitMs": 30000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js",
+      "name": "shared runtime independent-review witness: reload-backoff",
+      "passed": true,
+      "durationMs": 370.578401,
+      "limitMs": 30000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js",
+      "name": "shared runtime independent-review witness: trap-during-restore",
+      "passed": true,
+      "durationMs": 383.384194,
+      "limitMs": 30000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js",
+      "name": "shared runtime independent-review witness: close-during-restore",
+      "passed": true,
+      "durationMs": 362.697232,
+      "limitMs": 30000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js",
+      "name": "shared runtime independent-review witness: mixed-clocks",
+      "passed": true,
+      "durationMs": 370.151952,
+      "limitMs": 30000
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js",
+      "name": "shared runtime independent-review witness: last-close",
+      "passed": true,
+      "durationMs": 377.76415,
+      "limitMs": 30000
+    }
+  ],
+  "sourceDigests": {
+    "src/raft/raft-operation-port.js": "d7dd5cea4d67e66fcd63e87095b2c06a036dfdbf6796da7eff4469abb6a694c4",
+    "src/raft/raft-rs-operation-port.js": "1656c604b0ef26dd90ba15728f29f5060bc3f0528c8ece6f66369746a6c17468",
+    "src/partition/partition-consensus-port-opening.js": "721c27fa026ea3f91140157c7f128fe78f2ba99636a97d0a9493a7be8cf62c86",
+    "src/message-group/message-group-consensus-port.js": "18950fdf6695f9a03a9bd547d4836a997e0e03ad748b1add7b7ddacea2eecc27",
+    "src/wasm-service/wasm-service-consensus-port.js": "0be950d49580286f494e56a5d0988579f7a08656887d3a883738ac28f1cefa5d"
+  },
+  "testSha256": "08a39cfbc476ad23c1e7dfce1dca97c0a5a367e446a47b1f40d9e13fe17ed900"
+}

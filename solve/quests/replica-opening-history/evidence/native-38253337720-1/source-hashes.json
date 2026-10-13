@@ -1,0 +1,16 @@
+{
+  "before": {
+    "src/raft/raft-rs-operation-port.js": "1656c604b0ef26dd90ba15728f29f5060bc3f0528c8ece6f66369746a6c17468",
+    "src/raft/raft-rs-participation-gate.js": "20fd709e5f482ba28980d8da233368d8aa29d6e49d8706a8082d8ed0f0c34d6e",
+    "src/raft/raft-rs-replica-lifecycle-owner.js": "ef9129c4548241b3dc22deca633e013430bc0f6e5f54795d3069969f65e4d778",
+    "src/raft/raft-rs-runtime-owner.js": "d121161897f0fa1d167692b1e0962d0e9a6d06d0d854f9518d74116a896a27a0",
+    "src/raft/raft-rs-opening-history-constants.js": null
+  },
+  "after": {
+    "src/raft/raft-rs-operation-port.js": "552ec26c5d173a6962646e45e8a990d79a3f8052125fc5f798a77473d2a726bd",
+    "src/raft/raft-rs-participation-gate.js": "dd2911e8d85a783d8c849b00ff9ba88db6c79f500a8829aa31c97a0b4a0245f6",
+    "src/raft/raft-rs-replica-lifecycle-owner.js": "9d71e2ab8a6c48524ae5a04aca4991805b1c765feff3e3e3cb96040ec499cf70",
+    "src/raft/raft-rs-runtime-owner.js": "b6cf3a1138030e75f23cb83eeeb31f1bc9080a8d72c414a160320217e556b1b5",
+    "src/raft/raft-rs-opening-history-constants.js": "519cbf99c45a135cea5ab0646a0b9ab33db670e9d53105c7681784d245819a1c"
+  }
+}

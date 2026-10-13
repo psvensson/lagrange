@@ -1,0 +1,43 @@
+{"subsystem":"raft-rs","report":"core-trapped","groupId":"o1-gate-partition","replicaIdentity":"h1-b","peerId":"9115105443202071380","operation":"step","reason":"unreachable","runtimeGeneration":1,"from":"9115105443202073000","msgType":3,"term":"3","commit":"7","index":"7","level":"error","message":"raft-rs core trapped"}
+{"subsystem":"raft-rs","report":"runtime-replaced","groupId":"o1-gate-partition","replicaIdentity":"h1-b","peerId":"9115105443202071380","runtimeGeneration":2,"groupsRestored":3,"failure":null,"level":"error","message":"raft-rs runtime replaced"}
+TAP version 13
+# Subtest: T4 (H6, |D|=2): a target below its gate on the silent-skew prefix never campaigns - O-d: its durable term and vote are unchanged
+ok 1 - T4 (H6, |D|=2): a target below its gate on the silent-skew prefix never campaigns - O-d: its durable term and vote are unchanged
+  ---
+  duration_ms: 538.040327
+  type: 'test'
+  ...
+# Subtest: T4 (commit lag): a caught-up target between j and its own AddNode does not lead, and its gate opens in the drain that applies the AddNode; the scheduling asked for while closed ticks it from the start (a learner core never campaigns)
+ok 2 - T4 (commit lag): a caught-up target between j and its own AddNode does not lead, and its gate opens in the drain that applies the AddNode; the scheduling asked for while closed ticks it from the start (a learner core never campaigns)
+  ---
+  duration_ms: 205.151446
+  type: 'test'
+  ...
+# Subtest: T4 (H1 + self): a runtime reconstruction at the transient sole-voter index of the target never leads
+ok 3 - T4 (H1 + self): a runtime reconstruction at the transient sole-voter index of the target never leads
+  ---
+  duration_ms: 147.701943
+  type: 'test'
+  ...
+# Subtest: T4 (restart between j and a): a target restarted from its durable record below its admission restores its gate closed and does not lead
+ok 4 - T4 (restart between j and a): a target restarted from its durable record below its admission restores its gate closed and does not lead
+  ---
+  duration_ms: 220.43047
+  type: 'test'
+  ...
+# Subtest: B12: R-1a waits on a witness below its gate (whose view, folded at C_j, no longer transiently shows a committed voter absent), and retires only once the gate is open
+ok 5 - B12: R-1a waits on a witness below its gate (whose view, folded at C_j, no longer transiently shows a committed voter absent), and retires only once the gate is open
+  ---
+  duration_ms: 104.476821
+  type: 'test'
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 5
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1249.218509
+# time=2939ms

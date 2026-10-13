@@ -697,6 +697,7 @@ async function decidedOnTwoReplicas(tx, operations, setup) {
 }
 
 export {
+  resumeFixtureParticipantAdmission,
   COMMITTED,
   GENERATION_ORIGIN_INDEX,
   clearFixtureSingletons,

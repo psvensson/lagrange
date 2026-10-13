@@ -1,0 +1,41 @@
+name: rs-raft-review-workspace
+on:
+  push:
+    branches: [resume/rs-raft-runtime-recovery-20261012]
+    paths: [.github/workflows/rs-raft-review-workspace.yml]
+permissions:
+  contents: read
+jobs:
+  pinned-workspace:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Export exact current tracked source and Git identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/rs-raft-review-export"
+          mkdir -p "$OUT"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git diff --exit-code
+          git rev-parse HEAD > "$OUT/input-sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/tree-sha.txt"
+          git cat-file commit HEAD > "$OUT/head-commit.raw"
+          git ls-tree -r HEAD > "$OUT/tracked-blobs.txt"
+          git archive --format=tar.gz HEAD > "$OUT/source.tar.gz"
+          sha256sum package-lock.json > "$OUT/dependency-lock.sha256"
+          cd "$OUT"
+          sha256sum source.tar.gz head-commit.raw tracked-blobs.txt > SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: rs-raft-review-source-${{ github.run_id }}
+          path: ${{ runner.temp }}/rs-raft-review-export/
+          retention-days: 7
+          compression-level: 0
+          if-no-files-found: error

@@ -15,7 +15,9 @@
         "src/partition/partition-participant-transaction-",
         "src/query/sql-query-engine-select-execution.js",
         "src/query/query-executor-base.js",
-        "src/query/query-executor-join-execution.js"
+        "src/query/query-executor-join-execution.js",
+        "src/partition/partition-service-transaction-base.js",
+        "src/partition/partition-service-entry-apply-base.js"
       ],
       "tests": [
         "test/query/partition-transaction-seam-falsifiers.test.js",
@@ -27,7 +29,11 @@
         "test/partition/partition-transaction-replicated-apply-v3.test.js",
         "test/query/transaction-recovery-ownership.test.js",
         "test/query/transaction-session-reads.test.js",
-        "test/partition/participant-decision-canonical-record.test.js"
+        "test/partition/participant-decision-canonical-record.test.js",
+        "test/partition/partition-unreadable-durable-record.test.js",
+        "test/integration/seed-migration-cutover-persisted.integration.test.js",
+        "test/integration/seed-migration-process-loss.integration.test.js",
+        "test/integration/seed-migration-interrupted-decision.integration.test.js"
       ]
     },
     "transaction-workflow-recovery-ownership": {
@@ -39,7 +45,10 @@
       "tests": [
         "test/query/transaction-recovery-ownership.test.js",
         "test/workflow/durable-workflow-coordinator.test.js",
-        "test/workflow/durable-workflow-recovery-identity.test.js"
+        "test/workflow/durable-workflow-recovery-identity.test.js",
+        "test/integration/seed-migration-cutover-persisted.integration.test.js",
+        "test/integration/seed-migration-process-loss.integration.test.js",
+        "test/integration/seed-migration-interrupted-decision.integration.test.js"
       ]
     },
     "wit-world-interface": {
@@ -391,7 +400,7 @@
       ]
     },
     "CL-041": {
-      "description": "A follower grants its vote to at most one candidate per term, so at most one leader can be elected per term (Raft \u00a75.2 Election Safety).",
+      "description": "A follower grants its vote to at most one candidate per term, so at most one leader can be elected per term (Raft §5.2 Election Safety).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -402,7 +411,7 @@
       ]
     },
     "CL-040": {
-      "description": "A committed Raft log entry is identical cluster-wide at its index; a follower never stale-commits its own same-index/different-term entry on catch-up (Raft \u00a75.3 Log Matching).",
+      "description": "A committed Raft log entry is identical cluster-wide at its index; a follower never stale-commits its own same-index/different-term entry on catch-up (Raft §5.3 Log Matching).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -413,7 +422,7 @@
       ]
     },
     "CL-042": {
-      "description": "An empty raft log's last-log-term is 0 (Raft \u00a75.4.1): the consensus core never masquerades an empty log as up-to-date, so a voter holding committed entries denies an empty-log candidate regardless of the candidate's election term (CL-042).",
+      "description": "An empty raft log's last-log-term is 0 (Raft §5.4.1): the consensus core never masquerades an empty log as up-to-date, so a voter holding committed entries denies an empty-log candidate regardless of the candidate's election term (CL-042).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -548,20 +557,42 @@
       ]
     },
     "raft-rs-runtime-lifecycle-entry": {
-      "description": "The replica lifecycle owner admits each semantic operation before the runtime owner can enter the raft-rs core, and durable retirement waits for admitted operations before becoming terminal.",
+      "description": "The replica lifecycle owner admits each semantic operation before the runtime owner can enter the raft-rs core, and durable retirement waits for admitted operations before becoming terminal. A constructor refused before runtime admission publishes no membership reservation owner or native handle; each service initialization retains the exact named consensus failure and releases its own opening resources before reporting refusal. Exact-incarnation native opening history is NEVER_OPENED or ESTABLISHED in the existing lifecycle row; legacy NULL is unknown. Bootstrap and establishment commit atomically at FULL before participation; intact history restores, while absent native state cannot reopen an established or unknown incarnation. Host prior-existence remains independent for complete storage loss. If startup cleanup also fails, the original typed refusal and immutable owner retry answer remain primary; the actual secondary failure is retained, exact unclosed resources remain with the service lifecycle, initialize stays held, and existing shutdown retries that same cleanup without a new scheduler. Failed WASM teardown is CLEANUP_REQUIRED, not STOPPED.",
       "owners": [
         "src/raft/raft-rs-replica-lifecycle-owner.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-operation-port.js",
-        "src/raft/raft-rs-runtime-owner.js"
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/raft/raft-operation-port.js",
+        "src/raft/raft-rs-membership-administration.js",
+        "src/partition/partition-consensus-port-opening.js",
+        "src/message-group/message-group-consensus-port.js",
+        "src/wasm-service/wasm-service-consensus-port.js",
+        "src/raft/raft-rs-opening-history-constants.js",
+        "src/raft/raft-rs-durable-store.js",
+        "src/raft/raft-rs-participation-gate.js",
+        "src/partition/partition-service-core-base.js",
+        "src/partition/partition-service-raft-init-base.js",
+        "src/partition/partition-service-lifecycle-methods.js",
+        "src/message-group/message-group-service-raft-lifecycle.js",
+        "src/message-group/message-group-service-state.js",
+        "src/message-group/message-group-service-cache-and-lifecycle-runtime-methods.js",
+        "src/wasm-service/wasm-service-replica.js",
+        "src/wasm-service/wasm-service-replica-lifecycle.js",
+        "src/wasm-service/wasm-service-constants.js",
+        "src/node/replica-transport-handler-identity.js"
       ],
       "tests": [
         "test/raft/raft-rs-backend/operation-port-lifecycle.test.js",
-        "test/raft/raft-rs-backend/operation-port-boundary.test.js"
+        "test/raft/raft-rs-backend/operation-port-boundary.test.js",
+        "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+        "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
+        "test/raft/raft-opening-cleanup-error.test.js",
+        "test/raft/raft-rs-backend/startup-cleanup.integration.test.js"
       ]
     },
     "raft-rs-runtime-application-transaction": {
-      "description": "Ready processing and the application transaction owner keep application effects, partition progress, raft-rs applied progress, ConfState and each statement's durable outcome coherent across host failure and reconstruction; failure scope follows failure class (a core failure replaces the runtime and resumes every group once, a host failure reconstructs its own group and touches no other group; a failure within one retry window of the last instant the previous one held the group is the same persisting failure, whatever its class and whether or not a reconstruction succeeded in between, so the group is reconstructed at most once per window while it persists - at most ceil(span / window) + 1 reconstructions over any span - and a failure more than one window after the last one starts afresh; a group healed inside a window serves again only after it, so its first write after a heal waits up to one window), a durable record that cannot be read where a group is opened or reconstructed (a missing table, SQLITE_IOERR, SQLITE_CORRUPT) is that group's own typed host failure of phase durable-record-read and never a throw, a record that lost a table is never recreated empty (the record's tables are created in one transaction of the store's own, whole or not at all, so a partial schema only ever comes from outside), a replica whose record cannot be read at open is refused at initialization, typed and naming the phase and the table, whatever its replica count (healing in place is for a group that fails while it runs), a throw the runtime did not type is contained by the port as the group's typed host failure, a group without a usable host announces no role so its partition does not lead, a reconstructed sole voter leads again, a retry is answered from its durable outcome, and the admission owner refuses before consensus (and before a session stages it) every command the application would refuse or never answer.",
+      "description": "Ready processing and the application transaction owner keep application effects, partition progress, raft-rs applied progress, ConfState and each statement's durable outcome coherent across host failure and reconstruction; failure scope follows failure class (a core failure replaces the runtime and resumes every group once, a host failure reconstructs its own group and touches no other group; a failure within one retry window of the last instant the previous one held the group is the same persisting failure, whatever its class and whether or not a reconstruction succeeded in between, so the group is reconstructed at most once per window while it persists - at most ceil(span / window) + 1 reconstructions over any span - and a failure more than one window after the last one starts afresh; a group healed inside a window serves again only after it, so its first write after a heal waits up to one window), a durable record that cannot be read where a group is opened or reconstructed (a missing table, SQLITE_IOERR, SQLITE_CORRUPT) is that group's own typed host failure of phase durable-record-read and never a throw, a record that lost a table is never recreated empty (the record's tables are created in one transaction of the store's own, whole or not at all, so a partial schema only ever comes from outside), a replica whose record cannot be read at open is refused at initialization, typed and naming the phase and the table, whatever its replica count (healing in place is for a group that fails while it runs), a throw the runtime did not type is contained by the port as the group's typed host failure, a group without a usable host announces no role so its partition does not lead, a reconstructed sole voter leads again, a retry is answered from its durable outcome, and the admission owner refuses before consensus (and before a session stages it) every command the application would refuse or never answer. Shared native replacement holds entry until every registered group is reconstructed or explicitly held; callbacks cannot use stale handles or cached healthy observations. A failed shared reload owns one captured clock and existing election-derived retry window, shared by all callers; caller changes cannot renew or bypass it. Resumption uses each existing group queue; close discharges exact-handle obligations and final close releases the shared retry record.",
       "owners": [
         "src/raft/raft-rs-runtime-owner.js",
         "src/raft/raft-rs-runtime-tuning.js",
@@ -577,7 +608,10 @@
         "src/partition/partition-participant-transaction-bytes.js",
         "src/partition/partition-participant-transaction-constants.js",
         "src/partition/partition-participant-transaction-store.js",
-        "src/partition/partition-transaction-execution-envelope.js"
+        "src/partition/partition-transaction-execution-envelope.js",
+        "src/raft/raft-rs-binding-owner.js",
+        "src/raft/raft-rs-runtime-owner-constants.js",
+        "src/raft/raft-rs-runtime-faults.js"
       ],
       "tests": [
         "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
@@ -586,7 +620,14 @@
         "test/partition/partition-runtime-reconstruction-leadership.test.js",
         "test/partition/partition-unreadable-durable-record.test.js",
         "test/partition/partition-participant-transaction-apply.test.js",
-        "test/partition/partition-participant-transaction-staging.test.js"
+        "test/partition/partition-participant-transaction-staging.test.js",
+        "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js",
+        "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js",
+        "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+        "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
+        "test/raft/raft-rs-backend/startup-cleanup.integration.test.js",
+        "test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js",
+        "test/partition/participant-envelope-admission.test.js"
       ]
     },
     "partition-raft-operation-port": {
@@ -598,14 +639,17 @@
         "src/partition/partition-service-raft-init-base.js",
         "src/partition/partition-service-raft-lifecycle-wiring.js",
         "src/partition/partition-service-raft-membership-administration.js",
-        "src/partition/partition-consensus-hold-log.js"
+        "src/partition/partition-consensus-hold-log.js",
+        "src/partition/partition-consensus-port-opening.js"
       ],
       "tests": [
         "test/raft/raft-rs-backend/partition-construction-seam.test.js",
         "test/raft/raft-rs-backend/operation-port-boundary.test.js",
         "test/partition/partition-port-refusal-outcomes.test.js",
         "test/partition/partition-write-typed-releases.test.js",
-        "test/partition/partition-consensus-hold-log.test.js"
+        "test/partition/partition-consensus-hold-log.test.js",
+        "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+        "test/raft/raft-rs-backend/startup-cleanup.integration.test.js"
       ]
     },
     "partition-session-transaction-persistence-admission": {
@@ -929,6 +973,39 @@
         "test/integration/message-group-learner-discovery.integration.test.js",
         "test/rebalancer/coordinator-timeout-check-serialization.test.js"
       ]
+    },
+    "snapshot-receiver-lifecycle-staging": {
+      "description": "Validated snapshot installation consumes a narrow, immutable receiver-local staging result from the existing replica lifecycle owner; it neither constructs that owner nor acquires runtime/retirement authority. The lifecycle owner preserves an exact active incarnation and refuses conflicting, retired or lifecycle-less surviving native history. Snapshot installation retains validation, CREATE authorization, staged-file custody, native reconstruction and atomic publication. Fresh CREATE also consumes read-only surviving-receiver admission before staging, final swap and STAGED recovery; existing receiver history is not replaceable by checkpoint validity alone.",
+      "owners": [
+        "src/raft/snapshot-install.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/raft/snapshot-receiver-admission.js"
+      ],
+      "tests": [
+        "test/raft/snapshot-lifecycle-staging.test.js",
+        "test/integration/message-group-learner-runtime-authorization.integration.test.js",
+        "test/raft/raft-rs-backend/operation-port-boundary.test.js"
+      ]
+    },
+    "replica-host-cleanup-custody": {
+      "description": "The existing host retains exact unreleased service objects independently of active routing. Failed CREATE/restart and host shutdown use the same instance cleanup owner; typed failure retains custody, retries do not retarget successors, and pending cleanup bounds replacement admission without granting CREATE or storage-deletion authority.",
+      "owners": [
+        "src/node/replica-handler-class.js",
+        "src/node/replica-handler-create-methods.js",
+        "src/node/replica-handler-runtime-methods.js",
+        "src/node/replica-handler-create-status-methods.js",
+        "src/node/replica-runtime-cleanup-custody.js",
+        "src/wasm-service/wasm-service-lifecycle.js",
+        "src/partition/partition-service-lifecycle-methods.js",
+        "src/message-group/message-group-service-cache-and-lifecycle-runtime-methods.js",
+        "src/wasm-service/wasm-service-replica-lifecycle.js",
+        "src/raft/raft-operation-port.js"
+      ],
+      "tests": [
+        "test/node/replica-runtime-cleanup-custody.integration.test.js",
+        "test/wasm-service/wasm-service-lifecycle.test.js",
+        "test/node/replica-failed-create-cleanup-generation.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -952,22 +1029,28 @@
         {
           "id": "participant-request-and-apply",
           "owners": [
-            "src/partition/partition-participant-transaction-"
+            "src/partition/partition-participant-transaction-",
+            "src/partition/partition-service-transaction-base.js",
+            "src/partition/partition-service-entry-apply-base.js"
           ]
         }
       ],
       "contract": "distributed-transaction-coordinator-participant-protocol",
       "witnessTests": [
         "test/query/partition-transaction-seam-falsifiers.test.js",
-      "test/query/transaction-begin-collision-production.test.js",
+        "test/query/transaction-begin-collision-production.test.js",
         "test/query/transaction-coordinator-participant-protocol.test.js",
-      "test/query/transaction-evidence-binding-production.test.js",
+        "test/query/transaction-evidence-binding-production.test.js",
         "test/integration/transaction-coordinator-restart.integration.test.js",
         "test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js",
         "test/partition/partition-transaction-replicated-apply-v3.test.js",
         "test/query/transaction-recovery-ownership.test.js",
         "test/query/transaction-session-reads.test.js",
-        "test/partition/participant-decision-canonical-record.test.js"
+        "test/partition/participant-decision-canonical-record.test.js",
+        "test/partition/partition-unreadable-durable-record.test.js",
+        "test/integration/seed-migration-cutover-persisted.integration.test.js",
+        "test/integration/seed-migration-process-loss.integration.test.js",
+        "test/integration/seed-migration-interrupted-decision.integration.test.js"
       ]
     },
     "transaction-workflow-recovery-ownership": {
@@ -990,7 +1073,10 @@
       "witnessTests": [
         "test/query/transaction-recovery-ownership.test.js",
         "test/workflow/durable-workflow-coordinator.test.js",
-        "test/workflow/durable-workflow-recovery-identity.test.js"
+        "test/workflow/durable-workflow-recovery-identity.test.js",
+        "test/integration/seed-migration-cutover-persisted.integration.test.js",
+        "test/integration/seed-migration-process-loss.integration.test.js",
+        "test/integration/seed-migration-interrupted-decision.integration.test.js"
       ]
     },
     "seed-registration-election-scheduling": {
@@ -1364,27 +1450,49 @@
       }
     },
     "raft-rs-runtime-lifecycle-entry": {
-      "description": "Lifecycle admission and core entry must remain one boundary: retirement cannot race an admitted operation, and queued ingress must recheck lifecycle before worker-side core entry.",
+      "description": "Lifecycle admission and core entry must remain one boundary: retirement cannot race an admitted operation, and queued ingress must recheck lifecycle before worker-side core entry. Refused construction leaves earlier exact owners intact and service initialization consumes the canonical failure without bypassing its cleanup. The lifecycle history fact and the runtime bootstrap transaction share one durable opening boundary, including process-crash recovery and genuine never-opened retries. If startup cleanup also fails, the original typed refusal and immutable owner retry answer remain primary; the actual secondary failure is retained, exact unclosed resources remain with the service lifecycle, initialize stays held, and existing shutdown retries that same cleanup without a new scheduler. Failed WASM teardown is CLEANUP_REQUIRED, not STOPPED.",
       "endpoints": [
         {
           "id": "durable-lifecycle-admission",
           "owners": [
             "src/raft/raft-rs-replica-lifecycle-owner.js",
-            "src/raft/raft-rs-lifecycle-administration.js"
+            "src/raft/raft-rs-lifecycle-administration.js",
+            "src/partition/partition-consensus-port-opening.js",
+            "src/message-group/message-group-consensus-port.js",
+            "src/wasm-service/wasm-service-consensus-port.js",
+            "src/partition/partition-service-core-base.js",
+            "src/partition/partition-service-raft-init-base.js",
+            "src/partition/partition-service-lifecycle-methods.js",
+            "src/message-group/message-group-service-raft-lifecycle.js",
+            "src/message-group/message-group-service-state.js",
+            "src/message-group/message-group-service-cache-and-lifecycle-runtime-methods.js",
+            "src/wasm-service/wasm-service-replica.js",
+            "src/wasm-service/wasm-service-replica-lifecycle.js",
+            "src/wasm-service/wasm-service-constants.js",
+            "src/node/replica-transport-handler-identity.js"
           ]
         },
         {
           "id": "runtime-core-entry",
           "owners": [
             "src/raft/raft-rs-operation-port.js",
-            "src/raft/raft-rs-runtime-owner.js"
+            "src/raft/raft-rs-runtime-owner.js",
+            "src/raft/raft-operation-port.js",
+            "src/raft/raft-rs-membership-administration.js",
+            "src/raft/raft-rs-opening-history-constants.js",
+            "src/raft/raft-rs-durable-store.js",
+            "src/raft/raft-rs-participation-gate.js"
           ]
         }
       ],
       "contract": "raft-rs-runtime-lifecycle-entry",
       "witnessTests": [
         "test/raft/raft-rs-backend/operation-port-lifecycle.test.js",
-        "test/raft/raft-rs-backend/operation-port-boundary.test.js"
+        "test/raft/raft-rs-backend/operation-port-boundary.test.js",
+        "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+        "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
+        "test/raft/raft-opening-cleanup-error.test.js",
+        "test/raft/raft-rs-backend/startup-cleanup.integration.test.js"
       ]
     },
     "raft-rs-runtime-application-transaction": {
@@ -1395,7 +1503,10 @@
           "owners": [
             "src/raft/raft-rs-runtime-owner.js",
             "src/raft/raft-rs-runtime-tuning.js",
-            "src/raft/raft-rs-durable-store.js"
+            "src/raft/raft-rs-durable-store.js",
+            "src/raft/raft-rs-binding-owner.js",
+            "src/raft/raft-rs-runtime-owner-constants.js",
+            "src/raft/raft-rs-runtime-faults.js"
           ]
         },
         {
@@ -1409,7 +1520,8 @@
             "src/partition/partition-service-write-metrics-base.js",
             "src/partition/partition-participant-transaction-apply.js",
             "src/partition/partition-participant-transaction-store.js",
-            "src/partition/partition-transaction-execution-envelope.js"
+            "src/partition/partition-transaction-execution-envelope.js",
+            "src/partition/partition-participant-transaction-bytes.js"
           ]
         }
       ],
@@ -1421,7 +1533,14 @@
         "test/partition/partition-runtime-reconstruction-leadership.test.js",
         "test/partition/partition-unreadable-durable-record.test.js",
         "test/partition/partition-participant-transaction-apply.test.js",
-        "test/partition/partition-participant-transaction-staging.test.js"
+        "test/partition/partition-participant-transaction-staging.test.js",
+        "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js",
+        "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js",
+        "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+        "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
+        "test/raft/raft-rs-backend/startup-cleanup.integration.test.js",
+        "test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js",
+        "test/partition/participant-envelope-admission.test.js"
       ]
     },
     "partition-raft-operation-port": {
@@ -1441,7 +1560,8 @@
             "src/partition/partition-service-raft-init-base.js",
             "src/partition/partition-service-raft-lifecycle-wiring.js",
             "src/partition/partition-service-raft-membership-administration.js",
-            "src/partition/partition-consensus-hold-log.js"
+            "src/partition/partition-consensus-hold-log.js",
+            "src/partition/partition-consensus-port-opening.js"
           ]
         }
       ],
@@ -1451,7 +1571,9 @@
         "test/raft/raft-rs-backend/operation-port-boundary.test.js",
         "test/partition/partition-port-refusal-outcomes.test.js",
         "test/partition/partition-write-typed-releases.test.js",
-        "test/partition/partition-consensus-hold-log.test.js"
+        "test/partition/partition-consensus-hold-log.test.js",
+        "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+        "test/raft/raft-rs-backend/startup-cleanup.integration.test.js"
       ]
     },
     "spread-cure-transition-authorization": {
@@ -1842,6 +1964,61 @@
         "test/integration/message-group-learner-recipient.integration.test.js",
         "test/integration/message-group-learner-discovery.integration.test.js",
         "test/rebalancer/coordinator-timeout-check-serialization.test.js"
+      ]
+    },
+    "snapshot-receiver-lifecycle-staging": {
+      "description": "Snapshot staging consumes a lifecycle-owned preparation answer without being allowed to mint or retire live runtime authority.",
+      "endpoints": [
+        {
+          "id": "validated-snapshot-installation",
+          "owners": [
+            "src/raft/snapshot-install.js",
+            "src/raft/snapshot-receiver-admission.js"
+          ]
+        },
+        {
+          "id": "receiver-lifecycle-preparation",
+          "owners": [
+            "src/raft/raft-rs-replica-lifecycle-owner.js"
+          ]
+        }
+      ],
+      "contract": "snapshot-receiver-lifecycle-staging",
+      "witnessTests": [
+        "test/raft/snapshot-lifecycle-staging.test.js",
+        "test/integration/message-group-learner-runtime-authorization.integration.test.js",
+        "test/raft/raft-rs-backend/operation-port-boundary.test.js"
+      ]
+    },
+    "replica-host-cleanup-custody": {
+      "description": "The existing host retains exact unreleased service objects independently of active routing. Failed CREATE/restart and host shutdown use the same instance cleanup owner; typed failure retains custody, retries do not retarget successors, and pending cleanup bounds replacement admission without granting CREATE or storage-deletion authority.",
+      "contract": "replica-host-cleanup-custody",
+      "endpoints": [
+        {
+          "id": "host-object-custody",
+          "owners": [
+            "src/node/replica-handler-class.js",
+            "src/node/replica-handler-create-methods.js",
+            "src/node/replica-handler-runtime-methods.js",
+            "src/node/replica-handler-create-status-methods.js",
+            "src/node/replica-runtime-cleanup-custody.js",
+            "src/wasm-service/wasm-service-lifecycle.js"
+          ]
+        },
+        {
+          "id": "instance-resource-release",
+          "owners": [
+            "src/partition/partition-service-lifecycle-methods.js",
+            "src/message-group/message-group-service-cache-and-lifecycle-runtime-methods.js",
+            "src/wasm-service/wasm-service-replica-lifecycle.js",
+            "src/raft/raft-operation-port.js"
+          ]
+        }
+      ],
+      "witnessTests": [
+        "test/node/replica-runtime-cleanup-custody.integration.test.js",
+        "test/wasm-service/wasm-service-lifecycle.test.js",
+        "test/node/replica-failed-create-cleanup-generation.test.js"
       ]
     }
   }

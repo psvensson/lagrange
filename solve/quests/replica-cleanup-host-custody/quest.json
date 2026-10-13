@@ -1,0 +1,36 @@
+{
+  "schema": "solve-quest/2",
+  "id": "replica-cleanup-host-custody",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "ReplicaHandler and WasmServiceLifecycle retain exact replica objects whose shutdown is unfinished, independently of their routable active slots. Failed CREATE fencing never reports successful release or loses the primary failure; existing fence/shutdown calls retry retained resources. A permitted WASM STOPPING successor cannot orphan the predecessor, and further replacement is bounded while prior cleanup remains. No new cleanup coordinator, durable registry, filesystem deletion authority or timer is introduced.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/replica-cleanup-host-custody/evidence/receipt.json",
+      "requiredReceipts": [
+        "failed-create-exact-custody",
+        "shutdown-failure-and-retry",
+        "wasm-predecessor-and-successor",
+        "admission-backpressure",
+        "source-controls-and-regressions",
+        "independent-review-and-gates"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "separate-lifetimes",
+      "statement": "Host custody is distinct from per-instance resource state and from active routing. Sets/maps hold exact unreleased objects, never grant durable CREATE/removal authority."
+    },
+    {
+      "id": "preserve-positive-policy",
+      "statement": "The existing single STOPPING-successor behavior remains. An older stop cannot remove or release the successor's entry or allocation."
+    },
+    {
+      "id": "review",
+      "statement": "Source and proof remain WIP until independent review and the required gates pass."
+    }
+  ],
+  "sealedAt": "3ea4dd5053c5f60682cfc7bdcabfa32e0472682d"
+}

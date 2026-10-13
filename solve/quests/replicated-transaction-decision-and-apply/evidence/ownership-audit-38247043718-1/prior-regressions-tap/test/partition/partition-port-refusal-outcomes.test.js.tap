@@ -1,0 +1,35 @@
+TAP version 13
+# Subtest: F-f: a single-replica partition whose port refuses its campaign fails initialization closed with a typed outcome
+ok 1 - F-f: a single-replica partition whose port refuses its campaign fails initialization closed with a typed outcome
+  ---
+  duration_ms: 188.470907
+  type: 'test'
+  ...
+# Subtest: F-f: production construction over an inert rs-raft record (no lifecycle row) fails initialization closed with the port's own reason
+ok 2 - F-f: production construction over an inert rs-raft record (no lifecycle row) fails initialization closed with the port's own reason
+  ---
+  duration_ms: 81.27512
+  type: 'test'
+  ...
+# Subtest: F-h: peer admission records the port's actual answer - proposed, refused with its reason, deferred, or queued and then settled
+ok 3 - F-h: peer admission records the port's actual answer - proposed, refused with its reason, deferred, or queued and then settled
+  ---
+  duration_ms: 100.203028
+  type: 'test'
+  ...
+# Subtest: F-h: the services-cache reconcile records a refused admission as refused, with the port's reason
+ok 4 - F-h: the services-cache reconcile records a refused admission as refused, with the port's reason
+  ---
+  duration_ms: 74.006712
+  type: 'test'
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 4
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 513.573681
+# time=2762ms

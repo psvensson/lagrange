@@ -1,0 +1,61 @@
+{
+  "input": "0bc2ea4284e314d4b5dc00c07b8b0f135384c0af",
+  "baseline": "19aafbd901b5dba16530646dfc669e4d5c3eec7e",
+  "candidate": "e2c7435b72bb49856e7d13af08835d38f97b469d",
+  "localContentCandidate": "944bd9e8bd1f87514cb45657ca08ed9d916c632a",
+  "sourceTree": "972e63c8e342b118d02a7d263dabaa9fdff98bc2",
+  "checks": {
+    "baseline-engaged": true,
+    "candidate-native": true,
+    "source-only-revert": true,
+    "negative-assertions": true,
+    "same-native-test": true,
+    "all-files-engaged": false,
+    "regressions": false,
+    "hardware-duration-tolerance": false,
+    "lint": true,
+    "changed-literals": true,
+    "impact": true,
+    "boundary": true,
+    "whitespace": true,
+    "inherited-failure-binding": true
+  },
+  "nativeBaseline": {
+    "tests": 27,
+    "pass": 12,
+    "fail": 15,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "nativeCandidate": {
+    "tests": 28,
+    "pass": 28,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "nativeRevert": {
+    "tests": 27,
+    "pass": 12,
+    "fail": 15,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "regressions": {
+    "tests": 209,
+    "pass": 203,
+    "fail": 6,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "guidelineExit": 1,
+  "independentApproval": false,
+  "mergeReady": false,
+  "scope": "Actual service initialization/native fault cases plus explicitly controlled close and partition-adapter boundaries; all three existing lifecycle owners. Not snapshot receiver validation, full SQL/CDC startup, all arbitrary callback failures, or physical multi-host certification.",
+  "focusedProofPassed": false,
+  "allRunGatesPassed": false
+}

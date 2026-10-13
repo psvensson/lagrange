@@ -48,7 +48,7 @@ import {
   LEGACY_PARTITION_CONSENSUS_OUTCOME,
 } from './partition-legacy-consensus-state-constants.js';
 import {
-  consensusInitRefusedError,
+  refusePartitionConsensusStartup,
   openPartitionConsensusPort,
 } from './partition-consensus-port-opening.js';
 import {createCommittedStatementOutcomeTable} from
@@ -87,6 +87,8 @@ const {
   resolveCanonicalPartitionLeaderObservation,
   resolveRaftTransportDeliveryOptions,
 } = PARTITION_SERVICE_SHARED;
+
+const SERVICE_SHUTDOWN = 'partition_service_shutdown';
 
 class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
   /**
@@ -296,7 +298,36 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
    * Requirements: 8.1, 10.1, 10.2, 10.3, 10.4, 10.5
    * @return {Promise<void>}
    */
-  async initialize() {
+  initialize() {
+    if (this.startupFailure !== null) {
+      return Promise.reject(this.startupFailure);
+    }
+    if (this.isShutdown) {
+      return Promise.reject(
+        Object.assign(new Error(SERVICE_SHUTDOWN), {code: SERVICE_SHUTDOWN}));
+    }
+    if (this.initializationSettlement) {
+      return this.initializationSettlement;
+    }
+    if (this.initialized) {
+      return Promise.resolve();
+    }
+    const {promise, resolve, reject} = Promise.withResolvers();
+    this.initializationSettlement = promise;
+    this.initializeUnserialized().then(resolve, reject).finally(() => {
+      if (this.initializationSettlement === promise) {
+        this.initializationSettlement = null;
+      }
+    });
+    return promise;
+  }
+  async initializeUnserialized() {
+    if (this.startupFailure !== null) {
+      throw this.startupFailure;
+    }
+    if (this.isShutdown) {
+      throw Object.assign(new Error(SERVICE_SHUTDOWN), {code: SERVICE_SHUTDOWN});
+    }
     if (this.initialized) {
       return;
     }
@@ -587,8 +618,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
       // releases what it acquired (R11) instead of reporting a leader.
       const campaign = await this.raft.campaign();
       if (campaign?.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
-        await this.shutdown();
-        throw consensusInitRefusedError(this.partitionId, campaign);
+        await refusePartitionConsensusStartup(this, campaign);
       }
       this.logger.info(PARTITION_SERVICE_LOG_MSG.SINGLE_REPLICA_LEADER, {
         replicaId: this.replicaId,
@@ -600,6 +630,9 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     this.startPeriodicSizeUpdates();
     this.startPreparedStateHoldTimeoutSweep();
     await this.updatePartitionSize();
+    if (this.isShutdown) {
+      throw Object.assign(new Error(SERVICE_SHUTDOWN), {code: SERVICE_SHUTDOWN});
+    }
     this.initialized = true;
     this.reportInitializationStage(PARTITION_SERVICE_INIT_STAGE.READY, {
       sizeBytes: this.sizeBytes,
@@ -644,8 +677,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     if (!isHeldByHostFailure(opened)) {
       return;
     }
-    await this.shutdown();
-    throw consensusInitRefusedError(this.partitionId, opened);
+    await refusePartitionConsensusStartup(this, opened);
   }
   /**
    * Start the Raft election timer.

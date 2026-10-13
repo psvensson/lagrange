@@ -14,6 +14,11 @@ quests:
   - message-group-fresh-identity-membership
   - replicated-transaction-decision-and-apply
   - transaction-topology-admission-barrier
+  - snapshot-receiver-admission
+  - snapshot-lifecycle-staging-boundary
+  - replica-opening-history
+  - startup-refusal-cleanup-custody
+  - replica-cleanup-host-custody
 authorizes:
   - architecture
   - docs

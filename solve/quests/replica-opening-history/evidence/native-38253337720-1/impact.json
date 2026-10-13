@@ -1,0 +1,10 @@
+{
+  "command": [
+    "npm",
+    "run",
+    "-s",
+    "audit:impact-contracts"
+  ],
+  "completed": true,
+  "exit": 0
+}

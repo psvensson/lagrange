@@ -5,7 +5,8 @@
 // holds no durable record. Every refusal releases what initialization
 // acquired (R11) before it is thrown.
 
-import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
+import {isRaftOpeningFailure, withRaftOpeningCleanupFailure} from
+  '../raft/raft-operation-port.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {PARTITION_CONSENSUS_STARTUP_OUTCOME} from
   './partition-service-constants.js';
@@ -41,12 +42,38 @@ async function openPartitionConsensusPort(service, request) {
   try {
     return service.createOperationPort(request);
   } catch (error) {
-    if (error?.consensus?.outcome !== RAFT_OPERATION_OUTCOME.CORE_REFUSED) {
-      throw error;
-    }
-    await service.shutdown();
-    throw consensusInitRefusedError(service.partitionId, error.consensus);
+    const primary = isRaftOpeningFailure(error) ?
+      consensusInitRefusedError(service.partitionId, error.consensus) : error;
+    return cleanupRefusedPartitionStartup(service, primary);
   }
 }
 
-export {consensusInitRefusedError, openPartitionConsensusPort};
+// All partition opening refusals (construction, initial status, campaign)
+// use this same lifecycle interaction. Cleanup failure cannot replace the
+// primary refusal, and pending cleanup cannot admit another opening.
+async function refusePartitionConsensusStartup(service, answer) {
+  return cleanupRefusedPartitionStartup(service,
+    consensusInitRefusedError(service.partitionId, answer));
+}
+
+async function cleanupRefusedPartitionStartup(service, primary) {
+  service.startupFailure = primary;
+  // If an external shutdown already owns teardown, initialization must reject
+  // and let that owner continue after the joined initialization settles.
+  if (service.shutdownSettlement) {
+    throw primary;
+  }
+  service.initializationOwnsCleanup = true;
+  try {
+    await service.shutdown();
+  } catch (cleanup) {
+    service.startupFailure = withRaftOpeningCleanupFailure(primary, cleanup);
+    throw service.startupFailure;
+  } finally {
+    service.initializationOwnsCleanup = false;
+  }
+  throw primary;
+}
+
+export {consensusInitRefusedError, openPartitionConsensusPort,
+  refusePartitionConsensusStartup};

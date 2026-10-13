@@ -1,0 +1,31 @@
+{
+  "command": [
+    "npm",
+    "run",
+    "-s",
+    "test:file",
+    "--",
+    "test/partition/partition-unreadable-durable-record.test.js"
+  ],
+  "completed": true,
+  "exit": 1,
+  "files": [
+    {
+      "file": "test/partition/partition-unreadable-durable-record.test.js",
+      "counts": {
+        "tests": 6,
+        "pass": 0,
+        "fail": 6,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "testSha256": "aeb7f09ea90473bdea751aa9d7a1435b1cd14a5aa98c91ef62deeb1eeb6ecfa8",
+      "maxCaseMs": 112.271123,
+      "targetMs": 2000,
+      "toleranceFactor": 10,
+      "durationAccepted": true,
+      "assertionFailures": 6
+    }
+  ]
+}

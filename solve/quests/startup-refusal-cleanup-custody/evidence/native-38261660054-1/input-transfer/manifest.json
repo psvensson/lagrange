@@ -1,0 +1,18 @@
+{
+  "receivedAndRestoredBlobs": [
+    [
+      "56a932af2d6fab85a0cd5b22cd0827a4036a3d6f",
+      "8acd3ee85e2c8ba120a519985a8bf0b6b5412ac7"
+    ],
+    [
+      "fbfe3f65eacca246a97607199558e84b542d6af9",
+      "f422a2f218100da99260bcfbde20d29b4bdef901"
+    ],
+    [
+      "b04f87506c8b1e0e7fc3f79790637248792a3d07",
+      "b04f87506c8b1e0e7fc3f79790637248792a3d07"
+    ]
+  ],
+  "restoredPayloadSha256": "deb8700be5d9b15a46b5868447af1a86e9c9cb84b0d158e71941aa4db110573b",
+  "scope": "byte-exact transfer correction; source/test preimages and postimages separately enforced"
+}

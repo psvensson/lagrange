@@ -34,7 +34,10 @@ import {writeAtomicDurable, sha256Digest} from '../../src/runtime/oci-host-agent
 import {trapSharedCore} from '../raft/raft-rs-backend/evidence-o1-model.js';
 import {RAFT_RS_PEER_IDENTITY_ERROR_MSG} from '../../src/raft/raft-rs-peer-identity-constants.js';
 import {validateCheckpointDescriptor} from '../../src/raft/snapshot-checkpoint-format.js';
-import {requestSnapshotInstall} from '../../src/raft/snapshot-install.js';
+import {requestSnapshotInstall, recoverPendingSnapshotInstall} from '../../src/raft/snapshot-install.js';
+import {RaftRsReplicaLifecycleOwner, prepareReplicaLifecycleForSnapshot} from
+  '../../src/raft/raft-rs-replica-lifecycle-owner.js';
+import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {RAFT_SNAPSHOT_INSTALL_OUTCOME, RAFT_SNAPSHOT_INSTALL_REJECTION} from
   '../../src/raft/snapshot-install-constants.js';
 import {ReplicaCreateAdmissionOwner} from '../../src/node/replica-create-admission-owner.js';
@@ -1140,3 +1143,199 @@ test('recovered learner outcome advances only the exact operation membership fie
       assert.deepEqual(f.row(), before);
     });
   });
+
+
+// The receiver file, not the scrubbed checkpoint copy, carries retirement and
+// establishment history. Exercise the real native checkpoint and CREATE owner.
+async function receiverInstallFixture(t, state) {
+  const f = await fixture(t);
+  assertCommittedLearner(f, await f.run());
+  const created = await learnerCheckpoint(f);
+  const receiverRoot = path.join(f.cluster.directory, 'receiver-state-checkpoints');
+  const generation = created.descriptor.lastIncludedIndex;
+  fs.cpSync(created.checkpointDir, path.join(receiverRoot, String(generation)), {recursive: true});
+  const replicaDbPath = f.cluster.dbFileOf(TARGET);
+  let incarnation = null;
+  if (state !== 'absent') {
+    const db = new Database(replicaDbPath);
+    try {
+      db.exec('CREATE TABLE receiver_witness (value TEXT)');
+      db.prepare('INSERT INTO receiver_witness VALUES (?)').run('do-not-erase');
+      if (state !== 'empty-shell' && state !== 'orphan-native') {
+        const request = {db, groupId: state === 'foreign-group' ? 'foreign' : GROUP,
+          peerId: state === 'conflicting-peer' ? '17' : deriveRaftRsPeerId(TARGET),
+          replicaIdentity: state === 'conflicting-identity' ? 'foreign-replica' : TARGET};
+        const owner = new RaftRsReplicaLifecycleOwner(request);
+        incarnation = owner.incarnation;
+        if (state === 'retired') await owner.retire('removed-by-owner');
+        if (state === 'unknown') db.exec('UPDATE _raft_rs_replica_lifecycle SET native_history_state = NULL');
+        if (state === 'established-missing') prepareReplicaLifecycleForSnapshot(request);
+      }
+      if (state === 'orphan-native' || state === 'contradictory-never-opened') {
+        new RaftRsDurableStore(db).putBootstrapAppliedState(GROUP,
+          {voters: [], learners: [deriveRaftRsPeerId(TARGET)], votersOutgoing: [],
+            learnersNext: [], autoLeave: false}, {bootstrapIndex: '0', admissionIndex: null});
+      }
+    } finally {
+      db.close();
+    }
+  }
+  const admitted = await installationAdmission(t, f);
+  return {f, incarnation, created, admitted, options: {replicaDbPath,
+    checkpointsRoot: receiverRoot, generationIndex: generation,
+    expectedIdentity: {clusterId: 'origin-cluster', raftGroupId: GROUP,
+      entity: {kind: SERVICE_TYPE.MESSAGE_GROUP, id: GROUP},
+      membershipEpoch: created.descriptor.membershipEpoch},
+    expectedReplicaIdentity: TARGET, expectedPeerId: deriveRaftRsPeerId(TARGET),
+    createAdmissionOwner: admitted.owner, createAdmissionEvidence: admitted.evidence,
+    createPhysicalWorkerClaim: admitted.worker}};
+}
+for (const state of ['retired', 'conflicting-peer', 'conflicting-identity', 'foreign-group',
+  'unknown', 'established-missing', 'orphan-native', 'contradictory-never-opened']) {
+  test(`snapshot receiver admission refuses ${state} without erasing surviving bytes`, async (t) => {
+    const {options} = await receiverInstallFixture(t, state);
+    const before = fs.readFileSync(options.replicaDbPath);
+    const result = await requestSnapshotInstall(options);
+    assert.equal(result.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.REJECTED,
+      `surviving receiver ${state} must refuse fresh CREATE replacement`);
+    assert.deepEqual(fs.readFileSync(options.replicaDbPath), before);
+    assert.equal(fs.existsSync(path.join(options.checkpointsRoot, 'install', 'staging-payload')), false);
+  });
+}
+for (const state of ['absent', 'empty-shell', 'never-opened']) {
+  test(`snapshot receiver admission permits ${state} and preserves allocated incarnation`, async (t) => {
+    const {options, incarnation} = await receiverInstallFixture(t, state);
+    const result = await requestSnapshotInstall(options);
+    assert.equal(result.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED, JSON.stringify(result));
+    const db = new Database(options.replicaDbPath, {readonly: true});
+    try {
+      const row = db.prepare('SELECT * FROM _raft_rs_replica_lifecycle').get();
+      assert.equal(row.native_history_state, 'established');
+      if (incarnation !== null) {
+        assert.equal(row.incarnation, incarnation,
+          'snapshot import must preserve the receiver allocation, not mint a new incarnation');
+      }
+      assert.equal(RaftRsDurableStore.readDurableRecordIn(db, GROUP).appliedIndex,
+        String(options.generationIndex));
+    } finally {
+      db.close();
+    }
+  });
+}
+
+test('snapshot receiver admission rejects unreadable receiver without overwriting it', async (t) => {
+  const {options} = await receiverInstallFixture(t, 'absent');
+  const bytes = Buffer.from('not-a-sqlite-database'); fs.writeFileSync(options.replicaDbPath, bytes);
+  const result = await requestSnapshotInstall(options).catch((error) => ({outcome: 'thrown', error}));
+  assert.equal(result.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.REJECTED,
+    'unreadable receiver is a typed refusal, not an escaping SQLite error');
+  assert.deepEqual(fs.readFileSync(options.replicaDbPath), bytes);
+});
+
+test('snapshot receiver is revalidated after asynchronous CREATE commit admission', async (t) => {
+  const {options, admitted} = await receiverInstallFixture(t, 'never-opened');
+  const commit = admitted.owner.commitSnapshotInstall.bind(admitted.owner);
+  const liveDb = new Database(options.replicaDbPath);
+  liveDb.pragma('journal_mode = WAL');
+  admitted.owner.commitSnapshotInstall = async (claim, mutation) => {
+    // Capture the post-journal-mode image: the retirement below changes only WAL.
+    const before = fs.readFileSync(options.replicaDbPath);
+    liveDb.exec('UPDATE _raft_rs_replica_lifecycle SET state = \'retired\'');
+    assert.deepEqual(fs.readFileSync(options.replicaDbPath), before);
+    return commit(claim, mutation);
+  };
+  try {
+    const result = await requestSnapshotInstall(options);
+    assert.equal(result.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.REJECTED,
+      'receiver WAL/history changes cannot be deleted by snapshot swap');
+    assert.equal(liveDb.prepare('SELECT state FROM _raft_rs_replica_lifecycle').get().state, 'retired');
+  } finally {
+    if (liveDb?.open) liveDb.close();
+  }
+});
+
+async function stageWithoutSwap(_t, options) {
+  const rename = fs.renameSync; let intercepted = 0;
+  fs.renameSync = function(source, target) {
+    if (target === options.replicaDbPath) {
+      intercepted++; throw new Error('crash-before-snapshot-swap');
+    }
+    return rename(source, target);
+  };
+  try {
+    await assert.rejects(requestSnapshotInstall(options), /crash-before-snapshot-swap/);
+  } finally {
+    fs.renameSync = rename;
+  }
+  assert.equal(intercepted, 1, 'the real validated STAGED-to-swap boundary must engage');
+  return path.join(options.checkpointsRoot, 'install', 'install-state.json');
+}
+
+test('snapshot receiver pending STAGED recovery preserves exact never-opened incarnation', async (t) => {
+  const {options, incarnation} = await receiverInstallFixture(t, 'never-opened');
+  await stageWithoutSwap(t, options);
+  assert.equal((await recoverPendingSnapshotInstall(options)).outcome,
+    RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED);
+  const db = new Database(options.replicaDbPath, {readonly: true});
+  try {
+    assert.equal(db.prepare('SELECT incarnation FROM _raft_rs_replica_lifecycle').get().incarnation,
+      incarnation, 'restart must preserve the original receiver incarnation too');
+  } finally {
+    db.close();
+  }
+  assert.equal((await recoverPendingSnapshotInstall(options)).outcome,
+    RAFT_SNAPSHOT_INSTALL_OUTCOME.NO_INSTALL, 'completed restart is idempotent');
+});
+
+test('snapshot receiver recovery refuses historical STAGED marker bound to retired receiver', async (t) => {
+  const {options} = await receiverInstallFixture(t, 'never-opened');
+  const markerPath = await stageWithoutSwap(t, options);
+  const db = new Database(options.replicaDbPath);
+  db.exec('UPDATE _raft_rs_replica_lifecycle SET state = \'retired\''); db.close();
+  const before = fs.readFileSync(options.replicaDbPath);
+  const marker = JSON.parse(fs.readFileSync(markerPath, 'utf8'));
+  // Model an old installer that captured these exact bytes without validating
+  // their lifecycle. A matching digest and real CREATE grant are not permission.
+  marker.preInstallDigest = sha256Digest(before); writeAtomicDurable(markerPath, marker);
+  assert.equal((await recoverPendingSnapshotInstall(options)).outcome,
+    RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALL_STATE_CONFLICT);
+  assert.deepEqual(fs.readFileSync(options.replicaDbPath), before);
+  assert.equal(fs.existsSync(markerPath), true, 'refused recovery retains its unresolved marker');
+});
+
+
+for (const mutation of ['incarnation', 'retirement']) {
+  test(`snapshot receiver rejects staged ${mutation} change before swap`, async (t) => {
+    const {options, admitted} = await receiverInstallFixture(t, 'never-opened');
+    const before = fs.readFileSync(options.replicaDbPath);
+    const commit = admitted.owner.commitSnapshotInstall.bind(admitted.owner);
+    let engaged = 0;
+    admitted.owner.commitSnapshotInstall = async (claim, swap) => {
+      const file = path.join(options.checkpointsRoot, 'install', 'staging-payload');
+      const db = new Database(file);
+      try {
+        const sql = mutation === 'incarnation' ?
+          'UPDATE _raft_rs_replica_lifecycle SET incarnation = \'foreign-incarnation\'' :
+          'UPDATE _raft_rs_replica_lifecycle SET state = \'retired\'';
+        assert.equal(db.prepare(sql).run().changes, 1); engaged++;
+      } finally {
+        db.close();
+      }
+      return commit(claim, swap);
+    };
+    assert.equal((await requestSnapshotInstall(options)).outcome,
+      RAFT_SNAPSHOT_INSTALL_OUTCOME.REJECTED);
+    assert.equal(engaged, 1);
+    assert.deepEqual(fs.readFileSync(options.replicaDbPath), before);
+  });
+}
+
+test('snapshot receiver does not discard orphan WAL when the main database is absent', async (t) => {
+  const {options} = await receiverInstallFixture(t, 'absent');
+  const wal = options.replicaDbPath + '-wal';
+  const bytes = Buffer.from('surviving-orphan-journal'); fs.writeFileSync(wal, bytes);
+  assert.equal((await requestSnapshotInstall(options)).outcome,
+    RAFT_SNAPSHOT_INSTALL_OUTCOME.REJECTED);
+  assert.deepEqual(fs.readFileSync(wal), bytes);
+  assert.equal(fs.existsSync(options.replicaDbPath), false);
+});

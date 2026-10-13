@@ -1,0 +1,18 @@
+{"subsystem":"raft-rs","report":"core-trapped","groupId":"provenance-fatal","replicaIdentity":"fatal-b","peerId":"2498262034315153670","operation":"step","reason":"unreachable","runtimeGeneration":1,"from":"8109845050613857977","msgType":3,"term":"1","commit":"0","index":"0","level":"error","message":"raft-rs core trapped"}
+TAP version 13
+# Subtest: core and host outcomes are separated by execution provenance
+ok 1 - core and host outcomes are separated by execution provenance
+  ---
+  duration_ms: 272.927995
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 308.081985
+# time=1189ms

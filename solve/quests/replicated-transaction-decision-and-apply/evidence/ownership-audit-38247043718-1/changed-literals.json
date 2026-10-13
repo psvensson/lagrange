@@ -1,0 +1,12 @@
+{
+  "command": [
+    "node",
+    "scripts/check-guideline-literals.js",
+    "src/raft/snapshot-install.js",
+    "src/raft/raft-operation-port.js",
+    "src/raft/raft-rs-replica-lifecycle-owner.js"
+  ],
+  "completed": true,
+  "exit": 0,
+  "limitSeconds": 120
+}

@@ -1,0 +1,35 @@
+TAP version 13
+# Subtest: worker consensus path and its replica base are deleted
+ok 1 - worker consensus path and its replica base are deleted
+  ---
+  duration_ms: 2.03849
+  type: 'test'
+  ...
+# Subtest: wasm service replica requires its own durable file
+ok 2 - wasm service replica requires its own durable file
+  ---
+  duration_ms: 111.417181
+  type: 'test'
+  ...
+# Subtest: wasm service group commits and applies kv writes through raft-rs
+ok 3 - wasm service group commits and applies kv writes through raft-rs
+  ---
+  duration_ms: 489.807553
+  type: 'test'
+  ...
+# Subtest: wasm service replica restart preserves kv and consensus state
+ok 4 - wasm service replica restart preserves kv and consensus state
+  ---
+  duration_ms: 603.215508
+  type: 'test'
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 4
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1214.896745
+# time=2348ms

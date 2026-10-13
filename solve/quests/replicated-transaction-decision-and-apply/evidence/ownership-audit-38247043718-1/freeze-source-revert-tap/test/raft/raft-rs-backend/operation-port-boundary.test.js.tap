@@ -1,0 +1,74 @@
+TAP version 13
+# Subtest: the partition receives only a frozen operation port and immutable snapshots
+not ok 1 - the partition receives only a frozen operation port and immutable snapshots
+  ---
+  duration_ms: 32.993616
+  type: 'test'
+  location: '/home/runner/work/lagrange/lagrange/test/raft/raft-rs-backend/operation-port-boundary.test.js:119:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    every public value, function and nested result is frozen
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    assertDeepFrozen (file:///home/runner/work/lagrange/lagrange/test/raft/raft-rs-backend/operation-port-boundary.test.js:109:10)
+    assertDeepFrozen (file:///home/runner/work/lagrange/lagrange/test/raft/raft-rs-backend/operation-port-boundary.test.js:114:7)
+    assertDeepFrozen (file:///home/runner/work/lagrange/lagrange/test/raft/raft-rs-backend/operation-port-boundary.test.js:114:7)
+    TestContext.<anonymous> (file:///home/runner/work/lagrange/lagrange/test/raft/raft-rs-backend/operation-port-boundary.test.js:149:7)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.start (node:internal/test_runner/test:944:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+  ...
+# Subtest: one private binding owner loads native bytes and only the runtime owner imports it
+ok 2 - one private binding owner loads native bytes and only the runtime owner imports it
+  ---
+  duration_ms: 5565.724485
+  type: 'test'
+  ...
+# Subtest: retirement has one production writer and no provider control accessor
+ok 3 - retirement has one production writer and no provider control accessor
+  ---
+  duration_ms: 69.044442
+  type: 'test'
+  ...
+# Subtest: the private owner instruments actual core entry rather than gate checks
+ok 4 - the private owner instruments actual core entry rather than gate checks
+  ---
+  duration_ms: 0.394686
+  type: 'test'
+  ...
+# Subtest: the operation boundary removes public capability instead of renaming it
+ok 5 - the operation boundary removes public capability instead of renaming it
+  ---
+  duration_ms: 8.640451
+  type: 'test'
+  ...
+# Subtest: the ownership census catches import and lifecycle-writer bypass modules
+ok 6 - the ownership census catches import and lifecycle-writer bypass modules
+  ---
+  duration_ms: 0.420173
+  type: 'test'
+  ...
+# Subtest: the real ownership audit rejects core, facade and lifecycle mutants
+ok 7 - the real ownership audit rejects core, facade and lifecycle mutants
+  ---
+  duration_ms: 2.700932
+  type: 'test'
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 6
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 5689.972054
+# time=6113ms

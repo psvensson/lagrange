@@ -12,6 +12,7 @@ import {
   TABLES,
 } from '../constants/index.js';
 import {RAFT_EVENT} from '../raft/raft-operation-port-constants.js';
+import {withRaftOpeningCleanupFailure} from '../raft/raft-operation-port.js';
 import {
   reserveAndAdmitGroupPeer,
   takeGroupAdmissionsInFlight,
@@ -31,6 +32,8 @@ import {
 } from './message-group-consensus-port.js';
 import {MESSAGE_GROUP_SERVICE_LITERAL} from
   './message-group-service-runtime-support.js';
+
+const SERVICE_SHUTDOWN = 'message_group_service_shutdown';
 
 function isThisGroupsServiceRow(service, row) {
   return (row?.[COLUMN.GROUP_ID] || row?.group_id) === service.groupId &&
@@ -165,7 +168,36 @@ function assignRaftLifecycle(serviceClass) {
      * Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 7.1, 7.2, 7.3, 7.4
      * @return {Promise<void>}
      */
-    async initialize() {
+    initialize() {
+      if (this.startupFailure !== null) {
+        return Promise.reject(this.startupFailure);
+      }
+      if (this.isShutdown) {
+        return Promise.reject(
+          Object.assign(new Error(SERVICE_SHUTDOWN), {code: SERVICE_SHUTDOWN}));
+      }
+      if (this.initializationSettlement) {
+        return this.initializationSettlement;
+      }
+      if (this.initialized) {
+        return Promise.resolve();
+      }
+      const {promise, resolve, reject} = Promise.withResolvers();
+      this.initializationSettlement = promise;
+      this.initializeUnserialized().then(resolve, reject).finally(() => {
+        if (this.initializationSettlement === promise) {
+          this.initializationSettlement = null;
+        }
+      });
+      return promise;
+    },
+    async initializeUnserialized() {
+      if (this.startupFailure !== null) {
+        throw this.startupFailure;
+      }
+      if (this.isShutdown) {
+        throw Object.assign(new Error(SERVICE_SHUTDOWN), {code: SERVICE_SHUTDOWN});
+      }
       if (this.initialized) {
         return;
       }
@@ -190,8 +222,18 @@ function assignRaftLifecycle(serviceClass) {
             error: error.message,
           },
         );
-        await closeMessageGroupConsensus(this);
+        this.startupFailure = error;
+        try {
+          await closeMessageGroupConsensus(this);
+        } catch (cleanup) {
+          this.startupFailure = withRaftOpeningCleanupFailure(error, cleanup);
+          throw this.startupFailure;
+        }
+        this.startupFailure = null;
         throw error;
+      }
+      if (this.isShutdown) {
+        throw Object.assign(new Error(SERVICE_SHUTDOWN), {code: SERVICE_SHUTDOWN});
       }
       this.cdcHandler.initialize();
       this.initialized = true;

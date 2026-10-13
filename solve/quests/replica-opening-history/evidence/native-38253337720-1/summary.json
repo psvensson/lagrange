@@ -1,0 +1,69 @@
+{
+  "input": "316e5fcdab102ddc562433139d73b3df62748590",
+  "baseline": "7e2c3e85130590c56da8202ae5079499f3127058",
+  "candidate": "ff177c43c60556d6f65d09f7d610fe555fa1a1f3",
+  "node": "v22.23.3",
+  "checks": {
+    "candidate-native": true,
+    "native-source-control": true,
+    "negative-assertions": true,
+    "unchanged-native-tests": true,
+    "regression-count": true,
+    "regression-behavior": false,
+    "hardware-duration-tolerance": true,
+    "lint": true,
+    "changed-literals": true,
+    "impact": true,
+    "boundary": true,
+    "whitespace": true
+  },
+  "nativeBaseline": {
+    "tests": 28,
+    "pass": 13,
+    "fail": 15,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "nativeCandidate": {
+    "tests": 28,
+    "pass": 28,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "nativeSourceRevert": {
+    "tests": 28,
+    "pass": 13,
+    "fail": 15,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "regressions": {
+    "tests": 172,
+    "pass": 166,
+    "fail": 6,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "inheritedBaseline": {
+    "tests": 6,
+    "pass": 0,
+    "fail": 6,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "literalCounts": {
+    "before": "311",
+    "candidate": "311"
+  },
+  "nativeProofPassed": true,
+  "allRunGatesPassed": false,
+  "independentApproval": false,
+  "mergeReady": false,
+  "scope": "Real native operation ports and WASM service initialization; separate-process reopen and process-kill boundary witnesses. Not whole-file-loss, snapshot receiver validation, full SQL/CDC startup or multi-host certification."
+}

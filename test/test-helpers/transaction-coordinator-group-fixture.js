@@ -8,14 +8,12 @@
  * participant transaction admission enabled through the participant's
  * production entry point (the cutover sequence's caller, design 0.0.13).
  *
- * The coordinator's durable rows live in transaction-persistence-gateway.js
- * (real SQLite, the production schemas and CDC mutation SQL builder). A
- * restarted coordinator is a new engine over the same rows, recovering them
- * through the engine's production startup path
- * (activateDistributedTransactionRecovery) from a cache that holds them, as
- * the CDC-fed system cache does. A hold stops one coordinator at a named
- * persistence write and never releases it: that coordinator process stops
- * there (nothing after the write runs).
+ * The coordinator uses transaction-persistence-gateway.js, a double backed
+ * by one in-memory SQLite store with production schemas and mutation SQL.
+ * A reconstructed engine uses activateDistributedTransactionRecovery over
+ * those retained rows; it is not a new process or a replicated coordinator
+ * store. Holds suspend exact persistence continuations, not operating-system
+ * processes. Participant state is read independently from three real files.
  *
  * Routing rows are the cache's: the engine routes to the replica the cache
  * names leader, and is redirected by the participant's typed not-leader
@@ -23,6 +21,7 @@
  */
 import Database from 'better-sqlite3';
 import assert from 'node:assert/strict';
+import path from 'node:path';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {
   SERVICE_STATUS,
@@ -31,14 +30,6 @@ import {
 } from '../../src/constants/index.js';
 import {CDCOperation, PartitionService} from
   '../../src/partition/partition-service.js';
-import {SQL_TRANSACTIONS_SCHEMA} from
-  '../../src/bootstrap/system-table-workflow-schema-definitions.js';
-import {runtimeBuildProvenance} from
-  '../../src/diagnostics/runtime-build-provenance.js';
-import {requestParticipantRelease} from '../../src/node/participant-release-client.js';
-import {ReplicaHandler} from '../../src/node/replica-handler-class.js';
-import {PARTICIPANT_CUTOVER_OUTCOME} from
-  '../../src/partition/partition-participant-transaction-cutover-constants.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {RAFT_LEADERSHIP_TRANSFER_SUCCESSOR} from
   '../../src/raft/raft-operation-port-constants.js';
@@ -47,6 +38,7 @@ import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {formAdmittedGroup} from '../partition/partition-admitted-group-fixture.js';
+import {attachPartitionReleaseOwners} from '../partition/partition-release-fixture.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 import {createTransactionPersistenceGateway} from
   './transaction-persistence-gateway.js';
@@ -60,7 +52,6 @@ const GROUP_BUDGET_MS = 20000;
 const COORDINATOR_NODE_ID = 'tx1-coordinator-node';
 const RAFT_TIMING = Object.freeze({heartbeatIntervalMs: 20,
   electionTimeoutMinMs: 150, electionTimeoutMaxMs: 300});
-const RELEASE_RETRY_MS = 20;
 const COORDINATOR_TABLES = Object.freeze([
   TABLES.SQL_TRANSACTIONS,
   TABLES.SQL_TRANSACTION_PARTICIPANTS,
@@ -82,18 +73,6 @@ function readReplica(dbPath, read) {
   } finally {
     db.close();
   }
-}
-
-async function releaseGroup(handler, partitionId, targetBuildDigest) {
-  const deadline = handler.timeSource.now() + GROUP_BUDGET_MS;
-  let answer = null;
-  while (handler.timeSource.now() < deadline) {
-    answer = await handler.participantReleaseRecovery.releaseOperator({
-      partitionId, targetBuildDigest, deadlineAtMs: deadline});
-    if (answer.outcome === PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER) return answer;
-    await new Promise((resolve) => setTimeout(resolve, RELEASE_RETRY_MS));
-  }
-  return answer;
 }
 
 /**
@@ -200,32 +179,17 @@ async function withTransactionGroup(name, body) {
       schema: GROUP_SCHEMA}});
   const engines = [];
   const store = new Database(':memory:');
-  const handlers = group.services.map((service, index) => {
-    const handler = new ReplicaHandler({nodeId: members[index][1], ownerIncarnation: 1,
-      systemTableCache: service.systemTableCache, cdcIntegrationService: {},
-      createPartitionService: (options) => new PartitionService(options),
-      messageRouter: service.transport});
-    handler.registerWithRouter(service.transport);
-    handler.replaceLocalReplicaService(service.replicaId, service);
-    return handler;
-  });
-  const controlPartitionId = `${name}-sql-transactions-p1`;
-  const controlReplicaId = `${controlPartitionId}-r1`;
-  const controlService = new PartitionService(withFoundingStamp({
-    nodeId: members[0][1], partitionId: controlPartitionId,
-    replicaId: controlReplicaId, replicaIds: [controlReplicaId],
-    peerAddresses: [`${members[0][1]}/partition/${controlReplicaId}`],
-    tableId: SQL_TRANSACTIONS_SCHEMA.tableName,
-    tableName: SQL_TRANSACTIONS_SCHEMA.tableName,
-    schema: SQL_TRANSACTIONS_SCHEMA,
-    dbPath: ':memory:', transport: group.services[0].transport,
-    systemTableCache: group.services[0].systemTableCache, deferElection: true,
-  }));
-  await controlService.initialize();
-  handlers[0].replaceLocalReplicaService(controlReplicaId, controlService);
-  await controlService.raft.campaign();
-  assert.equal(controlService.raft.readStatus().role, RAFT_ROLE.LEADER,
-    'setup: the local sql_transactions control owner leads');
+  let releaseOwners;
+  try {
+    releaseOwners = await attachPartitionReleaseOwners(group.services, {
+      directory: path.dirname(group.dbFileOf(members[0])),
+      budgetMs: GROUP_BUDGET_MS,
+    });
+  } catch (error) {
+    await group.dispose();
+    store.close();
+    throw error;
+  }
   const ctx = {
     group,
     members,
@@ -273,14 +237,18 @@ async function withTransactionGroup(name, body) {
       return engine;
     },
     /**
-     * Wait until every replica applied at least the leader's commit index.
+     * Wait for every LIVE replica; stopped replicas retain deliberately stale
+     * durable records until restart. A spent wait is a failure, never success.
      * @return {Promise<boolean>}
      */
     async settle() {
       const leader = ctx.leader();
-      const target = leader ? leader.raft.readStatus().commitIndex : 0;
-      return group.waitFor(() => members.every((member) =>
-        ctx.appliedIndexOf(member) >= target));
+      assert.ok(leader, 'settlement requires an actual consensus leader');
+      const target = leader.raft.readStatus().commitIndex;
+      const settled = await group.waitFor(() => members.every((member, index) =>
+        group.services[index].isShutdown || ctx.appliedIndexOf(member) >= target));
+      assert.equal(settled, true, 'every live replica must apply the committed prefix');
+      return settled;
     },
     appliedIndexOf(member) {
       return readReplica(group.dbFileOf(member), (db) =>
@@ -353,7 +321,7 @@ async function withTransactionGroup(name, body) {
         }));
         await restarted.initialize();
         group.services[index] = restarted;
-        handlers[index].replaceLocalReplicaService(member[0], restarted);
+        releaseOwners.host(restarted);
         return restarted;
       };
     },
@@ -363,22 +331,14 @@ async function withTransactionGroup(name, body) {
       service.systemTableCache.applySystemTableChange(TABLES.TABLES,
         CDCOperation.INSERT, tableRow);
     }
-    const build = await runtimeBuildProvenance();
-    assert.equal(build.state, 'measured', build.reason);
-    const released = await releaseGroup(handlers[0], partitionId, build.digest);
-    assert.equal(released.outcome, PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER,
-      `setup: participant release failed (${JSON.stringify(released)})`);
+    await releaseOwners.release(partitionId);
     await ctx.settle();
     return await body(ctx);
   } finally {
     for (const engine of engines) {
       await engine.shutdown().catch(() => {});
     }
-    for (const handler of handlers) {
-      await handler.participantReleaseRecovery.shutdown();
-      handler.unregisterFromRouter(group.services[0].transport);
-    }
-    await controlService.shutdown();
+    await releaseOwners.dispose();
     await group.dispose();
     store.close();
   }

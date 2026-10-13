@@ -36,8 +36,11 @@ import {
 import {RaftRsDurableStore} from './raft-rs-durable-store.js';
 import {RAFT_RS_ZERO_INDEX} from './raft-rs-durable-store-constants.js';
 import {raftRsConfStateKey} from './raft-rs-conf-state-key.js';
-import {RaftRsReplicaLifecycleOwner} from
+import {inspectSnapshotReceiver, snapshotReceiverStillAdmitted} from
+  './snapshot-receiver-admission.js';
+import {prepareReplicaLifecycleForSnapshot} from
   './raft-rs-replica-lifecycle-owner.js';
+import {RAFT_OPERATION_OUTCOME} from './raft-operation-port-constants.js';
 import {readRaftRsPeerIdentityReservations} from
   './raft-rs-peer-identity.js';
 import {readCheckpoint} from './snapshot-checkpoint-store.js';
@@ -343,9 +346,12 @@ function reconstructStagedRaftRsState(stagingDb, descriptor, receiver) {
   // This row is receiver-local and is minted only in the throwaway staging
   // file. The lifecycle owner must run before the durable Raft record exists;
   // seeing a record without a lifecycle row is intentionally a hard refusal.
-  new RaftRsReplicaLifecycleOwner({db: stagingDb, groupId: raftRs.groupId,
-    peerId: String(receiver.peerId),
-    replicaIdentity: receiver.replicaIdentity});
+  const lifecycle = prepareReplicaLifecycleForSnapshot({db: stagingDb,
+    groupId: raftRs.groupId, peerId: String(receiver.peerId),
+    replicaIdentity: receiver.replicaIdentity, receiverIncarnation: receiver.incarnation});
+  if (lifecycle.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
+    throw Object.assign(new Error(lifecycle.reason), {consensus: lifecycle});
+  }
   const store = new RaftRsDurableStore(stagingDb);
   store.transaction(() => {
     store.putAppliedState(raftRs.groupId, raftRs.appliedIndex,
@@ -479,6 +485,8 @@ function swapPreparedInstall(checkpointsRoot, replicaDbPath, marker,
       (!replicaCreateInstallAuthoritiesEqual(
         authority, marker.createAuthority) ||
       fileDigest(replicaDbPath) !== marker.preInstallDigest ||
+      !snapshotReceiverStillAdmitted(checkpointsRoot, replicaDbPath, marker) ||
+      !raftRsInstalledImageMatches(checkpointsRoot, stagingPath(checkpointsRoot), marker) ||
       !stagedInstallBindingMatches(stagingPath(checkpointsRoot), marker))) {
     return false;
   }
@@ -551,7 +559,15 @@ async function requestSnapshotInstall(options) {
       reason: REJECTION.CREATE_ADMISSION_REQUIRED,
     });
   }
+  let receiverLifecycle = null;
   if (raftRsImage) {
+    receiverLifecycle = inspectSnapshotReceiver({replicaDbPath,
+      descriptor: validation.descriptor, replicaIdentity: options.expectedReplicaIdentity});
+    if (receiverLifecycle.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
+      return installResult(OUTCOME.REJECTED, {
+        reason: REJECTION.RECEIVER_STATE_REFUSED, consensus: receiverLifecycle,
+      });
+    }
     marker = buildFreshCreateMarker(
       options, installId, generationIndex, replicaDbPath);
     if (!marker) {
@@ -577,6 +593,7 @@ async function requestSnapshotInstall(options) {
     if (raftRsImage) {
       reconstructStagedRaftRsState(stagingDb, validation.descriptor, {
         peerId: options.expectedPeerId,
+        incarnation: receiverLifecycle.detail.incarnation,
         replicaIdentity: options.expectedReplicaIdentity,
       });
       writeStagedInstallBinding(stagingDb, marker);
@@ -609,6 +626,8 @@ function freshStagedInstallMatches(checkpointsRoot, replicaDbPath, marker,
     replicaCreateInstallAuthoritiesEqual(
       currentCreateAuthority, marker.createAuthority) &&
     fileDigest(replicaDbPath) === marker.preInstallDigest &&
+    snapshotReceiverStillAdmitted(checkpointsRoot, replicaDbPath, marker) &&
+    raftRsInstalledImageMatches(checkpointsRoot, stagingPath(checkpointsRoot), marker) &&
     stagedInstallBindingMatches(stagingPath(checkpointsRoot), marker);
 }
 

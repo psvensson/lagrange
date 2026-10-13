@@ -1,0 +1,22 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "snapshot-lifecycle-staging-boundary",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "symbol-limited-staging-boundary-and-class-refusal",
+      "passed": false,
+      "detail": "Retained measurements are bounded; complete sealed proof and independent review remain pending."
+    },
+    {
+      "id": "staging-identity-idempotence-and-refusal",
+      "passed": false,
+      "detail": "Retained measurements are bounded; complete sealed proof and independent review remain pending."
+    },
+    {
+      "id": "native-snapshot-install-regression",
+      "passed": false,
+      "detail": "Retained measurements are bounded; complete sealed proof and independent review remain pending."
+    }
+  ]
+}

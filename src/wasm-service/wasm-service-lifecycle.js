@@ -23,6 +23,9 @@ import {
   WASM_SERVICE_REPLICA_STATE,
 } from './wasm-service-constants.js';
 
+const STOP_REJECTED = 'rejected';
+const STOP_FAILED = 'WASM service shutdown has retained cleanup failures';
+
 const START_RESULT_FIELD = Object.freeze({
   STARTED: 'started',
   PORT: 'port',
@@ -98,6 +101,7 @@ class WasmServiceLifecycle {
 
     /** @type {Map<string, WasmServiceReplica>} */
     this.activeReplicas = new Map();
+    this.retiringReplicas = new Set();
 
     /** @type {Map<string, Object>} */
     this.startDiagnostics = new Map();
@@ -177,9 +181,17 @@ class WasmServiceLifecycle {
    */
   createReplica(serviceDefinition, replicaConfig) {
     const serviceId = serviceDefinition.serviceId;
-    if (this.activeReplicas.get(serviceId)?.live) {
+    const current = this.activeReplicas.get(serviceId);
+    const priorStop = [...this.retiringReplicas].some((replica) =>
+      replica.serviceDefinitionId === serviceId &&
+      (replica !== current || replica.lifecycleState ===
+        WASM_SERVICE_REPLICA_STATE.CLEANUP_REQUIRED));
+    if (current?.live || priorStop) {
       throw lifecycleRefusal(WASM_SERVICE_LIFECYCLE_REFUSAL.REPLICA_LIVE,
         WASM_SERVICE_ERROR_MSG.REPLICA_LIVE, serviceId);
+    }
+    if (current?.lifecycleState === WASM_SERVICE_REPLICA_STATE.STOPPING) {
+      this.retiringReplicas.add(current);
     }
     assertFoundingReplicaSet(replicaConfig.replicaId,
       replicaConfig.replicaIds);
@@ -431,30 +443,38 @@ class WasmServiceLifecycle {
    * @return {Promise<{stopped: boolean}>} Shutdown result.
    */
   async stopReplica(serviceId) {
-    const replica = this.activeReplicas.get(serviceId);
-    if (!replica) {
-      return {stopped: false};
+    const targets = new Set([...this.retiringReplicas].filter((replica) =>
+      replica.serviceDefinitionId === serviceId));
+    const current = this.activeReplicas.get(serviceId);
+    if (current) targets.add(current);
+    if (targets.size === 0) return {stopped: false};
+    const outcomes = await Promise.allSettled([...targets].map((replica) =>
+      this.stopOwnedReplica(serviceId, replica)));
+    const failures = outcomes.filter((outcome) => outcome.status === STOP_REJECTED)
+      .map((outcome) => outcome.reason);
+    if (failures.length === 1) throw failures[0];
+    if (failures.length > 1) throw new AggregateError(failures, STOP_FAILED);
+    return {stopped: true};
+  }
+
+  /** Release one snapshotted instance, never retargeting a successor after await.
+   * @param {string} serviceId - Service allocation key.
+   * @param {WasmServiceReplica} replica - Exact release obligation.
+   * @return {Promise<void>} Rejected obligations stay with this host.
+   */
+  async stopOwnedReplica(serviceId, replica) {
+    this.retiringReplicas.add(replica);
+    if (this.activeReplicas.get(serviceId) === replica) {
+      this.portAllocator?.release(serviceId);
+      this.logger.info(WASM_SERVICE_LOG_MSG.PORT_RELEASED, {serviceId});
     }
-
-    // A replica refused before its start holds no port to release.
-    this.portAllocator?.release(serviceId);
-
-    this.logger.info(WASM_SERVICE_LOG_MSG.PORT_RELEASED, {
-      serviceId,
-    });
-
     await replica.shutdown();
-
+    this.retiringReplicas.delete(replica);
     if (this.activeReplicas.get(serviceId) === replica) {
       this.activeReplicas.delete(serviceId);
       this.clearStartDiagnostic(serviceId);
     }
-
-    this.logger.info(WASM_SERVICE_LOG_MSG.REPLICA_STOPPED, {
-      serviceId,
-    });
-
-    return {stopped: true};
+    this.logger.info(WASM_SERVICE_LOG_MSG.REPLICA_STOPPED, {serviceId});
   }
 
   /**
@@ -551,10 +571,14 @@ class WasmServiceLifecycle {
    * @return {Promise<void>}
    */
   async shutdownAll() {
-    const serviceIds = [...this.activeReplicas.keys()];
-    for (const serviceId of serviceIds) {
-      await this.stopReplica(serviceId);
-    }
+    const serviceIds = new Set([...this.activeReplicas.keys(),
+      ...[...this.retiringReplicas].map((replica) => replica.serviceDefinitionId)]);
+    const outcomes = await Promise.allSettled([...serviceIds].map((serviceId) =>
+      this.stopReplica(serviceId)));
+    const failures = outcomes.filter((outcome) => outcome.status === STOP_REJECTED)
+      .map((outcome) => outcome.reason);
+    if (failures.length === 1) throw failures[0];
+    if (failures.length > 1) throw new AggregateError(failures, STOP_FAILED);
 
     if (this.moduleMirror &&
       typeof this.moduleMirror.unbindCdcIntegrationService === 'function') {

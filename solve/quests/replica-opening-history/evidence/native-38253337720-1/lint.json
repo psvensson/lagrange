@@ -1,0 +1,12 @@
+{
+  "command": [
+    "./node_modules/.bin/eslint",
+    "src/raft/raft-rs-operation-port.js",
+    "src/raft/raft-rs-participation-gate.js",
+    "src/raft/raft-rs-replica-lifecycle-owner.js",
+    "src/raft/raft-rs-runtime-owner.js",
+    "src/raft/raft-rs-opening-history-constants.js"
+  ],
+  "completed": true,
+  "exit": 0
+}

@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 116,
     "architecture-governance": 19,
-    "bootstrap-membership": 306,
+    "bootstrap-membership": 309,
     "cdc-metadata": 63,
     "cli-tooling": 96,
     "control-plane": 214,
@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 146,
     "solver-tooling": 7,
-    "storage-partition": 182,
-    "storage-raft": 120,
+    "storage-partition": 183,
+    "storage-raft": 128,
     "test-infrastructure": 143,
     "transactions": 18,
     "transport-messaging": 95,
     "wasm-toolchain": 57
   },
-  "censusSize": 2359,
-  "digest": "fnv1a32-adc903df",
+  "censusSize": 2371,
+  "digest": "fnv1a32-6c4b8408",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-586d1e6f",
+  "observationDigest": "fnv1a32-fdd67129",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1055,6 +1055,8 @@
     "test/integration/replica-handler-metadata-propagation.integration.test.js": "cdc-metadata",
     "test/integration/replica-operations-owner-read-transport-readiness.integration.test.js": "transport-messaging",
     "test/integration/seed-migration-cutover-persisted.integration.test.js": "bootstrap-membership",
+    "test/integration/seed-migration-interrupted-decision.integration.test.js": "bootstrap-membership",
+    "test/integration/seed-migration-process-loss.integration.test.js": "bootstrap-membership",
     "test/integration/seed-node-bootstrap.integration.test.js": "bootstrap-membership",
     "test/integration/seed-owner-read-diagnosis.integration.test.js": "bootstrap-membership",
     "test/integration/service-install-lifecycle-cli-pgwire.integration.test.js": "services-runtime",
@@ -1191,6 +1193,7 @@
     "test/node/replica-removal-deferred-row-write.test.js": "bootstrap-membership",
     "test/node/replica-removal-graceful-shutdown.property.test.js": "bootstrap-membership",
     "test/node/replica-removal-leader-source.test.js": "bootstrap-membership",
+    "test/node/replica-runtime-cleanup-custody.integration.test.js": "bootstrap-membership",
     "test/node/replica-state-delegation.test.js": "bootstrap-membership",
     "test/node/replica-state-machine-authoritative-transition.test.js": "bootstrap-membership",
     "test/node/replica-state-machine-registered-activation.test.js": "bootstrap-membership",
@@ -1257,6 +1260,7 @@
     "test/partition/message-handler-registry-routing.property.test.js": "storage-partition",
     "test/partition/message-handler-registry.test.js": "storage-partition",
     "test/partition/participant-decision-canonical-record.test.js": "storage-partition",
+    "test/partition/participant-envelope-admission.test.js": "storage-partition",
     "test/partition/participant-release-build-provenance.test.js": "storage-partition",
     "test/partition/participant-release-protocol.test.js": "storage-partition",
     "test/partition/partition-admission-redrive-wakes.test.js": "storage-partition",
@@ -1551,6 +1555,7 @@
     "test/raft/raft-cleanup-verification.test.js": "storage-raft",
     "test/raft/raft-id-mapper.test.js": "storage-raft",
     "test/raft/raft-log-write-owner.test.js": "storage-raft",
+    "test/raft/raft-opening-cleanup-error.test.js": "storage-raft",
     "test/raft/raft-rs-backend/admission-redrive-chain.test.js": "storage-raft",
     "test/raft/raft-rs-backend/admission-redrive.test.js": "storage-raft",
     "test/raft/raft-rs-backend/backend-seam.test.js": "storage-raft",
@@ -1580,6 +1585,7 @@
     "test/raft/raft-rs-backend/host-contract-citations.test.js": "storage-raft",
     "test/raft/raft-rs-backend/identity-record-window.test.js": "storage-raft",
     "test/raft/raft-rs-backend/identity-reuse-reseed-hold.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js": "storage-raft",
     "test/raft/raft-rs-backend/joining-genesis-tripwire.test.js": "storage-raft",
     "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js": "storage-raft",
     "test/raft/raft-rs-backend/local-log-guard-correct-followers.test.js": "storage-raft",
@@ -1611,11 +1617,16 @@
     "test/raft/raft-rs-backend/replica-membership-witness.test.js": "storage-raft",
     "test/raft/raft-rs-backend/reseed-hold-durability.test.js": "storage-raft",
     "test/raft/raft-rs-backend/restart-from-durable-record.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-trap-and-restore.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-turn-integrity.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-wait-bound-spent.test.js": "storage-raft",
     "test/raft/raft-rs-backend/single-path-partition-cutover.test.js": "storage-raft",
     "test/raft/raft-rs-backend/stampless-opening-refusal.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/startup-cleanup.integration.test.js": "storage-raft",
     "test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js": "storage-raft",
     "test/raft/raft-rs-backend/transfer-leadership-attack-matrix.test.js": "storage-raft",
     "test/raft/raft-rs-backend/transfer-leadership-decision-inputs.test.js": "storage-raft",
@@ -1641,6 +1652,7 @@
     "test/raft/snapshot-gated-compaction-contract.test.js": "storage-raft",
     "test/raft/snapshot-install-restart-states.test.js": "storage-raft",
     "test/raft/snapshot-install-transition.test.js": "storage-raft",
+    "test/raft/snapshot-lifecycle-staging.test.js": "storage-raft",
     "test/raft/snapshot-multichunk-transfer.test.js": "storage-raft",
     "test/raft/snapshot-offer-router.test.js": "storage-raft",
     "test/raft/snapshot-proof-gated-compaction.test.js": "storage-raft",
@@ -7333,6 +7345,7 @@
         "src/raft/raft-rs-ingress-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/raft/snapshot-checkpoint-constants.js",
         "src/raft/snapshot-checkpoint-store.js",
@@ -7541,7 +7554,28 @@
     "test/integration/seed-migration-cutover-persisted.integration.test.js": {
       "files": [
         "src/bootstrap/seed-startup-storage-admission.js",
-        "src/query/distributed/distributed-transaction-coordinator.js"
+        "src/query/distributed/distributed-transaction-coordinator.js",
+        "test/integration/helpers/tx1-migration-disk-reader.js"
+      ],
+      "env": [
+        "LAGRANGE_TX1_M1_DECISION_KILL_MARKER_PATH",
+        "LAGRANGE_TX1_M1_KILL_MARKER_PATH"
+      ]
+    },
+    "test/integration/seed-migration-interrupted-decision.integration.test.js": {
+      "files": [
+        "test/integration/helpers/tx1-in-doubt-decision-reader.js",
+        "test/integration/helpers/tx1-migration-disk-reader.js",
+        "test/integration/helpers/tx1-postkill-authority-replay.js",
+        "test/integration/helpers/tx1-postkill-seed-startup.js",
+        "test/integration/seed-migration-cutover-persisted.integration.test.js"
+      ]
+    },
+    "test/integration/seed-migration-process-loss.integration.test.js": {
+      "files": [
+        "test/integration/helpers/tx1-migration-disk-reader.js",
+        "test/integration/helpers/tx1-postkill-coordinator-reader.js",
+        "test/integration/seed-migration-cutover-persisted.integration.test.js"
       ]
     },
     "test/integration/seed-node-bootstrap.integration.test.js": {
@@ -7615,10 +7649,10 @@
     },
     "test/integration/transaction-coordinator-restart.integration.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/bootstrap/system-table-workflow-schema-definitions.js",
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/constants/transactions.js",
-        "src/diagnostics/runtime-build-provenance.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-service-constants.js",
         "src/partition/partition-service.js",
@@ -8370,6 +8404,16 @@
         "test/raft/raft-rs-backend/partition-node-cluster.js"
       ]
     },
+    "test/node/replica-runtime-cleanup-custody.integration.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/wasm-service/wasm-service-constants.js"
+      ]
+    },
     "test/node/replica-state-machine-registered-activation.test.js": {
       "files": [
         "src/config/configuration-manager.js",
@@ -8559,6 +8603,27 @@
         "src/partition/partition-participant-transaction-bytes.js"
       ]
     },
+    "test/partition/participant-envelope-admission.test.js": {
+      "files": [
+        "src/partition/partition-committed-command-admission.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-release-facts.js",
+        "src/partition/partition-participant-transaction-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
     "test/partition/participant-release-build-provenance.test.js": {
       "files": [
         "package-lock.json",
@@ -8687,7 +8752,6 @@
         "src/partition/partition-participant-transaction-connection.js",
         "src/partition/partition-participant-transaction-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
-        "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -9117,7 +9181,11 @@
     },
     "test/partition/partition-unreadable-durable-record.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/bootstrap/system-table-workflow-schema-definitions.js",
         "src/config/configuration-manager.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-write-kernel.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
@@ -9128,6 +9196,7 @@
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/raft/raft-rs-runtime-owner-constants.js",
         "src/raft/raft-rs-runtime-owner.js",
+        "test/partition/partition-service-test-support.js",
         "test/raft/raft-rs-backend/core-trap-envelope.js",
         "test/raft/raft-rs-backend/process-escape-counter.js",
         "test/test-helpers/controllable-consensus-port.js",
@@ -10345,6 +10414,15 @@
         "src/raft/raft-rs-runtime-owner.js"
       ]
     },
+    "test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js"
+      ]
+    },
     "test/raft/raft-rs-backend/joining-genesis-tripwire.test.js": {
       "files": [
         "src/raft/raft-committed-membership-stamp.js",
@@ -10518,6 +10596,8 @@
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-replica-lifecycle-owner.js",
         "src/raft/raft-rs-runtime-owner.js",
+        "src/raft/snapshot-install.js",
+        "src/raft/snapshot-receiver-admission.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
       ],
       "directories": [
@@ -10715,6 +10795,49 @@
         "src/raft/raft-rs-runtime-owner.js"
       ]
     },
+    "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js": {
+      "files": [
+        "package.json",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-binding-owner.js",
+        "src/raft/raft-rs-durable-store.js",
+        "src/raft/raft-rs-operation-port.js",
+        "src/raft/raft-rs-runtime-owner.js"
+      ],
+      "directories": [
+        "src",
+        "test/raft/raft-rs-backend"
+      ]
+    },
+    "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js": {
+      "files": [
+        "test/raft/raft-rs-backend/opening-history-process-child.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js": {
+      "files": [
+        "package.json",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-binding-owner.js",
+        "src/raft/raft-rs-durable-store.js",
+        "src/raft/raft-rs-operation-port.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/time/time-source.js"
+      ],
+      "directories": [
+        "src",
+        "test/raft/raft-rs-backend"
+      ]
+    },
     "test/raft/raft-rs-backend/runtime-trap-and-restore.test.js": {
       "files": [
         "src/raft/raft-rs-host-contract.js"
@@ -10769,12 +10892,21 @@
         "src/raft/raft-rs-runtime-owner.js"
       ]
     },
+    "test/raft/raft-rs-backend/startup-cleanup.integration.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js"
+      ]
+    },
     "test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js": {
       "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
         "src/bootstrap/system-table-workflow-schema-definitions.js",
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/constants/transactions.js",
-        "src/diagnostics/runtime-build-provenance.js",
         "src/partition/partition-cdc-obligation-ledger.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-service.js",
@@ -10924,6 +11056,25 @@
     "test/raft/snapshot-gated-compaction-contract.test.js": {
       "files": [
         "src/partition/partition-raft-storage.js"
+      ]
+    },
+    "test/raft/snapshot-lifecycle-staging.test.js": {
+      "files": [
+        "src/node/replica-handler-remove-execution-methods.js",
+        "src/raft/raft-rs-binding-owner.js",
+        "src/raft/raft-rs-core-constants.js",
+        "src/raft/raft-rs-group-membership-admission.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-membership-administration.js",
+        "src/raft/raft-rs-operation-port.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/raft/snapshot-install.js",
+        "src/raft/snapshot-receiver-admission.js"
+      ],
+      "directories": [
+        "src",
+        "src/raft"
       ]
     },
     "test/raft/snapshot-proof-gated-compaction.test.js": {

@@ -1,0 +1,30 @@
+{
+  "status": "FAIL",
+  "receipts": [
+    {
+      "id": "failed-create-exact-custody",
+      "passed": false
+    },
+    {
+      "id": "shutdown-failure-and-retry",
+      "passed": false
+    },
+    {
+      "id": "wasm-predecessor-and-successor",
+      "passed": false
+    },
+    {
+      "id": "admission-backpressure",
+      "passed": false
+    },
+    {
+      "id": "source-controls-and-regressions",
+      "passed": false
+    },
+    {
+      "id": "independent-review-and-gates",
+      "passed": false
+    }
+  ],
+  "schema": "test-receipt/1"
+}

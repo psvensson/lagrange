@@ -176,7 +176,7 @@ function observedCluster(observer) {
 }
 
 test('a three-replica partition commits every must-sync Ready at FULL ' +
-  'before any of its messages leave, and nothing else pays a sync',
+  'before messages leave; only durable opening establishment adds a sync',
 async () => {
   const observer = installDurableCommitObserver();
   const cluster = observedCluster(observer);
@@ -227,11 +227,20 @@ async () => {
       (replicaId) => cluster.dbFileOf(replicaId));
     assert.ok(sends > 0, 'messages were sent');
 
-    // Writes outside the persist transaction keep the connection's setting:
-    // every other transaction (application, applied state, bootstrap)
-    // committed at NORMAL, and every connection rests at NORMAL.
+    // Explicit successor of the former bootstrap-at-NORMAL cost clause:
+    // the new durable opening fact and bootstrap commit atomically at FULL.
+    // Ordinary application work still pays no new sync, and every connection
+    // returns to NORMAL. The observer identifies the actual bootstrap write
+    // inside that transaction, not a label supplied by production.
+    const bootstrapCommits = observer.events.filter((event) =>
+      event.type === DURABLE_EVENT.COMMIT && event.openingBootstrap);
+    assert.equal(bootstrapCommits.length, FOUNDING.length + 1,
+      'each genuine founding/learner bootstrap has one establishment commit');
+    assert.ok(bootstrapCommits.every((event) =>
+      event.level === SQLITE_SYNCHRONOUS.FULL));
     const otherCommits = observer.events.filter((event) =>
-      event.type === DURABLE_EVENT.COMMIT && !event.persist);
+      event.type === DURABLE_EVENT.COMMIT && !event.persist &&
+        !event.openingBootstrap);
     assert.ok(otherCommits.length > 0, 'application transactions ran');
     assert.deepEqual([...new Set(otherCommits.map((event) => event.level))],
       [SQLITE_SYNCHRONOUS.NORMAL],

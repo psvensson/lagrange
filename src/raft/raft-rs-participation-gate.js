@@ -23,6 +23,7 @@
 // durable write releases it (an event, never a timer).
 
 import {deepFreeze} from './raft-operation-port.js';
+import {RAFT_RS_OPENING_HISTORY} from './raft-rs-opening-history-constants.js';
 import {RAFT_OPERATION_OUTCOME} from './raft-operation-port-constants.js';
 import {
   BOOTSTRAP_MEMBERSHIP_SOURCE,
@@ -332,8 +333,11 @@ function reseedRequiredAtOpen() {
  * @param {Object} bootstrap - The port's bootstrap.
  * @return {Object|null} The typed refusal, or null to open.
  */
-function openingWithoutRecordRefusal(bootstrap) {
-  if (bootstrap.identityExisted === true) {
+// The local fact is supplied only by the existing lifecycle owner. An
+// unavailable/legacy-unknown fact never weakens the host/bootstrap fences.
+function openingWithoutRecordRefusal(bootstrap, history) {
+  if (bootstrap.identityExisted === true ||
+      history !== RAFT_RS_OPENING_HISTORY.NEVER_OPENED) {
     return reseedRequiredAtOpen();
   }
   const missing = bootstrap.source ===

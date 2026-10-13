@@ -9,10 +9,12 @@
 
 import {
   reportReplicaHandlerRetirement,
+  requireReplicaHandlerRetirement,
   retireReplicaTransportHandler,
 } from '../node/replica-transport-handler-identity.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {RAFT_EVENT} from '../raft/raft-operation-port-constants.js';
+import {withRaftOpeningCleanupFailure} from '../raft/raft-operation-port.js';
 import {wireReplicaLifecycleEvents} from '../raft/replica-leadership-state.js';
 import {SessionKVStore} from './session-kv-store.js';
 import {
@@ -50,7 +52,8 @@ function replicaRetiredError(replica) {
  */
 function isLiveWasmServiceReplica(replica) {
   return replica.lifecycleState === STATE.STARTING ||
-    replica.lifecycleState === STATE.READY;
+    replica.lifecycleState === STATE.READY ||
+    replica.lifecycleState === STATE.CLEANUP_REQUIRED;
 }
 
 /**
@@ -61,10 +64,6 @@ function isLiveWasmServiceReplica(replica) {
  */
 async function releaseWasmServiceReplicaConsensus(replica) {
   await closeWasmServiceConsensus(replica);
-  if (replica.kvStore) {
-    replica.kvStore.close();
-    replica.kvStore = null;
-  }
 }
 
 /**
@@ -95,7 +94,18 @@ async function openReplica(replica) {
       replica.transportHandler = handler;
     }
   } catch (error) {
-    await releaseWasmServiceReplicaConsensus(replica);
+    replica.startupFailure = error;
+    try {
+      await releaseWasmServiceReplicaConsensus(replica);
+    } catch (cleanup) {
+      replica.startupFailure = withRaftOpeningCleanupFailure(error, cleanup);
+      // A concurrent shutdown retains its existing settlement/ownership.
+      if (replica.lifecycleState === STATE.STARTING) {
+        replica.lifecycleState = STATE.CLEANUP_REQUIRED;
+      }
+      throw replica.startupFailure;
+    }
+    replica.startupFailure = null;
     // A shutdown that began meanwhile owns the state from here on.
     if (replica.lifecycleState === STATE.STARTING) {
       replica.lifecycleState = STATE.CREATED;
@@ -117,15 +127,19 @@ async function initializeWasmServiceReplica(replica) {
     return;
   case STATE.STARTING:
     return replica.lifecycleSettlement;
+  case STATE.CLEANUP_REQUIRED:
+    throw replica.startupFailure ?? replicaRetiredError(replica);
   case STATE.STOPPING:
   case STATE.STOPPED:
     throw replicaRetiredError(replica);
   default:
     break;
   }
+  const {promise, resolve, reject} = Promise.withResolvers();
   replica.lifecycleState = STATE.STARTING;
-  replica.lifecycleSettlement = openReplica(replica);
-  return replica.lifecycleSettlement;
+  replica.lifecycleSettlement = promise;
+  openReplica(replica).then(resolve, reject);
+  return promise;
 }
 
 /**
@@ -133,9 +147,10 @@ async function initializeWasmServiceReplica(replica) {
  * @param {Object} replica - The WasmServiceReplica.
  * @param {Function|null} handler - The handler this instance registered.
  * @param {Promise|null} starting - A failing open still releasing.
+ * @param {Error|null} activityFailure - An activity stop still owed.
  * @return {Promise<void>}
  */
-async function retireReplica(replica, handler, starting) {
+async function retireReplica(replica, handler, starting, activityFailure) {
   try {
     if (starting) {
       // The failed open releases its own handles first; its error belongs
@@ -149,17 +164,28 @@ async function retireReplica(replica, handler, starting) {
       address: replica.unifiedAddress,
       replicaId: replica.replicaId,
     };
-    reportReplicaHandlerRetirement(replica.logger, retirement,
-      await retireReplicaTransportHandler({
-        ...retirement,
-        transport: replica.transport,
-        handler,
-        lane: null,
-      }));
+    const outcome = await retireReplicaTransportHandler({
+      ...retirement,
+      transport: replica.transport,
+      handler,
+      lane: null,
+    });
+    reportReplicaHandlerRetirement(replica.logger, retirement, outcome);
+    requireReplicaHandlerRetirement(outcome);
+    if (replica.transportHandler === handler) {
+      replica.transportHandler = null;
+    }
     await releaseWasmServiceReplicaConsensus(replica);
-  } finally {
-    replica.lifecycleState = STATE.STOPPED;
+    if (activityFailure !== null) {
+      throw activityFailure;
+    }
+  } catch (error) {
+    replica.lifecycleState = STATE.CLEANUP_REQUIRED;
+    throw activityFailure !== null && error !== activityFailure ?
+      withRaftOpeningCleanupFailure(activityFailure, error) : error;
   }
+  replica.startupFailure = null;
+  replica.lifecycleState = STATE.STOPPED;
   replica.logger.info(WASM_SERVICE_LOG_MSG.REPLICA_STOPPED, {
     replicaId: replica.replicaId,
     serviceDefinitionId: replica.serviceDefinitionId,
@@ -186,16 +212,20 @@ async function shutdownWasmServiceReplica(replica, stopActivity) {
   }
   const starting = replica.lifecycleState === STATE.STARTING ?
     replica.lifecycleSettlement : null;
+  const {promise, resolve, reject} = Promise.withResolvers();
   replica.lifecycleState = STATE.STOPPING;
+  replica.lifecycleSettlement = promise;
   const handler = replica.transportHandler;
-  replica.transportHandler = null;
+  let activityFailure = null;
   try {
     stopActivity();
-  } finally {
-    // Retirement proceeds even when stopping an activity threw.
-    replica.lifecycleSettlement = retireReplica(replica, handler, starting);
+  } catch (error) {
+    activityFailure = error;
   }
-  return replica.lifecycleSettlement;
+  // Joiners already see this settlement. Retirement proceeds even if an
+  // activity stop failed, but cannot then claim every obligation completed.
+  retireReplica(replica, handler, starting, activityFailure).then(resolve, reject);
+  return promise;
 }
 
 export {

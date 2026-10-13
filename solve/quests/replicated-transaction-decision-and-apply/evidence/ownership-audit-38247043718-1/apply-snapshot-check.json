@@ -1,0 +1,11 @@
+{
+  "command": [
+    "git",
+    "apply",
+    "--check",
+    "/home/runner/work/lagrange/lagrange/solve/quests/replicated-transaction-decision-and-apply/evidence/ownership-audit-20261012/snapshot-source.patch"
+  ],
+  "completed": true,
+  "exit": 0,
+  "limitSeconds": 120
+}

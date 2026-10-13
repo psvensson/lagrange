@@ -2,6 +2,8 @@ import {assertCritical} from '../../utils/assert.js';
 import {MessageGroupService} from '../../message-group/message-group-service.js';
 import {getMessageGroupDbPath} from '../../storage/data-directory-manager.js';
 import {
+  initializeRegisteredMessageGroup,
+  messageGroupCreationAlreadySettled,
   registerMessageGroupTransportHandler,
   retireMessageGroupTransportHandler,
 } from '../shared/message-group-transport-handler.js';
@@ -85,7 +87,8 @@ const CREATE_MESSAGE_GROUP_REPLICA_LIFECYCLE_METHODS = {
 
     const messageGroupServices =
       this.delegates.getMessageGroupServices();
-    if (messageGroupServices.has(options.replicaId)) {
+    if (messageGroupCreationAlreadySettled(
+      messageGroupServices, options.replicaId)) {
       return {status: SERVICE_LIFECYCLE_STATE.CREATED};
     }
 
@@ -140,7 +143,9 @@ const CREATE_MESSAGE_GROUP_REPLICA_LIFECYCLE_METHODS = {
       );
     }
 
-    await messageGroup.initialize();
+    await initializeRegisteredMessageGroup({messageGroup,
+      messageGroupServices, messageRouter,
+      address: unifiedAddress, replicaId: options.replicaId});
     attachMessageGroupServiceBeforePublish(this.delegates, messageGroup);
     messageGroupServices.set(options.replicaId, messageGroup);
     this.delegates.pushJoinMessageGroupReplica(messageGroup);

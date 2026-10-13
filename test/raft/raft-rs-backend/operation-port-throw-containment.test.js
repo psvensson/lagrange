@@ -15,6 +15,8 @@
 
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
+import {setImmediate as nextEventLoopTurn} from 'node:timers/promises';
+import {VirtualTimeSource} from '../../../src/time/time-source.js';
 
 import Database from 'better-sqlite3';
 
@@ -61,9 +63,19 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Preserve every production tick and the full simulated interval; flush the
+// real microtask turn before the next due instant, rather than batching ticks.
+async function advanceScheduledClock(clock, spanMs) {
+  const end = clock.now() + spanMs;
+  while (clock.now() < end) {
+    clock.advance(Math.min(TIMING.tickIntervalMs, end - clock.now()));
+    await nextEventLoopTurn();
+  }
+}
+
 // A lone replica's port, from the request PartitionService hands its
 // backend (the contract owner's field names).
-function lonePort(groupId, {deferElection, db = new Database(IN_MEMORY)}) {
+function lonePort(groupId, {deferElection, db = new Database(IN_MEMORY), timeSource = null}) {
   const replicaId = `${groupId}-r1`;
   const port = createRaftRsOperationPort({
     [RAFT_OPERATION_PORT_REQUEST.GROUP_ID]: groupId,
@@ -74,7 +86,7 @@ function lonePort(groupId, {deferElection, db = new Database(IN_MEMORY)}) {
       genesisStamp([replicaId]),
     [RAFT_OPERATION_PORT_REQUEST.DURABLE_STORAGE]: db,
     [RAFT_OPERATION_PORT_REQUEST.TIMING]: TIMING,
-    [RAFT_OPERATION_PORT_REQUEST.SUBSTRATE]: {},
+    [RAFT_OPERATION_PORT_REQUEST.SUBSTRATE]: timeSource === null ? {} : {timeSource},
     [RAFT_OPERATION_PORT_REQUEST.DEFER_ELECTION]: deferElection,
     [RAFT_OPERATION_PORT_REQUEST.SEND_TO_PEER]: () => undefined,
     [RAFT_OPERATION_PORT_REQUEST.RESOLVE_PEER_ADDRESS]: (peer) =>
@@ -93,8 +105,9 @@ function lonePort(groupId, {deferElection, db = new Database(IN_MEMORY)}) {
   };
 }
 
-function throwingLeaderListener(port) {
+function throwingLeaderListener(port, observed = () => undefined) {
   return port.subscribe(RAFT_EVENT.LEADER, () => {
+    observed();
     throw new Error(LISTENER_FAILURE);
   });
 }
@@ -122,29 +135,34 @@ test('F-ah (b): a throw inside the port\'s own scheduled ticks is the ' +
   'group\'s typed host failure - nothing escapes the timer, one ' +
   'reconstruction per window', {timeout: TEST_TIMEOUT_MS}, async () => {
   const escapes = countEscapes();
+  const clock = new VirtualTimeSource({startMs: 1000});
   const {port, dispose} = lonePort('containment-scheduled',
-    {deferElection: false});
+    {deferElection: false, timeSource: clock});
+  let leaderAnnouncements = 0;
   try {
-    const unsubscribe = throwingLeaderListener(port);
-    const startedAt = Date.now();
-    await sleep(SCHEDULED_SPAN_MS);
+    const unsubscribe = throwingLeaderListener(port, () => { leaderAnnouncements += 1; });
+    const startedAt = clock.now();
+    await advanceScheduledClock(clock, SCHEDULED_SPAN_MS);
+    assert.ok(leaderAnnouncements > 0, 'actual scheduled leader callback must run');
     assert.deepEqual(escapes.escaped, [],
       'no exception or rejection escaped the port\'s scheduled ticks');
     const held = assertContained(answerOf(() => port.readStatus()),
       'after the span');
-    const spanMs = Date.now() - startedAt;
+    const spanMs = clock.now() - startedAt;
+    assert.equal(spanMs, SCHEDULED_SPAN_MS, 'the complete original observation interval is retained');
     const bound = Math.ceil(spanMs / recoveryRetryWindowMsOf(TIMING)) + 1;
     assert.ok(Number.isInteger(held.attempts) && held.attempts >= 1 &&
       held.attempts <= bound, 'the held group was reconstructed at most ' +
       `once per window (${held.attempts} over ${spanMs} ms, bound ${bound})`);
     unsubscribe();
-    await sleep(recoveryRetryWindowMsOf(TIMING) + WINDOW_MARGIN_MS);
+    await advanceScheduledClock(clock, recoveryRetryWindowMsOf(TIMING) + WINDOW_MARGIN_MS);
     assert.equal(port.readStatus().role, RAFT_ROLE.LEADER,
       'once the listener stops throwing the group leads again');
     assert.deepEqual(escapes.escaped, [], 'nothing escaped');
   } finally {
     dispose();
     escapes.stop();
+    assert.equal(clock.pendingTimerCount(), 0, 'all scheduled ticks are owned by the disposed port');
   }
 });
 

@@ -1,0 +1,104 @@
+{
+  "inputSource": "0d9d360049e4d106d4b4e57d58ddd0c0db5420d4",
+  "files": {
+    "solve/epics/raft-rs-full-cutover.md": {
+      "before": "bb9d74d5ac71217a66eb3b866b70c02c3d3e7178948c239eefe02d500ee4baef",
+      "after": "c1fe6e41952f2e18a2e6b23cda561d45b0526db8fc5fb3abbe4e6880da13fee3"
+    },
+    "src/raft/raft-rs-operation-port.js": {
+      "before": "1656c604b0ef26dd90ba15728f29f5060bc3f0528c8ece6f66369746a6c17468",
+      "after": "552ec26c5d173a6962646e45e8a990d79a3f8052125fc5f798a77473d2a726bd"
+    },
+    "src/raft/raft-rs-participation-gate.js": {
+      "before": "20fd709e5f482ba28980d8da233368d8aa29d6e49d8706a8082d8ed0f0c34d6e",
+      "after": "dd2911e8d85a783d8c849b00ff9ba88db6c79f500a8829aa31c97a0b4a0245f6"
+    },
+    "src/raft/raft-rs-replica-lifecycle-owner.js": {
+      "before": "ef9129c4548241b3dc22deca633e013430bc0f6e5f54795d3069969f65e4d778",
+      "after": "9d71e2ab8a6c48524ae5a04aca4991805b1c765feff3e3e3cb96040ec499cf70"
+    },
+    "src/raft/raft-rs-runtime-owner.js": {
+      "before": "d121161897f0fa1d167692b1e0962d0e9a6d06d0d854f9518d74116a896a27a0",
+      "after": "b6cf3a1138030e75f23cb83eeeb31f1bc9080a8d72c414a160320217e556b1b5"
+    },
+    "test/guidelines/harness.md": {
+      "before": "a1e3074f431666eb61a893d57541548acd51c483015c455d1508d3dfb3470604",
+      "after": "e43e7198ae48209899f23d21d93273ed24fd30250e69fd51d154cfa44377cf6f"
+    },
+    "test/raft/raft-rs-backend/durable-commit-observer.js": {
+      "before": "6a4e909f33653062d96d66cfc1c36236422b167fd5dc73ed17d3c79ff791cb08",
+      "after": "a698870dbc0f126fa4a2e329efa215f7e975bf88bd4c8c3aa186f49e28087a15"
+    },
+    "test/raft/raft-rs-backend/durable-commit-sync.test.js": {
+      "before": "5395bc7a11e9324d9fbcceead3377c869b7757f4176feec85822780b09c058dc",
+      "after": "f286b18740d185abb24fef467bcfd9aede68312aa2ebd91754592c83849cdd18"
+    },
+    "test/raft/raft-rs-backend/operation-port-lifecycle.test.js": {
+      "before": "fec926e2b50ac1dbd720b1900e0f37d8ee973a7ebe724f576ea45dca85d1adbc",
+      "after": "14862d37176b193101a638c42f19b2fa531c5dd6c272ca5aa1af9554c43c320d"
+    },
+    "test/shards/impact-contracts.json": {
+      "before": "c8cb4a6d4341ffe3a2eb3cb5cc4500d1fe98119ee194c21a43d7c315c23083d3",
+      "after": "1b8c8b8095bda65a10ea75feddd573404eb92d352e9e68844b787f8de9ce0c68"
+    },
+    "solve/epics/raft-rs-full-cutover/test-timing-ruling-20261012.md": {
+      "before": null,
+      "after": "fff763a99157347185406a5202e5d2d2335742f4257d77b96f890e7c625d2b25"
+    },
+    "solve/quests/replica-opening-history/design.md": {
+      "before": null,
+      "after": "1afd47182c5b7e829312cf5d61a35450b03c00de6182b5992cd6c823d2ee5e9d"
+    },
+    "solve/quests/replica-opening-history/evidence/receipt.json": {
+      "before": null,
+      "after": "12b46d2a505601958f1e4f77729d7282f04243de6444020e85729ae4a1246b0e"
+    },
+    "solve/quests/replica-opening-history/quest.json": {
+      "before": null,
+      "after": "8fe1c49a07d59f2597919f8c487f00581c4cee4f71469bdf43680e556c4e699d"
+    },
+    "src/raft/raft-rs-opening-history-constants.js": {
+      "before": null,
+      "after": "519cbf99c45a135cea5ab0646a0b9ab33db670e9d53105c7681784d245819a1c"
+    },
+    "test/raft/raft-rs-backend/opening-history-native-fixture.js": {
+      "before": null,
+      "after": "310e7d2f1e04499dcbc402c916429cf17fc13f8aadbdf028696db7618653d201"
+    },
+    "test/raft/raft-rs-backend/opening-history-process-child.js": {
+      "before": null,
+      "after": "33e4b42db4a62dc9b7ec565191243bd00979e11d305524c5b36fa5faa9fc1e07"
+    },
+    "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js": {
+      "before": null,
+      "after": "ea8b1f86ab95740b428a7c485da744552aee6b820a22268f97084f74588600a6"
+    }
+  },
+  "nativeTests": [
+    "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
+    "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js"
+  ],
+  "regressions": [
+    "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
+    "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+    "test/raft/raft-rs-backend/durable-commit-sync.test.js",
+    "test/raft/raft-rs-backend/runtime-trap-and-restore.test.js",
+    "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+    "test/raft/raft-rs-backend/operation-port-lifecycle.test.js",
+    "test/raft/raft-rs-backend/participation-gate.test.js",
+    "test/raft/raft-rs-backend/operation-port-throw-containment.test.js",
+    "test/raft/raft-rs-backend/restart-from-durable-record.test.js",
+    "test/raft/raft-rs-backend/durable-rejoin-record-refusal.test.js",
+    "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js",
+    "test/raft/raft-rs-backend/message-group-on-raft-rs.test.js",
+    "test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js",
+    "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js",
+    "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js",
+    "test/raft/snapshot-lifecycle-staging.test.js",
+    "test/integration/message-group-learner-runtime-authorization.integration.test.js",
+    "test/partition/partition-unreadable-durable-record.test.js",
+    "test/raft/raft-rs-backend/operation-port-boundary.test.js"
+  ],
+  "expectedRegressionCount": 172,
+  "inheritedFixture": "test/partition/partition-unreadable-durable-record.test.js"
+}

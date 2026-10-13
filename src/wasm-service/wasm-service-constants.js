@@ -98,6 +98,7 @@ const WASM_SERVICE_REPLICA_STATE = Object.freeze({
   STARTING: 'starting',
   READY: 'ready',
   STOPPING: 'stopping',
+  CLEANUP_REQUIRED: 'cleanup-required',
   STOPPED: 'stopped',
 });
 

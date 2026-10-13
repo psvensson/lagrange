@@ -156,6 +156,12 @@ test('durable retirement refuses every active operation before core entry after 
       const request = replica.request;
       const registry = new RaftRsPeerIdentityRegistry(replica.db);
       const mutant = createRuntimeDispatcher({
+        // This deliberate owner-bypass mutant also forges the new private
+        // history fact. Production can obtain it only from the lifecycle
+        // owner, which would refuse this retired generation. The unchanged
+        // assertions below prove why that composition boundary is required.
+        readOpeningHistory: () => 'established',
+        recordOpeningHistory: () => assert.fail('mutant must not rewrite history'),
         database: replica.db,
         groupId: cluster.partitionId,
         replicaIdentity: replica.replicaId,

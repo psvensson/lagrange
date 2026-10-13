@@ -1,0 +1,17 @@
+TAP version 13
+# Subtest: a trap marks the runtime unhealthy and its groups restore
+ok 1 - a trap marks the runtime unhealthy and its groups restore
+  ---
+  duration_ms: 187.397872
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 198.558023
+# time=552ms

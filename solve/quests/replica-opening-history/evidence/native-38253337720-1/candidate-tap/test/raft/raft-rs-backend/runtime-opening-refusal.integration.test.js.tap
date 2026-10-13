@@ -1,0 +1,108 @@
+{"level":50,"time":"2026-10-12T13:08:06.383Z","nodeId":"opening-refusal-node","pid":3545,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"propose","reason":"opening-refusal core-boundary trap","runtimeGeneration":1,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+{"level":50,"time":"2026-10-12T13:08:06.487Z","nodeId":"opening-refusal-node","pid":3545,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"propose","reason":"opening-refusal core-boundary trap","runtimeGeneration":2,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+{"level":50,"time":"2026-10-12T13:08:06.556Z","nodeId":"opening-refusal-node","pid":3545,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"propose","reason":"opening-refusal core-boundary trap","runtimeGeneration":4,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+{"level":50,"time":"2026-10-12T13:08:06.623Z","nodeId":"opening-refusal-node","pid":3545,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"propose","reason":"opening-refusal core-boundary trap","runtimeGeneration":5,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+{"level":50,"time":"2026-10-12T13:08:06.682Z","nodeId":"opening-refusal-node","pid":3545,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"propose","reason":"opening-refusal core-boundary trap","runtimeGeneration":7,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+{"level":50,"time":"2026-10-12T13:08:06.738Z","nodeId":"opening-refusal-node","pid":3545,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"propose","reason":"opening-refusal core-boundary trap","runtimeGeneration":8,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+{"level":50,"time":"2026-10-12T13:08:06.799Z","nodeId":"opening-refusal-node","pid":3545,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"propose","reason":"opening-refusal core-boundary trap","runtimeGeneration":10,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+{"level":50,"time":"2026-10-12T13:08:06.854Z","nodeId":"opening-refusal-node","pid":3545,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"propose","reason":"opening-refusal core-boundary trap","runtimeGeneration":11,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+{"level":50,"time":"2026-10-12T13:08:06.902Z","nodeId":"opening-refusal-node","pid":3545,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"propose","reason":"opening-refusal core-boundary trap","runtimeGeneration":12,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+{"level":50,"time":"2026-10-12T13:08:06.954Z","nodeId":"opening-refusal-node","pid":3545,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"propose","reason":"opening-refusal core-boundary trap","runtimeGeneration":13,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+TAP version 13
+# Subtest: native runtime opening: partition unhealthy initialization is typed, cleans up, and can retry
+ok 1 - native runtime opening: partition unhealthy initialization is typed, cleans up, and can retry
+  ---
+  duration_ms: 135.625202
+  type: 'test'
+  ...
+# Subtest: native runtime opening: partition backoff initialization is typed, cleans up, and can retry
+ok 2 - native runtime opening: partition backoff initialization is typed, cleans up, and can retry
+  ---
+  duration_ms: 86.757914
+  type: 'test'
+  ...
+# Subtest: native runtime opening: message-group unhealthy initialization is typed, cleans up, and can retry
+ok 3 - native runtime opening: message-group unhealthy initialization is typed, cleans up, and can retry
+  ---
+  duration_ms: 64.762195
+  type: 'test'
+  ...
+# Subtest: native runtime opening: message-group backoff initialization is typed, cleans up, and can retry
+ok 4 - native runtime opening: message-group backoff initialization is typed, cleans up, and can retry
+  ---
+  duration_ms: 67.320436
+  type: 'test'
+  ...
+# Subtest: native runtime opening: wasm-service unhealthy initialization is typed, cleans up, and can retry
+ok 5 - native runtime opening: wasm-service unhealthy initialization is typed, cleans up, and can retry
+  ---
+  duration_ms: 56.948472
+  type: 'test'
+  ...
+# Subtest: native runtime opening: wasm-service backoff initialization is typed, cleans up, and can retry
+ok 6 - native runtime opening: wasm-service backoff initialization is typed, cleans up, and can retry
+  ---
+  duration_ms: 56.445551
+  type: 'test'
+  ...
+# Subtest: native runtime opening: unhealthy refusal preserves absence of a reservation owner
+ok 7 - native runtime opening: unhealthy refusal preserves absence of a reservation owner
+  ---
+  duration_ms: 50.06577
+  type: 'test'
+  ...
+# Subtest: native runtime opening: unhealthy refusal preserves an existing reservation owner
+ok 8 - native runtime opening: unhealthy refusal preserves an existing reservation owner
+  ---
+  duration_ms: 57.539125
+  type: 'test'
+  ...
+# Subtest: native runtime opening: replacing refusal preserves absence of a reservation owner
+ok 9 - native runtime opening: replacing refusal preserves absence of a reservation owner
+  ---
+  duration_ms: 46.725846
+  type: 'test'
+  ...
+# Subtest: native runtime opening: replacing refusal preserves an existing reservation owner
+ok 10 - native runtime opening: replacing refusal preserves an existing reservation owner
+  ---
+  duration_ms: 51.722748
+  type: 'test'
+  ...
+# Subtest: WASM opening history: intact restart restores after a real commit
+ok 11 - WASM opening history: intact restart restores after a real commit
+  ---
+  duration_ms: 49.725117
+  type: 'test'
+  ...
+# Subtest: WASM opening history: lost record refuses after a real commit
+ok 12 - WASM opening history: lost record refuses after a real commit
+  ---
+  duration_ms: 48.754965
+  type: 'test'
+  ...
+{"level":50,"time":"2026-10-12T13:08:06.401Z","nodeId":"opening-refusal-node","pid":3545,"subsystem":"raft-rs","report":"runtime-replaced","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","runtimeGeneration":2,"groupsRestored":1,"failure":null,"nodeId":"opening-refusal-node","msg":"raft-rs runtime replaced"}
+{"level":50,"time":"2026-10-12T13:08:06.491Z","nodeId":"opening-refusal-node","pid":3545,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"create_node","reason":"opening-refusal restoration trap","runtimeGeneration":3,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+{"level":50,"time":"2026-10-12T13:08:06.501Z","nodeId":"opening-refusal-node","pid":3545,"subsystem":"raft-rs","report":"runtime-replaced","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","runtimeGeneration":4,"groupsRestored":1,"failure":null,"nodeId":"opening-refusal-node","msg":"raft-rs runtime replaced"}
+{"level":50,"time":"2026-10-12T13:08:06.561Z","nodeId":"opening-refusal-node","pid":3545,"subsystem":"message-group","groupId":"opening-message-group","replicaId":"opening-message-group-r1","error":"MessageGroupService consensus refused to initialize","nodeId":"opening-refusal-node","msg":"Failed during initialize, cleaning up raft"}
+{"level":50,"time":"2026-10-12T13:08:06.566Z","nodeId":"opening-refusal-node","pid":3545,"subsystem":"raft-rs","report":"runtime-replaced","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","runtimeGeneration":5,"groupsRestored":1,"failure":null,"nodeId":"opening-refusal-node","msg":"raft-rs runtime replaced"}
+{"level":50,"time":"2026-10-12T13:08:06.626Z","nodeId":"opening-refusal-node","pid":3545,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"create_node","reason":"opening-refusal restoration trap","runtimeGeneration":6,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+{"level":50,"time":"2026-10-12T13:08:06.629Z","nodeId":"opening-refusal-node","pid":3545,"subsystem":"message-group","groupId":"opening-message-group","replicaId":"opening-message-group-r1","error":"MessageGroupService consensus refused to initialize","nodeId":"opening-refusal-node","msg":"Failed during initialize, cleaning up raft"}
+{"level":50,"time":"2026-10-12T13:08:06.636Z","nodeId":"opening-refusal-node","pid":3545,"subsystem":"raft-rs","report":"runtime-replaced","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","runtimeGeneration":7,"groupsRestored":1,"failure":null,"nodeId":"opening-refusal-node","msg":"raft-rs runtime replaced"}
+{"level":50,"time":"2026-10-12T13:08:06.693Z","nodeId":"opening-refusal-node","pid":3545,"subsystem":"raft-rs","report":"runtime-replaced","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","runtimeGeneration":8,"groupsRestored":1,"failure":null,"nodeId":"opening-refusal-node","msg":"raft-rs runtime replaced"}
+{"level":50,"time":"2026-10-12T13:08:06.742Z","nodeId":"opening-refusal-node","pid":3545,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"create_node","reason":"opening-refusal restoration trap","runtimeGeneration":9,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+{"level":50,"time":"2026-10-12T13:08:06.751Z","nodeId":"opening-refusal-node","pid":3545,"subsystem":"raft-rs","report":"runtime-replaced","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","runtimeGeneration":10,"groupsRestored":1,"failure":null,"nodeId":"opening-refusal-node","msg":"raft-rs runtime replaced"}
+{"level":50,"time":"2026-10-12T13:08:06.806Z","nodeId":"opening-refusal-node","pid":3545,"subsystem":"raft-rs","report":"runtime-replaced","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","runtimeGeneration":11,"groupsRestored":1,"failure":null,"nodeId":"opening-refusal-node","msg":"raft-rs runtime replaced"}
+{"level":50,"time":"2026-10-12T13:08:06.862Z","nodeId":"opening-refusal-node","pid":3545,"subsystem":"raft-rs","report":"runtime-replaced","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","runtimeGeneration":12,"groupsRestored":1,"failure":null,"nodeId":"opening-refusal-node","msg":"raft-rs runtime replaced"}
+{"level":50,"time":"2026-10-12T13:08:06.910Z","nodeId":"opening-refusal-node","pid":3545,"subsystem":"raft-rs","report":"runtime-replaced","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","runtimeGeneration":13,"groupsRestored":1,"failure":null,"nodeId":"opening-refusal-node","msg":"raft-rs runtime replaced"}
+{"level":50,"time":"2026-10-12T13:08:06.961Z","nodeId":"opening-refusal-node","pid":3545,"subsystem":"raft-rs","report":"runtime-replaced","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","runtimeGeneration":14,"groupsRestored":1,"failure":null,"nodeId":"opening-refusal-node","msg":"raft-rs runtime replaced"}
+1..12
+# tests 12
+# suites 0
+# pass 12
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 801.134592
+# time=2049ms

@@ -127,6 +127,8 @@ class WasmServiceReplica extends EventEmitter {
     // of its in-flight start or shutdown is what a concurrent caller joins.
     this.lifecycleState = WASM_SERVICE_REPLICA_STATE.CREATED;
     this.lifecycleSettlement = null;
+    this.startupFailure = null;
+    this.consensusCloseSettlement = null;
     this.transportHandler = null;
     this.systemTableCache = options.systemTableCache ||
       NodeService.getInstance().getSystemTableCache();

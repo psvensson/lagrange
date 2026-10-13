@@ -1,0 +1,96 @@
+{"level":50,"time":"2026-10-12T11:10:38.853Z","nodeId":"opening-refusal-node","pid":3506,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"propose","reason":"opening-refusal core-boundary trap","runtimeGeneration":1,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+{"level":50,"time":"2026-10-12T11:10:38.943Z","nodeId":"opening-refusal-node","pid":3506,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"propose","reason":"opening-refusal core-boundary trap","runtimeGeneration":2,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+{"level":50,"time":"2026-10-12T11:10:39.029Z","nodeId":"opening-refusal-node","pid":3506,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"propose","reason":"opening-refusal core-boundary trap","runtimeGeneration":4,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+{"level":50,"time":"2026-10-12T11:10:39.096Z","nodeId":"opening-refusal-node","pid":3506,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"propose","reason":"opening-refusal core-boundary trap","runtimeGeneration":5,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+{"level":50,"time":"2026-10-12T11:10:39.157Z","nodeId":"opening-refusal-node","pid":3506,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"propose","reason":"opening-refusal core-boundary trap","runtimeGeneration":7,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+{"level":50,"time":"2026-10-12T11:10:39.220Z","nodeId":"opening-refusal-node","pid":3506,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"propose","reason":"opening-refusal core-boundary trap","runtimeGeneration":8,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+{"level":50,"time":"2026-10-12T11:10:39.280Z","nodeId":"opening-refusal-node","pid":3506,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"propose","reason":"opening-refusal core-boundary trap","runtimeGeneration":10,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+{"level":50,"time":"2026-10-12T11:10:39.344Z","nodeId":"opening-refusal-node","pid":3506,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"propose","reason":"opening-refusal core-boundary trap","runtimeGeneration":11,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+{"level":50,"time":"2026-10-12T11:10:39.414Z","nodeId":"opening-refusal-node","pid":3506,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"propose","reason":"opening-refusal core-boundary trap","runtimeGeneration":12,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+{"level":50,"time":"2026-10-12T11:10:39.466Z","nodeId":"opening-refusal-node","pid":3506,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"propose","reason":"opening-refusal core-boundary trap","runtimeGeneration":13,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+TAP version 13
+# Subtest: native runtime opening: partition unhealthy initialization is typed, cleans up, and can retry
+ok 1 - native runtime opening: partition unhealthy initialization is typed, cleans up, and can retry
+  ---
+  duration_ms: 132.817237
+  type: 'test'
+  ...
+# Subtest: native runtime opening: partition backoff initialization is typed, cleans up, and can retry
+ok 2 - native runtime opening: partition backoff initialization is typed, cleans up, and can retry
+  ---
+  duration_ms: 85.259826
+  type: 'test'
+  ...
+# Subtest: native runtime opening: message-group unhealthy initialization is typed, cleans up, and can retry
+ok 3 - native runtime opening: message-group unhealthy initialization is typed, cleans up, and can retry
+  ---
+  duration_ms: 74.433144
+  type: 'test'
+  ...
+# Subtest: native runtime opening: message-group backoff initialization is typed, cleans up, and can retry
+ok 4 - native runtime opening: message-group backoff initialization is typed, cleans up, and can retry
+  ---
+  duration_ms: 65.909547
+  type: 'test'
+  ...
+# Subtest: native runtime opening: wasm-service unhealthy initialization is typed, cleans up, and can retry
+ok 5 - native runtime opening: wasm-service unhealthy initialization is typed, cleans up, and can retry
+  ---
+  duration_ms: 63.025918
+  type: 'test'
+  ...
+# Subtest: native runtime opening: wasm-service backoff initialization is typed, cleans up, and can retry
+ok 6 - native runtime opening: wasm-service backoff initialization is typed, cleans up, and can retry
+  ---
+  duration_ms: 60.242501
+  type: 'test'
+  ...
+# Subtest: native runtime opening: unhealthy refusal preserves absence of a reservation owner
+ok 7 - native runtime opening: unhealthy refusal preserves absence of a reservation owner
+  ---
+  duration_ms: 53.953098
+  type: 'test'
+  ...
+# Subtest: native runtime opening: unhealthy refusal preserves an existing reservation owner
+ok 8 - native runtime opening: unhealthy refusal preserves an existing reservation owner
+  ---
+  duration_ms: 60.615918
+  type: 'test'
+  ...
+# Subtest: native runtime opening: replacing refusal preserves absence of a reservation owner
+ok 9 - native runtime opening: replacing refusal preserves absence of a reservation owner
+  ---
+  duration_ms: 70.674879
+  type: 'test'
+  ...
+# Subtest: native runtime opening: replacing refusal preserves an existing reservation owner
+ok 10 - native runtime opening: replacing refusal preserves an existing reservation owner
+  ---
+  duration_ms: 50.919342
+  type: 'test'
+  ...
+{"level":50,"time":"2026-10-12T11:10:38.872Z","nodeId":"opening-refusal-node","pid":3506,"subsystem":"raft-rs","report":"runtime-replaced","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","runtimeGeneration":2,"groupsRestored":1,"failure":null,"nodeId":"opening-refusal-node","msg":"raft-rs runtime replaced"}
+{"level":50,"time":"2026-10-12T11:10:38.947Z","nodeId":"opening-refusal-node","pid":3506,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"create_node","reason":"opening-refusal restoration trap","runtimeGeneration":3,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+{"level":50,"time":"2026-10-12T11:10:38.958Z","nodeId":"opening-refusal-node","pid":3506,"subsystem":"raft-rs","report":"runtime-replaced","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","runtimeGeneration":4,"groupsRestored":1,"failure":null,"nodeId":"opening-refusal-node","msg":"raft-rs runtime replaced"}
+{"level":50,"time":"2026-10-12T11:10:39.035Z","nodeId":"opening-refusal-node","pid":3506,"subsystem":"message-group","groupId":"opening-message-group","replicaId":"opening-message-group-r1","error":"MessageGroupService consensus refused to initialize","nodeId":"opening-refusal-node","msg":"Failed during initialize, cleaning up raft"}
+{"level":50,"time":"2026-10-12T11:10:39.040Z","nodeId":"opening-refusal-node","pid":3506,"subsystem":"raft-rs","report":"runtime-replaced","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","runtimeGeneration":5,"groupsRestored":1,"failure":null,"nodeId":"opening-refusal-node","msg":"raft-rs runtime replaced"}
+{"level":50,"time":"2026-10-12T11:10:39.100Z","nodeId":"opening-refusal-node","pid":3506,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"create_node","reason":"opening-refusal restoration trap","runtimeGeneration":6,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+{"level":50,"time":"2026-10-12T11:10:39.103Z","nodeId":"opening-refusal-node","pid":3506,"subsystem":"message-group","groupId":"opening-message-group","replicaId":"opening-message-group-r1","error":"MessageGroupService consensus refused to initialize","nodeId":"opening-refusal-node","msg":"Failed during initialize, cleaning up raft"}
+{"level":50,"time":"2026-10-12T11:10:39.108Z","nodeId":"opening-refusal-node","pid":3506,"subsystem":"raft-rs","report":"runtime-replaced","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","runtimeGeneration":7,"groupsRestored":1,"failure":null,"nodeId":"opening-refusal-node","msg":"raft-rs runtime replaced"}
+{"level":50,"time":"2026-10-12T11:10:39.167Z","nodeId":"opening-refusal-node","pid":3506,"subsystem":"raft-rs","report":"runtime-replaced","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","runtimeGeneration":8,"groupsRestored":1,"failure":null,"nodeId":"opening-refusal-node","msg":"raft-rs runtime replaced"}
+{"level":50,"time":"2026-10-12T11:10:39.223Z","nodeId":"opening-refusal-node","pid":3506,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"create_node","reason":"opening-refusal restoration trap","runtimeGeneration":9,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+{"level":50,"time":"2026-10-12T11:10:39.232Z","nodeId":"opening-refusal-node","pid":3506,"subsystem":"raft-rs","report":"runtime-replaced","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","runtimeGeneration":10,"groupsRestored":1,"failure":null,"nodeId":"opening-refusal-node","msg":"raft-rs runtime replaced"}
+{"level":50,"time":"2026-10-12T11:10:39.288Z","nodeId":"opening-refusal-node","pid":3506,"subsystem":"raft-rs","report":"runtime-replaced","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","runtimeGeneration":11,"groupsRestored":1,"failure":null,"nodeId":"opening-refusal-node","msg":"raft-rs runtime replaced"}
+{"level":50,"time":"2026-10-12T11:10:39.352Z","nodeId":"opening-refusal-node","pid":3506,"subsystem":"raft-rs","report":"runtime-replaced","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","runtimeGeneration":12,"groupsRestored":1,"failure":null,"nodeId":"opening-refusal-node","msg":"raft-rs runtime replaced"}
+{"level":50,"time":"2026-10-12T11:10:39.422Z","nodeId":"opening-refusal-node","pid":3506,"subsystem":"raft-rs","report":"runtime-replaced","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","runtimeGeneration":13,"groupsRestored":1,"failure":null,"nodeId":"opening-refusal-node","msg":"raft-rs runtime replaced"}
+{"level":50,"time":"2026-10-12T11:10:39.473Z","nodeId":"opening-refusal-node","pid":3506,"subsystem":"raft-rs","report":"runtime-replaced","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","runtimeGeneration":14,"groupsRestored":1,"failure":null,"nodeId":"opening-refusal-node","msg":"raft-rs runtime replaced"}
+1..10
+# tests 10
+# suites 0
+# pass 10
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 732.178885
+# time=1971ms

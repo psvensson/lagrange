@@ -1,0 +1,270 @@
+{"level":50,"time":"2026-10-12T11:10:06.866Z","nodeId":"opening-refusal-node","pid":3293,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"propose","reason":"opening-refusal core-boundary trap","runtimeGeneration":1,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+{"level":50,"time":"2026-10-12T11:10:06.951Z","nodeId":"opening-refusal-node","pid":3293,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"propose","reason":"opening-refusal core-boundary trap","runtimeGeneration":2,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+{"level":50,"time":"2026-10-12T11:10:07.016Z","nodeId":"opening-refusal-node","pid":3293,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"propose","reason":"opening-refusal core-boundary trap","runtimeGeneration":4,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+{"level":50,"time":"2026-10-12T11:10:07.077Z","nodeId":"opening-refusal-node","pid":3293,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"propose","reason":"opening-refusal core-boundary trap","runtimeGeneration":5,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+{"level":50,"time":"2026-10-12T11:10:07.129Z","nodeId":"opening-refusal-node","pid":3293,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"propose","reason":"opening-refusal core-boundary trap","runtimeGeneration":7,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+{"level":50,"time":"2026-10-12T11:10:07.181Z","nodeId":"opening-refusal-node","pid":3293,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"propose","reason":"opening-refusal core-boundary trap","runtimeGeneration":8,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+{"level":50,"time":"2026-10-12T11:10:07.241Z","nodeId":"opening-refusal-node","pid":3293,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"propose","reason":"opening-refusal core-boundary trap","runtimeGeneration":10,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+{"level":50,"time":"2026-10-12T11:10:07.311Z","nodeId":"opening-refusal-node","pid":3293,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"propose","reason":"opening-refusal core-boundary trap","runtimeGeneration":11,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+{"level":50,"time":"2026-10-12T11:10:07.363Z","nodeId":"opening-refusal-node","pid":3293,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"propose","reason":"opening-refusal core-boundary trap","runtimeGeneration":12,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+{"level":50,"time":"2026-10-12T11:10:07.416Z","nodeId":"opening-refusal-node","pid":3293,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"propose","reason":"opening-refusal core-boundary trap","runtimeGeneration":13,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+TAP version 13
+# Subtest: native runtime opening: partition unhealthy initialization is typed, cleans up, and can retry
+not ok 1 - native runtime opening: partition unhealthy initialization is typed, cleans up, and can retry
+  ---
+  duration_ms: 118.404507
+  type: 'test'
+  location: '/home/runner/work/lagrange/lagrange/test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js:132:5'
+  failureType: 'testCodeFailure'
+  error: |-
+    partition initialize must expose its existing typed refusal
+    + actual - expected
+    
+    + undefined
+    - 'partition_consensus_init_refused'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'partition_consensus_init_refused'
+  operator: 'strictEqual'
+  stack: |-
+    assertInitializationRefusal (file:///home/runner/work/lagrange/lagrange/test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js:118:12)
+    TestContext.<anonymous> (file:///home/runner/work/lagrange/lagrange/test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js:157:7)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: native runtime opening: partition backoff initialization is typed, cleans up, and can retry
+not ok 2 - native runtime opening: partition backoff initialization is typed, cleans up, and can retry
+  ---
+  duration_ms: 82.88343
+  type: 'test'
+  location: '/home/runner/work/lagrange/lagrange/test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js:132:5'
+  failureType: 'testCodeFailure'
+  error: |-
+    partition initialize must expose its existing typed refusal
+    + actual - expected
+    
+    + undefined
+    - 'partition_consensus_init_refused'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'partition_consensus_init_refused'
+  operator: 'strictEqual'
+  stack: |-
+    assertInitializationRefusal (file:///home/runner/work/lagrange/lagrange/test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js:118:12)
+    TestContext.<anonymous> (file:///home/runner/work/lagrange/lagrange/test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js:157:7)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: native runtime opening: message-group unhealthy initialization is typed, cleans up, and can retry
+not ok 3 - native runtime opening: message-group unhealthy initialization is typed, cleans up, and can retry
+  ---
+  duration_ms: 60.277263
+  type: 'test'
+  location: '/home/runner/work/lagrange/lagrange/test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js:132:5'
+  failureType: 'testCodeFailure'
+  error: |-
+    message-group initialize must expose its existing typed refusal
+    + actual - expected
+    
+    + undefined
+    - 'message_group_consensus_init_refused'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'message_group_consensus_init_refused'
+  operator: 'strictEqual'
+  stack: |-
+    assertInitializationRefusal (file:///home/runner/work/lagrange/lagrange/test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js:121:12)
+    TestContext.<anonymous> (file:///home/runner/work/lagrange/lagrange/test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js:157:7)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: native runtime opening: message-group backoff initialization is typed, cleans up, and can retry
+not ok 4 - native runtime opening: message-group backoff initialization is typed, cleans up, and can retry
+  ---
+  duration_ms: 63.578318
+  type: 'test'
+  location: '/home/runner/work/lagrange/lagrange/test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js:132:5'
+  failureType: 'testCodeFailure'
+  error: |-
+    message-group initialize must expose its existing typed refusal
+    + actual - expected
+    
+    + undefined
+    - 'message_group_consensus_init_refused'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'message_group_consensus_init_refused'
+  operator: 'strictEqual'
+  stack: |-
+    assertInitializationRefusal (file:///home/runner/work/lagrange/lagrange/test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js:121:12)
+    TestContext.<anonymous> (file:///home/runner/work/lagrange/lagrange/test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js:157:7)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: native runtime opening: wasm-service unhealthy initialization is typed, cleans up, and can retry
+not ok 5 - native runtime opening: wasm-service unhealthy initialization is typed, cleans up, and can retry
+  ---
+  duration_ms: 49.272525
+  type: 'test'
+  location: '/home/runner/work/lagrange/lagrange/test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js:132:5'
+  failureType: 'testCodeFailure'
+  error: |-
+    WASM initialize must expose its existing startup refusal
+    + actual - expected
+    
+    + 'runtime-replacement-in-progress'
+    - 'WASM service consensus port refused to open'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'WASM service consensus port refused to open'
+  actual: 'runtime-replacement-in-progress'
+  operator: 'strictEqual'
+  stack: |-
+    assertInitializationRefusal (file:///home/runner/work/lagrange/lagrange/test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js:124:12)
+    TestContext.<anonymous> (file:///home/runner/work/lagrange/lagrange/test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js:157:7)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: native runtime opening: wasm-service backoff initialization is typed, cleans up, and can retry
+not ok 6 - native runtime opening: wasm-service backoff initialization is typed, cleans up, and can retry
+  ---
+  duration_ms: 54.481187
+  type: 'test'
+  location: '/home/runner/work/lagrange/lagrange/test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js:132:5'
+  failureType: 'testCodeFailure'
+  error: |-
+    WASM initialize must expose its existing startup refusal
+    + actual - expected
+    
+    + 'opening-refusal restoration trap'
+    - 'WASM service consensus port refused to open'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'WASM service consensus port refused to open'
+  actual: 'opening-refusal restoration trap'
+  operator: 'strictEqual'
+  stack: |-
+    assertInitializationRefusal (file:///home/runner/work/lagrange/lagrange/test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js:124:12)
+    TestContext.<anonymous> (file:///home/runner/work/lagrange/lagrange/test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js:157:7)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: native runtime opening: unhealthy refusal preserves absence of a reservation owner
+not ok 7 - native runtime opening: unhealthy refusal preserves absence of a reservation owner
+  ---
+  duration_ms: 55.284835
+  type: 'test'
+  location: '/home/runner/work/lagrange/lagrange/test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js:183:5'
+  failureType: 'testCodeFailure'
+  error: |-
+    no failed constructor may publish a membership reservation owner
+    + actual - expected
+    
+    + 'RESERVED'
+    - 'NOT_MANAGED'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'NOT_MANAGED'
+  actual: 'RESERVED'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/runner/work/lagrange/lagrange/test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js:229:16)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: native runtime opening: unhealthy refusal preserves an existing reservation owner
+not ok 8 - native runtime opening: unhealthy refusal preserves an existing reservation owner
+  ---
+  duration_ms: 70.028794
+  type: 'test'
+  location: '/home/runner/work/lagrange/lagrange/test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js:183:5'
+  failureType: 'testCodeFailure'
+  error: |-
+    a refused same-name opening must not replace the live reservation owner
+    + actual - expected
+    
+    + null
+    - '5316986274740881166'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: '5316986274740881166'
+  actual: ~
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/runner/work/lagrange/lagrange/test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js:224:16)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: native runtime opening: replacing refusal preserves absence of a reservation owner
+not ok 9 - native runtime opening: replacing refusal preserves absence of a reservation owner
+  ---
+  duration_ms: 62.553106
+  type: 'test'
+  location: '/home/runner/work/lagrange/lagrange/test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js:183:5'
+  failureType: 'testCodeFailure'
+  error: |-
+    no failed constructor may publish a membership reservation owner
+    + actual - expected
+    
+    + 'RESERVED'
+    - 'NOT_MANAGED'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'NOT_MANAGED'
+  actual: 'RESERVED'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/runner/work/lagrange/lagrange/test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js:229:16)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: native runtime opening: replacing refusal preserves an existing reservation owner
+not ok 10 - native runtime opening: replacing refusal preserves an existing reservation owner
+  ---
+  duration_ms: 48.11639
+  type: 'test'
+  location: '/home/runner/work/lagrange/lagrange/test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js:183:5'
+  failureType: 'testCodeFailure'
+  error: |-
+    a refused same-name opening must not replace the live reservation owner
+    + actual - expected
+    
+    + null
+    - '5316986274740881166'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: '5316986274740881166'
+  actual: ~
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/runner/work/lagrange/lagrange/test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js:224:16)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+{"level":50,"time":"2026-10-12T11:10:06.956Z","nodeId":"opening-refusal-node","pid":3293,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"create_node","reason":"opening-refusal restoration trap","runtimeGeneration":3,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+{"level":50,"time":"2026-10-12T11:10:07.021Z","nodeId":"opening-refusal-node","pid":3293,"subsystem":"message-group","groupId":"opening-message-group","replicaId":"opening-message-group-r1","error":"runtime-replacement-in-progress","nodeId":"opening-refusal-node","msg":"Failed during initialize, cleaning up raft"}
+{"level":50,"time":"2026-10-12T11:10:07.082Z","nodeId":"opening-refusal-node","pid":3293,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"create_node","reason":"opening-refusal restoration trap","runtimeGeneration":6,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+{"level":50,"time":"2026-10-12T11:10:07.085Z","nodeId":"opening-refusal-node","pid":3293,"subsystem":"message-group","groupId":"opening-message-group","replicaId":"opening-message-group-r1","error":"opening-refusal restoration trap","nodeId":"opening-refusal-node","msg":"Failed during initialize, cleaning up raft"}
+{"level":50,"time":"2026-10-12T11:10:07.185Z","nodeId":"opening-refusal-node","pid":3293,"subsystem":"raft-rs","report":"core-trapped","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","operation":"create_node","reason":"opening-refusal restoration trap","runtimeGeneration":9,"nodeId":"opening-refusal-node","msg":"raft-rs core trapped"}
+{"level":50,"time":"2026-10-12T11:10:07.374Z","nodeId":"opening-refusal-node","pid":3293,"subsystem":"raft-rs","report":"runtime-replaced","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","runtimeGeneration":13,"groupsRestored":1,"failure":null,"nodeId":"opening-refusal-node","msg":"raft-rs runtime replaced"}
+{"level":50,"time":"2026-10-12T11:10:07.423Z","nodeId":"opening-refusal-node","pid":3293,"subsystem":"raft-rs","report":"runtime-replaced","groupId":"opening-refusal-survivor","replicaIdentity":"opening-refusal-survivor-r1","peerId":"7764589519727843662","runtimeGeneration":14,"groupsRestored":1,"failure":null,"nodeId":"opening-refusal-node","msg":"raft-rs runtime replaced"}
+1..10
+# tests 10
+# suites 0
+# pass 0
+# fail 10
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 678.22791
+# time=1905ms

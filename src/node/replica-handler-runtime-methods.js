@@ -1,3 +1,5 @@
+import {settlePendingReplicaRuntimeCleanup, fenceFailedReplicaCreateRuntime,
+  shutdownReplicaHandler} from './replica-runtime-cleanup-custody.js';
 import {
   assignReplicaHandlerRuntimeMetadataMethods,
 } from './replica-handler-runtime-metadata-methods.js';
@@ -20,7 +22,6 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
     NUM,
     REPLICA_HANDLER_ADDRESS,
     REPLICA_HANDLER_ERRNO,
-    REPLICA_HANDLER_EVENT,
     REPLICA_HANDLER_LOG_MSG,
     REPLICA_HANDLER_NUM,
     REPLICA_HANDLER_SERVICE,
@@ -75,37 +76,13 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
      * @return {Promise<boolean>} Whether a created runtime was fenced.
      * @private
      */
-    async fenceFailedReplicaCreateRuntime(
-      replicaId,
-      partitionId,
-      service = null,
-    ) {
-      if (!service) {
-        return false;
-      }
-      try {
-        if (typeof service.shutdown === REPLICA_HANDLER_TYPEOF.FUNCTION) {
-          await service.shutdown();
-        }
-      } catch (error) {
-        this.logger.warn(
-          REPLICA_HANDLER_LOG_MSG.LOCAL_CLEANUP_RETRY_REQUIRED,
-          {
-            replicaId,
-            partitionId,
-            nodeId: this.nodeId,
-            error: error.message,
-          },
-        );
-      }
-      if (this.localServices.get(replicaId) === service) {
-        this.localServices.delete(replicaId);
-      }
-      const localReplica = this.localReplicas.get(replicaId);
-      if (localReplica?.service === service) {
-        this.setLocalReplica(replicaId, {service: null});
-      }
-      return true;
+    async fenceFailedReplicaCreateRuntime(replicaId, partitionId,
+      service = null, primary = null) {
+      return fenceFailedReplicaCreateRuntime(this, replicaId, partitionId, service, primary);
+    }
+
+    settlePendingReplicaRuntimeCleanup(replicaId, partitionId) {
+      return settlePendingReplicaRuntimeCleanup(this, replicaId, partitionId);
     }
 
     /**
@@ -633,61 +610,10 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
     /**
      * Shutdown the replica handler.
      */
-    async shutdown() {
-      if (this.shutdownPromise) {
-        return this.shutdownPromise;
-      }
-      this.shutdownPromise = (async () => {
-        this.logger.info(REPLICA_HANDLER_LOG_MSG.SHUTTING_DOWN, {
-          nodeId: this.nodeId,
-        });
-        this.shuttingDown = true;
-        this.replicaCreateAdmissionRecoveryRearmOwner.cancel();
-        await Promise.allSettled([
-          this.replicaCreateAdmissionRecoveryTask,
-          this.participantReleaseRecovery.shutdown(),
-        ].filter(Boolean));
-        // A removal waiting for its replica to leave consensus stops waiting.
-        this.removalConsensusExitRelease?.abort();
-        for (const progress of this.creationProgressByReplica.values()) {
-          this.creationProgressReporter.fail(
-            progress,
-            REPLICA_HANDLER_LOG_MSG.SHUTTING_DOWN,
-            {stage: ReplicaStatus.FAILED},
-          );
-        }
-        await Promise.allSettled([...this.operationTasks]);
-        const servicesToShutdown = new Set([
-          ...this.localServices.values(),
-          ...[...this.localReplicas.values()]
-            .map((replica) => replica?.service)
-            .filter(Boolean),
-        ]);
-        for (const service of servicesToShutdown) {
-          try {
-            if (typeof service.shutdown === REPLICA_HANDLER_TYPEOF.FUNCTION) {
-              await service.shutdown();
-            }
-          } catch (error) {
-            this.logger.warn(REPLICA_HANDLER_LOG_MSG.REMOVE_FAILED, {
-              nodeId: this.nodeId,
-              error: error.message,
-            });
-          }
-        }
-        this.creationProgressByReplica.clear();
-        this.inProgressOperations.clear();
-        this.localServices.clear();
-        this.localReplicas.clear();
-        options.ReplicaCreateAdmissionOwner?.release?.(
-          this.replicaCreateAdmissionOwner,
-        );
-        this.replicaCreateAdmissionOwner = null;
-        this.initialized = false;
-        this.emit(REPLICA_HANDLER_EVENT.SHUTDOWN, {nodeId: this.nodeId});
-      })();
-      return this.shutdownPromise;
+    shutdown() {
+      return shutdownReplicaHandler(this, options);
     }
+
     /**
      * Get service reference for a replica from local tracking.
      * @param {string} replicaId - Replica ID.

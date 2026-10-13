@@ -66,6 +66,7 @@ function track(promise) {
 
 async function stage(engine, ctx, sessionId, rows) {
   const begun = await engine.executeQuery('BEGIN', [], {sessionId});
+  assert.equal(begun.success, true, `real BEGIN refused: ${JSON.stringify(begun)}`);
   const staged = [];
   for (const [id, value] of rows) {
     staged.push((await engine.executeQuery(
@@ -252,7 +253,8 @@ test('TX1 A3: a replica restarted after PREPARE reaches the decided ' +
         offsetMs = PAST_BUDGET_MS;
       }
       hold.release();
-      await ctx.group.waitFor(() => commit.settled);
+      assert.equal(await ctx.group.waitFor(() => commit.settled), true,
+        'the coordinator must settle its original request');
       await ctx.settle();
       // Read on the stopped replica's own database: it missed the decision.
       const whileDown = replicaViewOf(ctx, staged.transactionId, ids)[
@@ -328,10 +330,12 @@ test('TX1 A4: replayed COMMIT and ROLLBACK deliveries apply nothing twice, ' +
     const rolledBack = await stage(rolling, ctx, 'a4-r', [['a4-r1', 'two']]);
     const rollbackAnswer = track(rolling.executeQuery('COMMIT', [],
       {sessionId: 'a4-r'}));
-    await within(hold.reached, HOLD_WAIT_MS);
+    assert.notEqual(await within(hold.reached, HOLD_WAIT_MS), null,
+      'rollback must reach the actual post-PREPARE persistence boundary');
     offsetMs = PAST_BUDGET_MS;
     hold.release();
-    await ctx.group.waitFor(() => rollbackAnswer.settled);
+    assert.equal(await ctx.group.waitFor(() => rollbackAnswer.settled), true,
+      'the original rollback decision request must finish');
     offsetMs = 0;
     await ctx.settle();
     const obligationKey = `txop:${committed.participantId}:0`;
@@ -430,8 +434,8 @@ test('TX1 A5: a crash and restart after the PREPARE commit, after the ' +
   'coordinator decision and during decision fanout reach one terminal state ' +
   'on every replica', {timeout: TEST_TIMEOUT_MS}, async () => {
   const facts = await withTransactionGroup('tx1-a5', async (ctx) => {
-    // One coordinator per crash point, stopped for good at its hold; a new
-    // coordinator recovers the durable rows. A follower replica is also
+    // One suspended engine per simulated crash point; a new engine reads
+    // the gateway double's retained rows. A real follower replica is also
     // stopped across the second recovery and restarted after it.
     const crashAt = async (sessionId, ids, predicate, {replicaDown} = {}) => {
       const hold = createPersistenceHold(predicate);
@@ -492,4 +496,81 @@ test('TX1 A5: a crash and restart after the PREPARE commit, after the ' +
       rows: [['a5-f1'], ['a5-f1'], ['a5-f1']]},
   }, 'every crash point ends in the one terminal state its recorded decision ' +
     'names, on every replica');
+});
+
+// Compatibility is proved after a real replicated PREPARE, not by seeding a
+// private session map or ignoring a refused legacy BEGIN. Historical admitted
+// legacy work and its removal remain a separate migration obligation.
+test('TX1 native L6: legacy controls and expiry cannot settle a durable ' +
+  'PREPARED reservation, including after a replica restart',
+{timeout: TEST_TIMEOUT_MS}, async () => {
+  await withTransactionGroup('tx1-native-l6', async (ctx) => {
+    const hold = createPersistenceHold(isDecisionWrite);
+    const engine = ctx.createCoordinator({hold});
+    const sessionId = 'native-l6-prepared';
+    const staged = await stage(engine, ctx, sessionId, [['l6-row', 'durable']]);
+    const commit = track(engine.executeQuery('COMMIT', [], {sessionId}));
+    try {
+      assert.notEqual(await within(hold.reached, HOLD_WAIT_MS), null,
+        'the actual coordinator must reach its decision write after PREPARE');
+      await ctx.settle();
+      const before = ctx.replicaStates();
+      assert.ok(before.every((state) => state.participants.length === 1 &&
+        state.participants[0].state === PREPARED && state.rows.length === 0));
+      assert.equal(storeRowOf(ctx, staged.transactionId).decision, null);
+      const leader = ctx.leader();
+      const legacy = (operation, routingSession = sessionId) =>
+        leader.handleApplicationMessage({type: PARTITION_SERVICE_MESSAGE_TYPE.TRANSACTION,
+          operation, sessionId: routingSession, transactionEpoch: staged.begun.transactionEpoch});
+      const begun = await legacy(PARTITION_SERVICE_OPERATION.BEGIN_TRANSACTION, 'new-legacy');
+      assert.equal(begun.failureCode, 'participant_transaction_already_active');
+      for (const operation of [PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION,
+        PARTITION_SERVICE_OPERATION.COMMIT, PARTITION_SERVICE_OPERATION.ROLLBACK]) {
+        const answer = await legacy(operation);
+        assert.equal(answer.failureCode, 'participant_transaction_legacy_session_fenced');
+      }
+      const outcome = await legacy(PARTITION_SERVICE_OPERATION.TRANSACTION_OUTCOME);
+      assert.equal(outcome.outcome, PARTICIPANT_COMMIT_OUTCOME.UNKNOWN,
+        'a session-only absence is not evidence of a decided participant');
+      const query = await leader.handleApplicationMessage({
+        type: PARTITION_SERVICE_MESSAGE_TYPE.QUERY, sessionId,
+        sql: `INSERT INTO ${ctx.table} (id, value) VALUES (?, ?)`, params: ['intruder', 'no'],
+      });
+      assert.equal(query.failureCode, 'participant_transaction_legacy_session_fenced');
+      for (const service of ctx.services()) {
+        assert.equal(service.db.inTransaction, false,
+          'no legacy request acquired the native connection');
+        const now = service.timeSource.now();
+        service.enforcePreparedStateHoldTimeouts(now);
+        service.enforcePreparedStateHoldTimeouts(now + service.preparedStateHoldTimeoutMs * 2);
+        assert.equal(service.preparedTransactions.size, 0,
+          'legacy reconstruction is not the new reservation authority');
+      }
+      assert.deepEqual(ctx.replicaStates(), before,
+        'legacy controls and expiry change no participant row, generation or effect');
+      const index = followerIndexOf(ctx);
+      const restart = await ctx.stopReplica(index);
+      await restart();
+      await ctx.settle();
+      const restored = ctx.services()[index];
+      restored.enforcePreparedStateHoldTimeouts(restored.timeSource.now() +
+        restored.preparedStateHoldTimeoutMs * 2);
+      assert.equal(restored.preparedTransactions.size, 0);
+      assert.deepEqual(ctx.replicaStates(), before,
+        'restart keeps the exact prepared identity, digest and position without legacy maps');
+      hold.release();
+      assert.equal(await ctx.group.waitFor(() => commit.settled), true);
+      assert.equal(commit.value?.success, true, JSON.stringify(commit.value));
+      await ctx.settle();
+      assert.deepEqual(await outcomesOf(ctx, identityOf(staged, sessionId)),
+        [COMMITTED, COMMITTED, COMMITTED]);
+      assert.ok(ctx.replicaStates().every((state) => state.rows.length === 1 &&
+        state.rows[0].id === 'l6-row' && state.txopOutcomes === 1));
+      assert.equal((await legacy(PARTITION_SERVICE_OPERATION.BEGIN_TRANSACTION,
+        'after-decision')).failureCode, 'participant_transaction_legacy_session_fenced',
+      'terminal settlement does not reactivate fresh legacy execution');
+    } finally {
+      hold.release();
+    }
+  });
 });
