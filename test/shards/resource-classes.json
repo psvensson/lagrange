@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2351,
+    "ordinary": 2353,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2368,
-  "digest": "fnv1a32-1586c48d",
+  "censusSize": 2370,
+  "digest": "fnv1a32-374532b5",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1035,6 +1035,7 @@
     "test/integration/replica-handler-metadata-propagation.integration.test.js": "ordinary",
     "test/integration/replica-operations-owner-read-transport-readiness.integration.test.js": "ordinary",
     "test/integration/seed-migration-cutover-persisted.integration.test.js": "ordinary",
+    "test/integration/seed-migration-process-loss.integration.test.js": "ordinary",
     "test/integration/seed-node-bootstrap.integration.test.js": "ordinary",
     "test/integration/seed-owner-read-diagnosis.integration.test.js": "ordinary",
     "test/integration/service-install-lifecycle-cli-pgwire.integration.test.js": "ordinary",
@@ -1563,6 +1564,7 @@
     "test/raft/raft-rs-backend/host-contract-citations.test.js": "ordinary",
     "test/raft/raft-rs-backend/identity-record-window.test.js": "ordinary",
     "test/raft/raft-rs-backend/identity-reuse-reseed-hold.test.js": "ordinary",
+    "test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js": "ordinary",
     "test/raft/raft-rs-backend/joining-genesis-tripwire.test.js": "ordinary",
     "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js": "ordinary",
     "test/raft/raft-rs-backend/local-log-guard-correct-followers.test.js": "ordinary",

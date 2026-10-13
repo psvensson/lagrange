@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 116,
     "architecture-governance": 19,
-    "bootstrap-membership": 307,
+    "bootstrap-membership": 308,
     "cdc-metadata": 63,
     "cli-tooling": 96,
     "control-plane": 214,
@@ -19,16 +19,16 @@
     "services-runtime": 146,
     "solver-tooling": 7,
     "storage-partition": 183,
-    "storage-raft": 127,
+    "storage-raft": 128,
     "test-infrastructure": 143,
     "transactions": 18,
     "transport-messaging": 95,
     "wasm-toolchain": 57
   },
-  "censusSize": 2368,
-  "digest": "fnv1a32-489eddf6",
+  "censusSize": 2370,
+  "digest": "fnv1a32-9f8a4132",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-191b2db1",
+  "observationDigest": "fnv1a32-9f9ba21d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1055,6 +1055,7 @@
     "test/integration/replica-handler-metadata-propagation.integration.test.js": "cdc-metadata",
     "test/integration/replica-operations-owner-read-transport-readiness.integration.test.js": "transport-messaging",
     "test/integration/seed-migration-cutover-persisted.integration.test.js": "bootstrap-membership",
+    "test/integration/seed-migration-process-loss.integration.test.js": "bootstrap-membership",
     "test/integration/seed-node-bootstrap.integration.test.js": "bootstrap-membership",
     "test/integration/seed-owner-read-diagnosis.integration.test.js": "bootstrap-membership",
     "test/integration/service-install-lifecycle-cli-pgwire.integration.test.js": "services-runtime",
@@ -1583,6 +1584,7 @@
     "test/raft/raft-rs-backend/host-contract-citations.test.js": "storage-raft",
     "test/raft/raft-rs-backend/identity-record-window.test.js": "storage-raft",
     "test/raft/raft-rs-backend/identity-reuse-reseed-hold.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js": "storage-raft",
     "test/raft/raft-rs-backend/joining-genesis-tripwire.test.js": "storage-raft",
     "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js": "storage-raft",
     "test/raft/raft-rs-backend/local-log-guard-correct-followers.test.js": "storage-raft",
@@ -7553,6 +7555,16 @@
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/query/distributed/distributed-transaction-coordinator.js",
         "test/integration/helpers/tx1-migration-disk-reader.js"
+      ],
+      "env": [
+        "LAGRANGE_TX1_M1_KILL_MARKER_PATH"
+      ]
+    },
+    "test/integration/seed-migration-process-loss.integration.test.js": {
+      "files": [
+        "test/integration/helpers/tx1-migration-disk-reader.js",
+        "test/integration/helpers/tx1-postkill-coordinator-reader.js",
+        "test/integration/seed-migration-cutover-persisted.integration.test.js"
       ]
     },
     "test/integration/seed-node-bootstrap.integration.test.js": {
@@ -10387,6 +10399,15 @@
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-ingress-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js"

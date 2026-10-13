@@ -1,0 +1,18 @@
+TAP version 13
+# Subtest: TX1 M1: SIGKILL with RF3 SQLite handles open, then read and reconstruct the exact coordinator decision, participants and both effects from real disk
+ok 1 - TX1 M1: SIGKILL with RF3 SQLite handles open, then read and reconstruct the exact coordinator decision, participants and both effects from real disk
+  ---
+  duration_ms: 47344.358552
+  type: 'test'
+  ...
+# {"kind":"TX1_M1_SIGKILL_DISK_DURABILITY","killedPid":3277,"transactionId":"d34290ab6155cb55da17fb3aa3c7e391","distinctReplicaFiles":12,"killedWithOpenHandles":12,"committedDecisionRecovered":true,"coordinatorReconstructed":true,"replayAttempted":false,"coordinatorRestarted":false,"limits":"post-decision SIGKILL, no interrupted-fanout or physical-host proof"}
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 47350.228798
+# time=47588ms
