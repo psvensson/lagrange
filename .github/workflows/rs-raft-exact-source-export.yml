@@ -25,7 +25,7 @@ jobs:
           printf '%s\n' "$GITHUB_SHA" > test-output/rs-raft-source-export/SOURCE_SHA
           git archive --format=tar HEAD | gzip -n -6 > test-output/rs-raft-source-export/source.tar.gz
           sha256sum test-output/rs-raft-source-export/source.tar.gz > test-output/rs-raft-source-export/SHA256SUMS
-          tar -tzf test-output/rs-raft-source-export/source.tar.gz | grep -qx package-lock.json
+          tar -xOzf test-output/rs-raft-source-export/source.tar.gz package-lock.json | sha256sum > test-output/rs-raft-source-export/LOCK_SHA256
           test -z "$(git status --porcelain)"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
