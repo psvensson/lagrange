@@ -1,0 +1,251 @@
+TAP version 13
+# Subtest: TX1 alpha red: every identity-less transaction control reaches current identity admission and has zero effects
+not ok 1 - TX1 alpha red: every identity-less transaction control reaches current identity admission and has zero effects
+  ---
+  duration_ms: 13631.745491
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/rs-raft-alpha-single-path-20261013/test/partition/partition-tx1-single-path-alpha.test.js:58:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    session routing context never selects another transaction protocol
+    + actual - expected
+    ... Skipped lines
+    
+      {
+        after: {
+          participantSession: false,
+          proposed: 0,
+          rows: 0,
+    ...
+        codes: [
+    +     'participant_transaction_legacy_session_fenced',
+    +     'participant_transaction_legacy_session_fenced',
+    +     'participant_transaction_legacy_session_fenced',
+    +     'participant_transaction_legacy_session_fenced',
+    +     null
+    -     'participant_transaction_identity_required',
+    -     'participant_transaction_identity_required',
+    -     'participant_transaction_identity_required',
+    -     'participant_transaction_identity_required',
+    -     'participant_transaction_identity_required'
+        ]
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    codes:
+      0: 'participant_transaction_identity_required'
+      1: 'participant_transaction_identity_required'
+      2: 'participant_transaction_identity_required'
+      3: 'participant_transaction_identity_required'
+      4: 'participant_transaction_identity_required'
+    before:
+      sqliteOpen: false
+      participantSession: false
+      proposed: 0
+      rows: 0
+    after:
+      sqliteOpen: false
+      participantSession: false
+      proposed: 0
+      rows: 0
+  actual:
+    codes:
+      0: 'participant_transaction_legacy_session_fenced'
+      1: 'participant_transaction_legacy_session_fenced'
+      2: 'participant_transaction_legacy_session_fenced'
+      3: 'participant_transaction_legacy_session_fenced'
+      4: ~
+    before:
+      sqliteOpen: false
+      participantSession: false
+      proposed: 0
+      rows: 0
+    after:
+      sqliteOpen: false
+      participantSession: false
+      proposed: 0
+      rows: 0
+  operator: 'deepStrictEqual'
+  stack: |-
+    file:///mnt/data/peter/projects/.worktrees/rs-raft-alpha-single-path-20261013/test/partition/partition-tx1-single-path-alpha.test.js:83:10
+    async onFixtureLeader (file:///mnt/data/peter/projects/.worktrees/rs-raft-alpha-single-path-20261013/test/test-helpers/participant-transaction-fixture.js:460:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: TX1 alpha red: own partial identity, inherited identity and accessors cannot become ordinary query traffic
+not ok 2 - TX1 alpha red: own partial identity, inherited identity and accessors cannot become ordinary query traffic
+  ---
+  duration_ms: 32.503939
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/rs-raft-alpha-single-path-20261013/test/partition/partition-tx1-single-path-alpha.test.js:90:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    only a strict own-data ordinary request may reach ordinary query execution
+    + actual - expected
+    
+      {
+        accessorCode: 'participant_transaction_identity_required',
+    +   accessorReads: 4,
+    +   inheritedCode: 'participant_transaction_not_active',
+    -   accessorReads: 0,
+    -   inheritedCode: 'participant_transaction_identity_required',
+        ordinary: {
+          rows: [],
+          success: true
+        },
+        partialCodes: [
+    +     null,
+    +     null,
+    +     null,
+    +     null
+    -     'participant_transaction_identity_required',
+    -     'participant_transaction_identity_required',
+    -     'participant_transaction_identity_required',
+    -     'participant_transaction_identity_required'
+        ]
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    partialCodes:
+      0: 'participant_transaction_identity_required'
+      1: 'participant_transaction_identity_required'
+      2: 'participant_transaction_identity_required'
+      3: 'participant_transaction_identity_required'
+    inheritedCode: 'participant_transaction_identity_required'
+    accessorCode: 'participant_transaction_identity_required'
+    accessorReads: 0
+    ordinary:
+      success: true
+      rows:
+  actual:
+    partialCodes:
+      0: ~
+      1: ~
+      2: ~
+      3: ~
+    inheritedCode: 'participant_transaction_not_active'
+    accessorCode: 'participant_transaction_identity_required'
+    accessorReads: 4
+    ordinary:
+      success: true
+      rows:
+  operator: 'deepStrictEqual'
+  stack: |-
+    file:///mnt/data/peter/projects/.worktrees/rs-raft-alpha-single-path-20261013/test/partition/partition-tx1-single-path-alpha.test.js:124:10
+    async onFixtureLeader (file:///mnt/data/peter/projects/.worktrees/rs-raft-alpha-single-path-20261013/test/test-helpers/participant-transaction-fixture.js:460:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 alpha red: malformed current identity is refused before ordinary epoch gates while valid current identity retains their order
+not ok 3 - TX1 alpha red: malformed current identity is refused before ordinary epoch gates while valid current identity retains their order
+  ---
+  duration_ms: 18.170185
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/rs-raft-alpha-single-path-20261013/test/partition/partition-tx1-single-path-alpha.test.js:134:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    identity refusal precedes ordinary gates without moving valid-current execution
+    + actual - expected
+    
+      {
+    +   partial: null,
+    -   partial: 'participant_transaction_identity_required',
+        rows: 0,
+        valid: {
+          deferRetry: true,
+          errorCode: 'PARTITION_EPOCH_EVIDENCE_DEFERRED',
+          failureCode: null
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    partial: 'participant_transaction_identity_required'
+    valid:
+      failureCode: ~
+      errorCode: 'PARTITION_EPOCH_EVIDENCE_DEFERRED'
+      deferRetry: true
+    rows: 0
+  actual:
+    partial: ~
+    valid:
+      failureCode: ~
+      errorCode: 'PARTITION_EPOCH_EVIDENCE_DEFERRED'
+      deferRetry: true
+    rows: 0
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-alpha-single-path-20261013/test/partition/partition-tx1-single-path-alpha.test.js:152:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: TX1 alpha red: routing-only query collision is refused for volatile and durable current custody while an unrelated routing session remains ordinary
+not ok 4 - TX1 alpha red: routing-only query collision is refused for volatile and durable current custody while an unrelated routing session remains ordinary
+  ---
+  duration_ms: 23.846214
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/rs-raft-alpha-single-path-20261013/test/partition/partition-tx1-single-path-alpha.test.js:166:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    routing context cannot absorb or autocommit current transaction work
+    + actual - expected
+    ... Skipped lines
+    
+      {
+    +   durable: 'participant_transaction_legacy_session_fenced',
+    -   durable: 'participant_transaction_identity_required',
+        prepare: {
+          apply: null,
+          success: true
+        },
+        proposedOrdinaryWrites: 0,
+    ...
+        },
+    +   volatile: 'participant_transaction_legacy_session_fenced'
+    -   volatile: 'participant_transaction_identity_required'
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    volatile: 'participant_transaction_identity_required'
+    durable: 'participant_transaction_identity_required'
+    unrelated:
+      success: true
+      rows:
+    prepare:
+      apply: ~
+      success: true
+    proposedOrdinaryWrites: 0
+    rows: 0
+  actual:
+    volatile: 'participant_transaction_legacy_session_fenced'
+    durable: 'participant_transaction_legacy_session_fenced'
+    unrelated:
+      success: true
+      rows:
+    prepare:
+      apply: ~
+      success: true
+    proposedOrdinaryWrites: 0
+    rows: 0
+  operator: 'deepStrictEqual'
+  stack: |-
+    file:///mnt/data/peter/projects/.worktrees/rs-raft-alpha-single-path-20261013/test/partition/partition-tx1-single-path-alpha.test.js:187:12
+    async onFixtureLeader (file:///mnt/data/peter/projects/.worktrees/rs-raft-alpha-single-path-20261013/test/test-helpers/participant-transaction-fixture.js:460:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 0
+# fail 4
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 13709.547306
+# time=15538ms

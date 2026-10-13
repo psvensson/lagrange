@@ -93,6 +93,12 @@ const LEADER_DURABILITY_CONSEQUENCE_OUTCOME = Object.freeze({
 const ABSENT_DURABILITY_TIMESTAMP = null;
 
 class PartitionServiceDurabilityFitnessMethods {
+  isSoloReplicaGroup() {
+    const peerCount = this.raft?.readStatus?.().peerCount || 0;
+    return (!Array.isArray(this.replicaIds) || this.replicaIds.length <= 1) &&
+      peerCount === 0;
+  }
+
   getLeaderDurabilityFitnessState() {
     if (!this.leaderDurabilityFitness) {
       this.leaderDurabilityFitness = {

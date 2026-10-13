@@ -1,8 +1,7 @@
 // The committed application of a partition's transaction commands (TX1 design
 // revision 10, sections 2.3, 2.4, 3.2, 4, 6.1, 6.2 and 0.0.13): the one owner
 // of what a committed PARTICIPANT_PREPARE, PARTICIPANT_DECISION and
-// PARTICIPANT_GENERATION_ORIGIN do on every replica (and of the legacy
-// markers until the cutover's drain), and of the reservation a PREPARED row
+// PARTICIPANT_GENERATION_ORIGIN do on every replica, and of the reservation a PREPARED row
 // places on every other committed write.
 //
 // It runs inside the committed-entry application's callback, in the one
@@ -23,7 +22,7 @@
 // PREPARED, REFUSED or TOMBSTONE row, or a decided transition), REPLAYED for
 // an idempotent repeat answered from the row, RESERVED_REFUSED for a PREPARE
 // that met another transaction's reservation, RECORDED_ONLY for a typed
-// refusal consumed without a write (and a legacy marker that records nothing).
+// refusal consumed without a write.
 //
 // Every PREPARE and decision first compares its carried execution envelope
 // with this replica's build and applies as carried either way (a mismatch is
@@ -40,7 +39,6 @@ import {installTransactionSchemaEnforcement} from
 import {
   PARTITION_COMMITTED_COMMAND_OUTCOME as OUTCOME,
   PARTITION_SERVICE_EVENT,
-  PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_OPERATION as OPERATION,
 } from './partition-service-constants.js';
 import {
@@ -87,7 +85,6 @@ import {
 } from './partition-participant-transaction-store.js';
 import {
   PARTICIPANT_TRANSACTION_COMMAND as COMMAND,
-  PARTICIPANT_TRANSACTION_COMMAND_TYPES,
   PARTICIPANT_TRANSACTION_DECISION as DECISION,
   PARTICIPANT_TRANSACTION_FAILURE_CODE as CODE,
   PARTICIPANT_TRANSACTION_LOG_MSG as LOG_MSG,
@@ -549,26 +546,6 @@ function applyParticipantDecision(service, committed) {
   return DECISION_OVER_STATE[row.state](service, committed, row);
 }
 
-// --- the legacy markers (until the cutover's drain, the L6 window) ---
-
-function applyLegacyTransactionMarker(service, committed) {
-  const {command} = committed;
-  if (command.type !== OPERATION.TRANSACTION_COMMIT) {
-    return OUTCOME.RECORDED_ONLY;
-  }
-  service.recordTransactionCommitOutcome(command.sessionId,
-    command.transactionEpoch);
-  committed.afterCommit(() => {
-    service.logger.debug(PARTITION_SERVICE_LOG_MSG.TRANSACTION_COMMIT_APPLIED, {
-      partitionId: service.partitionId,
-      operationCount: command.operations?.length || 0,
-    });
-    service.resolveCommittedWrite(command.entryId,
-      {success: true, partitionId: service.partitionId});
-  });
-  return OUTCOME.APPLIED;
-}
-
 // --- PARTICIPANT_GENERATION_ORIGIN (design 0.0.13) ---
 
 // The first origin applied on the partition starts g at 0 at its own log
@@ -640,8 +617,8 @@ function applyParticipantCommand(service, committed) {
 
 /**
  * Apply one committed transaction command inside its application transaction:
- * a participant transaction command, or a legacy marker; then, as
- * for every applied command, the committed-entry event after the commit. A
+ * a participant transaction command; then, as for every applied command,
+ * the committed-entry event after the commit. A
  * throw (an environmental failure, a broken invariant) rejects the proposer
  * after the rollback (the write kernel answers it as an unknown outcome) and
  * fails the application closed.
@@ -652,9 +629,7 @@ function applyParticipantCommand(service, committed) {
  */
 function applyCommittedTransactionCommand(service, committed) {
   const {command} = committed;
-  const applied = PARTICIPANT_TRANSACTION_COMMAND_TYPES.includes(command.type) ?
-    applyParticipantCommand(service, committed) :
-    applyLegacyTransactionMarker(service, committed);
+  const applied = applyParticipantCommand(service, committed);
   committed.afterCommit(() => service.emit(
     PARTITION_SERVICE_EVENT.ENTRY_COMMITTED,
     {partitionId: service.partitionId, command}));

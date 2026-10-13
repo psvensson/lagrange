@@ -20,9 +20,8 @@ const RAFT_CHECKPOINT_PAYLOAD_SIDECAR_SUFFIXES = Object.freeze(['-wal', '-shm'])
 
 // Payload-kind compatibility matrix (S1 authoring bar): every kind and its
 // state-machine include/exclude rule. One raft group == one SQLite file, so
-// the rule is table-name-based. `_transaction_outcomes` is applied
-// state-machine state (2PC outcome memoization) and MUST survive the scrub;
-// an exclude built as `_%` would silently break exactly-once after install.
+// the rule is table-name-based; an exclude built as `_%` would silently
+// discard application state after install.
 // Adapters with no durable state-machine/consensus separation (the in-memory
 // log adapter, and SQLiteLogAdapter over a `:memory:` database as used by the
 // message-group worker) are typed UNSUPPORTED_ADAPTER at creation.

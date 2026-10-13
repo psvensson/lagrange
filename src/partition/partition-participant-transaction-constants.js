@@ -103,7 +103,8 @@ const PARTICIPANT_TRANSACTION_FAILURE_CODE = Object.freeze({
   // participant transaction's session, or a legacy BEGIN on a partition whose
   // participant admission is enabled (its generation origin applied here).
   REMOVAL_FENCED: 'participant_transaction_removal_fenced',
-  LEGACY_SESSION_FENCED: 'participant_transaction_legacy_session_fenced',
+  UNREPLICATED_LOCAL_MUTATION:
+    'participant_transaction_unreplicated_local_mutation',
   // Enabling admission on a connection that served a legacy session since
   // its open (0.0.14, the L6 clause): the cutover reopens it first.
   CONNECTION_SERVED_LEGACY: 'participant_transaction_connection_served_legacy',
@@ -181,12 +182,7 @@ const PARTICIPANT_TRANSACTION_BYTES = Object.freeze({
 // statement and for a COMMIT decision that applies at least one operation;
 // control rows never move it (design 3.2). Both are application state,
 // carried by any image of the partition's database taken at an applied index
-// (design 8.2). The old `_transaction_outcomes` table is written only by the
-// legacy path (a legacy COMMIT on the leader, a committed legacy marker) and
-// is retained read-only after a partition's cutover: a sessionId-only legacy
-// outcome read keeps answering from it for the transactions committed before
-// the drain (0.0.15), and no row of it is migrated (its key names no
-// transactionId). Its retirement belongs to a retention owner.
+// (design 8.2).
 const PARTICIPANT_TRANSACTION_SQL = Object.freeze({
   CREATE_TABLE: `
       CREATE TABLE IF NOT EXISTS _participant_transactions (
@@ -247,11 +243,6 @@ const PARTICIPANT_TRANSACTION_SQL = Object.freeze({
     'WHERE transaction_id = ? AND participant_id = ?',
   SELECT_RESERVATION:
     'SELECT 1 AS reserved FROM _participant_transactions WHERE state = ? ' +
-    'LIMIT 1',
-  // Whether some row carries a routing sessionId (a sessionId-only outcome
-  // read never answers NOT_COMMITTED from absence for it, the L6 window).
-  SELECT_SESSION_KNOWN:
-    'SELECT 1 AS known FROM _participant_transactions WHERE session_id = ? ' +
     'LIMIT 1',
   // Whether a PREPARED row carries a routing sessionId (a sessionId-only
   // request naming it is fenced, never run as an ordinary write).

@@ -334,11 +334,6 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
         // false when it widens to the next recovery candidate.
         const followRetryDecision = (decision) => {
           if (decision.state ===
-            CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.RETRY_SAME_ADDRESS) {
-            candidateState.requestRetryCurrentAddress();
-            return true;
-          }
-          if (decision.state ===
             CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.DEFER_PARTITION_RETRY) {
             candidateState.requestDeferredPartitionRetry();
             return true;
@@ -517,7 +512,6 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             const redirectRetryDecision =
               this.resolveControlPlaneWriteRetryDecision(
                 partitionId,
-                executionOptions,
                 redirectResponse,
                 forRead,
               );
@@ -527,13 +521,6 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               serviceInfo?.nodeId,
               response.leaderAddress,
             );
-            if (
-              redirectRetryDecision.state ===
-              CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.RETRY_SAME_ADDRESS
-            ) {
-              candidateState.requestRetryCurrentAddress();
-              break;
-            }
             if (
               redirectRetryDecision.state ===
               CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.DEFER_PARTITION_RETRY
@@ -598,10 +585,10 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           const controlPlaneWriteRetryDecision =
             this.resolveControlPlaneWriteRetryDecision(
               partitionId,
-              executionOptions,
               {
                 error: errorMessage,
                 errorCode: response?.errorCode,
+                failureCode: response?.failureCode,
                 retryAfterMs: response?.retryAfterMs,
                 deferRetry: response?.deferRetry,
               },
@@ -730,7 +717,6 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             const controlPlaneWriteRetryDecision =
               this.resolveControlPlaneWriteRetryDecision(
                 partitionId,
-                executionOptions,
                 error,
                 forRead,
               );
@@ -775,7 +761,6 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           const controlPlaneWriteRetryDecision =
             this.resolveControlPlaneWriteRetryDecision(
               partitionId,
-              executionOptions,
               error,
               forRead,
             );

@@ -1,0 +1,7 @@
+Scanned 25 JavaScript files
+Found 5 decision-boundary guideline violations
+Top files:
+- src/partition/partition-participant-transaction-bytes.js: 3
+- src/partition/partition-participant-transaction-request.js: 1
+- src/partition/partition-service-raft-init-base.js: 1
+Matched 6 inherited decision-boundary baseline violations

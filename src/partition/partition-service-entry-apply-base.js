@@ -1,10 +1,7 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
-import {QUERY_ERROR_CODE} from '../query/query-constants.js';
+import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
 import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
 import {PartitionServiceSchemaMigrationBase} from './partition-service-schema-migration-base.js';
-import {
-  createPartitionServiceTransactionSessionMethods,
-} from './partition-service-transaction-session-methods.js';
 import {
   PARTITION_COMMITTED_COMMAND_ERROR_CODE,
   PARTITION_COMMITTED_COMMAND_HOST_FAILURE_REASON,
@@ -25,14 +22,10 @@ import {
   settleFailedCommittedStatement,
   settleRecordedCommittedStatement,
 } from './partition-committed-statement-outcome.js';
-import {
-  PARTITION_WRITE_LEADERSHIP_REFUSAL,
-  pickTypedWriteAnswer,
-} from './partition-write-kernel.js';
 import {runCommittedPartitionStatement} from './partition-statement-admission.js';
 import {advancePartitionWriteGeneration, isPartitionReserved, readPartitionWriteOrigin} from
   './partition-participant-transaction-store.js';
-import {assertTransactionSchemaWriteEnforced, coordinatorTableSchemaRefusal} from
+import {assertTransactionSchemaWriteEnforced} from
   '../query/distributed/distributed-transaction-schema-enforcement.js';
 import {applyCommittedTransactionCommand, settleReservedCommittedStatement} from
   './partition-participant-transaction-apply.js';
@@ -41,26 +34,20 @@ import {requestCoordinatorSettlement, applyCoordinatorSettlement} from
 import {COORDINATOR_SETTLEMENT_TYPE} from './partition-coordinator-settlement-constants.js';
 import {ensureSqlTransactionsDecisionColumns} from
   './partition-coordinator-table-columns.js';
-import {answerParticipantSessionQuery, routeParticipantTransactionRequest} from
+import {admitsParticipantSessionQueryDuringRemoval,
+  routeParticipantTransactionRequest} from
   './partition-participant-transaction-request.js';
 import {
   applyCdcAcknowledgementCommand,
   isCdcCommandType,
   recordCommittedStatementCdc,
 } from './partition-cdc-obligation.js';
-import {QUERY_RESULT_REQUEST_FIELD} from '../query/query-result-budget.js';
-import {findParticipantSession} from './partition-participant-transaction-session.js';
-const READ_AUTHORITY_WITNESS_STATE = Object.freeze({
-  NOT_APPLICABLE: 'not_applicable',
-  OBSERVED: 'observed',
-});
 const COMMIT_APPLY_EFFECT_PHASE = Object.freeze({
   COMMIT: 'afterCommit',
   ROLLBACK: 'afterRollback',
 });
 
 const {
-  ERRORS,
   PARTITION_SERVICE_COLUMN,
   PARTITION_SERVICE_COLUMN_SQL,
   PARTITION_SERVICE_ERROR_MSG,
@@ -68,20 +55,8 @@ const {
   PARTITION_SERVICE_LITERAL,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_MESSAGE_TYPE,
-  PARTITION_SERVICE_MIGRATION_OPERATION,
   PARTITION_SERVICE_OPERATION,
-  PARTITION_SERVICE_RESPONSE,
-  PARTITION_SERVICE_VALUE,
-  PARTITION_TRANSITION_STATE,
-  TABLES,
   buildDurableCommitWitness,
-  QUERY_PAYLOAD_FIELD_ENTRY_ID,
-  QUERY_PAYLOAD_FIELD_EXPECTED_PARTITION_VERSION,
-  QUERY_PAYLOAD_FIELD_IDEMPOTENCY_KEY,
-  QUERY_PAYLOAD_FIELD_MIGRATION_ID,
-  QUERY_PAYLOAD_FIELD_MIGRATION_OPERATION,
-  QUERY_PAYLOAD_FIELD_OPERATION_ID,
-  RaftRole,
   SYSTEM_TABLE_NAME,
   isRaftRsTransportEnvelope,
 } = PARTITION_SERVICE_SHARED;
@@ -270,14 +245,20 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
    * @private
    */
   async handleTransportMessage(envelope) {
-    const payload = envelope.payload || envelope;
+    const payload = this.extractApplicationPayload(envelope);
+    if (payload === null) {
+      return {
+        acknowledged: false,
+        error: PARTITION_SERVICE_ERROR_MSG.INVALID_MESSAGE,
+      };
+    }
     if (isRaftRsTransportEnvelope(payload)) {
       if (this.raft) {
         await Promise.resolve(this.raft.step(payload));
       }
       return {acknowledged: true};
     }
-    return this.handleApplicationMessage(envelope);
+    return this.handleCanonicalApplicationPayload(payload);
   }
   /**
    * Handle application messages (non-Raft messages).
@@ -289,6 +270,15 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
    */
   async handleApplicationMessage(message) {
     const payload = this.extractApplicationPayload(message);
+    return this.handleCanonicalApplicationPayload(payload);
+  }
+  /**
+   * Dispatch one strict own-data application payload.
+   * @param {Object|null} payload - Canonical application payload.
+   * @return {Promise<Object>} Processing result.
+   * @private
+   */
+  async handleCanonicalApplicationPayload(payload) {
     if (!payload || !payload.type) {
       return {
         acknowledged: false,
@@ -334,14 +324,8 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         payload.type === COORDINATOR_SETTLEMENT_TYPE) {
       return {allowed: true, servingRequest};
     }
-    const sessionId =
-      payload.sessionId || payload.operation?.sessionId || null;
-    // An open session finishes: a legacy one, or a participant staging one.
-    return {
-      allowed: Boolean((sessionId && this.resolveOpenTransactionState(sessionId)) ||
-        findParticipantSession(this, payload)),
-      servingRequest,
-    };
+    return {allowed: payload.type === PARTITION_SERVICE_MESSAGE_TYPE.QUERY &&
+      admitsParticipantSessionQueryDuringRemoval(this, payload), servingRequest};
   }
 
   /**
@@ -413,15 +397,8 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
    */
   async handleTransactionMessage(payload) {
     const operation = payload?.operation;
-    const sessionId = payload?.sessionId || null;
-    const transactionEpoch = Number.isFinite(payload?.transactionEpoch) ?
-      Math.floor(payload.transactionEpoch) :
-      null;
     try {
-      // A request carrying a transactionId is the participant protocol's; the
-      // L6 fences keep a sessionId-only request off a participant's partition.
-      const result = await (routeParticipantTransactionRequest(this, payload) ??
-        this.executeTransactionControl(operation, sessionId, transactionEpoch));
+      const result = await routeParticipantTransactionRequest(this, payload);
       if (!result) {
         return {
           acknowledged: false,
@@ -445,37 +422,6 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
   }
 
   /**
-   * @param {string} operation
-   * @param {string|null} sessionId
-   * @param {number|null} transactionEpoch
-   * @return {Promise<Object|null>}
-   * @private
-   */
-  async executeTransactionControl(operation, sessionId, transactionEpoch) {
-    switch (operation) {
-    case PARTITION_SERVICE_OPERATION.BEGIN_TRANSACTION:
-    case PARTITION_SERVICE_LITERAL.BEGIN:
-      return this.beginTransaction(sessionId, transactionEpoch);
-    case PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION:
-    case PARTITION_SERVICE_LITERAL.PREPARE:
-      return this.prepareTransaction(sessionId);
-    case PARTITION_SERVICE_OPERATION.COMMIT:
-      return this.commitTransaction(sessionId);
-    case PARTITION_SERVICE_OPERATION.ROLLBACK:
-      return this.rollbackTransaction(sessionId);
-    case PARTITION_SERVICE_OPERATION.TRANSACTION_OUTCOME:
-      return {
-        success: true,
-        outcome: this.resolveTransactionCommitOutcome(
-          sessionId,
-          transactionEpoch,
-        ),
-      };
-    default:
-      return null;
-    }
-  }
-  /**
    * Extract canonical application payload from transport envelopes.
    * Message-group direct deliveries wrap payloads as:
    * {messageId, payload, sourceGroup, sourceReplica}.
@@ -484,7 +430,10 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
    * @private
    */
   extractApplicationPayload(message) {
-    const directPayload = message?.payload || message;
+    const outer = copyStrictOwnDataRecord(message);
+    if (outer === null) return null;
+    const directPayload = outer.payload === undefined ? outer :
+      copyStrictOwnDataRecord(outer.payload);
     if (
       directPayload &&
       typeof directPayload === PARTITION_SERVICE_LITERAL.OBJECT &&
@@ -492,7 +441,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       directPayload.payload &&
       typeof directPayload.payload === PARTITION_SERVICE_LITERAL.OBJECT
     ) {
-      return directPayload.payload;
+      return copyStrictOwnDataRecord(directPayload.payload);
     }
     return directPayload || null;
   }
@@ -550,383 +499,6 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       });
       throw error;
     }
-  }
-  /**
-   * Describe the replica that actually served a successful read.
-   * @param {boolean} isWriteOperation
-   * @return {Object}
-   * @private
-   */
-  buildRemoteReadAuthorityWitness(isWriteOperation) {
-    if (isWriteOperation) {
-      return {state: READ_AUTHORITY_WITNESS_STATE.NOT_APPLICABLE};
-    }
-    // The term is the consensus core's own, read through the port.
-    const status = this.raft?.readStatus();
-    return {
-      state: READ_AUTHORITY_WITNESS_STATE.OBSERVED,
-      partitionId: this.partitionId,
-      servingNodeId: this.nodeId,
-      servingReplicaId: this.replicaId,
-      term: status?.term ?? null,
-      role: this.role,
-      // The witness records WHEN THIS REPLICA observed its own authority, so
-      // it reads this replica's clock. This is the owner decision the metered
-      // oracle's knownAmbientSiteOutsideProofCone reserved: the site had no
-      // clock owner when it was recorded, and the composed formation reaching
-      // it is what supplied one.
-      observedAtMs: this.timeSource.now(),
-    };
-  }
-  /**
-   * Handle remote SQL query execution.
-   * Enables transparent query routing - any node can execute queries on any partition.
-   * For write operations on non-leaders, returns a redirect response with leader address.
-   * @param {Object} payload - Query payload.
-   * @param {string} payload.sql - SQL query string.
-   * @param {Array} payload.params - Query parameters.
-   * @return {Promise<Object>} Query result or redirect response.
-   * @private
-   */
-  /**
-   * Write-path epoch fencing at the partition boundary: reject a write
-   * whose expectedPartitionVersion mismatches the locally authoritative
-   * partition epoch with a typed stale-epoch outcome. Epoch evidence
-   * never fails OPEN: when the local tables row is unavailable (cold
-   * cache after restart) but the payload carries an expectation, the
-   * write defers pre-cutover / fails closed post-cutover instead of
-   * silently skipping validation. Returns the rejection envelope or
-   * null when the write may proceed.
-   * @param {*} expectedVersion - Payload epoch expectation.
-   * @return {Object|null}
-   * @private
-   */
-  rejectStalePartitionEpochWrite(expectedVersion) {
-    if (!Number.isSafeInteger(expectedVersion) || expectedVersion <= 0) {
-      return null;
-    }
-    const localVersion = this.resolveLocalActivePartitionVersion();
-    if (localVersion === null) {
-      return this.resolveEpochEvidenceGapOutcome(expectedVersion);
-    }
-    if (localVersion !== expectedVersion) {
-      this.logger.warn(
-        PARTITION_SERVICE_LOG_MSG.STALE_PARTITION_EPOCH_REJECTED,
-        {
-          partitionId: this.partitionId,
-          expectedVersion,
-          localVersion,
-        },
-      );
-      return {
-        acknowledged: true,
-        success: false,
-        error: PARTITION_SERVICE_ERROR_MSG.STALE_PARTITION_EPOCH_WRITE,
-        errorCode: QUERY_ERROR_CODE.STALE_PARTITION_EPOCH,
-        partitionId: this.partitionId,
-      };
-    }
-    return null;
-  }
-
-  /**
-   * Resolve the locally authoritative active partition version from the
-   * cached tables row; null when the row is unavailable.
-   * @return {number|null}
-   * @private
-   */
-  resolveLocalActivePartitionVersion() {
-    const row =
-      this.systemTableCache?.get?.(TABLES.TABLES, this.tableId) ||
-      this.systemTableCache?.get?.(TABLES.TABLES, this.tableName) ||
-      null;
-    const version = Number(
-      row?.active_partition_version ?? row?.activePartitionVersion,
-    );
-    return Number.isSafeInteger(version) && version > 0 ? version : null;
-  }
-
-  /**
-   * Epoch evidence gap (cold cache): a write carrying an epoch
-   * expectation must never fail open. Pre-cutover it defers (the
-   * evidence will hydrate and the retry re-validates); post-cutover it
-   * fails closed (a withdrawn epoch must never accept writes).
-   * @param {number} expectedVersion - Payload epoch expectation.
-   * @return {Object} Rejection/defer envelope.
-   * @private
-   */
-  resolveEpochEvidenceGapOutcome(expectedVersion) {
-    const cutoverActive =
-      this.splitReplication?.phase ===
-        PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE ||
-      this.mergeReplication?.phase ===
-        PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE;
-    if (cutoverActive) {
-      this.logger.warn(
-        PARTITION_SERVICE_LOG_MSG.STALE_PARTITION_EPOCH_REJECTED,
-        {partitionId: this.partitionId, expectedVersion, evidenceGap: true},
-      );
-      return {
-        acknowledged: true,
-        success: false,
-        error: PARTITION_SERVICE_ERROR_MSG.STALE_PARTITION_EPOCH_WRITE,
-        errorCode: QUERY_ERROR_CODE.STALE_PARTITION_EPOCH,
-        partitionId: this.partitionId,
-      };
-    }
-    this.logger.info(
-      PARTITION_SERVICE_LOG_MSG.PARTITION_EPOCH_EVIDENCE_DEFERRED,
-      {partitionId: this.partitionId, expectedVersion},
-    );
-    return {
-      acknowledged: true,
-      success: false,
-      error: PARTITION_SERVICE_ERROR_MSG.PARTITION_EPOCH_EVIDENCE_MISSING,
-      errorCode: QUERY_ERROR_CODE.PARTITION_EPOCH_EVIDENCE_DEFERRED,
-      deferRetry: true,
-      partitionId: this.partitionId,
-    };
-  }
-
-  async handleRemoteQuery(payload) {
-    const {
-      sql,
-      params,
-      splitMirrorOrigin,
-      sessionId,
-      [QUERY_PAYLOAD_FIELD_ENTRY_ID]: entryId,
-      [QUERY_PAYLOAD_FIELD_OPERATION_ID]: operationId,
-      [QUERY_PAYLOAD_FIELD_IDEMPOTENCY_KEY]: idempotencyKey,
-      [QUERY_PAYLOAD_FIELD_MIGRATION_OPERATION]: migrationOperation,
-      [QUERY_PAYLOAD_FIELD_MIGRATION_ID]: migrationId,
-      [QUERY_RESULT_REQUEST_FIELD.DEADLINE_MS]: resultDeadlineMs,
-      [QUERY_RESULT_REQUEST_FIELD.MAX_BYTES]: resultMaxBytes,
-      [QUERY_RESULT_REQUEST_FIELD.MAX_ROWS]: resultMaxRows,
-    } = payload;
-    if (!sql) {
-      return {
-        acknowledged: false,
-        error: PARTITION_SERVICE_ERROR_MSG.MISSING_SQL_QUERY,
-      };
-    }
-    const isWriteOperation = this.isWriteQuery(sql);
-    if (isWriteOperation) {
-      const epochRejection = this.rejectStalePartitionEpochWrite(
-        payload[QUERY_PAYLOAD_FIELD_EXPECTED_PARTITION_VERSION],
-      );
-      if (epochRejection) {
-        return epochRejection;
-      }
-    }
-    if (isWriteOperation && this.role !== RaftRole.LEADER) {
-      const leaderAddress = this.resolveLeaderAddress();
-      if (leaderAddress) {
-        this.logger.debug(
-          PARTITION_SERVICE_LOG_MSG.REDIRECTING_WRITE_TO_LEADER,
-          {
-            partitionId: this.partitionId,
-            replicaId: this.replicaId,
-            leaderAddress,
-          },
-        );
-        return {
-          acknowledged: true,
-          success: false,
-          redirect: PARTITION_SERVICE_RESPONSE.LEADER_REDIRECT,
-          leaderAddress,
-          partitionId: this.partitionId,
-        };
-      }
-      return {
-        acknowledged: true,
-        success: false,
-        error: ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
-        // Typed as the write kernel types it: not proposed here.
-        failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.NOT_LEADER,
-        partitionId: this.partitionId,
-      };
-    }
-    const participantAnswer = answerParticipantSessionQuery(this, payload);
-    if (participantAnswer !== null) return participantAnswer;
-    const readAuthorityWitness =
-      this.buildRemoteReadAuthorityWitness(isWriteOperation);
-    this.logger.debug(PARTITION_SERVICE_LOG_MSG.HANDLING_REMOTE_QUERY, {
-      sql: sql.substring(
-        0,
-        PARTITION_SERVICE_VALUE.DEFAULT_QUERY_TIMEOUT_MS,
-      ),
-      partitionId: this.partitionId,
-      replicaId: this.replicaId,
-    });
-    try {
-      let result = null;
-      if (
-        migrationOperation === PARTITION_SERVICE_MIGRATION_OPERATION.ALTER_TABLE
-      ) {
-        result = await this.executeMigrationAlterQuery(sql, params || [], {
-          migrationId: migrationId || null,
-          sessionId: sessionId || null,
-        });
-      } else {
-        result = await this.executeQuery(sql, params || [], {
-          entryId: entryId || null,
-          operationId: operationId || null,
-          idempotencyKey: idempotencyKey || null,
-          splitMirrorOrigin: splitMirrorOrigin || null,
-          sessionId: sessionId || null,
-          resultDeadlineMs,
-          resultMaxBytes,
-          resultMaxRows,
-        });
-      }
-      // A routed write can come back rejected without throwing (for example
-      // NO_LEADER when a stale-topology commit guard refuses a unilateral
-      // apply). The envelope must carry that outcome — collapsing it to
-      // success acks a write that never landed and the coordinator stops
-      // re-routing to the true leader.
-      const resultSuccess = result?.success !== false;
-      return {
-        acknowledged: true,
-        success: resultSuccess,
-        ...(resultSuccess || !result?.error ? {} : {error: result.error}),
-        ...(resultSuccess || !result?.errorCode ?
-          {} :
-          {errorCode: result.errorCode}),
-        // What is known of a write that did not succeed crosses this hop as
-        // its typed fields - its code and the entry it was proposed under
-        // among them - never as its text alone: a caller re-delivers an
-        // unknown outcome only under that entryId.
-        ...(resultSuccess ? {} : pickTypedWriteAnswer(result)),
-        rows: result.rows,
-        changes: result.changes,
-        // A settled replay names itself (PARTITION_SETTLED_REPLAY): with an
-        // unknown count it carries no `changes`, and the router's caller
-        // decides on the named state, never on the absent count.
-        ...(result?.settledReplay === undefined ? {} :
-          {settledReplay: result.settledReplay}),
-        count: result.count,
-        partitionId: this.partitionId,
-        durableCommitWitness: result.durableCommitWitness,
-        originHlc: result.originHlc,
-        acceptingNodeId: result.acceptingNodeId,
-        acknowledgedAtMs: result.acknowledgedAtMs,
-        readAuthorityWitness,
-      };
-    } catch (error) {
-      this.logger.error(PARTITION_SERVICE_ERROR_MSG.REMOTE_QUERY_FAILED, {
-        sql: sql.substring(
-          0,
-          PARTITION_SERVICE_VALUE.DEFAULT_QUERY_TIMEOUT_MS,
-        ),
-        error: error.message,
-        partitionId: this.partitionId,
-      });
-      return {
-        acknowledged: true,
-        success: false,
-        error: error.message,
-        errorCode: error.code || null,
-        partitionId: this.partitionId,
-      };
-    }
-  }
-  /**
-   * Execute one migration ALTER TABLE request through the Raft write path.
-   * @param {string} sql - ALTER TABLE SQL.
-   * @param {Array} params - SQL params.
-   * @param {Object} options - Migration context.
-   * @return {Promise<Object>} Execution result.
-   * @private
-   */
-  async executeMigrationAlterQuery(sql, params = [], options = {}) {
-    if (!sql) {
-      throw new Error(PARTITION_SERVICE_ERROR_MSG.MIGRATION_ALTER_MISSING_SQL);
-    }
-    const protectedSchema = coordinatorTableSchemaRefusal(this.tableName);
-    if (protectedSchema !== null) {
-      return {...protectedSchema, partitionId: this.partitionId};
-    }
-    this.registerMigrationDefaultFromAlterSql(sql);
-    return this.proposeWrite({
-      type: PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE,
-      sql,
-      params,
-      migrationId: options.migrationId || null,
-      sessionId: options.sessionId || null,
-    });
-  }
-  /**
-   * Parse and register one column default from ALTER TABLE ADD COLUMN SQL.
-   * @param {string} sql - ALTER TABLE SQL.
-   * @return {void}
-   * @private
-   */
-  registerMigrationDefaultFromAlterSql(sql) {
-    const parsed = this.parseAddColumnDefaultFromAlterSql(sql);
-    if (!parsed || !parsed.columnName || !parsed.hasDefault) {
-      return;
-    }
-    const tableKey = String(this.tableName || this.tableId || '');
-    if (!tableKey) {
-      return;
-    }
-    let columnDefaults = this.migrationColumnDefaultsByTable.get(tableKey);
-    if (!columnDefaults) {
-      columnDefaults = /* @__PURE__ */ new Map();
-      this.migrationColumnDefaultsByTable.set(tableKey, columnDefaults);
-    }
-    columnDefaults.set(parsed.columnName, parsed.defaultLiteral);
-    this.logger.info(PARTITION_SERVICE_LOG_MSG.MIGRATION_DEFAULT_REGISTERED, {
-      partitionId: this.partitionId,
-      tableName: tableKey,
-      columnName: parsed.columnName,
-    });
-  }
-  /**
-   * Extract one default literal from ALTER TABLE ... ADD COLUMN SQL.
-   * @param {string} sql - ALTER TABLE SQL.
-   * @return {Object|null} Parsed default metadata.
-   * @private
-   */
-  parseAddColumnDefaultFromAlterSql(sql) {
-    const normalizedSql = String(sql || '');
-    const addColumnMatch = normalizedSql.match(
-      /^\s*ALTER\s+TABLE\s+.+?\s+ADD\s+COLUMN\s+([^\s]+)\s+([\s\S]+)$/i,
-    );
-    if (!addColumnMatch) {
-      return null;
-    }
-    const columnName = String(addColumnMatch[1] || '').replace(
-      /^["'`]|["'`]$/g,
-      '',
-    );
-    const definitionTail = String(addColumnMatch[2] || '');
-    const defaultMatch = definitionTail.match(
-      /\bDEFAULT\s+((?:'[^']*'|"[^"]*"|`[^`]*`|[^\s,]+))/i,
-    );
-    return {
-      columnName,
-      hasDefault: defaultMatch !== null,
-      defaultLiteral: defaultMatch ? defaultMatch[1] : null,
-    };
-  }
-  /**
-   * Check if a SQL query is a write operation.
-   * @param {string} sql - SQL query string.
-   * @return {boolean} True if write operation.
-   * @private
-   */
-  isWriteQuery(sql) {
-    if (!sql) return false;
-    const trimmed = sql.trim().toUpperCase();
-    return (
-      trimmed.startsWith(PARTITION_SERVICE_LITERAL.INSERT) ||
-      trimmed.startsWith(PARTITION_SERVICE_LITERAL.UPDATE) ||
-      trimmed.startsWith(PARTITION_SERVICE_LITERAL.DELETE) ||
-      trimmed.startsWith(PARTITION_SERVICE_LITERAL.CREATE) ||
-      trimmed.startsWith(PARTITION_SERVICE_LITERAL.DROP) ||
-      trimmed.startsWith(PARTITION_SERVICE_LITERAL.ALTER)
-    );
   }
   /**
    * Advance the partition HLC to witness a committed entry's timestamp.
@@ -1102,7 +674,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         afterCommit: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, effect),
         afterRollback: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, effect)});
     } else {
-      // A transaction command (participant, or a legacy marker): its owner.
+      // A participant transaction command: its owner.
       return applyCommittedTransactionCommand(this, {command, index, term,
         afterCommit: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, effect),
         afterRollback: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, effect)});
@@ -1119,8 +691,4 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       PARTITION_COMMITTED_COMMAND_OUTCOME.RECORDED_ONLY;
   }
 }
-Object.assign(
-  PartitionServiceEntryApplyBase.prototype,
-  createPartitionServiceTransactionSessionMethods(),
-);
 export {PartitionServiceEntryApplyBase};

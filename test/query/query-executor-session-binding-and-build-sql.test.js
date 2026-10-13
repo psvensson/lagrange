@@ -30,9 +30,6 @@ import {
 import {
 } from '../../src/query/canonical-leader-routing.js';
 import {
-  PARTITION_SERVICE_ERROR_MSG,
-} from '../../src/partition/partition-service-constants.js';
-import {
 } from './routing-repair-test-helpers.js';
 
 // Initialize configuration for tests
@@ -40,114 +37,6 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
-
-test('QueryExecutor - executeOnPartition retries session-bound transaction ' +
-  'contention on the same replica before widening', async (t) => {
-  const deliveries = [];
-  const partitionId = 'replica_operations-p1';
-  const leaderAddress = 'leader-node/partition/replica_operations-p1-r1';
-  const fallbackAddress = 'follower-node/partition/replica_operations-p1-r2';
-  let leaderAttempts = 0;
-
-  const systemCache = {
-    partitions: [
-      {
-        partition_id: partitionId,
-        leader_node_id: 'leader-node',
-        table_name: TABLES.REPLICA_OPERATIONS,
-      },
-    ],
-    services: [
-      {
-        service_id: 'replica_operations-p1-r1',
-        service_type: 'partition',
-        partition_id: partitionId,
-        node_id: 'leader-node',
-        raft_role: 'leader',
-        address: leaderAddress,
-        status: 'active',
-      },
-      {
-        service_id: 'replica_operations-p1-r2',
-        service_type: 'partition',
-        partition_id: partitionId,
-        node_id: 'follower-node',
-        raft_role: 'follower',
-        address: fallbackAddress,
-        status: 'active',
-      },
-    ],
-    get(type, key) {
-      if (type === 'partitions') {
-        return this.partitions.find((partition) =>
-          partition.partition_id === key,
-        ) || null;
-      }
-      return null;
-    },
-    filter(type, predicate) {
-      if (type === 'services') {
-        return this.services.filter(predicate);
-      }
-      if (type === 'partitions') {
-        return this.partitions.filter(predicate);
-      }
-      return [];
-    },
-  };
-
-  const messageRouter = {
-    async deliver(address) {
-      deliveries.push(address);
-      if (address === leaderAddress) {
-        leaderAttempts += 1;
-        if (leaderAttempts === 1) {
-          return {
-            acknowledged: true,
-            success: false,
-            error: PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
-          };
-        }
-        return {
-          acknowledged: true,
-          success: true,
-          changes: 1,
-          rows: [],
-        };
-      }
-      return {
-        acknowledged: true,
-        success: false,
-        error: 'unexpected fallback delivery',
-      };
-    },
-  };
-
-  const executor = new QueryExecutor({
-    messageRouter,
-    systemCache,
-    nodeId: 'local-node',
-  });
-  executor.delay = async () => {};
-
-  const result = await executor.executeOnPartition(
-    partitionId,
-    'UPDATE replica_operations SET status = ? WHERE operation_id = ?',
-    ['active', 'op-1'],
-    false,
-    false,
-    false,
-    {sessionId: 'tx-1'},
-  );
-
-  t.equal(result.success, true);
-  t.same(
-    deliveries,
-    [leaderAddress, leaderAddress],
-    'session-bound transaction contention should retry the pinned replica ' +
-      'instead of widening to another live replica in the same attempt',
-  );
-});
 
 test('QueryExecutor - executeOnPartition pins session-bound writes to the ' +
   'same replica address across calls', async (t) => {

@@ -16,8 +16,10 @@
         "src/query/sql-query-engine-select-execution.js",
         "src/query/query-executor-base.js",
         "src/query/query-executor-join-execution.js",
-        "src/partition/partition-service-transaction-base.js",
-        "src/partition/partition-service-entry-apply-base.js"
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/partition/partition-service-remote-query-methods.js",
+        "src/partition/partition-service-participant-transaction-cadence-methods.js",
+        "src/partition/partition-service-removal-serving-methods.js"
       ],
       "tests": [
         "test/query/partition-transaction-seam-falsifiers.test.js",
@@ -33,7 +35,8 @@
         "test/partition/partition-unreadable-durable-record.test.js",
         "test/integration/seed-migration-cutover-persisted.integration.test.js",
         "test/integration/seed-migration-process-loss.integration.test.js",
-        "test/integration/seed-migration-interrupted-decision.integration.test.js"
+        "test/integration/seed-migration-interrupted-decision.integration.test.js",
+        "test/partition/partition-tx1-single-path-alpha.test.js"
       ]
     },
     "transaction-workflow-recovery-ownership": {
@@ -572,6 +575,8 @@
         "src/raft/raft-rs-durable-store.js",
         "src/raft/raft-rs-participation-gate.js",
         "src/partition/partition-service-core-base.js",
+        "src/partition/partition-service-leader-activation-methods.js",
+        "src/partition/partition-service-assembly.js",
         "src/partition/partition-service-raft-init-base.js",
         "src/partition/partition-service-lifecycle-methods.js",
         "src/message-group/message-group-service-raft-lifecycle.js",
@@ -653,9 +658,8 @@
       ]
     },
     "partition-session-transaction-persistence-admission": {
-      "description": "A participant staging session never holds a SQLite transaction on the partition's shared connection (TX1 design revision 10, 3.1 and 9.2: the earlier rule, that the transaction owner ends its session before it proposes a marker, is superseded): the leader classifies each session statement with its staging classifier and validates it inside one synchronous transaction that replays the staged operations and always rolls back, so the rs-raft store's persistence admission never defers consensus because of a session and no session ending can erase a consensus row; PREPARE and the decision are committed participant commands proposed outside any session. The store still refuses every durable consensus write inside a transaction it did not open (the legacy sessionId-only session path, fenced from participant transactions until the cutover's drain, and a raw foreign BEGIN), and every legacy session statement is admitted by the statement-admission owner before anything is prepared, so no session leaves a PRAGMA or TEMP object on the shared connection, and admission is enabled only on a connection that served no legacy session since its open; the runtime asks that admission before it enters the core and before every Ready, and the write path turns the refusal into a bounded deferral.",
+      "description": "A participant staging session never holds a SQLite transaction on the partition's shared connection: the leader classifies each current session statement with its staging classifier and validates it inside one synchronous transaction that replays the staged operations and always rolls back, so the rs-raft store's persistence admission never defers consensus because of a participant session and no session ending can erase a consensus row. PREPARE and the decision are committed participant commands proposed outside any session. The store still refuses every durable consensus write inside a foreign transaction it did not open; the runtime asks that admission before it enters the core and before every Ready, and the write path turns the refusal into a bounded deferral.",
       "owners": [
-        "src/partition/partition-service-transaction-base.js",
         "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-service-raft-write-commit.js",
         "src/raft/raft-rs-durable-store.js",
@@ -663,7 +667,7 @@
         "src/raft/raft-rs-runtime-owner.js",
         "src/partition/partition-participant-transaction-staging.js",
         "src/partition/partition-participant-transaction-session.js",
-        "src/partition/partition-participant-transaction-legacy-fence.js",
+        "src/partition/partition-local-mutation-admission.js",
         "src/partition/partition-participant-transaction-self-check.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-transaction-determinism-constants.js",
@@ -675,7 +679,8 @@
         "test/raft/raft-rs-backend/persistence-admission.test.js",
         "test/partition/partition-participant-transaction-apply.test.js",
         "test/partition/partition-participant-transaction-staging.test.js",
-        "test/partition/partition-legacy-session-statement-admission.test.js",
+        "test/partition/partition-tx1-single-path-alpha.test.js",
+        "test/partition/partition-participant-release-admission.test.js",
         "test/partition/partition-transaction-determinism.test.js"
       ]
     },
@@ -703,6 +708,9 @@
         "src/constants/errors.js",
         "src/control-plane/control-plane-error-classification.js",
         "src/cdc/cdc-routed-mutation-readiness.js",
+        "src/query/query-executor-shared.js",
+        "src/query/query-executor-partition-delivery.js",
+        "src/query/query-executor-write-retry-routing.js",
         "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js"
       ],
       "tests": [
@@ -710,6 +718,7 @@
         "test/partition/partition-write-kernel.test.js",
         "test/partition/partition-write-typed-releases.test.js",
         "test/query/partition-write-answer-consumers.test.js",
+        "test/query/query-executor-executeonpartition-no-handler-repair.test.js",
         "test/query/write-path-internal-pacing.test.js"
       ]
     },
@@ -1030,8 +1039,10 @@
           "id": "participant-request-and-apply",
           "owners": [
             "src/partition/partition-participant-transaction-",
-            "src/partition/partition-service-transaction-base.js",
-            "src/partition/partition-service-entry-apply-base.js"
+            "src/partition/partition-service-entry-apply-base.js",
+            "src/partition/partition-service-remote-query-methods.js",
+            "src/partition/partition-service-participant-transaction-cadence-methods.js",
+            "src/partition/partition-service-removal-serving-methods.js"
           ]
         }
       ],
@@ -1050,7 +1061,8 @@
         "test/partition/partition-unreadable-durable-record.test.js",
         "test/integration/seed-migration-cutover-persisted.integration.test.js",
         "test/integration/seed-migration-process-loss.integration.test.js",
-        "test/integration/seed-migration-interrupted-decision.integration.test.js"
+        "test/integration/seed-migration-interrupted-decision.integration.test.js",
+        "test/partition/partition-tx1-single-path-alpha.test.js"
       ]
     },
     "transaction-workflow-recovery-ownership": {
@@ -1461,6 +1473,8 @@
             "src/message-group/message-group-consensus-port.js",
             "src/wasm-service/wasm-service-consensus-port.js",
             "src/partition/partition-service-core-base.js",
+            "src/partition/partition-service-leader-activation-methods.js",
+            "src/partition/partition-service-assembly.js",
             "src/partition/partition-service-raft-init-base.js",
             "src/partition/partition-service-lifecycle-methods.js",
             "src/message-group/message-group-service-raft-lifecycle.js",
@@ -1605,12 +1619,11 @@
       ]
     },
     "partition-session-transaction-store-persistence-admission": {
-      "description": "The participant's staging owner holds no SQLite transaction across requests - each validation is one synchronous transaction that rolls back - exactly so the rs-raft store's persistence admission never refuses a consensus write because of a participant session; the legacy session path, until the cutover's drain, still ends its session before it proposes its marker.",
+      "description": "The participant's staging owner holds no SQLite transaction across requests - each validation is one synchronous transaction that rolls back - exactly so the rs-raft store's persistence admission never refuses a consensus write because of a participant session.",
       "endpoints": [
         {
           "id": "session-transaction",
           "owners": [
-            "src/partition/partition-service-transaction-base.js",
             "src/partition/partition-participant-transaction-request.js",
             "src/partition/partition-participant-transaction-staging.js",
             "src/partition/partition-participant-transaction-session.js",
@@ -1634,7 +1647,8 @@
         "test/raft/raft-rs-backend/persistence-admission.test.js",
         "test/partition/partition-participant-transaction-apply.test.js",
         "test/partition/partition-participant-transaction-staging.test.js",
-        "test/partition/partition-legacy-session-statement-admission.test.js",
+        "test/partition/partition-tx1-single-path-alpha.test.js",
+        "test/partition/partition-participant-release-admission.test.js",
         "test/partition/partition-transaction-determinism.test.js"
       ]
     },
@@ -1653,6 +1667,9 @@
           "owners": [
             "src/control-plane/control-plane-error-classification.js",
             "src/cdc/cdc-routed-mutation-readiness.js",
+            "src/query/query-executor-shared.js",
+            "src/query/query-executor-partition-delivery.js",
+            "src/query/query-executor-write-retry-routing.js",
             "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js"
           ]
         }
@@ -1663,6 +1680,7 @@
         "test/partition/partition-write-kernel.test.js",
         "test/partition/partition-write-typed-releases.test.js",
         "test/query/partition-write-answer-consumers.test.js",
+        "test/query/query-executor-executeonpartition-no-handler-repair.test.js",
         "test/query/write-path-internal-pacing.test.js"
       ]
     },

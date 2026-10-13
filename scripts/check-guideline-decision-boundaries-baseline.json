@@ -1,7 +1,7 @@
 {
   "version": 1,
   "generatedAt": "2026-08-05T17:56:03.717Z",
-  "rawViolationCount": 810,
+  "rawViolationCount": 806,
   "violations": [
     {
       "filePath": "examples/call-binding-account-summary/run-call-binding-account-summary.js",
@@ -4845,42 +4845,6 @@
       "line": 131,
       "column": 5,
       "functionName": "reconstructSplitExecutionStateForService",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/partition/partition-service-transaction-session-methods.js",
-      "line": 79,
-      "column": 7,
-      "functionName": "resolveActiveTransactionState",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/partition/partition-service-transaction-session-methods.js",
-      "line": 83,
-      "column": 7,
-      "functionName": "resolveActiveTransactionState",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/partition/partition-service-transaction-session-methods.js",
-      "line": 114,
-      "column": 7,
-      "functionName": "resolvePreparedTransactionState",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/partition/partition-service-transaction-session-methods.js",
-      "line": 118,
-      "column": 7,
-      "functionName": "resolvePreparedTransactionState",
       "kind": "raw_null_empty_state_outcome",
       "reason": "raw null or empty-state outcome returned for semantic target",
       "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"

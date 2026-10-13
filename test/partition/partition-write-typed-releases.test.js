@@ -6,18 +6,14 @@
 // proposal queue knew of it and why it was released: handed to consensus
 // (PROPOSED) its outcome is not known here - at its commit deadline, or when
 // its service shuts down - so it is answered OUTCOME_UNKNOWN with its entryId
-// (a retry with it is idempotent) and the cause; never handed to it (QUEUED)
-// it was not proposed, and a shutdown answers SERVICE_SHUTDOWN. A write the
-// proposal queue refuses at capacity is BACKPRESSURE with the queue's own
-// retryAfterMs; a proposal the port refuses is CONSENSUS_REFUSED with the
-// port's reason and retryability. Nothing is proposed for the not-proposed
-// cases. A router that holds the answer routes it again by its code.
+// (a retry with it is idempotent) and the cause. A proposal the port refuses
+// is CONSENSUS_REFUSED with the port's reason and retryability. Routers retain
+// their code-based handling for the current typed release vocabulary.
 //
 // The verifier's r5-g2 shapes, on production partitions where the state is
 // real: the leader of an admitted group whose outgoing transport is dropped
-// holds a PROPOSED write; a lone leader whose user session holds the
-// connection holds a QUEUED write (the port defers it). The 30-second commit
-// deadline and a core refusal run on the controllable port (its proposal is
+// holds a PROPOSED write. The 30-second commit deadline and a core refusal run
+// on the controllable port (its proposal is
 // accepted and never committed, or refused) with the replica's own clock
 // virtual, so the deadline is the partition's own timer, advanced. Codes,
 // causes and budgets are the owners' (the write kernel, the proposal queue,
@@ -33,17 +29,14 @@ import {test} from 'node:test';
 import Database from 'better-sqlite3';
 
 import {formAdmittedGroup} from './partition-admitted-group-fixture.js';
-import {
-  ControllableConsensusPort,
-  createControllablePartitionService,
-} from './partition-service-test-support.js';
+import {resumeFixtureParticipantGroupAdmission, shutdownAll, startLeader} from
+  '../test-helpers/participant-transaction-fixture.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {PartitionService} from '../../src/partition/partition-service.js';
 import {
   PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_OPERATION,
@@ -63,7 +56,6 @@ import {RAFT_RS_ENTRY_TYPE} from
 import {ReplicaOperationRepository} from
   '../../src/rebalancer/replica-operation-repository.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
-import {withFoundingStamp} from './partition-founding-stamp.js';
 
 const TEMP_PREFIX = 'partition-write-typed-releases-';
 const DB_FILE = 'partition.sqlite';
@@ -115,18 +107,6 @@ function tableOptions() {
       {name: 'id', type: 'TEXT', primaryKey: true},
       {name: 'value', type: 'TEXT'},
     ]},
-  };
-}
-
-function loneOptions(partitionId, dbPath, extra = {}) {
-  return {
-    ...tableOptions(),
-    partitionId,
-    replicaId: `${partitionId}-r1`,
-    replicaIds: [`${partitionId}-r1`],
-    nodeId: 'typed-release-node',
-    dbPath,
-    ...extra,
   };
 }
 
@@ -190,12 +170,9 @@ test('F-ak: a proposed write still pending at its commit deadline is ' +
   quietEnvironment();
   await withDirectory(async (directory) => {
     const clock = new VirtualTimeSource({startMs: VIRTUAL_START_MS});
-    const provider = new ControllableConsensusPort();
-    const service = createControllablePartitionService(loneOptions(
-      'fak-deadline', path.join(directory, DB_FILE), {timeSource: clock}),
-    provider);
+    const {leader: service} = await startLeader({...tableOptions(),
+      dbPath: path.join(directory, DB_FILE), timeSource: clock});
     try {
-      await service.initialize();
       const pending = insert(service, 'row-a', 'deadline', 'e-deadline');
       await new Promise((resolve) => setImmediate(resolve));
       clock.advance(PARTITION_SERVICE_DEFAULT.PENDING_REQUEST_TIMEOUT_MS);
@@ -207,7 +184,7 @@ test('F-ak: a proposed write still pending at its commit deadline is ' +
         deadlineMs: PARTITION_SERVICE_DEFAULT.PENDING_REQUEST_TIMEOUT_MS,
       }, 'it names the commit deadline and its length');
     } finally {
-      await service.shutdown();
+      await shutdownAll(service);
     }
   });
 });
@@ -236,6 +213,7 @@ async () => {
     !String(address).includes(members[0][1]) ? Promise.resolve(
       {acknowledged: true}) : deliver.call(network, address, ...rest));
   try {
+    await resumeFixtureParticipantGroupAdmission(group.services, group.waitFor);
     assert.equal((await insert(leader, 'row-0', 'setup', 's-setup'))
       .success, true, 'setup: the group serves a write');
     dropOutgoing = true;
@@ -259,78 +237,15 @@ async () => {
   }
 });
 
-// A lone leader whose user session holds its connection: the port defers
-// every proposal, so a write stays QUEUED (registered, never handed over).
-async function withSessionHeldLeader(partitionId, body) {
-  quietEnvironment();
-  await withDirectory(async (directory) => {
-    const dbPath = path.join(directory, DB_FILE);
-    const service = new PartitionService(withFoundingStamp(loneOptions(partitionId, dbPath)));
-    try {
-      await service.initialize();
-      assert.equal((await insert(service, 'row-0', 'setup', 's-setup'))
-        .success, true, 'setup: the lone leader serves a write');
-      await service.beginTransaction(`${partitionId}-session`);
-      await body({service, dbPath});
-    } finally {
-      await service.shutdown();
-    }
-  });
-}
-
-test('F-ak: a write the proposal queue refuses at capacity is BACKPRESSURE ' +
-  'with the queue\'s retryAfterMs and its entry, and never proposed',
-{timeout: TEST_TIMEOUT_MS}, async () => {
-  await withSessionHeldLeader('fak-backpressure', async ({service,
-    dbPath}) => {
-    service.proposalQueue.maxCapacity = 1;
-    const queued = insert(service, 'row-q', 'queued', 'e-holds-the-slot');
-    await sleep(PENDING_SETTLE_MS);
-    const refused = await answeredPromptly(
-      insert(service, 'row-b', 'refused', 'e-backpressure'));
-    assertTyped(refused, {code: REFUSAL?.BACKPRESSURE,
-      entryId: 'e-backpressure'}, 'backpressure');
-    assert.equal(refused.retryAfterMs, proposalQueueConstants
-      .PROPOSAL_QUEUE_DEFAULT.BACKPRESSURE_RETRY_AFTER_MS,
-    'it carries the proposal queue\'s own retry time');
-    await service.shutdown();
-    await answeredPromptly(queued);
-    assert.equal(durableEntryIds(dbPath, service.partitionId)
-      .includes('e-backpressure'), false, 'it was never proposed');
-  });
-});
-
-test('F-ak: a queued write at shutdown is answered SERVICE_SHUTDOWN with ' +
-  'its entry and the cause, and never proposed', {timeout: TEST_TIMEOUT_MS},
-async () => {
-  await withSessionHeldLeader('fak-queued-shutdown', async ({service,
-    dbPath}) => {
-    const queued = insert(service, 'row-q', 'queued', 'e-queued');
-    await sleep(PENDING_SETTLE_MS);
-    assert.equal(await Promise.race([queued, sleep(1).then(() =>
-      STILL_PENDING)]), STILL_PENDING, 'setup: the write is pending');
-    await service.shutdown();
-    const answer = await answeredPromptly(queued);
-    assertTyped(answer, {code: REFUSAL?.SERVICE_SHUTDOWN,
-      entryId: 'e-queued'}, 'the queued write at shutdown');
-    assert.equal(answer.consensus?.reason, RELEASE_CAUSE?.SHUTDOWN,
-      'it names the shutdown as its cause');
-    assert.equal(durableEntryIds(dbPath, service.partitionId)
-      .includes('e-queued'), false, 'it was never proposed');
-  });
-});
-
 test('F-ak: a proposal the port refuses is answered CONSENSUS_REFUSED with ' +
   'the port\'s reason and retryability, and routed again by its code',
 {timeout: TEST_TIMEOUT_MS}, async () => {
   quietEnvironment();
   await withDirectory(async (directory) => {
-    const provider = new ControllableConsensusPort();
-    provider.setProposeHandler(() => CORE_REFUSAL);
-    const service = createControllablePartitionService(loneOptions(
-      'fak-core-refused', path.join(directory, DB_FILE)), provider);
+    const {leader: service} = await startLeader({...tableOptions(),
+      dbPath: path.join(directory, DB_FILE)});
+    service.controllablePort.setProposeHandler(() => CORE_REFUSAL);
     try {
-      await service.initialize();
       const answer = await answeredPromptly(
         insert(service, 'row-r', 'refused', 'e-core-refused'));
       assertTyped(answer, {code: REFUSAL?.CONSENSUS_REFUSED,
@@ -343,7 +258,7 @@ test('F-ak: a proposal the port refuses is answered CONSENSUS_REFUSED with ' +
       assert.equal(partitionWriteKernel.isReroutableWriteFailureCode?.(
         answer.failureCode), true, 'the kernel names it routable again');
     } finally {
-      await service.shutdown();
+      await shutdownAll(service);
     }
   });
 });

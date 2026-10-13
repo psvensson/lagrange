@@ -1,0 +1,547 @@
+{"phase":"source-v2-control","sha":"204364d3c720bbb97c12b996918a6f7646194a6d","files":["test/query/query-executor-executeonpartition-no-handler-repair.test.js","test/control-plane/control-plane-error-classification.test.js"],"startedAt":"2026-10-13T13:07:48.589Z"}
+lab test: tv-dator: ordinary (2 files) cores=12 mem=15.4GiB speed x1.28
+[tv-dator] placement-shell=396059
+[tv-dator] placement-head=204364d3c720bbb97c12b996918a6f7646194a6d
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.3 mode:local retry: timeout: lanecap:11
+[tv-dator] placement-pid=396485
+[tv-dator] # test-files planned=2
+[tv-dator] classified lane ordinary: 2 file(s), jobs=4
+[tv-dator] thermal: ok cpu 64C (coretemp/Package id 0) nvme 45C (nvme/Sensor 1)
+[tv-dator] not ok test/control-plane/control-plane-error-classification.test.js (53 assertions, 430ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 14
+[tv-dator] # Subtest: isRetryableControlPlaneError detects typed pressure deferrals
+[tv-dator]     ok 1 - should be equal
+[tv-dator]     ok 2 - should be equal
+[tv-dator]     ok 3 - should be equal
+[tv-dator]     ok 4 - should be equal
+[tv-dator]     1..4
+[tv-dator] ok 1 - isRetryableControlPlaneError detects typed pressure deferrals # time=6.45ms
+[tv-dator] 
+[tv-dator] # Subtest: isRetryableControlPlaneError detects deferred connection failures
+[tv-dator]     ok 1 - should be equal
+[tv-dator]     1..1
+[tv-dator] ok 2 - isRetryableControlPlaneError detects deferred connection failures # time=0.58ms
+[tv-dator] 
+[tv-dator] # Subtest: isRetryableControlPlaneError treats stale no-handler ingress targets as retryable
+[tv-dator]     ok 1 - should be equal
+[tv-dator]     1..1
+[tv-dator] ok 3 - isRetryableControlPlaneError treats stale no-handler ingress targets as retryable # time=0.343ms
+[tv-dator] 
+[tv-dator] # Subtest: isRetryableControlPlaneError detects explicit deferRetry marker
+[tv-dator]     ok 1 - should be equal
+[tv-dator]     1..1
+[tv-dator] ok 4 - isRetryableControlPlaneError detects explicit deferRetry marker # time=0.356ms
+[tv-dator] 
+[tv-dator] # Subtest: isRetryableControlPlaneError treats pending response timeouts as retryable
+[tv-dator]     ok 1 - should be equal
+[tv-dator]     1..1
+[tv-dator] ok 5 - isRetryableControlPlaneError treats pending response timeouts as retryable # time=0.402ms
+[tv-dator] 
+[tv-dator] # Subtest: isRetryableControlPlaneError classifies the partition write kernel's answers by their owner, as the answer and as an Error of its text
+[tv-dator]     ok 1 - deadlineProposed: the answer (partition_write_outcome_unknown) is retryable
+[tv-dator]     ok 2 - deadlineProposed: an Error of its text is retryable (The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent)
+[tv-dator]     ok 3 - deadlineQueued: the answer (partition_write_commit_deadline_exceeded) is retryable
+[tv-dator]     ok 4 - deadlineQueued: an Error of its text is retryable (The write was not proposed before its commit deadline)
+[tv-dator]     ok 5 - notLeaderQueued: the answer (partition_write_not_leader) is retryable
+[tv-dator]     ok 6 - notLeaderQueued: an Error of its text is retryable (No leader available for write operation)
+[tv-dator]     ok 7 - hostFailure: setup: the answer carries its entryId
+[tv-dator]     ok 8 - hostFailure: the answer (partition_write_outcome_unknown) is retryable
+[tv-dator]     ok 9 - hostFailure: an Error of its text is not retried (The write failed on this replica while it was proposed or applied, so it may be committed; only a retry under its entryId is idempotent)
+[tv-dator]     ok 10 - environmental: setup: the answer carries its entryId
+[tv-dator]     ok 11 - environmental: the answer (partition_write_outcome_unknown) is retryable
+[tv-dator]     ok 12 - environmental: an Error of its text is not retried (The write failed on this replica while it was proposed or applied, so it may be committed; only a retry under its entryId is idempotent)
+[tv-dator]     ok 13 - a text no owner lists is not retried
+[tv-dator]     1..13
+[tv-dator] ok 6 - isRetryableControlPlaneError classifies the partition write kernel's answers by their owner, as the answer and as an Error of its text # time=1.491ms
+[tv-dator] 
+[tv-dator] # Subtest: a text-only Error of a host failure while proposing is not retried: one attempt under one key
+[tv-dator]     ok 1 - setup: the Error carries the answer's text alone
+[tv-dator]     ok 2 - one attempt under one key; the failure is surfaced, not re-proposed
+[tv-dator]     1..2
+[tv-dator] ok 7 - a text-only Error of a host failure while proposing is not retried: one attempt under one key # time=1.793ms
+[tv-dator] 
+[tv-dator] # Subtest: retired partition-session contention text alone is not retryable
+[tv-dator]     not ok 1 - retryability must come from a current typed or transport owner
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/control-plane/control-plane-error-classification.test.js
+[tv-dator]         lineNumber: 199
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/control-plane/control-plane-error-classification.test.js:199:7)
+[tv-dator]       source: |2
+[tv-dator]             const retired = new Error('Transaction already active on this partition');
+[tv-dator]       
+[tv-dator]             t.equal(isRetryableControlPlaneError(retired), false,
+[tv-dator]         ------^
+[tv-dator]               'retryability must come from a current typed or transport owner');
+[tv-dator]           });
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -false
+[tv-dator]         +true
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..1
+[tv-dator] not ok 8 - retired partition-session contention text alone is not retryable # time=19.695ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/control-plane/control-plane-error-classification.test.js
+[tv-dator]     lineNumber: 195
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |
+[tv-dator]     });
+[tv-dator]   
+[tv-dator]     test('retired partition-session contention text alone is not retryable',
+[tv-dator]     ^
+[tv-dator]       async (t) => {
+[tv-dator]         const retired = new Error('Transaction already active on this partition');
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: isRetryableControlPlaneError detects transaction commit visibility gaps
+[tv-dator]     ok 1 - should be equal
+[tv-dator]     1..1
+[tv-dator] ok 9 - isRetryableControlPlaneError detects transaction commit visibility gaps # time=0.332ms
+[tv-dator] 
+[tv-dator] # Subtest: isRetryableControlPlaneError treats cache visibility lag as retryable
+[tv-dator]     ok 1 - should be equal
+[tv-dator]     1..1
+[tv-dator] ok 10 - isRetryableControlPlaneError treats cache visibility lag as retryable # time=0.293ms
+[tv-dator] 
+[tv-dator] # Subtest: isRetryableControlPlaneError excludes hard validation failures
+[tv-dator]     ok 1 - should be equal
+[tv-dator]     1..1
+[tv-dator] ok 11 - isRetryableControlPlaneError excludes hard validation failures # time=0.216ms
+[tv-dator] 
+[tv-dator] # Subtest: isRetryableControlPlaneError follows nested participant pressure signals
+[tv-dator]     ok 1 - should be equal
+[tv-dator]     ok 2 - should be equal
+[tv-dator]     ok 3 - nested retry-after hints should surface through the shared classifier
+[tv-dator]     ok 4 - nested participant pressure should classify the top-level failure as retryable
+[tv-dator]     1..4
+[tv-dator] ok 12 - isRetryableControlPlaneError follows nested participant pressure signals # time=0.346ms
+[tv-dator] 
+[tv-dator] # Subtest: isRetryableControlPlaneError preserves typed deterministic aggregate outcomes
+[tv-dator]     ok 1 - generic aggregate text cannot retry a committed deterministic failure
+[tv-dator]     ok 2 - nested transport uncertainty remains retryable
+[tv-dator]     ok 3 - nested pressure remains retryable
+[tv-dator]     1..3
+[tv-dator] ok 13 - isRetryableControlPlaneError preserves typed deterministic aggregate outcomes # time=0.335ms
+[tv-dator] 
+[tv-dator] # Subtest: getControlPlaneFailureSummary prioritizes authoritative source gaps over broader participant failures
+[tv-dator]     ok 1 - the most specific authoritative source blocker should win
+[tv-dator]     ok 2 - should be equal
+[tv-dator]     ok 3 - should be equal
+[tv-dator]     ok 4 - should be equal
+[tv-dator]     ok 5 - should be equal
+[tv-dator]     1..5
+[tv-dator] ok 14 - getControlPlaneFailureSummary prioritizes authoritative source gaps over broader participant failures # time=0.472ms
+[tv-dator] 
+[tv-dator] 1..14
+[tv-dator] # { total: 39, pass: 38, fail: 1 }
+[tv-dator] # time=46.524ms
+[tv-dator] not ok test/query/query-executor-executeonpartition-no-handler-repair.test.js (69 assertions, 728ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 14
+[tv-dator] # Subtest: QueryExecutor - executeOnPartition fails closed when the canonical leader service row remains missing after repair
+[tv-dator]     ok 1 - should be equal
+[tv-dator]     ok 2 - should be equal
+[tv-dator]     ok 3 - write routing should still attempt one authoritative refresh before failing closed
+[tv-dator]     ok 4 - steady-state writes must not widen to redirect-capable replicas when canonical leader service metadata remains absent
+[tv-dator]     1..4
+[tv-dator] ok 1 - QueryExecutor - executeOnPartition fails closed when the canonical leader service row remains missing after repair # time=11.961ms
+[tv-dator] 
+[tv-dator] # Subtest: QueryExecutor - getLeaderRecoveryCandidates includes one refreshed candidate when stale address was already attempted
+[tv-dator]     ok 1 - should be equal
+[tv-dator]     ok 2 - recovery should include a single refreshed leader endpoint when it differs from the attempted stale address
+[tv-dator]     1..2
+[tv-dator] ok 2 - QueryExecutor - getLeaderRecoveryCandidates includes one refreshed candidate when stale address was already attempted # time=0.859ms
+[tv-dator] 
+[tv-dator] Routing query to partition service { partitionId: 'p1', address: 'leader-node/partition/p1-old' }
+[tv-dator] Routing query to partition service { partitionId: 'p1', address: 'leader-node/partition/p1-new' }
+[tv-dator] # Subtest: QueryExecutor - executeOnPartition repairs stale no-handler leader address and retries with refreshed endpoint
+[tv-dator]     ok 1 - should be equal
+[tv-dator]     ok 2 - write routing should retry once with refreshed leader metadata after no-handler on stale address
+[tv-dator]     ok 3 - should be equal
+[tv-dator]     ok 4 - should be equal
+[tv-dator]     ok 5 - should be equal
+[tv-dator]     ok 6 - should be equal
+[tv-dator]     ok 7 - should be equal
+[tv-dator]     1..7
+[tv-dator] ok 3 - QueryExecutor - executeOnPartition repairs stale no-handler leader address and retries with refreshed endpoint # time=2.951ms
+[tv-dator] 
+[tv-dator] Routing query to partition service { partitionId: 'p1', address: 'leader-node/partition/p1-old' }
+[tv-dator] Routing query to partition service { partitionId: 'p1', address: 'leader-node/partition/p1-new' }
+[tv-dator] # Subtest: QueryExecutor - executeOnPartition repairs stale no-handler read address and retries with refreshed endpoint
+[tv-dator]     ok 1 - should be equal
+[tv-dator]     ok 2 - read routing should also retry with refreshed metadata after no-handler on stale address
+[tv-dator]     ok 3 - should be equal
+[tv-dator]     ok 4 - should be equal
+[tv-dator]     ok 5 - should be equal
+[tv-dator]     1..5
+[tv-dator] ok 4 - QueryExecutor - executeOnPartition repairs stale no-handler read address and retries with refreshed endpoint # time=1.609ms
+[tv-dator] 
+[tv-dator] Routing query to partition service {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   address: 'leader-node/partition/replica_operations-p1-r1'
+[tv-dator] }
+[tv-dator] Routing query to partition service {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   address: 'follower-node/partition/replica_operations-p1-r3'
+[tv-dator] }
+[tv-dator] # Subtest: QueryExecutor - executeOnPartition skips duplicate queued no-handler read addresses after quarantine
+[tv-dator]     ok 1 - should be equal
+[tv-dator]     ok 2 - delivery should not retry a queued duplicate stale address after the first no-handler witness quarantines it
+[tv-dator]     1..2
+[tv-dator] ok 5 - QueryExecutor - executeOnPartition skips duplicate queued no-handler read addresses after quarantine # time=1.227ms
+[tv-dator] 
+[tv-dator] Routing query to partition service {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   address: 'old-owner/partition/replica_operations-p1-r1'
+[tv-dator] }
+[tv-dator] Routing query to partition service {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   address: 'new-owner/partition/replica_operations-p1-r4'
+[tv-dator] }
+[tv-dator] # Subtest: QueryExecutor - executeOnPartition repairs stale no-handler read address across owner handoff via routing overlay refresh
+[tv-dator]     ok 1 - should be equal
+[tv-dator]     ok 2 - read routing owner handoff repair should retry exactly once with the refreshed endpoint
+[tv-dator]     ok 3 - read routing owner handoff repair should not retry stale no-handler address after refresh
+[tv-dator]     ok 4 - read routing owner handoff repair should run routing overlay refresh 1 time(s)
+[tv-dator]     ok 5 - no-handler repair should refresh routing metadata for the affected partition
+[tv-dator]     ok 6 - overlay refresh should receive the stale-service repair reason
+[tv-dator]     1..6
+[tv-dator] ok 6 - QueryExecutor - executeOnPartition repairs stale no-handler read address across owner handoff via routing overlay refresh # time=1.908ms
+[tv-dator] 
+[tv-dator] Routing query to partition service {
+[tv-dator]   partitionId: 'sql_transactions-p1',
+[tv-dator]   address: 'leader-node/partition/sql_transactions-p1-r3'
+[tv-dator] }
+[tv-dator] Routing query to partition service {
+[tv-dator]   partitionId: 'sql_transactions-p1',
+[tv-dator]   address: 'recovery-node/partition/sql_transactions-p1-r4'
+[tv-dator] }
+[tv-dator] # Subtest: QueryExecutor - executeOnPartition widens recovery-owned system-table writes away from stale no-handler siblings on the disproven leader node
+[tv-dator]     ok 1 - should be equal
+[tv-dator]     ok 2 - runtime no-handler on one retained-leader sibling should widen to a different-node recovery candidate before retrying the same stale node
+[tv-dator]     1..2
+[tv-dator] ok 7 - QueryExecutor - executeOnPartition widens recovery-owned system-table writes away from stale no-handler siblings on the disproven leader node # time=1.174ms
+[tv-dator] 
+[tv-dator] Routing query to partition service {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   address: 'leader-node/partition/replica_operations-p1-r1'
+[tv-dator] }
+[tv-dator] Routing query to partition service {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   address: 'recovery-node/partition/replica_operations-p1-r3'
+[tv-dator] }
+[tv-dator] # Subtest: QueryExecutor - executeOnPartition widens owner-missing priority recovery reads away from a stale service-role-derived leader node after a no-handler witness
+[tv-dator]     ok 1 - should be equal
+[tv-dator]     ok 2 - owner-missing priority recovery reads should treat the runtime no-handler witness as evidence against retrying the disproven leader node first
+[tv-dator]     1..2
+[tv-dator] ok 8 - QueryExecutor - executeOnPartition widens owner-missing priority recovery reads away from a stale service-role-derived leader node after a no-handler witness # time=0.926ms
+[tv-dator] 
+[tv-dator] Routing query to partition service {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   address: 'old-owner/partition/replica_operations-p1-r1'
+[tv-dator] }
+[tv-dator] Routing query to partition service {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   address: 'new-owner/partition/replica_operations-p1-r1'
+[tv-dator] }
+[tv-dator] # Subtest: QueryExecutor - executeOnPartition honors overlay refresh when service id is unchanged
+[tv-dator]     ok 1 - should be equal
+[tv-dator]     ok 2 - same-service-id routing repair should retry exactly once with the refreshed endpoint
+[tv-dator]     ok 3 - same-service-id routing repair should not retry stale no-handler address after refresh
+[tv-dator]     ok 4 - same-service-id routing repair should run routing overlay refresh 1 time(s)
+[tv-dator]     ok 5 - same-service-id repair should still use stale-service refresh reason
+[tv-dator]     1..5
+[tv-dator] ok 9 - QueryExecutor - executeOnPartition honors overlay refresh when service id is unchanged # time=1.057ms
+[tv-dator] 
+[tv-dator] Routing query to partition service { partitionId: 'p1', address: 'leader-node/partition/p1' }
+[tv-dator] Routing query to partition service { partitionId: 'p1', address: 'follower-node/partition/p1' }
+[tv-dator] Following leader redirect {
+[tv-dator]   partitionId: 'p1',
+[tv-dator]   fromAddress: 'follower-node/partition/p1',
+[tv-dator]   leaderAddress: 'new-leader/partition/p1'
+[tv-dator] }
+[tv-dator] # Subtest: QueryExecutor - executeOnPartition falls back to live replica discovery after the canonical leader transport closes
+[tv-dator]     ok 1 - should be equal
+[tv-dator]     ok 2 - write routing should degrade to live replica discovery only after the canonical leader path proves unreachable
+[tv-dator]     1..2
+[tv-dator] ok 10 - QueryExecutor - executeOnPartition falls back to live replica discovery after the canonical leader transport closes # time=1.276ms
+[tv-dator] 
+[tv-dator] Routing query to partition service {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   address: 'leader-node/partition/replica_operations-p1-r1'
+[tv-dator] }
+[tv-dator] Routing query to partition service {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   address: 'follower-node/partition/replica_operations-p1-r2'
+[tv-dator] }
+[tv-dator] Routing query to partition service {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   address: 'follower-node/partition/replica_operations-p1-r2'
+[tv-dator] }
+[tv-dator] # Subtest: QueryExecutor - executeOnPartition quarantines stale no-handler leader address across consecutive writes
+[tv-dator]     ok 1 - should be equal
+[tv-dator]     ok 2 - should be equal
+[tv-dator]     ok 3 - second write should skip the quarantined stale no-handler leader address
+[tv-dator]     1..3
+[tv-dator] ok 11 - QueryExecutor - executeOnPartition quarantines stale no-handler leader address across consecutive writes # time=1.134ms
+[tv-dator] 
+[tv-dator] Routing query to partition service {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   address: 'leader-node/partition/replica_operations-p1-r1'
+[tv-dator] }
+[tv-dator] Routing query to partition service {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   address: 'leader-node/partition/replica_operations-p1-r1'
+[tv-dator] }
+[tv-dator] Routing query to partition service {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   address: 'follower-node/partition/replica_operations-p1-r2'
+[tv-dator] }
+[tv-dator] # Subtest: QueryExecutor - executeOnPartition retries retryable control-plane write failures on another live replica
+[tv-dator]     not ok 1 - a write code widens even when its generic text is not retryable
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/query/query-executor-executeonpartition-no-handler-repair.test.js
+[tv-dator]         lineNumber: 1185
+[tv-dator]         columnNumber: 5
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/query/query-executor-executeonpartition-no-handler-repair.test.js:1185:5)
+[tv-dator]       source: |2
+[tv-dator]           );
+[tv-dator]       
+[tv-dator]           t.equal(codedResult.success, true,
+[tv-dator]         ----^
+[tv-dator]             'a write code widens even when its generic text is not retryable');
+[tv-dator]           t.equal(deferredResult.success, true,
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -true
+[tv-dator]         +false
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     ok 2 - the full typed cutover-pause answer also widens
+[tv-dator]     not ok 3 - control-plane writes should fall through to another live replica for both code-owned and deferred typed answers
+[tv-dator]       ---
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,6 +1,5 @@
+[tv-dator]          Array [
+[tv-dator]            "leader-node/partition/replica_operations-p1-r1",
+[tv-dator]         -  "follower-node/partition/replica_operations-p1-r2",
+[tv-dator]            "leader-node/partition/replica_operations-p1-r1",
+[tv-dator]            "follower-node/partition/replica_operations-p1-r2",
+[tv-dator]          ]
+[tv-dator]       at:
+[tv-dator]         fileName: test/query/query-executor-executeonpartition-no-handler-repair.test.js
+[tv-dator]         lineNumber: 1189
+[tv-dator]         columnNumber: 5
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/query/query-executor-executeonpartition-no-handler-repair.test.js:1189:5)
+[tv-dator]       source: |2
+[tv-dator]           t.equal(deferredResult.success, true,
+[tv-dator]             'the full typed cutover-pause answer also widens');
+[tv-dator]           t.same(
+[tv-dator]         ----^
+[tv-dator]             deliveries,
+[tv-dator]             [leaderAddress, fallbackAddress, leaderAddress, fallbackAddress],
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..3
+[tv-dator] not ok 12 - QueryExecutor - executeOnPartition retries retryable control-plane write failures on another live replica # time=14.763ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/query/query-executor-executeonpartition-no-handler-repair.test.js
+[tv-dator]     lineNumber: 1074
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |
+[tv-dator]     });
+[tv-dator]   
+[tv-dator]     test('QueryExecutor - executeOnPartition retries retryable control-plane ' +
+[tv-dator]     ^
+[tv-dator]       'write failures on another live replica', async (t) => {
+[tv-dator]       const deliveries = [];
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] Routing query to partition service {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   address: 'leader-node/partition/replica_operations-p1-r1'
+[tv-dator] }
+[tv-dator] Routing query to partition service {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   address: 'follower-node/partition/replica_operations-p1-r2'
+[tv-dator] }
+[tv-dator] # Subtest: QueryExecutor - executeOnPartition widens deferred priority control-plane transport failures to another live replica
+[tv-dator]     ok 1 - should be equal
+[tv-dator]     ok 2 - priority recovery should widen to another live replica after a deferred leader-unavailable transport failure
+[tv-dator]     1..2
+[tv-dator] ok 13 - QueryExecutor - executeOnPartition widens deferred priority control-plane transport failures to another live replica # time=0.786ms
+[tv-dator] 
+[tv-dator] Routing query to partition service {
+[tv-dator]   partitionId: 'services-p1',
+[tv-dator]   address: 'leader-node/partition/services-p1-r1'
+[tv-dator] }
+[tv-dator] Routing query to partition service {
+[tv-dator]   partitionId: 'services-p1',
+[tv-dator]   address: 'leader-node/partition/services-p1-r1'
+[tv-dator] }
+[tv-dator] # Subtest: QueryExecutor - executeOnPartition keeps deferred non-priority system-table transport failures on the same leader address
+[tv-dator]     ok 1 - should be equal
+[tv-dator]     ok 2 - non-priority system-table writes should keep the bounded same-address retry contract after a deferred transport failure
+[tv-dator]     ok 3 - deferred failures should schedule one bounded partition retry
+[tv-dator]     ok 4 - deferred partition retry should honor retryAfterMs
+[tv-dator]     1..4
+[tv-dator] ok 14 - QueryExecutor - executeOnPartition keeps deferred non-priority system-table transport failures on the same leader address # time=1.063ms
+[tv-dator] 
+[tv-dator] Routing query to partition service {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   address: 'leader-node/partition/replica_operations-p1-r1'
+[tv-dator] }
+[tv-dator] # Subtest: QueryExecutor - executeOnPartition bounds deferred control-plane write retries by the per-call timeout budget
+[tv-dator]     ok 1 - bounded control-plane retries should surface the deferred failure once the budget is exhausted
+[tv-dator]     ok 2 - per-call timeout budget should prevent extra retry attempts when retryAfterMs exceeds the remaining budget
+[tv-dator]     ok 3 - per-call timeout budget should not sleep past the remaining execution budget
+[tv-dator]     ok 4 - bounded timeout exhaustion should preserve defer-retry semantics for upstream owners
+[tv-dator]     ok 5 - bounded timeout exhaustion should preserve retryAfterMs for the next owner-level retry
+[tv-dator]     1..5
+[tv-dator] ok 15 - QueryExecutor - executeOnPartition bounds deferred control-plane write retries by the per-call timeout budget # time=0.932ms
+[tv-dator] 
+[tv-dator] 1..15
+[tv-dator] # { total: 54, pass: 52, fail: 2 }
+[tv-dator] # time=96ms
+[tv-dator] # test-files total=2 pass=0 fail=2 assertions=122
+[tv-dator] Canonical partition leader service missing {
+[tv-dator]   partitionId: 'p1',
+[tv-dator]   leaderNodeId: 'leader-node',
+[tv-dator]   routableNodeIds: [ 'follower-node' ],
+[tv-dator]   staleLeaderNodeIds: [],
+[tv-dator]   routingSnapshot: {
+[tv-dator]     reasonCode: 'ok',
+[tv-dator]     routingReadinessDimension: 'serveEligible',
+[tv-dator]     serviceRowCount: 1,
+[tv-dator]     activeAddressedServiceCount: 1,
+[tv-dator]     routableServiceCount: 1,
+[tv-dator]     canonicalLeaderServiceCount: 0,
+[tv-dator]     leaderKnown: true,
+[tv-dator]     canonicalLeaderNodeId: 'leader-node',
+[tv-dator]     deniedByNodeId: {}
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Wait bound spent {
+[tv-dator]   event: 'wait_bound_spent',
+[tv-dator]   wait: 'partition_execution_deadline',
+[tv-dator]   awaited: 'successful partition delivery before the execution deadline',
+[tv-dator]   boundMs: 50,
+[tv-dator]   elapsedMs: 7,
+[tv-dator]   lastObserved: {
+[tv-dator]     attempts: 1,
+[tv-dator]     lastError: 'No leader available for write operation',
+[tv-dator]     lastErrorCode: null,
+[tv-dator]     lastParticipantNodeId: null,
+[tv-dator]     awaitedRoutingRepair: true,
+[tv-dator]     site: 'retry_delay_exceeds_budget',
+[tv-dator]     retryDelayMs: 50,
+[tv-dator]     remainingBudgetMs: 43
+[tv-dator]   },
+[tv-dator]   scope: { partitionId: 'p1', forRead: false, nodeId: 'local-node' },
+[tv-dator]   repeats: 0
+[tv-dator] }
+[tv-dator] No handler registered for partition service { partitionId: 'p1', address: 'leader-node/partition/p1-old' }
+[tv-dator] No handler registered for partition service { partitionId: 'p1', address: 'leader-node/partition/p1-old' }
+[tv-dator] No handler registered for partition service {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   address: 'leader-node/partition/replica_operations-p1-r1'
+[tv-dator] }
+[tv-dator] No handler registered for partition service {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   address: 'old-owner/partition/replica_operations-p1-r1'
+[tv-dator] }
+[tv-dator] No handler registered for partition service {
+[tv-dator]   partitionId: 'sql_transactions-p1',
+[tv-dator]   address: 'leader-node/partition/sql_transactions-p1-r3'
+[tv-dator] }
+[tv-dator] No handler registered for partition service {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   address: 'leader-node/partition/replica_operations-p1-r1'
+[tv-dator] }
+[tv-dator] No handler registered for partition service {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   address: 'old-owner/partition/replica_operations-p1-r1'
+[tv-dator] }
+[tv-dator] No handler registered for partition service {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   address: 'leader-node/partition/replica_operations-p1-r1'
+[tv-dator] }
+[tv-dator] Wait bound spent {
+[tv-dator]   event: 'wait_bound_spent',
+[tv-dator]   wait: 'partition_execution_deadline',
+[tv-dator]   awaited: 'successful partition delivery before the execution deadline',
+[tv-dator]   boundMs: 200,
+[tv-dator]   elapsedMs: 0,
+[tv-dator]   lastObserved: {
+[tv-dator]     attempts: 1,
+[tv-dator]     lastError: 'Connection to node leader-node closed',
+[tv-dator]     lastErrorCode: 'ROUTER_CONNECTION_CLOSED',
+[tv-dator]     lastParticipantNodeId: 'leader-node',
+[tv-dator]     awaitedRoutingRepair: false,
+[tv-dator]     site: 'retry_delay_exceeds_budget',
+[tv-dator]     retryDelayMs: 250,
+[tv-dator]     remainingBudgetMs: 200
+[tv-dator]   },
+[tv-dator]   scope: {
+[tv-dator]     partitionId: 'replica_operations-p1',
+[tv-dator]     forRead: false,
+[tv-dator]     nodeId: 'local-node'
+[tv-dator]   },
+[tv-dator]   repeats: 0
+[tv-dator] }
+lab test: tv-dator: # test-files total=2 pass=0 fail=2 assertions=122
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=2 pass=0 fail=2 assertions=122
+{"phase":"source-v3-candidate","sha":"57f98ca76d948e3a8f0d9e4dbe63992d68bde987","files":["test/query/query-executor-executeonpartition-no-handler-repair.test.js","test/control-plane/control-plane-error-classification.test.js"],"startedAt":"2026-10-13T13:08:18.921Z"}
+lab test: tv-dator: ordinary (2 files) cores=12 mem=15.4GiB speed x1.34
+[tv-dator] placement-shell=397018
+[tv-dator] placement-head=57f98ca76d948e3a8f0d9e4dbe63992d68bde987
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.4 mode:local retry: timeout: lanecap:11
+[tv-dator] placement-pid=397432
+[tv-dator] # test-files planned=2
+[tv-dator] classified lane ordinary: 2 file(s), jobs=4
+[tv-dator] thermal: ok cpu 63C (coretemp/Package id 0) nvme 42C (nvme/Sensor 1)
+[tv-dator] ok test/control-plane/control-plane-error-classification.test.js (53 assertions, 414ms)
+[tv-dator] ok test/query/query-executor-executeonpartition-no-handler-repair.test.js (69 assertions, 728ms)
+[tv-dator] # test-files total=2 pass=2 fail=0 assertions=122
+lab test: tv-dator: # test-files total=2 pass=2 fail=0 assertions=122
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=2 pass=2 fail=0 assertions=122

@@ -27,9 +27,8 @@ import {
 } from '../../src/query/query-constants.js';
 import {
 } from '../../src/query/canonical-leader-routing.js';
-import {
-  PARTITION_SERVICE_ERROR_MSG,
-} from '../../src/partition/partition-service-constants.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-write-kernel.js';
 import {
   assertNoHandlerRepairConverged,
   createStaleOverlayOwnerHandoffFixture,
@@ -1075,6 +1074,22 @@ test('QueryExecutor - executeOnPartition quarantines stale no-handler ' +
 test('QueryExecutor - executeOnPartition retries retryable control-plane ' +
   'write failures on another live replica', async (t) => {
   const deliveries = [];
+  const leaderFailures = [
+    {
+      acknowledged: true,
+      success: false,
+      error: ERRORS.QUERY_FAILED,
+      failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.NOT_LEADER,
+    },
+    {
+      acknowledged: true,
+      success: false,
+      error: ERRORS.WRITE_CUTOVER_PAUSED,
+      failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.CUTOVER_PAUSED,
+      deferRetry: true,
+      retryAfterMs: 25,
+    },
+  ];
   const partitionId = 'replica_operations-p1';
   const leaderAddress = 'leader-node/partition/replica_operations-p1-r1';
   const fallbackAddress = 'follower-node/partition/replica_operations-p1-r2';
@@ -1130,11 +1145,7 @@ test('QueryExecutor - executeOnPartition retries retryable control-plane ' +
     async deliver(address) {
       deliveries.push(address);
       if (address === leaderAddress) {
-        return {
-          acknowledged: true,
-          success: false,
-          error: PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
-        };
+        return leaderFailures.shift();
       }
       if (address === fallbackAddress) {
         return {
@@ -1158,19 +1169,28 @@ test('QueryExecutor - executeOnPartition retries retryable control-plane ' +
     nodeId: 'local-node',
   });
 
-  const result = await executor.executeOnPartition(
+  const codedResult = await executor.executeOnPartition(
     partitionId,
     'UPDATE replica_operations SET status = ? WHERE operation_id = ?',
     ['active', 'op-1'],
     false,
   );
+  const deferredResult = await executor.executeOnPartition(
+    partitionId,
+    'UPDATE replica_operations SET status = ? WHERE operation_id = ?',
+    ['active', 'op-2'],
+    false,
+  );
 
-  t.equal(result.success, true);
+  t.equal(codedResult.success, true,
+    'a write code widens even when its generic text is not retryable');
+  t.equal(deferredResult.success, true,
+    'the full typed cutover-pause answer also widens');
   t.same(
     deliveries,
-    [leaderAddress, fallbackAddress],
+    [leaderAddress, fallbackAddress, leaderAddress, fallbackAddress],
     'control-plane writes should fall through to another live replica ' +
-      'when the first candidate reports retryable partition contention',
+      'for both code-owned and deferred typed answers',
   );
 });
 

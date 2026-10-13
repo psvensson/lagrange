@@ -7,7 +7,7 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {NUM, TIME_MS, WORKFLOW_STEP} from '../../src/constants/index.js';
+import {ERRORS, NUM, TIME_MS, WORKFLOW_STEP} from '../../src/constants/index.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
 import {
   RESERVATION_REASON,
@@ -15,6 +15,8 @@ import {
   STORAGE_CAPACITY_DEFAULT,
 } from '../../src/rebalancer/storage-capacity-constants.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-write-kernel.js';
 import {
   OPERATION_RESERVATION_ATTEMPT_OUTCOME,
 } from '../../src/rebalancer/operation-reservation-attempt-outcome.js';
@@ -38,7 +40,6 @@ import {
   createMockTransactionCoordinator,
 } from './test-helpers.js';
 
-const LOST_OUTCOME_ERROR = 'Transaction already active on this partition';
 const UNIQUE_RESERVATION_ERROR =
   'UNIQUE constraint failed: storage_reservations.reservation_id';
 
@@ -155,7 +156,8 @@ function createLostOutcomeSqlEngine(options = {}) {
       }
       return {
         success: false,
-        error: LOST_OUTCOME_ERROR,
+        error: ERRORS.WRITE_OUTCOME_UNKNOWN,
+        failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,
         priorMutationDeliveryMayHaveBeenAttempted: true,
       };
     }

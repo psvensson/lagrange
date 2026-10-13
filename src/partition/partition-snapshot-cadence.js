@@ -1,8 +1,8 @@
 // Leader checkpoint cadence owner (quest raft-snapshot-live-rebuild, spec
 // solve/specs/raft-snapshot-transfer-install/live-rebuild-design.md, S6
 // Phase A link 1). A tick riding the existing 1s prepared-state-hold sweep
-// (partition-service-transaction-base.js — the durability-fitness
-// precedent). The sweep fires on ALL roles every second, so THE TICK owns
+// (partition-service-participant-transaction-cadence-methods.js). The sweep
+// fires on ALL roles every second, so THE TICK owns
 // its own role gate (leader-only).
 //
 // Checkpoint creation and proof-gated compaction measured their trigger and

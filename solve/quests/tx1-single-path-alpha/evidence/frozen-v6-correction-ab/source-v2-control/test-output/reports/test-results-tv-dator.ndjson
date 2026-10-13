@@ -1,0 +1,2 @@
+{"file":"test/control-plane/control-plane-error-classification.test.js","attempt":1,"ok":false,"assertions":53,"durationMs":430,"retriedOnce":false,"firstFailureLine":"not ok 1 - retryability must come from a current typed or transport owner"}
+{"file":"test/query/query-executor-executeonpartition-no-handler-repair.test.js","attempt":1,"ok":false,"assertions":69,"durationMs":728,"retriedOnce":false,"firstFailureLine":"not ok 1 - a write code widens even when its generic text is not retryable"}

@@ -27,14 +27,19 @@ import {
   PARTITION_SERVICE_MESSAGE_TYPE,
   PARTITION_SERVICE_OPERATION,
 } from '../../src/partition/partition-service-constants.js';
+import {QUERY_OPERATION} from '../../src/query/query-constants.js';
 import {readCommittedStatementOutcome} from
   '../../src/partition/partition-committed-statement-outcome.js';
 import {readParticipantReleaseFacts} from
   '../../src/partition/partition-participant-release-facts.js';
-import {releaseIdentityOf} from
+import {releaseIdentityOf, releaseMemberIds} from
   '../../src/partition/partition-participant-release-contract.js';
 import {resumeParticipantCutoverAdmission} from
   '../../src/partition/partition-participant-transaction-pause.js';
+import {enableParticipantTransactionAdmission} from
+  '../../src/partition/partition-participant-transaction-request.js';
+import {PARTICIPANT_CUTOVER_OUTCOME} from
+  '../../src/partition/partition-participant-transaction-cutover-constants.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
   '../../src/partition/partition-write-kernel.js';
 import {COMMIT_MODE, PARTICIPANT_COMMIT_OUTCOME} from '../../src/constants/transactions.js';
@@ -384,6 +389,7 @@ function createReplica(replicaId, extra = {}) {
       {name: 'value', type: 'TEXT'},
     ]},
     dbPath: extra.dbPath ?? ':memory:',
+    ...(extra.transport ? {transport: extra.transport} : {}),
     ...(extra.timeSource ? {timeSource: extra.timeSource} : {}),
     // The leader's determinism self-check, injectable (design v6 section 3.3).
     ...(extra.determinismSelfCheck ?
@@ -419,30 +425,126 @@ async function startLeader(extra) {
 }
 
 async function resumeFixtureParticipantAdmission(leader) {
-  const peerId = deriveRaftRsPeerId(leader.replicaId);
-  const confState = {voters: [peerId], votersOutgoing: [], learners: [], learnersNext: []};
-  const configurationKey = raftRsConfStateKey(confState);
   const port = leader.controllablePort;
-  port.configurationKey = configurationKey;
-  port.membershipGenerationIndex = port.committedIndex;
-  port.committedMembershipHandler = () => deepFreeze({
-    kind: COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED,
-    ...confState, identities: {[peerId]: leader.replicaId},
-    appliedIndex: port.committedIndex, commitIndex: port.committedIndex,
-    configurationKey, membershipGenerationIndex: port.committedIndex,
-    term: port.term, leaderId: leader.replicaId, gateOpen: true,
-  });
+  if (port) {
+    const peerId = deriveRaftRsPeerId(leader.replicaId);
+    const confState = {voters: [peerId], votersOutgoing: [], learners: [], learnersNext: []};
+    const configurationKey = raftRsConfStateKey(confState);
+    port.configurationKey = configurationKey;
+    port.membershipGenerationIndex = port.committedIndex;
+    port.committedMembershipHandler = () => deepFreeze({
+      kind: COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED,
+      ...confState, identities: {[peerId]: leader.replicaId},
+      appliedIndex: port.committedIndex, commitIndex: port.committedIndex,
+      configurationKey, membershipGenerationIndex: port.committedIndex,
+      term: port.term, leaderId: leader.replicaId, gateOpen: true,
+    });
+  }
+  if (originOf(leader) === null) {
+    const priorProposeHandler = port?.proposeHandler ?? null;
+    if (port) {
+      port.setProposeHandler(async (entry) => {
+        port.commit(entry);
+      });
+    }
+    let enabled;
+    try {
+      enabled = await enableParticipantTransactionAdmission(leader);
+    } finally {
+      if (port) port.setProposeHandler(priorProposeHandler);
+    }
+    if (enabled?.success !== true) {
+      throw new Error(`fixture participant origin refused: ${JSON.stringify(enabled)}`);
+    }
+  }
   const handler = {nodeId: leader.nodeId, ownerIncarnation: 1,
     localServices: new Map([[leader.replicaId, leader]])};
   const facts = await readParticipantReleaseFacts(handler, leader);
   const release = releaseIdentityOf({partitionId: leader.partitionId,
-    targetBuildDigest: facts.buildDigest, configurationKey,
-    membershipGenerationIndex: port.committedIndex});
+    targetBuildDigest: facts.buildDigest,
+    configurationKey: facts.membership.configurationKey,
+    membershipGenerationIndex: facts.membership.membershipGenerationIndex});
   const outcome = await resumeParticipantCutoverAdmission(handler, leader,
     {release, census: [facts]});
   if (outcome !== 'resumed') {
     throw new Error(`fixture participant release refused: ${outcome}`);
   }
+}
+
+function participantFixtureHandlerOf(service) {
+  return {nodeId: service.nodeId, ownerIncarnation: 1,
+    localServices: new Map([[service.replicaId, service]])};
+}
+
+function sameExactMemberIds(actual, expected) {
+  return actual !== null && actual.length === expected.length &&
+    actual.every((replicaId, index) => replicaId === expected[index]);
+}
+
+/**
+ * Open current participant admission on a real one- or multi-replica fixture
+ * group. The production origin owner commits the origin; the caller's bounded
+ * group wait observes exact committed membership and applied origin on every
+ * member before one complete release census is admitted on each replica.
+ * @param {Array<Object>} services - Every exact current group member.
+ * @param {Function} waitFor - The group's existing bounded wait owner.
+ * @return {Promise<Object>} The committed origin, release, census and outcomes.
+ */
+async function resumeFixtureParticipantGroupAdmission(services, waitFor) {
+  if (!Array.isArray(services) || services.length === 0 ||
+      typeof waitFor !== 'function') {
+    throw new Error('fixture participant group release requires members and wait owner');
+  }
+  const expectedMemberIds = services.map(({replicaId}) => replicaId).sort();
+  const leaders = services.filter((service) => {
+    const status = service.raft.readStatus();
+    return status.role === RAFT_ROLE.LEADER && status.leaderId === service.replicaId;
+  });
+  if (leaders.length !== 1) {
+    throw new Error(`fixture participant group has ${leaders.length} current leaders`);
+  }
+  const origin = await enableParticipantTransactionAdmission(leaders[0]);
+  if (origin?.success !== true) {
+    throw new Error(`fixture participant origin refused: ${JSON.stringify(origin)}`);
+  }
+
+  const handlers = services.map(participantFixtureHandlerOf);
+  let census = null;
+  const converged = await waitFor(async () => {
+    const observed = await Promise.all(services.map((service, index) =>
+      readParticipantReleaseFacts(handlers[index], service)));
+    const originFact = observed[0]?.origin;
+    const ready = originFact !== null && originFact !== undefined &&
+      observed.every((facts) => {
+        const memberIds = releaseMemberIds(facts?.membership);
+        return facts?.outcome === PARTICIPANT_CUTOVER_OUTCOME.OBSERVED &&
+          sameExactMemberIds(memberIds, expectedMemberIds) &&
+          facts.origin?.originIndex === originFact.originIndex &&
+          facts.origin?.originTerm === originFact.originTerm &&
+          facts.membership.appliedIndex >= originFact.originIndex;
+      });
+    if (ready) census = observed;
+    return ready;
+  });
+  if (converged !== true || census === null) {
+    throw new Error('fixture participant group release convergence bound spent');
+  }
+  const leaderFacts = census.find(({generation}) =>
+    generation.replicaId === leaders[0].replicaId);
+  const release = releaseIdentityOf({partitionId: leaders[0].partitionId,
+    targetBuildDigest: leaderFacts.buildDigest,
+    configurationKey: leaderFacts.membership.configurationKey,
+    membershipGenerationIndex: leaderFacts.membership.membershipGenerationIndex});
+  const outcomes = [];
+  for (let index = 0; index < services.length; index += 1) {
+    outcomes.push(await resumeParticipantCutoverAdmission(
+      handlers[index], services[index], {release, census}));
+  }
+  if (!outcomes.every((outcome) =>
+    outcome === PARTICIPANT_CUTOVER_OUTCOME.RESUMED)) {
+    throw new Error(`fixture participant group release refused: ${outcomes.join(',')}`);
+  }
+  return {origin, release, census, outcomes};
 }
 async function shutdownAll(...replicas) {
   for (const replica of replicas) {
@@ -484,11 +586,11 @@ function txMessage(operation, identity, extra = {}) {
     ...identityFields(identity), ...extra};
 }
 function beginMessage(identity) {
-  return txMessage(PARTITION_SERVICE_OPERATION.BEGIN_TRANSACTION, identity,
+  return txMessage(QUERY_OPERATION.BEGIN, identity,
     {commitMode: COMMIT_MODE.NOT_SELECTED});
 }
 const prepareMessage = (identity) =>
-  txMessage(PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION, identity);
+  txMessage(QUERY_OPERATION.PREPARE, identity);
 const commitMessage = (identity, preparedDigest) => txMessage(
   PARTITION_SERVICE_OPERATION.COMMIT, identity,
   bindingOf(identity, V3.DECISION.COMMIT, preparedDigest));
@@ -697,6 +799,7 @@ async function decidedOnTwoReplicas(tx, operations, setup) {
 }
 
 export {
+  resumeFixtureParticipantGroupAdmission,
   resumeFixtureParticipantAdmission,
   COMMITTED,
   GENERATION_ORIGIN_INDEX,

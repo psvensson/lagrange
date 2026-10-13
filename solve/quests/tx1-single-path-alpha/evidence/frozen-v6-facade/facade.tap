@@ -1,0 +1,89 @@
+TAP version 14
+# Subtest: public application database transaction facade semantics (single runtime, coordinator-visible; not distributed durability)
+    # formation (1 process(es)): {"activeMs":126652,"nodeStartMs":[126600],"writesServedAfterActiveMs":10852,"writeAttempts":1}
+    # Subtest: I2.1 facade: a committed two-participant callback is readable from another session of the same runtime
+        ok 1 - the transaction commits
+        ok 2 - tx.query returns the frozen null-prototype {rows, affectedRows}
+        ok 3 - should be equal
+        ok 4 - tx.query returns the frozen null-prototype {rows, affectedRows}
+        ok 5 - should be equal
+        ok 6 - should be equivalent
+        ok 7 - should be equivalent
+        # I2.1 visibility: current after 332 ms, history after a further 1019 ms; reader samples with current visible but history not yet: 0/1 (reported, not asserted: cross-partition visibility is not atomic)
+        1..7
+    ok 1 - I2.1 facade: a committed two-participant callback is readable from another session of the same runtime # time=20195.048ms
+    
+    # Subtest: I2.2 facade: a failed later statement rejects and leaves neither write readable on this runtime
+        ok 1 - should be equal
+        ok 2 - the callback rejects with an ApplicationDatabaseError
+        ok 3 - the first (successful) statement is not readable on this runtime
+        ok 4 - the duplicate target is intact
+        1..4
+    ok 2 - I2.2 facade: a failed later statement rejects and leaves neither write readable on this runtime # time=11693.913ms
+    
+    # Subtest: I2.2b facade: a failed first statement rejects and leaves neither write readable on this runtime
+        ok 1 - should be equal
+        ok 2 - the callback stops at the first failure
+        ok 3 - should be equivalent
+        ok 4 - should be equivalent
+        1..4
+    ok 3 - I2.2b facade: a failed first statement rejects and leaves neither write readable on this runtime # time=7315.619ms
+    
+    # Subtest: I2.3 facade: a caught failure still dooms the transaction
+        ok 1 - the duplicate statement fails and the callback catches it
+        ok 2 - a later statement settles with the recorded first failure
+        ok 3 - the callback returned normally, the transaction still rejects
+        ok 4 - the transaction rejects with the first failure
+        ok 5 - should be equivalent
+        1..5
+    ok 4 - I2.3 facade: a caught failure still dooms the transaction # time=7687.857ms
+    
+    # Subtest: I2.3b facade: raw COMMIT text is reserved and dooms the transaction
+        ok 1 - should be equal
+        ok 2 - should be equal
+        ok 3 - should be equal
+        ok 4 - should be equivalent
+        1..4
+    ok 5 - I2.3b facade: raw COMMIT text is reserved and dooms the transaction # time=7757.137ms
+    
+    # Subtest: F-2PC-CONCURRENT-PARTICIPANT witness: a concurrent transaction on the same partitions is refused
+        # F-2PC outcomes: fulfilled / rejected
+        ok 1 - observed today: exactly one of two concurrent transactions commits
+        ok 2 - the refusal is an untyped INTERNAL_ERROR
+        ok 3 - should be equal
+        ok 4 - and is not marked deferred
+        ok 5 - nor retryable
+        ok 6 - the refused transaction left nothing readable on this runtime
+        ok 7 - should be equivalent
+        1..7
+    ok 6 - F-2PC-CONCURRENT-PARTICIPANT witness: a concurrent transaction on the same partitions is refused # time=19525.861ms
+    
+    # Subtest: I2 facade: no transaction outcome carries topology or a session identity
+        ok 1 - I2.1: no topology, no session identity
+        ok 2 - I2.1 step 0: no topology, no session identity
+        ok 3 - I2.1 step 1: no topology, no session identity
+        ok 4 - I2.2: no topology, no session identity
+        ok 5 - I2.2 step 0: no topology, no session identity
+        ok 6 - I2.2 step 1: no topology, no session identity
+        ok 7 - I2.2b: no topology, no session identity
+        ok 8 - I2.2b step 0: no topology, no session identity
+        ok 9 - I2.3: no topology, no session identity
+        ok 10 - I2.3 step 0: no topology, no session identity
+        ok 11 - I2.3 step 1: no topology, no session identity
+        ok 12 - I2.3b: no topology, no session identity
+        ok 13 - I2.3b step 0: no topology, no session identity
+        ok 14 - I2.3b step 1: no topology, no session identity
+        ok 15 - I2.4 first: no topology, no session identity
+        ok 16 - I2.4 first step 0: no topology, no session identity
+        ok 17 - I2.4 first step 1: no topology, no session identity
+        ok 18 - I2.4 second: no topology, no session identity
+        ok 19 - I2.4 second step 0: no topology, no session identity
+        1..19
+    ok 7 - I2 facade: no transaction outcome carries topology or a session identity # time=13.011ms
+    
+    1..7
+ok 1 - public application database transaction facade semantics (single runtime, coordinator-visible; not distributed durability) # time=277419.764ms
+
+1..1
+# { total: 50, pass: 50 }
+# time=277429.465ms

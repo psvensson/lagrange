@@ -1,5 +1,7 @@
 import {test} from '../../src/test-helpers/tap.js';
-import {TABLES} from '../../src/constants/index.js';
+import {ERRORS, TABLES} from '../../src/constants/index.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-write-kernel.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   CONTROL_PLANE_MUTATION_MERGE_POLICY,
@@ -506,7 +508,10 @@ test('System metadata owners retry transient mutation failures and apply ' +
         if (upsertCallCount === 1) {
           return {
             success: false,
-            error: 'Transaction already active on this partition',
+            error: ERRORS.WRITE_CUTOVER_PAUSED,
+            failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.CUTOVER_PAUSED,
+            deferRetry: true,
+            retryAfterMs: 1,
           };
         }
         return {success: true};
@@ -524,7 +529,7 @@ test('System metadata owners retry transient mutation failures and apply ' +
   });
 
   t.equal(result.success, true,
-    'upsert should recover after one retryable mutation failure');
+    'upsert should recover after one typed retryable mutation failure');
   t.equal(upsertCallCount, 2,
     'owner writes should retry transient control-plane mutation failures');
   t.equal(

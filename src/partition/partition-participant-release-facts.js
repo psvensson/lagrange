@@ -44,18 +44,15 @@ function readRowidCensus(service) {
 }
 
 function readAcceptedWork(service, membership, status) {
-  const legacyActive = service.activeTransactions?.size;
-  const legacyPrepared = service.preparedTransactions?.size;
   const proposals = service.proposalQueue?.size;
   const pendingOutcomes = service.pendingWriteOutcomes?.size;
-  if (![legacyActive, legacyPrepared, proposals, pendingOutcomes,
+  if (![proposals, pendingOutcomes,
     membership.appliedIndex, status.commitIndex, status.lastIndex]
     .every((value) => Number.isSafeInteger(value) && value >= 0)) {
     throw new Error(FACT.DRAIN);
   }
   const prepared = readPreparedParticipantIds(service.db);
-  return Object.freeze({legacyActive, legacyPrepared,
-    sqliteTransactionOpen: service.db.inTransaction === true,
+  return Object.freeze({sqliteTransactionOpen: service.db.inTransaction === true,
     participantStaging: hasParticipantSession(service),
     participantPrepared: prepared.length, proposals, pendingOutcomes,
     appliedIndex: membership.appliedIndex, commitIndex: status.commitIndex,
@@ -63,8 +60,7 @@ function readAcceptedWork(service, membership, status) {
 }
 
 function isReleaseDrained(work) {
-  return work?.legacyActive === 0 && work.legacyPrepared === 0 &&
-    work.sqliteTransactionOpen === false && work.participantStaging === false &&
+  return work?.sqliteTransactionOpen === false && work.participantStaging === false &&
     work.participantPrepared === 0 && work.proposals === 0 && work.pendingOutcomes === 0 &&
     work.appliedIndex === work.commitIndex && work.commitIndex === work.lastIndex;
 }

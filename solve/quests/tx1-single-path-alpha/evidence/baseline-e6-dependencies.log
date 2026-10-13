@@ -1,0 +1,16 @@
+
+> lagrange-server@0.2.6 test:deps
+> depcruise --config dependency-cruiser.config.cjs src scripts test
+
+
+  error not-to-unresolvable: src/rebalancer/replica-operation-message-group-promotion.js → ../raft/learner-catch-up-acknowledgement.js
+  error no-circular: src/partition/partition-participant-release-facts.js → 
+      src/partition/partition-participant-transaction-pause.js →
+      src/partition/partition-participant-release-facts.js
+  error no-circular: src/partition/partition-participant-release-contract.js → 
+      src/partition/partition-participant-release-facts.js →
+      src/partition/partition-participant-transaction-pause.js →
+      src/partition/partition-participant-release-contract.js
+
+x 3 dependency violations (3 errors, 0 warnings). 5304 modules, 22436 dependencies cruised.
+

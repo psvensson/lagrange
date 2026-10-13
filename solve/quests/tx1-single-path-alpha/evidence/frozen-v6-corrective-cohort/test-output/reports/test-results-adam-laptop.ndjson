@@ -1,0 +1,9 @@
+{"file":"test/control-plane/system-metadata-owner-modules.test.js","attempt":1,"ok":true,"assertions":146,"durationMs":1063,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/cl-036-local-leader-row-seed.test.js","attempt":1,"ok":true,"assertions":47,"durationMs":1773,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/replica-dispatch-node-state-update-node-row-bootstrap-failures.test.js","attempt":1,"ok":true,"assertions":61,"durationMs":1883,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/cdc/cdc-integration-service-execute-sql-and-delivery.test.js","attempt":1,"ok":true,"assertions":52,"durationMs":2125,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/query/query-executor-session-binding-and-build-sql.test.js","attempt":1,"ok":true,"assertions":65,"durationMs":1519,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/query/sql-query-engine-provision-partition-quorum.test.js","attempt":1,"ok":true,"assertions":55,"durationMs":1787,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/distributed/harness/__tests__/table-distribution-helpers-read-path.test.js","attempt":1,"ok":true,"assertions":43,"durationMs":3069,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js","attempt":1,"ok":true,"assertions":100,"durationMs":2044,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-operation-repository.test.js","attempt":1,"ok":true,"assertions":434,"durationMs":9711,"retriedOnce":false,"firstFailureLine":null}

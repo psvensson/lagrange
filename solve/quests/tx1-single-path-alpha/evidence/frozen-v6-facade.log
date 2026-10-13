@@ -1,0 +1,20 @@
+lab test: lenovo-laptop: exclusive (1 files) cores=8 mem=15.5GiB speed x2.58
+[lenovo-laptop] placement-shell=1734235
+[lenovo-laptop] placement-head=57f98ca76d948e3a8f0d9e4dbe63992d68bde987
+[lenovo-laptop] placement-link=node_modules
+[lenovo-laptop] placement-link=data/examples
+[lenovo-laptop] placement-link=data/partitions
+[lenovo-laptop] placement-link=tools/alloy-6.2.0
+[lenovo-laptop] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[lenovo-laptop] placement-link=tools/tla2tools.jar
+[lenovo-laptop] placement-prepared=import-graph
+[lenovo-laptop] placement-env=factor:2.6 mode:local retry: timeout: lanecap:7
+[lenovo-laptop] placement-pid=1735030
+[lenovo-laptop] # test-files planned=1
+[lenovo-laptop] classified lane exclusive: 1 file(s), jobs=1
+[lenovo-laptop] thermal: ok cpu 50C (coretemp/Package id 0) nvme unmeasured
+[lenovo-laptop] ok test/integration/public-application-database-transaction-facade.integration.test.js (58 assertions, 279572ms)
+[lenovo-laptop] # test-files total=1 pass=1 fail=0 assertions=58
+lab test: lenovo-laptop: # test-files total=1 pass=1 fail=0 assertions=58
+lab test: lenovo-laptop: results copied to test-output/reports/test-results-lenovo-laptop.ndjson
+# test-files total=1 pass=1 fail=0 assertions=58

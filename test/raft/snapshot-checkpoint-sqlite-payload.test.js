@@ -9,9 +9,6 @@ import {test} from '../../src/test-helpers/tap.js';
 import {SQLiteLogAdapter} from '../../src/raft/sqlite-log-adapter.js';
 import {PartitionRaftStorage} from '../../src/partition/partition-raft-storage.js';
 import {
-  PARTITION_SERVICE_SQL,
-} from '../../src/partition/partition-service-constants.js';
-import {
   RAFT_CHECKPOINT_CREATION_OUTCOME,
   RAFT_CHECKPOINT_EXCLUDED_TABLES,
   RAFT_CHECKPOINT_PAYLOAD_FILE,
@@ -26,8 +23,8 @@ import {
 // follower-local consensus tables and state-machine tables FIRST
 // (anti-vacuous-assertion), create a checkpoint from a real file-backed DB
 // through the REAL adapter commit path, then inspect the sealed payload and
-// prove _raft_log/_raft_state are absent while _transaction_outcomes and
-// state-machine rows survive with the exact committed image.
+// prove _raft_log/_raft_state are absent while state-machine rows survive
+// with the exact committed image.
 
 const PARTITION_ID = 'sql_transactions-p1';
 const STATE_TABLE = 'sql_transactions';
@@ -42,11 +39,6 @@ const IDENTITY = Object.freeze({
 });
 const SELECT_TABLE_NAMES =
   'SELECT name FROM sqlite_master WHERE type = \'table\' ORDER BY name';
-const OUTCOME_ROW = Object.freeze({
-  sessionId: 'session-a',
-  epoch: 1,
-  outcome: 'committed',
-});
 
 function createFixture() {
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'raft-checkpoint-'));
@@ -54,9 +46,6 @@ function createFixture() {
   const db = new Database(dbPath);
   const adapter = new SQLiteLogAdapter(db, {address: PARTITION_ID, term: TERM});
   const storage = new PartitionRaftStorage(db, PARTITION_ID, adapter);
-  // The participant commit-outcome table is the partition service's own
-  // (its transaction base creates it), not the Raft storage's.
-  db.exec(PARTITION_SERVICE_SQL.CREATE_TRANSACTION_OUTCOME_TABLE);
   db.exec(`CREATE TABLE IF NOT EXISTS ${STATE_TABLE} ` +
     '(id TEXT PRIMARY KEY, payload TEXT)');
   return {
@@ -92,11 +81,6 @@ function seedCommittedFixture(fixture) {
   for (let ordinal = 1; ordinal <= ENTRY_COUNT; ordinal += 1) {
     lastEntry = commitAndApplyEntry(fixture, ordinal);
   }
-  fixture.db.prepare(
-    'INSERT INTO _transaction_outcomes ' +
-    '(session_id, transaction_epoch, outcome, updated_at) ' +
-    'VALUES (?, ?, ?, ?)',
-  ).run(OUTCOME_ROW.sessionId, OUTCOME_ROW.epoch, OUTCOME_ROW.outcome, 1);
   return lastEntry;
 }
 
@@ -114,8 +98,8 @@ test('a sealed payload excludes consensus tables and keeps the committed image',
         t.ok(sourceTables.includes(excluded),
           `anti-vacuous: source database really contains ${excluded}`);
       }
-      t.ok(sourceTables.includes('_transaction_outcomes'),
-        'anti-vacuous: source database really contains _transaction_outcomes');
+      t.ok(sourceTables.includes(STATE_TABLE),
+        'anti-vacuous: source database really contains application state');
 
       const created = await createSqliteStateMachineCheckpoint({
         db: fixture.db,
@@ -142,17 +126,6 @@ test('a sealed payload excludes consensus tables and keeps the committed image',
           t.notOk(payloadTables.includes(excluded),
             `sealed payload proves ${excluded} is absent`);
         }
-        t.same(
-          payload.prepare(
-            'SELECT session_id, transaction_epoch, outcome ' +
-            'FROM _transaction_outcomes',
-          ).all(),
-          [{
-            session_id: OUTCOME_ROW.sessionId,
-            transaction_epoch: OUTCOME_ROW.epoch,
-            outcome: OUTCOME_ROW.outcome,
-          }],
-          '_transaction_outcomes (applied state-machine state) survives');
         t.equal(
           payload.prepare(
             `SELECT COUNT(*) AS rows FROM ${STATE_TABLE}`).get().rows,

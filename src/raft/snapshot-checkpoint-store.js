@@ -20,10 +20,6 @@ import {
 } from '../runtime/oci-host-agent-durable-files.js';
 
 import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
-import {
-  PARTITION_SERVICE_OPERATION,
-} from '../partition/partition-service-constants.js';
-
 import {SQLITE_RAFT_STATE_KEY} from './sqlite-raft-state-constants.js';
 import {readSnapshotBoundary} from './snapshot-boundary.js';
 import {
@@ -165,9 +161,6 @@ function readLastIncludedTerm(copyDb, lastIncludedIndex) {
 
 const NO_COMMITTED_HLC = '0';
 const SELECT_LOG_COMMANDS = 'SELECT command FROM _raft_log ORDER BY log_index';
-const SELECT_LOG_COMMANDS_TO =
-  'SELECT command FROM _raft_log WHERE log_index <= ? ORDER BY log_index';
-
 function parseEntryData(rawCommand) {
   try {
     const envelope = JSON.parse(rawCommand);
@@ -198,32 +191,6 @@ function computeMaxCommittedHlc(copyDb) {
     max = prior;
   }
   return max === null ? NO_COMMITTED_HLC : max.toString();
-}
-
-// Fail-closed prepared-2PC gate: a checkpoint cannot carry prepared-but-
-// undecided transactions (they live only in the log), so creation refuses
-// when any session has a PREPARE at or below the boundary without a
-// terminal outcome at or below the boundary. PREPAREs strictly above the
-// boundary are uncommitted and irrelevant.
-function hasPendingPreparedTransactions(copyDb, boundaryIndex) {
-  const pending = new Set();
-  for (const row of copyDb.prepare(SELECT_LOG_COMMANDS_TO)
-    .iterate(boundaryIndex)) {
-    const data = parseEntryData(row.command);
-    if (!data || typeof data.sessionId !== 'string' || !data.sessionId) {
-      continue;
-    }
-    if (data.type === PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION) {
-      pending.add(data.sessionId);
-    } else if (
-      data.type === PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT ||
-      data.type === PARTITION_SERVICE_OPERATION.COMMIT ||
-      data.type === PARTITION_SERVICE_OPERATION.ROLLBACK
-    ) {
-      pending.delete(data.sessionId);
-    }
-  }
-  return pending.size > 0;
 }
 
 function scrubCopy(copyDb) {
@@ -320,10 +287,6 @@ function prepareSqliteCheckpointCopy(copyDb) {
   if (!lastIncluded.found) {
     gate = creationResult(
       CREATION.APPLY_WATERMARK_DIVERGENCE, ['missing_log_entry']);
-  } else if (hasPendingPreparedTransactions(
-    copyDb, watermarks.committedIndex)) {
-    gate = creationResult(
-      CREATION.PREPARED_TRANSACTIONS_PENDING, ['prepared_undecided']);
   }
   if (gate.outcome !== CREATION.CREATED) return {gate};
   const maxCommittedHlc = computeMaxCommittedHlc(copyDb);

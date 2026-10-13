@@ -48,9 +48,6 @@ const NOT_LEADER = 'partition_write_not_leader';
 const refusedWith = (failureCode, refusalLayer) => ({success: false, failureCode,
   refusalLayer});
 const nondeterministic = (layer) => refusedWith(CODE.SESSION_WRITE_NONDETERMINISTIC, layer);
-// A legacy (sessionId-only) TRANSACTION request.
-const legacyMessage = (operation, sessionId, extra = {}) => ({type: 'TRANSACTION',
-  operation, sessionId, ...extra});
 const answerOf = (answer) => pick(answer, ['success', 'failureCode', 'refusalLayer']);
 const proposedParticipantCommands = (proposed, tx) =>
   proposed.filter((entry) => entry.transactionId === tx.transactionId).length;
@@ -385,64 +382,6 @@ test('TX1 inc4 hold sweep: a PREPARED row past the hold window is reported once 
     held: {outcome: PARTICIPANT_COMMIT_OUTCOME.UNKNOWN, state: V3.STATE.PREPARED},
     decision: null, after: {outcome: PARTICIPANT_COMMIT_OUTCOME.COMMITTED,
       state: V3.STATE.COMMITTED}}, 'a PREPARED row is released by its decision alone');
-}));
-
-// --- the L6 fences between the two protocols ---
-
-test('TX1 inc4 L6 fences: on an admission-enabled partition a legacy BEGIN is refused; a ' +
-  'sessionId-only PREPARE, COMMIT, ROLLBACK or QUERY naming a participant session is refused ' +
-  'and touches nothing; a sessionId-only outcome read never answers NOT_COMMITTED for a ' +
-  'participant\'s session; a refused direct legacy BEGIN leaves participant admission intact',
-() => onLeader(async (leader, proposed) => {
-  const sessionId = 's-fenced';
-  const tx = identityOf('i4-fenced', {sessionId});
-  const fenced = (answer) => pick(answer, ['success', 'failureCode']);
-  const facts = {legacyBegin: fenced(await send(leader,
-    legacyMessage(PARTITION_SERVICE_OPERATION.BEGIN_TRANSACTION, 'legacy-only')))};
-  await send(leader, beginMessage(tx));
-  await send(leader, queryMessage(tx, INSERT_SQL, [ROW.id, ROW.value]));
-  facts.legacyControls = [];
-  for (const operation of [PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION,
-    PARTITION_SERVICE_OPERATION.COMMIT, PARTITION_SERVICE_OPERATION.ROLLBACK]) {
-    facts.legacyControls.push(fenced(await send(leader, legacyMessage(operation, sessionId))));
-  }
-  facts.legacyQuery = fenced(await send(leader, {type: 'QUERY', sql: INSERT_SQL,
-    params: [OTHER_ROW.id, OTHER_ROW.value], sessionId}));
-  const legacyOutcome = async (session) => (await send(leader, legacyMessage(
-    PARTITION_SERVICE_OPERATION.TRANSACTION_OUTCOME, session,
-    {transactionEpoch: tx.transactionEpoch})))?.outcome;
-  facts.outcomeWhileStaging = await legacyOutcome(sessionId);
-  track(send(leader, prepareMessage(tx)));
-  const command = await awaitProposal(proposed, isPrepareCommand);
-  facts.prepareApply = command ? applyCommitted(leader, command) : 'not proposed';
-  facts.outcomeWhilePrepared = await legacyOutcome(sessionId);
-  facts.outcomeOfUnknownSession = await legacyOutcome('never-used');
-  facts.ordinaryProposals = proposed.filter((entry) => entry.sql !== undefined).length;
-  facts.rows = leader.db.prepare(`SELECT COUNT(*) AS count FROM ${TABLE}`).get().count;
-  const legacyFenced = {success: false, failureCode: CODE.LEGACY_SESSION_FENCED};
-  // The current direct legacy entry point also consumes the L6 fence.
-  // A refused BEGIN cannot manufacture an active legacy session and must
-  // not prevent an otherwise-admitted participant BEGIN on that replica.
-  await onLeader(async (other) => {
-    const legacy = await other.beginTransaction('legacy-open', 1);
-    facts.refusedDirectLegacy = fenced(legacy);
-    facts.legacyConnectionOpen = other.db.inTransaction;
-    facts.participantBeginAfterRefusal = fenced(await send(other,
-      beginMessage(identityOf('i4-under-legacy'))));
-    facts.legacySessionsAfterRefusal = other.activeTransactions.size;
-    await send(other, txMessage(PARTITION_SERVICE_OPERATION.ROLLBACK,
-      identityOf('i4-under-legacy')));
-  });
-  assert.deepEqual(facts, {legacyBegin: legacyFenced,
-    legacyControls: [legacyFenced, legacyFenced, legacyFenced], legacyQuery: legacyFenced,
-    outcomeWhileStaging: PARTICIPANT_COMMIT_OUTCOME.UNKNOWN, prepareApply: null,
-    outcomeWhilePrepared: PARTICIPANT_COMMIT_OUTCOME.UNKNOWN,
-    outcomeOfUnknownSession: PARTICIPANT_COMMIT_OUTCOME.NOT_COMMITTED, ordinaryProposals: 0,
-    rows: 0,
-    refusedDirectLegacy: {success: false, failureCode: CODE.LEGACY_SESSION_FENCED},
-    legacyConnectionOpen: false, legacySessionsAfterRefusal: 0,
-    participantBeginAfterRefusal: {success: true, failureCode: null}},
-  'the two protocols never touch one partition at once');
 }));
 
 test('TX1 inc4 BEGIN fences: a non-leader refuses BEGIN NOT_LEADER and stages nothing; after ' +

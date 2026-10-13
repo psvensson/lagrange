@@ -7,6 +7,7 @@ import {
   test,
 } from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {LOGGING_DEFAULT} from '../../src/logging/logging-constants.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
@@ -37,6 +38,8 @@ import {RAFT_OPERATION_OUTCOME} from
 import {RAFT_RS_PERSISTENCE_ADMISSION} from
   '../../src/raft/raft-rs-durable-store-constants.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
+import {resumeFixtureParticipantAdmission} from
+  '../test-helpers/participant-transaction-fixture.js';
 
 
 beforeEach(() => {
@@ -81,6 +84,7 @@ function createPartition(id, replicaIds) {
     replicaIds,
     nodeId: 'test-node',
     peerAddresses: replicaIds.map((replicaId) => `test-node/partition/${replicaId}`),
+    systemTableCache: new SystemTableCache(),
     schema: {
       columns: [
         {name: 'id', type: 'TEXT', primaryKey: true},
@@ -105,6 +109,7 @@ test('PartitionService waits for committed-entry callback before acking multi-re
     partition.isLeader = true;
     partition.leaderId = partition.replicaId;
     partition.controllablePort.setRole(RAFT_ROLE.LEADER);
+    await resumeFixtureParticipantAdmission(partition);
 
     let proposedEntry = null;
     partition.controllablePort.setProposeHandler(async (entry) => {
@@ -186,6 +191,7 @@ test('PartitionService retains the durable witness for completed idempotent repl
       replicaId: 'commit-replay-r1',
       replicaIds: ['commit-replay-r1'],
       nodeId: 'test-node',
+      systemTableCache: new SystemTableCache(),
       schema: {
         columns: [
           {name: 'id', type: 'TEXT', primaryKey: true},
@@ -195,6 +201,7 @@ test('PartitionService retains the durable witness for completed idempotent repl
       dbPath: ':memory:',
     }));
     await partition.initialize();
+    await resumeFixtureParticipantAdmission(partition);
 
     const operation = {
       type: 'INSERT',
@@ -237,6 +244,7 @@ test(
     partition.isLeader = true;
     partition.leaderId = partition.replicaId;
     partition.controllablePort.setRole(RAFT_ROLE.LEADER);
+    await resumeFixtureParticipantAdmission(partition);
 
     let proposedEntry = null;
     partition.controllablePort.setProposeHandler(async (entry) => {
@@ -410,6 +418,7 @@ test(
       replicaId: 'statement-failed-r1',
       replicaIds: ['statement-failed-r1'],
       nodeId: 'test-node',
+      systemTableCache: new SystemTableCache(),
       schema: {
         columns: [
           {name: 'id', type: 'TEXT', primaryKey: true},
@@ -419,6 +428,7 @@ test(
       dbPath: ':memory:',
     }));
     await partition.initialize();
+    await resumeFixtureParticipantAdmission(partition);
     try {
       const appliedBefore = durableAppliedIndex(partition);
       const failed = await partition.applyWrite({
@@ -457,70 +467,6 @@ test(
     } finally {
       await partition.shutdown();
     }
-  },
-);
-
-test(
-  'PartitionService transaction outcome rolls back with the rs-raft ' +
-    'applied state',
-  async (t) => {
-    const partition = createPartition('commit-outcome-rollback', [
-      'commit-outcome-rollback-r1',
-      'commit-outcome-rollback-r2',
-      'commit-outcome-rollback-r3',
-    ]);
-    await partition.initialize();
-    const provider = partition.controllablePort;
-    const command = {
-      type: PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT,
-      entryId: 'transaction-outcome-entry',
-      sessionId: 'transaction-outcome-session',
-      transactionEpoch: 7,
-      operations: [],
-    };
-    const committedEvents = [];
-    partition.on(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, (event) => {
-      committedEvents.push(event.command.entryId);
-    });
-    const appliedBefore = durableAppliedIndex(partition);
-    const recordOutcome = partition.recordTransactionCommitOutcome;
-    partition.recordTransactionCommitOutcome = () => {
-      throw new Error('injected transaction outcome failure');
-    };
-
-    t.throws(
-      () => provider.commit(command),
-      /injected transaction outcome failure/,
-      'a durable outcome failure fails the application transaction',
-    );
-    t.equal(durableAppliedIndex(partition), appliedBefore,
-      'the rs-raft applied state rolls back with the outcome');
-    t.equal(
-      partition.db.prepare(
-        'SELECT COUNT(*) AS count FROM _transaction_outcomes',
-      ).get().count,
-      0,
-      'no transaction outcome survives the failed apply',
-    );
-    t.same(committedEvents, [],
-      'no observable commit event escapes the failed outcome write');
-
-    partition.recordTransactionCommitOutcome = recordOutcome;
-    provider.commit(command);
-    t.equal(durableAppliedIndex(partition), provider.committedIndex,
-      'retry advances the rs-raft applied state');
-    t.same(
-      partition.db.prepare(
-        'SELECT outcome, transaction_epoch AS transactionEpoch ' +
-        'FROM _transaction_outcomes WHERE session_id = ?',
-      ).get(command.sessionId),
-      {outcome: 'COMMITTED', transactionEpoch: command.transactionEpoch},
-      'retry durably records the matching transaction outcome',
-    );
-    t.same(committedEvents, [command.entryId],
-      'observable commit publishes only after the outcome is durable');
-
-    await partition.shutdown();
   },
 );
 
@@ -572,6 +518,7 @@ test(
     partition.isLeader = true;
     partition.leaderId = partition.replicaId;
     partition.controllablePort.setRole(RAFT_ROLE.LEADER);
+    await resumeFixtureParticipantAdmission(partition);
 
     let proposalCount = 0;
     partition.controllablePort.setProposeHandler(async () => {
@@ -657,6 +604,7 @@ test(
     partition.isLeader = true;
     partition.leaderId = partition.replicaId;
     partition.controllablePort.setRole(RAFT_ROLE.LEADER);
+    await resumeFixtureParticipantAdmission(partition);
 
     let proposalCount = 0;
     partition.controllablePort.setProposeHandler(async (entry) => {
@@ -759,6 +707,7 @@ test('PartitionService answers a queued write released on demotion ' +
   const partition = createPartition('queued-demotion', replicaIds);
   await partition.initialize();
   partition.controllablePort.setRole(RAFT_ROLE.LEADER);
+  await resumeFixtureParticipantAdmission(partition);
   const proposals = [];
   // The port's own deferral answer while a user transaction holds the
   // connection: a retryable host failure that leaves the group usable.
@@ -804,6 +753,7 @@ test('PartitionService: a write still deferred by the port when its ' +
   const partition = createPartition('deferral-spent', replicaIds);
   await partition.initialize();
   partition.controllablePort.setRole(RAFT_ROLE.LEADER);
+  await resumeFixtureParticipantAdmission(partition);
   partition.controllablePort.setProposeHandler(async () => ({
     outcome: RAFT_OPERATION_OUTCOME.HOST_FAILURE,
     reason: RAFT_RS_PERSISTENCE_ADMISSION.USER_TRANSACTION_OPEN,
@@ -891,6 +841,7 @@ async function controllableLeader(id) {
   partition.isLeader = true;
   partition.leaderId = partition.replicaId;
   partition.controllablePort.setRole(RAFT_ROLE.LEADER);
+  await resumeFixtureParticipantAdmission(partition);
   const proposals = [];
   partition.controllablePort.setProposeHandler(async (entry) => {
     proposals.push({...entry});

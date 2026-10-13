@@ -1,0 +1,5 @@
+impact-contracts: PASS (62 contracts, 33 coupled pairs, sha256:0ab9f9a174dd20a552feceb560b2e9e7388d6d0da69844d36fb57d6f7c8867a0)
+curated test shards: current
+primary classification OK: 2366 tests (unit=2060 integration=97 bootstrap=202 convergence-probe=3 packaging=4)
+resource classification OK — 2366 tests, digest fnv1a32-411784d5
+subsystem classification OK — 2366 tests, 22 subsystems, digest fnv1a32-60d1fa44

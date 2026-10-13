@@ -1,0 +1,58 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "generatedAt": "2026-10-13T13:22:29.983949+00:00",
+  "baselineHead": "e6d43bc1acb128a2b83ac89c77a3ec400e7edb1f",
+  "stage": "SourceV3 deletion and corrective consumer evidence approved for non-main WIP; current recovery and full release/regression gates HOLD",
+  "receipts": [
+    {
+      "id": "identityless-transaction-uses-current-admission-with-zero-effects",
+      "passed": true,
+      "reason": "Same current alpha witness b9616081... on locked tv-dator: seven behavioral assertion reds with predecessor source and seven passes with V2 source. Strict current identity owner admits every TRANSACTION request; malformed identity causes zero SQL/session/proposal/data effects. Source and alpha bytes remain exact across later inputs. Exact final sourceV3 V6 alpha recheck also passes seven assertions on locked tv-dator."
+    },
+    {
+      "id": "partial-query-and-session-collision-cannot-bypass-tx1",
+      "passed": true,
+      "reason": "Same-source A/B and independent V2 review cover partial/inherited/accessor/proxy/symbol input plus ACTIVE/PREPARING/PREPARED session collision, zero rejected data effects, nonempty unrelated ordinary-query positive and terminal session reuse. Exact final sourceV3 V6 admission/apply/staging cohort passes four files/57 assertions including unchanged alpha witness; this does not close recovery liveness."
+    },
+    {
+      "id": "executable-session-engine-and-consumers-removed",
+      "passed": true,
+      "reason": "Frozen sourceV3 removes obsolete engine and all inventoried current consumers. Independent source/evidence reviews bind all 37 source paths. Locked tv-dator identical-test A/B reaches three behavioral negatives on sourceV2 control and passes both files/122 assertions on sourceV3. Nine corrective files pass 1003 assertions; public facade passes 58 runner/50 leaf assertions. Existing coupled classifier contract now names all query consumers and witness; no duplicate classifier, recovery owner, legacy constant or widened retry budget."
+    },
+    {
+      "id": "current-release-drain-startup-and-hold-owners-preserved",
+      "passed": false,
+      "reason": "HOLD: final full-owner runtime witness is19/20 on both predecessor and candidate source at locked tv-dator. Deferred-election healed-group release predicate spends its full10-second bound. Cleanup masking fixed; body failure remains. Historical W1 healthy30-second timeout remains unresolved. Current recovery owner repair is outside this bounded deletion."
+    },
+    {
+      "id": "current-replicated-transaction-regression-cone-preserved",
+      "passed": false,
+      "reason": "HOLD: historical changed-path cohort at 775504a measured 1146 files/35018 assertions: 1054 pass,92 fail,0 unreported. Same-host identical-test predecessor-source controls reproduce 90 red files; two deterministic introduced retry failures are corrected and bounded reverified. This is not full-corpus proof: current release gate requires 2363 files plus separately observed convergence probes. Healthy exhausted waits, dependency cycles/missing C2 owner, test duplication, full release/static/current-owner and integrated crash/replay obligations remain open."
+    }
+  ],
+  "witnessSha256": "b96160819b027fe98396a4786460247762a17dc63078e69bacfa388ab501bdd0",
+  "evidence": [
+    "receipt-seal-time.json",
+    "source-review-manifest-v2.json",
+    "implementation-review-source-v2.md",
+    "implementation-review-current.md",
+    "implementation-review-runtime-cleanup-8f63.md",
+    "frozen-v2-source-only-ab.log",
+    "frozen-v5-evidence-manifest.json",
+    "frozen-v5-runtime-candidate.tap",
+    "frozen-v5-runtime-predecessor-source.tap",
+    "test-cleanup-session-vacuity.log",
+    "frozen-v3-broad-lab-result.json",
+    "receipt-pre-v6-correction.json",
+    "source-review-manifest-v3.json",
+    "implementation-review-consumer-correction-frozen.md",
+    "implementation-review-v6-correction-evidence.md",
+    "frozen-v6-evidence-manifest.json",
+    "final-metadata-binding.json",
+    "test-scope-clarification.md",
+    "frozen-v3-red-source-control-result.json"
+  ],
+  "sourceManifest": "source-review-manifest-v3.json",
+  "candidateInput": "57f98ca76d948e3a8f0d9e4dbe63992d68bde987"
+}

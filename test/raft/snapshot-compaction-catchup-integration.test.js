@@ -9,9 +9,6 @@ import {test} from '../../src/test-helpers/tap.js';
 import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
 import {PartitionRaftStorage} from
   '../../src/partition/partition-raft-storage.js';
-import {
-  PARTITION_SERVICE_OPERATION,
-} from '../../src/partition/partition-service-constants.js';
 import {RAFT_COMPACTION_OUTCOME} from '../../src/raft/compaction-policy.js';
 import {
   buildSnapshotCatchupDecision,
@@ -46,9 +43,7 @@ import {installSealedGeneration} from './snapshot-catchup-fixture.js';
 // The refuted stale-boundary hazard is pinned: a SECOND adapter facade over
 // the same database, primed BEFORE compaction, answers has/getLastInfo/
 // getEntryInfoBefore correctly AFTER compaction via refresh-on-row-miss.
-// Post-compaction checkpoint creation seals a non-regressed maxCommittedHlc,
-// and a PREPARE+COMMIT pair fully below K compacts without breaking later
-// creation (prepared-gate transitivity).
+// Post-compaction checkpoint creation seals a non-regressed maxCommittedHlc.
 
 const PARTITION_ID = 'compaction_catchup-p1';
 const STATE_TABLE = 'compaction_catchup';
@@ -58,7 +53,6 @@ const HEAD_ENTRY_COUNT = 5;
 const HLC_BASE_MS = 1710000000000;
 const HLC_STEP_MS = 1000;
 const FOLLOWER_ADDRESS = 'node-f/partition/compaction_catchup-p1-r2';
-const SESSION_ID = 'compaction-2pc-session';
 const IDENTITY = Object.freeze({
   clusterId: 'cluster-incarnation-compaction-catchup',
   raftGroupId: PARTITION_ID,
@@ -207,7 +201,6 @@ test('a compacted leader serves and installs its sealed boundary snapshot',
       fs.rmSync(followerWorkDir, {recursive: true, force: true});
     }
   });
-
 test('a second stale facade answers correctly after compaction (refresh-on-miss)',
   async (t) => {
     const leader = await createCompactedLeaderContext();
@@ -349,44 +342,6 @@ test('post-compaction checkpoint creation cannot regress the sealed clock',
       t.equal(created.descriptor.maxCommittedHlc, preCompactionMax,
         'the sealed maxCommittedHlc equals the pre-compaction maximum ' +
         '(non-regression through the deleted rows)');
-    } finally {
-      leader.close();
-    }
-  });
-
-test('a PREPARE+COMMIT pair fully below K compacts fine (gate transitivity)',
-  async (t) => {
-    const leader = await createCompactedLeaderContext({
-      boundaryCommands: [
-        {
-          type: PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION,
-          sessionId: SESSION_ID,
-          sql: 'row-1',
-          timestamp: rowHlc(1).toString(),
-        },
-        {
-          type: PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT,
-          sessionId: SESSION_ID,
-          sql: 'row-2',
-          timestamp: rowHlc(2).toString(),
-        },
-        plainCommand(3),
-      ],
-    });
-    try {
-      t.equal(leader.created.outcome,
-        RAFT_CHECKPOINT_CREATION_OUTCOME.CREATED,
-        'the boundary proof seals over the DECIDED pair');
-      t.equal(leader.compacted.outcome, RAFT_COMPACTION_OUTCOME.COMPACTED,
-        'the prefix holding the decided pair compacts');
-      const recheck = await createSqliteStateMachineCheckpoint({
-        db: leader.db,
-        identity: IDENTITY,
-        checkpointsRoot: leader.checkpointsRoot,
-      });
-      t.equal(recheck.outcome, RAFT_CHECKPOINT_CREATION_OUTCOME.CREATED,
-        'creation still succeeds after the pair\'s rows are gone — the ' +
-        'prepared gate is transitively sound');
     } finally {
       leader.close();
     }

@@ -97,7 +97,6 @@ import {
   buildDivergenceEvent,
 } from '../control-plane/read-model-contract.js';
 import {QUERY_ERROR_MSG} from '../query/query-constants.js';
-import {PARTITION_SERVICE_ERROR_MSG} from '../partition/partition-service-constants.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {
   getControlPlaneErrorCode,
@@ -349,9 +348,6 @@ const REPLICA_STATUS_READ_QUERY_OPTIONS = Object.freeze({
 const RETRYABLE_OPERATION_PERSIST_ERROR_PREFIXES = Object.freeze([
   QUERY_ERROR_MSG.TABLE_PARTITION_ROUTING_TIMEOUT_PREFIX,
 ]);
-const RETRYABLE_OPERATION_PERSIST_ERROR_MESSAGES = Object.freeze([
-  PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
-]);
 const RETRYABLE_OPERATION_PERSIST_ERROR_FRAGMENTS = Object.freeze([ERRORS.NO_HANDLER_FOR_ADDRESS]);
 const REPLICA_OPERATION_TRANSITION_LANE = Object.freeze({
   DEFAULT: 'default',
@@ -503,7 +499,6 @@ class ReplicaOperationRepository {
     this.controlPlaneReadinessService = options.controlPlaneReadinessService || null;
     this.logger = options.logger;
     this.emitter = options.emitter || null;
-    this.random = typeof options.random === 'function' ? options.random : Math.random;
     // The repository owns its own deadlines - incomplete-read backoff, query
     // duration and staleness, warning throttles, visibility grace - and reads
     // them from the clock its parent hands it, never from the ambient one. A
@@ -689,7 +684,6 @@ assignReplicaOperationRepositoryMutationMethods(ReplicaOperationRepository, {
   OPERATION_PERSIST_RETRY_DELAY_MS,
   OPERATION_PERSIST_RETRY_TIMEOUT_MS,
   OPERATION_MUTATION_SESSION_RETRY_DECISION,
-  PARTITION_SERVICE_ERROR_MSG,
   PRESSURE_WORK_CLASS,
   QUERY_ERROR_MSG,
   READ_MODEL_DIVERGENCE_TYPE,
@@ -703,7 +697,6 @@ assignReplicaOperationRepositoryMutationMethods(ReplicaOperationRepository, {
   REPLICA_OPERATION_TRANSITION_LANE,
   REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE,
   RETRYABLE_OPERATION_PERSIST_ERROR_FRAGMENTS,
-  RETRYABLE_OPERATION_PERSIST_ERROR_MESSAGES,
   RETRYABLE_OPERATION_PERSIST_ERROR_PREFIXES,
   SQL,
   SQL_RECONCILIATION_REASON,

@@ -309,66 +309,29 @@ test('storage_reservation_reconcile async wrapper records the section only ' +
   t.end();
 });
 
-test('stuck_transaction_heal section is recorded around the hold-timeout ' +
-  'sweep and the heal-deferred behavior is unchanged', async (t) => {
-  const {PartitionServiceTransactionBase} = await import(
-    '../../src/partition/partition-service-transaction-base.js'
-  );
-  const {PARTITION_SERVICE_SHARED} = await import(
-    '../../src/partition/partition-service-shared.js'
-  );
-  const {RaftRole} = PARTITION_SERVICE_SHARED;
-  const errors = [];
-  const service = Object.assign(
-    Object.create(PartitionServiceTransactionBase.prototype),
-    {
+test('stuck_transaction_heal section is recorded around the current participant hold sweep', async (t) => {
+  const {default: Database} = await import('better-sqlite3');
+  const {PARTITION_SERVICE_PARTICIPANT_TRANSACTION_CADENCE_METHODS} =
+    await import('../../src/partition/partition-service-participant-transaction-cadence-methods.js');
+  const {openParticipantTransactionStore} =
+    await import('../../src/partition/partition-participant-transaction-store.js');
+  const db = new Database(':memory:');
+  try {
+    openParticipantTransactionStore(db);
+    const service = Object.assign({
+      db,
       partitionId: 'p-1',
-      role: RaftRole.LEADER,
       preparedStateHoldTimeoutMs: 1000,
-      preparedTransactions: new Map([
-        ['session-1', {preparedAt: 0}],
-      ]),
-      activeTransactions: new Map(),
-      isSoloReplicaGroup: () => false,
-      logger: {
-        info: () => {},
-        warn: () => {},
-        error: (message, context) => errors.push([message, context]),
-        debug: () => {},
-      },
-    },
-  );
-
-  const site = RAFT_CHURN_SYNC_SECTION.STUCK_TRANSACTION_HEAL;
-  const before = siteSnapshot(site)?.count || 0;
-  // preparedAt=0 with now=5000 exceeds the 1000ms hold; leader role defers.
-  const released = service.enforcePreparedStateHoldTimeouts(5000);
-  const after = siteSnapshot(site)?.count || 0;
-
-  t.equal(after, before + 1, 'the heal sweep entered its sync section');
-  t.equal(released, 0, 'leader-role heal still deferred (returns 0)');
-  // The spent hold is reported once as a wait_bound_spent ERROR (it was a
-  // heal-deferred warn before spent waits became visible failures).
-  t.equal(errors.length, 1, 'heal-deferred spent hold reported once');
-  t.equal(errors[0][1]?.event, 'wait_bound_spent', 'through the reporter');
-  t.equal(
-    errors[0][1]?.lastObserved?.expiredPreparedSessionCount,
-    1,
-    'deferred report carries the expired session count',
-  );
-  t.ok(
-    service.preparedTransactions.has('session-1'),
-    'deferred heal leaves the stuck session in place (no behavior change)',
-  );
-
-  // The cheap early-return path (nothing expired) is also inside the section.
-  service.preparedTransactions.clear();
-  const releasedEmpty = service.enforcePreparedStateHoldTimeouts(5000);
-  t.equal(releasedEmpty, 0, 'empty sweep still returns 0');
-  t.equal(
-    siteSnapshot(site)?.count || 0,
-    before + 2,
-    'empty sweep is also recorded (the continuous cadence is measurable)',
-  );
+      logger: {info: () => {}, warn: () => {}, error: () => {}, debug: () => {}},
+    }, PARTITION_SERVICE_PARTICIPANT_TRANSACTION_CADENCE_METHODS);
+    const site = RAFT_CHURN_SYNC_SECTION.STUCK_TRANSACTION_HEAL;
+    const before = siteSnapshot(site)?.count || 0;
+    const released = service.enforcePreparedStateHoldTimeouts(5000);
+    t.equal(released, 0, 'the current sweep never releases PREPARED custody');
+    t.equal(siteSnapshot(site)?.count || 0, before + 1,
+      'the current participant sweep entered its sync section');
+  } finally {
+    db.close();
+  }
   t.end();
 });

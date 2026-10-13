@@ -34,7 +34,6 @@ const RETRYABLE_CONTROL_PLANE_ERROR_FRAGMENTS = Object.freeze([
   'closed',
   'control_plane_pressure_degraded',
   ROUTER_ERROR_MSG.PENDING_RESPONSE_TIMEOUT,
-  'Transaction already active on this partition',
   'No active transaction to commit',
 ]);
 

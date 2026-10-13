@@ -149,11 +149,15 @@ async function restartOverCommittedCommands(options, commands) {
     }
     const record = readCommittedIndependently(
       partitionOptions.dbPath, partitionOptions.partitionId);
-    // The commands a test committed, without the origin this fixture added.
+    // The non-origin commands a test committed. Generation-origin controls
+    // remain visible through readCommittedIndependently for witnesses that
+    // exercise their idempotent committed replay.
     const before = {...record,
       committed: record.committed.filter((entry) => !isGenerationOrigin(entry))};
-    assert.equal(before.committed.length, commands.length,
-      'precondition: every proposed command is committed and applied in the ' +
+    const expectedNonOriginCommands = commands.filter((command) =>
+      command?.type !== PARTICIPANT_TRANSACTION_COMMAND.GENERATION_ORIGIN);
+    assert.equal(before.committed.length, expectedNonOriginCommands.length,
+      'precondition: every proposed non-origin command is committed and applied in the ' +
       `rs-raft store (${JSON.stringify(before)})`);
     restarted = new PartitionService(withFoundingStamp(partitionOptions));
     await restarted.initialize();

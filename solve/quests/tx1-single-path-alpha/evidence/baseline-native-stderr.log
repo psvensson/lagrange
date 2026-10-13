@@ -1,0 +1,38 @@
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'TIMEOUT_BUDGET_DEFAULT.TRANSACTION_BUDGET_MS',
+  awaited: 'distributed transaction commit protocol completion',
+  boundMs: 60000,
+  elapsedMs: 120024,
+  lastObserved: {
+    stage: 'PREPARING',
+    status: 'PREPARING',
+    commitMode: 'TWO_PHASE_COMMIT',
+    remainingBudgetMs: 0,
+    participantStatuses: { PREPARED: 1 }
+  },
+  scope: {
+    transactionId: '357d7267d88cd87ea666b345737747be',
+    sessionId: 'a3-rollback'
+  },
+  repeats: 0
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'TIMEOUT_BUDGET_DEFAULT.TRANSACTION_BUDGET_MS',
+  awaited: 'distributed transaction commit protocol completion',
+  boundMs: 60000,
+  elapsedMs: 120009,
+  lastObserved: {
+    stage: 'PREPARING',
+    status: 'PREPARING',
+    commitMode: 'TWO_PHASE_COMMIT',
+    remainingBudgetMs: 0,
+    participantStatuses: { PREPARED: 1 }
+  },
+  scope: {
+    transactionId: 'addf4b61327a4b2de62d40706e3568be',
+    sessionId: 'a4-r'
+  },
+  repeats: 0
+}

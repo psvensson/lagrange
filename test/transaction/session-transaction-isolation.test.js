@@ -23,6 +23,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import {performance} from 'node:perf_hooks';
 import {test} from 'node:test';
 
 import Database from 'better-sqlite3';
@@ -30,35 +31,37 @@ import Database from 'better-sqlite3';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {PartitionService} from '../../src/partition/partition-service.js';
-import * as partitionVocabulary from
+import {PARTITION_SERVICE_OPERATION} from
   '../../src/partition/partition-service-constants.js';
-import {enableParticipantTransactionAdmission} from
-  '../../src/partition/partition-participant-transaction-request.js';
 import {
   PARTICIPANT_TRANSACTION_COMMAND,
   PARTICIPANT_TRANSACTION_DECISION as DECISION,
   PARTICIPANT_TRANSACTION_STATE as STATE,
 } from '../../src/partition/partition-participant-transaction-constants.js';
-import {decodeCommittedProposal} from
-  '../../src/raft/raft-rs-proposal-codec.js';
-import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {hasParticipantSession} from
+  '../../src/partition/partition-participant-transaction-session.js';
+import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {
+  applyCommitted,
+  awaitProposal,
   beginMessage,
   bindingOf,
+  commitOrdinaryWrite,
   identityOf,
+  isDecisionCommand,
+  isPrepareCommand,
   prepareMessage,
   queryMessage,
   send,
+  shutdownAll,
+  startLeader,
+  track,
   txMessage,
 } from '../test-helpers/participant-transaction-fixture.js';
 
-const {PARTITION_SERVICE_OPERATION, PARTITION_SERVICE_SQL} =
-  partitionVocabulary;
 const TEMP_PREFIX = 'session-transaction-isolation-';
 const DB_FILE = 'partition.sqlite';
-const PAYLOAD_ENCODING = 'base64';
-const TABLE_NAME = 'isolation_rows';
+const TABLE_NAME = 'test_table';
 const INSERT_SQL = `INSERT INTO ${TABLE_NAME} (id, value) VALUES (?, ?)`;
 const SELECT_ALL_SQL = `SELECT id, value FROM ${TABLE_NAME} ORDER BY id`;
 const SELECT_ONE_SQL = `SELECT id, value FROM ${TABLE_NAME} WHERE id = ?`;
@@ -81,24 +84,6 @@ function resetEnvironment() {
   LoggingService.resetInstance();
 }
 
-function partitionOptions(partitionId, dbPath) {
-  return {
-    partitionId,
-    tableId: TABLE_NAME,
-    tableName: TABLE_NAME,
-    replicaId: `${partitionId}-r1`,
-    replicaIds: [`${partitionId}-r1`],
-    nodeId: 'isolation-node',
-    dbPath,
-    schema: {
-      columns: [
-        {name: 'id', type: 'TEXT', primaryKey: true},
-        {name: 'value', type: 'TEXT'},
-      ],
-    },
-  };
-}
-
 function withIndependent(dbPath, read) {
   const independent = new Database(dbPath, {readonly: true});
   try {
@@ -112,29 +97,13 @@ function withIndependent(dbPath, read) {
  * The partition's durable rs-raft record, on an independent connection.
  * @param {string} dbPath - The partition database.
  * @param {string} groupId - The partition id (the group).
- * @return {Object} Commit, applied and the payload entries, decoded.
+ * @return {Object} The durable applied index.
  */
 function durableRecordOf(dbPath, groupId) {
   return withIndependent(dbPath, (independent) => {
-    const hard = independent.prepare(
-      'SELECT commit_index FROM _raft_rs_hard_state WHERE group_id = ?')
-      .get(groupId);
-    const applied = independent.prepare(
-      'SELECT applied_index FROM _raft_rs_applied_state WHERE group_id = ?')
-      .get(groupId);
-    const entries = independent.prepare(
-      'SELECT log_index, term, entry_type, data FROM _raft_rs_log ' +
-      'WHERE group_id = ? ORDER BY log_index').all(groupId);
     return {
-      commitIndex: hard === undefined ? null : Number(hard.commit_index),
-      appliedIndex: applied === undefined ? null :
-        Number(applied.applied_index),
-      entries: entries.map((row) => ({
-        index: Number(row.log_index),
-        term: Number(row.term),
-        entryType: Number(row.entry_type),
-        data: row.data,
-      })),
+      appliedIndex: Number(RaftRsDurableStore.readAppliedIndexIn(
+        independent, groupId)),
     };
   });
 }
@@ -145,34 +114,9 @@ function rowsOf(dbPath, sql, params = []) {
       .map(({id, value}) => ({id, value})));
 }
 
-function sessionlessWrite(service, row, entryId) {
-  return service.applyWrite({
-    type: PARTITION_SERVICE_OPERATION.INSERT,
-    sql: INSERT_SQL,
-    params: [row.id, row.value],
-    entryId,
-  });
-}
-
-async function shutdownQuietly(service) {
-  try {
-    await service?.shutdown?.();
-  } catch {
-    // The assertion under test already recorded what mattered.
-  }
-}
-
 function tempDbPath() {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), TEMP_PREFIX));
   return {directory, dbPath: path.join(directory, DB_FILE)};
-}
-
-// Participant transactions on this partition: enabled once (the generation
-// origin committed through its own lone leader), each named by its
-// transactionId and routed under a sessionId.
-async function enableTransactions(service) {
-  const enabled = await enableParticipantTransactionAdmission(service);
-  assert.equal(enabled.success, true, JSON.stringify(enabled));
 }
 
 function transactionOf(service, transactionId, sessionId) {
@@ -180,83 +124,77 @@ function transactionOf(service, transactionId, sessionId) {
 }
 
 test('W1 a participant session never touches the partition\'s connection, so ' +
-  'unbinding it can never erase consensus rows, and the partition restarts ' +
-  'from its rs-raft record (design 9.2: W1 superseded by F6 c\')',
-{timeout: TEST_TIMEOUT_MS}, async () => {
+  'unbinding it can never erase applied consensus rows ' +
+  '(design 9.2: W1 superseded by F6 c\')',
+{timeout: TEST_TIMEOUT_MS}, async (t) => {
   quietEnvironment();
   const {directory, dbPath} = tempDbPath();
-  const options = partitionOptions('w1-rollback', dbPath);
-  let restarted = null;
+  let first = null;
+  const startedAt = performance.now();
+  const diagnose = (phase, state) => t.diagnostic(
+    `W1 ${phase} ${state} elapsedMs=${Math.round(performance.now() - startedAt)}`);
   try {
-    const first = new PartitionService(withFoundingStamp(options));
-    let beforeSession;
-    let afterSession;
-    let status;
+    diagnose('startLeader', 'start');
+    const started = await startLeader({dbPath});
+    diagnose('startLeader', 'end');
+    first = started.leader;
+    const proposed = started.proposed;
     const connectionHeld = [];
-    try {
-      await first.initialize();
-      const written = await sessionlessWrite(first, SESSIONLESS_FIRST, 'w1-a');
-      assert.equal(written.success, true, JSON.stringify(written));
-      await enableTransactions(first);
-      beforeSession = durableRecordOf(dbPath, first.partitionId);
-      const tx = transactionOf(first, 'w1-tx', 's1');
-      assert.equal((await send(first, beginMessage(tx))).success, true);
-      connectionHeld.push(first.db.inTransaction);
-      const staged = await send(first, queryMessage(tx, INSERT_SQL,
-        [SESSION_ROW.id, SESSION_ROW.value]));
-      assert.equal(staged.provisional, true, JSON.stringify(staged));
-      connectionHeld.push(first.db.inTransaction);
-      const unbound = await send(first,
-        txMessage(PARTITION_SERVICE_OPERATION.ROLLBACK, tx));
-      assert.equal(unbound.success, true, JSON.stringify(unbound));
-      afterSession = durableRecordOf(dbPath, first.partitionId);
-      status = first.raft.readStatus();
-      const second = await sessionlessWrite(first, SESSIONLESS_SECOND,
-        'w1-b');
-      assert.equal(second.success, true, JSON.stringify(second));
-    } finally {
-      await first.shutdown();
-    }
-    const beforeRestart = durableRecordOf(dbPath, options.partitionId);
-    let restartOutcome = null;
-    restarted = new PartitionService(withFoundingStamp(options));
-    try {
-      await restarted.initialize();
-    } catch (error) {
-      restartOutcome = error;
-    }
+    diagnose('firstWrite', 'start');
+    const written = await commitOrdinaryWrite(first, proposed, 'w1-a',
+      SESSIONLESS_FIRST);
+    diagnose('firstWrite', 'end');
+    assert.deepEqual(written, {apply: null, answer: true});
+    const beforeSession = durableRecordOf(dbPath, first.partitionId);
+    const tx = transactionOf(first, 'w1-tx', 's1');
+    diagnose('begin', 'start');
+    const begun = await send(first, beginMessage(tx));
+    diagnose('begin', 'end');
+    assert.equal(begun.success, true);
+    connectionHeld.push(first.db.inTransaction);
+    diagnose('stagedQuery', 'start');
+    const staged = await send(first, queryMessage(tx, INSERT_SQL,
+      [SESSION_ROW.id, SESSION_ROW.value]));
+    diagnose('stagedQuery', 'end');
+    assert.equal(staged.provisional, true, JSON.stringify(staged));
+    connectionHeld.push(first.db.inTransaction);
+    diagnose('rollback', 'start');
+    const unbound = await send(first,
+      txMessage(PARTITION_SERVICE_OPERATION.ROLLBACK, tx));
+    diagnose('rollback', 'end');
+    assert.equal(unbound.success, true, JSON.stringify(unbound));
+    const afterSession = durableRecordOf(dbPath, first.partitionId);
+    const status = first.raft.readStatus();
+    const rowsAfterRollback = rowsOf(dbPath, SELECT_ALL_SQL);
+    diagnose('secondWrite', 'start');
+    const second = await commitOrdinaryWrite(first, proposed, 'w1-b',
+      SESSIONLESS_SECOND);
+    diagnose('secondWrite', 'end');
+    assert.deepEqual(second, {apply: null, answer: true});
+    const finalRecord = durableRecordOf(dbPath, first.partitionId);
     // Every fact is measured before any is asserted, so a red names them all.
-    const kept = beforeSession.entries.filter((entry) =>
-      afterSession.entries.some((later) =>
-        later.index === entry.index && later.term === entry.term &&
-        later.data === entry.data));
-    const indices = beforeRestart.entries.map((entry) => entry.index);
     assert.deepEqual({
       connectionHeld,
-      preSessionEntriesKept: kept.length,
-      durableCommit: afterSession.commitIndex,
-      durableApplied: afterSession.appliedIndex,
-      durableLogContiguous: indices.every((index, position) =>
-        position === 0 || index === indices[position - 1] + 1),
-      restartOutcome: restartOutcome === null ? null :
-        String(restartOutcome.message),
+      durableAppliedBeforeSession: beforeSession.appliedIndex,
+      durableAppliedAfterRollback: afterSession.appliedIndex,
+      durableAppliedAfterSecond: finalRecord.appliedIndex,
+      rowsAfterRollback,
       servedRows: rowsOf(dbPath, SELECT_ALL_SQL),
     }, {
       connectionHeld: [false, false],
-      preSessionEntriesKept: beforeSession.entries.length,
-      durableCommit: status.commitIndex,
-      durableApplied: status.commitIndex,
-      durableLogContiguous: true,
-      restartOutcome: null,
+      durableAppliedBeforeSession: status.appliedIndex,
+      durableAppliedAfterRollback: status.appliedIndex,
+      durableAppliedAfterSecond: status.appliedIndex + 1,
+      rowsAfterRollback: [SESSIONLESS_FIRST].map(({id, value}) => ({id, value})),
       servedRows: [SESSIONLESS_FIRST, SESSIONLESS_SECOND].map(({id, value}) =>
         ({id, value})),
     }, 'the session held no SQLite transaction; the durable record holds ' +
-      'everything the core committed and applied, and the partition restarts ' +
-      `from it (core ${JSON.stringify(status)}; durable log indices ` +
-      `${JSON.stringify(indices)} commit ${beforeRestart.commitIndex}; ` +
-      `restart ${restartOutcome?.stack})`);
+      'everything the core applied ' +
+      `(core ${JSON.stringify(status)}; applied ${finalRecord.appliedIndex})`);
   } finally {
-    await shutdownQuietly(restarted);
+    diagnose('shutdown', 'start');
+    await shutdownAll(first);
+    diagnose('shutdown', 'end');
     fs.rmSync(directory, {recursive: true, force: true});
     resetEnvironment();
   }
@@ -268,60 +206,99 @@ test('W2 a sessionless write under an open participant session is always ' +
 {timeout: TEST_TIMEOUT_MS}, async () => {
   quietEnvironment();
   const {directory, dbPath} = tempDbPath();
-  const service = new PartitionService(withFoundingStamp(partitionOptions('w2-ack', dbPath)));
+  let service = null;
   try {
-    await service.initialize();
-    await enableTransactions(service);
+    const started = await startLeader({dbPath});
+    service = started.leader;
+    const proposed = started.proposed;
     const first = transactionOf(service, 'w2-tx1', 's1');
-    await send(service, beginMessage(first));
-    const during = await service.executeQuery(INSERT_SQL,
-      [DURING_SESSION.id, DURING_SESSION.value]);
-    await send(service, txMessage(PARTITION_SERVICE_OPERATION.ROLLBACK, first));
-    // The same write issued while a session is open and awaited after it
-    // ends.
+    const firstBegin = await send(service, beginMessage(first));
+    const firstBeforeWrite = hasParticipantSession(service);
+    const during = await commitOrdinaryWrite(service, proposed, 'w2-during',
+      DURING_SESSION);
+    const firstAfterWrite = hasParticipantSession(service);
+    const firstRollback = await send(service,
+      txMessage(PARTITION_SERVICE_OPERATION.ROLLBACK, first));
+    const firstAfterRollback = hasParticipantSession(service);
     const second = transactionOf(service, 'w2-tx2', 's2');
-    await send(service, beginMessage(second));
-    const pending = service.executeQuery(INSERT_SQL,
-      [SESSIONLESS_FIRST.id, SESSIONLESS_FIRST.value]);
-    await send(service, txMessage(PARTITION_SERVICE_OPERATION.ROLLBACK, second));
-    const settled = await pending;
+    const secondBegin = await send(service, beginMessage(second));
+    const secondBeforeWrite = hasParticipantSession(service);
+    const settled = await commitOrdinaryWrite(service, proposed, 'w2-second',
+      SESSIONLESS_FIRST);
+    const secondAfterWrite = hasParticipantSession(service);
+    const secondRollback = await send(service,
+      txMessage(PARTITION_SERVICE_OPERATION.ROLLBACK, second));
+    const secondAfterRollback = hasParticipantSession(service);
     const record = durableRecordOf(dbPath, service.partitionId);
     assert.deepEqual({
-      during: {success: during?.success, deferRetry: during?.deferRetry ?? null},
-      settled: settled?.success,
+      sessions: {firstBegin: firstBegin?.success,
+        firstBeforeWrite, firstAfterWrite,
+        firstRollback: firstRollback?.success, firstAfterRollback,
+        secondBegin: secondBegin?.success,
+        secondBeforeWrite, secondAfterWrite,
+        secondRollback: secondRollback?.success, secondAfterRollback},
+      during,
+      settled,
       present: [...rowsOf(dbPath, SELECT_ONE_SQL, [DURING_SESSION.id]),
         ...rowsOf(dbPath, SELECT_ONE_SQL, [SESSIONLESS_FIRST.id])],
-      durableCommit: record.commitIndex,
+      durableApplied: record.appliedIndex,
     }, {
-      during: {success: true, deferRetry: null},
-      settled: true,
+      sessions: {firstBegin: true,
+        firstBeforeWrite: true, firstAfterWrite: true,
+        firstRollback: true, firstAfterRollback: false,
+        secondBegin: true,
+        secondBeforeWrite: true, secondAfterWrite: true,
+        secondRollback: true, secondAfterRollback: false},
+      during: {apply: null, answer: true},
+      settled: {apply: null, answer: true},
       present: [{...DURING_SESSION}, {...SESSIONLESS_FIRST}],
-      durableCommit: service.raft.readStatus().commitIndex,
+      durableApplied: service.raft.readStatus().appliedIndex,
     }, 'no session defers or erases a sessionless write: ' +
       JSON.stringify({during, settled}));
   } finally {
-    await shutdownQuietly(service);
+    await shutdownAll(service);
     fs.rmSync(directory, {recursive: true, force: true});
     resetEnvironment();
   }
 });
 
 // One participant transaction through PREPARE and a bound decision; the
-// commands it proposed, read back from the durable log, and its row.
-async function decideThroughConsensus(service, dbPath, tx, row, decision) {
-  await send(service, beginMessage(tx));
-  await send(service, queryMessage(tx, INSERT_SQL, [row.id, row.value]));
-  const prepared = await send(service, prepareMessage(tx));
-  const decided = await send(service, txMessage(decision === DECISION.COMMIT ?
+// current consensus seam's proposals and its durable outcome row.
+async function decideThroughConsensus(service, proposed, dbPath, tx, row, decision) {
+  const begun = await send(service, beginMessage(tx));
+  const staged = await send(service, queryMessage(tx, INSERT_SQL, [row.id, row.value]));
+  const connectionHeld = [service.db.inTransaction];
+  const prepare = track(send(service, prepareMessage(tx)));
+  const prepareCommand = await awaitProposal(proposed,
+    (entry) => isPrepareCommand(entry) && entry.transactionId === tx.transactionId);
+  assert.ok(prepareCommand, 'PREPARE must be proposed');
+  connectionHeld.push(service.db.inTransaction);
+  const prepareSettledBeforeApply = prepare.settled;
+  const prepareApply = applyCommitted(service, prepareCommand);
+  const prepared = await prepare.promise;
+  connectionHeld.push(service.db.inTransaction);
+  const decisionRequest = track(send(service, txMessage(decision === DECISION.COMMIT ?
     PARTITION_SERVICE_OPERATION.COMMIT : PARTITION_SERVICE_OPERATION.ROLLBACK,
-  tx, bindingOf(tx, decision, prepared?.preparedDigest)));
-  const record = durableRecordOf(dbPath, service.partitionId);
+  tx, bindingOf(tx, decision, prepared?.preparedDigest))));
+  const decisionCommand = await awaitProposal(proposed,
+    (entry) => isDecisionCommand(entry) && entry.transactionId === tx.transactionId);
+  assert.ok(decisionCommand, 'decision must be proposed');
+  connectionHeld.push(service.db.inTransaction);
+  const decisionSettledBeforeApply = decisionRequest.settled;
+  const decisionApply = applyCommitted(service, decisionCommand);
+  const decided = await decisionRequest.promise;
+  connectionHeld.push(service.db.inTransaction);
   return {
+    begun: begun?.success ?? false,
+    staged: staged?.provisional ?? false,
+    connectionHeld,
+    prepareSettledBeforeApply,
+    prepareApply,
     prepared: prepared?.state ?? null,
+    decisionSettledBeforeApply,
+    decisionApply,
     decided: decided?.state ?? null,
-    commands: record.entries.filter((entry) => entry.data !== null)
-      .map((entry) => decodeCommittedProposal(Buffer.from(entry.data,
-        PAYLOAD_ENCODING)))
+    commands: proposed
       .filter((command) => command.participantId === tx.participantId)
       .map((command) => ({type: command.type, decision: command.decision ?? null})),
     row: withIndependent(dbPath, (independent) => independent
@@ -331,51 +308,50 @@ async function decideThroughConsensus(service, dbPath, tx, row, decision) {
 }
 
 test('W6 a participant transaction ends through its committed PARTICIPANT_PREPARE ' +
-  'and PARTICIPANT_DECISION, with no terminal SQLite statement, and its outcome ' +
+  'and PARTICIPANT_DECISION without holding the SQLite connection, and its outcome ' +
   'row is _participant_transactions (design 9.2: W6 superseded)',
 {timeout: TEST_TIMEOUT_MS}, async () => {
   quietEnvironment();
   const {directory, dbPath} = tempDbPath();
-  const service = new PartitionService(withFoundingStamp(partitionOptions('w6-order', dbPath)));
+  let service = null;
   try {
-    await service.initialize();
-    const written = await sessionlessWrite(service, SESSIONLESS_FIRST,
-      'w6-a');
-    assert.equal(written.success, true, JSON.stringify(written));
-    await enableTransactions(service);
-    // Observe the partition's own connection: no session statement ever
-    // ends a SQLite transaction on it.
-    const terminal = [];
-    const exec = service.db.exec.bind(service.db);
-    service.db.exec = (sql) => {
-      if (sql === PARTITION_SERVICE_SQL.COMMIT ||
-          sql === PARTITION_SERVICE_SQL.ROLLBACK) {
-        terminal.push(sql);
-      }
-      return exec(sql);
-    };
-    const committed = await decideThroughConsensus(service, dbPath,
+    const started = await startLeader({dbPath});
+    service = started.leader;
+    const proposed = started.proposed;
+    const written = await commitOrdinaryWrite(service, proposed, 'w6-a',
+      SESSIONLESS_FIRST);
+    assert.deepEqual(written, {apply: null, answer: true});
+    const committed = await decideThroughConsensus(service, proposed, dbPath,
       transactionOf(service, 'w6-tx1', 's1'), SESSION_ROW, DECISION.COMMIT);
-    const rolledBack = await decideThroughConsensus(service, dbPath,
+    const rolledBack = await decideThroughConsensus(service, proposed, dbPath,
       transactionOf(service, 'w6-tx2', 's2'), SESSIONLESS_SECOND,
       DECISION.ROLLBACK);
     const record = durableRecordOf(dbPath, service.partitionId);
     const prepareThen = (decision) => [
       {type: PARTICIPANT_TRANSACTION_COMMAND.PREPARE, decision: null},
       {type: PARTICIPANT_TRANSACTION_COMMAND.DECISION, decision}];
-    assert.deepEqual({committed, rolledBack, terminalStatements: terminal,
-      durableCommit: record.commitIndex,
+    assert.deepEqual({committed, rolledBack,
+      durableApplied: record.appliedIndex,
       rows: rowsOf(dbPath, SELECT_ALL_SQL)}, {
-      committed: {prepared: STATE.PREPARED, decided: STATE.COMMITTED,
+      committed: {begun: true, staged: true,
+        connectionHeld: [false, false, false, false, false],
+        prepareSettledBeforeApply: false, prepareApply: null,
+        prepared: STATE.PREPARED,
+        decisionSettledBeforeApply: false, decisionApply: null,
+        decided: STATE.COMMITTED,
         commands: prepareThen(DECISION.COMMIT), row: STATE.COMMITTED},
-      rolledBack: {prepared: STATE.PREPARED, decided: STATE.ROLLED_BACK,
+      rolledBack: {begun: true, staged: true,
+        connectionHeld: [false, false, false, false, false],
+        prepareSettledBeforeApply: false, prepareApply: null,
+        prepared: STATE.PREPARED,
+        decisionSettledBeforeApply: false, decisionApply: null,
+        decided: STATE.ROLLED_BACK,
         commands: prepareThen(DECISION.ROLLBACK), row: STATE.ROLLED_BACK},
-      terminalStatements: [],
-      durableCommit: service.raft.readStatus().commitIndex,
+      durableApplied: service.raft.readStatus().appliedIndex,
       rows: [SESSIONLESS_FIRST, SESSION_ROW].map(({id, value}) => ({id, value})),
     }, 'each decision is a committed command over a PREPARED row');
   } finally {
-    await shutdownQuietly(service);
+    await shutdownAll(service);
     fs.rmSync(directory, {recursive: true, force: true});
     resetEnvironment();
   }

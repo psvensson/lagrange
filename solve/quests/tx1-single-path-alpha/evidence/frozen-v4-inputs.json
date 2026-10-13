@@ -1,0 +1,18 @@
+{
+  "purpose": "Exact reason-strengthened runtime A/B inputs; unlanded",
+  "candidate": {
+    "path": "/tmp/session-worktree-xohUof/tree",
+    "sha": "2feb3110f196467e015c7741211e35bf597248a0",
+    "tree": "93807cf464420d6b02265fffeee4bd906c4f6a1e",
+    "parent": "e6d43bc1acb128a2b83ac89c77a3ec400e7edb1f"
+  },
+  "predecessor": {
+    "path": "/tmp/session-worktree-0BiMvl/tree",
+    "sha": "662931ff95e39ba02d329581536442bcaf2869a0",
+    "tree": "f46c0cd6fd1d0392dcb74ef291e26a898c547ffc",
+    "parent": "2feb3110f196467e015c7741211e35bf597248a0"
+  },
+  "sourceBase": "e6d43bc1acb128a2b83ac89c77a3ec400e7edb1f",
+  "runtimeSha256": "f8ea05b90b5509328312b98b763fe130a22c2f922053cc3fd3de528195e9bce6",
+  "capturedAt": "2026-10-13T12:17:46.225Z"
+}

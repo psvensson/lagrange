@@ -1,0 +1,64 @@
+{
+  "candidate": "57f98ca76d948e3a8f0d9e4dbe63992d68bde987",
+  "predecessor": "e6d43bc1acb128a2b83ac89c77a3ec400e7edb1f",
+  "method": "Canonical whole-repository JSON collectors on immutable inputs; compare violation multisets, excluding line/column and normalizing only embedded line N locations in reason text. JSON mode is report-only. Identical findings remain unresolved.",
+  "rows": [
+    {
+      "check": "literals",
+      "predecessor": {
+        "scannedFileCount": 2226,
+        "totalViolationCount": 318,
+        "rawViolationCount": 1584,
+        "inheritedViolationCount": 1266,
+        "baselineViolationCount": 1287
+      },
+      "candidate": {
+        "scannedFileCount": 2226,
+        "totalViolationCount": 318,
+        "rawViolationCount": 1582,
+        "inheritedViolationCount": 1264,
+        "baselineViolationCount": 1286
+      },
+      "introduced": [],
+      "removed": []
+    },
+    {
+      "check": "decision-boundaries",
+      "predecessor": {
+        "scannedFileCount": 2226,
+        "totalViolationCount": 42,
+        "rawViolationCount": 799,
+        "inheritedViolationCount": 757,
+        "baselineViolationCount": 810
+      },
+      "candidate": {
+        "scannedFileCount": 2226,
+        "totalViolationCount": 42,
+        "rawViolationCount": 795,
+        "inheritedViolationCount": 753,
+        "baselineViolationCount": 806
+      },
+      "introduced": [],
+      "removed": []
+    },
+    {
+      "check": "silent-catch",
+      "predecessor": {
+        "scannedFileCount": 1915,
+        "totalViolationCount": 3,
+        "rawViolationCount": 96,
+        "inheritedViolationCount": 93,
+        "baselineViolationCount": 97
+      },
+      "candidate": {
+        "scannedFileCount": 1915,
+        "totalViolationCount": 3,
+        "rawViolationCount": 93,
+        "inheritedViolationCount": 90,
+        "baselineViolationCount": 94
+      },
+      "introduced": [],
+      "removed": []
+    }
+  ]
+}

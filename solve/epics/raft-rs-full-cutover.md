@@ -13,6 +13,7 @@ quests:
   - cutover-transition-authority-review
   - message-group-fresh-identity-membership
   - replicated-transaction-decision-and-apply
+  - tx1-single-path-alpha
   - transaction-topology-admission-barrier
   - snapshot-receiver-admission
   - snapshot-lifecycle-staging-boundary

@@ -55,7 +55,6 @@ const ANSWER = Object.freeze({
   DETERMINISM_SELF_CHECK_FAILED:
     'participant_transaction_determinism_self_check_failed',
   REMOVAL_FENCED: 'participant_transaction_removal_fenced',
-  LEGACY_SESSION_FENCED: 'participant_transaction_legacy_session_fenced',
   GENERATION_ORIGIN_PENDING:
     'participant_transaction_generation_origin_pending',
   TERMINAL: 'participant_transaction_terminal',
@@ -765,7 +764,7 @@ async () => {
   const definitive = {};
   for (const code of [ANSWER.REPLAY_DIVERGED, ANSWER.STATEMENT_FAILED,
     ANSWER.SESSION_WRITE_NONDETERMINISTIC, ANSWER.REPLAY_BUDGET_EXCEEDED,
-    ANSWER.LEGACY_SESSION_FENCED, ANSWER.TERMINAL]) {
+    ANSWER.TERMINAL]) {
     definitive[code] = await prepareAnswered((message) =>
       refusalOf(message, code));
   }
@@ -776,7 +775,7 @@ async () => {
     success: true}));
   const beginRefused = {};
   for (const code of [ANSWER.GENERATION_ORIGIN_PENDING,
-    ANSWER.DETERMINISM_SELF_CHECK_FAILED, ANSWER.LEGACY_SESSION_FENCED]) {
+    ANSWER.DETERMINISM_SELF_CHECK_FAILED]) {
     const {engine, log} = harness({answer: (message) =>
       (message.operation === QUERY_OPERATION.BEGIN ?
         refusalOf(message, code) : null)});

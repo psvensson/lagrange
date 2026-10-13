@@ -83,8 +83,11 @@ const RATCHET_TARGETS = [
     // 2026-10-05: tightened 48/1512 -> 48/1510 on the checker's hint (the
     // write paths open their transaction in one two-line call).
     // Replay's routed-write helper tightened the combined result further.
+    // 2026-10-13: tightened 47/1473 -> 47/1462 on the checker's measured
+    // hint during the TX1 deletion audit. The exact e6 predecessor also
+    // measures 47/1462, so this quest claims no clone reduction.
     baselineCloneGroupCount: 47,
-    baselineDuplicatedLineCount: 1473,
+    baselineDuplicatedLineCount: 1462,
     reportOutputDirectory: 'test-output/analysis/jscpd-src-scripts',
     strictEligible: true,
   },

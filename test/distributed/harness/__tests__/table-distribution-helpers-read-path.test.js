@@ -939,7 +939,7 @@ test('table-distribution-helpers retries retryable snapshot-read defers until ' 
   );
 });
 
-test('table-distribution-helpers retries transaction-active bootstrap ' +
+test('table-distribution-helpers retries deferred bootstrap ' +
   'failures on the dedicated control lane', async () => {
   const createCalls = [];
   let tableLookupAttempts = 0;
@@ -953,7 +953,9 @@ test('table-distribution-helpers retries transaction-active bootstrap ' +
           lane: options.lane,
         });
         if (createCalls.length === 1) {
-          throw new Error('Transaction already active on this partition');
+          const deferred = new Error('query_admission_deferred');
+          deferred.deferRetry = true;
+          throw deferred;
         }
         return {rows: []};
       }

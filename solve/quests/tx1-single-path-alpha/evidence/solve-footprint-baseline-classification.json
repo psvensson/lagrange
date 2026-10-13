@@ -1,0 +1,21 @@
+{
+  "classificationOwner": "scripts/solve/store.js:isQuestLogPath",
+  "method": "git tracked path inventory and stat bytes; no full solver-budget or closure audit claim",
+  "activeBudgetBytes": 20971520,
+  "rows": [
+    {
+      "label": "pristine e6",
+      "root": "/tmp/lagrange-tx1-baseline-OnmaDp/tree",
+      "totalBytes": 88658209,
+      "historyBytes": 31119791,
+      "activeBytes": 57538418
+    },
+    {
+      "label": "TX1 before staging",
+      "root": "/mnt/data/peter/projects/.worktrees/rs-raft-alpha-single-path-20261013",
+      "totalBytes": 88658235,
+      "historyBytes": 31119791,
+      "activeBytes": 57538444
+    }
+  ]
+}

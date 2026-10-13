@@ -1,0 +1,50 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "generatedAt": "2026-10-13T12:41:27.507458+00:00",
+  "baselineHead": "e6d43bc1acb128a2b83ac89c77a3ec400e7edb1f",
+  "stage": "Deletion REVISE after same-host controls exposed dangling legacy error consumers; current recovery and regression gates remain HOLD",
+  "receipts": [
+    {
+      "id": "identityless-transaction-uses-current-admission-with-zero-effects",
+      "passed": true,
+      "reason": "Same current alpha witness b9616081... on locked tv-dator: seven behavioral assertion reds with predecessor source and seven passes with V2 source. Strict current identity owner admits every TRANSACTION request; malformed identity causes zero SQL/session/proposal/data effects. Source and alpha bytes remain exact across later inputs."
+    },
+    {
+      "id": "partial-query-and-session-collision-cannot-bypass-tx1",
+      "passed": true,
+      "reason": "Same-source A/B and independent V2 review cover partial/inherited/accessor/proxy/symbol input plus ACTIVE/PREPARING/PREPARED session collision, zero rejected data effects, nonempty unrelated ordinary-query positive and terminal session reuse."
+    },
+    {
+      "id": "executable-session-engine-and-consumers-removed",
+      "passed": false,
+      "reason": "REVISE: same-host predecessor controls expose remaining live consumers of removed TRANSACTION_ALREADY_ACTIVE in query retry routing and rebalancer mutation/repository code. The retired constant becomes undefined and deterministically breaks two retry witnesses. Complete removed-field/method census and atomic consumer removal/current typed retry refit are required. Historical source V2 approval does not cover this newly discovered integration defect."
+    },
+    {
+      "id": "current-release-drain-startup-and-hold-owners-preserved",
+      "passed": false,
+      "reason": "HOLD: final full-owner runtime witness is19/20 on both predecessor and candidate source at locked tv-dator. Deferred-election healed-group release predicate spends its full10-second bound. Cleanup masking fixed; body failure remains. Historical W1 healthy30-second timeout remains unresolved. Current recovery owner repair is outside this bounded deletion."
+    },
+    {
+      "id": "current-replicated-transaction-regression-cone-preserved",
+      "passed": false,
+      "reason": "HOLD: exact775504a changed-path lab selection completed1146 files/35018 assertions:1054 files passed,92 failed,0 unreported. Same-host predecessor source controls are running. Healthy exhausted waits remain defects. Dependency/unused/duplication and current owner/static gates remain red; no full crash/replay or integrated-main certification."
+    }
+  ],
+  "witnessSha256": "b96160819b027fe98396a4786460247762a17dc63078e69bacfa388ab501bdd0",
+  "evidence": [
+    "receipt-seal-time.json",
+    "source-review-manifest-v2.json",
+    "implementation-review-source-v2.md",
+    "implementation-review-current.md",
+    "implementation-review-runtime-cleanup-8f63.md",
+    "frozen-v2-source-only-ab.log",
+    "frozen-v5-evidence-manifest.json",
+    "frozen-v5-runtime-candidate.tap",
+    "frozen-v5-runtime-predecessor-source.tap",
+    "test-cleanup-session-vacuity.log",
+    "frozen-v3-broad-lab-result.json"
+  ],
+  "sourceManifest": "source-review-manifest-v2.json",
+  "candidateInput": "59e022721a94b449aa0d1ee47a441db29fb5f8d7"
+}

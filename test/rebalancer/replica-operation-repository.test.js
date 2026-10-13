@@ -50,7 +50,8 @@ import {
   SQL_RECONCILIATION_REASON,
 } from '../../src/control-plane/read-model-contract.js';
 import {REBALANCE_COORDINATOR_EVENT} from '../../src/rebalancer/rebalancer-constants.js';
-import {PARTITION_SERVICE_ERROR_MSG} from '../../src/partition/partition-service-constants.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-write-kernel.js';
 import {createTestCoordinator} from './test-helpers.js';
 import {registerReplicaOperationRepositoryDeferredVisibilityTests} from './replica-operation-repository-deferred-visibility-test-cases.js';
 import {registerReplicaOperationRepositoryIncompleteVisibilityTests} from './replica-operation-repository-incomplete-visibility-test-cases.js';
@@ -159,7 +160,6 @@ function createTestRepository(overrides = {}) {
     controlPlaneReadinessService: overrides.controlPlaneReadinessService || null,
     logger: mockLogger,
     emitter: overrides.emitter || null,
-    random: overrides.random,
   });
 }
 
@@ -1029,6 +1029,6 @@ registerReplicaOperationRepositoryTailTests({
   READ_MODEL_DIVERGENCE_TYPE,
   SQL_RECONCILIATION_REASON,
   REBALANCE_COORDINATOR_EVENT,
-  PARTITION_SERVICE_ERROR_MSG,
+  PARTITION_WRITE_LEADERSHIP_REFUSAL,
   createTestCoordinator,
 });

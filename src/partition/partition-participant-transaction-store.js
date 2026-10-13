@@ -142,20 +142,8 @@ function isPartitionReserved(db) {
 }
 
 /**
- * Whether some participant transaction row carries this routing sessionId
- * (a sessionId-only outcome read never answers NOT_COMMITTED from absence
- * for it).
- * @param {Object} db - The partition's connection.
- * @param {string} sessionId - The routing sessionId.
- * @return {boolean} Whether a row names it.
- */
-function isParticipantSessionKnown(db, sessionId) {
-  return readStatementOf(db, SQL.SELECT_SESSION_KNOWN).get(sessionId) !== undefined;
-}
-
-/**
- * Whether a PREPARED row carries this routing sessionId (the L6 fence
- * refuses a sessionId-only request naming it).
+ * Whether a PREPARED row carries this routing sessionId (the current routing
+ * collision predicate refuses a sessionId-only request naming it).
  * @param {Object} db - The partition's connection.
  * @param {string} sessionId - The routing sessionId.
  * @return {boolean} Whether a PREPARED row names it.
@@ -301,7 +289,6 @@ function participantOutcomeOf(row, volatileState = STATE.ABSENT) {
 export {
   advancePartitionWriteGeneration,
   insertParticipantTransactionRow,
-  isParticipantSessionKnown,
   isParticipantSessionPrepared,
   isPartitionReserved,
   openParticipantTransactionStore,

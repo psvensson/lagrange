@@ -192,11 +192,13 @@ test('a text-only Error of a host failure while proposing is not retried: ' +
   'one attempt under one key; the failure is surfaced, not re-proposed');
 });
 
-test('isRetryableControlPlaneError detects transaction lane contention', async (t) => {
-  const error = new Error('Transaction already active on this partition');
+test('retired partition-session contention text alone is not retryable',
+  async (t) => {
+    const retired = new Error('Transaction already active on this partition');
 
-  t.equal(isRetryableControlPlaneError(error), true);
-});
+    t.equal(isRetryableControlPlaneError(retired), false,
+      'retryability must come from a current typed or transport owner');
+  });
 
 test('isRetryableControlPlaneError detects transaction commit visibility ' +
   'gaps', async (t) => {

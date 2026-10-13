@@ -38,9 +38,6 @@ import {
   cleanupStaleTransferStaging,
 } from '../raft/snapshot-transfer-receiver.js';
 import {
-  createPartitionSnapshotCadence,
-} from './partition-snapshot-cadence.js';
-import {
   detectLegacyPartitionConsensusState,
   legacyPartitionConsensusStateError,
 } from './partition-legacy-consensus-state.js';
@@ -91,22 +88,6 @@ const {
 const SERVICE_SHUTDOWN = 'partition_service_shutdown';
 
 class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
-  /**
-   * One checkpoint-cadence tick, driven by the 1s prepared-state-hold sweep
-   * (S6 Phase A link 1). The cadence owner holds the leader-only role gate
-   * and the in-flight flag — the sweep only provides the heartbeat. Lazily
-   * constructed so guard-injected services without raft state stay inert.
-   * The returned promise NEVER rejects (typed outcomes only).
-   * @param {number} nowMs sweep timestamp (nowMs-overridable in guards)
-   * @return {Promise<Object>} typed frozen cadence tick result
-   */
-  runSnapshotCadenceTick(nowMs) {
-    if (!this.snapshotCadence) {
-      this.snapshotCadence = createPartitionSnapshotCadence({service: this});
-    }
-    return this.snapshotCadence.tick(nowMs);
-  }
-
   /**
    * Resolve the current raft term when a live raft instance exists; the
    * leadership-state helper passes it with the leadership event so the
@@ -400,7 +381,6 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
         throw legacyPartitionConsensusStateError(
           legacyConsensusState, this.partitionId);
       }
-      this.createTransactionOutcomeTable();
       createCommittedStatementOutcomeTable(this.db);
       openParticipantTransactionStore(this.db);
       if (this.schema) {

@@ -1,0 +1,24 @@
+[
+  {
+    "label": "source-v2-control",
+    "sha": "204364d3c720bbb97c12b996918a6f7646194a6d",
+    "files": [
+      "test/query/query-executor-executeonpartition-no-handler-repair.test.js",
+      "test/control-plane/control-plane-error-classification.test.js"
+    ],
+    "code": 1,
+    "resultRoot": "/mnt/data/peter/projects/.worktrees/rs-raft-alpha-single-path-20261013/test-output/alpha-single-path-20261013/frozen-v6-correction-ab/source-v2-control",
+    "finishedAt": "2026-10-13T13:08:18.921Z"
+  },
+  {
+    "label": "source-v3-candidate",
+    "sha": "57f98ca76d948e3a8f0d9e4dbe63992d68bde987",
+    "files": [
+      "test/query/query-executor-executeonpartition-no-handler-repair.test.js",
+      "test/control-plane/control-plane-error-classification.test.js"
+    ],
+    "code": 0,
+    "resultRoot": "/mnt/data/peter/projects/.worktrees/rs-raft-alpha-single-path-20261013/test-output/alpha-single-path-20261013/frozen-v6-correction-ab/source-v3-candidate",
+    "finishedAt": "2026-10-13T13:08:46.444Z"
+  }
+]

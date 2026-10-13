@@ -1,0 +1,23 @@
+[
+  {
+    "label": "session-predecessor-source",
+    "sha": "7d5ccc89125fa657db5ddc4877dff5e1f57e76a3",
+    "file": "test/transaction/session-transaction-isolation.test.js",
+    "code": 0,
+    "rawTap": "/mnt/data/peter/projects/.worktrees/rs-raft-alpha-single-path-20261013/test-output/alpha-single-path-20261013/frozen-v3-session-predecessor-source.tap"
+  },
+  {
+    "label": "session-candidate",
+    "sha": "775504a9792b7b2f21b1cc6d92406c8d1df26d97",
+    "file": "test/transaction/session-transaction-isolation.test.js",
+    "code": 0,
+    "rawTap": "/mnt/data/peter/projects/.worktrees/rs-raft-alpha-single-path-20261013/test-output/alpha-single-path-20261013/frozen-v3-session-candidate.tap"
+  },
+  {
+    "label": "runtime-candidate",
+    "sha": "775504a9792b7b2f21b1cc6d92406c8d1df26d97",
+    "file": "test/partition/partition-runtime-reconstruction-leadership.test.js",
+    "code": 1,
+    "rawTap": "/mnt/data/peter/projects/.worktrees/rs-raft-alpha-single-path-20261013/test-output/alpha-single-path-20261013/frozen-v3-runtime-candidate.tap"
+  }
+]

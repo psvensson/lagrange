@@ -66,7 +66,6 @@ import {
 import {isDeferredReadinessPlanningSnapshot} from
   '../control-plane/readiness-planning-version-contract.js';
 import {isRetryableControlPlaneError} from '../control-plane/control-plane-error-classification.js';
-import {PARTITION_SERVICE_ERROR_MSG} from '../partition/partition-service-constants.js';
 import {CONTROL_PLANE_READ_LEADER_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
 import {isPriorityControlPlanePartition} from '../bootstrap/system-partition-classification.js';
@@ -163,7 +162,6 @@ const LEADER_GAP_REASON_SERVICE_MISSING = 'service_missing';
 const SYSTEM_TABLE_NAMES = new Set(Object.values(TABLES));
 const CONTROL_PLANE_WRITE_RETRY_DECISION_STATE = Object.freeze({
   NONE: 'none',
-  RETRY_SAME_ADDRESS: 'retry_same_address',
   DEFER_PARTITION_RETRY: 'defer_partition_retry',
   WIDEN_TO_RECOVERY_CANDIDATE: 'widen_to_recovery_candidate',
 });
@@ -242,7 +240,6 @@ export const QUERY_EXECUTOR_SHARED = {
   METRICS_LOG_TAG,
   MIGRATION_PARTITION_OPERATION,
   NUM,
-  PARTITION_SERVICE_ERROR_MSG,
   PG_EXPR_TYPE,
   ParallelQueryCoordinator,
   QUERY_AST_NODE,

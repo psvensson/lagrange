@@ -25,6 +25,10 @@ import {
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_OPERATION,
 } from '../../src/partition/partition-service-constants.js';
+import {buildGenerationOriginCommand} from
+  '../../src/partition/partition-participant-transaction-bytes.js';
+import {PARTICIPANT_TRANSACTION_COMMAND} from
+  '../../src/partition/partition-participant-transaction-constants.js';
 import {
   buildReplayCursorCheckpoint,
   loadDurableDeltasBehindWatermark,
@@ -257,22 +261,35 @@ test('reconstruction seeds the catch-up queue from the durable Raft ' +
     sql: `DELETE FROM ${SOURCE_TABLE} WHERE id = ?`,
     params: ['a'],
   };
+  const replayedOrigin = buildGenerationOriginCommand(FIXTURE_PARTITION_ID, {
+    timestamp: 'durable-replay-origin',
+    proposedBy: `${FIXTURE_PARTITION_ID}-r1`,
+    proposedAt: 1,
+  });
   const source = await restartedSource([
     insertCommand('a'),
     insertCommand('b'),
     // The barrier: covered by the snapshot, never replayed.
     insertCommand('c'),
-    // Non-write control entries are filtered out of the mirror replay.
-    {
-      type: PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION,
-      sessionId: 'session-control',
-      epoch: 1,
-      writeSet: [`${SOURCE_TABLE}:z`],
-    },
+    // A valid current committed control is applied after the watermark but
+    // never enters the SQL delta queue.
+    replayedOrigin,
     deleteCommand,
   ]);
   try {
-    const [, second, third, , fifth] = source.committed;
+    const [, second, third, fourth] = source.committed;
+    const durable = readCommittedIndependently(
+      source.dbPath, FIXTURE_PARTITION_ID);
+    const origins = durable.committed.filter((entry) =>
+      entry.command.type ===
+        PARTICIPANT_TRANSACTION_COMMAND.GENERATION_ORIGIN);
+    assert.equal(origins.length, 2,
+      'the admission origin and proposed replay are both committed and applied');
+    assert.equal(origins[1].command.entryId, replayedOrigin.entryId);
+    assert.ok(origins[1].index > third.index && origins[1].index < fourth.index,
+      'the applied current control sits behind the watermark before the SQL delta');
+    assert.ok(durable.appliedIndex >= origins[1].index,
+      'the durable applied cursor covers the replayed current control');
     const checkpoint = buildReplayCursorCheckpoint(
       SPLIT_ACK_CHECKPOINT_FIELD, second.index, third.index);
     const metadata = normalizeSplitTransitionMetadataForService(
@@ -293,12 +310,12 @@ test('reconstruction seeds the catch-up queue from the durable Raft ' +
     assert.ok(handle, 'execution handle must reconstruct');
     assert.deepEqual(
       handle.pendingEntries.map((entry) => entry.logIndex),
-      [fifth.index],
+      [fourth.index],
       'deltas behind the watermark must replay from the log in order',
     );
     assert.deepEqual(
       handle.pendingEntries.map((entry) => entry.sql),
-      [fifth.command.sql],
+      [fourth.command.sql],
     );
     assert.equal(handle.snapshotBarrierIndex, second.index);
     assert.equal(handle.replayWatermarkIndex, third.index);
@@ -586,13 +603,13 @@ test('leader-owned activation invokes mirror worker resumption: ' +
   const {readFileSync} = await import('node:fs');
   const source = readFileSync(
     new URL(
-      '../../src/partition/partition-service-core-base.js',
+      '../../src/partition/partition-service-leader-activation-methods.js',
       import.meta.url,
     ),
     'utf8',
   );
   const activationSection = source.slice(
-    source.indexOf('PREPARED_STATE_RECONSTRUCTED'),
+    source.indexOf('scheduleLeaderOwnedActivation'),
   );
   assert.ok(
     activationSection.includes('resumeDurableMirrorReplicationWorkers'),

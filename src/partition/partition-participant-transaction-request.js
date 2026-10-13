@@ -22,11 +22,10 @@
 // the leader stamps PREPARE and decision commands with its execution
 // envelope (partition-transaction-execution-envelope.js).
 //
-// The two identity classes have one outcome authority each, until the
-// cutover's drain (the L6 window): a request carrying a transactionId is
-// answered from `_participant_transactions` here; a sessionId-only request
-// keeps the legacy session path, behind the fences of
-// partition-participant-transaction-legacy-fence.js.
+// Every TRANSACTION request belongs to this owner. A QUERY is this owner's
+// when it carries any current identity field, or when its routing sessionId
+// collides with current volatile/durable participant custody. Every other
+// QUERY is ordinary routing traffic.
 
 import {PARTICIPANT_COMMIT_OUTCOME} from '../constants/transactions.js';
 import {TABLES} from '../constants/tables.js';
@@ -67,14 +66,11 @@ import {
   endParticipantSession,
   findParticipantSession,
   openParticipantSession,
+  participantRoutingSessionCollision,
+  participantTransactionActive,
 } from './partition-participant-transaction-session.js';
 import {runParticipantSessionStatement} from
   './partition-participant-transaction-staging.js';
-import {
-  fenceLegacySessionQuery,
-  fenceLegacyTransactionRequest,
-  participantTransactionActive,
-} from './partition-participant-transaction-legacy-fence.js';
 import {participantDeterminismSelfCheckOf} from
   './partition-participant-transaction-self-check.js';
 import {participantConnectionStampOf} from
@@ -90,6 +86,7 @@ import {TOPOLOGY_TRANSITION_KIND, topologyTransitionOf} from
 import {executionEnvelopeOf} from './partition-transaction-execution-envelope.js';
 import {transactionStatementKindOf} from './partition-transaction-determinism.js';
 import {TRANSACTION_STATEMENT_KIND} from './partition-transaction-determinism-constants.js';
+import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
 import {
   PARTICIPANT_TRANSACTION_DECISION as DECISION,
   PARTICIPANT_TRANSACTION_FAILURE_CODE as CODE,
@@ -107,20 +104,51 @@ const {
 // What a decision request does when the durable row and the session leave it
 // to the log: it is proposed, and its apply decides.
 const PROPOSE_DECISION = Object.freeze({proposeDecision: true});
+const REQUEST_IDENTITY_FIELDS = Object.freeze([
+  'transactionId',
+  'participantId',
+  'commitMode',
+  'transactionEpoch',
+]);
+const PARTICIPANT_QUERY_KIND = Object.freeze({
+  ORDINARY: 'ordinary',
+  CURRENT: 'current',
+  REFUSED: 'refused',
+});
+const objectHasOwn = Object.hasOwn;
 
 function isNonEmptyString(value) {
   return typeof value === 'string' && value.length > 0;
 }
 
+function requestCarriesIdentity(request) {
+  for (let index = 0; index < REQUEST_IDENTITY_FIELDS.length; index += 1) {
+    if (objectHasOwn(request, REQUEST_IDENTITY_FIELDS[index])) return true;
+  }
+  return false;
+}
+
 /**
- * Whether a request carries a transactionId: it is the participant
- * protocol's, answered here; one without is the legacy session path's.
+ * Classify one strict own-data request as current participant traffic,
+ * current identity refusal, or ordinary QUERY traffic.
  * @param {Object} payload - A TRANSACTION or QUERY request.
- * @return {boolean} Whether this owner answers it.
+ * @return {Object} Discriminated request classification.
  */
-function isParticipantTransactionRequest(payload) {
-  return payload?.transactionId !== undefined &&
-    payload?.transactionId !== null;
+function participantQueryClassification(service, payload) {
+  const request = copyStrictOwnDataRecord(payload);
+  if (request === null) {
+    return {kind: PARTICIPANT_QUERY_KIND.REFUSED, request: {},
+      failureCode: CODE.IDENTITY_REQUIRED};
+  } else if (requestCarriesIdentity(request)) {
+    const failureCode = identityRefusalOf(request, service.partitionId);
+    return failureCode === null ?
+      {kind: PARTICIPANT_QUERY_KIND.CURRENT, request} :
+      {kind: PARTICIPANT_QUERY_KIND.REFUSED, request, failureCode};
+  } else if (participantRoutingSessionCollision(service, request.sessionId)) {
+    return {kind: PARTICIPANT_QUERY_KIND.REFUSED, request,
+      failureCode: identityRefusalOf(request, service.partitionId)};
+  }
+  return {kind: PARTICIPANT_QUERY_KIND.ORDINARY, request};
 }
 
 function answerOf(service, payload, fields) {
@@ -275,9 +303,8 @@ function beginParticipantSession(service, payload) {
   if (session !== null) {
     return existingSessionAnswer(service, payload, session);
   }
-  // One non-terminal transaction per partition: another participant
-  // transaction staging, preparing or PREPARED here, or a legacy session.
-  if (participantTransactionActive(service) || service.isInTransaction()) {
+  // One non-terminal participant transaction per partition.
+  if (participantTransactionActive(service)) {
     return refusalOf(service, payload, CODE.ALREADY_ACTIVE);
   }
   // The conflict base (design 3.2): read at BEGIN, carried unchanged, with
@@ -530,10 +557,8 @@ function participantOutcomeAnswer(service, payload) {
 
 function answerParticipantRequest(service, payload) {
   switch (payload.operation) {
-  case PARTITION_SERVICE_OPERATION.BEGIN_TRANSACTION:
   case PARTITION_SERVICE_LITERAL.BEGIN:
     return beginParticipantSession(service, payload);
-  case PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION:
   case PARTITION_SERVICE_LITERAL.PREPARE:
     return prepareParticipant(service, payload);
   case PARTITION_SERVICE_OPERATION.COMMIT:
@@ -548,23 +573,19 @@ function answerParticipantRequest(service, payload) {
 }
 
 /**
- * Route one TRANSACTION request: a request carrying a transactionId is
- * answered here (null for an operation this owner does not know); a
- * sessionId-only request the L6 fences refuse is answered by them; any other
- * request is the legacy session path's (undefined).
+ * Route one TRANSACTION request. Every request is current: malformed identity
+ * is refused by the canonical identity owner and never selects another
+ * protocol. Null is the answer for an operation this owner does not know.
  * @param {Object} service - The partition.
  * @param {Object} payload - The TRANSACTION request.
- * @return {(Promise<Object|null>|undefined)} The answer, or undefined.
+ * @return {Promise<Object|null>} The answer.
  */
 function routeParticipantTransactionRequest(service, payload) {
-  if (isParticipantTransactionRequest(payload)) {
-    const identityRefusal = identityRefusalOf(payload, service.partitionId);
-    return Promise.resolve(identityRefusal === null ?
-      answerParticipantRequest(service, payload) :
-      refusalOf(service, payload, identityRefusal));
-  }
-  const fenced = fenceLegacyTransactionRequest(service, payload);
-  return fenced === undefined ? undefined : Promise.resolve(fenced);
+  const request = copyStrictOwnDataRecord(payload) ?? {};
+  const identityRefusal = identityRefusalOf(request, service.partitionId);
+  return Promise.resolve(identityRefusal === null ?
+    answerParticipantRequest(service, request) :
+    refusalOf(service, request, identityRefusal));
 }
 
 // --- session statements (QUERY) ---
@@ -596,22 +617,55 @@ function sessionStatementAnswer(service, payload) {
 }
 
 /**
- * Answer a QUERY carrying a transactionId: a statement of the transaction
+ * Return the current owner's early malformed/collision answer. Valid current
+ * queries keep their ordinary epoch and leadership gates before staging.
+ * @param {Object} service - The partition.
+ * @param {Object} payload - The QUERY request.
+ * @return {Object|null} Acknowledged refusal, or null.
+ */
+function answerParticipantQueryIdentityRefusal(service, payload) {
+  const classified = participantQueryClassification(service, payload);
+  return classified.kind === PARTICIPANT_QUERY_KIND.REFUSED ?
+    {acknowledged: true, ...refusalOf(service, classified.request,
+      classified.failureCode)} : null;
+}
+
+/**
+ * Whether removal admission must route this QUERY through the participant
+ * owner: a current session still in volatile custody, a routing collision,
+ * or a malformed strict record. A valid identity with no current session is
+ * new work and remains fenced.
+ * @param {Object} service - The partition.
+ * @param {Object} payload - The QUERY request.
+ * @return {boolean} Whether this owner must answer it.
+ */
+function admitsParticipantSessionQueryDuringRemoval(service, payload) {
+  const classified = participantQueryClassification(service, payload);
+  return classified.kind === PARTICIPANT_QUERY_KIND.REFUSED ||
+    (classified.kind === PARTICIPANT_QUERY_KIND.CURRENT &&
+      findParticipantSession(service, classified.request) !== null);
+}
+
+/**
+ * Answer a valid current QUERY: a statement of the transaction
  * staging on this leader is staged or read under c'; one for a transaction
  * not staging here now (PREPARING for a write, PREPARED, decided, or unknown
- * here) is refused, typed, never run as a sessionless write. A sessionId-only
- * QUERY that names a participant transaction's session is refused by the L6
- * fence. Null for every other QUERY (the sessionless and legacy paths).
+ * here) is refused, typed, never run as an ordinary write. Null for ordinary
+ * QUERY traffic.
  * @param {Object} service - The partition.
  * @param {Object} payload - The QUERY request.
  * @return {Object|null} The acknowledged answer, or null.
  */
 function answerParticipantSessionQuery(service, payload) {
-  if (!isParticipantTransactionRequest(payload)) {
-    return fenceLegacySessionQuery(service, payload);
-  }
   try {
-    return {acknowledged: true, ...sessionStatementAnswer(service, payload)};
+    const classified = participantQueryClassification(service, payload);
+    if (classified.kind === PARTICIPANT_QUERY_KIND.ORDINARY) return null;
+    if (classified.kind === PARTICIPANT_QUERY_KIND.REFUSED) {
+      return {acknowledged: true, ...refusalOf(service, classified.request,
+        classified.failureCode)};
+    }
+    return {acknowledged: true,
+      ...sessionStatementAnswer(service, classified.request)};
   } catch (statementError) {
     // An unexpected failure answers this request; nothing staged changed.
     return {acknowledged: true, success: false, error: statementError?.message,
@@ -673,7 +727,9 @@ async function enableParticipantTransactionAdmission(service) {
 }
 
 export {
+  answerParticipantQueryIdentityRefusal,
   answerParticipantSessionQuery,
+  admitsParticipantSessionQueryDuringRemoval,
   enableParticipantTransactionAdmission,
   routeParticipantTransactionRequest,
 };

@@ -1,0 +1,32 @@
+proof range: e6d43bc1acb128a2b83ac89c77a3ec400e7edb1f..HEAD (flag)
+changed paths: 88 (51 JavaScript)
+  FAIL   7070ms  test:deps
+  ok   4604ms  test:metrics:scoped
+  ok   1638ms  audit:shards
+  ok   1118ms  eslint(51 changed)
+  ok    656ms  audit:runtime-grammar
+  ok    431ms  audit:current-capabilities
+  ok    168ms  audit:doc-ascii
+  ok    134ms  test:metadata-gateway:audit
+  ok    113ms  audit:impact-contracts
+  ok    100ms  audit:roadmap-authority
+  ok     91ms  audit:doc-audience
+  ok     81ms  audit:cli-docs
+  ok     78ms  audit:closure-ledger
+  ok     73ms  audit:service-portability-claims
+FAIL test:deps
+> lagrange-server@0.2.6 test:deps
+> depcruise --config dependency-cruiser.config.cjs src scripts test
+
+
+  error not-to-unresolvable: src/rebalancer/replica-operation-message-group-promotion.js → ../raft/learner-catch-up-acknowledgement.js
+  error no-circular: src/partition/partition-participant-release-facts.js → 
+      src/partition/partition-participant-transaction-pause.js →
+      src/partition/partition-participant-release-facts.js
+  error no-circular: src/partition/partition-participant-release-contract.js → 
+      src/partition/partition-participant-release-facts.js →
+      src/partition/partition-participant-transaction-pause.js →
+      src/partition/partition-participant-release-contract.js
+
+x 3 dependency violations (3 errors, 0 warnings). 5299 modules, 22403 dependencies cruised.
+fast-static: FAIL in 16355ms

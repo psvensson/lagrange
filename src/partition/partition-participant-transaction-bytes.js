@@ -23,6 +23,7 @@ import {
 import {isExecutionEnvelope} from './partition-transaction-execution-envelope.js';
 
 const DECISIONS = Object.freeze(Object.values(DECISION));
+const numberIsSafeInteger = Number.isSafeInteger;
 
 function isNonEmptyString(value) {
   return typeof value === 'string' && value.length > 0;
@@ -87,7 +88,7 @@ function identityRefusalOf(carrier, partitionId) {
   if (!isNonEmptyString(carrier?.transactionId) ||
       !isNonEmptyString(carrier?.participantId) ||
       !isNonEmptyString(carrier?.commitMode) ||
-      !Number.isSafeInteger(carrier?.transactionEpoch)) {
+      !numberIsSafeInteger(carrier?.transactionEpoch)) {
     return CODE.IDENTITY_REQUIRED;
   }
   return carrier.participantId ===

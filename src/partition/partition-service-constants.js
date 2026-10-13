@@ -49,7 +49,6 @@ const PARTITION_SERVICE_DEFAULT = Object.freeze({
   // timeout (never bounded below it); the next check is armed from
   // completion, so a timeout never stacks with the cadence.
   LEARNER_PROMOTION_WAKE_DELAY_MS: NUM.ZERO,
-  MAX_COMMITTED_WRITE_LOG_ENTRIES: NUM.THOUSAND,
   PREPARED_STATE_HOLD_SWEEP_INTERVAL_MS: TIME_MS.SECOND,
   // A sessionless write the consensus port defers because a user session
   // holds the partition's connection is proposed again (from this delay,
@@ -59,14 +58,6 @@ const PARTITION_SERVICE_DEFAULT = Object.freeze({
   USER_TRANSACTION_WRITE_RETRY_INTERVAL_MS: NUM.TEN,
   USER_TRANSACTION_WRITE_RETRY_MAX_DELAY_MS: NUM.HUNDRED,
   USER_TRANSACTION_WRITE_DEFER_BUDGET_MS: TIME_MS.SECOND * NUM.TWO,
-});
-// Where a prepared session's state lives. No PREPARE marker is proposed while
-// a session stages on the partition's connection (consensus persistence
-// never runs inside a user transaction), so a prepared session is local to
-// this replica: its open SQLite transaction and memory, lost on restart.
-// Replicating the prepared write set is the replicated-transaction owner's.
-const PARTITION_TRANSACTION_PREPARED_STATE = Object.freeze({
-  LOCAL_STAGING: 'local-staging',
 });
 const PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON = Object.freeze({
   INITIAL_DELAY: 'initial_delay',
@@ -91,30 +82,8 @@ const PARTITION_SERVICE_SQL = Object.freeze({
         value TEXT
       )
     `,
-  CREATE_TRANSACTION_OUTCOME_TABLE: `
-      CREATE TABLE IF NOT EXISTS _transaction_outcomes (
-        session_id TEXT NOT NULL,
-        transaction_epoch INTEGER NOT NULL,
-        outcome TEXT NOT NULL,
-        updated_at INTEGER NOT NULL,
-        PRIMARY KEY (session_id, transaction_epoch)
-      )
-    `,
   SELECT_RAFT_STATE_VALUE: 'SELECT value FROM _raft_state WHERE key = ?',
-  SELECT_TRANSACTION_OUTCOME:
-    'SELECT outcome FROM _transaction_outcomes ' +
-    'WHERE session_id = ? AND transaction_epoch = ?',
-  UPSERT_TRANSACTION_OUTCOME:
-    'INSERT INTO _transaction_outcomes ' +
-    '(session_id, outcome, transaction_epoch, updated_at) VALUES (?, ?, ?, ?) ' +
-    'ON CONFLICT(session_id, transaction_epoch) DO UPDATE SET ' +
-    'outcome = excluded.outcome, ' +
-    'updated_at = excluded.updated_at',
   UPSERT_RAFT_STATE: 'INSERT OR REPLACE INTO _raft_state (key, value) VALUES (?, ?)',
-  BEGIN_IMMEDIATE: 'BEGIN IMMEDIATE',
-  SAVEPOINT_PREPARE: 'SAVEPOINT prepare_transaction',
-  COMMIT: 'COMMIT',
-  ROLLBACK: 'ROLLBACK',
   UPDATE_SERVICE_RAFT_ROLE:
     `UPDATE ${TABLES.SERVICES} SET raft_role = ?, updated_at = ? ` +
     'WHERE (service_id = ?)',
@@ -162,18 +131,13 @@ const PARTITION_SERVICE_OPERATION = Object.freeze({
   UPSERT: 'UPSERT',
   QUERY: 'QUERY',
   MIGRATION_ALTER_TABLE: 'MIGRATION_ALTER_TABLE',
-  BEGIN_TRANSACTION: 'BEGIN_TRANSACTION',
-  PREPARE_TRANSACTION: 'PREPARE_TRANSACTION',
   COMMIT: 'COMMIT',
   ROLLBACK: 'ROLLBACK',
-  TRANSACTION_COMMIT: 'TRANSACTION_COMMIT',
   TRANSACTION_OUTCOME: 'TRANSACTION_OUTCOME',
 });
 
-// The committed command types the application executes as SQL, the
-// transaction markers (session-bound: TRANSACTION_COMMIT records the session's
-// outcome, PREPARE_TRANSACTION and ROLLBACK are recorded in the log only), the
-// participant transaction commands, the CDC delivery owner's CDC_DELIVERED, and
+// The committed command types the application executes as SQL, the participant
+// transaction commands, the CDC delivery owner's CDC_DELIVERED, and
 // every type it recognises. Anything else is UNRECOGNISED. Frozen arrays:
 // membership is asked of the admission owner, which decides before consensus
 // what may be proposed (partition-committed-command-admission.js).
@@ -186,14 +150,8 @@ const PARTITION_COMMITTED_SQL_COMMAND_TYPES = Object.freeze([
   PARTITION_SERVICE_OPERATION.QUERY,
   PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE,
 ]);
-const PARTITION_COMMITTED_MARKER_COMMAND_TYPES = Object.freeze([
-  PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT,
-  PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION,
-  PARTITION_SERVICE_OPERATION.ROLLBACK,
-]);
 const PARTITION_COMMITTED_COMMAND_TYPES = Object.freeze([
   ...PARTITION_COMMITTED_SQL_COMMAND_TYPES,
-  ...PARTITION_COMMITTED_MARKER_COMMAND_TYPES,
   ...PARTICIPANT_TRANSACTION_COMMAND_TYPES,
   ...PARTITION_CDC_COMMAND_TYPES,
   COORDINATOR_SETTLEMENT_TYPE,
@@ -228,8 +186,6 @@ const PARTITION_COMMITTED_COMMAND_ERROR_CODE = Object.freeze({
   STATEMENT_MISSING: 'partition_write_statement_missing',
   // The admission owner's refusals before consensus.
   COMMAND_TYPE_UNKNOWN: 'partition_write_command_type_unknown',
-  MARKER_NOT_ADMISSIBLE: 'partition_write_marker_not_admissible',
-  SESSION_MISSING: 'partition_write_session_missing',
   ENTRY_ID_INVALID: 'partition_write_entry_id_invalid',
 });
 
@@ -534,12 +490,6 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
     'Write answered with an unknown outcome; its cause stays on this replica',
   REDIRECTING_WRITE_TO_LEADER: 'Redirecting write to leader',
   APPLYING_COMMITTED_ENTRY: 'Applying committed entry',
-  TRANSACTION_COMMIT_APPLIED: 'Transaction commit entry applied',
-  BEGINNING_TRANSACTION: 'Beginning transaction',
-  PREPARING_TRANSACTION: 'Preparing transaction',
-  PREPARED_STATE_RECONSTRUCTED: 'Prepared transaction state reconstructed',
-  COMMITTING_TRANSACTION: 'Committing transaction',
-  ROLLING_BACK_TRANSACTION: 'Rolling back transaction',
   EXECUTING_QUERY: 'Executing query',
   APPLY_WRITE_CALLED: 'applyWrite called',
   GENERATE_CDC_EVENT_CALLED: 'generateCDCEvent called',
@@ -606,24 +556,11 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
   CDC_EVENT_FAILED: 'Failed to generate CDC event for committed entry',
   APPLY_COMMITTED_FAILED: 'Failed to apply committed entry',
   NOT_INITIALIZED: 'PartitionService not initialized',
-  TRANSACTION_ALREADY_ACTIVE: 'Transaction already active on this partition',
   WRITE_DEFERRED_USER_TRANSACTION_OPEN:
     'Write deferred: a user transaction holds the partition connection',
   SERVING_ADMISSION_FENCED_FOR_REMOVAL:
     'Serving admission fenced for replica removal',
-  BEGIN_TRANSACTION_FAILED: 'Failed to begin transaction',
-  PREPARE_CONFLICT: 'Prepare failed due to write conflict',
-  NO_ACTIVE_TRANSACTION_PREPARE: 'No active transaction to prepare',
-  SNAPSHOT_EXPIRED: 'Snapshot history expired for transaction epoch',
-  PREPARE_LOST: 'Prepared state lost after failover',
-  NO_ACTIVE_TRANSACTION_COMMIT: 'No active transaction to commit',
-  COMMIT_TRANSACTION_FAILED: 'Failed to commit transaction',
-  NO_ACTIVE_TRANSACTION_ROLLBACK: 'No active transaction to rollback',
-  ROLLBACK_TRANSACTION_FAILED: 'Failed to rollback transaction',
-  NO_ACTIVE_TRANSACTION: 'No active transaction',
-  TRANSACTION_WRITE_FAILED: 'Transaction write failed',
   RAFT_COMMAND_FAILED: 'Raft command failed',
-  TRANSACTION_COMMIT_RAFT_FAILED: 'Raft command failed for transaction commit',
   SINGLE_REPLICA_RAFT_OWNER_REQUIRED:
     'PartitionService single-replica leadership requires raft.campaign(...)',
   QUERY_FAILED: 'Query execution failed',
@@ -772,7 +709,6 @@ export {
   PARTITION_COMMITTED_COMMAND_HOST_FAILURE_REASON,
   PARTITION_COMMITTED_COMMAND_OUTCOME,
   PARTITION_COMMITTED_COMMAND_TYPES,
-  PARTITION_COMMITTED_MARKER_COMMAND_TYPES,
   PARTITION_COMMITTED_SQL_COMMAND_TYPES,
   PARTITION_CONSENSUS_STARTUP_OUTCOME,
   PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
@@ -801,5 +737,4 @@ export {
   PARTITION_SERVICE_TYPE,
   PARTITION_SERVICE_VALUE,
   PARTITION_STATEMENT_ADMISSION_LOG_MSG,
-  PARTITION_TRANSACTION_PREPARED_STATE,
 };

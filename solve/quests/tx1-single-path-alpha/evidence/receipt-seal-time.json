@@ -1,0 +1,42 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "generatedAt": "2026-10-13T10:40:25.388768+00:00",
+  "baselineHead": "e6d43bc1acb128a2b83ac89c77a3ec400e7edb1f",
+  "stage": "seal-time baseline, source unchanged",
+  "receipts": [
+    {
+      "id": "identityless-transaction-uses-current-admission-with-zero-effects",
+      "passed": false,
+      "reason": "Four identityless control answers use the old fence code; outcome answer has no identity failure. Zero measured SQL/session/proposal/data effects. Baseline behavioral assertion failed."
+    },
+    {
+      "id": "partial-query-and-session-collision-cannot-bypass-tx1",
+      "passed": false,
+      "reason": "Partial identity SELECT reaches ordinary query; inherited identity and accessor invoke old request handling; malformed follower request reaches epoch gate; routing collisions return old code. Three behavioral assertions failed."
+    },
+    {
+      "id": "executable-session-engine-and-consumers-removed",
+      "passed": false,
+      "reason": "Source census retains 29 references to old executable owner, dispatcher, reconstruction, outcome DDL and session helpers."
+    },
+    {
+      "id": "current-release-drain-startup-and-hold-owners-preserved",
+      "passed": false,
+      "reason": "Pending candidate deletion and current-owner regression evidence; baseline depends on old maps and methods."
+    },
+    {
+      "id": "current-replicated-transaction-regression-cone-preserved",
+      "passed": false,
+      "reason": "Pending candidate exact-source proof. Existing baseline lab 13 files/114 assertions passed, but separate healthy M1 exhausted wait is operationally red and no full crash/replay certification is claimed."
+    }
+  ],
+  "witnessSha256": "ca852049572dd1fa638872ea0ee8d24d869a10af7c0e47564bf19fbba1064ced",
+  "evidence": [
+    "red-single-path.tap",
+    "red-witness-source.txt",
+    "baseline-old-owner-references.txt",
+    "lab-baseline-tv-dator.ndjson",
+    "timeout-investigation.md"
+  ]
+}

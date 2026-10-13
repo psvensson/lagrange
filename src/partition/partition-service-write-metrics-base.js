@@ -1,6 +1,6 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
-import {PartitionServiceTransactionBase} from './partition-service-transaction-base.js';
-import {fenceLegacyLocalMutation} from './partition-participant-transaction-legacy-fence.js';
+import {PartitionServiceEntryApplyBase} from './partition-service-entry-apply-base.js';
+import {unreplicatedLocalMutationRefusal} from './partition-local-mutation-admission.js';
 import {
   startAdmittedPartitionWrite,
 } from './partition-service-raft-write-commit.js';
@@ -56,7 +56,7 @@ const {
   getSystemCachePrimaryKeyFieldOrFallback,
 } = PARTITION_SERVICE_SHARED;
 
-class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
+class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
   async executeQuery(sql, params = [], options = {}) {
     if (!this.initialized) {
       throw new Error(PARTITION_SERVICE_ERROR_MSG.NOT_INITIALIZED);
@@ -66,9 +66,6 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
       sql: sql.substring(0, PARTITION_SERVICE_VALUE.DEFAULT_QUERY_TIMEOUT_MS),
     });
     try {
-      const transaction = this.resolveActiveTransactionState(
-        options.sessionId || null,
-      );
       const operation = {
         type: PARTITION_SERVICE_OPERATION.QUERY,
         sql,
@@ -91,11 +88,11 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
       // its outcome row by applyWrite (nothing is proposed), before any
       // admission rule or the ceiling pre-check: state that changed after the
       // write committed never turns its outcome into a refusal.
-      if (!transaction && this.isSettledRedelivery(operation)) {
+      if (this.isSettledRedelivery(operation)) {
         return this.proposeWrite(operation);
       }
       // The statement-admission owner decides what a statement may prepare,
-      // sessionless and legacy (sessionId-only) session statements alike: a
+      // ordinary statements: a
       // refused head (a PRAGMA, TEMP DDL) is never prepared on the shared
       // connection. A participant session statement never reaches here (its
       // staging owner answers it).
@@ -111,9 +108,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
           maxBytes: options.resultMaxBytes,
           maxRows: options.resultMaxRows,
         });
-        const visibleRows = transaction ?
-          this.applySnapshotReadFilter(rows, transaction.state) :
-          rows;
+        const visibleRows = rows;
         const durationMs = this.timeSource.now() - sqliteStartMs;
         try {
           this.logger.info(METRICS_LOG_TAG.PARTITION_SQLITE, {
@@ -132,13 +127,6 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
           partitionId: this.partitionId,
         };
       } else {
-        if (transaction) {
-          return this.executeTransactionWrite(
-            operation,
-            transaction.sessionId,
-            admission,
-          );
-        }
         return this.proposeWrite(operation);
       }
     } catch (error) {
@@ -193,7 +181,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
           partitionId: this.partitionId,
         };
       }
-      const fenced = fenceLegacyLocalMutation(this);
+      const fenced = unreplicatedLocalMutationRefusal(this);
       if (fenced !== null) {
         return fenced;
       }
@@ -212,70 +200,6 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
       this.logger.error(PARTITION_SERVICE_ERROR_MSG.QUERY_FAILED, {
         partitionId: this.partitionId,
         sql: sql.substring(0, PARTITION_SERVICE_VALUE.DEFAULT_QUERY_TIMEOUT_MS),
-        error: error.message,
-      });
-      throw error;
-    }
-  }
-  /**
-   * Execute a write operation within an active transaction.
-   * @param {Object} operation - Write operation.
-   * @param {string|null} sessionId - Transaction session ID.
-   * @param {Object|null} admitted - Its statement's admission, when the
-   *   caller admitted it (admitted here otherwise, before any prepare).
-   * @return {Promise<Object>} Operation result.
-   * @private
-   */
-  async executeTransactionWrite(operation, sessionId = null, admitted = null) {
-    const transaction = this.resolveActiveTransactionState(sessionId);
-    if (!transaction) {
-      throw new Error(PARTITION_SERVICE_ERROR_MSG.NO_ACTIVE_TRANSACTION);
-    }
-    const {sessionId: transactionSessionId, state: transactionState} =
-      transaction;
-    const timestamp = this.hlcClock.now();
-    const entry = buildPartitionWriteEntry(
-      {
-        ...operation,
-        sessionId: transactionSessionId,
-      },
-      {
-        timestamp,
-        proposedBy: this.replicaId,
-        proposedAt: this.timeSource.now(),
-      },
-    );
-    // A session write enters consensus inside its transaction's commit
-    // marker, so the admission owner admits it at staging exactly as the
-    // write path admits a write: an invalid entryId is refused before
-    // anything is staged, and an absent one was minted by the builder.
-    const admission = admitCommittedCommand(entry, {
-      origin: PARTITION_COMMITTED_COMMAND_ORIGIN.WRITE_PATH});
-    if (!admission.admitted) {
-      return committedCommandRefusalResult(admission, this.partitionId);
-    }
-    const statement = admitted ?? admitPartitionStatement(this, entry.sql,
-      entry.params || []);
-    if (!statement.admitted) {
-      return partitionStatementRefusalAnswer(this, entry.sql, statement);
-    }
-    try {
-      const info = statement.statement.run(...(entry.params || []));
-      const trackedEntry = {...entry, changes: info.changes};
-      transactionState.operations.push(trackedEntry);
-      this.trackTransactionWriteSetKey(transactionState, trackedEntry);
-      this.syncLegacyTransactionAliases();
-      return {
-        success: true,
-        changes: info.changes,
-        lastInsertRowid: info.lastInsertRowid,
-        partitionId: this.partitionId,
-        inTransaction: true,
-        sessionId: transactionSessionId,
-      };
-    } catch (error) {
-      this.logger.error(PARTITION_SERVICE_ERROR_MSG.TRANSACTION_WRITE_FAILED, {
-        partitionId: this.partitionId,
         error: error.message,
       });
       throw error;

@@ -1,0 +1,2981 @@
+{
+  "scannedFileCount": 2226,
+  "totalViolationCount": 318,
+  "filesWithViolations": [
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "violationCount": 65
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "violationCount": 63
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "violationCount": 45
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "violationCount": 42
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-owner-entry-baseline.js",
+      "violationCount": 24
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-transition-authority-baseline.js",
+      "violationCount": 24
+    },
+    {
+      "filePath": "src/node/replica-handler-participant-cutover.js",
+      "violationCount": 6
+    },
+    {
+      "filePath": "src/node/replica-handler-release-recovery.js",
+      "violationCount": 6
+    },
+    {
+      "filePath": "scripts/quest-evidence/tx1-historical-before-l6-witness.mjs",
+      "violationCount": 5
+    },
+    {
+      "filePath": "src/partition/partition-participant-release-contract.js",
+      "violationCount": 4
+    },
+    {
+      "filePath": "src/query/distributed/distributed-transaction-settlement.js",
+      "violationCount": 4
+    },
+    {
+      "filePath": "src/cdc/cdc-delivery-outcome.js",
+      "violationCount": 3
+    },
+    {
+      "filePath": "src/node/participant-release-client.js",
+      "violationCount": 3
+    },
+    {
+      "filePath": "src/node/replica-handler-participant-release.js",
+      "violationCount": 3
+    },
+    {
+      "filePath": "src/query/distributed/distributed-transaction-schema-enforcement.js",
+      "violationCount": 3
+    },
+    {
+      "filePath": "src/bootstrap/bootstrap-service-seed-workflow.js",
+      "violationCount": 2
+    },
+    {
+      "filePath": "src/bootstrap/shared/message-group-transport-handler.js",
+      "violationCount": 2
+    },
+    {
+      "filePath": "src/diagnostics/runtime-build-provenance.js",
+      "violationCount": 2
+    },
+    {
+      "filePath": "src/partition/cdc-event-buffer.js",
+      "violationCount": 2
+    },
+    {
+      "filePath": "src/partition/partition-participant-transaction-topology-fence.js",
+      "violationCount": 2
+    },
+    {
+      "filePath": "src/query/distributed/distributed-transaction-recovery-authority.js",
+      "violationCount": 2
+    },
+    {
+      "filePath": "scripts/build-sea.js",
+      "violationCount": 1
+    },
+    {
+      "filePath": "src/cdc/cdc-event-envelope.js",
+      "violationCount": 1
+    },
+    {
+      "filePath": "src/diagnostics/runtime-content-fingerprint.js",
+      "violationCount": 1
+    },
+    {
+      "filePath": "src/partition/partition-cdc-obligation-delivery.js",
+      "violationCount": 1
+    },
+    {
+      "filePath": "src/query/distributed/distributed-transaction-release-settlement.js",
+      "violationCount": 1
+    },
+    {
+      "filePath": "src/rebalancer/replica-operation-message-group-membership-owner-claim.js",
+      "violationCount": 1
+    }
+  ],
+  "violations": [
+    {
+      "filePath": "scripts/build-sea.js",
+      "line": 218,
+      "column": 66,
+      "value": "'\\n'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-owner-entry-baseline.js",
+      "line": 24,
+      "column": 18,
+      "value": "'cutover owner-entry baseline harness'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-owner-entry-baseline.js",
+      "line": 26,
+      "column": 62,
+      "value": "'output path and exact checkout SHA required'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-owner-entry-baseline.js",
+      "line": 54,
+      "column": 14,
+      "value": "'sha256'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-owner-entry-baseline.js",
+      "line": 54,
+      "column": 78,
+      "value": "'hex'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-owner-entry-baseline.js",
+      "line": 67,
+      "column": 59,
+      "value": "300000",
+      "kind": "free_floating_number_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-owner-entry-baseline.js",
+      "line": 68,
+      "column": 54,
+      "value": "'partition'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-owner-entry-baseline.js",
+      "line": 68,
+      "column": 77,
+      "value": "'replica_operations-p1'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-owner-entry-baseline.js",
+      "line": 115,
+      "column": 27,
+      "value": "300000",
+      "kind": "free_floating_number_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-owner-entry-baseline.js",
+      "line": 144,
+      "column": 84,
+      "value": "10",
+      "kind": "free_floating_number_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-owner-entry-baseline.js",
+      "line": 144,
+      "column": 119,
+      "value": "5",
+      "kind": "free_floating_number_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-owner-entry-baseline.js",
+      "line": 146,
+      "column": 59,
+      "value": "'real deferred retry owner must engage'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-owner-entry-baseline.js",
+      "line": 148,
+      "column": 5,
+      "value": "'record_remote_retry_progress'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-owner-entry-baseline.js",
+      "line": 164,
+      "column": 111,
+      "value": "'skip'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-owner-entry-baseline.js",
+      "line": 173,
+      "column": 44,
+      "value": "'scheduler entered the real remote-retry route'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-owner-entry-baseline.js",
+      "line": 187,
+      "column": 3,
+      "value": "'actual remote-retry evidence must not be replaced with local-dispatch evidence'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-owner-entry-baseline.js",
+      "line": 201,
+      "column": 19,
+      "value": "'existing callback plus real downstream fence; not a disk-crash proof'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-owner-entry-baseline.js",
+      "line": 203,
+      "column": 30,
+      "value": "'measured'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-owner-entry-baseline.js",
+      "line": 204,
+      "column": 20,
+      "value": "'Owner-entry overlap reproduces a volatile progress CAS conflict; active remote-retry evidence selects NO_OPERATION_EFFECT, not duplicate dispatch. The existing publication fence rejects a divergent history prefix.'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-owner-entry-baseline.js",
+      "line": 205,
+      "column": 27,
+      "value": "'projection-concurrency-under-controlled-await; physical-safety-defect-not-proven'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-owner-entry-baseline.js",
+      "line": 206,
+      "column": 27,
+      "value": "'all real repository/lease/timer outcome changes around this interval'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-owner-entry-baseline.js",
+      "line": 207,
+      "column": 5,
+      "value": "'whether duplicate local progress events affect any downstream permission'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-owner-entry-baseline.js",
+      "line": 208,
+      "column": 5,
+      "value": "'full durable failure/restart behavior and independent review'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-owner-entry-baseline.js",
+      "line": 210,
+      "column": 30,
+      "value": "'harness_failed'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-owner-entry-baseline.js",
+      "line": 217,
+      "column": 62,
+      "value": "'\\n'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 19,
+      "column": 18,
+      "value": "'terminal membership obligation owner-entry diagnostic'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 21,
+      "column": 62,
+      "value": "'output and exact SHA required'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 45,
+      "column": 21,
+      "value": "'SELECT * FROM replica_operations WHERE operation_id = ?'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 49,
+      "column": 20,
+      "value": "'message_group_'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 49,
+      "column": 42,
+      "value": "'source_replica_id'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 49,
+      "column": 63,
+      "value": "'replica_id'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 49,
+      "column": 77,
+      "value": "'operation_id'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 53,
+      "column": 13,
+      "value": "'journal_mode=WAL'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 54,
+      "column": 13,
+      "value": "'synchronous=FULL'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 77,
+      "column": 24,
+      "value": "'executeOperationInternal'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 78,
+      "column": 21,
+      "value": "'physical execution outside terminal diagnostic'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 81,
+      "column": 24,
+      "value": "'deliver'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 82,
+      "column": 21,
+      "value": "'transport outside terminal diagnostic'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 95,
+      "column": 44,
+      "value": "'c0-fresh-target-node'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 96,
+      "column": 33,
+      "value": "17",
+      "kind": "free_floating_number_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 97,
+      "column": 53,
+      "value": "10",
+      "kind": "free_floating_number_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 97,
+      "column": 68,
+      "value": "10",
+      "kind": "free_floating_number_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 100,
+      "column": 34,
+      "value": "'learner_requested'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 101,
+      "column": 44,
+      "value": "'intent_recorded'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 103,
+      "column": 46,
+      "value": "44",
+      "kind": "free_floating_number_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 107,
+      "column": 18,
+      "value": "3",
+      "kind": "free_floating_number_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 107,
+      "column": 37,
+      "value": "4",
+      "kind": "free_floating_number_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 107,
+      "column": 60,
+      "value": "'c0-source-attempt'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 115,
+      "column": 38,
+      "value": "'inserted'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 115,
+      "column": 50,
+      "value": "'real canonical repository insert must engage'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 126,
+      "column": 59,
+      "value": "'terminal repository write must engage'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 127,
+      "column": 47,
+      "value": "'ordinary settlement retains exact membership tuple'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 145,
+      "column": 44,
+      "value": "'terminal record effect must engage'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 148,
+      "column": 33,
+      "value": "'observed-progress route skips the terminal row'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 149,
+      "column": 41,
+      "value": "'actual owner entrypoints must suppress physical work'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 155,
+      "column": 38,
+      "value": "'membership_lane_conflict'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 157,
+      "column": 27,
+      "value": "'SELECT COUNT(*) FROM replica_operations WHERE message_group_membership_lane_key = ?'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 162,
+      "column": 30,
+      "value": "'measured'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 164,
+      "column": 27,
+      "value": "'Ordinary owner entries do not gain execution and SQL retains the exact membership lane. This does not prove resumption of the parked membership protocol; its active recovery driver remains a FreshMG product obligation.'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 166,
+      "column": 30,
+      "value": "'failed'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 174,
+      "column": 5,
+      "value": "'src/rebalancer/operation-workflow-owner.js'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 175,
+      "column": 5,
+      "value": "'src/rebalancer/operation-workflow-owner-execution-lane.js'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 176,
+      "column": 5,
+      "value": "'src/rebalancer/operation-workflow-recovery-observation.js'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 177,
+      "column": 5,
+      "value": "'src/rebalancer/operation-workflow-owner-ports.js'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 178,
+      "column": 5,
+      "value": "'src/rebalancer/replica-operation-repository-mutation-update-methods.js'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 179,
+      "column": 5,
+      "value": "'src/rebalancer/replica-operation-repository-mutation-persistence-methods.js'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 180,
+      "column": 5,
+      "value": "'test/rebalancer/reservation-dispatch-gate-test-harness.js'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 181,
+      "column": 37,
+      "value": "'sha256'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 181,
+      "column": 101,
+      "value": "'hex'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-terminal-obligation-baseline.js",
+      "line": 182,
+      "column": 62,
+      "value": "'\\n'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-transition-authority-baseline.js",
+      "line": 17,
+      "column": 18,
+      "value": "'the cutover transition-authority baseline harness'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-transition-authority-baseline.js",
+      "line": 22,
+      "column": 3,
+      "value": "'usage: node <harness> <output.json> <verified checkout sha>'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-transition-authority-baseline.js",
+      "line": 91,
+      "column": 25,
+      "value": "'dispatchLocalOwner'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-transition-authority-baseline.js",
+      "line": 91,
+      "column": 47,
+      "value": "'wakeRemoteOwner'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-transition-authority-baseline.js",
+      "line": 92,
+      "column": 5,
+      "value": "'advanceExistingOperation'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-transition-authority-baseline.js",
+      "line": 92,
+      "column": 33,
+      "value": "'reconcileStaleProgress'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-transition-authority-baseline.js",
+      "line": 93,
+      "column": 5,
+      "value": "'retainPublicationForRetry'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-transition-authority-baseline.js",
+      "line": 93,
+      "column": 34,
+      "value": "'markActiveGateVisible'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-transition-authority-baseline.js",
+      "line": 94,
+      "column": 5,
+      "value": "'recordTerminalSuccess'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-transition-authority-baseline.js",
+      "line": 94,
+      "column": 30,
+      "value": "'recordTerminalFailure'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-transition-authority-baseline.js",
+      "line": 94,
+      "column": 55,
+      "value": "'waitForOwnerProgress'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-transition-authority-baseline.js",
+      "line": 97,
+      "column": 25,
+      "value": "'waitForOwnerProgress'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-transition-authority-baseline.js",
+      "line": 106,
+      "column": 33,
+      "value": "'dispatchLocalOwner'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-transition-authority-baseline.js",
+      "line": 107,
+      "column": 3,
+      "value": "'positive control must engage the actual local-dispatch adapter branch'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-transition-authority-baseline.js",
+      "line": 120,
+      "column": 33,
+      "value": "'real store winner must engage'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-transition-authority-baseline.js",
+      "line": 121,
+      "column": 32,
+      "value": "'real store version conflict must engage'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-transition-authority-baseline.js",
+      "line": 133,
+      "column": 36,
+      "value": "'sending'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-transition-authority-baseline.js",
+      "line": 133,
+      "column": 61,
+      "value": "'pending'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-transition-authority-baseline.js",
+      "line": 139,
+      "column": 37,
+      "value": "'non-extension refusal control must engage'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-transition-authority-baseline.js",
+      "line": 145,
+      "column": 18,
+      "value": "'removed'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-transition-authority-baseline.js",
+      "line": 145,
+      "column": 43,
+      "value": "'forged'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-transition-authority-baseline.js",
+      "line": 146,
+      "column": 18,
+      "value": "'creating'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-transition-authority-baseline.js",
+      "line": 146,
+      "column": 44,
+      "value": "'sending'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-transition-authority-baseline.js",
+      "line": 190,
+      "column": 60,
+      "value": "'\\n'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 22,
+      "column": 18,
+      "value": "'cutover workflow process-loss diagnostic'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 34,
+      "column": 13,
+      "value": "'journal_mode = WAL'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 35,
+      "column": 13,
+      "value": "'synchronous = FULL'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 99,
+      "column": 24,
+      "value": "'executeOperationInternal'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 100,
+      "column": 21,
+      "value": "'physical execution is outside this diagnostic'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 103,
+      "column": 24,
+      "value": "'deliver'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 104,
+      "column": 21,
+      "value": "'network delivery is outside this diagnostic'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 107,
+      "column": 29,
+      "value": "'inspect:'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 110,
+      "column": 28,
+      "value": "'reopen must read the existing row through the real repository'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 124,
+      "column": 27,
+      "value": "'result'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 130,
+      "column": 24,
+      "value": "'sys-postgres-wire-r1'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 131,
+      "column": 20,
+      "value": "'sys-postgres-wire'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 132,
+      "column": 67,
+      "value": "'sys-postgres-wire'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 141,
+      "column": 24,
+      "value": "'readonly_refusal'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 142,
+      "column": 48,
+      "value": "'read-only failure must not be committed'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 143,
+      "column": 21,
+      "value": "'readonly_refusal'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 145,
+      "column": 24,
+      "value": "'after_mark'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 145,
+      "column": 50,
+      "value": "'after_mark'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 148,
+      "column": 24,
+      "value": "'readonly_refusal'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 151,
+      "column": 27,
+      "value": "'refusal'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 152,
+      "column": 19,
+      "value": "'readonly_refusal'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 170,
+      "column": 7,
+      "value": "'c0_process_loss'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 188,
+      "column": 27,
+      "value": "'stdout'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 188,
+      "column": 37,
+      "value": "'stderr'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 188,
+      "column": 65,
+      "value": "'data'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 190,
+      "column": 35,
+      "value": "1000000",
+      "kind": "free_floating_number_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 190,
+      "column": 55,
+      "value": "'SIGKILL'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 192,
+      "column": 14,
+      "value": "'message'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 194,
+      "column": 41,
+      "value": "'cut'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 194,
+      "column": 59,
+      "value": "'SIGKILL'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 196,
+      "column": 14,
+      "value": "'error'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 197,
+      "column": 14,
+      "value": "'exit'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 205,
+      "column": 14,
+      "value": "'worker'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 210,
+      "column": 56,
+      "value": "'output path and source SHA required'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 223,
+      "column": 25,
+      "value": "'before_sql'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 223,
+      "column": 39,
+      "value": "'uncommitted_sql'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 223,
+      "column": 58,
+      "value": "'committed_answer_lost'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 224,
+      "column": 7,
+      "value": "'after_mark'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 224,
+      "column": 21,
+      "value": "'readonly_refusal'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 224,
+      "column": 41,
+      "value": "'terminal_committed'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 230,
+      "column": 35,
+      "value": "'SIGKILL'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 233,
+      "column": 46,
+      "value": "'the named interruption must engage'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 236,
+      "column": 50,
+      "value": "'exactly one real SQL transition attempted'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 238,
+      "column": 9,
+      "value": "'cut must not silently bypass the real SQLite update'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 239,
+      "column": 53,
+      "value": "'uncommitted_sql'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 240,
+      "column": 9,
+      "value": "'the uncommitted cut requires an open SQLite transaction'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 243,
+      "column": 59,
+      "value": "'local candidate really advanced'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 244,
+      "column": 53,
+      "value": "'after_mark'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 245,
+      "column": 9,
+      "value": "'post-mark cut cannot pass while the local mark is absent'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 246,
+      "column": 20,
+      "value": "'readonly_refusal'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 247,
+      "column": 55,
+      "value": "'SQLITE_READONLY'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 248,
+      "column": 11,
+      "value": "'an unrelated exception cannot satisfy the read-only fault'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 260,
+      "column": 59,
+      "value": "'fresh process has no volatile progress'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 261,
+      "column": 20,
+      "value": "'terminal_committed'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 274,
+      "column": 32,
+      "value": "'measured'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 276,
+      "column": 32,
+      "value": "'failed'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 281,
+      "column": 7,
+      "value": "'src/rebalancer/operation-workflow-transition-orchestration.js'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 282,
+      "column": 7,
+      "value": "'src/rebalancer/operation-workflow-owner-execution-lane.js'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 283,
+      "column": 7,
+      "value": "'src/rebalancer/replica-operation-repository-mutation-update-methods.js'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 284,
+      "column": 7,
+      "value": "'src/rebalancer/operation-workflow-persistence.js'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 285,
+      "column": 7,
+      "value": "'src/workflow/durable-workflow-coordinator.js'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 286,
+      "column": 7,
+      "value": "'test/rebalancer/reservation-dispatch-gate-test-harness.js'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 287,
+      "column": 39,
+      "value": "'sha256'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 287,
+      "column": 103,
+      "value": "'hex'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-baseline.js",
+      "line": 288,
+      "column": 64,
+      "value": "'\\n'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 22,
+      "column": 18,
+      "value": "'the C0 process-crash diagnostic'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 46,
+      "column": 11,
+      "value": "'PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 52,
+      "column": 51,
+      "value": "'fixture-admission'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 54,
+      "column": 36,
+      "value": "'c0-group'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 55,
+      "column": 44,
+      "value": "'fixture-unresolved'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 56,
+      "column": 37,
+      "value": "'c0-fixed-source-target-pair'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 60,
+      "column": 18,
+      "value": "'fixture operation row must exist'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 65,
+      "column": 11,
+      "value": "'CREATE TABLE c0_fixture(id TEXT PRIMARY KEY, revision INTEGER NOT NULL, body TEXT NOT NULL)'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 72,
+      "column": 15,
+      "value": "'fixture-terminal-with-outstanding-membership'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 74,
+      "column": 14,
+      "value": "'INSERT INTO c0_fixture VALUES (?, ?, ?)'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 108,
+      "column": 13,
+      "value": "'fixture-dispatch'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 116,
+      "column": 16,
+      "value": "'cas-refused'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 116,
+      "column": 42,
+      "value": "'different-durable-winner'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 118,
+      "column": 16,
+      "value": "'UPDATE c0_fixture SET revision=2, body=? WHERE id=?'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 121,
+      "column": 16,
+      "value": "'before-commit'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 122,
+      "column": 18,
+      "value": "'write-unavailable'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 122,
+      "column": 47,
+      "value": "'PRAGMA query_only=ON'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 124,
+      "column": 15,
+      "value": "'BEGIN IMMEDIATE'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 128,
+      "column": 20,
+      "value": "'inside-transaction'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 128,
+      "column": 50,
+      "value": "'COMMIT'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 134,
+      "column": 16,
+      "value": "'after-local-mark'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 134,
+      "column": 47,
+      "value": "'acknowledged'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 141,
+      "column": 40,
+      "value": "'acknowledged'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 143,
+      "column": 14,
+      "value": "'message'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 145,
+      "column": 16,
+      "value": "'acknowledged'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 161,
+      "column": 15,
+      "value": "'fixture-replay'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 176,
+      "column": 21,
+      "value": "'data'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 177,
+      "column": 21,
+      "value": "'data'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 178,
+      "column": 14,
+      "value": "'error'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 183,
+      "column": 14,
+      "value": "'message'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 184,
+      "column": 47,
+      "value": "'duplicate cut'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 184,
+      "column": 76,
+      "value": "'SIGKILL'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 186,
+      "column": 20,
+      "value": "'acknowledged'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 186,
+      "column": 47,
+      "value": "'SIGKILL'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 188,
+      "column": 14,
+      "value": "'close'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 192,
+      "column": 22,
+      "value": "'acknowledged'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 193,
+      "column": 35,
+      "value": "'SIGKILL'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 206,
+      "column": 60,
+      "value": "'output and source label SHA required'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 230,
+      "column": 12,
+      "value": "'cas-refused'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 230,
+      "column": 27,
+      "value": "'different-durable-winner'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 231,
+      "column": 20,
+      "value": "'write-unavailable'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 236,
+      "column": 18,
+      "value": "'inside-transaction'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 236,
+      "column": 40,
+      "value": "'named transaction cut must be real'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 240,
+      "column": 9,
+      "value": "'selected cut must observe the expected SQL write'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 242,
+      "column": 10,
+      "value": "'after-local-mark'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 242,
+      "column": 30,
+      "value": "'acknowledged'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 243,
+      "column": 9,
+      "value": "'local committed marker must match the selected cut'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 248,
+      "column": 20,
+      "value": "'write-unavailable'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 249,
+      "column": 60,
+      "value": "8",
+      "kind": "free_floating_number_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 250,
+      "column": 11,
+      "value": "'the refusal control must be SQLITE_READONLY, not an arbitrary error'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 256,
+      "column": 90,
+      "value": "'fixture-unresolved'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 265,
+      "column": 85,
+      "value": "'fixture-unresolved'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 266,
+      "column": 30,
+      "value": "'terminal-row-loader'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 267,
+      "column": 14,
+      "value": "'ensureOperationWorkflow fallback and downstream terminal guards are not executed'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 268,
+      "column": 32,
+      "value": "'measured'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 270,
+      "column": 32,
+      "value": "'failed'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 277,
+      "column": 64,
+      "value": "'\\n'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 283,
+      "column": 25,
+      "value": "'--worker'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 283,
+      "column": 63,
+      "value": "3",
+      "kind": "free_floating_number_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 283,
+      "column": 80,
+      "value": "4",
+      "kind": "free_floating_number_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 284,
+      "column": 30,
+      "value": "'--read'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 284,
+      "column": 96,
+      "value": "3",
+      "kind": "free_floating_number_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/cutover-workflow-crash-projection-baseline.js",
+      "line": 285,
+      "column": 47,
+      "value": "3",
+      "kind": "free_floating_number_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 16,
+      "column": 18,
+      "value": "'retry recovery-window owner measurement'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 17,
+      "column": 34,
+      "value": "'all'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 18,
+      "column": 62,
+      "value": "'output and exact SHA required'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 19,
+      "column": 12,
+      "value": "'all'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 19,
+      "column": 19,
+      "value": "'query-only'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 66,
+      "column": 36,
+      "value": "'actual executor delivery must engage'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 68,
+      "column": 5,
+      "value": "'all deliveries use exactly one entry identity'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 71,
+      "column": 49,
+      "value": "'unsettled write must stay typed unknown'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 72,
+      "column": 45,
+      "value": "'unknown outcome preserves its exact write identity'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 85,
+      "column": 32,
+      "value": "'a'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 86,
+      "column": 32,
+      "value": "'a'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 86,
+      "column": 37,
+      "value": "'b'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 86,
+      "column": 42,
+      "value": "'c'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 86,
+      "column": 52,
+      "value": "'a'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 87,
+      "column": 5,
+      "value": "'native positive control: established leader'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 88,
+      "column": 23,
+      "value": "'a'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 90,
+      "column": 25,
+      "value": "10",
+      "kind": "free_floating_number_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 91,
+      "column": 25,
+      "value": "'b'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 91,
+      "column": 30,
+      "value": "'c'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 92,
+      "column": 9,
+      "value": "'observations alone do not advance the election'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 95,
+      "column": 55,
+      "value": "'b'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 95,
+      "column": 60,
+      "value": "'c'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 96,
+      "column": 22,
+      "value": "'b'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 96,
+      "column": 27,
+      "value": "'c'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 100,
+      "column": 32,
+      "value": "'ticking surviving native quorum elects a replacement'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 101,
+      "column": 19,
+      "value": "'guarded-production-operation-ports'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 101,
+      "column": 68,
+      "value": "'a'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 101,
+      "column": 73,
+      "value": "'b'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 101,
+      "column": 78,
+      "value": "'c'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 102,
+      "column": 13,
+      "value": "'a'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 103,
+      "column": 27,
+      "value": "10",
+      "kind": "free_floating_number_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 103,
+      "column": 47,
+      "value": "'b'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 103,
+      "column": 52,
+      "value": "'c'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 104,
+      "column": 19,
+      "value": "'No conversion from deterministic ticks to physical latency; not a SQL workload.'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 120,
+      "column": 47,
+      "value": "'recovery reached by an allowed retry settles'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 136,
+      "column": 20,
+      "value": "'createPartitionAttemptBudget.waitForRetryBudget'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 137,
+      "column": 23,
+      "value": "'Observed policy boundary, not an automatic source-repair decision.'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 139,
+      "column": 16,
+      "value": "'all'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 145,
+      "column": 16,
+      "value": "'sha256'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 145,
+      "column": 80,
+      "value": "'hex'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 146,
+      "column": 30,
+      "value": "'measured'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/retry-recovery-window.js",
+      "line": 151,
+      "column": 64,
+      "value": "'\\n'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/tx1-historical-before-l6-witness.mjs",
+      "line": 24,
+      "column": 23,
+      "value": "'public legacy TRANSACTION message'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/tx1-historical-before-l6-witness.mjs",
+      "line": 42,
+      "column": 15,
+      "value": "'TX1_HISTORICAL_BEFORE_L6 '",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/tx1-historical-before-l6-witness.mjs",
+      "line": 44,
+      "column": 5,
+      "value": "'historical source must accept a genuine public legacy BEGIN'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/tx1-historical-before-l6-witness.mjs",
+      "line": 46,
+      "column": 5,
+      "value": "'historical source must reach its existing legacy PREPARE method'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "scripts/quest-evidence/tx1-historical-before-l6-witness.mjs",
+      "line": 48,
+      "column": 5,
+      "value": "'historical PREPARE must be reflected in source-owned state'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/bootstrap/bootstrap-service-seed-workflow.js",
+      "line": 275,
+      "column": 27,
+      "value": "'Seed participant release authority unavailable'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/bootstrap/bootstrap-service-seed-workflow.js",
+      "line": 295,
+      "column": 27,
+      "value": "'Seed participant release failed: '",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/bootstrap/shared/message-group-transport-handler.js",
+      "line": 102,
+      "column": 38,
+      "value": "'Message group opening cleanup remains pending'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/bootstrap/shared/message-group-transport-handler.js",
+      "line": 114,
+      "column": 18,
+      "value": "'MESSAGE_GROUP_CREATE_CLEANUP_REQUIRED'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/cdc/cdc-delivery-outcome.js",
+      "line": 17,
+      "column": 54,
+      "value": "'eventKey'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/cdc/cdc-delivery-outcome.js",
+      "line": 28,
+      "column": 30,
+      "value": "'eventKey'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/cdc/cdc-delivery-outcome.js",
+      "line": 47,
+      "column": 56,
+      "value": "'eventKey'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/cdc/cdc-event-envelope.js",
+      "line": 12,
+      "column": 28,
+      "value": "'eventKey'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/diagnostics/runtime-build-provenance.js",
+      "line": 47,
+      "column": 64,
+      "value": "'..'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/diagnostics/runtime-build-provenance.js",
+      "line": 47,
+      "column": 70,
+      "value": "'..'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/diagnostics/runtime-content-fingerprint.js",
+      "line": 49,
+      "column": 26,
+      "value": "'ENOENT'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/node/participant-release-client.js",
+      "line": 38,
+      "column": 21,
+      "value": "'release_deadline'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/node/participant-release-client.js",
+      "line": 49,
+      "column": 23,
+      "value": "'replica_release_reply'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/node/participant-release-client.js",
+      "line": 53,
+      "column": 21,
+      "value": "'replica_release_reply'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/node/replica-handler-participant-cutover.js",
+      "line": 151,
+      "column": 21,
+      "value": "'current_control_owner_fact'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/node/replica-handler-participant-cutover.js",
+      "line": 165,
+      "column": 21,
+      "value": "'current_control_owner_fact'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/node/replica-handler-participant-cutover.js",
+      "line": 204,
+      "column": 21,
+      "value": "'release_deadline'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/node/replica-handler-participant-cutover.js",
+      "line": 209,
+      "column": 21,
+      "value": "'hosted_partition'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/node/replica-handler-participant-cutover.js",
+      "line": 222,
+      "column": 21,
+      "value": "'fresh_storage_or_operator_authority'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/node/replica-handler-participant-cutover.js",
+      "line": 243,
+      "column": 21,
+      "value": "'committed_replica_routes'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/node/replica-handler-participant-release.js",
+      "line": 49,
+      "column": 15,
+      "value": "'replica-lifecycle'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/node/replica-handler-participant-release.js",
+      "line": 87,
+      "column": 23,
+      "value": "'release_deadline'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/node/replica-handler-participant-release.js",
+      "line": 91,
+      "column": 72,
+      "value": "'hosted_replica'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/node/replica-handler-release-recovery.js",
+      "line": 79,
+      "column": 22,
+      "value": "'explicit_pre_origin_release_request'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/node/replica-handler-release-recovery.js",
+      "line": 85,
+      "column": 22,
+      "value": "'measured_boot_content'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/node/replica-handler-release-recovery.js",
+      "line": 140,
+      "column": 25,
+      "value": "'Fresh replica release deadline unavailable'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/node/replica-handler-release-recovery.js",
+      "line": 147,
+      "column": 25,
+      "value": "'Fresh replica release authority unavailable'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/node/replica-handler-release-recovery.js",
+      "line": 164,
+      "column": 23,
+      "value": "'Fresh replica participant release failed: '",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/node/replica-handler-release-recovery.js",
+      "line": 169,
+      "column": 25,
+      "value": "'Operator participant release deadline unavailable'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/partition/cdc-event-buffer.js",
+      "line": 39,
+      "column": 31,
+      "value": "'eventKey'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/partition/cdc-event-buffer.js",
+      "line": 63,
+      "column": 31,
+      "value": "'eventKey'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/partition/partition-cdc-obligation-delivery.js",
+      "line": 467,
+      "column": 23,
+      "value": "'cdc_subscriber_set_changed'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/partition/partition-participant-release-contract.js",
+      "line": 48,
+      "column": 26,
+      "value": "'COMMIT'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/partition/partition-participant-release-contract.js",
+      "line": 48,
+      "column": 63,
+      "value": "'COMMITTED'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/partition/partition-participant-release-contract.js",
+      "line": 49,
+      "column": 27,
+      "value": "'ROLLBACK'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/partition/partition-participant-release-contract.js",
+      "line": 49,
+      "column": 66,
+      "value": "'ROLLED_BACK'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/partition/partition-participant-transaction-topology-fence.js",
+      "line": 92,
+      "column": 42,
+      "value": "'source'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/partition/partition-participant-transaction-topology-fence.js",
+      "line": 92,
+      "column": 53,
+      "value": "'target'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/query/distributed/distributed-transaction-recovery-authority.js",
+      "line": 85,
+      "column": 32,
+      "value": "'Transaction authority read unavailable'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/query/distributed/distributed-transaction-recovery-authority.js",
+      "line": 113,
+      "column": 34,
+      "value": "'Transaction recovery freeze unresolved'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/query/distributed/distributed-transaction-release-settlement.js",
+      "line": 145,
+      "column": 26,
+      "value": "'COMMITTED'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/query/distributed/distributed-transaction-schema-enforcement.js",
+      "line": 45,
+      "column": 21,
+      "value": "'sha256'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/query/distributed/distributed-transaction-schema-enforcement.js",
+      "line": 45,
+      "column": 52,
+      "value": "'hex'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/query/distributed/distributed-transaction-schema-enforcement.js",
+      "line": 131,
+      "column": 14,
+      "value": "'The coordinator ledger schema changes only through its fixed committed owner'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/query/distributed/distributed-transaction-settlement.js",
+      "line": 77,
+      "column": 45,
+      "value": "3",
+      "kind": "free_floating_number_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/query/distributed/distributed-transaction-settlement.js",
+      "line": 77,
+      "column": 52,
+      "value": "'outcome'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/query/distributed/distributed-transaction-settlement.js",
+      "line": 77,
+      "column": 63,
+      "value": "'reason'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/query/distributed/distributed-transaction-settlement.js",
+      "line": 77,
+      "column": 73,
+      "value": "'recordedDecision'",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    },
+    {
+      "filePath": "src/rebalancer/replica-operation-message-group-membership-owner-claim.js",
+      "line": 152,
+      "column": 34,
+      "value": "' AND '",
+      "kind": "free_floating_string_literal",
+      "reason": "raw literal outside a named constant owner",
+      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
+    }
+  ],
+  "rawViolationCount": 1584,
+  "inheritedViolationCount": 1266,
+  "baselineViolationCount": 1287
+}

@@ -1,0 +1,1386 @@
+{
+  "candidate": "775504a9792b7b2f21b1cc6d92406c8d1df26d97",
+  "predecessorSourceInput": "7d5ccc89125fa657db5ddc4877dff5e1f57e76a3",
+  "sourceBase": "e6d43bc1acb128a2b83ac89c77a3ec400e7edb1f",
+  "method": "Same current tests and same physical locked lab hosts; only src restored. Candidate broad cohort and predecessor failed-file cohort differ, so timing comparisons do not isolate load. No budget changes or failure waiver.",
+  "failedFilesCompared": 92,
+  "alsoFailWithPredecessorSource": 90,
+  "passWithPredecessorSource": [
+    "test/query/query-executor-executeonpartition-no-handler-repair.test.js",
+    "test/query/query-executor-session-binding-and-build-sql.test.js"
+  ],
+  "diagnosis": "The two predecessor greens consume deleted TRANSACTION_ALREADY_ACTIVE, which becomes undefined on candidate; immediate deterministic classification failures are confirmed by current source tracing. The other90 reproduce at file level; this does not certify their assertions, health, fixtures, or unrelated owner guarantees.",
+  "rows": [
+    {
+      "host": "lenovo-laptop",
+      "file": "test/node/replica-transport-handler-identity.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 22,
+      "predecessorElapsedMs": 2570,
+      "candidate": {
+        "host": "lenovo-laptop",
+        "passed": false,
+        "file": "test/node/replica-transport-handler-identity.test.js",
+        "assertions": 22,
+        "elapsedMs": 2178
+      }
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 3,
+      "predecessorElapsedMs": 2965,
+      "candidate": {
+        "host": "lenovo-laptop",
+        "passed": false,
+        "file": "test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js",
+        "assertions": 3,
+        "elapsedMs": 2421
+      }
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/query/partition-write-answer-consumers.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 2,
+      "predecessorElapsedMs": 3032,
+      "candidate": {
+        "host": "lenovo-laptop",
+        "passed": false,
+        "file": "test/query/partition-write-answer-consumers.test.js",
+        "assertions": 2,
+        "elapsedMs": 2347
+      }
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/raft/raft-rs-backend/evidence-o1-static.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 8,
+      "predecessorElapsedMs": 979,
+      "candidate": {
+        "host": "lenovo-laptop",
+        "passed": false,
+        "file": "test/raft/raft-rs-backend/evidence-o1-static.test.js",
+        "assertions": 8,
+        "elapsedMs": 887
+      }
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/index-management/index-service.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 57,
+      "predecessorElapsedMs": 2936,
+      "candidate": {
+        "host": "lenovo-laptop",
+        "passed": false,
+        "file": "test/index-management/index-service.test.js",
+        "assertions": 57,
+        "elapsedMs": 2796
+      }
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/partition/cdc-generation.property.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 8,
+      "predecessorElapsedMs": 2762,
+      "candidate": {
+        "host": "lenovo-laptop",
+        "passed": false,
+        "file": "test/partition/cdc-generation.property.test.js",
+        "assertions": 8,
+        "elapsedMs": 2927
+      }
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/partition/partition-service-raft-noop-cdc-placement.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 12,
+      "predecessorElapsedMs": 1910,
+      "candidate": {
+        "host": "lenovo-laptop",
+        "passed": false,
+        "file": "test/partition/partition-service-raft-noop-cdc-placement.test.js",
+        "assertions": 12,
+        "elapsedMs": 2450
+      }
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/index-management/index-maintenance-consistency.property.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 10,
+      "predecessorElapsedMs": 2712,
+      "candidate": {
+        "host": "lenovo-laptop",
+        "passed": false,
+        "file": "test/index-management/index-maintenance-consistency.property.test.js",
+        "assertions": 10,
+        "elapsedMs": 3311
+      }
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/raft/raft-rs-backend/single-path-partition-cutover.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 5,
+      "predecessorElapsedMs": 27730,
+      "candidate": {
+        "host": "lenovo-laptop",
+        "passed": false,
+        "file": "test/raft/raft-rs-backend/single-path-partition-cutover.test.js",
+        "assertions": 5,
+        "elapsedMs": 38630
+      }
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/query/write-exactly-once-schedules.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 2,
+      "predecessorElapsedMs": 63447,
+      "candidate": {
+        "host": "lenovo-laptop",
+        "passed": false,
+        "file": "test/query/write-exactly-once-schedules.test.js",
+        "assertions": 2,
+        "elapsedMs": 63284
+      }
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/bootstrap/partition-activation-handler-boundary.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 45,
+      "predecessorElapsedMs": 1469,
+      "candidate": {
+        "host": "lenovo-laptop",
+        "passed": false,
+        "file": "test/bootstrap/partition-activation-handler-boundary.test.js",
+        "assertions": 45,
+        "elapsedMs": 1343
+      }
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/bootstrap/bootstrap-epoch-manager-lifecycle.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 5,
+      "predecessorElapsedMs": 31814,
+      "candidate": {
+        "host": "lenovo-laptop",
+        "passed": false,
+        "file": "test/bootstrap/bootstrap-epoch-manager-lifecycle.test.js",
+        "assertions": 5,
+        "elapsedMs": 30667
+      }
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/bootstrap/phase-event-ordering-characterization.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 223,
+      "predecessorElapsedMs": 2881,
+      "candidate": {
+        "host": "lenovo-laptop",
+        "passed": false,
+        "file": "test/bootstrap/phase-event-ordering-characterization.test.js",
+        "assertions": 223,
+        "elapsedMs": 3009
+      }
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/bootstrap/node-bootstrap-consistency.property.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 33,
+      "predecessorElapsedMs": 53855,
+      "candidate": {
+        "host": "lenovo-laptop",
+        "passed": false,
+        "file": "test/bootstrap/node-bootstrap-consistency.property.test.js",
+        "assertions": 33,
+        "elapsedMs": 51292
+      }
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/integration/membership-consistency.integration.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 71,
+      "predecessorElapsedMs": 103982,
+      "candidate": {
+        "host": "lenovo-laptop",
+        "passed": false,
+        "file": "test/integration/membership-consistency.integration.test.js",
+        "assertions": 71,
+        "elapsedMs": 103060
+      }
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/integration/raft-leader-election.integration.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 23,
+      "predecessorElapsedMs": 119978,
+      "candidate": {
+        "host": "lenovo-laptop",
+        "passed": false,
+        "file": "test/integration/raft-leader-election.integration.test.js",
+        "assertions": 23,
+        "elapsedMs": 120050
+      }
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/integration/debug-join-flow.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 3,
+      "predecessorElapsedMs": 24826,
+      "candidate": {
+        "host": "lenovo-laptop",
+        "passed": false,
+        "file": "test/integration/debug-join-flow.test.js",
+        "assertions": 3,
+        "elapsedMs": 23930
+      }
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/integration/create-table-partition-provisioning.integration.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 4,
+      "predecessorElapsedMs": 32188,
+      "candidate": {
+        "host": "lenovo-laptop",
+        "passed": false,
+        "file": "test/integration/create-table-partition-provisioning.integration.test.js",
+        "assertions": 4,
+        "elapsedMs": 33669
+      }
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/distributed/harness/__tests__/owner-interaction-model.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 5,
+      "predecessorElapsedMs": 654,
+      "candidate": {
+        "host": "adams-gamla",
+        "passed": false,
+        "file": "test/distributed/harness/__tests__/owner-interaction-model.test.js",
+        "assertions": 5,
+        "elapsedMs": 3722
+      }
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/node/replica-create-admission-recovery.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 10,
+      "predecessorElapsedMs": 4686,
+      "candidate": {
+        "host": "adams-gamla",
+        "passed": false,
+        "file": "test/node/replica-create-admission-recovery.test.js",
+        "assertions": 10,
+        "elapsedMs": 6686
+      }
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/node/replica-handler-cache-state.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 19,
+      "predecessorElapsedMs": 4694,
+      "candidate": {
+        "host": "adams-gamla",
+        "passed": false,
+        "file": "test/node/replica-handler-cache-state.test.js",
+        "assertions": 19,
+        "elapsedMs": 5699
+      }
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/partition/partition-service-sqlite-metrics.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 17,
+      "predecessorElapsedMs": 1753,
+      "candidate": {
+        "host": "adams-gamla",
+        "passed": false,
+        "file": "test/partition/partition-service-sqlite-metrics.test.js",
+        "assertions": 17,
+        "elapsedMs": 1974
+      }
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/partition/partition-service.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 126,
+      "predecessorElapsedMs": 2910,
+      "candidate": {
+        "host": "adams-gamla",
+        "passed": false,
+        "file": "test/partition/partition-service.test.js",
+        "assertions": 126,
+        "elapsedMs": 3235
+      }
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/partition/partition-write-kernel.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 104,
+      "predecessorElapsedMs": 596,
+      "candidate": {
+        "host": "adams-gamla",
+        "passed": false,
+        "file": "test/partition/partition-write-kernel.test.js",
+        "assertions": 104,
+        "elapsedMs": 711
+      }
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/partition/partition-write-leadership-transfer-committed.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 2,
+      "predecessorElapsedMs": 1544,
+      "candidate": {
+        "host": "adams-gamla",
+        "passed": false,
+        "file": "test/partition/partition-write-leadership-transfer-committed.test.js",
+        "assertions": 2,
+        "elapsedMs": 1857
+      }
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/partition/partition-transaction-replay-cursor-v4.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 11,
+      "predecessorElapsedMs": 5072,
+      "candidate": {
+        "host": "adams-gamla",
+        "passed": false,
+        "file": "test/partition/partition-transaction-replay-cursor-v4.test.js",
+        "assertions": 11,
+        "elapsedMs": 5888
+      }
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/partition/settled-replay-preserves-result.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 6,
+      "predecessorElapsedMs": 1741,
+      "candidate": {
+        "host": "adams-gamla",
+        "passed": false,
+        "file": "test/partition/settled-replay-preserves-result.test.js",
+        "assertions": 6,
+        "elapsedMs": 2007
+      }
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/query/query-executor-executeonpartition-no-handler-repair.test.js",
+      "predecessorPassed": true,
+      "predecessorAssertions": 68,
+      "predecessorElapsedMs": 1138,
+      "candidate": {
+        "host": "adams-gamla",
+        "passed": false,
+        "file": "test/query/query-executor-executeonpartition-no-handler-repair.test.js",
+        "assertions": 68,
+        "elapsedMs": 1441
+      }
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/query/distributed-transaction-coordinator.property.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 23,
+      "predecessorElapsedMs": 2509,
+      "candidate": {
+        "host": "adams-gamla",
+        "passed": false,
+        "file": "test/query/distributed-transaction-coordinator.property.test.js",
+        "assertions": 23,
+        "elapsedMs": 2766
+      }
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/query/transaction-recovery-poison-row-attribution.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 14,
+      "predecessorElapsedMs": 696,
+      "candidate": {
+        "host": "adams-gamla",
+        "passed": false,
+        "file": "test/query/transaction-recovery-poison-row-attribution.test.js",
+        "assertions": 14,
+        "elapsedMs": 724
+      }
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/query/sql-query-engine.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 132,
+      "predecessorElapsedMs": 2416,
+      "candidate": {
+        "host": "adams-gamla",
+        "passed": false,
+        "file": "test/query/sql-query-engine.test.js",
+        "assertions": 132,
+        "elapsedMs": 2882
+      }
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/convergence/dt6-learner-promotion-proof-channel-wake.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 12,
+      "predecessorElapsedMs": 15879,
+      "candidate": {
+        "host": "adams-gamla",
+        "passed": false,
+        "file": "test/convergence/dt6-learner-promotion-proof-channel-wake.test.js",
+        "assertions": 12,
+        "elapsedMs": 15807
+      }
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/scripts/check-guideline-decision-boundaries.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 96,
+      "predecessorElapsedMs": 1878,
+      "candidate": {
+        "host": "adams-gamla",
+        "passed": false,
+        "file": "test/scripts/check-guideline-decision-boundaries.test.js",
+        "assertions": 96,
+        "elapsedMs": 2555
+      }
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/query/unknown-outcome-redelivery-budget.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 3,
+      "predecessorElapsedMs": 74291,
+      "candidate": {
+        "host": "adams-gamla",
+        "passed": false,
+        "file": "test/query/unknown-outcome-redelivery-budget.test.js",
+        "assertions": 3,
+        "elapsedMs": 74286
+      }
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/bootstrap/join-lifecycle-sub-phase-parity-characterization.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 84,
+      "predecessorElapsedMs": 2713,
+      "candidate": {
+        "host": "adams-gamla",
+        "passed": false,
+        "file": "test/bootstrap/join-lifecycle-sub-phase-parity-characterization.test.js",
+        "assertions": 84,
+        "elapsedMs": 2661
+      }
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/bootstrap/fresh-join-via-non-seed-node.integration.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 11,
+      "predecessorElapsedMs": 13810,
+      "candidate": {
+        "host": "adams-gamla",
+        "passed": false,
+        "file": "test/bootstrap/fresh-join-via-non-seed-node.integration.test.js",
+        "assertions": 11,
+        "elapsedMs": 17956
+      }
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/integration/node-join-replica-activation.integration.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 30,
+      "predecessorElapsedMs": 58581,
+      "candidate": {
+        "host": "adams-gamla",
+        "passed": false,
+        "file": "test/integration/node-join-replica-activation.integration.test.js",
+        "assertions": 30,
+        "elapsedMs": 58325
+      }
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/integration/pgwire-command-tag-real-engine.integration.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 38,
+      "predecessorElapsedMs": 312383,
+      "candidate": {
+        "host": "adams-gamla",
+        "passed": false,
+        "file": "test/integration/pgwire-command-tag-real-engine.integration.test.js",
+        "assertions": 38,
+        "elapsedMs": 306142
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/node/message-group-service-handler-membership.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 1,
+      "predecessorElapsedMs": 791,
+      "candidate": {
+        "host": "carinas-windows",
+        "passed": false,
+        "file": "test/node/message-group-service-handler-membership.test.js",
+        "assertions": 1,
+        "elapsedMs": 652
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/config/code-path-uniqueness.property.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 12,
+      "predecessorElapsedMs": 1275,
+      "candidate": {
+        "host": "carinas-windows",
+        "passed": false,
+        "file": "test/config/code-path-uniqueness.property.test.js",
+        "assertions": 12,
+        "elapsedMs": 1093
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/partition/partition-service-raft-propose-metrics.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 34,
+      "predecessorElapsedMs": 1843,
+      "candidate": {
+        "host": "carinas-windows",
+        "passed": false,
+        "file": "test/partition/partition-service-raft-propose-metrics.test.js",
+        "assertions": 34,
+        "elapsedMs": 1872
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/convergence/dt6-learner-promotion-progress-proof.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 30,
+      "predecessorElapsedMs": 3073,
+      "candidate": {
+        "host": "carinas-windows",
+        "passed": false,
+        "file": "test/convergence/dt6-learner-promotion-progress-proof.test.js",
+        "assertions": 30,
+        "elapsedMs": 2953
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/partition/partition-service-stale-topology-write-guard.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 22,
+      "predecessorElapsedMs": 1854,
+      "candidate": {
+        "host": "carinas-windows",
+        "passed": false,
+        "file": "test/partition/partition-service-stale-topology-write-guard.test.js",
+        "assertions": 22,
+        "elapsedMs": 1926
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/partition/split-backfill-internal-pacing.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 6,
+      "predecessorElapsedMs": 1739,
+      "candidate": {
+        "host": "carinas-windows",
+        "passed": false,
+        "file": "test/partition/split-backfill-internal-pacing.test.js",
+        "assertions": 6,
+        "elapsedMs": 1546
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/query/query-executor-session-binding-and-build-sql.test.js",
+      "predecessorPassed": true,
+      "predecessorAssertions": 68,
+      "predecessorElapsedMs": 1411,
+      "candidate": {
+        "host": "carinas-windows",
+        "passed": false,
+        "file": "test/query/query-executor-session-binding-and-build-sql.test.js",
+        "assertions": 68,
+        "elapsedMs": 1297
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/query/deferred-hash.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 21,
+      "predecessorElapsedMs": 1488,
+      "candidate": {
+        "host": "carinas-windows",
+        "passed": false,
+        "file": "test/query/deferred-hash.test.js",
+        "assertions": 21,
+        "elapsedMs": 1369
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/query/sql-query-engine-transaction-owned-commit-mode.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 19,
+      "predecessorElapsedMs": 1473,
+      "candidate": {
+        "host": "carinas-windows",
+        "passed": false,
+        "file": "test/query/sql-query-engine-transaction-owned-commit-mode.test.js",
+        "assertions": 19,
+        "elapsedMs": 1224
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/partition/partition-runtime-reconstruction-leadership.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 20,
+      "predecessorElapsedMs": 51464,
+      "candidate": {
+        "host": "carinas-windows",
+        "passed": false,
+        "file": "test/partition/partition-runtime-reconstruction-leadership.test.js",
+        "assertions": 20,
+        "elapsedMs": 51754
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/raft/leadership-transfer-single-path.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 3,
+      "predecessorElapsedMs": 915,
+      "candidate": {
+        "host": "carinas-windows",
+        "passed": false,
+        "file": "test/raft/leadership-transfer-single-path.test.js",
+        "assertions": 3,
+        "elapsedMs": 919
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/raft/raft-rs-backend/committed-membership-census.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 8,
+      "predecessorElapsedMs": 535,
+      "candidate": {
+        "host": "carinas-windows",
+        "passed": false,
+        "file": "test/raft/raft-rs-backend/committed-membership-census.test.js",
+        "assertions": 8,
+        "elapsedMs": 538
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/raft/raft-rs-backend/reseed-hold-durability.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 3,
+      "predecessorElapsedMs": 525,
+      "candidate": {
+        "host": "carinas-windows",
+        "passed": false,
+        "file": "test/raft/raft-rs-backend/reseed-hold-durability.test.js",
+        "assertions": 3,
+        "elapsedMs": 615
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/scripts/change-selection-taxonomy.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 8,
+      "predecessorElapsedMs": 6851,
+      "candidate": {
+        "host": "carinas-windows",
+        "passed": false,
+        "file": "test/scripts/change-selection-taxonomy.test.js",
+        "assertions": 8,
+        "elapsedMs": 8745
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/simulation/formation-attribution-provenance.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 41,
+      "predecessorElapsedMs": 3335,
+      "candidate": {
+        "host": "carinas-windows",
+        "passed": false,
+        "file": "test/simulation/formation-attribution-provenance.test.js",
+        "assertions": 41,
+        "elapsedMs": 4196
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/workflow/monotonic-workflow-regression.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 86,
+      "predecessorElapsedMs": 1020,
+      "candidate": {
+        "host": "carinas-windows",
+        "passed": false,
+        "file": "test/workflow/monotonic-workflow-regression.test.js",
+        "assertions": 86,
+        "elapsedMs": 1265
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/query/settled-replay-sql-surface.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 4,
+      "predecessorElapsedMs": 121562,
+      "candidate": {
+        "host": "carinas-windows",
+        "passed": false,
+        "file": "test/query/settled-replay-sql-surface.test.js",
+        "assertions": 4,
+        "elapsedMs": 121522
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/query/unknown-outcome-same-entry.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 11,
+      "predecessorElapsedMs": 170932,
+      "candidate": {
+        "host": "carinas-windows",
+        "passed": false,
+        "file": "test/query/unknown-outcome-same-entry.test.js",
+        "assertions": 11,
+        "elapsedMs": 170721
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/query/write-identity-instance.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 17,
+      "predecessorElapsedMs": 475499,
+      "candidate": {
+        "host": "carinas-windows",
+        "passed": false,
+        "file": "test/query/write-identity-instance.test.js",
+        "assertions": 17,
+        "elapsedMs": 445510
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/bootstrap/seed-teardown-pending-cdc-delivery.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 1,
+      "predecessorElapsedMs": 1532,
+      "candidate": {
+        "host": "carinas-windows",
+        "passed": false,
+        "file": "test/bootstrap/seed-teardown-pending-cdc-delivery.test.js",
+        "assertions": 1,
+        "elapsedMs": 1510
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/bootstrap/bootstrap-websocket-server-reentry.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 3,
+      "predecessorElapsedMs": 16664,
+      "candidate": {
+        "host": "carinas-windows",
+        "passed": false,
+        "file": "test/bootstrap/bootstrap-websocket-server-reentry.test.js",
+        "assertions": 3,
+        "elapsedMs": 16115
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/integration/critical-partition-learner-safety.integration.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 10,
+      "predecessorElapsedMs": 35900,
+      "candidate": {
+        "host": "carinas-windows",
+        "passed": false,
+        "file": "test/integration/critical-partition-learner-safety.integration.test.js",
+        "assertions": 10,
+        "elapsedMs": 35673
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/integration/managed-split-writes-after-cutover.integration.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 2,
+      "predecessorElapsedMs": 140479,
+      "candidate": {
+        "host": "carinas-windows",
+        "passed": false,
+        "file": "test/integration/managed-split-writes-after-cutover.integration.test.js",
+        "assertions": 2,
+        "elapsedMs": 141408
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/integration/public-binding-cell-invocation-seam.integration.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 2,
+      "predecessorElapsedMs": 181662,
+      "candidate": {
+        "host": "carinas-windows",
+        "passed": false,
+        "file": "test/integration/public-binding-cell-invocation-seam.integration.test.js",
+        "assertions": 2,
+        "elapsedMs": 211099
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/integration/seed-node-bootstrap.integration.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 45,
+      "predecessorElapsedMs": 16602,
+      "candidate": {
+        "host": "carinas-windows",
+        "passed": false,
+        "file": "test/integration/seed-node-bootstrap.integration.test.js",
+        "assertions": 45,
+        "elapsedMs": 16494
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/integration/seed-owner-read-diagnosis.integration.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 5,
+      "predecessorElapsedMs": 12726,
+      "candidate": {
+        "host": "carinas-windows",
+        "passed": false,
+        "file": "test/integration/seed-owner-read-diagnosis.integration.test.js",
+        "assertions": 5,
+        "elapsedMs": 12982
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/integration/sql-engine-system-writes-contract.integration.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 4,
+      "predecessorElapsedMs": 14130,
+      "candidate": {
+        "host": "carinas-windows",
+        "passed": false,
+        "file": "test/integration/sql-engine-system-writes-contract.integration.test.js",
+        "assertions": 4,
+        "elapsedMs": 30899
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/partition/partition-consensus-hold-log.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 1,
+      "predecessorElapsedMs": 1840,
+      "candidate": {
+        "host": "adam-laptop",
+        "passed": false,
+        "file": "test/partition/partition-consensus-hold-log.test.js",
+        "assertions": 1,
+        "elapsedMs": 2591
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/address/address-manager-peer-location-authority.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 28,
+      "predecessorElapsedMs": 2614,
+      "candidate": {
+        "host": "adam-laptop",
+        "passed": false,
+        "file": "test/address/address-manager-peer-location-authority.test.js",
+        "assertions": 28,
+        "elapsedMs": 2474
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/partition/partition-replication-restart-attempt-handoff.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 108,
+      "predecessorElapsedMs": 2602,
+      "candidate": {
+        "host": "adam-laptop",
+        "passed": false,
+        "file": "test/partition/partition-replication-restart-attempt-handoff.test.js",
+        "assertions": 108,
+        "elapsedMs": 3985
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/node/replica-handler-owner-path-bypass.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 4,
+      "predecessorElapsedMs": 6135,
+      "candidate": {
+        "host": "adam-laptop",
+        "passed": false,
+        "file": "test/node/replica-handler-owner-path-bypass.test.js",
+        "assertions": 4,
+        "elapsedMs": 9069
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/node/replica-handler.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 105,
+      "predecessorElapsedMs": 6580,
+      "candidate": {
+        "host": "adam-laptop",
+        "passed": false,
+        "file": "test/node/replica-handler.test.js",
+        "assertions": 105,
+        "elapsedMs": 8999
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/partition/partition-service-size-split-transport.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 107,
+      "predecessorElapsedMs": 6365,
+      "candidate": {
+        "host": "adam-laptop",
+        "passed": false,
+        "file": "test/partition/partition-service-size-split-transport.test.js",
+        "assertions": 107,
+        "elapsedMs": 5967
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/partition/partition-write-leadership-transfer.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 2,
+      "predecessorElapsedMs": 3010,
+      "candidate": {
+        "host": "adam-laptop",
+        "passed": false,
+        "file": "test/partition/partition-write-leadership-transfer.test.js",
+        "assertions": 2,
+        "elapsedMs": 3016
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/partition/raft-rs-transport-demux.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 16,
+      "predecessorElapsedMs": 3392,
+      "candidate": {
+        "host": "adam-laptop",
+        "passed": false,
+        "file": "test/partition/raft-rs-transport-demux.test.js",
+        "assertions": 16,
+        "elapsedMs": 3641
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/query/distributed-transaction-coordinator.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 86,
+      "predecessorElapsedMs": 1966,
+      "candidate": {
+        "host": "adam-laptop",
+        "passed": false,
+        "file": "test/query/distributed-transaction-coordinator.test.js",
+        "assertions": 86,
+        "elapsedMs": 1591
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/partition/partition-statement-admission.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 11,
+      "predecessorElapsedMs": 9216,
+      "candidate": {
+        "host": "adam-laptop",
+        "passed": false,
+        "file": "test/partition/partition-statement-admission.test.js",
+        "assertions": 11,
+        "elapsedMs": 5920
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/query/partition-transaction-seam-falsifiers.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 14,
+      "predecessorElapsedMs": 3786,
+      "candidate": {
+        "host": "adam-laptop",
+        "passed": false,
+        "file": "test/query/partition-transaction-seam-falsifiers.test.js",
+        "assertions": 14,
+        "elapsedMs": 3578
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/query/sql-query-engine-execution.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 130,
+      "predecessorElapsedMs": 3399,
+      "candidate": {
+        "host": "adam-laptop",
+        "passed": false,
+        "file": "test/query/sql-query-engine-execution.test.js",
+        "assertions": 130,
+        "elapsedMs": 3705
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/query/transaction-owned-commit-mode-guard.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 12,
+      "predecessorElapsedMs": 836,
+      "candidate": {
+        "host": "adam-laptop",
+        "passed": false,
+        "file": "test/query/transaction-owned-commit-mode-guard.test.js",
+        "assertions": 12,
+        "elapsedMs": 1282
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/query/sql-query-engine-managed-split.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 39,
+      "predecessorElapsedMs": 2201,
+      "candidate": {
+        "host": "adam-laptop",
+        "passed": false,
+        "file": "test/query/sql-query-engine-managed-split.test.js",
+        "assertions": 39,
+        "elapsedMs": 2859
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/query/write-path-internal-pacing.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 37,
+      "predecessorElapsedMs": 3654,
+      "candidate": {
+        "host": "adam-laptop",
+        "passed": false,
+        "file": "test/query/write-path-internal-pacing.test.js",
+        "assertions": 37,
+        "elapsedMs": 4342
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/rebalancer/replica-operation-membership-epoch-binding.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 109,
+      "predecessorElapsedMs": 2968,
+      "candidate": {
+        "host": "adam-laptop",
+        "passed": false,
+        "file": "test/rebalancer/replica-operation-membership-epoch-binding.test.js",
+        "assertions": 109,
+        "elapsedMs": 2854
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/partition/table-partition-structure.property.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 6,
+      "predecessorElapsedMs": 18562,
+      "candidate": {
+        "host": "adam-laptop",
+        "passed": false,
+        "file": "test/partition/table-partition-structure.property.test.js",
+        "assertions": 6,
+        "elapsedMs": 20298
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/scripts/solve-footprint-accounting.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 4,
+      "predecessorElapsedMs": 358147,
+      "candidate": {
+        "host": "adam-laptop",
+        "passed": false,
+        "file": "test/scripts/solve-footprint-accounting.test.js",
+        "assertions": 4,
+        "elapsedMs": 353516
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/query/write-exactly-once-property.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 1,
+      "predecessorElapsedMs": 600054,
+      "candidate": {
+        "host": "adam-laptop",
+        "passed": false,
+        "file": "test/query/write-exactly-once-property.test.js",
+        "assertions": 1,
+        "elapsedMs": 600073
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/bootstrap/dynamic-partition-cdc-subscription.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 30,
+      "predecessorElapsedMs": 2510,
+      "candidate": {
+        "host": "adam-laptop",
+        "passed": false,
+        "file": "test/bootstrap/dynamic-partition-cdc-subscription.test.js",
+        "assertions": 30,
+        "elapsedMs": 3276
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/bootstrap/bootstrap-sequence.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 56,
+      "predecessorElapsedMs": 16021,
+      "candidate": {
+        "host": "adam-laptop",
+        "passed": false,
+        "file": "test/bootstrap/bootstrap-sequence.test.js",
+        "assertions": 56,
+        "elapsedMs": 27265
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/bootstrap/fresh-join-registration-runtime-replacement.integration.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 4,
+      "predecessorElapsedMs": 14417,
+      "candidate": {
+        "host": "adam-laptop",
+        "passed": false,
+        "file": "test/bootstrap/fresh-join-registration-runtime-replacement.integration.test.js",
+        "assertions": 4,
+        "elapsedMs": 28023
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/integration/insert-or-ignore-raft-replay.integration.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 8,
+      "predecessorElapsedMs": 17436,
+      "candidate": {
+        "host": "adam-laptop",
+        "passed": false,
+        "file": "test/integration/insert-or-ignore-raft-replay.integration.test.js",
+        "assertions": 8,
+        "elapsedMs": 17786
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/integration/leader-metadata-validation.integration.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 13,
+      "predecessorElapsedMs": 20292,
+      "candidate": {
+        "host": "adam-laptop",
+        "passed": false,
+        "file": "test/integration/leader-metadata-validation.integration.test.js",
+        "assertions": 13,
+        "elapsedMs": 23201
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/integration/managed-split-admission-reliability.integration.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 16,
+      "predecessorElapsedMs": 18456,
+      "candidate": {
+        "host": "adam-laptop",
+        "passed": false,
+        "file": "test/integration/managed-split-admission-reliability.integration.test.js",
+        "assertions": 16,
+        "elapsedMs": 19453
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/integration/multi-node-raft-replication.integration.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 17,
+      "predecessorElapsedMs": 35443,
+      "candidate": {
+        "host": "adam-laptop",
+        "passed": false,
+        "file": "test/integration/multi-node-raft-replication.integration.test.js",
+        "assertions": 17,
+        "elapsedMs": 34725
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/integration/public-application-database-transaction-facade.integration.test.js",
+      "predecessorPassed": false,
+      "predecessorAssertions": 58,
+      "predecessorElapsedMs": 92610,
+      "candidate": {
+        "host": "adam-laptop",
+        "passed": false,
+        "file": "test/integration/public-application-database-transaction-facade.integration.test.js",
+        "assertions": 58,
+        "elapsedMs": 92148
+      }
+    }
+  ],
+  "artifacts": [
+    {
+      "file": "frozen-v3-red-controls/lenovo-laptop/status.json",
+      "sha256": "39cce5e25578de91dadee5972025f65e1822a79142232abd24a40ea12cb37911",
+      "bytes": 60
+    },
+    {
+      "file": "frozen-v3-red-controls/lenovo-laptop/input.json",
+      "sha256": "d53907b8312a6c3d51c248478951bdb1987a4392b24f7f5b416125fa67625778",
+      "bytes": 1356
+    },
+    {
+      "file": "frozen-v3-red-controls/lenovo-laptop/results.ndjson",
+      "sha256": "f8480f431a0597f37dd804fac3495fd077b4924fcc4403d0c585cf8565c61377",
+      "bytes": 4729
+    },
+    {
+      "file": "frozen-v3-red-controls/lenovo-laptop/raw.log",
+      "sha256": "a27518e573654f8cf7d93d5f0a81d29366e9115213d956f6c033ac602a952bd9",
+      "bytes": 253213
+    },
+    {
+      "file": "frozen-v3-red-controls/adams-gamla/status.json",
+      "sha256": "9b5af46fa439b7ce35c0f90e61d2595b31e57bfc3aa95ac906f2c98adc94c9fc",
+      "bytes": 60
+    },
+    {
+      "file": "frozen-v3-red-controls/adams-gamla/input.json",
+      "sha256": "3ea5228ebd963cf47100854e937f797bbfdeaaffbb36a9e89ada94ad89f9aec1",
+      "bytes": 1514
+    },
+    {
+      "file": "frozen-v3-red-controls/adams-gamla/results.ndjson",
+      "sha256": "cfc43c4a96df6d6f72832c0aaba2a2ae7c08bf0ca1c046e1106bb5974719710e",
+      "bytes": 4989
+    },
+    {
+      "file": "frozen-v3-red-controls/adams-gamla/raw.log",
+      "sha256": "cf1237c5fb3b58e64162e838075be600826e9e64cad3c2f8b40c0af471d911cd",
+      "bytes": 374998
+    },
+    {
+      "file": "frozen-v3-red-controls/carinas-windows/status.json",
+      "sha256": "e343f45086bb308d0655e3662602dd46a6935555cd73f5c7d88d1ce6bd5ada45",
+      "bytes": 60
+    },
+    {
+      "file": "frozen-v3-red-controls/carinas-windows/input.json",
+      "sha256": "9b88fa919fc4c4d4bbbd839dada615ed4f435610bad4416470d901049670ecdf",
+      "bytes": 1961
+    },
+    {
+      "file": "frozen-v3-red-controls/carinas-windows/results.ndjson",
+      "sha256": "9aaa3ff864dd3158424281492d8a90e0413c0c06f7388fe759baeaac6d95ba2c",
+      "bytes": 6991
+    },
+    {
+      "file": "frozen-v3-red-controls/carinas-windows/raw.log",
+      "sha256": "c8f1620977a4d4131bef99384d80327aa1f18ccc338ad66749536778f6eec957",
+      "bytes": 545591
+    },
+    {
+      "file": "frozen-v3-red-controls/adam-laptop/status.json",
+      "sha256": "9684c784153554de172b288c916dc28d21de3a81202535129047531ed8b89ee4",
+      "bytes": 60
+    },
+    {
+      "file": "frozen-v3-red-controls/adam-laptop/input.json",
+      "sha256": "71973cda539368c580ceef23f6d0d8d74d708fa4e656fca318475db4ae5044f7",
+      "bytes": 1938
+    },
+    {
+      "file": "frozen-v3-red-controls/adam-laptop/results.ndjson",
+      "sha256": "c39c788de26c283d92a764e00c10be308ad0dc51dff3406211c12795a19a4ac5",
+      "bytes": 7124
+    },
+    {
+      "file": "frozen-v3-red-controls/adam-laptop/raw.log",
+      "sha256": "1093fde4b08aee2120e0692dc47df5d30b72eef8aecbf206797cae3f06a2081a",
+      "bytes": 880323
+    }
+  ],
+  "completedAt": "2026-10-13T12:55:25.403509+00:00"
+}

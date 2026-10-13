@@ -1,0 +1,10 @@
+{
+  "sha": "57f98ca76d948e3a8f0d9e4dbe63992d68bde987",
+  "files": [
+    "test/partition/partition-tx1-single-path-alpha.test.js",
+    "test/partition/partition-participant-release-admission.test.js",
+    "test/partition/partition-participant-transaction-apply.test.js",
+    "test/partition/partition-participant-transaction-staging.test.js"
+  ],
+  "host": "tv-dator"
+}

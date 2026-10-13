@@ -48,7 +48,6 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
     OPERATION_PERSIST_RETRY_DELAY_MS,
     OPERATION_PERSIST_RETRY_TIMEOUT_MS,
     OPERATION_MUTATION_SESSION_RETRY_DECISION,
-    PARTITION_SERVICE_ERROR_MSG,
     PRESSURE_WORK_CLASS,
     QUERY_ERROR_MSG,
     REBALANCE_COORDINATOR_LOG_MSG,
@@ -56,7 +55,6 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
     REPLICA_OPERATION_MUTATION_WORKLOAD_PROFILE,
     REPLICA_OPERATION_REPOSITORY_LITERAL,
     RETRYABLE_OPERATION_PERSIST_ERROR_FRAGMENTS,
-    RETRYABLE_OPERATION_PERSIST_ERROR_MESSAGES,
     RETRYABLE_OPERATION_PERSIST_ERROR_PREFIXES,
     ROUTER_ERROR_MSG,
     SYSTEM_TABLE_NAME,
@@ -397,7 +395,6 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
             errorMessage.includes(fragment),
           ) ||
           isRetryableWorkflowParticipantLookupErrorMessage(errorMessage) ||
-          RETRYABLE_OPERATION_PERSIST_ERROR_MESSAGES.includes(errorMessage) ||
           RETRYABLE_OPERATION_PERSIST_ERROR_PREFIXES.some((prefix) =>
             errorMessage.startsWith(prefix),
           ))
@@ -511,13 +508,6 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
       return error;
     }
 
-    isOperationMutationPartitionContention(errorResult) {
-      return (
-        this.getOperationPersistErrorMessage(errorResult) ===
-        PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE
-      );
-    }
-
     hasOperationMutationParticipantFailureEvidence(errorResult, errorMessage) {
       return (
         (Array.isArray(errorResult?.participantFailures) &&
@@ -574,10 +564,7 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
             OPERATION_MUTATION_SESSION_RETRY_DECISION.RETAIN_EXISTING_SESSION,
         };
       }
-      if (
-        this.isOperationMutationPartitionContention(errorResult) ||
-        this.isOperationMutationRouteRepairCandidate(errorResult)
-      ) {
+      if (this.isOperationMutationRouteRepairCandidate(errorResult)) {
         return {
           state:
             OPERATION_MUTATION_SESSION_RETRY_DECISION.ROTATE_IMPLICIT_SESSION,
@@ -603,19 +590,7 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
         Number.isFinite(retryAfterMs) && retryAfterMs > 0 ?
           Math.floor(retryAfterMs) :
           OPERATION_PERSIST_RETRY_DELAY_MS;
-      if (!this.isOperationMutationPartitionContention(errorResult)) {
-        return baseDelayMs;
-      }
-      const jitterCeilingMs = Math.max(
-        1,
-        Math.floor(baseDelayMs / 2),
-      );
-      const boundedRandom = Math.max(
-        0,
-        Math.min(1, this.random()),
-      );
-      const jitterMs = Math.floor(boundedRandom * jitterCeilingMs);
-      return baseDelayMs + jitterMs;
+      return baseDelayMs;
     }
 
     // The persist-retry budgets above are measured on this repository's

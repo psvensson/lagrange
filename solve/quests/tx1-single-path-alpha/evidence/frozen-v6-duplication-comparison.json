@@ -1,0 +1,45 @@
+{
+  "candidate": "57f98ca76d948e3a8f0d9e4dbe63992d68bde987",
+  "predecessor": "e6d43bc1acb128a2b83ac89c77a3ec400e7edb1f",
+  "method": "Compare exact fragment plus unordered file-pair multisets from canonical jscpd reports; no increased thresholds. Whole test duplication gate stays red.",
+  "rows": [
+    {
+      "surface": "src-scripts",
+      "predecessorGroups": 47,
+      "candidateGroups": 47,
+      "predecessorLines": 1462,
+      "candidateLines": 1462,
+      "newCloneIdentities": 0,
+      "removedCloneIdentities": 0,
+      "reports": [
+        {
+          "localPath": "/tmp/lagrange-tx1-baseline-OnmaDp/tree/test-output/analysis/jscpd-src-scripts/jscpd-report.json",
+          "sha256": "4efc7381eac2a4e84466f9ce1af12b4b5cb2581cfd914494caead142f1c74c85"
+        },
+        {
+          "localPath": "/tmp/session-worktree-a1ayrY/tree/test-output/analysis/jscpd-src-scripts/jscpd-report.json",
+          "sha256": "399a9f8b97f73a0e977a06dbdbbaa95c9e14a8753843a05b711fac96985b4fed"
+        }
+      ]
+    },
+    {
+      "surface": "test",
+      "predecessorGroups": 700,
+      "candidateGroups": 697,
+      "predecessorLines": 26492,
+      "candidateLines": 26415,
+      "newCloneIdentities": 0,
+      "removedCloneIdentities": 3,
+      "reports": [
+        {
+          "localPath": "/tmp/lagrange-tx1-baseline-OnmaDp/tree/test-output/analysis/jscpd-test/jscpd-report.json",
+          "sha256": "5a85c69580fdd7a3f6bdae91240c2632de59ab796d8a05386cae6f662f86169e"
+        },
+        {
+          "localPath": "/tmp/session-worktree-a1ayrY/tree/test-output/analysis/jscpd-test/jscpd-report.json",
+          "sha256": "8b69d7892e98f67042141bbf9c90bd0c19323818704f00fe55ebf3f846d616af"
+        }
+      ]
+    }
+  ]
+}

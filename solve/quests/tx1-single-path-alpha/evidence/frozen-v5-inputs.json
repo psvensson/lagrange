@@ -1,0 +1,18 @@
+{
+  "purpose": "Unlanded cleanup-primary-error visibility A/B",
+  "candidate": {
+    "path": "/tmp/session-worktree-dEBHVZ/tree",
+    "sha": "59e022721a94b449aa0d1ee47a441db29fb5f8d7",
+    "tree": "5636dd3134144779ca5cc85d0c753224815f7a7f",
+    "parent": "e6d43bc1acb128a2b83ac89c77a3ec400e7edb1f"
+  },
+  "predecessor": {
+    "path": "/tmp/session-worktree-wzco8c/tree",
+    "sha": "27218f8d8c85978755ea88b8d4ca5826aabd6a85",
+    "tree": "e942daa27e7cebab17522dd41eb0bca673b9f31c",
+    "parent": "59e022721a94b449aa0d1ee47a441db29fb5f8d7"
+  },
+  "sourceBase": "e6d43bc1acb128a2b83ac89c77a3ec400e7edb1f",
+  "runtimeSha256": "8f63c5e1ba41b8973a8a90f79c94eb33bffef8f65706e21ad4457cbe1ff65124",
+  "capturedAt": "2026-10-13T12:28:47.212Z"
+}

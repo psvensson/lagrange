@@ -38,6 +38,7 @@ import {test} from 'node:test';
 import Database from 'better-sqlite3';
 
 import {formAdmittedGroup} from './partition-admitted-group-fixture.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -64,6 +65,10 @@ import {
 } from '../../src/partition/partition-committed-statement-outcome-constants.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
+import {
+  resumeFixtureParticipantAdmission,
+  resumeFixtureParticipantGroupAdmission,
+} from '../test-helpers/participant-transaction-fixture.js';
 
 const TEMP_PREFIX = 'committed-statement-outcome-';
 const DB_FILE = 'partition.sqlite';
@@ -108,6 +113,7 @@ function partitionOptions(partitionId, dbPath) {
     replicaId: `${partitionId}-r1`,
     replicaIds: [`${partitionId}-r1`],
     nodeId: 'statement-outcome-node',
+    systemTableCache: new SystemTableCache(),
     dbPath,
     schema: {columns: [
       {name: 'id', type: 'TEXT', primaryKey: true},
@@ -203,6 +209,7 @@ async function withPartition(partitionId, body) {
     const service = new PartitionService(withFoundingStamp(partitionOptions(partitionId, dbPath)));
     services.push(service);
     await service.initialize();
+    await resumeFixtureParticipantAdmission(service);
     return service;
   };
   try {
@@ -388,6 +395,7 @@ test('B2: the replicas of a three-replica group hold identical outcome rows ' +
     serviceOptions: partitionOptions(partitionId, null),
     budgetMs: GROUP_BUDGET_MS,
   });
+  await resumeFixtureParticipantGroupAdmission(group.services, group.waitFor);
   const {dbFileOf, waitFor} = group;
   const leader = group.services[0];
   try {
@@ -509,14 +517,14 @@ const B5_SHAPES = Object.freeze([
     viaTransport: true,
     command: {type: 'REPLICATE_ROWS', sql: INADMISSIBLE_SQL,
       entryId: 'e-poison'}},
-  {name: 'prepare-marker', code: 'MARKER_NOT_ADMISSIBLE',
-    command: {type: PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION,
+  {name: 'retired-prepare-marker', code: 'COMMAND_TYPE_UNKNOWN',
+    command: {type: 'PREPARE_TRANSACTION',
       sessionId: 'session-x', entryId: 'e-prepare'}},
-  {name: 'rollback-marker', code: 'MARKER_NOT_ADMISSIBLE',
+  {name: 'retired-rollback-marker', code: 'COMMAND_TYPE_UNKNOWN',
     command: {type: PARTITION_SERVICE_OPERATION.ROLLBACK,
       sessionId: 'session-x', entryId: 'e-rollback'}},
-  {name: 'transaction-commit-without-session', code: 'SESSION_MISSING',
-    command: {type: PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT,
+  {name: 'retired-transaction-commit', code: 'COMMAND_TYPE_UNKNOWN',
+    command: {type: 'TRANSACTION_COMMIT',
       entryId: 'e-commit'}},
 ]);
 
@@ -620,58 +628,6 @@ test('F-ad: a present-but-invalid entryId is refused before consensus; a ' +
     assert.equal(minted.success, true, 'an absent entryId is minted');
     assert.equal(rowOf(dbPath, 'row-minted')?.id, 'row-minted',
       'and the write applied');
-  });
-});
-
-// F-ai: a session write enters consensus inside its transaction's commit
-// marker, so the admission owner admits it where it is staged, exactly as it
-// admits a write on the write path.
-test('F-ai: a session write is admitted at staging - a present-but-invalid ' +
-  'entryId is refused typed before anything is staged, an absent one is ' +
-  'minted - so the commit marker carries only string entry ids',
-{timeout: TEST_TIMEOUT_MS}, async () => {
-  await withPartition('fai-session', async ({dbPath, open}) => {
-    const partition = await open();
-    assert.equal((await insert(partition, 'row-0', 'setup', 'e-setup'))
-      .success, true, 'setup: the partition serves a write');
-    const sessionId = 'fai-session-1';
-    await partition.beginTransaction(sessionId);
-    for (const [name, entryId] of INVALID_ENTRY_IDS) {
-      const staged = await partition.executeQuery(INSERT_SQL,
-        [`session-${name}`, 'v'], {sessionId, entryId});
-      assert.equal(staged?.success, false, 'a session write with an ' +
-        `invalid entryId (${name}) is refused (${JSON.stringify(staged)})`);
-      assert.equal(staged.failureCode,
-        PARTITION_COMMITTED_COMMAND_ERROR_CODE.ENTRY_ID_INVALID,
-        `with the admission owner's typed code (${name})`);
-    }
-    const minted = await partition.executeQuery(INSERT_SQL,
-      ['session-minted', 'v'], {sessionId});
-    assert.equal(minted?.success, true, 'a session write without an ' +
-      'entryId is staged');
-    assert.equal((await partition.commitTransaction(sessionId))?.success,
-      true, 'the session commits');
-    const independent = new Database(dbPath, {readonly: true});
-    let marker;
-    try {
-      marker = RaftRsDurableStore.readCommittedEntriesIn(independent,
-        'fai-session').map((record) => record.command).find((command) =>
-        command.type === PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT &&
-        command.sessionId === sessionId);
-    } finally {
-      independent.close();
-    }
-    assert.ok(marker, 'the session\'s commit marker is in the durable log');
-    assert.deepEqual(marker.operations.map((operation) =>
-      typeof operation.entryId), ['string'], 'the marker carries exactly ' +
-      'the staged write, keyed by a string entry id ' +
-      `(${JSON.stringify(marker.operations.map((op) => op.entryId))})`);
-    assert.equal(rowOf(dbPath, 'session-minted')?.id, 'session-minted',
-      'the admitted session write applied');
-    for (const [name] of INVALID_ENTRY_IDS) {
-      assert.equal(rowOf(dbPath, `session-${name}`), null,
-        `nothing was staged for the refused write (${name})`);
-    }
   });
 });
 
@@ -854,6 +810,7 @@ test('AD: on a three-replica group, the leader\'s own environmental apply ' +
     serviceOptions: partitionOptions(partitionId, null),
     budgetMs: GROUP_BUDGET_MS,
   });
+  await resumeFixtureParticipantGroupAdmission(group.services, group.waitFor);
   const leader = group.services[0];
   const prepare = leader.db.prepare.bind(leader.db);
   try {

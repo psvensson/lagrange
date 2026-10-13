@@ -271,9 +271,6 @@ test('TX1 inc3: a write the leader proposed that meets the reservation at apply 
     const proposedBefore = proposed.length;
     facts.begin = pick(await send(leader, beginMessage(identityOf('i3-other'))),
       ['success', 'failureCode']);
-    facts.legacyBegin = pick(await send(leader, {type: 'TRANSACTION',
-      operation: PARTITION_SERVICE_OPERATION.BEGIN_TRANSACTION, sessionId: 'legacy'}),
-    ['success', 'failureCode']);
     facts.unknownStatement = pick(await send(leader, queryMessage(identityOf('i3-unknown'),
       INSERT_SQL, [ROW_2.id, ROW_2.value])), ['success', 'failureCode']);
     facts.mismatch = pick(await send(leader, txMessage(
@@ -293,7 +290,6 @@ test('TX1 inc3: a write the leader proposed that meets the reservation at apply 
     assert.deepEqual(facts, {prepareApply: null, reservedApply: null, answer: 'pending',
       retryable: true, unsettled: 'unsettled',
       begin: {success: false, failureCode: CODE.ALREADY_ACTIVE},
-      legacyBegin: {success: false, failureCode: CODE.ALREADY_ACTIVE},
       unknownStatement: {success: false, failureCode: CODE.NOT_ACTIVE},
       mismatch: {success: false, failureCode: CODE.IDENTITY_MISMATCH}, proposedByRefusals: 0,
       decisionApply: null, reproposals: 2, retried: null, writeAnswer: true,
@@ -335,8 +331,7 @@ test('TX1 inc3: no staging transaction is ever open on the leader\'s connection,
     facts.staged = (await send(leader, queryMessage(tx, INSERT_SQL, [ROW.id, ROW.value])))
       ?.success === true;
     facts.stagingOpen = leader.db.inTransaction;
-    const prepare = track(send(leader, txMessage(PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION,
-      tx)));
+    const prepare = track(send(leader, prepareMessage(tx)));
     const command = await awaitProposal(proposed,
       (entry) => entry.transactionId === tx.transactionId);
     facts.atProposal = {stagingOpen: leader.db.inTransaction, rows: rowCount(leader),
@@ -579,19 +574,18 @@ test('TX1 inc3 G2: a deterministic failure of a later COMMIT operation leaves no
       rows: [0, 0], txop: 0, generation: 0}, 'a COMMIT applies all of its operations or none');
   }));
 
-test('TX1 inc3 G3: while a PREPARE is in flight on the leader, a participant BEGIN and a ' +
-  'legacy BEGIN are refused already_active and open no staging transaction', () => onLeader(
+test('TX1 inc3 G3: while a PREPARE is in flight on the leader, another participant BEGIN ' +
+  'is refused already_active and opens no staging transaction', () => onLeader(
   async (leader, proposed) => {
     const {prepare, command} = await preparingOn(leader, proposed,
       identityOf('g3-a', {sessionId: 's-a'}));
     const facts = {participant: pick(await send(leader, beginMessage(identityOf('g3-b',
-      {sessionId: 's-b'}))), ['success', 'failureCode']), legacy: pick(await send(leader,
-      {type: 'TRANSACTION', operation: PARTITION_SERVICE_OPERATION.BEGIN_TRANSACTION,
-        sessionId: 's-legacy'}), ['success', 'failureCode']), stagingOpen: leader.db.inTransaction};
+      {sessionId: 's-b'}))), ['success', 'failureCode']),
+    stagingOpen: leader.db.inTransaction};
     facts.apply = command ? applyCommitted(leader, command) : 'not proposed';
     facts.prepared = pick(await prepare.promise, ['success', 'state']);
     const refused = {success: false, failureCode: CODE.ALREADY_ACTIVE};
-    assert.deepEqual(facts, {participant: refused, legacy: refused, stagingOpen: false,
+    assert.deepEqual(facts, {participant: refused, stagingOpen: false,
       apply: null, prepared: {success: true, state: V3.STATE.PREPARED}},
     'PREPARING holds the partition like PREPARED does');
   }));

@@ -26,7 +26,11 @@ transactions, and partition-local write kernels.
   rs-raft record (`legacy_partition_consensus_state_detected`); such state is
   never migrated or reused.
 - `PartitionWriteKernel` owns partition write execution.
-- `PartitionTransactionHandler` owns partition-local transaction handling.
+- `partition-participant-transaction-request.js`,
+  `partition-participant-transaction-session.js`,
+  `partition-participant-transaction-store.js`, and
+  `partition-participant-transaction-apply.js` own the current TX1 request,
+  volatile staging, durable custody, and committed application boundaries.
 - `ManagedSplitWorkflow` owns split lifecycle progression.
 - `PartitionSplitMergeManager` owns split/merge evaluation and triggering.
 - `PartitionServiceRowOwner` owns partition service-row field mutation.

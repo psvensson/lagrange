@@ -1,0 +1,28 @@
+{
+  "purpose": "Unlanded sourceV3 correction with same-test sourceV2 control",
+  "candidate": {
+    "path": "/tmp/session-worktree-a1ayrY/tree",
+    "sha": "57f98ca76d948e3a8f0d9e4dbe63992d68bde987",
+    "tree": "5404bba10d321c6b5ac50c438f69c3c782ea73ec",
+    "parent": "e6d43bc1acb128a2b83ac89c77a3ec400e7edb1f"
+  },
+  "control": {
+    "path": "/tmp/session-worktree-IG0jGz/tree",
+    "sha": "204364d3c720bbb97c12b996918a6f7646194a6d",
+    "tree": "9562e94d5f9ece68f12996ef6343eb6328fb1080",
+    "parent": "57f98ca76d948e3a8f0d9e4dbe63992d68bde987"
+  },
+  "sourceControl": "59e022721a94b449aa0d1ee47a441db29fb5f8d7",
+  "sourceDelta": [
+    "src/control-plane/control-plane-error-classification.js",
+    "src/partition/partition-participant-transaction-session.js",
+    "src/partition/partition-participant-transaction-store.js",
+    "src/query/query-executor-partition-delivery.js",
+    "src/query/query-executor-shared.js",
+    "src/query/query-executor-write-retry-routing.js",
+    "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
+    "src/rebalancer/replica-operation-repository.js"
+  ],
+  "sourceManifestSha256": "7c7b498fc6f3e0433cb40ed57e874989c5a73af650b48f61f731a0122cde8d4a",
+  "capturedAt": "2026-10-13T13:05:41.174Z"
+}

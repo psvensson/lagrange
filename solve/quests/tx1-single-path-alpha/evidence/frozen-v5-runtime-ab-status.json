@@ -1,0 +1,16 @@
+[
+  {
+    "label": "predecessor-source",
+    "sha": "27218f8d8c85978755ea88b8d4ca5826aabd6a85",
+    "code": 1,
+    "rawTap": "/mnt/data/peter/projects/.worktrees/rs-raft-alpha-single-path-20261013/test-output/alpha-single-path-20261013/frozen-v5-runtime-predecessor-source.tap",
+    "finishedAt": "2026-10-13T12:30:25.221Z"
+  },
+  {
+    "label": "candidate",
+    "sha": "59e022721a94b449aa0d1ee47a441db29fb5f8d7",
+    "code": 1,
+    "rawTap": "/mnt/data/peter/projects/.worktrees/rs-raft-alpha-single-path-20261013/test-output/alpha-single-path-20261013/frozen-v5-runtime-candidate.tap",
+    "finishedAt": "2026-10-13T12:31:29.677Z"
+  }
+]

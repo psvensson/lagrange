@@ -18,7 +18,11 @@ import {
   PARTICIPANT_TRANSACTION_LOG_MSG as LOG_MSG,
   PARTICIPANT_TRANSACTION_SESSION_PHASE as PHASE,
 } from './partition-participant-transaction-constants.js';
-import {readPreparedParticipantIds} from './partition-participant-transaction-store.js';
+import {
+  isParticipantSessionPrepared,
+  isPartitionReserved,
+  readPreparedParticipantIds,
+} from './partition-participant-transaction-store.js';
 
 // Per partition service: participantId -> session.
 const SESSIONS = new WeakMap();
@@ -77,7 +81,7 @@ function findParticipantSession(service, {transactionId, participantId}) {
 
 /**
  * The session a routing sessionId names, if a participant transaction holds
- * it (the L6 fences between the two protocols ask this).
+ * it (participantQueryClassification asks through the collision predicate).
  * @param {Object} service - The partition.
  * @param {string} sessionId - A routing sessionId.
  * @return {Object|null} The session.
@@ -92,6 +96,19 @@ function participantSessionNamed(service, sessionId) {
 }
 
 /**
+ * Whether the current participant owner holds this routing session, either in
+ * volatile staging or as a durable PREPARED obligation.
+ * @param {Object} service - The partition.
+ * @param {*} sessionId - Routing context from a QUERY.
+ * @return {boolean} Whether ordinary query routing would collide with TX1.
+ */
+function participantRoutingSessionCollision(service, sessionId) {
+  return typeof sessionId === 'string' && sessionId.length > 0 &&
+    (participantSessionNamed(service, sessionId) !== null ||
+      isParticipantSessionPrepared(service.db, sessionId));
+}
+
+/**
  * Whether any staging session exists here (one non-terminal transaction per
  * partition).
  * @param {Object} service - The partition.
@@ -99,6 +116,16 @@ function participantSessionNamed(service, sessionId) {
  */
 function hasParticipantSession(service) {
   return (SESSIONS.get(service)?.size ?? 0) > 0;
+}
+
+/**
+ * Whether the current participant owner holds the partition: volatile
+ * staging on this leader, or a durable PREPARED reservation.
+ * @param {Object} service - The partition.
+ * @return {boolean} Whether TX1 has nonterminal work here.
+ */
+function participantTransactionActive(service) {
+  return hasParticipantSession(service) || isPartitionReserved(service.db);
 }
 
 /**
@@ -202,6 +229,7 @@ export {
   findParticipantSession,
   hasParticipantSession,
   openParticipantSession,
-  participantSessionNamed,
+  participantRoutingSessionCollision,
+  participantTransactionActive,
   sweepParticipantTransactionHolds,
 };
