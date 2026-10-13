@@ -1,0 +1,14 @@
+4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865  solve/quests/replicated-transaction-decision-and-apply/evidence/in-doubt-38367914597-1/bootstrap-baseline.exit
+c7e0ff988bfb6e9835e090e793519758652db3742c24f0331c1ec6b927d00e8e  solve/quests/replicated-transaction-decision-and-apply/evidence/in-doubt-38367914597-1/bootstrap-baseline.log
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  solve/quests/replicated-transaction-decision-and-apply/evidence/in-doubt-38367914597-1/bootstrap-candidate.exit
+7119e09045926db5d1c3a22343e9c44a55b767ec70f62b6a858e98be3ef6fde5  solve/quests/replicated-transaction-decision-and-apply/evidence/in-doubt-38367914597-1/bootstrap-candidate.log
+54f9406e1ebda115909da8628a28ebf3c5f88afde3e15debbae7926bcc569112  solve/quests/replicated-transaction-decision-and-apply/evidence/in-doubt-38367914597-1/candidate-sha.txt
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  solve/quests/replicated-transaction-decision-and-apply/evidence/in-doubt-38367914597-1/eslint.log
+0d5fedb6397a800cfe79768f1780c937747be3e202fe59c4e225c77712d18e30  solve/quests/replicated-transaction-decision-and-apply/evidence/in-doubt-38367914597-1/generated-paths.txt
+3f8238f4dcf09b1d6d2102957f84d24852cd2cb61fd0a647921e2602d2b3cb23  solve/quests/replicated-transaction-decision-and-apply/evidence/in-doubt-38367914597-1/impact.log
+f45a82e853becd6c91ab0b71f25b4db9dbaf80ae250fd1dc4c2a7244341f08dd  solve/quests/replicated-transaction-decision-and-apply/evidence/in-doubt-38367914597-1/install.log
+1c38ab6fc8c989bb3c87673eb9d93fc29acaa39d2278e1597866d57b8f26ad49  solve/quests/replicated-transaction-decision-and-apply/evidence/in-doubt-38367914597-1/metadata.log
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  solve/quests/replicated-transaction-decision-and-apply/evidence/in-doubt-38367914597-1/native-exit.txt
+76e8ce8320c968ea163099cc20c611863fcefd78dda352a503ed9afdcde70f2b  solve/quests/replicated-transaction-decision-and-apply/evidence/in-doubt-38367914597-1/native.log
+e354d6106460970db79b5e6470921adbf4580378fd0f91ea5ec06b9340c0e5b7  solve/quests/replicated-transaction-decision-and-apply/evidence/in-doubt-38367914597-1/summary.json
+e849d9def3de6483e69c96dda7af88bb47c815068c9b3fa49ec24a7c9dec27f5  solve/quests/replicated-transaction-decision-and-apply/evidence/in-doubt-38367914597-1/tap/native.tap
