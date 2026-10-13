@@ -7,6 +7,7 @@ on:
       - test/integration/seed-migration-interrupted-decision.integration.test.js
       - test/integration/seed-migration-cutover-persisted.integration.test.js
       - test/integration/helpers/tx1-in-doubt-decision-reader.js
+      - test/integration/helpers/tx1-postkill-authority-replay.js
       - test/shards/impact-contracts.json
 permissions:
   contents: read
@@ -42,8 +43,9 @@ jobs:
           npm run -s test:metadata:refresh > "$OUT/metadata.log" 2>&1
           node --check "$WITNESS"
           node --check test/integration/helpers/tx1-in-doubt-decision-reader.js
+          node --check test/integration/helpers/tx1-postkill-authority-replay.js
           node --check test/integration/seed-migration-cutover-persisted.integration.test.js
-          node_modules/.bin/eslint "$WITNESS"             test/integration/helpers/tx1-in-doubt-decision-reader.js             test/integration/seed-migration-cutover-persisted.integration.test.js             > "$OUT/eslint.log" 2>&1
+          node_modules/.bin/eslint "$WITNESS"             test/integration/helpers/tx1-in-doubt-decision-reader.js             test/integration/helpers/tx1-postkill-authority-replay.js             test/integration/seed-migration-cutover-persisted.integration.test.js             > "$OUT/eslint.log" 2>&1
           npm run -s audit:impact-contracts > "$OUT/impact.log" 2>&1
           git diff --exit-code -- src
           git diff --check
@@ -89,6 +91,13 @@ jobs:
               'immutable-decision-readback':receipt.get('durableDecisionReadBack') is True,
               'snapshot-authority-fenced':receipt.get('cacheDiscoveryCannotDecide') is True,
               'no-effects-applied':receipt.get('effectsNotApplied') is True,
+              'independent-reread':receipt.get('diskRereadBridge',{}).get('physicalReplicaFiles')==6 and
+                  receipt.get('diskRereadBridge',{}).get('scans',0)>=3,
+              'forged-discovery-fenced':receipt.get('diskRereadBridge',{}).get('forgedRollbackIgnored') is True and
+                  receipt.get('diskRereadBridge',{}).get('invalidHeld') is True,
+              'exact-bound-commit-request':receipt.get('diskRereadBridge',{}).get('boundCommitAttempts')==2 and
+                  receipt.get('diskRereadBridge',{}).get('rollbackCalls')==0,
+              'no-offline-persistence':receipt.get('diskRereadBridge',{}).get('durableRowsUnchanged') is True,
               'honest-scope':receipt.get('fanoutReplayCertified') is False,
               'canonical-test-success':(e/'native-exit.txt').read_text().strip()=='0',
           }
@@ -96,7 +105,7 @@ jobs:
               'checks':checks,'receipt':receipt,
               'counts':{k:count(k) for k in ('tests','pass','fail','cancelled','skipped','todo')},
               'focusedProofPassed':all(checks.values()),'independentApproval':False,
-              'mergeReady':False,'scope':'real RF3 same-host coordinator COMMIT persisted before participant delivery; SIGKILL; read-only reconstruction. Full production cold restart/replay remains unproved.'}
+              'mergeReady':False,'scope':'real RF3 same-host coordinator COMMIT persisted before participant delivery; SIGKILL; independent physical reread and controlled bound COMMIT attempts with participant transport deliberately unavailable. Live authoritative gateway, cold boot, effects and replay remain unproved.'}
           (e/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
           print(json.dumps(summary,indent=2))
           PY
