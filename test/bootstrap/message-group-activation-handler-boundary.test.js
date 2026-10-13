@@ -22,6 +22,8 @@ import {activateMessageGroupServiceRows} from
   '../../src/bootstrap/shared/message-group-service-activation.js';
 import {retireMessageGroupTransportHandler} from
   '../../src/bootstrap/shared/message-group-transport-handler.js';
+import {REPLICA_HANDLER_RETIREMENT_OUTCOME} from
+  '../../src/node/replica-transport-handler-identity.js';
 import {runSerializedReplicaMutation} from
   '../../src/node/replica-state-machine-serialization.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
@@ -100,6 +102,38 @@ function createWorld(initialRow = registeredRow(), options = {}) {
       replicaId: REPLICA_ID});
   return {router, stateMachine, service, durable, activate, retire};
 }
+
+test('MG retirement refuses completion without exact handler identity API',
+  async (t) => {
+    const address = ADDRESS;
+    const handler = () => {};
+    const registered = new Map([[address, handler]]);
+    const errors = [];
+    const router = {
+      register(key, value) {
+        registered.set(key, value);
+      },
+      unregister(key) {
+        registered.delete(key);
+      },
+      // Deliberately no getRegisteredHandler or unregisterExact.
+    };
+    const messageGroup = {
+      transportHandler: handler,
+      logger: {error(message, evidence) {
+        errors.push({message, evidence});
+      }},
+    };
+    await t.rejects(
+      retireMessageGroupTransportHandler({messageGroup, messageRouter: router,
+        address, replicaId: REPLICA_ID}),
+      {code: REPLICA_HANDLER_RETIREMENT_OUTCOME.REFUSED_NO_IDENTITY},
+      'logging a refused identity retirement must not settle teardown');
+    t.equal(registered.get(address), handler,
+      'the handler was retained rather than removed unsafely by address');
+    t.equal(errors.length, 1, 'the same owner reports the typed refusal');
+    t.equal(errors[0].evidence.replicaId, REPLICA_ID);
+  });
 
 test('MG N2 (1): the exact generation handler is registered -> ACTIVE',
   async (t) => {
