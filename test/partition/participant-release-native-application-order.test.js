@@ -411,7 +411,7 @@ function createMembershipReadState({service, status, settled}) {
     capturedSignal, currentSignal, progressSignal, routeSignal, hold,
     captureStarted: false, currentStarted: false, released: false,
     routeResult: null, routeOutcome: null, unsubscribe: null,
-    heldTask: null, passiveTasks: [], errors: []};
+    carrierOutcome: null, heldTask: null, passiveTasks: [], errors: []};
 
   const readCommittedMembership = function(request) {
     const result = Reflect.apply(native.readCommittedMembership, native, [request]);
@@ -556,15 +556,26 @@ async function requireTreatmentRecord(state, field, signal, releaseSettled,
   return record;
 }
 
-async function requireOwnedSettlement(state, promise, releaseSettled, stage) {
-  const own = Promise.prototype.then.call(promise,
-    (value) => Object.freeze({kind: 'owned-settled', value}),
-    (error) => Object.freeze({kind: 'owned-threw', error}));
-  const outcome = await Promise.race([own, state.routeSignal.promise,
-    releaseSettled]);
-  assert.ok(outcome.kind === 'owned-settled' || outcome.kind === 'owned-threw',
-    `${state.replicaId}: ${stage} settles before the observation/release ` +
-      `(${diagnosticText(outcome)})`);
+function recordOwnedSettlement(state, promise) {
+  assert.equal(state.carrierOutcome, null,
+    `${state.replicaId}: one exact carrier settlement is retained`);
+  const observer = Promise.prototype.then.call(promise,
+    (value) => {
+      state.carrierOutcome = Object.freeze({kind: 'owned-settled', value});
+      return state.carrierOutcome;
+    },
+    (error) => {
+      state.carrierOutcome = Object.freeze({kind: 'owned-threw', error});
+      return state.carrierOutcome;
+    });
+  state.passiveTasks.push(observer);
+  void Promise.prototype.catch.call(observer, () => undefined);
+  return observer;
+}
+
+async function requireOwnedSettlement(state, signal, releaseSettled, stage) {
+  const outcome = await requireTreatmentRecord(state, 'carrierOutcome', signal,
+    releaseSettled, stage);
   if (outcome.kind === 'owned-threw') throw outcome.error;
   return outcome.value;
 }
@@ -1092,7 +1103,7 @@ async function captureCleanup(errors, phase, operation) {
   }
 }
 
-function finishWithCustody(primary, cleanupErrors) {
+function finishWithCustody(primary, cleanupErrors, retainedDirectory) {
   if (primary !== null && cleanupErrors.length === 0) throw primary;
   if (primary === null && cleanupErrors.length === 0) return;
   const causes = [primary, ...cleanupErrors.map(({error}) => error)]
@@ -1100,11 +1111,15 @@ function finishWithCustody(primary, cleanupErrors) {
   const message = primary?.message ?? 'native release witness cleanup failed';
   const aggregate = new AggregateError(causes, message, {cause: primary ?? causes[0]});
   aggregate.cleanupFailures = cleanupErrors;
+  if (retainedDirectory !== null) {
+    aggregate.retainedDirectory = retainedDirectory;
+  }
   throw aggregate;
 }
 
 async function cleanupMembershipReads(membershipReads, cleanupErrors) {
-  if (membershipReads === null) return;
+  if (membershipReads === null) return false;
+  let portCustodyUncertain = false;
   await captureCleanup(cleanupErrors, 'release-membership-reads', async () =>
     membershipReads.release());
   for (const state of membershipReads.states) {
@@ -1124,10 +1139,12 @@ async function cleanupMembershipReads(membershipReads, cleanupErrors) {
           state.unsubscribe();
         });
     }
-    await captureCleanup(cleanupErrors,
+    const restoreFailure = await captureCleanup(cleanupErrors,
       `restore-membership-port-${state.replicaId}`, async () =>
         membershipReads.restore(state));
+    if (restoreFailure !== null) portCustodyUncertain = true;
   }
+  return portCustodyUncertain;
 }
 
 async function cleanupNativeWitness({gate, membershipReads, releasePromise, route,
@@ -1144,7 +1161,8 @@ async function cleanupNativeWitness({gate, membershipReads, releasePromise, rout
         () => gate.restore(replicaId));
     }
   }
-  await cleanupMembershipReads(membershipReads, cleanupErrors);
+  const membershipPortCustodyUncertain = await cleanupMembershipReads(
+    membershipReads, cleanupErrors);
   if (releasePromise !== null) {
     await captureCleanup(cleanupErrors, 'settle-release', () => releasePromise);
   }
@@ -1157,21 +1175,26 @@ async function cleanupNativeWitness({gate, membershipReads, releasePromise, rout
       () => route.restore());
   }
   let releaseOwnerFailure = null;
+  let retainedDirectory = null;
   if (releaseOwners !== null) {
     releaseOwnerFailure = await captureCleanup(cleanupErrors,
       'dispose-release-owners',
       () => releaseOwners.dispose());
   }
   if (group !== null) {
+    if (membershipPortCustodyUncertain) {
+      retainedDirectory = path.dirname(group.dbFileOf(MEMBERS[0]));
+    }
     await captureCleanup(cleanupErrors, 'dispose-group', () => group.dispose({
-      retainDirectory: releaseOwnerFailure !== null ||
+      retainDirectory: membershipPortCustodyUncertain ||
+        releaseOwnerFailure !== null ||
         primary?.retainedDirectory !== undefined,
     }));
   }
   await captureCleanup(cleanupErrors, 'shutdown-router', () => router.shutdown());
   await captureCleanup(cleanupErrors, 'reset-environment',
     async () => resetEnvironment());
-  finishWithCustody(primary, cleanupErrors);
+  finishWithCustody(primary, cleanupErrors, retainedDirectory);
 }
 
 test('the real participant release owner waits for every native voter origin ' +
@@ -1272,12 +1295,15 @@ test('the real participant release owner waits for every native voter origin ' +
     assert.equal(trackedRelease.settled, false,
       'the same release remains pending while both native N answers are held');
     membershipReads.subscribeProgress();
-    const forwarded = membershipReads.states.map((state) => Object.freeze({state,
-      promise: gate.forward(state.replicaId)}));
+    const forwarded = membershipReads.states.map((state) => {
+      const promise = gate.forward(state.replicaId);
+      return Object.freeze({state,
+        signal: recordOwnedSettlement(state, promise)});
+    });
     gate.disarm();
     for (const replicaId of gate.followerIds) gate.restore(replicaId);
-    await Promise.all(forwarded.map(({state, promise}) =>
-      requireOwnedSettlement(state, promise, releaseSettled,
+    await Promise.all(forwarded.map(({state, signal}) =>
+      requireOwnedSettlement(state, signal, releaseSettled,
         'the exact retained origin carrier')));
     await Promise.all(membershipReads.states.map((state) =>
       requireTreatmentRecord(state, 'progress', state.progressSignal.promise,
