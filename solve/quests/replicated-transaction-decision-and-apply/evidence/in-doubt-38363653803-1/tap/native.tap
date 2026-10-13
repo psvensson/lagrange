@@ -1,0 +1,18 @@
+TAP version 13
+# Subtest: TX1 M1: a real COMMIT decision and held prepared participants survive seed process loss
+ok 1 - TX1 M1: a real COMMIT decision and held prepared participants survive seed process loss
+  ---
+  duration_ms: 69327.106453
+  type: 'test'
+  ...
+# {"kind":"TX1_UNDELIVERED_DECISION","transactionId":"bf82e10021498bd5960de2847fa03e8b","replicaFiles":12,"durableDecisionReadBack":true,"cacheDiscoveryCannotDecide":true,"effectsNotApplied":true,"fanoutReplayCertified":false}
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 69331.62816
+# time=69519ms

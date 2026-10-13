@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 116,
     "architecture-governance": 19,
-    "bootstrap-membership": 308,
+    "bootstrap-membership": 309,
     "cdc-metadata": 63,
     "cli-tooling": 96,
     "control-plane": 214,
@@ -25,10 +25,10 @@
     "transport-messaging": 95,
     "wasm-toolchain": 57
   },
-  "censusSize": 2370,
-  "digest": "fnv1a32-9f8a4132",
+  "censusSize": 2371,
+  "digest": "fnv1a32-6c4b8408",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-9f9ba21d",
+  "observationDigest": "fnv1a32-41f3426e",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1055,6 +1055,7 @@
     "test/integration/replica-handler-metadata-propagation.integration.test.js": "cdc-metadata",
     "test/integration/replica-operations-owner-read-transport-readiness.integration.test.js": "transport-messaging",
     "test/integration/seed-migration-cutover-persisted.integration.test.js": "bootstrap-membership",
+    "test/integration/seed-migration-interrupted-decision.integration.test.js": "bootstrap-membership",
     "test/integration/seed-migration-process-loss.integration.test.js": "bootstrap-membership",
     "test/integration/seed-node-bootstrap.integration.test.js": "bootstrap-membership",
     "test/integration/seed-owner-read-diagnosis.integration.test.js": "bootstrap-membership",
@@ -7557,7 +7558,15 @@
         "test/integration/helpers/tx1-migration-disk-reader.js"
       ],
       "env": [
+        "LAGRANGE_TX1_M1_DECISION_KILL_MARKER_PATH",
         "LAGRANGE_TX1_M1_KILL_MARKER_PATH"
+      ]
+    },
+    "test/integration/seed-migration-interrupted-decision.integration.test.js": {
+      "files": [
+        "test/integration/helpers/tx1-in-doubt-decision-reader.js",
+        "test/integration/helpers/tx1-migration-disk-reader.js",
+        "test/integration/seed-migration-cutover-persisted.integration.test.js"
       ]
     },
     "test/integration/seed-migration-process-loss.integration.test.js": {

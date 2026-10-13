@@ -3,13 +3,13 @@
   "id": "test-primary-classification",
   "counts": {
     "unit": 2065,
-    "integration": 96,
+    "integration": 97,
     "bootstrap": 202,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2370,
-  "digest": "fnv1a32-6263f453",
+  "censusSize": 2371,
+  "digest": "fnv1a32-9d596fe6",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1036,6 +1036,7 @@
     "test/integration/replica-handler-metadata-propagation.integration.test.js": "integration",
     "test/integration/replica-operations-owner-read-transport-readiness.integration.test.js": "integration",
     "test/integration/seed-migration-cutover-persisted.integration.test.js": "integration",
+    "test/integration/seed-migration-interrupted-decision.integration.test.js": "integration",
     "test/integration/seed-migration-process-loss.integration.test.js": "integration",
     "test/integration/seed-node-bootstrap.integration.test.js": "integration",
     "test/integration/seed-owner-read-diagnosis.integration.test.js": "integration",
