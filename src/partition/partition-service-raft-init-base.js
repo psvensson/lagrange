@@ -298,7 +298,30 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
    * Requirements: 8.1, 10.1, 10.2, 10.3, 10.4, 10.5
    * @return {Promise<void>}
    */
-  async initialize() {
+  initialize() {
+    if (this.initializationSettlement) {
+      return this.initializationSettlement;
+    }
+    if (this.startupFailure !== null) {
+      return Promise.reject(this.startupFailure);
+    }
+    if (this.isShutdown) {
+      return Promise.reject(
+        Object.assign(new Error(SERVICE_SHUTDOWN), {code: SERVICE_SHUTDOWN}));
+    }
+    if (this.initialized) {
+      return Promise.resolve();
+    }
+    const {promise, resolve, reject} = Promise.withResolvers();
+    this.initializationSettlement = promise;
+    this.initializeUnserialized().then(resolve, reject).finally(() => {
+      if (this.initializationSettlement === promise) {
+        this.initializationSettlement = null;
+      }
+    });
+    return promise;
+  }
+  async initializeUnserialized() {
     if (this.startupFailure !== null) {
       throw this.startupFailure;
     }
@@ -607,6 +630,9 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     this.startPeriodicSizeUpdates();
     this.startPreparedStateHoldTimeoutSweep();
     await this.updatePartitionSize();
+    if (this.isShutdown) {
+      throw Object.assign(new Error(SERVICE_SHUTDOWN), {code: SERVICE_SHUTDOWN});
+    }
     this.initialized = true;
     this.reportInitializationStage(PARTITION_SERVICE_INIT_STAGE.READY, {
       sizeBytes: this.sizeBytes,

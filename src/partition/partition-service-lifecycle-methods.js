@@ -165,6 +165,11 @@ class PartitionServiceLifecycleMethods {
     const {promise, resolve, reject} = Promise.withResolvers();
     this.shutdownSettlement = promise;
     const release = async () => {
+      const initialization = this.initializationSettlement;
+      if (initialization) {
+        await Promise.allSettled([initialization]);
+      }
+      this.initialized = false;
       this.leaderActivationGate.shutdown();
       this.logger.info(PARTITION_SERVICE_LOG_MSG.SHUTTING_DOWN, {
         partitionId: this.partitionId,

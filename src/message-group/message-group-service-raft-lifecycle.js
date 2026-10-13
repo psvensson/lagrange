@@ -168,7 +168,30 @@ function assignRaftLifecycle(serviceClass) {
      * Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 7.1, 7.2, 7.3, 7.4
      * @return {Promise<void>}
      */
-    async initialize() {
+    initialize() {
+      if (this.initializationSettlement) {
+        return this.initializationSettlement;
+      }
+      if (this.startupFailure !== null) {
+        return Promise.reject(this.startupFailure);
+      }
+      if (this.isShutdown) {
+        return Promise.reject(
+          Object.assign(new Error(SERVICE_SHUTDOWN), {code: SERVICE_SHUTDOWN}));
+      }
+      if (this.initialized) {
+        return Promise.resolve();
+      }
+      const {promise, resolve, reject} = Promise.withResolvers();
+      this.initializationSettlement = promise;
+      this.initializeUnserialized().then(resolve, reject).finally(() => {
+        if (this.initializationSettlement === promise) {
+          this.initializationSettlement = null;
+        }
+      });
+      return promise;
+    },
+    async initializeUnserialized() {
       if (this.startupFailure !== null) {
         throw this.startupFailure;
       }
@@ -208,6 +231,9 @@ function assignRaftLifecycle(serviceClass) {
         }
         this.startupFailure = null;
         throw error;
+      }
+      if (this.isShutdown) {
+        throw Object.assign(new Error(SERVICE_SHUTDOWN), {code: SERVICE_SHUTDOWN});
       }
       this.cdcHandler.initialize();
       this.initialized = true;

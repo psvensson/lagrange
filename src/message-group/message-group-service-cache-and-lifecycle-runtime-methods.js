@@ -151,6 +151,11 @@ function createMessageGroupServiceCacheAndLifecycleRuntimeMethods(deps = {}) {
       const {promise, resolve, reject} = Promise.withResolvers();
       this.shutdownSettlement = promise;
       const release = async () => {
+        const initialization = this.initializationSettlement;
+        if (initialization) {
+          await Promise.allSettled([initialization]);
+        }
+        this.initialized = false;
         this.logger.info(
           MESSAGE_GROUP_SERVICE_LITERAL.SHUTTING_DOWN_MESSAGE_GROUP_SERVICE,
           {

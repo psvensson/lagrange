@@ -286,6 +286,7 @@ class MessageGroupService extends EventEmitter {
     this.initialized = false;
     this.startupFailure = null;
     this.isShutdown = false;
+    this.initializationSettlement = null;
     this.shutdownSettlement = null;
     this.consensusCloseSettlement = null;
     this.isLeader = false;

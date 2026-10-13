@@ -237,6 +237,7 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
       try {
         this.throwIfShuttingDown();
         await this.settlePendingReplicaRuntimeCleanup(replicaId, partitionId);
+        this.throwIfShuttingDown();
         const {existed, record: identityRecord} = await priorExistence
           .observeReplicaIdentity(this, replicaId, skipLifecycleStatusPersistence);
         // A refused or unreadable identity observation must not consume the
@@ -618,6 +619,16 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           nodeId: this.nodeId,
         });
         throw error;
+      } finally {
+        // The exact runtime remains in pendingRuntimeShutdowns when cleanup
+        // fails, but its physical CREATE worker claim must never remain held.
+        // Existing success/error paths delete tracking first; this is the
+        // fail-safe for a cleanup rejection that exits before those paths.
+        if (operationId && this.inProgressOperations.has(operationId)) {
+          this.inProgressOperations.delete(operationId);
+          this.getReplicaCreateAdmissionOwner()
+            .releasePhysicalWorker(request.createPhysicalWorkerClaim);
+        }
       }
     }
   }
