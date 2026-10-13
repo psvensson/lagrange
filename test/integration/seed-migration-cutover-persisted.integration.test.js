@@ -82,6 +82,7 @@ const PARTITION_OF = Object.freeze({
   migrationPartitions: INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SCHEMA_MIGRATION_PARTITIONS],
   transactions: INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_TRANSACTIONS],
   participants: INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS],
+  writeOperations: INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS],
 });
 const ROUTABLE_WAIT_MS = 15000;
 const POLL_INTERVAL_MS = 50;
@@ -242,6 +243,52 @@ async (t) => {
     }
     assert.equal(new Set(requests.map((request) => request.dbPath)).size, 12,
       'the four RF3 system groups must use twelve independent SQLite files');
+    // Optional external kill witness follows this SAME real M1 execution,
+    // after RF3 committed convergence, before any orderly SQLite shutdown.
+    const killMarkerPath = process.env.LAGRANGE_TX1_M1_KILL_MARKER_PATH;
+    if (killMarkerPath) {
+      const recoveryRequests = [];
+      const expectedRecoveryRows = [];
+      for (const [partitionId, tableName] of [
+        [PARTITION_OF.transactions, TABLES.SQL_TRANSACTIONS],
+        [PARTITION_OF.participants, TABLES.SQL_TRANSACTION_PARTICIPANTS],
+        [PARTITION_OF.writeOperations, TABLES.SQL_WRITE_OPERATIONS],
+      ]) {
+        const sql = 'SELECT * FROM ' + tableName + ' WHERE transaction_id = ?';
+        const params = [transactionRows[0].transaction_id];
+        const expected = await readLocal(partitionId, sql, params);
+        const group = replicas.filter((replica) => getPartitionId(replica) === partitionId);
+        assert.equal(group.length, 3, 'every coordinator recovery group has RF3');
+        assert.equal(await waitFor(async () => {
+          const current = await Promise.all(group.map(async (replica) =>
+            (await replica.executeLocalQuery(sql, params)).rows));
+          return current.every((rows) => JSON.stringify(rows) === JSON.stringify(expected));
+        }, ROUTABLE_WAIT_MS, POLL_INTERVAL_MS), true,
+        'the coordinator rows must converge before SIGKILL');
+        for (const replica of group) {
+          recoveryRequests.push({replicaId: replica.replicaId, dbPath: replica.dbPath,
+            tableName, sql, params});
+          expectedRecoveryRows.push({replicaId: replica.replicaId, rows: expected});
+        }
+      }
+      const marker = {schemaVersion: 1, kind: 'TX1_M1_PRE_KILL', pid: process.pid,
+        dataDir, transactionId: transactionRows[0].transaction_id,
+        requests, expectedDiskRows, recoveryRequests, expectedRecoveryRows,
+        coordinatorRestarted: false, persistedDecision: transactions[0],
+        pendingOpenHandles: retainedReplicas.filter((replica) => replica.db?.open).length};
+      // Marker existence is a complete, fsynced signal. Do not let the
+      // parent observe partially written bytes and kill too early.
+      const unpublishedMarkerPath = killMarkerPath + '.writing';
+      const markerFd = fs.openSync(unpublishedMarkerPath, 'wx', 0o600);
+      try {
+        fs.writeFileSync(markerFd, JSON.stringify(marker) + '\n');
+        fs.fsyncSync(markerFd);
+      } finally {
+        fs.closeSync(markerFd);
+      }
+      fs.renameSync(unpublishedMarkerPath, killMarkerPath);
+      await new Promise(() => {});
+    }
     await setupEngine.shutdown();
     await seedApi.shutdown();
     await bootstrapService.shutdown();
