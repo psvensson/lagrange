@@ -1,0 +1,20 @@
+{
+  "base": "a3b5c63451c3cf968b3d7ec807a0381261d4b61f",
+  "candidate": {
+    "worktree": "/tmp/session-worktree-a5UpsH/tree",
+    "sha": "2d3c98fd301a8b4e7c73091a24e1ff392e552262",
+    "tree": "bea2eb0fc00e622a5b6ebc281dfca756712ea9ba"
+  },
+  "control": {
+    "worktree": "/tmp/session-worktree-BnLnkZ/tree",
+    "sha": "231b7cb8f4d9b154c95e113db6990579fe3cd3b3",
+    "tree": "a83c8c907ef2dcc22055f258a65a5acd587324fc"
+  },
+  "sourceOnlyControlPaths": [
+    "src/bootstrap/bootstrap-service-seed-workflow.js",
+    "src/node/participant-release-diagnostic-observation.js",
+    "src/node/replica-handler-participant-cutover.js"
+  ],
+  "identicalNonSourceBytes": true,
+  "createdAt": "2026-10-13T17:22:17.365Z"
+}

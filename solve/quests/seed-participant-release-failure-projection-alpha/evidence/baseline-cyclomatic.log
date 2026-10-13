@@ -1,0 +1,4 @@
+Scoped complexity ratchet: 2 violation(s) in 3 target(s) (threshold: 12).
+src/node/replica-handler-participant-cutover.js:138:1 Async function 'releaseControlOwnerFirst' has a complexity of 15. Maximum allowed is 12.
+src/node/replica-handler-participant-cutover.js:200:1 Async function 'runCutoverAttempt' has a complexity of 30. Maximum allowed is 12.
+Saved complexity report to test-output/analysis/complexity-scoped.json.

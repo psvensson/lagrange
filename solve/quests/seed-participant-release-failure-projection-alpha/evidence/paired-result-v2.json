@@ -1,0 +1,740 @@
+{
+  "schema": "seed-release-diagnostic-paired-evidence/2",
+  "candidate": {
+    "sha": "3231b1311ad79fb933d059877c97fc296b951e5d",
+    "tree": "b3adccaa73f0bb401144a7e212916446ec370d44"
+  },
+  "control": {
+    "sha": "38b43ed7167435fc22dd4e95dc1d519cf06c64bd",
+    "tree": "a17d32d6ec67e5835126fa7848a6f116b41309b8"
+  },
+  "sameHostIdenticalTests": true,
+  "runs": [
+    {
+      "name": "control-protocol-v3",
+      "host": "tv-dator",
+      "sha": "38b43ed7167435fc22dd4e95dc1d519cf06c64bd",
+      "files": [
+        "test/partition/participant-release-protocol.test.js"
+      ],
+      "status": 1,
+      "fileRecords": [
+        {
+          "file": "test/partition/participant-release-protocol.test.js",
+          "attempt": 1,
+          "ok": false,
+          "assertions": 10,
+          "durationMs": 3215,
+          "retriedOnce": false,
+          "firstFailureLine": "not ok 8 - registered participant release projects one real blocked drain and older joined attempt"
+        }
+      ]
+    },
+    {
+      "name": "control-seed-v3",
+      "host": "carinas-windows",
+      "sha": "38b43ed7167435fc22dd4e95dc1d519cf06c64bd",
+      "files": [
+        "test/bootstrap/seed-participant-release-failure-projection.test.js"
+      ],
+      "status": 1,
+      "fileRecords": [
+        {
+          "file": "test/bootstrap/seed-participant-release-failure-projection.test.js",
+          "attempt": 1,
+          "ok": false,
+          "assertions": 3,
+          "durationMs": 5511,
+          "retriedOnce": false,
+          "firstFailureLine": "not ok 1 - seed release workflow preserves first owner observations beside actual client deadline"
+        }
+      ]
+    },
+    {
+      "name": "candidate-protocol-v2",
+      "host": "tv-dator",
+      "sha": "3231b1311ad79fb933d059877c97fc296b951e5d",
+      "files": [
+        "test/partition/participant-release-protocol.test.js"
+      ],
+      "status": 0,
+      "fileRecords": [
+        {
+          "file": "test/partition/participant-release-protocol.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 10,
+          "durationMs": 2514,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        }
+      ]
+    },
+    {
+      "name": "candidate-seed-v2",
+      "host": "carinas-windows",
+      "sha": "3231b1311ad79fb933d059877c97fc296b951e5d",
+      "files": [
+        "test/bootstrap/seed-participant-release-failure-projection.test.js"
+      ],
+      "status": 0,
+      "fileRecords": [
+        {
+          "file": "test/bootstrap/seed-participant-release-failure-projection.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 3,
+          "durationMs": 4010,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        }
+      ]
+    },
+    {
+      "name": "startup-claim-v2",
+      "host": "adam-laptop",
+      "sha": "3231b1311ad79fb933d059877c97fc296b951e5d",
+      "files": [
+        "test/integration/message-group-membership-claim-cache.integration.test.js"
+      ],
+      "status": 1,
+      "fileRecords": [
+        {
+          "file": "test/integration/message-group-membership-claim-cache.integration.test.js",
+          "attempt": 1,
+          "ok": false,
+          "assertions": 1,
+          "durationMs": 12865,
+          "retriedOnce": false,
+          "firstFailureLine": "not ok 1 - repository failed and successful T1 cases share one SQL/Raft/cache seed"
+        }
+      ]
+    },
+    {
+      "name": "startup-bootstrap-v2",
+      "host": "adams-gamla",
+      "sha": "3231b1311ad79fb933d059877c97fc296b951e5d",
+      "files": [
+        "test/bootstrap/node-bootstrap-consistency.property.test.js"
+      ],
+      "status": 1,
+      "fileRecords": [
+        {
+          "file": "test/bootstrap/node-bootstrap-consistency.property.test.js",
+          "attempt": 1,
+          "ok": false,
+          "assertions": 57,
+          "durationMs": 35807,
+          "retriedOnce": false,
+          "firstFailureLine": "not ok 2 - seed bootstrap should succeed"
+        }
+      ]
+    },
+    {
+      "name": "participant-cone-v2",
+      "host": "lenovo-laptop",
+      "sha": "3231b1311ad79fb933d059877c97fc296b951e5d",
+      "files": [
+        "test/partition/committed-statement-outcome.test.js",
+        "test/partition/partition-unreadable-durable-record.test.js",
+        "test/partition/partition-participant-transaction-apply.test.js",
+        "test/partition/partition-participant-transaction-staging.test.js",
+        "test/partition/participant-envelope-admission.test.js",
+        "test/partition/partition-participant-release-admission.test.js"
+      ],
+      "status": 0,
+      "fileRecords": [
+        {
+          "file": "test/partition/participant-envelope-admission.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 2,
+          "durationMs": 1989,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/partition/partition-participant-release-admission.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 4,
+          "durationMs": 5773,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/partition/partition-participant-transaction-apply.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 27,
+          "durationMs": 7293,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/partition/committed-statement-outcome.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 18,
+          "durationMs": 9622,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/partition/partition-participant-transaction-staging.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 19,
+          "durationMs": 8791,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/partition/partition-unreadable-durable-record.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 6,
+          "durationMs": 13142,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        }
+      ]
+    },
+    {
+      "name": "runtime-cone-v2",
+      "host": "adam-laptop",
+      "sha": "3231b1311ad79fb933d059877c97fc296b951e5d",
+      "files": [
+        "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+        "test/raft/raft-rs-backend/operation-port-throw-containment.test.js",
+        "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js",
+        "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js",
+        "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+        "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
+        "test/raft/raft-rs-backend/startup-cleanup.integration.test.js",
+        "test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js"
+      ],
+      "status": 0,
+      "fileRecords": [
+        {
+          "file": "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 7,
+          "durationMs": 901,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/raft/raft-rs-backend/operation-port-throw-containment.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 4,
+          "durationMs": 1031,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 5,
+          "durationMs": 6206,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 4,
+          "durationMs": 1761,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 16,
+          "durationMs": 2093,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 27,
+          "durationMs": 3705,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 8,
+          "durationMs": 3735,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test/raft/raft-rs-backend/startup-cleanup.integration.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 30,
+          "durationMs": 3578,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        }
+      ]
+    },
+    {
+      "name": "native-recovery-v2",
+      "host": "tv-dator",
+      "sha": "3231b1311ad79fb933d059877c97fc296b951e5d",
+      "files": [
+        "test/partition/partition-runtime-reconstruction-leadership.test.js"
+      ],
+      "status": 0,
+      "fileRecords": [
+        {
+          "file": "test/partition/partition-runtime-reconstruction-leadership.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 20,
+          "durationMs": 27395,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        }
+      ]
+    },
+    {
+      "name": "focused-recovery-v2",
+      "host": "carinas-windows",
+      "sha": "3231b1311ad79fb933d059877c97fc296b951e5d",
+      "files": [
+        "test/node/replica-handler-release-recovery.test.js"
+      ],
+      "status": 0,
+      "fileRecords": [
+        {
+          "file": "test/node/replica-handler-release-recovery.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 15,
+          "durationMs": 4533,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        }
+      ]
+    }
+  ],
+  "candidateSummary": {
+    "uniqueFiles": 20,
+    "positiveFiles": 18,
+    "positiveRunnerAssertions": 225,
+    "negativeFiles": 2,
+    "negativeFileRunnerAssertions": 58,
+    "totalRunnerAssertions": 283,
+    "bootstrapFailedLeaves": 6,
+    "bootstrapPassingLeaves": 43,
+    "claimDidNotReachIntendedBody": true
+  },
+  "staticGate": "HOLD: source/content independently approved after two new findings removed; inherited literal8, seed retry1, cutover complexity15/30 cognitive23, two dependency cycles and test clone excess46 remain. Source duplication47/1462 unchanged; no changed-witness clone. Other whole-repo gates not rerun or waived.",
+  "claimLimit": "Diagnostics and unchanged adjacent candidate behavior at named seams only; neither startup repair nor main readiness. Source controls fail meaningfully on missing projections. No retry-only success, skip, cancellation or runner timeout is reported; existing seed budget failures are retained as system defects.",
+  "artifacts": [
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/control-protocol-v3-fleet.json",
+      "sha256": "7eaad4b9ef6060c9d0bbcaae275c42afd0f292c651cf0f597572c6309f523034",
+      "bytes": 12695
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/control-protocol-v3-input.json",
+      "sha256": "102014ac88591d3f5a7b7f2323ba6ea04127cdd248c727a1e2dc98d0ddd52a39",
+      "bytes": 579
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/control-protocol-v3-lab.log",
+      "sha256": "7f47c795051e674843fdf10f9608032583cda3e2a81882650f30ddeb692c17cf",
+      "bytes": 9375
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/control-protocol-v3-result.json",
+      "sha256": "86aee5c888b26b44b2a6ed3f0f370f40aafe5d27a281fc2033290cd8285b20f7",
+      "bytes": 62
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/control-protocol-v3-tv-dator.raw.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/control-protocol-v3-tv-dator.raw.log",
+      "sha256": "e063f7a355f836a506f29064f479fcf484bb6970029bf134f2ae2cbc1da049b0",
+      "bytes": 7396
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/control-protocol-v3-tv-dator.status.json",
+      "sha256": "3ffe09ecc4a1f39ac6f78caca24c95a5d1182b4dbd23662d5e5938bcc488a56f",
+      "bytes": 36
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/control-seed-v3-carinas-windows.raw.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/control-seed-v3-carinas-windows.raw.log",
+      "sha256": "62e5d4f914c847471a63eb1762718b2b16a170309875c50c3a48a661ae88bd9e",
+      "bytes": 4089
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/control-seed-v3-carinas-windows.status.json",
+      "sha256": "3ffe09ecc4a1f39ac6f78caca24c95a5d1182b4dbd23662d5e5938bcc488a56f",
+      "bytes": 36
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/control-seed-v3-fleet.json",
+      "sha256": "cd443d7ca2f911c362d3cecef49c74175ec0b1636a0e84fc58dc98af25a4d055",
+      "bytes": 12695
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/control-seed-v3-input.json",
+      "sha256": "95d54fe301d464de6e0ff0db22d96d39f35dcafb69394ac51e471456cd7456bd",
+      "bytes": 633
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/control-seed-v3-lab.log",
+      "sha256": "c374780907f1e2c8c4d4f371cbb12e64391daf5c3bd9a9b1c5b8590147adee22",
+      "bytes": 5685
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/control-seed-v3-result.json",
+      "sha256": "6a865dfe93e9f262f3a05b1f566ab80a87d7ad72829a680906351d117c8bb5d3",
+      "bytes": 62
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-protocol-v2-fleet.json",
+      "sha256": "369a8ee549c5bb58e713181c975e7638b46dd29eb0ccd5f566329c910a71fb28",
+      "bytes": 12698
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-protocol-v2-input.json",
+      "sha256": "cb4946600b3ae5df1aba5b770054c307cf6467a9a9495137250715da0f5362a4",
+      "bytes": 579
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-protocol-v2-lab.log",
+      "sha256": "92bbe7db3c2f3c46f65d24d5c4ce68a28640dceb6faeb2eada8634ba6103d2e2",
+      "bytes": 1120
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-protocol-v2-result.json",
+      "sha256": "2bbf4f5eee04e3ea3d66f00937dd8ea4d1135225c35c244621d1059695e33493",
+      "bytes": 62
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-protocol-v2-tv-dator.raw.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-protocol-v2-tv-dator.raw.log",
+      "sha256": "9d3cdac17a27aa30275af7873c7463f29a373f4548d60b4644b415d384325f74",
+      "bytes": 848
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-protocol-v2-tv-dator.status.json",
+      "sha256": "f67f647bb544af538d33b715ae91a9f95a5c95eef71ec0aa1d071b7e2cccb231",
+      "bytes": 36
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-seed-v2-carinas-windows.raw.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-seed-v2-carinas-windows.raw.log",
+      "sha256": "cff31094567548d73d7a15bf140d7ab1aecc370c9b00cb1d5fc09132d6db3190",
+      "bytes": 693
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-seed-v2-carinas-windows.status.json",
+      "sha256": "f67f647bb544af538d33b715ae91a9f95a5c95eef71ec0aa1d071b7e2cccb231",
+      "bytes": 36
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-seed-v2-fleet.json",
+      "sha256": "60ef8694be25884d7b4f849f296a8bb7ab87f5f522aa9b0b06807b6db0a739c0",
+      "bytes": 12694
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-seed-v2-input.json",
+      "sha256": "3fbb4415abb33323d9597da0b70dd082f9798076458c441c97c10e62195c8bcf",
+      "bytes": 633
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-seed-v2-lab.log",
+      "sha256": "878e61ee2c6081b36a6afc3e7fe67b11e6e77c043d9bda513e2e16d99da01636",
+      "bytes": 1017
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-seed-v2-result.json",
+      "sha256": "b49e0999caa38dac8f678da6ad558d1bac91575e98606ebd50dd0b7b47313373",
+      "bytes": 62
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/startup-claim-v2-adam-laptop.raw.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/startup-claim-v2-adam-laptop.raw.log",
+      "sha256": "77f255f36d1209dbf4abc594be67915523a4af436f3bbbc7d16f4ba1b6955a46",
+      "bytes": 5646
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/startup-claim-v2-adam-laptop.status.json",
+      "sha256": "3ffe09ecc4a1f39ac6f78caca24c95a5d1182b4dbd23662d5e5938bcc488a56f",
+      "bytes": 36
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/startup-claim-v2-fleet.json",
+      "sha256": "799677cab494e5707a5fc2463f17162d8dfbcec9996681b7f7bc6039a2853afa",
+      "bytes": 12693
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/startup-claim-v2-input.json",
+      "sha256": "bfb411e33f8a1fe3dd65c938b28a1a9b0cc049e1d2cbed7d0cce0b8f7118f51e",
+      "bytes": 650
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/startup-claim-v2-lab.log",
+      "sha256": "4f328e7ecebadbabf1201719ac6ed60773ebc3595de307636374ed4b65719d5a",
+      "bytes": 6349
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/startup-claim-v2-result.json",
+      "sha256": "4dd108c3f3a4377ec1d9adda65577bed07d995d0eace06ad574d76f3f6de4317",
+      "bytes": 62
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/startup-bootstrap-v2-adams-gamla.raw.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/startup-bootstrap-v2-adams-gamla.raw.log",
+      "sha256": "829c0f8270c2cee1910bc2fe5ea290702c8a4b8c947f3ebd87afc5797d353e3f",
+      "bytes": 21006
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/startup-bootstrap-v2-adams-gamla.status.json",
+      "sha256": "3ffe09ecc4a1f39ac6f78caca24c95a5d1182b4dbd23662d5e5938bcc488a56f",
+      "bytes": 36
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/startup-bootstrap-v2-fleet.json",
+      "sha256": "041e356ea6761e4a5fff24d737c5bc2de6b4716b38d704b8fbec76d38fdc87ad",
+      "bytes": 12692
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/startup-bootstrap-v2-input.json",
+      "sha256": "ad2de5ba8f15f9ec3915597444770ef39cbc742cd16ebecc12e33a305cc7ca94",
+      "bytes": 605
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/startup-bootstrap-v2-lab.log",
+      "sha256": "9733b82616a5316ce00e6c2fc217dba894b90a330dbe6decabd1c91394808f31",
+      "bytes": 25155
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/startup-bootstrap-v2-result.json",
+      "sha256": "e37cf3eda841394faa494dc781d0bb4595a573be581a3904ea0701e74475703c",
+      "bytes": 62
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/participant-cone-v2-fleet.json",
+      "sha256": "192a1aaad09084525c20b27a860c1adaeafdfc565192acf1e5ee76cda543a8f5",
+      "bytes": 12688
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/participant-cone-v2-input.json",
+      "sha256": "67d9d97712c7046c3548f3868f6d6f00565db37b19dfe2412a4dee862bf97f49",
+      "bytes": 2032
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/participant-cone-v2-lab.log",
+      "sha256": "39ef2a1237a3d41e61d174e697a1fd737da9080434cacbe9c7fb1fc593cb46d3",
+      "bytes": 1727
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/participant-cone-v2-lenovo-laptop.raw.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/participant-cone-v2-lenovo-laptop.raw.log",
+      "sha256": "0465185fbeaf2231ab1bd952d2c696b0d1a11e48908a3a817b16c455d5f1e5b7",
+      "bytes": 2222
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/participant-cone-v2-lenovo-laptop.status.json",
+      "sha256": "f67f647bb544af538d33b715ae91a9f95a5c95eef71ec0aa1d071b7e2cccb231",
+      "bytes": 36
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/participant-cone-v2-result.json",
+      "sha256": "86655b8de0533724671fb8eb01f840499cfe3801f512abf1fdcb8702560851c3",
+      "bytes": 62
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/runtime-cone-v2-adam-laptop.raw.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/runtime-cone-v2-adam-laptop.raw.log",
+      "sha256": "99e6e80086b0c31ea0567e4b329adb726b1b9fc001ec9649a361a40f5fac32ed",
+      "bytes": 3041
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/runtime-cone-v2-adam-laptop.status.json",
+      "sha256": "f67f647bb544af538d33b715ae91a9f95a5c95eef71ec0aa1d071b7e2cccb231",
+      "bytes": 36
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/runtime-cone-v2-fleet.json",
+      "sha256": "6ff704f234130f9502244148ce9f4d2a94691a83bf2731e0cb86f5c301f01d1c",
+      "bytes": 12652
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/runtime-cone-v2-input.json",
+      "sha256": "c0862dc4e9829f0ad9c6756a4cb22068d8e3421a1bff9295dba4c7450f46cb42",
+      "bytes": 2900
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/runtime-cone-v2-lab.log",
+      "sha256": "3ee3a94e9529919519d31d6540e7d09d1c1fc42945de292503fb75668077e0cd",
+      "bytes": 2098
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/runtime-cone-v2-result.json",
+      "sha256": "085106617d763a72f0faaff05c45516943f452c094b5aac37ace537bcb307bd8",
+      "bytes": 62
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/native-recovery-v2-fleet.json",
+      "sha256": "2cccf98a79361143beef1848c438cd38af8fb755787d52f62f1adec811a14e32",
+      "bytes": 12698
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/native-recovery-v2-input.json",
+      "sha256": "8694163a8878b39abf6f38fbda56f1fbd39e2e5903c544fc6fe1e7d9d4d160a4",
+      "bytes": 624
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/native-recovery-v2-lab.log",
+      "sha256": "acab9a480f215be7c8fa617a8b2fb4f215938b416a98c56b0e051a0f3ee925a6",
+      "bytes": 1136
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/native-recovery-v2-result.json",
+      "sha256": "0d82300f63a1499fc50af8401d7beb606d556abac88b66661ff8e22e775702e4",
+      "bytes": 62
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/native-recovery-v2-tv-dator.raw.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/native-recovery-v2-tv-dator.raw.log",
+      "sha256": "a3775fc94e3e0c31095ef9cf6a50c2da9b29926b432d51f2649ed74e6c5b3109",
+      "bytes": 880
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/native-recovery-v2-tv-dator.status.json",
+      "sha256": "f67f647bb544af538d33b715ae91a9f95a5c95eef71ec0aa1d071b7e2cccb231",
+      "bytes": 36
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/focused-recovery-v2-carinas-windows.raw.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/focused-recovery-v2-carinas-windows.raw.log",
+      "sha256": "79eae3421f93f33ccb090f456a4b685712bbdd27cb64474c241e44c27be26529",
+      "bytes": 663
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/focused-recovery-v2-carinas-windows.status.json",
+      "sha256": "f67f647bb544af538d33b715ae91a9f95a5c95eef71ec0aa1d071b7e2cccb231",
+      "bytes": 36
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/focused-recovery-v2-fleet.json",
+      "sha256": "e1b2e7f160f9dfb7b19b3543fa223cefaf701af0cb87806f3b9b8ee74eaa8066",
+      "bytes": 12695
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/focused-recovery-v2-input.json",
+      "sha256": "1a524c868c611e3022fed7a2e0789867304c04b1235740bfd322be1daaa8da20",
+      "bytes": 583
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/focused-recovery-v2-lab.log",
+      "sha256": "82217725900c1aec269a905d8e7b23a5928f7f32e2101c2b7a327b7560978b60",
+      "bytes": 1003
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/focused-recovery-v2-result.json",
+      "sha256": "04a5d0b61008716ad3c20f278668cda1da5cac9fc0db9c63d5a1e86e63bdaca9",
+      "bytes": 62
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-v2-dependencies.log",
+      "sha256": "f5c10fceb32a448d47b053f6cf16a27736099a293168099f30d7fea3258e4258",
+      "bytes": 678
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-v2-duplication.log",
+      "sha256": "8b6436c74c48cdee9b59db433f8aee1eab5fa493fd34766c6025ab5dd2799a95",
+      "bytes": 1837
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-v2-global-static-status.json",
+      "sha256": "03c577ae95fdb78e7a582b9d4a55facf17aca1a2fbd84610a542ab112545a77a",
+      "bytes": 240
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/frozen-implementation-v2-hashes.json",
+      "sha256": "d1a79f64045a705593c23fe23f6e4a3dbdbd18a297d98d8f008029f7dd917c2f",
+      "bytes": 1175
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/implementation-pair-v2.json",
+      "sha256": "5e82959e65578d9f2e588510ffb370c9100d1b3baa65ee2a95d746f38334a081",
+      "bytes": 838
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/implementation-review-v2.md",
+      "sha256": "8a1e0e37420f1a70fc08595617495832037e7fe5c701b264cf302a1df4156251",
+      "bytes": 8304
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/witness-review-v2.md",
+      "sha256": "2414a30871e54568df43d56275ca83f6b74da01403754964af8bc52134f9be14",
+      "bytes": 14540
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/startup-observations-v2.json",
+      "sha256": "de812e1e25f2b2c70264e09f5f0e2d0cccb67c917bada96ee30bc55ff1ff246d",
+      "bytes": 4046
+    }
+  ],
+  "createdAt": "2026-10-13T17:42:56.899581+00:00"
+}

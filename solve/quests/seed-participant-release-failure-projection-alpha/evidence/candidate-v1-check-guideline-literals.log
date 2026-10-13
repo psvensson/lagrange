@@ -1,0 +1,6 @@
+Scanned 3 JavaScript files
+Found 8 new literal-guideline violations
+Top files:
+- src/node/replica-handler-participant-cutover.js: 6
+- src/bootstrap/bootstrap-service-seed-workflow.js: 2
+Matched 0 inherited literal-guideline baseline violations

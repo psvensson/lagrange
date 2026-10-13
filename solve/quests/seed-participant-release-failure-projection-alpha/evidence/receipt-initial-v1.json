@@ -1,0 +1,70 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "seed-participant-release-failure-projection-alpha",
+  "status": "fail",
+  "base": "a3b5c63451c3cf968b3d7ec807a0381261d4b61f",
+  "generatedAt": "2026-10-13T16:55:07.549664+00:00",
+  "receipts": [
+    {
+      "id": "one-canonical-blocked-entry",
+      "passed": false,
+      "detail": "No engaged witness yet proves that one canonical find result both decides DRAIN_PENDING and supplies its bounded blocked generation/work projection."
+    },
+    {
+      "id": "first-observations-survive",
+      "passed": false,
+      "detail": "No engaged workflow witness yet proves first blocked and joined observations survive later retries and the terminal client deadline without growing history."
+    },
+    {
+      "id": "typed-relative-time",
+      "passed": false,
+      "detail": "Measured, unavailable, unsafe, and nonmonotonic NodeService-clock observations and their null-scalar behavior have not been implemented or measured."
+    },
+    {
+      "id": "accessor-free-bounded-trigger",
+      "passed": false,
+      "detail": "Strict-own-data fixed-trigger capture and the adversarial zero-getter and zero-coercion controls have not been implemented or measured."
+    },
+    {
+      "id": "exact-shared-promise",
+      "passed": false,
+      "detail": "No engaged same-build join witness yet proves exact stored-promise awaiting, mixed-build separation, and starter-only identity cleanup."
+    },
+    {
+      "id": "underlying-answer-identity",
+      "passed": false,
+      "detail": "No witness yet proves that removing only joinedAttempt reproduces the settled owner answer exactly while successful answers remain unchanged."
+    },
+    {
+      "id": "actual-workflow-client-retention",
+      "passed": false,
+      "detail": "The named actual seed-workflow and participant-release-client witness does not yet exist, so one delivery, two attempts, the terminal client deadline, first-only custody, and exact counters are unproved."
+    },
+    {
+      "id": "existing-interaction-registered",
+      "passed": false,
+      "detail": "The diagnostic observation owner, seed workflow, client, and named witness are not yet registered in both existing raft-rs-runtime-application-transaction forms."
+    },
+    {
+      "id": "source-revert-engagement",
+      "passed": false,
+      "detail": "Root has not yet measured identical witness bytes against the candidate and same-host source-only revert through pending work, same-build join, delivered refusal, and actual client deadline engagement."
+    },
+    {
+      "id": "healthy-path-and-policy-unchanged",
+      "passed": false,
+      "detail": "Current success, authority, retry, timeout, serial order, admission, recovery, promise cleanup, startup result, and shutdown preservation have not yet been measured on the exact candidate."
+    },
+    {
+      "id": "static-and-review-gate",
+      "passed": false,
+      "detail": "No implementation exists, so exact-byte independent review, ordinary generated metadata, focused proof, static ratchets, and source-revert evidence are absent. Existing startup reds remain separate hard failures and cannot make this receipt pass."
+    }
+  ],
+  "design": {
+    "v3Sha256": "f3fcf5c22571bc4388239637f77014da3d067f504e7d12a0a4f82580a64c5eb4",
+    "registryCorrectionSha256": "587f3475319c6cb38cfb040213feb04a6f37fe0a89d799a684482dd5551262c2",
+    "independentReviewSha256": "2e1d96d6503bc9292119ed79fc0c4c3e1aa9b0a624c2e2499e17345151cbc5f0"
+  },
+  "limit": "Initial all-false seal input only. It is neither implementation evidence nor a startup-repair, integration, corpus, landing, or epic-completion claim."
+}

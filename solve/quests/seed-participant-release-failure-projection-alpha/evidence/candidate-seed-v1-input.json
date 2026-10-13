@@ -1,0 +1,26 @@
+{
+  "sha": "2d3c98fd301a8b4e7c73091a24e1ff392e552262",
+  "tree": "bea2eb0fc00e622a5b6ebc281dfca756712ea9ba",
+  "host": "carinas-windows",
+  "files": [
+    "test/bootstrap/seed-participant-release-failure-projection.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/bootstrap/seed-participant-release-failure-projection.test.js"
+      ],
+      "jobs": 2,
+      "resourceClass": "bootstrap"
+    }
+  ],
+  "costs": [
+    {
+      "file": "test/bootstrap/seed-participant-release-failure-projection.test.js",
+      "jobs": 2,
+      "ms": 10000,
+      "lane": "bootstrap"
+    }
+  ],
+  "startedAt": "2026-10-13T17:23:55.380Z"
+}

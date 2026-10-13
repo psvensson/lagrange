@@ -1,0 +1,17 @@
+placement-shell=435476
+placement-head=2d3c98fd301a8b4e7c73091a24e1ff392e552262
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.6 mode:local retry: timeout: lanecap:11
+placement-pid=435891
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: ok cpu 64C (coretemp/Package id 0) nvme 50C (nvme/Sensor 1)
+ok test/partition/participant-release-protocol.test.js (10 assertions, 3003ms)
+# test-files total=1 pass=1 fail=0 assertions=10
+placement-results={"file":"test/partition/participant-release-protocol.test.js","attempt":1,"ok":true,"assertions":10,"durationMs":3003,"retriedOnce":false,"firstFailureLine":null}

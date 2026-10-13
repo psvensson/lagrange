@@ -1,0 +1,12 @@
+{
+  "src/node/participant-release-diagnostic-observation.js": "79f83e6c3768180f4ec6e2c64c74a2d4ee49c8c0d7f25fdd9fbd832947a42e83",
+  "src/node/replica-handler-participant-cutover.js": "36b24096246f4c57f11c4238ebd4847276eb0f802b82d7aa56acd347303a57c3",
+  "src/bootstrap/bootstrap-service-seed-workflow.js": "d52ed687fb26454f01bf57d59aff95e3e1c240e773de94fbb4fbd89821713df4",
+  "test/partition/participant-release-protocol.test.js": "037c9c287d8c0efd5821dcd7d0548ab409054deb61ec259726dca62f1c029f82",
+  "test/bootstrap/seed-participant-release-failure-projection.test.js": "3350b6ad477f1b721fd644b1af2130b597632e6dfed237e30c34d5e3f560dba1",
+  "test/shards/impact-contracts.json": "e3b0c3037ee1f092ab0b56c4d52433936b1e6fe01d860dcbf93b74b2d437d0e7",
+  "test/shards/impact-graph-seal.json": "09f5da795a1dbfccefc3d01cdfa5b914d42f4c88c30644d53bf5fb83d6562b12",
+  "test/shards/primary-classes.json": "7f0512827614cdc4869d1c9c8541d442066a6dd5846e154c08e4af16dd65f25e",
+  "test/shards/resource-classes.json": "5000c27eb00432ecadb9355023bc64bed214916d73bd335f8185c35254452abd",
+  "test/shards/subsystem-classes.json": "5b07ec345f81ffa94a22cd984c3b36a78e74dfc25a38738a8fb391b5e4b274ca"
+}

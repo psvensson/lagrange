@@ -1,0 +1,294 @@
+{
+  "schema": "seed-release-diagnostic-paired-evidence/1",
+  "candidate": {
+    "sha": "2d3c98fd301a8b4e7c73091a24e1ff392e552262",
+    "tree": "bea2eb0fc00e622a5b6ebc281dfca756712ea9ba"
+  },
+  "control": {
+    "sha": "231b7cb8f4d9b154c95e113db6990579fe3cd3b3",
+    "tree": "a83c8c907ef2dcc22055f258a65a5acd587324fc"
+  },
+  "sameHostIdenticalTests": true,
+  "runs": [
+    {
+      "host": "tv-dator",
+      "test": "test/partition/participant-release-protocol.test.js",
+      "candidate": {
+        "pass": 10,
+        "fail": 0,
+        "durationMs": 3003
+      },
+      "control": {
+        "pass": 7,
+        "fail": 3,
+        "durationMs": 3255
+      },
+      "engagement": "Actual pending proposal and older same-build joined attempt reached DRAIN_PENDING; absent complete blockedDrain projection failed canonical facts comparison. Seven original cases stay green."
+    },
+    {
+      "host": "carinas-windows",
+      "test": "test/bootstrap/seed-participant-release-failure-projection.test.js",
+      "candidate": {
+        "pass": 3,
+        "fail": 0,
+        "durationMs": 5504
+      },
+      "control": {
+        "pass": 0,
+        "fail": 3,
+        "durationMs": 5480
+      },
+      "engagement": "Primary real client deadline, distinct later refusal custody, and immediate owner-refusal paths reached intended assertions before absent seedRelease fields."
+    }
+  ],
+  "noTimeoutRetrySkipOrCancellationObserved": true,
+  "staticGate": "HOLD: two new seed decision-boundary findings; unchanged inherited literal8, seed retry1, cutover complexity15/30 cognitive23, one cyclic SCC, test clone excess46. Source duplication unchanged47/1462; no clones touch either changed witness. Independent production verdict pending.",
+  "artifacts": [
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/witness-review-v2.md",
+      "sha256": "2414a30871e54568df43d56275ca83f6b74da01403754964af8bc52134f9be14",
+      "bytes": 14540
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/control-protocol-v2-fleet.json",
+      "sha256": "7b5fd4ef24e7f5792f97bcf3f03d6c9f7ee7cbefa0da0f0b06c2de76c6b5d41f",
+      "bytes": 12698
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/control-protocol-v2-input.json",
+      "sha256": "2e502a0cc7617f03b7be5380f1a778b92c6de7336cef2372acf21d09ae71017f",
+      "bytes": 579
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/control-protocol-v2-lab.log",
+      "sha256": "685cc84dc282dfe6c5542da1c831893cadceb9862e48461cc03806a413c5b85c",
+      "bytes": 9376
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/control-protocol-v2-result.json",
+      "sha256": "0c5d6789b24fc266010354f28fc30e5b90d65a44200d2b5e447de15a586a9080",
+      "bytes": 62
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/control-protocol-v2-tv-dator.raw.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/control-protocol-v2-tv-dator.raw.log",
+      "sha256": "a7d4040c28b4e5134401fe9b41c3a9c5fd2a9dc42787cd5ec9cedeb852500cd3",
+      "bytes": 7397
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/control-protocol-v2-tv-dator.status.json",
+      "sha256": "3ffe09ecc4a1f39ac6f78caca24c95a5d1182b4dbd23662d5e5938bcc488a56f",
+      "bytes": 36
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/control-seed-v2-carinas-windows.raw.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/control-seed-v2-carinas-windows.raw.log",
+      "sha256": "620d43ac1f8966c46422f60a6d184b2a5ed01b9c6cdb842d4cb2d1d466dc65e9",
+      "bytes": 4090
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/control-seed-v2-carinas-windows.status.json",
+      "sha256": "3ffe09ecc4a1f39ac6f78caca24c95a5d1182b4dbd23662d5e5938bcc488a56f",
+      "bytes": 36
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/control-seed-v2-fleet.json",
+      "sha256": "4faf343a846507bbd387456a1469fd91c5e825a28e435e37b1b19922c07cf1a1",
+      "bytes": 12696
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/control-seed-v2-input.json",
+      "sha256": "aab2bf056468d7097e5e18b4825d9f8912fd8f5564f9cf9b1eebe15f7593e127",
+      "bytes": 633
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/control-seed-v2-lab.log",
+      "sha256": "b19973e6ea964323e90b152ee5a4744c9d3017b19a5f7172cd2701336899c3b7",
+      "bytes": 5686
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/control-seed-v2-result.json",
+      "sha256": "9ea8fb4ffda163fde9f7cefba9bf3280511c5d8830a208aac0c9440548bb3126",
+      "bytes": 62
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-protocol-v1-fleet.json",
+      "sha256": "4bfebe73bf375eb102dc9342dd92b4a2729044a740e90741842277387027ec44",
+      "bytes": 12697
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-protocol-v1-input.json",
+      "sha256": "ac278ae342acbe097d9c3c9a6065f26acdc0f3c9bfc8b9c738d9971315151125",
+      "bytes": 579
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-protocol-v1-lab.log",
+      "sha256": "a4ac66b68b2420c1411011f16a3ff2c0b98ca0bb8798f5d9f93aca44b01c0dbc",
+      "bytes": 1120
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-protocol-v1-result.json",
+      "sha256": "62c7ea544078be67ef74bee333c8db9680342ca185db7e098ebada8b115df25c",
+      "bytes": 62
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-protocol-v1-tv-dator.raw.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-protocol-v1-tv-dator.raw.log",
+      "sha256": "f54cd9f723455a4b07e7f04a45b6574fdfad865fd32eea814c3cf85f4a53d014",
+      "bytes": 848
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-protocol-v1-tv-dator.status.json",
+      "sha256": "f67f647bb544af538d33b715ae91a9f95a5c95eef71ec0aa1d071b7e2cccb231",
+      "bytes": 36
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-seed-v1-carinas-windows.raw.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-seed-v1-carinas-windows.raw.log",
+      "sha256": "d8fcb2852d552bbabea460dfa1c688d2474c8bc4b0c5f9f131f2b4b0561dd68c",
+      "bytes": 693
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-seed-v1-carinas-windows.status.json",
+      "sha256": "f67f647bb544af538d33b715ae91a9f95a5c95eef71ec0aa1d071b7e2cccb231",
+      "bytes": 36
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-seed-v1-fleet.json",
+      "sha256": "7f30dee4f4a765361a02564068161535cce93332c907b770f2f9b53f761f67dd",
+      "bytes": 12721
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-seed-v1-input.json",
+      "sha256": "795484cc2c111a681cacb929f535ee20573817fdc0bceac03c6c97dcfbd08264",
+      "bytes": 633
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-seed-v1-lab.log",
+      "sha256": "bc6cd077f4720916ed65273f29b539035ab5a5bbd1985142a930e0aa29078312",
+      "bytes": 1017
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-seed-v1-result.json",
+      "sha256": "3bc71fb9bab63d43a913a5f935833eb4c1e5152fe73ee041c5836c3b56d66fc2",
+      "bytes": 62
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-v1-check-circular-dependencies.log",
+      "sha256": "d0a44397413261de24e4db8fbd73548410f180f66ec19f33b502aab1fa9699e7",
+      "bytes": 251
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-v1-check-duplication.log",
+      "sha256": "8b6436c74c48cdee9b59db433f8aee1eab5fa493fd34766c6025ab5dd2799a95",
+      "bytes": 1837
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-v1-check-file-size-thresholds.log",
+      "sha256": "681d5b303722668ada3f30b4060a2d32b57399f0e838867f73f28cca1b2700f5",
+      "bytes": 103
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-v1-check-guideline-ambient-intrinsics.log",
+      "sha256": "8c2aefa99064b65f9e747bad50f147e1ef6a70dbef483fa64da51b288aa8b9da",
+      "bytes": 127
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-v1-check-guideline-boundary-mode-contracts.log",
+      "sha256": "d39c82e978f948c09499f7712060371dfe10ae0e2b786c90f3887ba0a2847693",
+      "bytes": 77
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-v1-check-guideline-decision-boundaries.json",
+      "sha256": "54ea38efb0a080c50eeed74d9a0053208cc2f5ae364aa5c80435f8e1b550551c",
+      "bytes": 1665
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-v1-check-guideline-decision-boundaries.log",
+      "sha256": "a8520677b1f54841e973b817984cc12216ec00c44cd69912c8a8eaace69e05c6",
+      "bytes": 197
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-v1-check-guideline-deferred-outcomes.log",
+      "sha256": "75cd25d9ef2682897a901d685625a41c40b6a571f46c59ee593a712f99467c86",
+      "bytes": 82
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-v1-check-guideline-hot-path-diagnostics.log",
+      "sha256": "e01ea736b5802396cd5ca959abe4ef67e692596551783b4ec0df327472f64e9e",
+      "bytes": 128
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-v1-check-guideline-literals.json",
+      "sha256": "a4f7600f1d23fc1b5d7f6d75f39639b31fd3c6a87b5eff9ad80c7b59ebc77431",
+      "bytes": 3370
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-v1-check-guideline-literals.log",
+      "sha256": "f4d730baecac9995ea08eba9614dcda2377c7901be86e19ff937d753de8e2cb5",
+      "bytes": 244
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-v1-check-guideline-silent-catch.log",
+      "sha256": "e0d960034e0364090d3c551efd0eea89e3223b1379ebe3f0a07716c3a4e8fd06",
+      "bytes": 112
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-v1-check-runtime-grammar-contracts.log",
+      "sha256": "e12c20041df1cb7d4405d78452f4f5a2f3417841073f72075e08ab0eb764d1b0",
+      "bytes": 71
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-v1-dependencies-status.json",
+      "sha256": "b36327fdd9c9e39f86af586b626c59b5a244a153f4d7af9a187b14495703a258",
+      "bytes": 88
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-v1-dependencies.log",
+      "sha256": "f5c10fceb32a448d47b053f6cf16a27736099a293168099f30d7fea3258e4258",
+      "bytes": 678
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-v1-global-static-status.json",
+      "sha256": "5ea7d4fa302a677cd654ebb1646c64c35327bb8cff1b6465e32071c9c6c883ee",
+      "bytes": 265
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-v1-other-static-status.json",
+      "sha256": "aff99a83c44fb27e33392e0a7046a4c4e8a864289aba704f60a0afb6a4a15b8d",
+      "bytes": 503
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/candidate-v1-scoped-static-status.json",
+      "sha256": "f78a1def3cbf6e10974b9549f536e1efea1393f341dc894a29a7e36088665329",
+      "bytes": 2615
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/control-v1-check-guideline-decision-boundaries.json",
+      "sha256": "1b288cbc1d2cd1046e582f7bce9f356f5b91e6b9ff34edc71b4f64db2edc1cd3",
+      "bytes": 762
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/control-v1-check-guideline-literals.json",
+      "sha256": "877dc00505b790643d6db6cd1182c6b213295da8d7dbfdfe7155144bf97c3ce1",
+      "bytes": 3370
+    }
+  ],
+  "createdAt": "2026-10-13T17:27:17.125422+00:00"
+}

@@ -1,0 +1,26 @@
+{
+  "sha": "3231b1311ad79fb933d059877c97fc296b951e5d",
+  "tree": "b3adccaa73f0bb401144a7e212916446ec370d44",
+  "host": "adam-laptop",
+  "files": [
+    "test/integration/message-group-membership-claim-cache.integration.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/integration/message-group-membership-claim-cache.integration.test.js"
+      ],
+      "jobs": 1,
+      "resourceClass": "exclusive"
+    }
+  ],
+  "costs": [
+    {
+      "file": "test/integration/message-group-membership-claim-cache.integration.test.js",
+      "jobs": 1,
+      "ms": 10000,
+      "lane": "exclusive"
+    }
+  ],
+  "startedAt": "2026-10-13T17:35:27.494Z"
+}

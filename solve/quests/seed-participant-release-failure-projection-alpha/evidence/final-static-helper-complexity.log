@@ -1,0 +1,10 @@
+
+> lagrange-server@0.2.6 test:complexity:scoped:strict
+> node scripts/check-complexity.js --scoped --strict src/node/participant-release-diagnostic-observation.js
+
+No complexity violations (threshold: 12).
+
+> lagrange-server@0.2.6 test:complexity:cognitive:scoped:strict
+> node scripts/check-cognitive-complexity.js --scoped --strict src/node/participant-release-diagnostic-observation.js
+
+No cognitive complexity violations (threshold: 20).

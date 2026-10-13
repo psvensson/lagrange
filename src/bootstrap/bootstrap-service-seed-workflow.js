@@ -20,6 +20,9 @@ import {
 import {runtimeBuildProvenance, RUNTIME_BUILD_STATE} from
   '../diagnostics/runtime-build-provenance.js';
 import {requestParticipantRelease} from '../node/participant-release-client.js';
+import {observeParticipantReleaseClockValue,
+  participantReleaseSeedBudgetObservation, readParticipantReleaseClock} from
+  '../node/participant-release-diagnostic-observation.js';
 import {PARTICIPANT_CUTOVER_BOUND, PARTICIPANT_CUTOVER_OUTCOME,
   PARTICIPANT_RELEASE_TRIGGER} from
   '../partition/partition-participant-transaction-cutover-constants.js';
@@ -82,6 +85,26 @@ const PHASE_EVENT = Object.freeze({
 });
 const DEFERRED_LATENCY_TOPOLOGY_FAILURE =
   'Deferred latency topology lifecycle start failed';
+const EMPTY_PARTICIPANT_RELEASE_DIAGNOSTIC_OBSERVATION = null;
+
+function retainFirstReleaseObservation(current, value) {
+  return current === null && value !== undefined ? value : current;
+}
+
+function seedReleaseFailureProjection({startObservation, terminalObservation,
+  budgetMs, ordinal, total, completed, attemptCount, firstBlockedDrain,
+  firstJoinedAttempt}) {
+  return {
+    ...participantReleaseSeedBudgetObservation(
+      startObservation, terminalObservation, budgetMs),
+    ordinal,
+    total,
+    completed,
+    attemptCount,
+    firstBlockedDrain,
+    firstJoinedAttempt,
+  };
+}
 
 function createBootstrapServiceSeedWorkflowMethods() {
   return {
@@ -263,7 +286,11 @@ function createBootstrapServiceSeedWorkflowMethods() {
         return leftControl - rightControl || left.partitionId.localeCompare(right.partitionId);
       });
       const timeSource = this.nodeService.getTimeSource();
-      const deadline = timeSource.now() + this.config.leadershipWaitTimeoutMs;
+      const budgetMs = this.config.leadershipWaitTimeoutMs;
+      const startMs = timeSource.now();
+      const startObservation = observeParticipantReleaseClockValue(startMs);
+      const deadline = startMs + budgetMs;
+      let completed = 0;
       for (const service of services) {
         const authorization = this.replicaHandler
           .participantReleaseAuthorizationOwner.authorizeFreshSeed({
@@ -275,12 +302,20 @@ function createBootstrapServiceSeedWorkflowMethods() {
           throw new Error('Seed participant release authority unavailable');
         }
         let answer = null;
+        let attemptCount = 0;
+        let firstBlockedDrain = EMPTY_PARTICIPANT_RELEASE_DIAGNOSTIC_OBSERVATION;
+        let firstJoinedAttempt = EMPTY_PARTICIPANT_RELEASE_DIAGNOSTIC_OBSERVATION;
         do {
+          attemptCount += 1;
           answer = await requestParticipantRelease(this.replicaHandler, {
             partitionId: service.partitionId, targetBuildDigest: build.digest,
             trigger: PARTICIPANT_RELEASE_TRIGGER.FRESH_SEED,
             deadlineAtMs: deadline, authorization,
           });
+          firstBlockedDrain = retainFirstReleaseObservation(
+            firstBlockedDrain, answer.blockedDrain);
+          firstJoinedAttempt = retainFirstReleaseObservation(
+            firstJoinedAttempt, answer.joinedAttempt);
           if (answer.outcome === PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER) break;
           const retryAfterMs = answer.outcome ===
               PARTICIPANT_CUTOVER_OUTCOME.NOT_LEADER ?
@@ -292,9 +327,15 @@ function createBootstrapServiceSeedWorkflowMethods() {
             Math.max(0, deadline - timeSource.now())));
         } while (timeSource.now() <= deadline);
         if (answer?.outcome !== PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER) {
+          const terminalObservation = readParticipantReleaseClock(timeSource);
+          const seedRelease = seedReleaseFailureProjection({startObservation,
+            terminalObservation, budgetMs, ordinal: completed + 1,
+            total: services.length, completed, attemptCount, firstBlockedDrain,
+            firstJoinedAttempt});
           throw new Error('Seed participant release failed: ' +
-            JSON.stringify({partitionId: service.partitionId, answer}));
+            JSON.stringify({partitionId: service.partitionId, answer, seedRelease}));
         }
+        completed += 1;
       }
     },
     buildSeedCheckpointSteps(startupPipelineRunner, seedPlan) {

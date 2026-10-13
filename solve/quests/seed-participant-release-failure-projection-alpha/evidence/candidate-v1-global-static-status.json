@@ -1,0 +1,15 @@
+{
+  "sha": "2d3c98fd301a8b4e7c73091a24e1ff392e552262",
+  "results": [
+    {
+      "script": "check-circular-dependencies",
+      "status": 1,
+      "signal": null
+    },
+    {
+      "script": "check-duplication",
+      "status": 1,
+      "signal": null
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+lab test: carinas-windows: bootstrap (1 files) cores=12 mem=7.5GiB speed x1.55
+[carinas-windows] placement-shell=1271690
+[carinas-windows] placement-head=2d3c98fd301a8b4e7c73091a24e1ff392e552262
+[carinas-windows] placement-link=node_modules
+[carinas-windows] placement-link=data/examples
+[carinas-windows] placement-prepared=import-graph
+[carinas-windows] placement-env=factor:1.6 mode:local retry: timeout: lanecap:11
+[carinas-windows] placement-pid=1272112
+[carinas-windows] # test-files planned=1
+[carinas-windows] classified lane bootstrap: 1 file(s), jobs=2
+[carinas-windows] thermal: unmeasurable (no sensors)
+[carinas-windows] ok test/bootstrap/seed-participant-release-failure-projection.test.js (3 assertions, 5504ms)
+[carinas-windows] # test-files total=1 pass=1 fail=0 assertions=3
+lab test: carinas-windows: # test-files total=1 pass=1 fail=0 assertions=3
+lab test: carinas-windows: results copied to test-output/reports/test-results-carinas-windows.ndjson
+# test-files total=1 pass=1 fail=0 assertions=3

@@ -1,0 +1,24 @@
+{
+  "base": "a3b5c63451c3cf968b3d7ec807a0381261d4b61f",
+  "candidate": {
+    "worktree": "/tmp/session-worktree-zgZpNx/tree",
+    "sha": "3231b1311ad79fb933d059877c97fc296b951e5d",
+    "tree": "b3adccaa73f0bb401144a7e212916446ec370d44"
+  },
+  "control": {
+    "worktree": "/tmp/session-worktree-B9sBfl/tree",
+    "sha": "38b43ed7167435fc22dd4e95dc1d519cf06c64bd",
+    "tree": "a17d32d6ec67e5835126fa7848a6f116b41309b8"
+  },
+  "sourceOnlyControlPaths": [
+    "src/bootstrap/bootstrap-service-seed-workflow.js",
+    "src/node/participant-release-diagnostic-observation.js",
+    "src/node/replica-handler-participant-cutover.js"
+  ],
+  "contentDeltaFromV1": [
+    "src/bootstrap/bootstrap-service-seed-workflow.js",
+    "test/shards/impact-graph-seal.json"
+  ],
+  "identicalNonSourceBytes": true,
+  "createdAt": "2026-10-13T17:34:36.384Z"
+}

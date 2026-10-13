@@ -1,0 +1,20 @@
+lab test: tv-dator: ordinary (1 files) cores=12 mem=15.4GiB speed x1.56
+[tv-dator] placement-shell=435476
+[tv-dator] placement-head=2d3c98fd301a8b4e7c73091a24e1ff392e552262
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.6 mode:local retry: timeout: lanecap:11
+[tv-dator] placement-pid=435891
+[tv-dator] # test-files planned=1
+[tv-dator] classified lane ordinary: 1 file(s), jobs=4
+[tv-dator] thermal: ok cpu 64C (coretemp/Package id 0) nvme 50C (nvme/Sensor 1)
+[tv-dator] ok test/partition/participant-release-protocol.test.js (10 assertions, 3003ms)
+[tv-dator] # test-files total=1 pass=1 fail=0 assertions=10
+lab test: tv-dator: # test-files total=1 pass=1 fail=0 assertions=10
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=1 pass=1 fail=0 assertions=10

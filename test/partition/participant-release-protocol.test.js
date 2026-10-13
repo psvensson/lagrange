@@ -9,6 +9,7 @@ import {PartitionService} from '../../src/partition/partition-service.js';
 import {ReplicaHandler} from '../../src/node/replica-handler-class.js';
 import {requestParticipantRelease} from '../../src/node/participant-release-client.js';
 import {runtimeBuildProvenance} from '../../src/diagnostics/runtime-build-provenance.js';
+import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {SQL_TRANSACTIONS_SCHEMA} from
   '../../src/bootstrap/system-table-workflow-schema-definitions.js';
 import {readTransactionSchemaEnforcement} from
@@ -16,12 +17,34 @@ import {readTransactionSchemaEnforcement} from
 import {participantCutoverPauseOf} from
   '../../src/partition/partition-participant-transaction-pause.js';
 import {readPartitionWriteOrigin} from '../../src/partition/partition-participant-transaction-store.js';
+import {isReleaseDrained, readParticipantReleaseFacts} from
+  '../../src/partition/partition-participant-release-facts.js';
+import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from
+  '../../src/raft/raft-committed-membership-constants.js';
 import {PARTICIPANT_CUTOVER_OUTCOME as OUTCOME} from
   '../../src/partition/partition-participant-transaction-cutover-constants.js';
+import {
+  PARTICIPANT_RELEASE_ACTION as RELEASE_ACTION,
+  PARTICIPANT_RELEASE_RESULT_FIELD,
+  PARTICIPANT_RELEASE_ROUTE_SUFFIX,
+  PARTICIPANT_RELEASE_TRIGGER,
+  PARTICIPANT_RELEASE_TYPE,
+} from '../../src/partition/partition-participant-transaction-cutover-constants.js';
 import {durableRecordBootstrap} from '../../src/raft/raft-committed-membership-stamp.js';
 import {createInProcessMockTransport} from '../test-helpers/replica-handler-identity-fixture.js';
-import {resetFixtureSingletons, clearFixtureSingletons} from
+import {
+  awaitProposal,
+  clearFixtureSingletons,
+  resetFixtureSingletons,
+  shutdownAll,
+  startLeader,
+  track,
+} from
   '../test-helpers/participant-transaction-fixture.js';
+import {
+  pollutePrototypeProperty,
+  replacePrototypeProperty,
+} from '../helpers/hostile-intrinsics.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
 import {waitForCondition} from './partition-service-test-support.js';
 
@@ -35,7 +58,100 @@ const TABLE = 'release_table';
 const CONTROL_PARTITION = 'sql_transactions-p1';
 const CONTROL_REPLICA = 'release-sql-transactions-r1';
 const SQL = `INSERT INTO ${TABLE} (id, value) VALUES (?, ?)`;
+const PENDING_DELETE_SQL =
+  'DELETE FROM sql_transactions WHERE transaction_id = ?';
 const cache = {getAll: () => [], get: () => null, filter: () => []};
+
+function retainFailure(current, next, message) {
+  return current === null ? next : new AggregateError([current, next], message);
+}
+
+function scriptedTimeSource(values) {
+  let reads = 0;
+  return {
+    now() {
+      const value = values[Math.min(reads, values.length - 1)];
+      reads += 1;
+      if (value instanceof Error) throw value;
+      return value;
+    },
+    setTimeout,
+    clearTimeout,
+    reads: () => reads,
+  };
+}
+
+function registeredReleaseRequest(fields = {}) {
+  return {
+    type: PARTICIPANT_RELEASE_TYPE,
+    action: RELEASE_ACTION.RELEASE,
+    partitionId: PARTITION,
+    targetBuildDigest: 'a'.repeat(64),
+    deadlineAtMs: 1_000_000,
+    ...fields,
+  };
+}
+
+async function sendRegisteredRelease(handler, transport, request) {
+  const registered = transport.getRegisteredHandler(
+    `${handler.nodeId}${PARTICIPANT_RELEASE_ROUTE_SUFFIX}`,
+  );
+  assert.equal(typeof registered, 'function', 'release route must be registered');
+  const response = await registered({payload: request});
+  return response[PARTICIPANT_RELEASE_RESULT_FIELD];
+}
+
+async function withEmptyRegisteredHandler(timeSource, measure) {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'tx1-release-observation-'));
+  const transport = createInProcessMockTransport();
+  const handler = new ReplicaHandler({nodeId: NODE, ownerIncarnation: 1,
+    systemTableCache: cache, cdcIntegrationService: {},
+    createPartitionService: () => null, messageRouter: transport,
+    dataDir: directory, timeSource});
+  handler.registerWithRouter(transport);
+  let failure = null;
+  try {
+    await measure({handler, transport});
+  } catch (error) {
+    failure = error;
+  }
+  try {
+    await handler.shutdown();
+  } catch (error) {
+    failure = retainFailure(failure, error,
+      'release observation assertion and handler cleanup failed');
+  }
+  try {
+    fs.rmSync(directory, {recursive: true, force: true});
+  } catch (error) {
+    failure = retainFailure(failure, error,
+      'release observation assertion and artifact cleanup failed');
+  }
+  if (failure !== null) throw failure;
+}
+
+async function joinedHostedPartitionFailure(starterRequest, clockValues = [100, 100, 101, 102]) {
+  let answers = null;
+  await withEmptyRegisteredHandler(scriptedTimeSource(clockValues),
+    async ({handler, transport}) => {
+      const starter = sendRegisteredRelease(handler, transport, starterRequest);
+      const joiner = sendRegisteredRelease(handler, transport,
+        registeredReleaseRequest());
+      answers = await Promise.all([starter, joiner]);
+    });
+  assert.equal(answers[0].outcome, OUTCOME.UNAVAILABLE);
+  assert.equal(answers[0].missingFact, 'hosted_partition');
+  assert.equal(answers[1].outcome, OUTCOME.UNAVAILABLE);
+  assert.equal(answers[1].missingFact, 'hosted_partition');
+  assert.equal(Object.hasOwn(answers[0], 'joinedAttempt'), false,
+    'the starter is not its own joining caller');
+  assert.equal(typeof answers[1].joinedAttempt?.clockState, 'string');
+  assert.notEqual(answers[1].joinedAttempt.clockState.length, 0);
+  const {joinedAttempt, ...underlying} = answers[1];
+  assert.deepEqual(underlying, answers[0],
+    'the caller projection must preserve the exact settled owner answer');
+  return {starter: answers[0], joiner: answers[1], joinedAttempt};
+}
 
 async function fixture(measure, table = {tableId: TABLE, tableName: TABLE,
   schema: {columns: [{name: 'id', type: 'TEXT', primaryKey: true},
@@ -234,3 +350,331 @@ test('control cohort preserves unreconstructible legacy rows and reports exact a
     assert.notEqual(participantCutoverPauseOf(service), null);
   }, {tableId: SQL_TRANSACTIONS_SCHEMA.tableName,
     tableName: SQL_TRANSACTIONS_SCHEMA.tableName, schema: SQL_TRANSACTIONS_SCHEMA}));
+
+test('registered participant release projects one real blocked drain and older joined attempt',
+  async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'tx1-release-real-drain-'));
+    const transport = createInProcessMockTransport();
+    const clock = new VirtualTimeSource({startMs: 1000});
+    const {leader, proposed} = await startLeader({
+      tableName: SQL_TRANSACTIONS_SCHEMA.tableName,
+      schema: SQL_TRANSACTIONS_SCHEMA,
+      timeSource: clock,
+    });
+    const handler = new ReplicaHandler({nodeId: leader.nodeId, ownerIncarnation: 1,
+      systemTableCache: leader.systemTableCache, cdcIntegrationService: {},
+      createPartitionService: () => leader, messageRouter: transport,
+      dataDir: directory, timeSource: clock});
+    handler.registerWithRouter(transport);
+    handler.localServices.set(leader.replicaId, leader);
+    let failure = null;
+    let restoreSafeInteger = null;
+    let pendingWrite = null;
+    let proposal = null;
+    let proposalCommitted = false;
+    try {
+      const build = await runtimeBuildProvenance();
+      assert.equal(build.state, 'measured', build.reason);
+      const initial = await handler.participantReleaseRecovery.releaseOperator({
+        partitionId: leader.partitionId,
+        targetBuildDigest: build.digest,
+        deadlineAtMs: clock.now() + 30000,
+      });
+      assert.equal(initial.outcome, OUTCOME.CUT_OVER, JSON.stringify(initial));
+      assert.equal(Object.hasOwn(initial, 'joinedAttempt'), false);
+
+      const absentId = 'd'.repeat(32);
+      pendingWrite = track(leader.executeQuery(PENDING_DELETE_SQL, [absentId]));
+      proposal = await awaitProposal(proposed,
+        (entry) => entry.sql === PENDING_DELETE_SQL);
+      assert.notEqual(proposal, null, 'the production write must reach the proposal port');
+      assert.equal(pendingWrite.settled, false,
+        'the write remains owned until its actual proposal commits');
+      assert.equal(leader.proposalQueue.size, 1);
+      assert.equal(leader.db.prepare(
+        'SELECT COUNT(*) AS count FROM sql_transactions WHERE transaction_id = ?',
+      ).get(absentId).count, 0);
+
+      const originalMembership = leader.controllablePort.committedMembershipHandler;
+      assert.equal(typeof originalMembership, 'function');
+      const gateStarted = Promise.withResolvers();
+      const gateContinuation = Promise.withResolvers();
+      let gateOpen = false;
+      let blockedMembershipReads = 0;
+      leader.controllablePort.committedMembershipHandler = async (...args) => {
+        if (!gateOpen) {
+          blockedMembershipReads += 1;
+          gateStarted.resolve();
+          await gateContinuation.promise;
+        }
+        return originalMembership(...args);
+      };
+      try {
+        const authorization = handler.participantReleaseAuthorizationOwner
+          .authorizeOperator({partitionId: leader.partitionId,
+            targetBuildDigest: build.digest});
+        const request = registeredReleaseRequest({partitionId: leader.partitionId,
+          targetBuildDigest: build.digest, trigger: PARTICIPANT_RELEASE_TRIGGER.OPERATOR,
+          deadlineAtMs: clock.now() + 30000, authorization});
+        const starter = sendRegisteredRelease(handler, transport, request);
+        await gateStarted.promise;
+        assert.equal(blockedMembershipReads, 1,
+          'one cutover attempt reaches the gated membership owner');
+
+        const mixed = await sendRegisteredRelease(handler, transport,
+          {...request, targetBuildDigest: '0'.repeat(64)});
+        assert.equal(mixed.outcome, OUTCOME.INVALID);
+        assert.equal(Object.hasOwn(mixed, 'joinedAttempt'), false,
+          'a mixed build neither joins nor samples the active attempt');
+
+        clock.advance(1);
+        restoreSafeInteger = replacePrototypeProperty(Number, 'isSafeInteger', () => {
+          throw new Error('ambient Number.isSafeInteger must not be read by join projection');
+        });
+        const joiner = sendRegisteredRelease(handler, transport, {...request});
+        await Promise.resolve();
+        restoreSafeInteger();
+        restoreSafeInteger = null;
+        gateOpen = true;
+        gateContinuation.resolve();
+
+        const [starterAnswer, joinerAnswer] = await Promise.all([starter, joiner]);
+        assert.equal(starterAnswer.outcome, OUTCOME.DRAIN_PENDING,
+          JSON.stringify(starterAnswer));
+        assert.equal(joinerAnswer.outcome, OUTCOME.DRAIN_PENDING,
+          JSON.stringify(joinerAnswer));
+        assert.equal(blockedMembershipReads, 1,
+          'the same-build caller must share the first attempt');
+        assert.equal(Object.hasOwn(starterAnswer, 'joinedAttempt'), false);
+        assert.deepEqual(joinerAnswer.blockedDrain, starterAnswer.blockedDrain);
+        const canonicalFacts = await readParticipantReleaseFacts(
+          handler,
+          leader,
+          COMMITTED_MEMBERSHIP_READ_PURPOSE.RETIREMENT,
+        );
+        assert.equal(canonicalFacts.outcome, OUTCOME.OBSERVED,
+          JSON.stringify(canonicalFacts));
+        assert.deepEqual(starterAnswer.blockedDrain,
+          {generation: canonicalFacts.generation, work: canonicalFacts.work},
+          'the refusal projects the complete generation and work from the one canonical fact');
+        assert.equal(isReleaseDrained(starterAnswer.blockedDrain?.work), false);
+        assert.equal(starterAnswer.blockedDrain?.work?.proposals, 1);
+        assert.equal(starterAnswer.blockedDrain?.generation?.replicaId, leader.replicaId);
+        assert.equal(joinerAnswer.joinedAttempt?.originalTrigger,
+          PARTICIPANT_RELEASE_TRIGGER.OPERATOR);
+        assert.equal(typeof joinerAnswer.joinedAttempt?.clockState, 'string');
+        assert.notEqual(joinerAnswer.joinedAttempt.clockState.length, 0);
+        assert.ok(joinerAnswer.joinedAttempt.joinAgeMs > 0,
+          'the joining caller observes an already-running attempt');
+        assert.ok(joinerAnswer.joinedAttempt.terminalAgeMs >=
+          joinerAnswer.joinedAttempt.joinAgeMs);
+        const {joinedAttempt, ...settledAnswer} = joinerAnswer;
+        assert.deepEqual(settledAnswer, starterAnswer,
+          'removing only caller projection recovers the exact shared answer');
+        assert.notEqual(joinedAttempt, null);
+      } finally {
+        restoreSafeInteger?.();
+        gateOpen = true;
+        gateContinuation.resolve();
+        leader.controllablePort.committedMembershipHandler = originalMembership;
+      }
+
+      leader.controllablePort.commit(proposal);
+      proposalCommitted = true;
+      const writeAnswer = await pendingWrite.promise;
+      assert.equal(writeAnswer.success, true, JSON.stringify(writeAnswer));
+      assert.equal(leader.proposalQueue.size, 0);
+      const healed = await handler.participantReleaseRecovery.releaseOperator({
+        partitionId: leader.partitionId,
+        targetBuildDigest: build.digest,
+        deadlineAtMs: clock.now() + 30000,
+      });
+      assert.equal(healed.outcome, OUTCOME.CUT_OVER, JSON.stringify(healed));
+      assert.equal(Object.hasOwn(healed, 'joinedAttempt'), false,
+        'a fresh successful attempt carries no failure projection');
+    } catch (error) {
+      failure = error;
+    }
+    try {
+      if (proposal !== null && proposalCommitted === false) {
+        leader.controllablePort.commit(proposal);
+        proposalCommitted = true;
+      }
+      if (pendingWrite !== null) await pendingWrite.promise;
+    } catch (error) {
+      failure = retainFailure(failure, error,
+        'blocked-drain assertion and pending-write settlement failed');
+    }
+    try {
+      await handler.shutdown();
+    } catch (error) {
+      failure = retainFailure(failure, error,
+        'blocked-drain assertion and handler cleanup failed');
+    }
+    try {
+      await shutdownAll(leader);
+      fs.rmSync(directory, {recursive: true, force: true});
+    } catch (error) {
+      failure = retainFailure(failure, error,
+        'blocked-drain assertion and artifact cleanup failed');
+    }
+    if (failure !== null) throw failure;
+  });
+
+test('registered failed joins bound triggers without getters or coercion', async () => {
+  const valid = await joinedHostedPartitionFailure(registeredReleaseRequest({
+    trigger: PARTICIPANT_RELEASE_TRIGGER.OPERATOR,
+  }));
+  assert.equal(valid.joinedAttempt.originalTrigger, PARTICIPANT_RELEASE_TRIGGER.OPERATOR);
+
+  const inherited = Object.assign(Object.create({
+    trigger: PARTICIPANT_RELEASE_TRIGGER.OPERATOR,
+  }), registeredReleaseRequest());
+  const inheritedResult = await joinedHostedPartitionFailure(inherited);
+  assert.equal(inheritedResult.joinedAttempt.originalTrigger, null);
+
+  let getterReads = 0;
+  const accessor = registeredReleaseRequest();
+  Object.defineProperty(accessor, 'trigger', {enumerable: true, get() {
+    getterReads += 1;
+    return PARTICIPANT_RELEASE_TRIGGER.OPERATOR;
+  }});
+  const accessorResult = await joinedHostedPartitionFailure(accessor);
+  assert.equal(accessorResult.joinedAttempt.originalTrigger, null);
+  assert.equal(getterReads, 0, 'diagnostics inspect a descriptor and never invoke its getter');
+
+  let proxyTriggerReads = 0;
+  const proxied = new Proxy(registeredReleaseRequest({
+    trigger: PARTICIPANT_RELEASE_TRIGGER.OPERATOR,
+  }), {get(target, field, receiver) {
+    if (field === 'trigger') proxyTriggerReads += 1;
+    return Reflect.get(target, field, receiver);
+  }});
+  const proxyResult = await joinedHostedPartitionFailure(proxied);
+  assert.equal(proxyResult.joinedAttempt.originalTrigger, null);
+  assert.equal(proxyTriggerReads, 0);
+
+  let coercionReads = 0;
+  const coercible = {toString() {
+    coercionReads += 1;
+    return PARTICIPANT_RELEASE_TRIGGER.OPERATOR;
+  }, [Symbol.toPrimitive]() {
+    coercionReads += 1;
+    return PARTICIPANT_RELEASE_TRIGGER.OPERATOR;
+  }};
+  const invalidInputs = [
+    Object(PARTICIPANT_RELEASE_TRIGGER.OPERATOR),
+    Object(1),
+    Object(true),
+    coercible,
+    'operator-with-untrusted-suffix',
+  ];
+  for (const trigger of invalidInputs) {
+    const result = await joinedHostedPartitionFailure(registeredReleaseRequest({trigger}));
+    assert.equal(result.joinedAttempt.originalTrigger, null);
+  }
+  assert.equal(coercionReads, 0);
+
+  const symbolOnly = registeredReleaseRequest();
+  symbolOnly[Symbol('trigger')] = PARTICIPANT_RELEASE_TRIGGER.OPERATOR;
+  assert.equal((await joinedHostedPartitionFailure(symbolOnly))
+    .joinedAttempt.originalTrigger, null);
+  const arrayRequest = Object.assign([], registeredReleaseRequest({
+    trigger: PARTICIPANT_RELEASE_TRIGGER.OPERATOR,
+  }));
+  assert.equal((await joinedHostedPartitionFailure(arrayRequest))
+    .joinedAttempt.originalTrigger, null);
+
+  const nullPrototypeRequest = Object.assign(Object.create(null),
+    registeredReleaseRequest({trigger: PARTICIPANT_RELEASE_TRIGGER.OPERATOR}));
+  assert.equal((await joinedHostedPartitionFailure(nullPrototypeRequest))
+    .joinedAttempt.originalTrigger, PARTICIPANT_RELEASE_TRIGGER.OPERATOR);
+
+  const restores = [
+    pollutePrototypeProperty(Object.prototype, 'participantReleaseDiagnosticPollution', 1),
+    pollutePrototypeProperty(Array.prototype, 'participantReleaseDiagnosticPollution', 2),
+    pollutePrototypeProperty(Map.prototype, 'participantReleaseDiagnosticPollution', 3),
+    pollutePrototypeProperty(Set.prototype, 'participantReleaseDiagnosticPollution', 4),
+  ];
+  try {
+    const polluted = await joinedHostedPartitionFailure(registeredReleaseRequest({
+      trigger: PARTICIPANT_RELEASE_TRIGGER.OPERATOR,
+    }));
+    assert.equal(polluted.joinedAttempt.originalTrigger,
+      PARTICIPANT_RELEASE_TRIGGER.OPERATOR);
+  } finally {
+    for (let index = restores.length - 1; index >= 0; index -= 1) restores[index]();
+  }
+});
+
+test('registered failed joins type invalid and backward owner clock observations', async () => {
+  const measured = await joinedHostedPartitionFailure(registeredReleaseRequest({
+    trigger: PARTICIPANT_RELEASE_TRIGGER.OPERATOR,
+  }), [100, 100, 101, 102]);
+  assert.equal(measured.joinedAttempt.joinAgeMs, 1);
+  assert.equal(measured.joinedAttempt.terminalAgeMs, 2);
+
+  const unsafeSamples = [
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    Number.NEGATIVE_INFINITY,
+    1.5,
+    -0,
+    Number.MAX_SAFE_INTEGER + 1,
+    '101',
+  ];
+  let unsafeState = null;
+  for (const sample of unsafeSamples) {
+    const observed = await joinedHostedPartitionFailure(registeredReleaseRequest(),
+      [100, 100, sample, 102]);
+    unsafeState ??= observed.joinedAttempt.clockState;
+    assert.equal(observed.joinedAttempt.clockState, unsafeState);
+    assert.equal(observed.joinedAttempt.joinAgeMs, null);
+    assert.equal(observed.joinedAttempt.terminalAgeMs, null);
+  }
+  assert.notEqual(unsafeState, measured.joinedAttempt.clockState);
+
+  const overflow = await joinedHostedPartitionFailure(registeredReleaseRequest(),
+    [-Number.MAX_SAFE_INTEGER, -Number.MAX_SAFE_INTEGER,
+      Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER]);
+  assert.equal(overflow.joinedAttempt.clockState, unsafeState,
+    'unsafe derived subtraction has the same typed state as unsafe samples');
+  assert.equal(overflow.joinedAttempt.joinAgeMs, null);
+  assert.equal(overflow.joinedAttempt.terminalAgeMs, null);
+
+  const backward = await joinedHostedPartitionFailure(registeredReleaseRequest(),
+    [100, 100, 99, 101]);
+  assert.notEqual(backward.joinedAttempt.clockState, measured.joinedAttempt.clockState);
+  assert.notEqual(backward.joinedAttempt.clockState, unsafeState);
+  assert.equal(backward.joinedAttempt.joinAgeMs, null);
+  assert.equal(backward.joinedAttempt.terminalAgeMs, null);
+
+  const unsafeBeforeBackward = await joinedHostedPartitionFailure(
+    registeredReleaseRequest({deadlineAtMs: Number.MAX_SAFE_INTEGER}),
+    [Number.MAX_SAFE_INTEGER, 0, -Number.MAX_SAFE_INTEGER,
+      -Number.MAX_SAFE_INTEGER]);
+  assert.equal(unsafeBeforeBackward.joinedAttempt.clockState, unsafeState,
+    'unsafe derived age takes precedence over the same backward observation');
+  assert.equal(unsafeBeforeBackward.joinedAttempt.joinAgeMs, null);
+  assert.equal(unsafeBeforeBackward.joinedAttempt.terminalAgeMs, null);
+
+  const unavailable = await joinedHostedPartitionFailure(registeredReleaseRequest(),
+    [100, 100, 101, new Error('terminal clock unavailable')]);
+  assert.notEqual(unavailable.joinedAttempt.clockState, measured.joinedAttempt.clockState);
+  assert.notEqual(unavailable.joinedAttempt.clockState, unsafeState);
+  assert.notEqual(unavailable.joinedAttempt.clockState, backward.joinedAttempt.clockState);
+  assert.equal(unavailable.joinedAttempt.joinAgeMs, null);
+  assert.equal(unavailable.joinedAttempt.terminalAgeMs, null);
+
+  const unavailableJoin = await joinedHostedPartitionFailure(registeredReleaseRequest(),
+    [100, 100, new Error('join clock unavailable'), 102]);
+  const {joinedAttempt: unavailableJoinProjection, ...unavailableJoinAnswer} =
+    unavailableJoin.joiner;
+  assert.deepEqual(unavailableJoinAnswer, unavailableJoin.starter,
+    'a throwing join observation cannot alter the settled owner answer');
+  assert.deepEqual(unavailableJoinProjection, unavailableJoin.joinedAttempt);
+  assert.equal(unavailableJoin.joinedAttempt.clockState,
+    unavailable.joinedAttempt.clockState);
+  assert.equal(unavailableJoin.joinedAttempt.joinAgeMs, null);
+  assert.equal(unavailableJoin.joinedAttempt.terminalAgeMs, null);
+});

@@ -1,0 +1,68 @@
+placement-shell=1268157
+placement-head=989d34f5cceed3f83722d147b72f724dad077024
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:1.6 mode:local retry: timeout: lanecap:11
+placement-pid=1268587
+# test-files planned=1
+classified lane bootstrap: 1 file(s), jobs=2
+thermal: unmeasurable (no sensors)
+not ok test/bootstrap/seed-participant-release-failure-projection.test.js (2 assertions, 5666ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: seed release workflow preserves first owner observations beside actual client deadline
+not ok 1 - seed release workflow preserves first owner observations beside actual client deadline
+  ---
+  duration_ms: 4630.144475
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/989d34f5ccee-mv6xnp53-1864290/test/bootstrap/seed-participant-release-failure-projection.test.js:119:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    undefined !== 1
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/989d34f5ccee-mv6xnp53-1864290/test/bootstrap/seed-participant-release-failure-projection.test.js:146:14)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: seed release workflow types terminal clock faults without changing refusal
+not ok 2 - seed release workflow types terminal clock faults without changing refusal
+  ---
+  duration_ms: 3.549894
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/989d34f5ccee-mv6xnp53-1864290/test/bootstrap/seed-participant-release-failure-projection.test.js:207:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    undefined !== 1
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 1
+  operator: 'strictEqual'
+  stack: |-
+    observeTerminalClock (file:///home/peter/projects/lagrange/test-output/placement-worktrees/989d34f5ccee-mv6xnp53-1864290/test/bootstrap/seed-participant-release-failure-projection.test.js:193:12)
+    async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/989d34f5ccee-mv6xnp53-1864290/test/bootstrap/seed-participant-release-failure-projection.test.js:208:20)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 0
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4638.444202
+# time=5666ms
+# test-files total=1 pass=0 fail=1 assertions=2
+placement-results={"file":"test/bootstrap/seed-participant-release-failure-projection.test.js","attempt":1,"ok":false,"assertions":2,"durationMs":5666,"retriedOnce":false,"firstFailureLine":"not ok 1 - seed release workflow preserves first owner observations beside actual client deadline"}

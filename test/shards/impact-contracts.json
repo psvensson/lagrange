@@ -621,6 +621,9 @@
         "src/node/replica-handler-release-recovery.js",
         "src/node/replica-handler-membership-relay.js",
         "src/node/replica-handler-participant-cutover.js",
+        "src/node/participant-release-diagnostic-observation.js",
+        "src/bootstrap/bootstrap-service-seed-workflow.js",
+        "src/node/participant-release-client.js",
         "src/partition/partition-participant-release-facts.js",
         "src/partition/partition-participant-release-contract.js",
         "src/partition/partition-participant-transaction-pause.js",
@@ -642,7 +645,8 @@
         "test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js",
         "test/partition/participant-envelope-admission.test.js",
         "test/node/replica-handler-release-recovery.test.js",
-        "test/partition/participant-release-protocol.test.js"
+        "test/partition/participant-release-protocol.test.js",
+        "test/bootstrap/seed-participant-release-failure-projection.test.js"
       ]
     },
     "partition-raft-operation-port": {
@@ -1550,6 +1554,9 @@
             "src/partition/partition-transaction-execution-envelope.js",
             "src/partition/partition-participant-transaction-bytes.js",
             "src/node/replica-handler-participant-cutover.js",
+            "src/node/participant-release-diagnostic-observation.js",
+            "src/bootstrap/bootstrap-service-seed-workflow.js",
+            "src/node/participant-release-client.js",
             "src/partition/partition-participant-release-facts.js",
             "src/partition/partition-participant-release-contract.js",
             "src/partition/partition-participant-transaction-pause.js",
@@ -1574,7 +1581,8 @@
         "test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js",
         "test/partition/participant-envelope-admission.test.js",
         "test/node/replica-handler-release-recovery.test.js",
-        "test/partition/participant-release-protocol.test.js"
+        "test/partition/participant-release-protocol.test.js",
+        "test/bootstrap/seed-participant-release-failure-projection.test.js"
       ]
     },
     "partition-raft-operation-port": {

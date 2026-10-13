@@ -18,6 +18,9 @@ import {releaseAnswer, releaseCensusDefect, releaseIdentityOf,
   '../partition/partition-participant-release-contract.js';
 import {askParticipantRelease, releaseNodeOfAddress, requestParticipantRelease} from
   './participant-release-client.js';
+import {captureParticipantReleaseDiagnosticTrigger,
+  participantReleaseAttemptAgeObservation, readParticipantReleaseClock} from
+  './participant-release-diagnostic-observation.js';
 import {settleTransactionReleaseRows, transactionReleaseProofOf} from
   '../query/distributed/distributed-transaction-release-settlement.js';
 import {TRANSACTION_RELEASE_CENSUS_STATE} from
@@ -253,8 +256,10 @@ async function runCutoverAttempt(handler, request) {
   census = await actOnCohort(handler, release, attempt, ACTION.PAUSE, census);
   unavailable = unavailableCensus(census);
   if (unavailable !== null) return unavailable;
-  if (census.some((facts) => !isReleaseDrained(facts.work))) {
-    return attemptRefusal({...request, release}, OUTCOME.DRAIN_PENDING);
+  const blockedDrain = census.find((facts) => !isReleaseDrained(facts.work));
+  if (blockedDrain !== undefined) {
+    return attemptRefusal({...request, release}, OUTCOME.DRAIN_PENDING,
+      {blockedDrain: {generation: blockedDrain.generation, work: blockedDrain.work}});
   }
   const reopened = await reopenCohort(handler, service, request, release, attempt, census);
   if (reopened !== null) return reopened;
@@ -299,6 +304,20 @@ async function runCutoverAttempt(handler, request) {
     {release, census});
 }
 
+async function joinParticipantCutover(handler, current) {
+  const joinObservation = readParticipantReleaseClock(handler.timeSource);
+  const answer = await current.promise;
+  const terminalObservation = readParticipantReleaseClock(handler.timeSource);
+  if (answer.outcome === OUTCOME.CUT_OVER) return answer;
+  const joinedAttempt = participantReleaseAttemptAgeObservation(
+    current.startObservation,
+    joinObservation,
+    terminalObservation,
+    current.originalTrigger,
+  );
+  return releaseAnswer(answer.outcome, answer, {...answer, joinedAttempt});
+}
+
 async function runParticipantCutover(handler, request) {
   let runs = RUNS.get(handler);
   if (runs === undefined) {
@@ -308,11 +327,14 @@ async function runParticipantCutover(handler, request) {
   const current = runs.get(request.partitionId);
   if (current) {
     return current.targetBuildDigest === request.targetBuildDigest ?
-      current.promise : releaseAnswer(OUTCOME.INVALID, request);
+      joinParticipantCutover(handler, current) : releaseAnswer(OUTCOME.INVALID, request);
   }
+  const originalTrigger = captureParticipantReleaseDiagnosticTrigger(request);
+  const startObservation = readParticipantReleaseClock(handler.timeSource);
   const running = runCutoverAttempt(handler, request).catch((error) =>
     attemptRefusal(request, OUTCOME.UNAVAILABLE, {reason: String(error?.message ?? error)}));
-  const record = {targetBuildDigest: request.targetBuildDigest, promise: running};
+  const record = {targetBuildDigest: request.targetBuildDigest, originalTrigger,
+    startObservation, promise: running};
   runs.set(request.partitionId, record);
   try {
     return await running;
