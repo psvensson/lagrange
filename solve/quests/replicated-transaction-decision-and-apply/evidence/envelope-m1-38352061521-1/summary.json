@@ -1,0 +1,87 @@
+{
+  "candidate": "43563146c24e907a993045fa51f180608c795c1c",
+  "baseline": "4c8f02e8e6d9da3520fa909885b9391ba6a442a0",
+  "sourceTree": "9ec2119cb275f5b54bad15a3fadeb4196a3d061e",
+  "checks": {
+    "negative-assertions": true,
+    "candidate-envelope": true,
+    "identical-control-tests": true,
+    "m1-persistence": true,
+    "all-wider-files-engaged": true,
+    "wider-behavior": false,
+    "duration-tolerance": false,
+    "source-restored": true,
+    "lint": true,
+    "changed-literals": true,
+    "impact": true,
+    "shards": true,
+    "boundary": true,
+    "whitespace": true
+  },
+  "envelopeOriginal": {
+    "tests": 2,
+    "pass": 1,
+    "fail": 1,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "envelopeCandidate": {
+    "tests": 2,
+    "pass": 2,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "envelopeSourceRevert": {
+    "tests": 2,
+    "pass": 1,
+    "fail": 1,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "wider": {
+    "tests": 254,
+    "pass": 250,
+    "fail": 4,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "widerFailedFiles": [
+    "test/partition/partition-participant-transaction-staging.test.js",
+    "test/partition/partition-legacy-session-statement-admission.test.js"
+  ],
+  "m1": {
+    "file": "test/integration/seed-migration-cutover-persisted.integration.test.js",
+    "counts": {
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "names": [
+      "TX1 M1: the schema-migration cutover on the production seed-hydration engine persists its two-participant transaction (tables-p1 and schema_migration_partitions-p1) with a durable COMMITTED decision, and both cutover UPDATEs apply"
+    ],
+    "failed": [],
+    "assertionFailures": 0,
+    "testSha256": "5c379ce4f80d1c4e49475eabb7c06d2f30df31e385148a000c7b3d7943138eac",
+    "testUnchanged": true,
+    "maxCaseMs": 45155.977206,
+    "targetMs": 30000,
+    "toleranceMs": 300000,
+    "durationWithinTolerance": true,
+    "waitBoundDiagnostics": 1,
+    "independentM1Readback": true
+  },
+  "guidelineExit": 1,
+  "independentApproval": false,
+  "mergeReady": false,
+  "scope": "Preproposal envelope-shape fix with controlled committed replay; actual seed M1 coordinator-system-table persistence and separate-process readback of twelve files after orderly shutdown on one host. Not coordinator crash recovery, historical legacy admission, complete seed certification, split/merge or physical multi-host proof.",
+  "focusedProofPassed": true,
+  "allRunGatesPassed": false
+}
