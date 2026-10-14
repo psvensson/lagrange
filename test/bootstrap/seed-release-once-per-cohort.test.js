@@ -99,3 +99,83 @@ test('seed issues one serialized real partition release intent, not one per repl
         options.timeoutMs <= SHARED_BUDGET_MS);
     }
   });
+
+test('independent seed partition intents overlap only after actual control release completes',
+  async () => {
+    const services = new Map();
+    const groupNames = [
+      {id: CONTROL, table: TABLES.SQL_TRANSACTIONS},
+      {id: PAYLOADS, table: TABLES.ARTIFACT_PAYLOADS},
+      {id: RESULTS, table: TABLES.CALL_CELL_REDUCE_RESULTS},
+      {id: 'code-p1', table: TABLES.CODE},
+      {id: 'contexts-p1', table: TABLES.CONTEXTS},
+    ];
+    for (const {id, table} of [...groupNames].reverse()) {
+      for (let number = 3; number >= 1; number -= 1) {
+        const r = localReplica(id, table, `${id}-r${number}`);
+        services.set(r.replicaId, r);
+      }
+    }
+
+    const clock = new RealTimeSource();
+    const intents = [];
+    const controller = {controlComplete: false, inFlight: 0, maximum: 0,
+      settled: 0, activeAtFinish: 0};
+    const token = Object.freeze({kind: 'test-only-authority-token'});
+    const owner = {
+      partitionServices: services,
+      nodeService: {getTimeSource: () => clock},
+      config: {leadershipWaitTimeoutMs: SHARED_BUDGET_MS},
+      replicaHandler: {
+        nodeId: 'seed-bounded-test',
+        timeSource: clock,
+        participantReleaseAuthorizationOwner: {
+          authorizeFreshSeed() {
+            return token;
+          },
+        },
+        messageRouter: {
+          deliver(_address, payload) {
+            assert.equal(payload.action, 'release');
+            intents.push({partition: payload.partitionId,
+              deadline: payload.deadlineAtMs});
+            if (payload.partitionId !== CONTROL) {
+              assert.equal(controller.controlComplete, true,
+                'no dependent seed cohort begins before control completes');
+              controller.inFlight += 1;
+              controller.maximum = Math.max(controller.maximum, controller.inFlight);
+            }
+            return new Promise((resolve) => {
+              // A bounded test-only asynchronous transport exercises the
+              // existing bootstrap orchestration without changing release
+              // policy, retry, owner clock, or any real native runtime.
+              setTimeout(() => {
+                if (payload.partitionId === CONTROL) controller.controlComplete = true;
+                else controller.inFlight -= 1;
+                controller.settled += 1;
+                resolve({acknowledged: true, deliveryState: 'delivered',
+                  [PARTICIPANT_RELEASE_RESULT_FIELD]: {outcome: OUTCOME.CUT_OVER}});
+              }, payload.partitionId === CONTROL ? 5 : 20);
+            });
+          },
+        },
+      },
+      sleep() {
+        throw new Error('successful fake responses should not cause retries');
+      },
+    };
+    await createBootstrapServiceSeedWorkflowMethods()
+      .releaseSeedParticipantCohorts.call(owner);
+    controller.activeAtFinish = controller.inFlight;
+    assert.equal(controller.activeAtFinish, 0,
+      'seed awaits every admitted independent cohort before completing');
+    assert.equal(controller.settled, groupNames.length,
+      'one real request for each eligible distinct partition');
+    assert.deepEqual(intents.map((item) => item.partition),
+      [CONTROL, PAYLOADS, RESULTS, 'code-p1', 'contexts-p1'],
+    'the seed begins by control then admits independent partitions in sorted order');
+    assert.equal(new Set(intents.map((item) => item.deadline)).size, 1,
+      'all independent cohorts share the unchanged original absolute deadline');
+    assert.ok(controller.maximum >= 2,
+      'at least two independent real release intents must be in flight together');
+  });
