@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 116,
     "architecture-governance": 19,
-    "bootstrap-membership": 311,
+    "bootstrap-membership": 312,
     "cdc-metadata": 63,
     "cli-tooling": 96,
     "control-plane": 214,
@@ -25,10 +25,10 @@
     "transport-messaging": 95,
     "wasm-toolchain": 57
   },
-  "censusSize": 2371,
-  "digest": "fnv1a32-2130751d",
+  "censusSize": 2372,
+  "digest": "fnv1a32-ae976d3c",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-82a6919d",
+  "observationDigest": "fnv1a32-1f0c723d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -277,6 +277,7 @@
     "test/bootstrap/seed-participant-release-failure-projection.test.js": "bootstrap-membership",
     "test/bootstrap/seed-registration-election-scheduling.test.js": "bootstrap-membership",
     "test/bootstrap/seed-registration-phase.test.js": "bootstrap-membership",
+    "test/bootstrap/seed-release-once-per-cohort.test.js": "bootstrap-membership",
     "test/bootstrap/seed-restart-recovery-gate.test.js": "bootstrap-membership",
     "test/bootstrap/seed-startup-session-store.test.js": "bootstrap-membership",
     "test/bootstrap/seed-teardown-pending-cdc-delivery.test.js": "bootstrap-membership",
@@ -3231,6 +3232,12 @@
       "files": [
         "src/bootstrap/phases/seed-partitions-phase.js",
         "src/bootstrap/phases/seed-registration-phase.js"
+      ]
+    },
+    "test/bootstrap/seed-release-once-per-cohort.test.js": {
+      "files": [
+        "src/bootstrap/bootstrap-service-seed-workflow.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js"
       ]
     },
     "test/bootstrap/seed-teardown-pending-cdc-delivery.test.js": {
