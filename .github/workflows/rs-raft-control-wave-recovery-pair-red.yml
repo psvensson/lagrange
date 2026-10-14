@@ -1,0 +1,73 @@
+# Original canonical owner source, paired red. This exact test uses real
+# registered three-voter SQL control, real dependents, and a single VirtualTimeSource
+# owned by the existing recovery queue; no new release driver, no extra deadline.
+name: rs-raft-control-wave-recovery-pair-red
+on:
+  push:
+    branches: [work/rs-raft-control-wave-recovery-owner-pair-20261014]
+    paths:
+      - .github/workflows/rs-raft-control-wave-recovery-pair-red.yml
+      - test/partition/control-wave-duplicate-boundary.test.js
+permissions:
+  contents: read
+jobs:
+  red:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Exact prior production source and locked dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE=ffa78370f6b1fa661ae87310e26b584f0016dc05
+          test -z "$(git diff --name-only "$BASE" HEAD -- src)"
+          npm ci
+      - name: Semantic recovery ping-pong old-source negative
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-wave-recovery-pingpong-red
+          mkdir -p "$OUT"
+          TEST=test/partition/control-wave-duplicate-boundary.test.js
+          git rev-parse HEAD > "$OUT/source-sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/source-tree.txt"
+          sha256sum "$TEST" > "$OUT/test-bytes.sha256"
+          node --check "$TEST" > "$OUT/syntax.log" 2>&1
+          syntax=$?
+          npx eslint "$TEST" > "$OUT/lint.log" 2>&1
+          lint=$?
+          printf '%s\n' "$syntax" > "$OUT/syntax.status"
+          printf '%s\n' "$lint" > "$OUT/lint.status"
+          if test "$syntax" -ne 0 || test "$lint" -ne 0; then
+            cat "$OUT/syntax.log" "$OUT/lint.log"
+            exit 1
+          fi
+          node --test "$TEST" > "$OUT/old-source.tap" 2>&1
+          rc=$?
+          printf '%s\n' "$rc" > "$OUT/original.status"
+          tail -n 78 "$OUT/old-source.tap"
+          test "$rc" -ne 0 || exit 1
+          grep -F 'held control RUNS must not ping-pong a second recovery driver' "$OUT/old-source.tap" || exit 1
+          grep -F "code: 'ERR_ASSERTION'" "$OUT/old-source.tap" || exit 1
+          grep -F 'expected: 0' "$OUT/old-source.tap" || exit 1
+          echo 'Source-only negative actually engaged timer rearming; no timeout/setup red counts.'
+      - name: Preserve old source, full original TAP and every refusal
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-wave-recovery-pingpong-red-${{ github.sha }}
+          path: test-output/rs-raft-wave-recovery-pingpong-red/
+          retention-days: 14
+          if-no-files-found: warn
