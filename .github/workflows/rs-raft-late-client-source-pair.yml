@@ -1,0 +1,76 @@
+# Same host, identical test bytes against immutable pre-fix and current
+# canonical release-client source. This is WIP behavioral proof, NOT merge.
+name: rs-raft-late-client-source-pair
+on:
+  push:
+    branches: [continue/rs-raft-late-release-client-candidate-20261014]
+    paths: [.github/workflows/rs-raft-late-client-source-pair.yml]
+permissions:
+  contents: read
+jobs:
+  pair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Exact paired source/identity under one VM
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          BASE=b17f335ed4d016c8cd40f5d5f882d34c19a1b668
+          FILE=test/node/participant-release-caller-deadline.test.js
+          FILTER='delivered CUT_OVER after original caller deadline cannot authorize success'
+          OUT=test-output/rs-raft-late-client-source-pair
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/candidate-sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/candidate-tree.txt"
+          git rev-parse "$BASE^{tree}" > "$OUT/negative-tree.txt"
+          git diff --name-only "$BASE" HEAD -- src > "$OUT/production-paths.txt"
+          cat "$OUT/production-paths.txt"
+          test "$(wc -l < "$OUT/production-paths.txt")" = 1 || exit 1
+          grep -Fx src/node/participant-release-client.js "$OUT/production-paths.txt" || exit 1
+          OLD="$RUNNER_TEMP/rs-raft-late-client-old"
+          git worktree add --detach "$OLD" "$BASE" > "$OUT/old-worktree.log" 2>&1 || exit 1
+          cmp "$FILE" "$OLD/$FILE" || exit 1
+          sha256sum "$FILE" > "$OUT/candidate-test-sha256.txt"
+          (cd "$OLD" && sha256sum "$FILE") > "$OUT/negative-test-sha256.txt"
+          npm ci > "$OUT/candidate-install.log" 2>&1
+          current_installed=$?
+          (cd "$OLD" && npm ci) > "$OUT/old-install.log" 2>&1
+          old_installed=$?
+          test "$current_installed" = 0 && test "$old_installed" = 0 || exit 1
+          (cd "$OLD" && node --test --test-name-pattern="$FILTER" "$FILE") > "$OUT/negative.tap" 2>&1
+          old=$?
+          node --test --test-name-pattern="$FILTER" "$FILE" > "$OUT/candidate.tap" 2>&1
+          new=$?
+          printf '%s\n' "$old" > "$OUT/negative.status"
+          printf '%s\n' "$new" > "$OUT/candidate.status"
+          echo "one-VM old status=$old, current status=$new"
+          tail -n 36 "$OUT/negative.tap"
+          tail -n 30 "$OUT/candidate.tap"
+          test "$old" -ne 0 || exit 1
+          grep -F 'a late delivered CUT_OVER is not fresh caller authorization' "$OUT/negative.tap" || exit 1
+          grep -F "code: 'ERR_ASSERTION'" "$OUT/negative.tap" || exit 1
+          grep -F "actual: 'cut_over'" "$OUT/negative.tap" || exit 1
+          test "$new" = 0 || exit 1
+          grep -F "ok 1 - $FILTER" "$OUT/candidate.tap" || exit 1
+          echo 'Genuine late-positive old-source negative; current source refuses it.'
+      - name: Preserve complete original/candidate TAP and identical source identity
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-late-client-pair-${{ github.sha }}
+          path: test-output/rs-raft-late-client-source-pair/
+          retention-days: 14
+          if-no-files-found: warn
