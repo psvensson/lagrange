@@ -1,0 +1,63 @@
+# Source-only RED in the original shared release client, no implementation.
+name: rs-raft-late-release-client-red
+on:
+  push:
+    branches: [work/rs-raft-release-late-success-fence-20261014]
+    paths: [.github/workflows/rs-raft-late-release-client-red.yml]
+permissions:
+  contents: read
+jobs:
+  old-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Original client source and exact dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse 7d0042659daaed7d38e9e586454861c21df3d838:src/node/participant-release-client.js)" = \
+            "$(git rev-parse HEAD:src/node/participant-release-client.js)"
+          npm ci
+          node --check test/node/participant-release-caller-deadline.test.js
+      - name: Negative must fail ONLY at delivered late positive
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-release-client-deadline-red
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/source-sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/source-tree.txt"
+          node --test \
+            --test-name-pattern='delivered CUT_OVER after original caller deadline cannot authorize success' \
+            test/node/participant-release-caller-deadline.test.js \
+            > "$OUT/old-source-negative.tap" 2>&1
+          rc=$?
+          printf '%s\n' "$rc" > "$OUT/old-source.status"
+          cat "$OUT/old-source-negative.tap" | tail -n 70
+          test "$rc" -ne 0 || exit 1
+          grep -F 'a late delivered CUT_OVER is not fresh caller authorization' \
+            "$OUT/old-source-negative.tap" || exit 1
+          grep -F "code: 'ERR_ASSERTION'" "$OUT/old-source-negative.tap" || exit 1
+          grep -F "actual: 'cut_over'" "$OUT/old-source-negative.tap" || exit 1
+          grep -F "expected: 'unavailable'" "$OUT/old-source-negative.tap" || exit 1
+          echo 'Original client accepts stale positive reply: engaged RED proven.'
+      - name: Preserve raw original-client test failure and immutable source
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-late-client-red-${{ github.sha }}
+          path: test-output/rs-raft-release-client-deadline-red/
+          retention-days: 14
+          if-no-files-found: warn
