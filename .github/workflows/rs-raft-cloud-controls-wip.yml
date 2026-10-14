@@ -39,6 +39,7 @@ jobs:
       - name: Measure each focused file once; preserve red
         shell: bash
         run: |
+          set +e
           set -uo pipefail
           mkdir -p test-output/rs-raft-cloud-controls-wip
           git rev-parse HEAD > test-output/rs-raft-cloud-controls-wip/sha.txt
