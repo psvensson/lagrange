@@ -612,6 +612,124 @@ test('dirty terminal membership refusal stays unavailable unless current lineage
     }
   });
 
+
+test('unreadable latest status or invalid latest generation never fabricates STALE',
+  async () => {
+    for (const latest of ['held-status', 'invalid-generation']) {
+      await withActualHandler(async ({handler, leader, transport, timeSource}) => {
+        const request = await currentObservationRequest(handler, leader);
+        const port = leader.controllablePort;
+        const membershipDescriptor = Object.getOwnPropertyDescriptor(
+          port, 'committedMembershipHandler');
+        const portDescriptor = Object.getOwnPropertyDescriptor(leader, 'raft');
+        const originalPort = leader.raft;
+        const refused = () => Object.freeze({
+          kind: COMMITTED_MEMBERSHIP_ANSWER_KIND.REFUSED,
+          reason: COMMITTED_MEMBERSHIP_REFUSAL.MEMBERSHIP_UNREADABLE,
+        });
+        let statusReads = 0;
+        const wrappedPort = Object.freeze({...originalPort,
+          readStatus(...args) {
+            const status = Reflect.apply(originalPort.readStatus, originalPort, args);
+            statusReads += 1;
+            if (statusReads === 1) return status;
+            return latest === 'held-status' ?
+              Object.freeze({outcome: RAFT_OPERATION_OUTCOME.HOST_FAILURE,
+                reason: 'current status unavailable'}) :
+              Object.freeze({...status, runtimeGeneration: null});
+          },
+        });
+        port.committedMembershipHandler = refused;
+        Object.defineProperty(leader, 'raft', {...portDescriptor, value: wrappedPort});
+        const membership = deferCommittedMembership(leader);
+        const timerBaseline = observationTimerOwnedCount(timeSource);
+        let failure = null;
+        try {
+          const observed = membership.trackSettlement(
+            \`unreadable latest context: \${latest}\`,
+            sendRegisteredObservation(handler, transport, request));
+          await membership.started;
+          membership.release();
+          const answer = await observed;
+          assert.equal(answer.outcome, OUTCOME.UNAVAILABLE,
+            \`\${latest}: \${JSON.stringify(answer)}\`);
+          assert.equal(answer.missingFact, 'committed_membership_witness');
+          assert.equal(answer.reason, COMMITTED_MEMBERSHIP_REFUSAL.MEMBERSHIP_UNREADABLE);
+          assert.equal(answer.partitionId, request.partitionId);
+          assert.equal(answer.phase, request.action);
+          assert.equal(answer.releaseId, request.release.releaseId);
+          assert.equal(statusReads, 2,
+            'PA and R each consume their existing single current-status observation');
+          assert.equal(membership.reads(), 1,
+            'an unreadable current status never triggers a membership retry');
+          assert.equal(observationListenerCount(leader), 0);
+          assert.equal(observationTimerOwnedCount(timeSource), timerBaseline);
+        } catch (error) {
+          failure = error;
+        } finally {
+          failure = await membership.retire(failure,
+            \`latest \${latest} status and membership custody failed\`);
+          failure = retainDescriptorRestorations(failure, [
+            {owner: leader, field: 'raft', descriptor: portDescriptor},
+            {owner: port, field: 'committedMembershipHandler',
+              descriptor: membershipDescriptor},
+          ], \`latest \${latest} status assertion\`);
+        }
+        if (failure !== null) throw failure;
+      });
+    }
+  });
+
+test('ordinary membership refusal avoids OBS-only generation projection and mutation',
+  async () => withActualHandler(async ({handler, leader}) => {
+    const port = leader.controllablePort;
+    const membershipDescriptor = Object.getOwnPropertyDescriptor(
+      port, 'committedMembershipHandler');
+    const portDescriptor = Object.getOwnPropertyDescriptor(leader, 'raft');
+    const originalPort = leader.raft;
+    let statusReads = 0;
+    let generationReads = 0;
+    const wrappedPort = Object.freeze({...originalPort,
+      readStatus(...args) {
+        statusReads += 1;
+        const status = {...Reflect.apply(originalPort.readStatus, originalPort, args)};
+        Object.defineProperty(status, 'runtimeGeneration', {enumerable: true,
+          get() {
+            generationReads += 1;
+            throw new Error('ordinary refusal must not project generation');
+          }});
+        return status;
+      },
+    });
+    const refused = () => Object.freeze({
+      kind: COMMITTED_MEMBERSHIP_ANSWER_KIND.REFUSED,
+      reason: COMMITTED_MEMBERSHIP_REFUSAL.MEMBERSHIP_UNREADABLE,
+    });
+    const admissionBefore = participantReleaseAdmissionOf(leader);
+    let failure = null;
+    try {
+      port.committedMembershipHandler = refused;
+      Object.defineProperty(leader, 'raft', {...portDescriptor, value: wrappedPort});
+      const result = await readParticipantReleaseFacts(handler, leader);
+      assert.equal(result.outcome, OUTCOME.UNAVAILABLE);
+      assert.equal(result.missingFact, 'committed_membership_witness');
+      assert.equal(result.reason, COMMITTED_MEMBERSHIP_REFUSAL.MEMBERSHIP_UNREADABLE);
+      assert.equal(statusReads, 1, 'ordinary facts retain exactly one existing status read');
+      assert.equal(generationReads, 0, 'ordinary refusal never reads generation');
+      assert.equal(participantReleaseAdmissionOf(leader), admissionBefore,
+        'ordinary refusal leaves admission lifetime unchanged');
+    } catch (error) {
+      failure = error;
+    } finally {
+      failure = retainDescriptorRestorations(failure, [
+        {owner: leader, field: 'raft', descriptor: portDescriptor},
+        {owner: port, field: 'committedMembershipHandler',
+          descriptor: membershipDescriptor},
+      ], 'ordinary refusal assertion');
+    }
+    if (failure !== null) throw failure;
+  }));
+
 test('registry replacement and deletion promptly retire old observers before held facts return',
   async () => {
     for (const mutation of ['replace', 'delete']) {
