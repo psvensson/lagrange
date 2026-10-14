@@ -518,14 +518,23 @@ async function resumeFixtureParticipantAdmission(leader) {
     }
   }
   const handler = {nodeId: leader.nodeId, ownerIncarnation: 1,
+    timeSource: leader.timeSource,
     localServices: new Map([[leader.replicaId, leader]])};
   const facts = await readParticipantReleaseFacts(handler, leader);
   const release = releaseIdentityOf({partitionId: leader.partitionId,
     targetBuildDigest: facts.buildDigest,
     configurationKey: facts.membership.configurationKey,
     membershipGenerationIndex: facts.membership.membershipGenerationIndex});
+  // The direct TX1 setup helper is still subject to the real recipient
+  // contract. Supply one bounded, exact current-member RESUME attempt rather
+  // than silently bypassing the deadline field absent in historical fixtures.
+  const deadlineAtMs = handler.timeSource.now() + PARTICIPANT_CUTOVER_BOUND.REQUEST_TIMEOUT_MS;
+  const attempt = Object.freeze({leaderReplicaId: facts.leaderReplicaId,
+    term: facts.membership.term,
+    leaderLifecycleIncarnation: facts.generation.lifecycleIncarnation,
+    deadlineAtMs});
   const outcome = await resumeParticipantCutoverAdmission(handler, leader,
-    {release, census: [facts]});
+    {release, census: [facts], attempt, deadlineAtMs});
   if (outcome !== 'resumed') {
     throw new Error(`fixture participant release refused: ${outcome}`);
   }
