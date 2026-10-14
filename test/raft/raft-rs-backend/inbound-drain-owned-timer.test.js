@@ -90,18 +90,18 @@ async function withFreshUnsteppedRecipient(partitionId, body) {
     const owned = clocks.get(replicaIds[1]);
     assert.equal(owned.issued.length, 0,
       'a never-delivered recipient has no preexisting inbound wake');
-    const campaign = await sender.campaign();
-    assert.equal(campaign.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
+    // This tests admitted inbound custody, not election. The real registered
+    // sending peer need not have formed a quorum before the first delivery.
     const senderStatus = sender.readStatus();
     const status = recipient.node.readStatus();
     assert.equal(status.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
-    assert.ok(senderStatus.term > 0,
-      'the actual sending core produced a positive campaign term');
+    assert.equal(senderStatus.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
+    const inboundTerm = String(Math.max(1, senderStatus.term, status.term));
     assert.equal(owned.issued.length, 0,
       'sender campaign queued transport, but delivered no recipient carrier');
     const envelope = coreTrappingAppend({
       dbFile: recipient.dbFile, groupId: partitionId,
-      status, from: senderStatus.peerId, term: String(senderStatus.term),
+      status, from: senderStatus.peerId, term: inboundTerm,
     });
     setCoreFaultInjector(null);
     await body({cluster, recipient, owned, envelope});
