@@ -1,0 +1,66 @@
+# Source-frozen, test-only adversarial final recipient RESUME fence.
+name: rs-raft-control-proof-resume-race
+on:
+  push:
+    branches: [verify/rs-raft-control-proof-resume-race-20261014]
+    paths: [.github/workflows/rs-raft-control-proof-resume-race.yml]
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Source-frozen preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          ORIGINAL=47ceb42e4a36757007f0d8006d2014fa1400d9c8
+          test -z "$(git diff --name-only "$ORIGINAL" HEAD -- src)"
+          npm ci
+          node --check test/partition/participant-release-protocol.test.js
+          npx eslint test/partition/participant-release-protocol.test.js
+      - name: Execute actual RESUME mutation and complete protocol suite
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-control-proof-resume-race
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/head.txt"
+          git rev-parse HEAD^{tree} > "$OUT/tree.txt"
+          TEST=test/partition/participant-release-protocol.test.js
+          node --test \
+            --test-name-pattern='control current-proof refuses an enforcer mutation at final actual RESUME' \
+            "$TEST" > "$OUT/exact-race.tap" 2>&1
+          race=$?
+          npm run -s test:file -- "$TEST" > "$OUT/full-protocol.log" 2>&1
+          full=$?
+          printf '%s\n' "$race" > "$OUT/exact-race.status"
+          printf '%s\n' "$full" > "$OUT/full-protocol.status"
+          echo "exact natural RESUME mutated status=$race, full protocol status=$full"
+          tail -n 70 "$OUT/exact-race.tap"
+          tail -n 32 "$OUT/full-protocol.log"
+          if test -f ".tap/test-results/$TEST.tap"; then
+            cp ".tap/test-results/$TEST.tap" "$OUT/full-protocol.tap"
+          fi
+          test "$race" = 0 && test "$full" = 0
+      - name: Preserve exact source and red or green original TAP
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-control-proof-resume-race-${{ github.sha }}
+          path: test-output/rs-raft-control-proof-resume-race/
+          retention-days: 14
+          if-no-files-found: warn
