@@ -1,0 +1,95 @@
+# Focused caller deadline owner, real release/recovery and native interactions.
+# This is WIP/NOT independent merger certification.
+name: rs-raft-late-client-candidate-gates
+on:
+  push:
+    branches: [continue/rs-raft-late-release-client-candidate-20261014]
+    paths:
+      - .github/workflows/rs-raft-late-client-candidate-gates.yml
+      - src/node/participant-release-client.js
+      - test/node/participant-release-caller-deadline.test.js
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-late-client-candidate-gates
+  cancel-in-progress: false
+jobs:
+  candidate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install exact locked dependencies
+        run: npm ci
+      - name: Source-bound red corrections and original owner interactions
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-late-client-candidate
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/tree.txt"
+          failed=0
+          for file in \
+            src/node/participant-release-client.js \
+            test/node/participant-release-caller-deadline.test.js; do
+            node --check "$file" > "$OUT/${file##*/}.syntax.log" 2>&1
+            code=$?
+            printf '%s\n' "$code" > "$OUT/${file##*/}.syntax.status"
+            if test "$code" -ne 0; then failed=1; cat "$OUT/${file##*/}.syntax.log"; fi
+          done
+          npx eslint src/node/participant-release-client.js \
+            test/node/participant-release-caller-deadline.test.js \
+            > "$OUT/eslint.log" 2>&1
+          lint=$?
+          printf '%s\n' "$lint" > "$OUT/eslint.status"
+          if test "$lint" -ne 0; then failed=1; cat "$OUT/eslint.log"; fi
+          for testfile in \
+            test/node/participant-release-caller-deadline.test.js \
+            test/partition/participant-release-protocol.test.js \
+            test/partition/participant-release-applied-position.test.js \
+            test/node/replica-handler-release-recovery.test.js \
+            test/partition/control-wave-duplicate-boundary.test.js \
+            test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js \
+            test/partition/participant-release-native-application-order.test.js \
+            test/raft/raft-rs-backend/inbound-drain-owned-timer.test.js; do
+            label="${testfile##*/}"
+            npm run -s test:file -- "$testfile" > "$OUT/$label.log" 2>&1
+            rc=$?
+            printf '%s\n' "$rc" > "$OUT/$label.status"
+            echo "$testfile exit=$rc"
+            tail -n 13 "$OUT/$label.log" | cut -c 1-550
+            if test "$rc" -ne 0; then
+              failed=1
+              grep -E 'not ok|error|failed|cancel|timeout' "$OUT/$label.log" \
+                | tail -n 17 | cut -c 1-800 || true
+            fi
+            if test -f ".tap/test-results/$testfile.tap"; then
+              cp ".tap/test-results/$testfile.tap" "$OUT/$label.full.tap"
+            fi
+            if test -d test-output/reports; then
+              mkdir -p "$OUT/$label.canonical"
+              find test-output/reports -maxdepth 1 -type f -name '*.ndjson' \
+                -exec cp {} "$OUT/$label.canonical/" \;
+            fi
+          done
+          exit "$failed"
+      - name: Preserve original exit, exact source, raw and canonical TAP
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-late-client-candidate-${{ github.sha }}
+          path: test-output/rs-raft-late-client-candidate/
+          retention-days: 14
+          if-no-files-found: warn
