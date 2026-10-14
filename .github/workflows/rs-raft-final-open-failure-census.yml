@@ -1,0 +1,37 @@
+# Read-only exact failed TAP classification; no tests rerun or source changed.
+name: rs-raft-final-open-failure-census
+on:
+  push:
+    branches: [wip/rs-raft-final-open-deadline-20261014]
+    paths: [.github/workflows/rs-raft-final-open-failure-census.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  classify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Classify preserved protocol and recovery failures
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/rs-raft-failure-census"
+          mkdir -p "$ROOT"
+          gh api repos/psvensson/lagrange/actions/artifacts/11903568130/zip > "$ROOT/failure.zip"
+          unzip -q "$ROOT/failure.zip" -d "$ROOT/contents"
+          find "$ROOT/contents" -type f | head -n 32
+          for filename in participant-release-protocol.test.js.log replica-handler-release-recovery.test.js.log; do
+            f=$(find "$ROOT/contents" -type f -name "$filename" | head -n 1)
+            test -f "$f" || { echo "Missing preserved $filename"; exit 1; }
+            echo "--- Original red test $filename ---"
+            grep -nE 'not ok|AssertionError|ERR_ASSERTION|failureType|code:|actual:|expected:' "$f" | head -n 115 | cut -c 1-1700 || true
+            echo '--- Last source-bound original TAP assertions ---'
+            tail -n 140 "$f" | cut -c 1-1400
+          done
