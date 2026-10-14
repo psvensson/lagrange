@@ -48,6 +48,7 @@ const replacementBootstrap = `      // Passive test-only phase timing; the origi
           console.log(JSON.stringify({
             schema: 'seed-release-real-hardware-timing/1',
             budgetMs: ${budgetMs},
+            configuredLeadershipWaitMs: this.config?.leadershipWaitTimeoutMs ?? null,
             clockKind: 'RealTimeSource(Date.now)',
             outcome,
             measuredWallMs: Math.round((performance.now() - wallStarted) * 100) / 100,
