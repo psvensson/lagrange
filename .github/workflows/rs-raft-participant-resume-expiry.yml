@@ -8,6 +8,7 @@ on:
       - .github/workflows/rs-raft-participant-resume-expiry.yml
       - src/partition/partition-participant-transaction-pause.js
       - test/partition/participant-release-protocol.test.js
+      - test/test-helpers/participant-transaction-fixture.js
 permissions:
   contents: read
 concurrency:
