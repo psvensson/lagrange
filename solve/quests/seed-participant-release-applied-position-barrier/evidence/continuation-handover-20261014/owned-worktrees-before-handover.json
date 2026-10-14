@@ -1,0 +1,96 @@
+{
+  "observedAt": "2026-10-14T00:45:07.141111+00:00",
+  "scope": "All nine owned continuation worktrees and selected immutable measurement refs. Inventory precedes final evidence/handover commit; main continuation dirty entries are the preserved findings and this handover. Final checkpoint is the commit containing HANDOVER.md; root verifies that descendant remote after committing.",
+  "worktrees": [
+    {
+      "worktree": "/mnt/data/peter/projects/.worktrees/rs-raft-alpha-single-path-20261013",
+      "head": "d35d8828c630d1b9675b47f511c477b3cc9ee991",
+      "ref": "refs/heads/continue/rs-raft-alpha-single-path-20261013",
+      "remoteHead": "d35d8828c630d1b9675b47f511c477b3cc9ee991",
+      "remoteMatches": true,
+      "statusPorcelain": ""
+    },
+    {
+      "worktree": "/mnt/data/peter/projects/.worktrees/rs-raft-applied-position-controls-20261013",
+      "head": "279e28ce52f2ed2ca894f335d026cad2984a2544",
+      "ref": "refs/heads/continue/rs-raft-applied-position-controls-20261013",
+      "remoteHead": "279e28ce52f2ed2ca894f335d026cad2984a2544",
+      "remoteMatches": true,
+      "statusPorcelain": ""
+    },
+    {
+      "worktree": "/mnt/data/peter/projects/.worktrees/rs-raft-c2-orphan-removal-20261013",
+      "head": "406ceac1c40bdf57da1a6668806d0f3b38526cb9",
+      "ref": "refs/heads/continue/rs-raft-c2-orphan-removal-20261013",
+      "remoteHead": "406ceac1c40bdf57da1a6668806d0f3b38526cb9",
+      "remoteMatches": true,
+      "statusPorcelain": ""
+    },
+    {
+      "worktree": "/mnt/data/peter/projects/.worktrees/rs-raft-c2-recovery-integration-20261013",
+      "head": "a3b5c63451c3cf968b3d7ec807a0381261d4b61f",
+      "ref": "refs/heads/continue/rs-raft-c2-recovery-integration-20261013",
+      "remoteHead": "a3b5c63451c3cf968b3d7ec807a0381261d4b61f",
+      "remoteMatches": true,
+      "statusPorcelain": ""
+    },
+    {
+      "worktree": "/mnt/data/peter/projects/.worktrees/rs-raft-legacy-connection-cleanup-20261013",
+      "head": "b8e36a97c46c5d0743aa34a95de18abadfc0bca7",
+      "ref": "refs/heads/continue/rs-raft-legacy-connection-cleanup-20261013",
+      "remoteHead": "b8e36a97c46c5d0743aa34a95de18abadfc0bca7",
+      "remoteMatches": true,
+      "statusPorcelain": ""
+    },
+    {
+      "worktree": "/mnt/data/peter/projects/.worktrees/rs-raft-release-continuation-20261013",
+      "head": "f6c48301221877c534a3f669f5a91a7a8a1edd29",
+      "ref": "refs/heads/continue/rs-raft-release-continuation-20261013",
+      "remoteHead": "f6c48301221877c534a3f669f5a91a7a8a1edd29",
+      "remoteMatches": true,
+      "statusPorcelain": ""
+    },
+    {
+      "worktree": "/mnt/data/peter/projects/.worktrees/rs-raft-release-owner-cycle-removal-20261013",
+      "head": "ad23d75d58e320ca2fe58f8baa9b0a941a8158e2",
+      "ref": "refs/heads/continue/rs-raft-release-owner-cycle-removal-20261013",
+      "remoteHead": "ad23d75d58e320ca2fe58f8baa9b0a941a8158e2",
+      "remoteMatches": true,
+      "statusPorcelain": ""
+    },
+    {
+      "worktree": "/mnt/data/peter/projects/.worktrees/rs-raft-seed-native-startup-census-20261013",
+      "head": "ea69ca71b1fbaa9d8a42f0f98707b6a2d85fb1d8",
+      "ref": "refs/heads/continue/rs-raft-seed-native-startup-census-20261013",
+      "remoteHead": "ea69ca71b1fbaa9d8a42f0f98707b6a2d85fb1d8",
+      "remoteMatches": true,
+      "statusPorcelain": " M solve/quests/seed-participant-release-applied-position-barrier/log.ndjson\n?? solve/quests/seed-participant-release-applied-position-barrier/evidence/continuation-handover-20261014/usage-cutoff.json\n?? solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v13/native-v13-result-attribution-v1.md\n"
+    },
+    {
+      "worktree": "/mnt/data/peter/projects/.worktrees/rs-raft-seed-release-diagnostics-20261013",
+      "head": "ffe35e77d51cbd4ba35fb30518de1307eaaa2eec",
+      "ref": "refs/heads/continue/rs-raft-seed-release-diagnostics-20261013",
+      "remoteHead": "ffe35e77d51cbd4ba35fb30518de1307eaaa2eec",
+      "remoteMatches": true,
+      "statusPorcelain": ""
+    }
+  ],
+  "selectedRemoteRefs": {
+    "refs/heads/continue/rs-raft-alpha-single-path-20261013": "d35d8828c630d1b9675b47f511c477b3cc9ee991",
+    "refs/heads/continue/rs-raft-applied-position-controls-20261013": "279e28ce52f2ed2ca894f335d026cad2984a2544",
+    "refs/heads/continue/rs-raft-applied-position-controls-v6a-20261014": "279e28ce52f2ed2ca894f335d026cad2984a2544",
+    "refs/heads/continue/rs-raft-applied-position-source-v4-20261014": "25a2cd6d8f7c88df392d9efe0af312268ad3efcf",
+    "refs/heads/continue/rs-raft-c2-orphan-removal-20261013": "406ceac1c40bdf57da1a6668806d0f3b38526cb9",
+    "refs/heads/continue/rs-raft-c2-recovery-integration-20261013": "a3b5c63451c3cf968b3d7ec807a0381261d4b61f",
+    "refs/heads/continue/rs-raft-controls-v6a-candidate-v4-20261014": "6a4fef46db8cb63cc78541fd432a8855c27c4f4e",
+    "refs/heads/continue/rs-raft-controls-v6a-negative-v2-20261014": "4fe6bd0fc2debe70abc6ddf3c6df437dc41d20bc",
+    "refs/heads/continue/rs-raft-legacy-connection-cleanup-20261013": "b8e36a97c46c5d0743aa34a95de18abadfc0bca7",
+    "refs/heads/continue/rs-raft-native-v12-diagnostic-v4-20261014": "ea663ca425f2d38325e90eab25d57a7fd38e139b",
+    "refs/heads/continue/rs-raft-native-v13-step-diagnostic-v4-20261014": "a9506863ab58493add5f7762dd05e8ef915f9844",
+    "refs/heads/continue/rs-raft-release-continuation-20261013": "f6c48301221877c534a3f669f5a91a7a8a1edd29",
+    "refs/heads/continue/rs-raft-release-owner-cycle-removal-20261013": "ad23d75d58e320ca2fe58f8baa9b0a941a8158e2",
+    "refs/heads/continue/rs-raft-seed-native-startup-census-20261013": "ea69ca71b1fbaa9d8a42f0f98707b6a2d85fb1d8",
+    "refs/heads/continue/rs-raft-seed-release-diagnostics-20261013": "ffe35e77d51cbd4ba35fb30518de1307eaaa2eec",
+    "refs/heads/main": "599e9224b7ec9e2439bc5f6fb3ceebb4aaa1b68a"
+  }
+}

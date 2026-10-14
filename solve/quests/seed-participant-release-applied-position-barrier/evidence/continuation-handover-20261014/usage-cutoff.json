@@ -1,0 +1,16 @@
+{
+  "timestamp": "2026-10-14T00:43:28.666Z",
+  "source": "Local session event_msg/token_count rate_limits telemetry",
+  "primary": {
+    "used_percent": 96.0,
+    "remaining_percent": 4.0,
+    "window_minutes": 10080,
+    "resets_at": 1792490679
+  },
+  "credits": {
+    "has_credits": false,
+    "unlimited": false,
+    "balance": "0"
+  },
+  "interpretation": "Primary allowance triggered user under-five-percent preservation instruction. Additional credit balance is a separate field. Implementation and new lab work stopped; preservation only."
+}
