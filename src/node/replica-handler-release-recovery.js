@@ -11,7 +11,8 @@ import {invalidateParticipantReleaseAdmission, participantCutoverPauseOf} from
 import {PARTICIPANT_CUTOVER_BOUND as BOUND, PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
   PARTICIPANT_RELEASE_LOG, PARTICIPANT_RELEASE_TRIGGER as TRIGGER} from
   '../partition/partition-participant-transaction-cutover-constants.js';
-import {runParticipantCutover} from './replica-handler-participant-cutover.js';
+import {runParticipantCutover, withFreshSeedControlWave} from
+  './replica-handler-participant-cutover.js';
 import {requestParticipantRelease} from './participant-release-client.js';
 import {isHeldByHostFailure} from '../partition/partition-write-kernel.js';
 
@@ -258,6 +259,12 @@ function createParticipantReleaseRecovery(handler) {
     // control wave. This does not admit or execute a second release path.
     requestRecovery(partitionId) {
       enqueue(partitionId);
+    },
+    async withFreshSeedControlWave(options, execute) {
+      if (stopped || handler.shuttingDown) {
+        throw new Error('Release recovery owner is already retired');
+      }
+      return withFreshSeedControlWave(handler, options, execute);
     },
     async releaseFreshCreate(partitionId, options = {}) {
       const build = await runtimeBuildProvenance();
