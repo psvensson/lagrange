@@ -1,0 +1,46 @@
+{
+  "kind": "root-artifact-custody",
+  "scope": "First focused candidate measurement. Red; no qualified negative or closure claim.",
+  "artifacts": [
+    {
+      "path": "fleet.json",
+      "bytes": 12695,
+      "sha256": "3f3d8dfdae45b65bfffdec37c146650d4a844304568d5daa8ce8238306638719"
+    },
+    {
+      "path": "input.json",
+      "bytes": 868,
+      "sha256": "91704a4c84a51bef85692238fecc91dc1a73948d9428db60bf888a0dec69644f"
+    },
+    {
+      "path": "lab.log",
+      "bytes": 11530,
+      "sha256": "89e38050d1de964ccca740190d83d1872b16a0c986991983f19091cf14bf5f1f"
+    },
+    {
+      "path": "result.json",
+      "bytes": 62,
+      "sha256": "1fa2e1e95d49513d25208a975b0de382d08d28004d1a42cb809e505091dccb5c"
+    },
+    {
+      "path": "test-results-tv-dator.ndjson",
+      "bytes": 424,
+      "sha256": "37363dd920b08a8863485a0dc684a3e44470cf3ffd88358bc83e29173138e887"
+    },
+    {
+      "path": "tv-dator.raw.err",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "tv-dator.raw.log",
+      "bytes": 9579,
+      "sha256": "c88c66ed0ecd56d7e66e972d4f7e8627a05254cfa297aeefc9743df73d7f9155"
+    },
+    {
+      "path": "tv-dator.status.json",
+      "bytes": 36,
+      "sha256": "3ffe09ecc4a1f39ac6f78caca24c95a5d1182b4dbd23662d5e5938bcc488a56f"
+    }
+  ]
+}

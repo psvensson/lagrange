@@ -1,0 +1,237 @@
+lab test: tv-dator: ordinary (2 files) cores=12 mem=15.4GiB speed x1.45
+[tv-dator] placement-shell=470805
+[tv-dator] placement-head=4fe6bd0fc2debe70abc6ddf3c6df437dc41d20bc
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.5 mode:local retry: timeout: lanecap:11
+[tv-dator] placement-pid=471224
+[tv-dator] # test-files planned=2
+[tv-dator] classified lane ordinary: 2 file(s), jobs=4
+[tv-dator] thermal: ok cpu 63C (coretemp/Package id 0) nvme 41C (nvme/Sensor 1)
+[tv-dator] not ok test/partition/participant-release-applied-position.test.js (8 assertions, 2321ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 13
+[tv-dator] # Subtest: applied-position client preserves overall and RPC deadlines without stranded debt
+[tv-dator] not ok 1 - applied-position client preserves overall and RPC deadlines without stranded debt
+[tv-dator]   ---
+[tv-dator]   duration_ms: 1286.19542
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4fe6bd0fc2de-mv7db0lo-2389264/test/partition/participant-release-applied-position.test.js:161:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     Expected values to be strictly equal:
+[tv-dator]     
+[tv-dator]     3 !== 5
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 5
+[tv-dator]   actual: 3
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/4fe6bd0fc2de-mv7db0lo-2389264/test/partition/participant-release-applied-position.test.js:212:18
+[tv-dator]     async withRegisteredObservationOwner (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4fe6bd0fc2de-mv7db0lo-2389264/test/partition/participant-release-applied-position.test.js:87:5)
+[tv-dator]     async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4fe6bd0fc2de-mv7db0lo-2389264/test/partition/participant-release-applied-position.test.js:170:7)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[tv-dator]   ...
+[tv-dator] # Subtest: transport queue delay consumes the carried applied-position RPC window
+[tv-dator] not ok 2 - transport queue delay consumes the carried applied-position RPC window
+[tv-dator]   ---
+[tv-dator]   duration_ms: 42.430494
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4fe6bd0fc2de-mv7db0lo-2389264/test/partition/participant-release-applied-position.test.js:334:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     Expected values to be strictly equal:
+[tv-dator]     
+[tv-dator]     3 !== 6
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 6
+[tv-dator]   actual: 3
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/4fe6bd0fc2de-mv7db0lo-2389264/test/partition/participant-release-applied-position.test.js:357:14
+[tv-dator]     async withRegisteredObservationOwner (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4fe6bd0fc2de-mv7db0lo-2389264/test/partition/participant-release-applied-position.test.js:87:5)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: one applied-position observation owns duplicate, conflict and successor lifetimes
+[tv-dator] not ok 3 - one applied-position observation owns duplicate, conflict and successor lifetimes
+[tv-dator]   ---
+[tv-dator]   duration_ms: 26.833236
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4fe6bd0fc2de-mv7db0lo-2389264/test/partition/participant-release-applied-position.test.js:407:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     Expected values to be strictly equal:
+[tv-dator]     
+[tv-dator]     3 !== 6
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 6
+[tv-dator]   actual: 3
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/4fe6bd0fc2de-mv7db0lo-2389264/test/partition/participant-release-applied-position.test.js:431:14
+[tv-dator]     async withRegisteredObservationOwner (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4fe6bd0fc2de-mv7db0lo-2389264/test/partition/participant-release-applied-position.test.js:87:5)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: shared ingress refuses unsafe envelopes and facts refuse malformed owner generations
+[tv-dator] not ok 4 - shared ingress refuses unsafe envelopes and facts refuse malformed owner generations
+[tv-dator]   ---
+[tv-dator]   duration_ms: 27.235727
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4fe6bd0fc2de-mv7db0lo-2389264/test/partition/participant-release-applied-position.test.js:571:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     Expected values to be strictly deep-equal:
+[tv-dator]     + actual - expected
+[tv-dator]     
+[tv-dator]       {
+[tv-dator]     +   acknowledged: true,
+[tv-dator]         correlationId: 'fixture-participant-release',
+[tv-dator]         error: 'Unknown message type: undefined',
+[tv-dator]         status: 'error'
+[tv-dator]       }
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected:
+[tv-dator]     status: 'error'
+[tv-dator]     error: 'Unknown message type: undefined'
+[tv-dator]     correlationId: 'fixture-participant-release'
+[tv-dator]   actual:
+[tv-dator]     acknowledged: true
+[tv-dator]     status: 'error'
+[tv-dator]     error: 'Unknown message type: undefined'
+[tv-dator]     correlationId: 'fixture-participant-release'
+[tv-dator]   operator: 'deepStrictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     assertGenericUnsafeEnvelopes (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4fe6bd0fc2de-mv7db0lo-2389264/test/partition/participant-release-applied-position.test.js:122:12)
+[tv-dator]     async file:///home/peter/projects/lagrange/test-output/placement-worktrees/4fe6bd0fc2de-mv7db0lo-2389264/test/partition/participant-release-applied-position.test.js:579:7
+[tv-dator]     async withRegisteredObservationOwner (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4fe6bd0fc2de-mv7db0lo-2389264/test/partition/participant-release-applied-position.test.js:87:5)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: applied-position receiver refuses malformed observation clocks without effects
+[tv-dator] not ok 5 - applied-position receiver refuses malformed observation clocks without effects
+[tv-dator]   ---
+[tv-dator]   duration_ms: 32.295161
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4fe6bd0fc2de-mv7db0lo-2389264/test/partition/participant-release-applied-position.test.js:653:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     Expected values to be strictly equal:
+[tv-dator]     
+[tv-dator]     3 !== 5
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 5
+[tv-dator]   actual: 3
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/4fe6bd0fc2de-mv7db0lo-2389264/test/partition/participant-release-applied-position.test.js:700:14
+[tv-dator]     async withRegisteredObservationOwner (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4fe6bd0fc2de-mv7db0lo-2389264/test/partition/participant-release-applied-position.test.js:87:5)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: post-facts adjudication fences a real term change and preserves same-context facts
+[tv-dator] not ok 6 - post-facts adjudication fences a real term change and preserves same-context facts
+[tv-dator]   ---
+[tv-dator]   duration_ms: 26.937001
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4fe6bd0fc2de-mv7db0lo-2389264/test/partition/participant-release-applied-position.test.js:747:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     {"outcome":"observed","releaseId":"17432943a7e094bb17d45e0155a57131f4477cb81224c94423accaedc76b981e","partitionId":"tx1-v3","phase":"observe_applied_position","generation":{"nodeId":"test-node","ownerIncarnation":1,"replicaId":"tx1-v3-r1","lifecycleIncarnation":1,"runtimeGeneration":1,"connectionGeneration":7,"admissionGeneration":14},"buildDigest":"460b0864540fb7444171dc8766d2a5c121f65853960c3fb4b9484daafd4ef72a","membership":{"kind":"committed","voters":["3983866873471810851"],"votersOutgoing":[],"learners":[],"learnersNext":[],"identities":{"3983866873471810851":"tx1-v3-r1"},"appliedIndex":2,"commitIndex":2,"configurationKey":"[[\"3983866873471810851\"],[],[],[],false]","membershipGenerationIndex":2,"term":1,"leaderId":"tx1-v3-r1","gateOpen":true},"leaderReplicaId":"tx1-v3-r1","leaderAddress":null,"role":"leader","confChangePending":false,"peers":[{"address":"test-node/partition/tx1-v3-r2","replicaIdentity":"tx1-v3-r2"},{"address":"test-node/partition/tx1-v3-r3","replicaIdentity":"tx1-v3-r3"}],"origin":{"originIndex":2,"originTerm":1},"connection":{"generation":7,"servedLegacy":false},"paused":true,"rowid":{"kind":"rowid","maximum":null,"belowCeiling":true},"work":{"sqliteTransactionOpen":false,"participantStaging":false,"participantPrepared":0,"proposals":0,"pendingOutcomes":0,"appliedIndex":2,"commitIndex":2,"lastIndex":2},"topology":null,"queryCensus":null}
+[tv-dator]     + actual - expected
+[tv-dator]     
+[tv-dator]     + 'observed'
+[tv-dator]     - 'release_generation_changed'
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 'release_generation_changed'
+[tv-dator]   actual: 'observed'
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/4fe6bd0fc2de-mv7db0lo-2389264/test/partition/participant-release-applied-position.test.js:776:18
+[tv-dator]     async withRegisteredObservationOwner (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4fe6bd0fc2de-mv7db0lo-2389264/test/partition/participant-release-applied-position.test.js:87:5)
+[tv-dator]     async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4fe6bd0fc2de-mv7db0lo-2389264/test/partition/participant-release-applied-position.test.js:750:7)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: normal N-to-K application between facts and adjudication remains current
+[tv-dator] not ok 7 - normal N-to-K application between facts and adjudication remains current
+[tv-dator]   ---
+[tv-dator]   duration_ms: 28.013225
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4fe6bd0fc2de-mv7db0lo-2389264/test/partition/participant-release-applied-position.test.js:803:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     a false STALE means the N-to-K applied-position fence rejected current work: {"outcome":"release_generation_changed","releaseId":"17432943a7e094bb17d45e0155a57131f4477cb81224c94423accaedc76b981e","partitionId":"tx1-v3","phase":"observe_applied_position"}
+[tv-dator]     + actual - expected
+[tv-dator]     
+[tv-dator]     + 'release_generation_changed'
+[tv-dator]     - 'observed'
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 'observed'
+[tv-dator]   actual: 'release_generation_changed'
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/4fe6bd0fc2de-mv7db0lo-2389264/test/partition/participant-release-applied-position.test.js:840:14
+[tv-dator]     async withRegisteredObservationOwner (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4fe6bd0fc2de-mv7db0lo-2389264/test/partition/participant-release-applied-position.test.js:87:5)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: an applied-progress wake reflected by the first facts read needs no forced reread
+[tv-dator] not ok 8 - an applied-progress wake reflected by the first facts read needs no forced reread
+[tv-dator]   ---
+[tv-dator]   duration_ms: 27.005016
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4fe6bd0fc2de-mv7db0lo-2389264/test/partition/participant-release-applied-position.test.js:882:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     a first owner read made after the wake needs no unconditional reread
+[tv-dator]     
+[tv-dator]     2 !== 1
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 1
+[tv-dator]   actual: 2
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/4fe6bd0fc2de-mv7db0lo-2389264/test/partition/participant-release-applied-position.test.js:917:14
+[tv-dator]     async withRegisteredObservationOwner (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4fe6bd0fc2de-mv7db0lo-2389264/test/partition/participant-release-applied-position.test.js:87:5)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] 1..8
+[tv-dator] # tests 8
+[tv-dator] # suites 0
+[tv-dator] # pass 0
+[tv-dator] # fail 8
+[tv-dator] # cancelled 0
+[tv-dator] # skipped 0
+[tv-dator] # todo 0
+[tv-dator] # duration_ms 1501.912463
+[tv-dator] # time=2321ms
+[tv-dator] ok test/partition/participant-release-protocol.test.js (11 assertions, 2773ms)
+[tv-dator] # test-files total=2 pass=1 fail=1 assertions=19
+lab test: tv-dator: # test-files total=2 pass=1 fail=1 assertions=19
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=2 pass=1 fail=1 assertions=19

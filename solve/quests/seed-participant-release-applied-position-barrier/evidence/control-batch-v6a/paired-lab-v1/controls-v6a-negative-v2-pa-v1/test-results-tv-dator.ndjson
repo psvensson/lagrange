@@ -1,0 +1,2 @@
+{"file":"test/partition/participant-release-applied-position.test.js","attempt":1,"ok":false,"assertions":8,"durationMs":2321,"retriedOnce":false,"firstFailureLine":"not ok 1 - applied-position client preserves overall and RPC deadlines without stranded debt"}
+{"file":"test/partition/participant-release-protocol.test.js","attempt":1,"ok":true,"assertions":11,"durationMs":2773,"retriedOnce":false,"firstFailureLine":null}

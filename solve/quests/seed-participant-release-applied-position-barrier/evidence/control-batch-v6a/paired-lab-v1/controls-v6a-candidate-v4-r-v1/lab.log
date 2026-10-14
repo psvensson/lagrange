@@ -1,0 +1,262 @@
+lab test: lenovo-laptop: ordinary (1 files) cores=8 mem=15.5GiB speed x2.28
+[lenovo-laptop] placement-shell=1782672
+[lenovo-laptop] placement-head=6a4fef46db8cb63cc78541fd432a8855c27c4f4e
+[lenovo-laptop] placement-link=node_modules
+[lenovo-laptop] placement-link=data/examples
+[lenovo-laptop] placement-link=data/partitions
+[lenovo-laptop] placement-link=tools/alloy-6.2.0
+[lenovo-laptop] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[lenovo-laptop] placement-link=tools/tla2tools.jar
+[lenovo-laptop] placement-prepared=import-graph
+[lenovo-laptop] placement-env=factor:2.3 mode:local retry: timeout: lanecap:7
+[lenovo-laptop] placement-pid=1783055
+[lenovo-laptop] # test-files planned=1
+[lenovo-laptop] classified lane ordinary: 1 file(s), jobs=4
+[lenovo-laptop] thermal: ok cpu 51C (coretemp/Package id 0) nvme unmeasured
+[lenovo-laptop] not ok test/node/replica-handler-release-recovery.test.js (23 assertions, 6912ms)
+[lenovo-laptop] # TAP assertions failed; test process exited 1
+[lenovo-laptop] TAP version 13
+[lenovo-laptop] # Subtest: current live resume opens once and a wrong release ID preserves that OPEN proof
+[lenovo-laptop] ok 1 - current live resume opens once and a wrong release ID preserves that OPEN proof
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 4638.178299
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: shutdown reentered by the OPEN proof status read refuses idempotent resume
+[lenovo-laptop] ok 2 - shutdown reentered by the OPEN proof status read refuses idempotent resume
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 69.925203
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: handler shutdown begun during awaited release facts cannot reopen admission
+[lenovo-laptop] ok 3 - handler shutdown begun during awaited release facts cannot reopen admission
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 41.531771
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: service shutdown begun during awaited release facts returns stale and stays closed
+[lenovo-laptop] ok 4 - service shutdown begun during awaited release facts returns stale and stays closed
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 44.844436
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: handler shutdown cancels an applied-position observation before held facts release
+[lenovo-laptop] not ok 5 - handler shutdown cancels an applied-position observation before held facts release
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 43.78278
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/6a4fef46db8c-mv7d8wtk-2385338/test/node/replica-handler-release-recovery.test.js:343:1'
+[lenovo-laptop]   failureType: 'testCodeFailure'
+[lenovo-laptop]   error: |-
+[lenovo-laptop]     Expected values to be strictly equal:
+[lenovo-laptop]     
+[lenovo-laptop]     0 !== 1
+[lenovo-laptop]     
+[lenovo-laptop]   code: 'ERR_ASSERTION'
+[lenovo-laptop]   name: 'AssertionError'
+[lenovo-laptop]   expected: 1
+[lenovo-laptop]   actual: 0
+[lenovo-laptop]   operator: 'strictEqual'
+[lenovo-laptop]   stack: |-
+[lenovo-laptop]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/6a4fef46db8c-mv7d8wtk-2385338/test/node/replica-handler-release-recovery.test.js:368:16
+[lenovo-laptop]     async withActualHandler (file:///home/peter/projects/lagrange/test-output/placement-worktrees/6a4fef46db8c-mv7d8wtk-2385338/test/node/replica-handler-release-recovery.test.js:194:5)
+[lenovo-laptop]     async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/6a4fef46db8c-mv7d8wtk-2385338/test/node/replica-handler-release-recovery.test.js:345:5)
+[lenovo-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[lenovo-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: service shutdown entry wakes and cancels observation before held facts release
+[lenovo-laptop] ok 6 - service shutdown entry wakes and cancels observation before held facts release
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 37.513798
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: post-await term and generation changes keep applied-position observation stale
+[lenovo-laptop] ok 7 - post-await term and generation changes keep applied-position observation stale
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 56.556052
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: follower reentry revalidates the latest generation after canonical facts
+[lenovo-laptop] ok 8 - follower reentry revalidates the latest generation after canonical facts
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 39.928477
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: dirty terminal membership refusal stays unavailable unless current lineage changes
+[lenovo-laptop] not ok 9 - dirty terminal membership refusal stays unavailable unless current lineage changes
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 41.441274
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/6a4fef46db8c-mv7d8wtk-2385338/test/node/replica-handler-release-recovery.test.js:547:1'
+[lenovo-laptop]   failureType: 'testCodeFailure'
+[lenovo-laptop]   error: |-
+[lenovo-laptop]     {"outcome":"release_fact_unavailable","releaseId":"ffffabd76fc0d3ca8c8bbee8bdf56afb36f005d2c02df82e1d5c19c0bb885e2d","partitionId":"tx1-v3","phase":"observe_applied_position","missingFact":"committed_membership_witness","reason":"membership-unreadable"}
+[lenovo-laptop]     + actual - expected
+[lenovo-laptop]     
+[lenovo-laptop]     + 'release_fact_unavailable'
+[lenovo-laptop]     - 'release_generation_changed'
+[lenovo-laptop]                ^
+[lenovo-laptop]     
+[lenovo-laptop]   code: 'ERR_ASSERTION'
+[lenovo-laptop]   name: 'AssertionError'
+[lenovo-laptop]   expected: 'release_generation_changed'
+[lenovo-laptop]   actual: 'release_fact_unavailable'
+[lenovo-laptop]   operator: 'strictEqual'
+[lenovo-laptop]   stack: |-
+[lenovo-laptop]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/6a4fef46db8c-mv7d8wtk-2385338/test/node/replica-handler-release-recovery.test.js:569:18
+[lenovo-laptop]     async withActualHandler (file:///home/peter/projects/lagrange/test-output/placement-worktrees/6a4fef46db8c-mv7d8wtk-2385338/test/node/replica-handler-release-recovery.test.js:194:5)
+[lenovo-laptop]     async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/6a4fef46db8c-mv7d8wtk-2385338/test/node/replica-handler-release-recovery.test.js:550:7)
+[lenovo-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[lenovo-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: registry replacement and deletion promptly retire old observers before held facts return
+[lenovo-laptop] not ok 10 - registry replacement and deletion promptly retire old observers before held facts return
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 56.92207
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/6a4fef46db8c-mv7d8wtk-2385338/test/node/replica-handler-release-recovery.test.js:602:1'
+[lenovo-laptop]   failureType: 'testCodeFailure'
+[lenovo-laptop]   error: |-
+[lenovo-laptop]     Expected values to be strictly equal:
+[lenovo-laptop]     
+[lenovo-laptop]     0 !== 1
+[lenovo-laptop]     
+[lenovo-laptop]   code: 'ERR_ASSERTION'
+[lenovo-laptop]   name: 'AssertionError'
+[lenovo-laptop]   expected: 1
+[lenovo-laptop]   actual: 0
+[lenovo-laptop]   operator: 'strictEqual'
+[lenovo-laptop]   stack: |-
+[lenovo-laptop]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/6a4fef46db8c-mv7d8wtk-2385338/test/node/replica-handler-release-recovery.test.js:630:18
+[lenovo-laptop]     async withActualHandler (file:///home/peter/projects/lagrange/test-output/placement-worktrees/6a4fef46db8c-mv7d8wtk-2385338/test/node/replica-handler-release-recovery.test.js:194:5)
+[lenovo-laptop]     async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/6a4fef46db8c-mv7d8wtk-2385338/test/node/replica-handler-release-recovery.test.js:605:7)
+[lenovo-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[lenovo-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: synchronous acquisition cancellation retires late subscription and timer handles
+[lenovo-laptop] not ok 11 - synchronous acquisition cancellation retires late subscription and timer handles
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 49.192669
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/6a4fef46db8c-mv7d8wtk-2385338/test/node/replica-handler-release-recovery.test.js:666:1'
+[lenovo-laptop]   failureType: 'testCodeFailure'
+[lenovo-laptop]   error: |-
+[lenovo-laptop]     Expected values to be strictly equal:
+[lenovo-laptop]     
+[lenovo-laptop]     0 !== 1
+[lenovo-laptop]     
+[lenovo-laptop]   code: 'ERR_ASSERTION'
+[lenovo-laptop]   name: 'AssertionError'
+[lenovo-laptop]   expected: 1
+[lenovo-laptop]   actual: 0
+[lenovo-laptop]   operator: 'strictEqual'
+[lenovo-laptop]   stack: |-
+[lenovo-laptop]     withActualHandler.timeSource (file:///home/peter/projects/lagrange/test-output/placement-worktrees/6a4fef46db8c-mv7d8wtk-2385338/test/node/replica-handler-release-recovery.test.js:723:18)
+[lenovo-laptop]     async withActualHandler (file:///home/peter/projects/lagrange/test-output/placement-worktrees/6a4fef46db8c-mv7d8wtk-2385338/test/node/replica-handler-release-recovery.test.js:194:5)
+[lenovo-laptop]     async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/6a4fef46db8c-mv7d8wtk-2385338/test/node/replica-handler-release-recovery.test.js:670:7)
+[lenovo-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[lenovo-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: cleanup debt retains all seven acquired resources on the installing scheduler
+[lenovo-laptop] not ok 12 - cleanup debt retains all seven acquired resources on the installing scheduler
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 37.309286
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/6a4fef46db8c-mv7d8wtk-2385338/test/node/replica-handler-release-recovery.test.js:745:1'
+[lenovo-laptop]   failureType: 'testCodeFailure'
+[lenovo-laptop]   error: |-
+[lenovo-laptop]     Expected values to be strictly equal:
+[lenovo-laptop]     
+[lenovo-laptop]     9 !== 4
+[lenovo-laptop]     
+[lenovo-laptop]   code: 'ERR_ASSERTION'
+[lenovo-laptop]   name: 'AssertionError'
+[lenovo-laptop]   expected: 4
+[lenovo-laptop]   actual: 9
+[lenovo-laptop]   operator: 'strictEqual'
+[lenovo-laptop]   stack: |-
+[lenovo-laptop]     withActualHandler.timeSource (file:///home/peter/projects/lagrange/test-output/placement-worktrees/6a4fef46db8c-mv7d8wtk-2385338/test/node/replica-handler-release-recovery.test.js:836:16)
+[lenovo-laptop]     async withActualHandler (file:///home/peter/projects/lagrange/test-output/placement-worktrees/6a4fef46db8c-mv7d8wtk-2385338/test/node/replica-handler-release-recovery.test.js:194:5)
+[lenovo-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[lenovo-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: host-held recovery uses the fixed owner cadence and never reads retryAfterMs
+[lenovo-laptop] ok 13 - host-held recovery uses the fixed owner cadence and never reads retryAfterMs
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 43.989373
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: ordered hosted observations prefer a leader and retain no earlier held debt
+[lenovo-laptop] ok 14 - ordered hosted observations prefer a leader and retain no earlier held debt
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 27.467233
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: no-leader observation gives canonical held status precedence over unavailable status
+[lenovo-laptop] ok 15 - no-leader observation gives canonical held status precedence over unavailable status
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 33.793299
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: healthy nonleaders do not poll while malformed status is typed and event-driven
+[lenovo-laptop] ok 16 - healthy nonleaders do not poll while malformed status is typed and event-driven
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 29.213234
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: release recovery caps running observations at four and drains the fifth in-lane
+[lenovo-laptop] ok 17 - release recovery caps running observations at four and drains the fifth in-lane
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 29.68243
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: replacement before a held wake observes only the current registry object
+[lenovo-laptop] ok 18 - replacement before a held wake observes only the current registry object
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 23.905787
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: last registry removal discharges its timer and a later registration reports afresh
+[lenovo-laptop] ok 19 - last registry removal discharges its timer and a later registration reports afresh
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 26.602468
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: shutdown retained in the registry clears its report before current reentry
+[lenovo-laptop] ok 20 - shutdown retained in the registry clears its report before current reentry
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 27.681714
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: timer registration failure is visible and claims no scheduled wake
+[lenovo-laptop] ok 21 - timer registration failure is visible and claims no scheduled wake
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 26.012818
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: direct recovery shutdown clears held debt and ignores later owner events
+[lenovo-laptop] ok 22 - direct recovery shutdown clears held debt and ignores later owner events
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 27.987257
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: service replacement during awaited facts cannot reopen the stale object
+[lenovo-laptop] ok 23 - service replacement during awaited facts cannot reopen the stale object
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 49.27596
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] 1..23
+[lenovo-laptop] # tests 23
+[lenovo-laptop] # suites 0
+[lenovo-laptop] # pass 18
+[lenovo-laptop] # fail 5
+[lenovo-laptop] # cancelled 0
+[lenovo-laptop] # skipped 0
+[lenovo-laptop] # todo 0
+[lenovo-laptop] # duration_ms 5513.984326
+[lenovo-laptop] # time=6912ms
+[lenovo-laptop] # test-files total=1 pass=0 fail=1 assertions=23
+lab test: lenovo-laptop: # test-files total=1 pass=0 fail=1 assertions=23
+lab test: lenovo-laptop: results copied to test-output/reports/test-results-lenovo-laptop.ndjson
+# test-files total=1 pass=0 fail=1 assertions=23

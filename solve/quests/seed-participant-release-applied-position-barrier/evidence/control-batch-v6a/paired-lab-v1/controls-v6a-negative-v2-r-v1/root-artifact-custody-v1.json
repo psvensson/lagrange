@@ -1,0 +1,46 @@
+{
+  "kind": "root-artifact-custody",
+  "scope": "Identical focused controls on retained-feature predecessor, same physical hosts as candidate; case qualification requires independent comparison.",
+  "artifacts": [
+    {
+      "path": "fleet.json",
+      "bytes": 12696,
+      "sha256": "a49e5e254d59d776ee998899b290ce2413e7ee60bd0fe072001bd576593d76f7"
+    },
+    {
+      "path": "input.json",
+      "bytes": 581,
+      "sha256": "097a4dfbe50c06b935b94e7c86c5d479cc56ee007ba1bf3850fcde69597abfa2"
+    },
+    {
+      "path": "lab.log",
+      "bytes": 16048,
+      "sha256": "408eb4553aec7af511118e5489ef527411e33ac7496e896dac7db30bf380f1cc"
+    },
+    {
+      "path": "lenovo-laptop.raw.err",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "lenovo-laptop.raw.log",
+      "bytes": 11896,
+      "sha256": "e06b6520cc45a000982e3e5f8ccb83ed5942aa362b8cb5faa55e2b8ed0d137b8"
+    },
+    {
+      "path": "lenovo-laptop.status.json",
+      "bytes": 36,
+      "sha256": "3ffe09ecc4a1f39ac6f78caca24c95a5d1182b4dbd23662d5e5938bcc488a56f"
+    },
+    {
+      "path": "result.json",
+      "bytes": 62,
+      "sha256": "bcc97e899ec4c3f226c7cb5db35ab745d58974ce7c03ff82cc1a392082729f24"
+    },
+    {
+      "path": "test-results-lenovo-laptop.ndjson",
+      "bytes": 254,
+      "sha256": "c093d0f6b10d8f91e56c5bc57949accc86cb5edc9040c886d0ac1afb437fb7b0"
+    }
+  ]
+}

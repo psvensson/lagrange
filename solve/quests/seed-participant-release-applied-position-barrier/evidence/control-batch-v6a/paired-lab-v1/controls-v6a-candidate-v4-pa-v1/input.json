@@ -1,0 +1,34 @@
+{
+  "sha": "6a4fef46db8cb63cc78541fd432a8855c27c4f4e",
+  "tree": "bb22fec85b11ed2445cbe7f7447887df2b8629cc",
+  "host": "tv-dator",
+  "files": [
+    "test/partition/participant-release-protocol.test.js",
+    "test/partition/participant-release-applied-position.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/partition/participant-release-applied-position.test.js",
+        "test/partition/participant-release-protocol.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ],
+  "costs": [
+    {
+      "file": "test/partition/participant-release-applied-position.test.js",
+      "jobs": 4,
+      "ms": 10000,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/participant-release-protocol.test.js",
+      "jobs": 4,
+      "ms": 10000,
+      "lane": "ordinary"
+    }
+  ],
+  "startedAt": "2026-10-14T00:22:54.441Z"
+}

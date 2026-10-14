@@ -1,0 +1,26 @@
+{
+  "sha": "6a4fef46db8cb63cc78541fd432a8855c27c4f4e",
+  "tree": "bb22fec85b11ed2445cbe7f7447887df2b8629cc",
+  "host": "lenovo-laptop",
+  "files": [
+    "test/node/replica-handler-release-recovery.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/node/replica-handler-release-recovery.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ],
+  "costs": [
+    {
+      "file": "test/node/replica-handler-release-recovery.test.js",
+      "jobs": 4,
+      "ms": 10000,
+      "lane": "ordinary"
+    }
+  ],
+  "startedAt": "2026-10-14T00:22:54.444Z"
+}
