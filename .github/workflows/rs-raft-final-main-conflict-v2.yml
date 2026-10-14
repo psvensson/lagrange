@@ -1,0 +1,70 @@
+# Absolutely no push to main or WIP branch. Frozen current main and candidate.
+# This is a conflict census, not a merge or a source approval.
+name: rs-raft-final-main-conflict-v2
+on:
+  push:
+    branches: [integrate/rs-raft-final-main-dry-run-20261014]
+    paths: [.github/workflows/rs-raft-final-main-conflict-v2.yml]
+permissions:
+  contents: read
+jobs:
+  merge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Frozen same-tree merge conflict inventory, no content changes
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          MAIN=46cefa725cd2c398dc612fd81db9777fa0ac5b6c
+          CANDIDATE=cff4cc0ab568711d42d54ec4f4edd20eaba19fee
+          OUT=test-output/rs-raft-final-main-dry-run
+          mkdir -p "$OUT"
+          printf '%s\n' "$MAIN" > "$OUT/pinned-main.txt"
+          printf '%s\n' "$CANDIDATE" > "$OUT/pinned-candidate.txt"
+          git rev-parse HEAD > "$OUT/runner-head.txt"
+          git rev-parse HEAD^{tree} > "$OUT/runner-tree.txt"
+          git cat-file -e "$MAIN^{commit}" || exit 1
+          git cat-file -e "$CANDIDATE^{commit}" || exit 1
+          git rev-list --left-right --count "$MAIN...$CANDIDATE" > "$OUT/divergence.txt"
+          git merge-base "$MAIN" "$CANDIDATE" > "$OUT/merge-base.txt"
+          git checkout --detach "$MAIN" > "$OUT/main-checkout.log" 2>&1
+          test "$(git rev-parse HEAD)" = "$MAIN" || exit 1
+          git config user.name 'rs-raft-mergetree-diagnostic'
+          git config user.email 'diagnostic@example.invalid'
+          GIT_MERGE_AUTOEDIT=no git -c core.hooksPath=/dev/null merge \
+            --no-commit --no-ff "$CANDIDATE" > "$OUT/merge.stdout" 2> "$OUT/merge.stderr"
+          rc=$?
+          printf '%s\n' "$rc" > "$OUT/merge.status"
+          git diff --name-only --diff-filter=U > "$OUT/unmerged-paths.txt"
+          git ls-files -u > "$OUT/unmerged-stage-records.txt"
+          git status --short > "$OUT/working-tree-status.txt"
+          echo "Original main=$MAIN"
+          echo "Original source=$CANDIDATE"
+          echo "Divergence: $(cat "$OUT/divergence.txt")"
+          echo "Merge-base: $(cat "$OUT/merge-base.txt")"
+          echo "Non-resolved path count: $(wc -l < "$OUT/unmerged-paths.txt")"
+          cat "$OUT/unmerged-paths.txt" | head -n 120
+          echo "Merge exit=$rc"
+          tail -n 45 "$OUT/merge.stdout"
+          tail -n 45 "$OUT/merge.stderr"
+          if test "$rc" -eq 0 && test ! -s "$OUT/unmerged-paths.txt"; then
+            git diff --cached --name-status "$MAIN" > "$OUT/composed-paths.txt"
+            echo 'Conflict-free preview only; no commit created or pushed'
+          else
+            echo 'Conflicts/unmerged owner decisions are HOLD; no source file auto-resolved'
+          fi
+      - name: Preserve all original conflict stages with SHAs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-final-main-conflicts-${{ github.sha }}
+          path: test-output/rs-raft-final-main-dry-run/
+          retention-days: 14
+          if-no-files-found: warn
