@@ -10,6 +10,7 @@ on:
       - src/node/replica-handler-participant-release.js
       - src/partition/partition-participant-transaction-pause.js
       - test/partition/participant-release-protocol.test.js
+      - test/test-helpers/participant-transaction-fixture.js
       - test/node/participant-release-caller-deadline.test.js
 permissions:
   contents: read
