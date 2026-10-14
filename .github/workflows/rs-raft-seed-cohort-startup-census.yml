@@ -1,0 +1,80 @@
+# One new WIP observational replay at the original 1s startup budget.
+# This augments only evidence custody, never release policy/timing.
+name: rs-raft-seed-cohort-startup-census
+on:
+  push:
+    branches: [continue/rs-raft-seed-cohort-once-20261014]
+    paths:
+      - .github/workflows/rs-raft-seed-cohort-startup-census.yml
+      - scripts/quest-evidence/summarize-seed-release-trace.mjs
+      - src/bootstrap/bootstrap-service-seed-workflow.js
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-seed-cohort-startup-census
+  cancel-in-progress: false
+jobs:
+  census:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Exact dependencies
+        run: npm ci
+      - name: Run original test unchanged; parse its ORIGINAL full-TAP trace
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-seed-once-startup-census
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/source-sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/source-tree.txt"
+          TEST=test/integration/message-group-membership-claim-cache.integration.test.js
+          sha256sum "$TEST" > "$OUT/original-test-sha256.txt"
+          npm run -s test:file -- "$TEST" > "$OUT/classified-run.log" 2>&1
+          status=$?
+          printf '%s\n' "$status" > "$OUT/original-test.status"
+          echo "original claim/cache test status=$status (not a success criterion)"
+          tail -n 18 "$OUT/classified-run.log" | cut -c 1-250
+          RAW=".tap/test-results/$TEST.tap"
+          if test ! -f "$RAW"; then
+            echo "Missing original complete TAP file at $RAW"
+            find .tap/test-results -type f | head -n 18
+            exit 1
+          fi
+          sha256sum "$RAW" > "$OUT/raw-tap-sha256.txt"
+          cp "$RAW" "$OUT/raw-full.tap"
+          node scripts/quest-evidence/summarize-seed-release-trace.mjs "$RAW" "$OUT/trace-summary.json" \
+            > "$OUT/trace-summary-one-line.json" 2> "$OUT/summary-error.log"
+          parsed=$?
+          printf '%s\n' "$parsed" > "$OUT/summary.status"
+          if test "$parsed" -eq 0; then
+            cat "$OUT/trace-summary-one-line.json"
+          else
+            cat "$OUT/summary-error.log"
+          fi
+          if test -d test-output/reports; then
+            find test-output/reports -maxdepth 1 -type f -name '*.ndjson' -exec cp {} "$OUT/" \;
+          fi
+          # Original test is expected red; evidence is usable only when its
+          # already-owned report has no gaps and the full TAP was preserved.
+          test "$parsed" -eq 0
+      - name: Preserve complete original TAP, its digest, and bounded census
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-seed-once-startup-census-${{ github.sha }}
+          path: test-output/rs-raft-seed-once-startup-census/
+          retention-days: 14
+          if-no-files-found: warn
