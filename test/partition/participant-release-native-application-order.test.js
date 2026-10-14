@@ -12,7 +12,7 @@ import Database from 'better-sqlite3';
 
 import {formAdmittedGroup} from './partition-admitted-group-fixture.js';
 import {attachPartitionReleaseOwners} from './partition-release-fixture.js';
-import {installBeforeExitDiagnostic} from
+import {createNativeCoreEntryWitness, installBeforeExitDiagnostic} from
   './participant-release-native-exit-diagnostic.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -45,6 +45,7 @@ import {
   '../../src/raft/raft-committed-membership-constants.js';
 import {createRaftOperationPort} from '../../src/raft/raft-operation-port.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
+import {setActualCoreEntryObserver} from '../../src/raft/raft-rs-runtime-owner.js';
 import {
   RAFT_RS_MESSAGE_TYPE,
   RAFT_RS_TRANSPORT_PROTOCOL,
@@ -1214,6 +1215,8 @@ async function cleanupNativeWitness({gate, membershipReads, releasePromise, rout
     exitDiagnostic.cleanupEntered = true;
     exitDiagnostic.phase = 'cleanup';
   }
+  await captureCleanup(cleanupErrors, 'stop-exact-native-core-entry-witness',
+    async () => setActualCoreEntryObserver(null));
   if (gate !== null) gate.disarm();
   if (gate !== null) {
     for (const replicaId of gate.followerIds) {
@@ -1284,7 +1287,7 @@ test('the real participant release owner waits for every native voter origin ' +
       cleanupEntered: false, trackedRelease: null, listener: null,
       error: null, routerInitialized: false, groupFormed: false,
       settledObserved: false, releaseOwnersAttached: false,
-      gate: null, membershipReads: null, route: null};
+      gate: null, membershipReads: null, core: null, route: null};
     installBeforeExitDiagnostic(exitDiagnostic);
     await router.initialize({startServer: false});
     exitDiagnostic.routerInitialized = true;
@@ -1385,6 +1388,10 @@ test('the real participant release owner waits for every native voter origin ' +
     assert.equal(trackedRelease.settled, false,
       'the same release remains pending while both native N answers are held');
     membershipReads.subscribeProgress();
+    // Passive actual-native turn-entry witness, installed only after N
+    // capture and before both exact original delivery promises resume.
+    exitDiagnostic.core = createNativeCoreEntryWitness(gate.followerIds);
+    setActualCoreEntryObserver(exitDiagnostic.core.capture);
     const forwarded = membershipReads.states.map((state) => {
       membershipReads.armStep(state.replicaId);
       const promise = gate.forward(state.replicaId);
