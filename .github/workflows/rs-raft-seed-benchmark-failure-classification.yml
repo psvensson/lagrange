@@ -1,0 +1,50 @@
+# Classify exact previously retained TAP; no source or test executions.
+name: rs-raft-seed-benchmark-failure-classification
+on:
+  push:
+    branches: [diagnostic/rs-raft-seed-virtual-hardware-budget-20261014]
+    paths: [.github/workflows/rs-raft-seed-benchmark-failure-classification.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Inspect prior full original raw TAP without changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ID=11884558074
+          mkdir -p /tmp/rs-raft-benchmark-artifact
+          gh api "repos/psvensson/lagrange/actions/artifacts/$ID/zip" \
+            > /tmp/rs-raft-benchmark-artifact/artifact.zip
+          unzip -q /tmp/rs-raft-benchmark-artifact/artifact.zip \
+            -d /tmp/rs-raft-benchmark-artifact/contents
+          ls -la /tmp/rs-raft-benchmark-artifact/contents | head -n 35
+          for entry in 1-15000 2-20000 3-15000; do
+            echo "--- $entry full original nested failure ---"
+            file="/tmp/rs-raft-benchmark-artifact/contents/$entry.run.log"
+            if test ! -f "$file"; then
+              file=$(find /tmp/rs-raft-benchmark-artifact/contents \
+                -type f -name "$entry.run.log" | head -n 1)
+            fi
+            test -f "$file" || { echo 'Missing original log'; exit 1; }
+            grep -E -m 8 'not ok|AssertionError|test-files total|Error:|code:|error:' "$file" \
+              | cut -c 1-1500 || true
+            echo 'original complete TAP failure details:'
+            original=$(find /tmp/rs-raft-benchmark-artifact/contents \
+              -type f -name "$entry.full.tap" | head -n 1)
+            if test -f "$original"; then
+              grep -A 20 -B 2 -m 4 'not ok' "$original" | cut -c 1-1500 || true
+            fi
+          done
+          echo 'Raw logs retained at original artifact 11884558074; this is only a classification.'
