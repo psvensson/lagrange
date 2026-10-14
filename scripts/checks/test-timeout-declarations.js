@@ -36,16 +36,20 @@ const TEST_ROOT_NAMES = Object.freeze(new Set([
   'test', 't', 'tap', 'it', 'describe', 'suite',
 ]));
 const TEST_MODIFIER_NAMES = Object.freeze(new Set(['only', 'skip', 'todo']));
+const TAP_MODULE_SPECIFIER = 'tap';
+const NODE_TEST_MODULE = 'node:test';
+const SHARED_TAP_MODULE_SUFFIX = `${'src'}${path.sep}${'test-helpers'}${path.sep}${'tap.js'}`;
 const SET_TIMEOUT_METHOD = 'setTimeout';
 const NODE_TYPE = Object.freeze({
   ASSIGNMENT: 'AssignmentExpression',
   AWAIT: 'AwaitExpression',
+  IMPORT_EXPRESSION: 'ImportExpression',
+  IMPORT_DECLARATION: 'ImportDeclaration',
   BINARY: 'BinaryExpression',
   CALL: 'CallExpression',
   EXPRESSION_STATEMENT: 'ExpressionStatement',
   SPREAD: 'SpreadElement',
   VARIABLE_DECLARATION: 'VariableDeclaration',
-  IMPORT_DECLARATION: 'ImportDeclaration',
   IMPORT_SPECIFIER: 'ImportSpecifier',
   IDENTIFIER: 'Identifier',
   LITERAL: 'Literal',
@@ -87,6 +91,7 @@ const AST_METADATA_KEYS = Object.freeze(new Set(['loc', 'range', 'parent']));
 // Ambient-intrinsic hardening (system-guidelines): capture at module load so a
 // replaced prototype cannot reroute declaration resolution.
 const stringStartsWith = Function.call.bind(String.prototype.startsWith);
+const stringEndsWith = Function.call.bind(String.prototype.endsWith);
 
 function applyArithmetic(operator, left, right) {
   if (operator === OPERATOR_MULTIPLY) return left * right;
@@ -360,16 +365,96 @@ function declaredRootTimeout(call, bindings, filePath, problems) {
   }, problems);
 }
 
-// Returns {milliseconds, topLevelMilliseconds, fileMilliseconds, problems}.
-// `milliseconds` is the largest resolvable declaration anywhere in the file
-// (0 when there is none); `topLevelMilliseconds` is the SUM of the
-// declarations on top-level test calls, which share tap's one root timer;
-// `fileMilliseconds` is the largest top-level `t.setTimeout(N)`, the file's
-// own root budget. `problems` is non-empty when a declaration exists but
-// could not be resolved — callers must fail closed on it rather than fall
-// back to the default cap.
+// What a file's imports declare, over one parsed AST, at import-statement
+// and dynamic-import-call altitude alike. The classification is decided by
+// resolved import specifiers, never by a filename pattern. `tap` reports
+// whether the file arms the tap root timer; `nodeTest` reports whether it
+// declares itself a pure node:test file; the fail-closed rule applies
+// whenever the extraction cannot resolve what a dynamic import reaches.
+function classifyDeclaredModules(imports, unresolvedDynamic) {
+  let nodeTest = false;
+  let tap = false;
+  const reach = (specifier) => {
+    if (specifier === NODE_TEST_MODULE) nodeTest = true;
+    if (specifier === TAP_MODULE_SPECIFIER ||
+        stringEndsWith(path.resolve(imports.directory, specifier),
+          SHARED_TAP_MODULE_SUFFIX)) {
+      tap = true;
+    }
+  };
+  for (const specifier of imports.specifiers) reach(specifier);
+  // An unresolvable runtime is never a silent exemption: fail closed to the
+  // budgeted class (tap), whose admission decides against the watchdog.
+  return {
+    nodeTest: nodeTest && !tap && !unresolvedDynamic,
+    tap: tap || unresolvedDynamic,
+  };
+}
+
+function collectDeclaredModules(ast, filePath) {
+  const imports = {directory: path.dirname(filePath), specifiers: []};
+  let unresolvedDynamic = false;
+  for (const node of ast.body) {
+    if (node.type !== NODE_TYPE.IMPORT_DECLARATION) continue;
+    if (typeof node.source?.value === 'string') {
+      imports.specifiers.push(node.source.value);
+    } else {
+      unresolvedDynamic = true;
+    }
+  }
+  walk(ast, (node) => {
+    if (node.type !== NODE_TYPE.IMPORT_EXPRESSION) return;
+    // espree models a dynamic `import(specifier)` as an ImportExpression
+    // whose `source` is the specifier expression (acorn's shape, not a
+    // CallExpression with an `Import` callee).
+    const source = node.source;
+    if (source?.type === NODE_TYPE.LITERAL &&
+        typeof source.value === 'string') {
+      imports.specifiers.push(source.value);
+    } else {
+      unresolvedDynamic = true;
+    }
+  });
+  return classifyDeclaredModules(imports, unresolvedDynamic);
+}
+
+// One source read by the caller, one parse here: the runtime a file declares
+// and the timeout declarations it carries, for the runner's single budget
+// decision. `runtime` is the fail-closed classification (tap arms the root
+// timer even when node:test is imported beside it, and an unresolvable
+// dynamic import is treated as reaching tap rather than silently bypassing
+// admission); `timeouts` is the same shape extractTimeoutDeclarations pins.
+export function extractTestFileProfile(source, filePath) {
+  let ast;
+  try {
+    ast = espree.parse(source, PARSE_OPTIONS);
+  } catch (error) {
+    return {
+      runtime: {nodeTest: false, tap: true},
+      timeouts: {
+        fileMilliseconds: 0,
+        milliseconds: 0,
+        problems: [`${filePath} ${PARSE_FAILURE_PROBLEM}: ${error.message}`],
+        topLevelMilliseconds: 0,
+      },
+    };
+  }
+  return {
+    runtime: collectDeclaredModules(ast, filePath),
+    timeouts: extractDeclarationsFromAst(ast, filePath),
+  };
+}
+
+export function declaredTestRuntime(source, filePath) {
+  try {
+    const ast = espree.parse(source, PARSE_OPTIONS);
+    return collectDeclaredModules(ast, filePath);
+  } catch {
+    return {nodeTest: false, tap: true};
+  }
+}
+
 export function extractTimeoutDeclarations(source, filePath) {
-  const problems = [];
   let ast;
   try {
     ast = espree.parse(source, PARSE_OPTIONS);
@@ -381,6 +466,11 @@ export function extractTimeoutDeclarations(source, filePath) {
       topLevelMilliseconds: 0,
     };
   }
+  return extractDeclarationsFromAst(ast, filePath);
+}
+
+function extractDeclarationsFromAst(ast, filePath) {
+  const problems = [];
   const bindings = collectNumericConstants(ast);
   bindings.imports = collectImportBindings(ast);
   const topLevelCalls = collectTopLevelCalls(ast);

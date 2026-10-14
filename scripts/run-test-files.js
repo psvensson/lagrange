@@ -19,7 +19,7 @@ import {fileURLToPath} from 'node:url';
 import {Parser} from 'tap-parser';
 
 import {
-  extractTimeoutDeclarations,
+  extractTestFileProfile,
 } from './checks/test-timeout-declarations.js';
 
 const DEFAULT_JOBS = 4;
@@ -148,6 +148,20 @@ const FAILURE_REASON = Object.freeze({
   STREAM_INCOMPLETE: 'TAP stream did not complete',
   TIMED_OUT: 'test process timed out',
 });
+
+// The typed admission verdict a test file receives before it starts (the
+// runner is the single owner of the effective TAP root budget): a TAP root
+// budget that cannot fit inside the per-file watchdog's reporting margin is
+// refused - never silently truncated, never silently inflated - because tap
+// could never deliver its own expiry before the kill speaks.
+const FAILURE_CODE = Object.freeze({
+  BUDGET_UNFIT: 'BUDGET_UNFIT',
+  TAP_TIMEOUT_INVALID: 'TAP_TIMEOUT_INVALID',
+});
+const BUDGET_UNFIT_REMEDY =
+  '--timeout-ms, lower the budget, or accept that the file must not start';
+const TAP_TIMEOUT_INVALID_REMEDY =
+  'a positive number tap itself can consume (Number(value), seconds)';
 
 // The loaders every test process starts with. Only the mock plugin serves
 // anything (t.mockImport, two files); @tapjs/typescript (+245 ms) and
@@ -295,9 +309,6 @@ function prepareTestRun(file, options) {
   const {absoluteFile, relativeFile} = normalizeTestFile(cwd, file);
   const outputFile = path.join(resultsDirectory, `${relativeFile}${TAP_RESULT_SUFFIX}`);
   const stderrFile = `${outputFile}${STDERR_RESULT_SUFFIX}`;
-  mkdirSync(path.dirname(outputFile), {recursive: true});
-  const stdoutFd = openSync(outputFile, 'w');
-  const stderrFd = openSync(stderrFile, 'w');
   // No test process inherits a git repository pointer: a push from a linked
   // worktree runs the gate with git's GIT_DIR exported, and a fixture that
   // commits, configures or resets would reach the pusher's repository
@@ -310,29 +321,27 @@ function prepareTestRun(file, options) {
     TAP_FAIL_TODO: '1',
     _TAPJS_PROCESSINFO_COVERAGE_: '0',
   };
-  // tap arms ONE root timer per file: TAP_TIMEOUT seconds (30 by default),
-  // started when the root test starts. A top-level test's {timeout: N} arms
-  // a second timer for that test alone and cannot extend the root's: when
-  // the root timer fires, whichever test is running dies with `expired:
-  // TAP` (two 700 ms tests under TAP_TIMEOUT=1: the second dies at 1.0 s,
-  // 2026-10-11). So the root budget a file needs is the SUM of its
-  // top-level declarations, not the largest - lifting to the largest is
-  // how three 120 s tests came to share one 120 s root timer and die at
-  // 167 s on the slowest lab host (ledger S1). The root timer is wall
-  // clock, so the sum is scaled by LAGRANGE_TEST_MACHINE_FACTOR (S2: the
-  // bootstrap-heavy files expired only on the x2.1 host), never falls
-  // below a file-level t.setTimeout (tap honours that call as its root
-  // timer; the export keeps the two in step), and stays below the per-file
-  // kill (--timeout-ms, default 600 s) so tap reports the expiry before
-  // the runner kills. An explicit caller TAP_TIMEOUT still wins outright;
-  // a caller that only wants a minimum (for example the classified
-  // exclusive lane) passes TAP_TIMEOUT_FLOOR instead, which raises
-  // undeclared files without cutting a file below its own declaration —
-  // clobbering declarations is exactly how a 480 s formation test came to
-  // die at 120 s while its declared budget said otherwise.
   const budgetMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const tapTimeout = resolveTapTimeout(absoluteFile, env, budgetMs);
-  if (tapTimeout !== undefined) env.TAP_TIMEOUT = tapTimeout;
+  // Budget admission precedes every filesystem effect (directories, output
+  // handles): a refused configuration creates, truncates and retains
+  // nothing. ONE source read and ONE parse feed both the runtime
+  // classification and the declaration extraction: only files whose declared
+  // imports reach the tap runner arm its root timer, and a runtime the
+  // extraction cannot resolve fails closed to the admitted class (tap) -
+  // an unclassified file must never silently bypass admission. A node:test
+  // file never consumes TAP_TIMEOUT, so it is never budget-admitted here.
+  const profile = extractTestFileProfile(
+    readFileSync(absoluteFile, TEXT_ENCODING), absoluteFile);
+  if (profile.timeouts.problems.length > 0) {
+    throw unresolvedDeclarationError(profile.timeouts.problems);
+  }
+  if (profile.runtime.tap) {
+    const tapTimeout = resolveTapTimeout(absoluteFile, env, budgetMs, profile);
+    if (tapTimeout !== undefined) env.TAP_TIMEOUT = tapTimeout;
+  }
+  mkdirSync(path.dirname(outputFile), {recursive: true});
+  const stdoutFd = openSync(outputFile, 'w');
+  const stderrFd = openSync(stderrFile, 'w');
   return {
     absoluteFile,
     budgetMs,
@@ -361,6 +370,12 @@ const UNRESOLVED_TIMEOUT_ERROR =
   `tap's ${TAP_DEFAULT_TIMEOUT_SECONDS}s default, which would silently cap ` +
   'the file:';
 
+function unresolvedDeclarationError(problems) {
+  return new Error(
+    `${UNRESOLVED_TIMEOUT_ERROR}${PROBLEM_INDENT}` +
+    `${problems.join(PROBLEM_INDENT)}`);
+}
+
 // Declarations are parsed, not pattern-matched, and an unresolvable one is a
 // hard error. Falling back to the default cap is exactly how 18 files came to
 // declare 45s-300s and run at 30s anyway; a refactor to
@@ -372,62 +387,120 @@ function parsedTimeoutFloorSeconds(value) {
   return Number.isInteger(seconds) && seconds > 0 ? seconds : 0;
 }
 
-// What the file's source declares, or null when it cannot be read (the spawn
-// reports that itself).
-function declaredTimeouts(absoluteFile) {
-  let source;
-  try {
-    source = readFileSync(absoluteFile, TEXT_ENCODING);
-  } catch {
-    return null;
+// The typed refusal for a root budget that cannot fit the watchdog margin:
+// preparation-failure output carries its fields machine-readably.
+class RunnerBudgetRefusal extends Error {
+  constructor({marginSeconds, requestedRootSeconds, watchdogSeconds}) {
+    super(`${FAILURE_CODE.BUDGET_UNFIT}: a ${requestedRootSeconds}s TAP root ` +
+      `budget cannot fit inside the ${marginSeconds}s reporting margin of ` +
+      `this file's ${watchdogSeconds}s process watchdog; raise ` +
+      `${BUDGET_UNFIT_REMEDY}`);
+    this.failureCode = FAILURE_CODE.BUDGET_UNFIT;
+    this.marginSeconds = marginSeconds;
+    this.requestedRootSeconds = requestedRootSeconds;
+    this.watchdogSeconds = watchdogSeconds;
   }
-  const declared = extractTimeoutDeclarations(source, absoluteFile);
-  if (declared.problems.length > 0) {
-    throw new Error(
-      `${UNRESOLVED_TIMEOUT_ERROR}${PROBLEM_INDENT}` +
-      `${declared.problems.join(PROBLEM_INDENT)}`);
+}
+
+// The typed refusal for an explicit TAP_TIMEOUT the runner cannot interpret
+// the way tap will: tap consumes Number(value) seconds (@tapjs/core), so a
+// value that is not a finite positive number under that same grammar is
+// refused instead of matched on a parse-int shadow of itself.
+class RunnerTimeoutInvalid extends Error {
+  constructor(rawValue) {
+    super(`${FAILURE_CODE.TAP_TIMEOUT_INVALID}: TAP_TIMEOUT=${JSON.stringify(
+      rawValue)} is not ${TAP_TIMEOUT_INVALID_REMEDY}`);
+    this.failureCode = FAILURE_CODE.TAP_TIMEOUT_INVALID;
+    this.tapTimeoutRaw = String(rawValue);
   }
-  return declared;
+}
+
+// The reporting margin the per-file kill leaves to tap's own expiry report
+// (tap arms the root timer only after module load and lets a stuck process
+// live 10 s past the fire before killing itself): nine tenths of the kill.
+function killMarginSeconds(budgetMs) {
+  return Math.floor(
+    (budgetMs - budgetMs / KILL_BUDGET_MARGIN_DIVISOR) /
+    MILLISECONDS_PER_SECOND);
 }
 
 // The root budget the declarations call for on this machine, in whole
 // seconds, or null when tap's own default already covers them: the top-level
 // sum, never below the largest declaration anywhere (a subtest may declare
 // more than its parent) nor below a file-level t.setTimeout, scaled by the
-// machine factor, and bounded so the kill cannot pre-empt tap's report.
-function deriveRootTimeoutSeconds(declared, machineFactor, budgetMs) {
-  if (declared === null) return null;
-  const declaredMs = Math.max(declared.topLevelMilliseconds,
-    declared.milliseconds, declared.fileMilliseconds);
+// machine factor. The kill margin is an admission question, decided by the
+// caller - a requested root is never silently truncated to the margin.
+function deriveRootTimeoutSeconds(timeouts, machineFactor) {
+  const declaredMs = Math.max(timeouts.topLevelMilliseconds,
+    timeouts.milliseconds, timeouts.fileMilliseconds);
   // Whole milliseconds first: 80000 * 2.1 is 168000.00000000003 in binary
   // floating point, and a ceiling taken on that charges a whole second.
   const scaledSeconds = Math.ceil(
     Math.round(declaredMs * machineFactor) / MILLISECONDS_PER_SECOND);
-  const boundSeconds = Math.floor(
-    (budgetMs - budgetMs / KILL_BUDGET_MARGIN_DIVISOR) / MILLISECONDS_PER_SECOND);
-  const seconds = Math.min(scaledSeconds, boundSeconds);
-  return seconds > TAP_DEFAULT_TIMEOUT_SECONDS ? seconds : null;
+  return scaledSeconds > TAP_DEFAULT_TIMEOUT_SECONDS ? scaledSeconds : null;
+}
+
+// The canonical number tap itself will consume for an explicit TAP_TIMEOUT
+// value: Number(value) seconds, exactly as @tapjs/core reads the environment
+// (its `env.TAP_TIMEOUT || '30'` also makes an empty value the default).
+// Values outside that grammar are a typed refusal, never a parse-int shadow.
+function canonicalExplicitTapTimeoutSeconds(env) {
+  const raw = env.TAP_TIMEOUT;
+  if (raw === undefined) return {consumed: false, seconds: null};
+  if (String(raw).trim() === '') return {consumed: false, seconds: null};
+  const seconds = Number(raw);
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    throw new RunnerTimeoutInvalid(raw);
+  }
+  return {consumed: true, seconds};
+}
+
+// The root budget this file requests, before any admission decision: the
+// explicit caller TAP_TIMEOUT (canonical, it wins), else the derived and
+// floored budget, else null (tap's own 30 s default stands).
+function requestedTapRootSeconds(timeouts, env) {
+  const explicit = canonicalExplicitTapTimeoutSeconds(env);
+  if (explicit.consumed) return explicit.seconds;
+  const derivedSeconds = deriveRootTimeoutSeconds(
+    timeouts, resolveTestMachineFactor(env));
+  const flooredSeconds = Math.max(
+    derivedSeconds ?? 0,
+    parsedTimeoutFloorSeconds(env.TAP_TIMEOUT_FLOOR),
+  );
+  return flooredSeconds > 0 ? flooredSeconds : null;
 }
 
 /**
  * The TAP_TIMEOUT a test file runs under: the caller's own when it set one,
  * else the budget derived from the file's declarations and the lane floor,
  * as the string the child's environment carries - or undefined when tap's
- * default stands.
- * @param {string} absoluteFile the test file
+ * default stands. The effective root is admitted against the watchdog's
+ * reporting margin on the way through: a request that cannot fit is a typed
+ * RunnerBudgetRefusal, never a truncation and never an inflation.
+ * @param {string} absoluteFile the test file, for the self-serving read path
  * @param {object} env the child's environment so far
  * @param {number} budgetMs the per-file kill budget
+ * @param {object} [profile] the file's already-extracted source profile
+ * (runtime and timeout declarations from one read and one parse); when given,
+ * the file is neither read nor parsed again
  * @return {string|undefined}
  */
-function resolveTapTimeout(absoluteFile, env, budgetMs) {
-  if (env.TAP_TIMEOUT !== undefined) return env.TAP_TIMEOUT;
-  const derivedSeconds = deriveRootTimeoutSeconds(
-    declaredTimeouts(absoluteFile), resolveTestMachineFactor(env), budgetMs);
-  const resolvedSeconds = Math.max(
-    derivedSeconds ?? 0,
-    parsedTimeoutFloorSeconds(env.TAP_TIMEOUT_FLOOR),
-  );
-  return resolvedSeconds > 0 ? String(resolvedSeconds) : undefined;
+function resolveTapTimeout(absoluteFile, env, budgetMs, profile) {
+  const timeouts = profile?.timeouts ??
+    extractTestFileProfile(readFileSync(absoluteFile, TEXT_ENCODING),
+      absoluteFile).timeouts;
+  const requestedSeconds = requestedTapRootSeconds(timeouts, env);
+  const seconds = requestedSeconds ?? TAP_DEFAULT_TIMEOUT_SECONDS;
+  const marginSeconds = killMarginSeconds(budgetMs);
+  if (seconds > marginSeconds) {
+    throw new RunnerBudgetRefusal({
+      marginSeconds,
+      requestedRootSeconds: seconds,
+      watchdogSeconds: Math.round(budgetMs / MILLISECONDS_PER_SECOND),
+    });
+  }
+  if (requestedSeconds === null) return undefined;
+  return String(seconds);
 }
 
 /**
@@ -693,6 +766,19 @@ function recordAttempt(result, options) {
     firstFailureLine: result.firstFailureLine,
   };
   if (result.timeout) line.timeout = result.timeout;
+  // A pre-execution refusal keeps its typed admission verdict machine-
+  // readable: the ledger is the durable evidence of which files the
+  // contract refused and by what number, not a printed message to reparse.
+  if (result.failureCode !== undefined) {
+    line.failureCode = result.failureCode;
+    line.status = result.status;
+    line.requestedRootSeconds = result.requestedRootSeconds;
+    line.marginSeconds = result.marginSeconds;
+    line.watchdogSeconds = result.watchdogSeconds;
+    if (result.tapTimeoutRaw !== undefined) {
+      line.tapTimeoutRaw = result.tapTimeoutRaw;
+    }
+  }
   mkdirSync(path.dirname(options.ledgerFile), {recursive: true});
   appendFileSync(options.ledgerFile, JSON.stringify(line) + LEDGER_LINE_END);
 }
@@ -704,7 +790,7 @@ function settleResult(result, options) {
 }
 
 function preparationFailure(file, error) {
-  return {
+  const preparation = {
     assertions: 0,
     elapsedMs: 0,
     file,
@@ -715,6 +801,19 @@ function preparationFailure(file, error) {
     status: TEST_PROCESS_NOT_STARTED,
     stderr: '',
   };
+  // A typed refusal keeps its machine-readable admission verdict beside the
+  // ordinary preparation failure shape - same ledger, same verdict line,
+  // same exit-code ownership.
+  if (error.failureCode !== undefined) {
+    preparation.failureCode = error.failureCode;
+    preparation.marginSeconds = error.marginSeconds;
+    preparation.requestedRootSeconds = error.requestedRootSeconds;
+    preparation.watchdogSeconds = error.watchdogSeconds;
+    if (error.tapTimeoutRaw !== undefined) {
+      preparation.tapTimeoutRaw = error.tapTimeoutRaw;
+    }
+  }
+  return preparation;
 }
 
 function printTestResult(result) {
