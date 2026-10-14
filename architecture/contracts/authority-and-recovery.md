@@ -77,6 +77,40 @@ against an otherwise current valid OPEN proof is stale without revoking that
 proof. Recovery shutdown removes only volatile observation debt; it cannot
 weaken origin, generation, membership, transaction-drain or lifecycle fences.
 
+### A held control wave and recovery share one progress owner
+
+The same canonical participant-release `RUNS` entry owns a held
+`sql_transactions-p1` seed control wave. The original recovery queue is the
+only continuation owner **after** that wave has retired; a registry/consensus
+wake while the wave remains held is not permission to launch another control
+`RELEASE`. The current cutover owner returns the typed
+`control_wave_owned_by_current_cutover` missing fact to distinguish a current
+owned deferral from missing leadership, storage permission, or an ordinary
+recoverable failure.
+
+The existing release-recovery queue must not rearm its
+`RECOVERY_RETRY_MS` timer against this exact wave-owned deferral. It may still
+receive events, but they do not create a second cutover decision algorithm.
+The wave retains its original absolute deadline, current committed voter
+identity and live admission CLOSED while held. On successful END it RESUMEs
+every current voter through the original recipient and discharges its volatile
+wave, with no extra recovery wake. On refused, uncertain or incomplete END it
+retires its wave entry only after joining admitted children and returns any
+still-CLOSED control debt through `participantReleaseRecovery.requestRecovery`
+to the pre-existing queue. That queue recomputes *new* durable origin,
+membership, generation, measured build and work before attempting a release;
+it never treats an old wave correlation or earlier `CUT_OVER` as authority.
+
+This is the historical **paired invariant**: repeated retry under a healthy
+owner must be suppressed **and** a failed/retired owner must hand progress back.
+A test passing just the first half can strand admission; a test passing just
+the second can recreate the retry/repair storm. The control wave's own
+bounded callback/transport obligations must be separately verified so that
+a nonterminating owner cannot silently absorb retry debt. This interaction
+inherits the `owner-interaction` ping-pong verification template and the
+2026-09-17 owner-clock DT6 lesson: timers/waits and the deadline they enforce
+must belong to one clock, not a mixture of wall and virtual time.
+
 ### Every abstraction reduces the reasoning required
 
 A new subsystem earns its existence through a distinct responsibility or
