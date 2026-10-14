@@ -1,0 +1,66 @@
+# Real one-replica Raft+SQLite recipient: actual old source must show
+# reopened admission after its original time expires in awaited membership.
+name: rs-raft-recipient-resume-late-red
+on:
+  push:
+    branches: [work/rs-raft-recipient-postawait-fence-20261014]
+    paths: [.github/workflows/rs-raft-recipient-resume-late-red.yml]
+permissions:
+  contents: read
+jobs:
+  old-receiver:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Establish exact original recipient source
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE=7d0042659daaed7d38e9e586454861c21df3d838
+          test "$(git rev-parse HEAD:src/node/replica-handler-participant-release.js)" = \
+            "$(git rev-parse "$BASE:src/node/replica-handler-participant-release.js")"
+          test "$(git rev-parse HEAD:src/partition/partition-participant-transaction-pause.js)" = \
+            "$(git rev-parse "$BASE:src/partition/partition-participant-transaction-pause.js")"
+          npm ci
+          node --check test/partition/participant-release-protocol.test.js
+      - name: Engage old real recipient and preserve explicit late OPEN negative
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-recipient-postawait-red
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/head.txt"
+          git rev-parse HEAD^{tree} > "$OUT/tree.txt"
+          TEST=test/partition/participant-release-protocol.test.js
+          node --test \
+            --test-name-pattern='real RESUME recipient refuses admission if original deadline expires during awaited Raft facts' \
+            "$TEST" > "$OUT/old-recipient.tap" 2>&1
+          code=$?
+          printf '%s\n' "$code" > "$OUT/status"
+          tail -n 75 "$OUT/old-recipient.tap"
+          test "$code" -ne 0 || exit 1
+          grep -F 'the original recipient may not perform a post-deadline RESUME mutation' \
+            "$OUT/old-recipient.tap" || exit 1
+          grep -F "code: 'ERR_ASSERTION'" "$OUT/old-recipient.tap" || exit 1
+          grep -F "actual: 'resumed'" "$OUT/old-recipient.tap" || exit 1
+          echo 'Engaged original recipient late RESUME unsafe outcome exposed'
+      - name: Preserve complete exact negative, including setup/cleanup refusals
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-recipient-postawait-red-${{ github.sha }}
+          path: test-output/rs-raft-recipient-postawait-red/
+          retention-days: 14
+          if-no-files-found: warn
