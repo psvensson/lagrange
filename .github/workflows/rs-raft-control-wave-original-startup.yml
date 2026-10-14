@@ -1,0 +1,87 @@
+# WIP: actual original startup proof on the experimental seed-wave owner.
+# Original absolute seed budgets and entire tests must remain unchanged.
+name: rs-raft-control-wave-original-startup
+on:
+  push:
+    branches: [work/rs-raft-seed-control-wave-v1-20261014]
+    paths:
+      - .github/workflows/rs-raft-control-wave-original-startup.yml
+permissions:
+  contents: read
+jobs:
+  startup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 32
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Prepare exact candidate and ephemeral producer metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run -s test:metadata:refresh
+          git diff --name-status
+          git diff --check
+      - name: Original unchanged 1000ms and 5000ms complete startup tests
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-control-wave-original-startup
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/source-sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/source-tree.txt"
+          fail=0
+          for file in \
+            test/integration/message-group-membership-claim-cache.integration.test.js \
+            test/bootstrap/node-bootstrap-consistency.property.test.js; do
+            name="${file##*/}"
+            git rev-parse "HEAD:$file" > "$OUT/$name.test-blob.txt"
+            npm run -s test:file -- "$file" > "$OUT/$name.log" 2>&1
+            rc=$?
+            printf '%s\n' "$rc" > "$OUT/$name.status"
+            echo "$file original complete body status=$rc"
+            grep -E 'Seed participant release failed|test-files total|ok test/|control wave|refused' \
+              "$OUT/$name.log" | tail -n 15 | cut -c 1-1100 || true
+            if test "$rc" -ne 0; then fail=1; fi
+            if test -f ".tap/test-results/$file.tap"; then
+              cp ".tap/test-results/$file.tap" "$OUT/$name.original.tap"
+              sha256sum "$OUT/$name.original.tap" > "$OUT/$name.sha256"
+              if test "$name" = "message-group-membership-claim-cache.integration.test.js"; then
+                node scripts/quest-evidence/summarize-seed-release-trace.mjs \
+                  "$OUT/$name.original.tap" "$OUT/$name.census.json" \
+                  > "$OUT/$name.census-brief.json" 2> "$OUT/$name.census-error.log"
+                parsed=$?
+                printf '%s\n' "$parsed" > "$OUT/$name.census.status"
+                if test "$parsed" = 0; then cat "$OUT/$name.census-brief.json"; else
+                  cat "$OUT/$name.census-error.log"; fail=1; fi
+              fi
+            else
+              echo "Missing original TAP for $file"
+              fail=1
+            fi
+            if test -d test-output/reports; then
+              mkdir -p "$OUT/$name.canonical"
+              find test-output/reports -maxdepth 1 -type f -name '*.ndjson' \
+                -exec cp {} "$OUT/$name.canonical/" \;
+            fi
+          done
+          exit "$fail"
+      - name: Preserve all red/green complete original startup TAP and exact source
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-control-wave-startup-${{ github.sha }}
+          path: test-output/rs-raft-control-wave-original-startup/
+          retention-days: 14
+          if-no-files-found: warn
