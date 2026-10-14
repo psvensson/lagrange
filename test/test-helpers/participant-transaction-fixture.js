@@ -517,15 +517,20 @@ async function resumeFixtureParticipantAdmission(leader) {
       throw new Error(`fixture participant origin refused: ${JSON.stringify(enabled)}`);
     }
   }
+  // The real recipient always receives an absolute cutover deadline and
+  // uses its owning node's clock. This direct test helper must provide that
+  // same contract; absence is not permission to open admission.
   const handler = {nodeId: leader.nodeId, ownerIncarnation: 1,
-    localServices: new Map([[leader.replicaId, leader]])};
+    localServices: new Map([[leader.replicaId, leader]]),
+    timeSource: leader.timeSource};
   const facts = await readParticipantReleaseFacts(handler, leader);
   const release = releaseIdentityOf({partitionId: leader.partitionId,
     targetBuildDigest: facts.buildDigest,
     configurationKey: facts.membership.configurationKey,
     membershipGenerationIndex: facts.membership.membershipGenerationIndex});
   const outcome = await resumeParticipantCutoverAdmission(handler, leader,
-    {release, census: [facts]});
+    {release, census: [facts], deadlineAtMs:
+      handler.timeSource.now() + PARTICIPANT_CUTOVER_BOUND.DRAIN_DEADLINE_MS});
   if (outcome !== 'resumed') {
     throw new Error(`fixture participant release refused: ${outcome}`);
   }
