@@ -1,0 +1,37 @@
+# Review existing retained original TAP without modifying source or reruns.
+name: rs-raft-participant-resume-failure-triage
+on:
+  push:
+    branches: [fix/rs-raft-participant-resume-deadline-20261014]
+    paths: [.github/workflows/rs-raft-participant-resume-failure-triage.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  classify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Classify preserved full protocol test failure
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/resume-expiry-original-tap"
+          mkdir -p "$OUT"
+          gh api repos/psvensson/lagrange/actions/artifacts/11886406679/zip > "$OUT/evidence.zip"
+          unzip -q "$OUT/evidence.zip" -d "$OUT/raw"
+          find "$OUT/raw" -type f -maxdepth 4 | sort | head -n 20
+          TARGET=$(find "$OUT/raw" -type f -name full-protocol.tap | head -n 1)
+          test -f "$TARGET"
+          echo '--- Original complete TAP not-ok contexts ---'
+          grep -B 2 -A 31 -m 6 -E 'not ok|# fail' "$TARGET" | cut -c 1-1700 || true
+          echo '--- Top-level evidence ---'
+          LOG=$(find "$OUT/raw" -type f -name protocol.log | head -n 1)
+          test -f "$LOG"
+          grep -E 'not ok|# test-files|AssertionError|ERR_ASSERTION' "$LOG" | tail -n 18 || true
