@@ -456,6 +456,7 @@ test('one applied-position observation owns duplicate, conflict and successor li
         status: ReplicaOperationResponseStatus.ERROR,
         error: REPLICA_HANDLER_ERROR_MSG.UNKNOWN_MESSAGE_TYPE(undefined),
         correlationId: 'fixture-participant-release',
+        acknowledged: true,
       });
       assert.equal(topAccessorReads, 0);
 
@@ -637,27 +638,16 @@ test('shared ingress refuses unsafe envelopes and facts refuse malformed owner g
     }
     if (failure !== null) throw failure;
 
-    const ownerDescriptor = Object.getOwnPropertyDescriptor(handler, 'ownerIncarnation');
     const currentIncarnation = handler.ownerIncarnation;
-    let generationFailure = null;
-    try {
-      for (const malformed of [undefined, Object(currentIncarnation), 0]) {
-        handler.ownerIncarnation = malformed;
-        const refused = await readParticipantReleaseFacts(handler, leader);
-        assert.equal(refused.outcome, OUTCOME.UNAVAILABLE);
-        assert.equal(refused.missingFact, 'current_replica_generation');
-      }
-    } catch (error) {
-      generationFailure = error;
-    } finally {
-      try {
-        Object.defineProperty(handler, 'ownerIncarnation', ownerDescriptor);
-      } catch (error) {
-        generationFailure = retainFailure(generationFailure, error,
-          'generation assertion and owner restoration failed');
-      }
+    for (const malformed of [undefined, Object(currentIncarnation), 0]) {
+      // The lifecycle owner's incarnation is deliberately read-only. Use an
+      // isolated malformed projection, never mutate the actual handler.
+      const malformedOwner = Object.create(handler);
+      Object.defineProperty(malformedOwner, 'ownerIncarnation', {value: malformed});
+      const refused = await readParticipantReleaseFacts(malformedOwner, leader);
+      assert.equal(refused.outcome, OUTCOME.UNAVAILABLE);
+      assert.equal(refused.missingFact, 'current_replica_generation');
     }
-    if (generationFailure !== null) throw generationFailure;
     const observed = await readParticipantReleaseFacts(handler, leader);
     assert.equal(observed.outcome, OUTCOME.OBSERVED, JSON.stringify(observed));
     assert.equal(observed.generation.ownerIncarnation, currentIncarnation);
