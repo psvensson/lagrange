@@ -646,13 +646,13 @@ test('unreadable latest status or invalid latest generation never fabricates STA
         let failure = null;
         try {
           const observed = membership.trackSettlement(
-            \`unreadable latest context: \${latest}\`,
+            `unreadable latest context: ${latest}`,
             sendRegisteredObservation(handler, transport, request));
           await membership.started;
           membership.release();
           const answer = await observed;
           assert.equal(answer.outcome, OUTCOME.UNAVAILABLE,
-            \`\${latest}: \${JSON.stringify(answer)}\`);
+            `${latest}: ${JSON.stringify(answer)}`);
           assert.equal(answer.missingFact, 'committed_membership_witness');
           assert.equal(answer.reason, COMMITTED_MEMBERSHIP_REFUSAL.MEMBERSHIP_UNREADABLE);
           assert.equal(answer.partitionId, request.partitionId);
@@ -668,12 +668,12 @@ test('unreadable latest status or invalid latest generation never fabricates STA
           failure = error;
         } finally {
           failure = await membership.retire(failure,
-            \`latest \${latest} status and membership custody failed\`);
+            `latest ${latest} status and membership custody failed`);
           failure = retainDescriptorRestorations(failure, [
             {owner: leader, field: 'raft', descriptor: portDescriptor},
             {owner: port, field: 'committedMembershipHandler',
               descriptor: membershipDescriptor},
-          ], \`latest \${latest} status assertion\`);
+          ], `latest ${latest} status assertion`);
         }
         if (failure !== null) throw failure;
       });
