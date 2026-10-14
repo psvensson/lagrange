@@ -5,7 +5,13 @@ name: rs-raft-deadline-composed-original
 on:
   push:
     branches: [fix/rs-raft-participant-resume-deadline-20261014]
-    paths: [.github/workflows/rs-raft-deadline-composed-original.yml]
+    paths:
+      - .github/workflows/rs-raft-deadline-composed-original.yml
+      - src/bootstrap/bootstrap-service-seed-workflow.js
+      - src/partition/partition-participant-transaction-pause.js
+      - test/bootstrap/seed-release-expired-success.test.js
+      - test/test-helpers/participant-transaction-fixture.js
+      - test/partition/participant-release-protocol.test.js
 permissions:
   contents: read
 jobs:
