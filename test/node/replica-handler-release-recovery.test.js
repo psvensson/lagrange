@@ -32,7 +32,8 @@ import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {createInProcessMockTransport} from
   '../test-helpers/replica-handler-identity-fixture.js';
 import {replacePrototypeProperty} from '../helpers/hostile-intrinsics.js';
-import {captureParticipantReleaseObservationTimer, observationTimerOwnedCount} from
+import {captureParticipantReleaseObservationTimer, lastObservationTimerHandle,
+  observationTimerOwnedCount} from
   '../test-helpers/participant-release-observer-resource-fixture.js';
 import {
   changeFixtureParticipantMembership,
@@ -824,6 +825,11 @@ test('cleanup debt retains all seven acquired resources on the installing schedu
       const clearDescriptor = Object.getOwnPropertyDescriptor(timeSource, 'clearTimeout');
       const actualClear = timeSource.clearTimeout.bind(timeSource);
       timeSource.clearTimeout = (handle) => {
+        // Service recovery legitimately clears other handles on this clock.
+        // Fault-inject and count only the observation owner's captured handle.
+        if (handle !== lastObservationTimerHandle(timeSource)) {
+          return actualClear(handle);
+        }
         releaseCalls[6] += 1;
         assert.equal(handle, timerHandle, 'cleanup retains the exact A-owned timer handle');
         if (faultsEnabled) throw sentinels[6];
@@ -832,8 +838,9 @@ test('cleanup debt retains all seven acquired resources on the installing schedu
       const setDescriptor = Object.getOwnPropertyDescriptor(timeSource, 'setTimeout');
       const actualSet = timeSource.setTimeout.bind(timeSource);
       timeSource.setTimeout = (...args) => {
-        timerHandle = actualSet(...args);
-        return timerHandle;
+        const handle = actualSet(...args);
+        if (handle === lastObservationTimerHandle(timeSource)) timerHandle = handle;
+        return handle;
       };
       let clockBClears = 0;
       const clockBClear = clockB.clearTimeout.bind(clockB);
