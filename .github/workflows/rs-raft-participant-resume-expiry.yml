@@ -1,0 +1,70 @@
+# Exact original physical registered-resume deadline falsifier. Cross-owner
+# release logic stays frozen until meaningful old-source failure is established.
+name: rs-raft-participant-resume-expiry
+on:
+  push:
+    branches: [fix/rs-raft-participant-resume-deadline-20261014]
+    paths:
+      - .github/workflows/rs-raft-participant-resume-expiry.yml
+      - src/partition/partition-participant-transaction-pause.js
+      - test/partition/participant-release-protocol.test.js
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-participant-resume-expiry
+  cancel-in-progress: false
+jobs:
+  evidence:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Exact locked dependencies
+        run: npm ci
+      - name: Complete source-scoped recipient expiry and protocol evidence
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-participant-resume-expiry
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/tree.txt"
+          npx eslint src/partition/partition-participant-transaction-pause.js \
+            test/partition/participant-release-protocol.test.js > "$OUT/lint.log" 2>&1
+          lint=$?
+          printf '%s\n' "$lint" > "$OUT/lint.status"
+          if test "$lint" -ne 0; then cat "$OUT/lint.log"; fi
+          TEST=test/partition/participant-release-protocol.test.js
+          node --test \
+            --test-name-pattern='real recipient refuses OPEN when its absolute deadline expires during awaited RESUME facts' \
+            "$TEST" > "$OUT/exact-old-source.tap" 2>&1
+          focused=$?
+          printf '%s\n' "$focused" > "$OUT/exact-old-source.status"
+          tail -n 75 "$OUT/exact-old-source.tap"
+          npm run -s test:file -- "$TEST" > "$OUT/protocol.log" 2>&1
+          total=$?
+          printf '%s\n' "$total" > "$OUT/protocol.status"
+          tail -n 17 "$OUT/protocol.log"
+          if test -f ".tap/test-results/$TEST.tap"; then
+            cp ".tap/test-results/$TEST.tap" "$OUT/full-protocol.tap"
+          fi
+          test "$focused" -eq 0 && test "$total" -eq 0 && test "$lint" -eq 0
+      - name: Preserve original live recipient's red and green TAP
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-recipient-resume-expiry-${{ github.sha }}
+          path: test-output/rs-raft-participant-resume-expiry/
+          retention-days: 14
+          if-no-files-found: warn
