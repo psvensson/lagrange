@@ -1,0 +1,60 @@
+# RED source-only proof: a delivered CUT_OVER after absolute expiry
+# cannot satisfy seed readiness. No production source has changed.
+name: rs-raft-seed-post-await-red
+on:
+  push:
+    branches: [verify/rs-raft-seed-late-reply-fence-20261014]
+    paths: [.github/workflows/rs-raft-seed-post-await-red.yml]
+permissions:
+  contents: read
+jobs:
+  red:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Unchanged source and original ownership seam
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "$(git diff --name-only 7d0042659daaed7d38e9e586454861c21df3d838 HEAD -- src)"
+          npm ci
+      - name: Observe exact late-success failure with the original source
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-seed-late-reply-negative
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/source-head.txt"
+          git rev-parse HEAD^{tree} > "$OUT/source-tree.txt"
+          TEST=test/bootstrap/seed-release-once-per-cohort.test.js
+          node --check "$TEST" > "$OUT/syntax.log" 2>&1
+          if test "$?" -ne 0; then cat "$OUT/syntax.log"; exit 1; fi
+          node --test --test-name-pattern='seed must not claim readiness from a successful delivery observed after its deadline' \
+            "$TEST" > "$OUT/engaged-red.tap" 2>&1
+          rc=$?
+          printf '%s\n' "$rc" > "$OUT/status.txt"
+          tail -n 82 "$OUT/engaged-red.tap"
+          test "$rc" -ne 0 || exit 1
+          grep -F 'seed cannot declare a bounded successful release after deadline' "$OUT/engaged-red.tap" || exit 1
+          grep -F "code: 'ERR_ASSERTION'" "$OUT/engaged-red.tap" || exit 1
+          echo 'Specific late CUT_OVER seed report bug reproduced against immutable production owner.'
+      - name: Preserve exact old-source red including full TAP
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-seed-post-await-red-${{ github.sha }}
+          path: test-output/rs-raft-seed-late-reply-negative/
+          retention-days: 14
+          if-no-files-found: warn
