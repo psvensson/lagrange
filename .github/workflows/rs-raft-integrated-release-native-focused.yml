@@ -6,6 +6,7 @@ on:
     branches: [continue/rs-raft-cloud-integrated-release-native-20261014]
     paths:
       - .github/workflows/rs-raft-integrated-release-native-focused.yml
+      - test/node/replica-handler-release-recovery.test.js
       - test/shards/impact-graph-seal.json
       - test/shards/primary-classes.json
       - test/shards/resource-classes.json
