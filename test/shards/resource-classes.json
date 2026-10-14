@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2355,
+    "ordinary": 2357,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2372,
-  "digest": "fnv1a32-da9d6989",
+  "censusSize": 2374,
+  "digest": "fnv1a32-6bd2318f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1216,6 +1216,7 @@
     "test/partition/committed-statement-outcome.test.js": "ordinary",
     "test/partition/complete-peer-list.property.test.js": "ordinary",
     "test/partition/contiguous-non-overlapping-ranges.property.test.js": "ordinary",
+    "test/partition/control-wave-duplicate-boundary.test.js": "ordinary",
     "test/partition/default-replica-count.property.test.js": "ordinary",
     "test/partition/durable-replay-cursor.test.js": "ordinary",
     "test/partition/durable-voter-visibility-role-write.test.js": "ordinary",
@@ -1524,6 +1525,7 @@
     "test/query/write-identity-instance.test.js": "ordinary",
     "test/query/write-path-internal-pacing.test.js": "ordinary",
     "test/query/write-tracking-recursion-guard.test.js": "ordinary",
+    "test/quest-evidence/participant-release-trace-envelope.test.js": "ordinary",
     "test/raft/authoritative-row-mutation-helper.test.js": "ordinary",
     "test/raft/authoritative-row-mutation-outcome-classifier.test.js": "ordinary",
     "test/raft/bulk-transfer-socket-adapter.test.js": "ordinary",
