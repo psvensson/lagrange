@@ -93,6 +93,14 @@ function retainFirstReleaseObservation(current, value) {
   return current === null && value !== undefined ? value : current;
 }
 
+// Exactly one seed owner decides whether a *completed* release interaction
+// fits its one absolute deadline. Diagnostic projection never grants success.
+function seedReleaseTerminalStatus(timeSource, startMs, deadlineAtMs) {
+  const terminalMs = timeSource.now();
+  return {terminalMs, timely: Number.isSafeInteger(terminalMs) &&
+    terminalMs >= startMs && terminalMs < deadlineAtMs};
+}
+
 function seedReleaseFailureProjection({startObservation, terminalObservation,
   budgetMs, ordinal, total, completed, attemptCount, firstBlockedDrain,
   firstJoinedAttempt}) {
@@ -357,9 +365,8 @@ function createBootstrapServiceSeedWorkflowMethods() {
         // the seed owner has exhausted its original bounded release window.
         // One clock read owns this final classification; no new timer, retry
         // or second release decision is introduced here.
-        const terminalMs = timeSource.now();
-        const timely = Number.isSafeInteger(terminalMs) &&
-          terminalMs >= startMs && terminalMs < deadline;
+        const {terminalMs, timely} =
+          seedReleaseTerminalStatus(timeSource, startMs, deadline);
         if (answer?.outcome !== PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER || !timely) {
           const terminalObservation = observeParticipantReleaseClockValue(terminalMs);
           const seedRelease = seedReleaseFailureProjection({startObservation,
@@ -402,6 +409,24 @@ function createBootstrapServiceSeedWorkflowMethods() {
           await releaseOne(service, controlWaveToken);
         }
       });
+      // Per-partition success is not final seed readiness: the held control
+      // cohort still has its independent END and original recipient RESUME.
+      // A delayed END cannot turn a once-valid cohort into an unlimited
+      // readiness permit after the seed's single absolute deadline.
+      const waveTerminal = seedReleaseTerminalStatus(timeSource, startMs, deadline);
+      if (!waveTerminal.timely) {
+        const seedRelease = seedReleaseFailureProjection({
+          startObservation,
+          terminalObservation: observeParticipantReleaseClockValue(waveTerminal.terminalMs),
+          budgetMs, ordinal: completed, total: cohorts.length, completed,
+          attemptCount: 0,
+          firstBlockedDrain: EMPTY_PARTICIPANT_RELEASE_DIAGNOSTIC_OBSERVATION,
+          firstJoinedAttempt: EMPTY_PARTICIPANT_RELEASE_DIAGNOSTIC_OBSERVATION,
+        });
+        throw new Error('Seed participant release failed: ' +
+          JSON.stringify({partitionId: control.partitionId,
+            phase: 'control_wave_end', answer: null, seedRelease}));
+      }
     },
     buildSeedCheckpointSteps(startupPipelineRunner, seedPlan) {
       const phases = Array.isArray(seedPlan?.phases) ? seedPlan.phases : [];
