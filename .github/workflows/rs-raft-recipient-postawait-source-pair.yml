@@ -1,0 +1,79 @@
+# Strict same-host source-only old/new on the original Raft recipient,
+# retaining the exact new test bytes and its authentic physical member.
+name: rs-raft-recipient-postawait-source-pair
+on:
+  push:
+    branches: [continue/rs-raft-recipient-postawait-candidate-20261014]
+    paths: [.github/workflows/rs-raft-recipient-postawait-source-pair.yml]
+permissions:
+  contents: read
+jobs:
+  paired:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: One VM, two original recipient implementations and identical Raft test
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OLD=5232aea87abe18fa58a85986bc26a0048bf1f684
+          TEST=test/partition/participant-release-protocol.test.js
+          FILTER='real RESUME recipient refuses expiry after either original Raft membership await'
+          OUT=test-output/rs-raft-recipient-postawait-pair
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/candidate-sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/candidate-tree.txt"
+          git rev-parse "$OLD^{tree}" > "$OUT/old-tree.txt"
+          git diff --name-only "$OLD" HEAD -- src > "$OUT/production-paths.txt"
+          cat "$OUT/production-paths.txt"
+          test "$(wc -l < "$OUT/production-paths.txt")" -eq 2 || exit 1
+          grep -Fx src/node/replica-handler-participant-release.js "$OUT/production-paths.txt" || exit 1
+          grep -Fx src/partition/partition-participant-transaction-pause.js "$OUT/production-paths.txt" || exit 1
+          ROOT="$RUNNER_TEMP/rs-raft-old-recipient"
+          git worktree add --detach "$ROOT" "$OLD" > "$OUT/old-worktree.log" 2>&1 || exit 1
+          cp "$TEST" "$ROOT/$TEST" || exit 1
+          cmp "$TEST" "$ROOT/$TEST" || exit 1
+          sha256sum "$TEST" > "$OUT/candidate-test.sha256"
+          (cd "$ROOT" && sha256sum "$TEST") > "$OUT/old-test.sha256"
+          npm ci > "$OUT/new-install.log" 2>&1
+          new_dep=$?
+          (cd "$ROOT" && npm ci) > "$OUT/old-install.log" 2>&1
+          old_dep=$?
+          test "$new_dep" = 0 && test "$old_dep" = 0 || exit 1
+          (cd "$ROOT" && node --test --test-name-pattern="$FILTER" "$TEST") \
+            > "$OUT/old.tap" 2>&1
+          old_rc=$?
+          node --test --test-name-pattern="$FILTER" "$TEST" > "$OUT/candidate.tap" 2>&1
+          new_rc=$?
+          printf '%s\n' "$old_rc" > "$OUT/old.status"
+          printf '%s\n' "$new_rc" > "$OUT/candidate.status"
+          echo "same VM actual late recipient old=$old_rc, new=$new_rc"
+          tail -n 48 "$OUT/old.tap"
+          tail -n 36 "$OUT/candidate.tap"
+          test "$old_rc" -ne 0 || exit 1
+          grep -F 'the original recipient may not reopen admission after either expired Raft read' "$OUT/old.tap" || exit 1
+          grep -F "code: 'ERR_ASSERTION'" "$OUT/old.tap" || exit 1
+          grep -F "actual: 'resumed'" "$OUT/old.tap" || exit 1
+          test "$new_rc" = 0 || exit 1
+          grep -F "ok 1 - $FILTER" "$OUT/candidate.tap" || exit 1
+          echo 'Engaged original recipient late OPEN refused by exact new owner source.'
+      - name: Retain complete raw test and source identities with any refusals
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-recipient-postawait-pair-${{ github.sha }}
+          path: test-output/rs-raft-recipient-postawait-pair/
+          retention-days: 14
+          if-no-files-found: warn
