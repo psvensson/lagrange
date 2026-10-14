@@ -1,0 +1,75 @@
+# Exact WIP static census. Never substitutes for Quest independent proof.
+name: rs-raft-cloud-controls-static
+on:
+  push:
+    branches: [continue/rs-raft-cloud-controls-correction-20261014]
+    paths:
+      - .github/workflows/rs-raft-cloud-controls-static.yml
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-cloud-controls-static
+  cancel-in-progress: false
+jobs:
+  census:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install exact locked dependencies
+        run: npm ci
+      - name: Capture each static result without hiding any red
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-cloud-static
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/source-sha.txt"
+          all_ok=0
+          for entry in \
+            audit:shards \
+            audit:impact-contracts \
+            test:deps \
+            test:unused:ratchet \
+            audit:file-size:strict \
+            test:duplication:strict \
+            lint; do
+            npm run -s "$entry" > "$OUT/$entry.log" 2>&1
+            code=$?
+            printf '%s\n' "$code" > "$OUT/$entry.status"
+            echo "$entry status=$code"
+            if test "$code" -ne 0; then
+              grep -E 'ERROR|error|fail|exceeded|stale|baseline|not found' "$OUT/$entry.log" | tail -n 16 || true
+              all_ok=1
+            fi
+          done
+          npm run -s test:metadata:refresh > "$OUT/metadata-refresh.log" 2>&1
+          meta_status=$?
+          printf '%s\n' "$meta_status" > "$OUT/metadata-refresh.status"
+          git diff --stat > "$OUT/metadata-diff-stat.txt"
+          git diff --name-status > "$OUT/metadata-diff-files.txt"
+          git diff --check > "$OUT/metadata-diff-check.log" 2>&1
+          diff_status=$?
+          printf '%s\n' "$diff_status" > "$OUT/metadata-diff-check.status"
+          echo "metadata refresh=$meta_status diffCheck=$diff_status"
+          cat "$OUT/metadata-diff-stat.txt"
+          if test "$meta_status" -ne 0 || test "$diff_status" -ne 0; then all_ok=1; fi
+          exit "$all_ok"
+      - name: Preserve all red and green static logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-controls-static-${{ github.sha }}
+          path: test-output/rs-raft-cloud-static/
+          retention-days: 10
+          if-no-files-found: warn
