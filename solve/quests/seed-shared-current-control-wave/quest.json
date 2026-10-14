@@ -1,0 +1,55 @@
+{
+  "schema": "solve-quest/2",
+  "id": "seed-shared-current-control-wave",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "Amortize SQL_TRANSACTIONS fresh-seed control fencing across a bounded wave of independent partition cohorts using ONE canonical replica-handler cutover owner. Each dependent cutover still receives a fresh, current, complete-member control verdict before PAUSE and immediately before RESUME. The controller retains exact PAUSE/CLOSED status for the held wave; no previous CUT_OVER, owner snapshot, cached OPEN or seed-local authorization may grant permission. On failure, timeout, membership/generation turnover and restart, all dependent and control obligations remain owned and fail closed.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/seed-shared-current-control-wave/evidence/receipt.json",
+      "requiredReceipts": [
+        "measured-old-two-full-control-calls-per-dependent",
+        "wave-control-authority-and-current-member-proof",
+        "failure-deadline-restart-and-cancellation-closeout",
+        "original-1000-5000-ms-full-startup-positive",
+        "independent-source-static-multihost-and-cutover-gates"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "single-control-owner",
+      "statement": "Only replica-handler-participant-cutover / existing participant-release admission and recovery own control permission. Seed owns ordered cohort intents and wave admission only; no second state machine, no cache of CUT_OVER/OPEN, no derived SQL read permission. This is a new explicitly scoped wave interaction, not a reinterpretation of the previously sealed serial or bounded-concurrency Quest outcomes."
+    },
+    {
+      "id": "durable-source-and-paused-session",
+      "statement": "Before a wave, the canonical control leader performs its normal full first release or authentic post-origin revalidation, then pauses and validates the COMPLETE current committed control voter cohort. The bounded volatile session is merely a locator for the owner-held CLOSED control state and exact member identity; durable Raft origin, query schema and current membership remain the authorities. No new durable ledgers or permit rows may be invented."
+    },
+    {
+      "id": "fresh-before-and-after",
+      "statement": "Every dependent partition still receives an owner-issued fresh current control verdict before closing/PAUSE and after its final cohort census but before RESUME. A verdict must re-read every current member at the owner, require the held PAUSE, no prepared/active SQL work, same durable origin, schema ENFORCED, current term, membership generation, exact replica lifecycle/generation and deadline. It may not be inferred from token possession, cache membership, leader-only status, the first wave proof or a previous successful dependent."
+    },
+    {
+      "id": "safety-admission-and-invalidation",
+      "statement": "The held control cohort cannot resume accidentally while a dependent wave is active. A forged/expired token, wrong build/actor/handler, membership change, new or lost member, leader change, remote disconnect, pending SQL transaction, origin/schema mismatch or lost reply fails closed. Any active outer cutover still uses original recipient RESUME and independently rechecks its exact member cohort and application progress. Do not weaken existing normal operator, recovery, single RELEASE or SQL transaction paths."
+    },
+    {
+      "id": "bounded-failure-and-recovery",
+      "statement": "Use the same original shared 1000/5000ms deadline and existing retry cadence; wave width must not exceed the previously studied bound without explicit acceptance. A failed wave joins every admitted child before attempting end. End/resume of control is one exact owner operation with current census; on unsafe end it stays CLOSED and existing release recovery retains debt. Restart loses volatile session grants, never restores them as permission; retained durable origin and actual owners reconstruct normal release."
+    },
+    {
+      "id": "proof-and-scope",
+      "statement": "Original paired evidence: 694 completed routed deliveries and 28 control RELEASEs before one-intent repair; after one-intent 514 deliveries, 21 control RELEASEs for 10 dependent partition requests. Paired direct control median 16.29ms old vs 12.53ms post-origin. Widths 1,2,4,8 on shared original 1000ms body all RED, and 45-way worse; no deadline changes accepted. Prove engaged old-source repeated PAUSE/RESUME negative, exact control+dependent current-voter integration, stale/ABA/unknown adversaries, startup entire bodies, TX1/TX2/FreshMG/CDC/snapshot/seed-loss and independent locked-host/main gates before landing."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "concurrency-serialization",
+    "formation-circularity",
+    "admission-gating",
+    "retry-loops",
+    "harness-fidelity",
+    "adversarial-js-intrinsics"
+  ]
+}
