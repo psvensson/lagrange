@@ -517,7 +517,11 @@ async function resumeFixtureParticipantAdmission(leader) {
       throw new Error(`fixture participant origin refused: ${JSON.stringify(enabled)}`);
     }
   }
+  // This direct test-helper invocation still belongs to the same original
+  // admission owner as routed RESUME: supply the real member clock and one
+  // valid absolute request deadline rather than silently omitting both.
   const handler = {nodeId: leader.nodeId, ownerIncarnation: 1,
+    timeSource: leader.timeSource,
     localServices: new Map([[leader.replicaId, leader]])};
   const facts = await readParticipantReleaseFacts(handler, leader);
   const release = releaseIdentityOf({partitionId: leader.partitionId,
@@ -525,7 +529,7 @@ async function resumeFixtureParticipantAdmission(leader) {
     configurationKey: facts.membership.configurationKey,
     membershipGenerationIndex: facts.membership.membershipGenerationIndex});
   const outcome = await resumeParticipantCutoverAdmission(handler, leader,
-    {release, census: [facts]});
+    {release, census: [facts], deadlineAtMs: leader.timeSource.now() + 30000});
   if (outcome !== 'resumed') {
     throw new Error(`fixture participant release refused: ${outcome}`);
   }
