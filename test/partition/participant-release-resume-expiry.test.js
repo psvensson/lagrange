@@ -90,7 +90,9 @@ async function withRealControlRecipient(expireDuringFacts) {
     const previousTimeSource = handler.timeSource;
     const clock = new VirtualTimeSource({startMs: previousTimeSource.now()});
     handler.timeSource = clock;
-    restoreTime = () => {handler.timeSource = previousTimeSource;};
+    restoreTime = () => {
+      handler.timeSource = previousTimeSource;
+    };
     const deadline = clock.now() + 1000;
 
     const originalPort = service.raft;
@@ -126,8 +128,12 @@ async function withRealControlRecipient(expireDuringFacts) {
     };
     restoreDelivery = () => {
       if (priorDelivery === undefined) {
-        if (!delete transport.deliver) throw new Error('transport restoration refused');
-      } else Object.defineProperty(transport, 'deliver', priorDelivery);
+        if (!delete transport.deliver) {
+          throw new Error('transport restoration refused');
+        }
+      } else {
+        Object.defineProperty(transport, 'deliver', priorDelivery);
+      }
     };
 
     outstanding = handler.participantReleaseRecovery.releaseOperator({
@@ -162,25 +168,42 @@ async function withRealControlRecipient(expireDuringFacts) {
   } finally {
     continueFacts.resolve();
     if (outstanding !== null) {
-      try {await boundedPromise(outstanding, 'retire held real release');}
-      catch (error) {failure = accumulateFailure(failure, error,'release settlement');}
+      try {
+        await boundedPromise(outstanding, 'retire held real release');
+      } catch (error) {
+        failure = accumulateFailure(failure, error, 'release settlement');
+      }
     }
-    for (const [label,restore] of [
-      ['delivery',restoreDelivery],['port',restorePort],['clock',restoreTime],
+    for (const [label, restore] of [
+      ['delivery', restoreDelivery], ['port', restorePort], ['clock', restoreTime],
     ]) {
       if (restore === null) continue;
-      try {restore();}
-      catch(error){failure=accumulateFailure(failure,error,label+' restoration');}
+      try {
+        restore();
+      } catch (error) {
+        failure = accumulateFailure(failure, error, label + ' restoration');
+      }
     }
-    try {await handler?.participantReleaseRecovery.shutdown();}
-    catch(error){failure=accumulateFailure(failure,error,'recovery shutdown');}
-    try {handler?.unregisterFromRouter(transport);}
-    catch(error){failure=accumulateFailure(failure,error,'router cleanup');}
-    try {await service?.shutdown();}
-    catch(error){failure=accumulateFailure(failure,error,'service cleanup');}
-    if(failure===null) fs.rmSync(directory,{recursive:true,force:true});
+    try {
+      await handler?.participantReleaseRecovery.shutdown();
+    } catch (error) {
+      failure = accumulateFailure(failure, error, 'recovery shutdown');
+    }
+    try {
+      handler?.unregisterFromRouter(transport);
+    } catch (error) {
+      failure = accumulateFailure(failure, error, 'router cleanup');
+    }
+    try {
+      await service?.shutdown();
+    } catch (error) {
+      failure = accumulateFailure(failure, error, 'service cleanup');
+    }
+    if (failure === null) {
+      fs.rmSync(directory, {recursive: true, force: true});
+    }
   }
-  if(failure!==null)throw failure;
+  if (failure !== null) throw failure;
 }
 
 test('expired real recipient RESUME after awaited membership stays CLOSED',
