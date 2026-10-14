@@ -119,6 +119,17 @@ async function askParticipantRelease(owner, nodeId, request) {
       {...prepared.request, type: PARTICIPANT_RELEASE_TYPE},
       {targetNodeId: nodeId, deliveryPriority: PARTICIPANT_RELEASE_PRIORITY,
         timeoutMs: prepared.timeoutMs}));
+    // The transport may deliver a previously committed positive reply after
+    // the caller's original absolute deadline. A result can still be durable,
+    // but it cannot become *current caller authorization*. This is the same
+    // original TimeSource used for the pre-send bound, not a new timer/owner.
+    // OBSERVE_APPLIED_POSITION owns its own independent deadline adjudicator.
+    if (!prepared.observation &&
+        participantReleaseAbsoluteClockValid(prepared.request.deadlineAtMs) &&
+        ownerNow(owner) >= prepared.request.deadlineAtMs) {
+      return releaseAnswer(OUTCOME.UNAVAILABLE, prepared.request,
+        {missingFact: MISSING_FACT.RELEASE_DEADLINE, owner: nodeId});
+    }
     return participantReleaseDeliveryAnswer(response, prepared, nodeId);
   } catch (error) {
     const delivery = classifyTransportDeliveryOutcome(error);
