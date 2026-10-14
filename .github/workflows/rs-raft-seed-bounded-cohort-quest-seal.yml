@@ -1,0 +1,49 @@
+name: rs-raft-seed-bounded-cohort-quest-seal
+on:
+  push:
+    branches: [continue/rs-raft-seed-bounded-concurrent-cohorts-20261014]
+    paths: [.github/workflows/rs-raft-seed-bounded-cohort-quest-seal.yml]
+permissions:
+  contents: write
+jobs:
+  seal:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Seal red by canonical Solver only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          H="$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$H"
+          node scripts/solve.js start --id seed-bounded-independent-cohort-release --json
+          node scripts/solve.js probe --id seed-bounded-independent-cohort-release --json
+          git diff --check
+          git add -- solve/quests/seed-bounded-independent-cohort-release/quest.json solve/quests/seed-bounded-independent-cohort-release/log.ndjson
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'WIP seed Quest: canonically seal bounded cohort concurrency red'
+          git fetch --no-tags origin refs/heads/continue/rs-raft-seed-bounded-concurrent-cohorts-20261014
+          test "$(git rev-parse FETCH_HEAD)" = "$H" || {
+            echo 'Concurrent writer: decline seal publication'
+            exit 1
+          }
+          git push origin HEAD:refs/heads/continue/rs-raft-seed-bounded-concurrent-cohorts-20261014
+      - name: Keep red Quest evidence regardless of status
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-seed-bounded-quest-${{ github.sha }}
+          path: solve/quests/seed-bounded-independent-cohort-release/
+          retention-days: 14
+          if-no-files-found: warn
