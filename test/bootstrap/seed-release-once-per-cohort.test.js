@@ -180,7 +180,9 @@ test('late successful cohort reply cannot authorize seed TRAFFIC_READY after abs
         nodeId: 'late-release-caller',
         timeSource: clock,
         participantReleaseAuthorizationOwner: {
-          authorizeFreshSeed() { return Object.freeze({kind: 'authorized-seed'}); },
+          authorizeFreshSeed() {
+            return Object.freeze({kind: 'authorized-seed'});
+          },
         },
         messageRouter: {
           deliver(_address, payload, options) {
@@ -197,7 +199,9 @@ test('late successful cohort reply cannot authorize seed TRAFFIC_READY after abs
           },
         },
       },
-      sleep() { throw new Error('a complete reply needs no retry or timer'); },
+      sleep() {
+        throw new Error('a complete reply needs no retry or timer');
+      },
     };
     const method = createBootstrapServiceSeedWorkflowMethods()
       .releaseSeedParticipantCohorts;
