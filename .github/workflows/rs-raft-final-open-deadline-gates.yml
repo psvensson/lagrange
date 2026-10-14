@@ -9,6 +9,7 @@ on:
       - src/partition/partition-participant-transaction-pause.js
       - test/bootstrap/seed-release-once-per-cohort.test.js
       - test/partition/participant-release-protocol.test.js
+      - test/test-helpers/participant-transaction-fixture.js
 permissions:
   contents: read
 concurrency:
@@ -41,7 +42,11 @@ jobs:
           git rev-parse HEAD > "$OUT/sha.txt"
           git rev-parse HEAD^{tree} > "$OUT/tree.txt"
           npx eslint src/bootstrap/bootstrap-service-seed-workflow.js \
-            test/bootstrap/seed-release-once-per-cohort.test.js > "$OUT/lint.log" 2>&1
+            src/partition/partition-participant-transaction-pause.js \
+            test/bootstrap/seed-release-once-per-cohort.test.js \
+            test/partition/participant-release-protocol.test.js \
+            test/test-helpers/participant-transaction-fixture.js \
+            > "$OUT/lint.log" 2>&1
           lint=$?
           printf '%s\n' "$lint" > "$OUT/lint.status"
           if test "$lint" != 0; then cat "$OUT/lint.log"; fi
