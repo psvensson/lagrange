@@ -90,7 +90,7 @@ const EMPTY_PARTICIPANT_RELEASE_DIAGNOSTIC_OBSERVATION = null;
 // One seed-workflow scheduling bound, never a release/Raft execution driver.
 // Independent partition cohorts have distinct Raft owners and SQLite stores;
 // their nested control RELEASEs join the one canonical control RUNS owner.
-const SEED_INDEPENDENT_COHORT_WIDTH = 8;
+const SEED_INDEPENDENT_COHORT_WIDTH = 45;
 
 async function attemptSeedCohortRelease(owner, service, buildDigest, deadline, timeSource) {
   const authorization = owner.replicaHandler
