@@ -305,6 +305,46 @@ input continues to come from the Binding-declared statement and existing access
 policy. Additional typed capabilities require their own canonical owner rather
 than a convenient broker method.
 
+## Complete host-capability parity (architectural target, not yet proven)
+
+The Call Cell context above is one instance of a broader rule: **every
+Lagrange-supplied host capability exposed to a supported WASM Component world
+must have a 1:1 semantic projection through each supported native-language
+SDK for that same world and Binding mode**. The reverse also holds: an SDK
+must not invent an additional Lagrange platform capability or a stronger
+guarantee. Idiomatic naming and synchronous/asynchronous language wrappers
+may differ; authorization, types, behavior, limits and outcomes may not.
+
+The canonical host-interface shapes live in [`wit/world.wit`](../wit/world.wit).
+Today that file distinguishes the request `context` imports
+(`read`, `write`, `capability`, `call-binding`) from the Call Cell
+`call-context` imports (`emit`, `call-bounded`), and declares the request,
+run and reduce exports. **Parity is per admitted world and capability, not
+universal permission to call every interface from any invocation.** In
+particular, a Call Cell does not gain request-context table access merely
+because a Python SDK could offer a convenient method.
+
+WIT specifies signatures, not all semantics. The authoritative execution,
+authority and failure rules remain with their Lagrange owners (including
+[Minimal Deployment Surface](minimal-deployment-surface.md) and
+[Execution Semantics](../docs/execution-semantics.md)); the SDK and native
+broker consume those decisions and do not reimplement policy, routing,
+timeouts, idempotency or retry classification. The native process's ordinary
+OS and network APIs are outside the Lagrange host-capability contract and
+do not imply equivalent sandbox isolation.
+
+Before calling a capability *portable*, acceptance must exercise the same
+positive and negative scenarios through the WASM host import and the native
+SDK projection: canonical values/errors, authorized and denied calls,
+identity/intent binding, deadline and budget exhaustion, stale placement,
+ambiguous outcomes, result publication and restart. Unsupported capability
+projections must be declared unavailable rather than emulated through a
+provider-specific privileged shortcut.
+
+This section extends the design requirement; it does not claim the current
+OCI scaffold implements these interfaces or that existing WIT versions are
+already a complete multi-language SDK specification.
+
 ## Same-program semantics
 
 "Same program" means source-level composition and one revision identity, not a
