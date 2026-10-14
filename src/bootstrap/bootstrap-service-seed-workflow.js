@@ -301,7 +301,16 @@ function createBootstrapServiceSeedWorkflowMethods() {
         return true;
       });
       const timeSource = this.nodeService.getTimeSource();
-      const budgetMs = this.config.leadershipWaitTimeoutMs;
+      // Leadership election and the complete 45-partition seed release are
+      // different operations. Preserve the original leadershipWaitTimeoutMs
+      // fallback for existing callers while allowing a separately bounded,
+      // explicitly configured release interval on actual virtual hardware.
+      const budgetMs = Object.hasOwn(this.config, 'seedParticipantReleaseBudgetMs') ?
+        this.config.seedParticipantReleaseBudgetMs :
+        this.config.leadershipWaitTimeoutMs;
+      if (!Number.isSafeInteger(budgetMs) || budgetMs <= 0) {
+        throw new Error('Invalid seed participant release budget');
+      }
       const startMs = timeSource.now();
       const startObservation = observeParticipantReleaseClockValue(startMs);
       const deadline = startMs + budgetMs;
