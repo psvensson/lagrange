@@ -22,7 +22,7 @@ import {runtimeBuildProvenance, RUNTIME_BUILD_STATE} from
 import {requestParticipantRelease} from '../node/participant-release-client.js';
 import {INITIAL_PARTITION_IDS} from './system-table-schemas-constants.js';
 import {observeParticipantReleaseClockValue,
-  participantReleaseSeedBudgetObservation, readParticipantReleaseClock} from
+  participantReleaseSeedBudgetObservation} from
   '../node/participant-release-diagnostic-observation.js';
 import {PARTICIPANT_CUTOVER_BOUND, PARTICIPANT_CUTOVER_OUTCOME,
   PARTICIPANT_RELEASE_CONTROL_WAVE_FIELD as WAVE_FIELD,
