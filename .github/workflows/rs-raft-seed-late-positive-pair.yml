@@ -1,0 +1,91 @@
+# Fail-closed source-only late-CUT_OVER proof. The first run expects
+# a named red on immutable previous code. Later runs compare old/new on one VM.
+name: rs-raft-seed-late-positive-pair
+on:
+  push:
+    branches: [fix/rs-raft-seed-late-cutover-fence-20261014]
+    paths:
+      - .github/workflows/rs-raft-seed-late-positive-pair.yml
+      - src/bootstrap/bootstrap-service-seed-workflow.js
+      - test/bootstrap/seed-release-once-per-cohort.test.js
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-seed-late-positive-pair
+  cancel-in-progress: false
+jobs:
+  source-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 17
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install exact lock
+        run: npm ci
+      - name: Original source red and candidate green on one host
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          BASE=7d0042659daaed7d38e9e586454861c21df3d838
+          CASE='seed refuses an acknowledged CUT_OVER delivered after the single absolute deadline'
+          TEST=test/bootstrap/seed-release-once-per-cohort.test.js
+          OUT="$GITHUB_WORKSPACE/test-output/rs-raft-late-control-pair"
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/candidate-sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/candidate-tree.txt"
+          git rev-parse "$BASE^{tree}" > "$OUT/negative-tree.txt"
+          NEG="$RUNNER_TEMP/rs-raft-late-control-old"
+          git worktree add --detach "$NEG" "$BASE" > "$OUT/worktree.log" 2>&1 || exit 1
+          cp "$TEST" "$NEG/$TEST" || exit 1
+          cmp "$TEST" "$NEG/$TEST" || exit 1
+          sha256sum "$TEST" > "$OUT/candidate-test.sha256"
+          (cd "$NEG" && sha256sum "$TEST") > "$OUT/negative-test.sha256"
+          (cd "$NEG" && npm ci) > "$OUT/negative-install.log" 2>&1
+          install=$?
+          test "$install" -eq 0 || exit 1
+          (cd "$NEG" && node --test --test-name-pattern="$CASE" "$TEST") \
+            > "$OUT/negative.tap" 2>&1
+          neg=$?
+          printf '%s\n' "$neg" > "$OUT/negative.status"
+          echo "previous source negative=$neg"
+          tail -n 38 "$OUT/negative.tap"
+          test "$neg" -ne 0 || exit 1
+          grep -F 'an expired caller cannot accept a late positive release answer' "$OUT/negative.tap" || exit 1
+          grep -F 'ERR_ASSERTION' "$OUT/negative.tap" || exit 1
+          grep -F 'Missing expected rejection' "$OUT/negative.tap" || exit 1
+          # Until the only production change lands, preserve the meaningful
+          # old red and explicitly refuse any premature positive claim.
+          DIFFERENCE="$(git diff --name-only "$BASE" HEAD -- src)"
+          printf '%s\n' "$DIFFERENCE" > "$OUT/production-paths.txt"
+          if test -z "$DIFFERENCE"; then
+            echo 'Meaningful source-only negative captured; implementation not yet tested'
+            exit 0
+          fi
+          test "$DIFFERENCE" = src/bootstrap/bootstrap-service-seed-workflow.js || exit 1
+          node --test --test-name-pattern="$CASE" "$TEST" \
+            > "$OUT/candidate.tap" 2>&1
+          pos=$?
+          printf '%s\n' "$pos" > "$OUT/candidate.status"
+          echo "same-VM candidate status=$pos"
+          tail -n 35 "$OUT/candidate.tap"
+          test "$pos" -eq 0 || exit 1
+          grep -F "ok 1 - $CASE" "$OUT/candidate.tap" || exit 1
+          echo 'Late successful release no longer grants seed success after expiry'
+      - name: Preserve raw TAP and source identity including negative
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-late-control-pair-${{ github.sha }}
+          path: test-output/rs-raft-late-control-pair/
+          retention-days: 14
+          if-no-files-found: warn
