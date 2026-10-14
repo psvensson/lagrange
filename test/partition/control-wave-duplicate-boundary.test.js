@@ -55,6 +55,12 @@ function collectFailure(first, error, message) {
   return first === null ? error : new AggregateError([first, error], message);
 }
 
+async function settleRecoveryTurn() {
+  for (let turn = 0; turn < 8; turn += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+}
+
 test('one canonical wave holds three real control voters across two released native cohorts',
   {timeout: TEST_TIMEOUT_MS}, async () => {
     const transport = createLoopbackTransport();
@@ -196,11 +202,6 @@ test('one canonical wave holds three real control voters across two released nat
             // ownership available for a *failed* terminal wave.
             const firstRecoveryTimer = recoveryTimers.length;
             handler.participantReleaseRecovery.requestRecovery(CONTROL);
-            const settleRecoveryTurn = async () => {
-              for (let turn = 0; turn < 8; turn += 1) {
-                await new Promise((resolve) => setImmediate(resolve));
-              }
-            };
             recoveryClock.advance(0);
             await settleRecoveryTurn();
             for (let turn = 0; turn < 3; turn += 1) {
@@ -440,6 +441,7 @@ test('one canonical wave holds three real control voters across two released nat
 
       let capturedLateRefusal = null;
       let heldClosedAfterSchemaMutation = false;
+      const retryBeforeFailedWave = recoveryTimers.length;
       const endFailure = await handler.participantReleaseRecovery.withFreshSeedControlWave({
         targetBuildDigest: build.digest, deadlineAtMs,
         controlAuthorization, partitionIds: [DEPENDENTS[0].id],
@@ -461,6 +463,14 @@ test('one canonical wave holds three real control voters across two released nat
       assert.ok(endFailure instanceof Error,
         'the final control-wave membership/schema fence must refuse END');
       assert.match(endFailure.message, /Current control wave END census refused/u);
+      assert.ok(recoveryTimers.slice(retryBeforeFailedWave).some(({delay}) =>
+        delay === 0),
+      'failed wave END hands CLOSED control back to the same recovery clock owner');
+      recoveryClock.advance(0);
+      await settleRecoveryTurn();
+      assert.ok(recoveryTimers.slice(retryBeforeFailedWave).some(({delay}) =>
+        delay === BOUND.RECOVERY_RETRY_MS),
+      'after owner handoff, the unchanged recovery lane retains non-CUT_OVER debt');
       const refusedRecovery = await release(CONTROL);
       assert.equal(refusedRecovery.outcome, OUTCOME.CENSUS_REFUSED,
         'divergent real member schema cannot be silently repaired as a new cutover');
