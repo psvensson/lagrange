@@ -1757,8 +1757,11 @@ function retryInboundDrainWhenAdmitted(group) {
     return;
   }
   group.inboundDrainScheduled = true;
+  // This is the continuation of the SAME accepted inbound obligation.
+  // An open SQLite transaction defers its admission; it does not turn
+  // the originally accepted work into an idle best-effort timer.
   group.timers.setTimeout(() => runScheduledInboundDrain(group),
-    PERSISTENCE_ADMISSION_WAIT.POLL_INTERVAL_MS)?.unref?.();
+    PERSISTENCE_ADMISSION_WAIT.POLL_INTERVAL_MS);
 }
 
 function runScheduledInboundDrain(group) {
