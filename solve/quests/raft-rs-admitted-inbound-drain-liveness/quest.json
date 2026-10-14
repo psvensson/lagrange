@@ -1,0 +1,54 @@
+{
+  "schema": "solve-quest/2",
+  "id": "raft-rs-admitted-inbound-drain-liveness",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "An exact logical follower that returns CORE_OK/inbound-enqueued for a valid original Raft carrier retains an admitted native-execution obligation. On an otherwise idle host that obligation must keep the scheduled inbound drain executable until it enters the existing Raft core, durably applies and publishes progress, or is refused by the existing lifecycle owner. The real three-member participant release must finish after both original carriers are naturally forwarded and both follower published applied positions advance. A cancellation with unresolved original promises and event-loop exit is RED, never an acceptable timeout.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/raft-rs-admitted-inbound-drain-liveness/evidence/receipt.json",
+      "requiredReceipts": [
+        "identity-correct-native-core-entry-negative",
+        "admitted-inbound-execution-positive",
+        "native-source-only-control-differential",
+        "idle-retirement-and-recovery-preserved",
+        "independent-review-static-and-host-paired"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "separate-owned-scope",
+      "statement": "This Quest owns only admission-to-execution liveness in src/raft/raft-rs-runtime-owner.js. It does not expand the existing seed-participant-release-applied-position-barrier Quest, and does not edit the release observer, RPC clock, Retry, budget or final census policy. No new progress driver or duplicative scheduling owner."
+    },
+    {
+      "id": "source-backed-causal-falsifier",
+      "statement": "V13 established both exact original carrier native.step outcomes CORE_OK/inbound-enqueued. V14 on hosted GitHub commit 70c66f5de607576736969f41a1ef127eac89b433 observed zero per-replica actual core entries before Node beforeExit and unresolved application-progress promises. This is passive evidence, not a native-positive proof, and does not alone identify the private drain-timer branch."
+    },
+    {
+      "id": "one-real-admission-obligation",
+      "statement": "When queued inbound envelopes have been accepted by the existing native owner, the original scheduled drain must retain host execution lifetime until admission is discharged, executed, or refused by existing lifecycle authority. Do not ref arbitrary passive observers, start retries, repeat reads, add new clocks, or alter Raft semantics. Leave actual shutdown/idle timers quiescent after retirement."
+    },
+    {
+      "id": "no-test-lifetime-trick",
+      "statement": "The witness must stay uninstrumented for candidate-positive acceptance, with actual native follower application, SQL durability, release route settlement and original deadline verified. Diagnostic instrumentation is strictly bounded and passive; its observer lifetime must not repair production."
+    },
+    {
+      "id": "paired-and-adversarial",
+      "statement": "Compare exact candidate and source-only predecessor on the same host and witness, no retry, with full canonical raw evidence, time/lease accounting, independent reviewer and no baseline or timeout increase. Test zero queued work/no leak, removed/retired/reconstructed groups, peer replacement, group health and actual core execution lifecycle."
+    },
+    {
+      "id": "broader-merge-hold",
+      "statement": "Passing this scoped Quest cannot close the release/startup five receipts, FreshMG, TX1/TX2, recovery, CDC, snapshots or final merge/publisher gates. Production code stays non-main WIP until independent proof."
+    }
+  ],
+  "verificationTemplates": [
+    "concurrency-serialization",
+    "harness-fidelity",
+    "owner-interaction",
+    "recovery-replay",
+    "admission-gating"
+  ],
+  "sealedAt": null
+}
