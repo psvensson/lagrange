@@ -430,6 +430,81 @@ test('control current-proof refuses schema drift during its second live census, 
   }, {partitionId: CONTROL_PARTITION, tableId: SQL_TRANSACTIONS_SCHEMA.tableName,
     tableName: SQL_TRANSACTIONS_SCHEMA.tableName, schema: SQL_TRANSACTIONS_SCHEMA}));
 
+test('real recipient refuses OPEN when its absolute deadline expires during awaited RESUME facts',
+  () => fixture(async ({handler, service, release, transport}) => {
+    const first = await release();
+    assert.equal(first.outcome, OUTCOME.CUT_OVER, JSON.stringify(first));
+    const originalPort = service.raft;
+    const originalPortProperty = Object.getOwnPropertyDescriptor(service, 'raft');
+    const originalTimeSource = handler.timeSource;
+    const originalDeliver = transport.deliver;
+    let inResume = false;
+    let resumeMembershipReads = 0;
+    let nowExpired = false;
+    let enteredBeforeDeadline = false;
+    // The original handler retains its real timer scheduler. Only the
+    // monotonic observation is advanced after a genuine asynchronous read.
+    const observedClock = Object.create(originalTimeSource);
+    Object.defineProperty(observedClock, 'now', {value: () =>
+      originalTimeSource.now() + (nowExpired ? 60000 : 0)});
+    const measuredPort = Object.create(originalPort);
+    Object.defineProperty(measuredPort, 'readCommittedMembership', {
+      value: async (...args) => {
+        const answer = await Reflect.apply(originalPort.readCommittedMembership,
+          originalPort, args);
+        if (inResume) {
+          resumeMembershipReads += 1;
+          if (resumeMembershipReads === 2) nowExpired = true;
+        }
+        return answer;
+      },
+    });
+    let failure = null;
+    try {
+      handler.timeSource = observedClock;
+      Object.defineProperty(service, 'raft', {...originalPortProperty,
+        value: measuredPort});
+      transport.deliver = function(...args) {
+        const request = args[1];
+        if (request?.type === PARTICIPANT_RELEASE_TYPE &&
+            request.partitionId === CONTROL_PARTITION &&
+            request.action === RELEASE_ACTION.RESUME) {
+          inResume = true;
+          enteredBeforeDeadline = observedClock.now() < request.deadlineAtMs;
+          const result = Reflect.apply(originalDeliver, this, args);
+          return Promise.resolve(result).finally(() => {inResume = false;});
+        }
+        return Reflect.apply(originalDeliver, this, args);
+      };
+      const response = await release();
+      assert.equal(enteredBeforeDeadline, true,
+        'registered RESUME arrived before the original finite deadline');
+      assert.equal(resumeMembershipReads >= 2, true,
+        'the real recipient completed two distinct awaited fresh-fact observations');
+      assert.equal(nowExpired, true,
+        'the deadline advanced after ingress and before final admission');
+      assert.equal(response.outcome, OUTCOME.UNAVAILABLE, JSON.stringify(response));
+      assert.equal(participantReleaseAdmissionOf(service).state, ADMISSION.CLOSED,
+        'an expired RESUME cannot commit OPEN after its awaited membership read');
+    } catch (error) {
+      failure = error;
+    } finally {
+      transport.deliver = originalDeliver;
+      handler.timeSource = originalTimeSource;
+      try {
+        if (originalPortProperty) {
+          Object.defineProperty(service, 'raft', originalPortProperty);
+        } else {
+          Reflect.deleteProperty(service, 'raft');
+        }
+      } catch (error) {
+        failure = retainFailure(failure, error, 'original Raft port restoration');
+      }
+    }
+    if (failure !== null) throw failure;
+  }, {partitionId: CONTROL_PARTITION, tableId: SQL_TRANSACTIONS_SCHEMA.tableName,
+    tableName: SQL_TRANSACTIONS_SCHEMA.tableName, schema: SQL_TRANSACTIONS_SCHEMA}));
+
 test('control cohort preserves unreconstructible legacy rows and reports exact activation debt',
   () => fixture(async ({service, release}) => {
     const transactionId = 'b'.repeat(32);
