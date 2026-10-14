@@ -283,6 +283,17 @@ async function currentSeedControlWave(handler, request) {
     return waveRefusal(request, MISSING_FACT.RELEASE_DEADLINE);
   }
   const current = await readWaveCensus(handler, record);
+  // Member INSPECT replies can arrive after END or owner replacement. The
+  // captured facts were valid at their source, but may no longer authorize
+  // any new dependent PAUSE. Recheck the exact owner record and state AFTER
+  // the await, with no intervening yield before returning the verdict.
+  if (RUNS.get(handler)?.get(CONTROL_PARTITION) !== record ||
+      record.state !== SEED_WAVE_STATE.HELD) {
+    return waveRefusal(request);
+  }
+  if (handler.timeSource.now() >= record.deadlineAtMs) {
+    return waveRefusal(request, MISSING_FACT.RELEASE_DEADLINE);
+  }
   return current === null ? waveRefusal(request) : null;
 }
 
