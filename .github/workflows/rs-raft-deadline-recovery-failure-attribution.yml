@@ -1,0 +1,35 @@
+# Read-only classification of the original complete 25-assertion R test
+# from pinned composed evidence, no production edits or retries.
+name: rs-raft-deadline-recovery-failure-attribution
+on:
+  push:
+    branches: [fix/rs-raft-participant-resume-deadline-20261014]
+    paths: [.github/workflows/rs-raft-deadline-recovery-failure-attribution.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  classify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Inspect genuine R cases from preserved composed raw TAP
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/rs-raft-recovery-original-red"
+          mkdir -p "$OUT"
+          gh api repos/psvensson/lagrange/actions/artifacts/11887395464/zip > "$OUT/raw.zip"
+          unzip -q "$OUT/raw.zip" -d "$OUT/files"
+          TAP=$(find "$OUT/files" -type f -name 'replica-handler-release-recovery.test.js.full.tap' | head -n 1)
+          test -f "$TAP"
+          echo '--- Original recovery failed cases (complete response, capped line width) ---'
+          grep -A 33 -B 1 -E '^not ok|^  not ok' "$TAP" | cut -c 1-1650 | head -n 210 || true
+          echo '--- Source refs ---'
+          sha256sum "$TAP"
