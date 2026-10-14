@@ -23,3 +23,27 @@ The next source-only, no-behavior-change experiment is to parse the ORIGINAL ful
 Any new design must preserve current control-owner pre/post checks and complete current voter census, proper OPEN/authority, one shared original deadline, and no new cache of a former successful control permission. A retained successful old control CUT_OVER is not a current control fact. Concurrency raises load and is not a replacement for eliminating unjustified repeated expensive work. Do not escalate cap or count a single hosted positive as proof without a named falsifier and independent review.
 
 The existing `seed-bounded-independent-cohort-release` Quest remains open with five false receipts. None of these runs touches `main`.
+
+
+## Same physical hosted machine width-eight versus upper-bound 45 (2026-10-14)
+
+Run `38525302263` at immutable experiment `00def0c3732d2214709ddd0bda5d00d5165582ad` used source-only change in `SEED_INDEPENDENT_COHORT_WIDTH`, no deadline or original claim/cache test-byte change. It installed the exact two source trees in worktrees of ONE hosted runner and executed the same original 1,000ms claim/cache body serially. Both attempts are RED; diagnostic output preserves full original TAP and canonical owned trace summary.
+
+| Property | Width 8 (original `cf3a8bb8`) | Upper-bound 45 (experiment `00def0c3`) |
+|---|---|---|
+| Original claim-cache status | RED | RED |
+| First sorted failing cohort | logs-p1, ordinal 18 | artifact_payloads-p1, ordinal 3 |
+| Completed ordered prefix | 17/45 | 2/45 |
+| Terminal measured age of shared 1000ms budget | 1017ms | 1752ms |
+| Participant-release original-router deliveries | 689 | 588 |
+| Full RELEASE request count | 65 | 95 |
+| Control SQL_TRANSACTIONS RELEASE requests | 41 | 51 |
+| Complete delivered calls to control | 361 | 179 |
+| Distinct dependent partition names requested | 24 | 44 |
+| Terminal outcome | UNAVAILABLE / release_deadline / enable | UNAVAILABLE / release_deadline / observe_applied_position |
+
+Upper bound admits almost every independent partition at once, which *reduces* repeated control work by RUNS joining, but leaves many previously admitted cohort calls in intermediate PAUSE/ENABLE and consumes more than the original deadline before the earliest outstanding ordinal can finish. Thus the limitation is not just serial duplicated control releases; too much native/transport/SQLite work at once causes contention. One successful direct overlap test or one green 5s fixture cannot qualify that strategy.
+
+**Decision:** reject cap escalation as the release cure. Retain immutable experimental source and its red evidence; do not merge `experiment/rs-raft-seed-full-overlap-20261014` into any candidate. A source-level owner design must amortize repeated current-control work without caching stale OPEN permission, and it must reduce the full participant-cutover work under the same deadlines; otherwise the existing 1000ms criterion remains unsatisfied. No change to authorization, membership, native origin, or current-control pre/post fence has been approved.
+
+The 45-upper-bound experiment is only source-bound hosted evidence, not an independent locked-lab result or causal proof of each delayed private branch. The seed-bounded Quest's five receipts remain false.
