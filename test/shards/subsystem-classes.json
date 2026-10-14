@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 157,
     "storage-raft": 135,
-    "test-infrastructure": 137,
+    "test-infrastructure": 138,
     "transactions": 15,
     "transport-messaging": 92,
     "wasm-toolchain": 57
   },
-  "censusSize": 2285,
-  "digest": "fnv1a32-72594200",
+  "censusSize": 2286,
+  "digest": "fnv1a32-37ba42b5",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-d9fac015",
+  "observationDigest": "fnv1a32-eff8e422",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2048,6 +2048,7 @@
     "test/scripts/run-live-repetitions.test.js": "test-infrastructure",
     "test/scripts/run-test-ci.test.js": "test-infrastructure",
     "test/scripts/run-test-files.test.js": "test-infrastructure",
+    "test/scripts/runner-budget-admission.test.js": "test-infrastructure",
     "test/scripts/select-change-tests.test.js": "test-infrastructure",
     "test/scripts/selection-golden-corpus.test.js": "test-infrastructure",
     "test/scripts/service-portability-claims-contract.test.js": "test-infrastructure",
@@ -11935,6 +11936,14 @@
       ]
     },
     "test/scripts/run-test-files.test.js": {
+      "directories": [
+        "test/scripts/__fixtures__/run-test-files"
+      ]
+    },
+    "test/scripts/runner-budget-admission.test.js": {
+      "files": [
+        "src/test-helpers/tap.js"
+      ],
       "directories": [
         "test/scripts/__fixtures__/run-test-files"
       ]
