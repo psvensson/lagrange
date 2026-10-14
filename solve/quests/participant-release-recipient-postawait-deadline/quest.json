@@ -1,0 +1,53 @@
+{
+  "schema": "solve-quest/2",
+  "id": "participant-release-recipient-postawait-deadline",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "The original registered release recipient must never perform PAUSE/ENABLE/RESUME admission mutation based on facts that finished after the request's original absolute deadline. Recheck the original handler TimeSource after asynchronous membership assessment, and at the final recipient-owned OPEN mutation boundary with no intervening await. Preserve fail-closed pause and typed deadline refusal, never fake rollback of already-durable Raft effects.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/participant-release-recipient-postawait-deadline/evidence/receipt.json",
+      "requiredReceipts": [
+        "engaged-old-source-late-resume-open-negative",
+        "current-recipient-postawait-refusal-and-closed-admission",
+        "last-hop-resume-deadline-equality-and-current-identity",
+        "original-native-protocol-recovery-and-participant-transaction-cone",
+        "independent-review-static-multihost-merge-gates"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "per-stage-owner",
+      "statement": "replica-handler-participant-release owns ingress and post-await deadline classification for original non-OBSERVE actions. The existing partition-participant-transaction-pause owner alone decides the final CLOSED->OPEN mutation; check the same caller's absolute deadline immediately before that mutation. No duplicate release leader, polling reader, new time source, timeout renewal or alternate admission mutator."
+    },
+    {
+      "id": "real-negative",
+      "statement": "Old-source run 38558305155 uses a real registered ReplicaHandler, actual initialized/campaigned SQLite+Raft PartitionService, first durable release, manually closed original admission, valid original RESUME tuple, and real readCommittedMembership. The adapter only advances the original handler timeSource after that actual awaited read; old source returns RESUMED and opens admission after deadline. It must be held as named red, not a setup failure."
+    },
+    {
+      "id": "preserve-pause-on-expiry",
+      "statement": "A PAUSE already delivered before expiration must not abandon a reachable member OPEN merely because its awaited membership read finished late: keep admission CLOSED with original raiseParticipantCutoverPause owner and return typed UNAVAILABLE/RELEASE_DEADLINE. On RESUME and ENABLE, no action may become newly admitted when deadline is spent."
+    },
+    {
+      "id": "deadline-source-and-observe",
+      "statement": "Keep source request.deadlineAtMs unchanged across all stages. Use handler.timeSource.now(), not Date.now or timer invented by helper. The existing OBSERVE_APPLIED_POSITION own caller deadlines and separate adjudicator remain untouched. On unknown/invalid values retain existing refusal precedence, not stale or coerced status."
+    },
+    {
+      "id": "known-boundary",
+      "statement": "An already durable Raft action cannot be uncommitted by reply denial. Typed deadline refusal only claims current request authorization expired, and the existing original recovery owner remains responsible for reconciling durable effect. Test true on-time results, exactly-on-deadline refusal, late awaited Raft proof refusal, registry replacement and query schema/transaction changes."
+    },
+    {
+      "id": "composition",
+      "statement": "Compose on explicit 20s seed release and 1s election WIP profile only after static regeneration; ensure original 45 real partition SQL/Raft/CDC green with lossless bounded trace and no disabled assertions. Full TX1/TX2, FreshMG, CDC, restart, off-seed seed-loss and zero-legacy/independent locked-host gates remain blocked before main."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "admission-gating",
+    "concurrency-serialization",
+    "harness-fidelity",
+    "retry-loops"
+  ]
+}
