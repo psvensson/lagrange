@@ -102,6 +102,7 @@ const RUNTIME_PHASE = Object.freeze({
   APPLICATION: 'application',
   READY_DRAIN: 'ready-drain',
   READY_PERSISTENCE: 'ready-persistence',
+  INBOUND_TIMER_CLEANUP: 'inbound-timer-cleanup',
   CAMPAIGN_ELIGIBILITY: 'campaign-eligibility',
   DISPATCH: 'dispatch',
   ADMISSION: 'admission',
