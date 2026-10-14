@@ -1,0 +1,77 @@
+# WIP compatibility-only configuration separation. It preserves the
+# historical election/release fallback; original tests remain strict.
+name: rs-raft-seed-release-budget-independence
+on:
+  push:
+    branches: [work/rs-raft-seed-release-budget-independent-20261014]
+    paths:
+      - .github/workflows/rs-raft-seed-release-budget-independence.yml
+      - src/bootstrap/bootstrap-service-seed-workflow.js
+      - test/bootstrap/seed-release-once-per-cohort.test.js
+permissions:
+  contents: read
+jobs:
+  bounded:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Exact fallback, explicit budget and native/Raft release checks
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-release-budget-independent
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/head.txt"
+          git rev-parse HEAD^{tree} > "$OUT/tree.txt"
+          npx eslint src/bootstrap/bootstrap-service-seed-workflow.js \
+            test/bootstrap/seed-release-once-per-cohort.test.js \
+            > "$OUT/lint.log" 2>&1
+          lint=$?
+          printf '%s\n' "$lint" > "$OUT/lint.status"
+          if test "$lint" -ne 0; then cat "$OUT/lint.log"; fi
+          failed=0
+          if test "$lint" -ne 0; then failed=1; fi
+          for file in \
+            test/bootstrap/seed-release-once-per-cohort.test.js \
+            test/partition/control-wave-duplicate-boundary.test.js \
+            test/node/replica-handler-release-recovery.test.js \
+            test/bootstrap/node-bootstrap-consistency.property.test.js; do
+            label="${file##*/}"
+            npm run -s test:file -- "$file" > "$OUT/$label.log" 2>&1
+            rc=$?
+            printf '%s\n' "$rc" > "$OUT/$label.status"
+            echo "$file real suite status=$rc"
+            tail -n 15 "$OUT/$label.log" | cut -c 1-450
+            if test "$rc" -ne 0; then failed=1; fi
+            if test -f ".tap/test-results/$file.tap"; then
+              cp ".tap/test-results/$file.tap" "$OUT/$label.full.tap"
+            fi
+            if test -d test-output/reports; then
+              mkdir -p "$OUT/$label.canonical"
+              find test-output/reports -maxdepth 1 -type f -name '*.ndjson' \
+                -exec cp {} "$OUT/$label.canonical/" \;
+            fi
+          done
+          exit "$failed"
+      - name: Retain all source-bound statuses and raw TAP evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-release-budget-independent-${{ github.sha }}
+          path: test-output/rs-raft-release-budget-independent/
+          retention-days: 14
+          if-no-files-found: warn
