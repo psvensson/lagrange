@@ -121,4 +121,44 @@ test('seed issues one serialized real partition release intent, not one per repl
       assert.ok(options.timeoutMs > 0 &&
         options.timeoutMs <= SHARED_BUDGET_MS);
     }
+
+    // An explicitly scoped release budget must not alter leader-election
+    // waiting, the partition-intent count, or the single shared deadline.
+    owner.config.seedParticipantReleaseBudgetMs = 20000;
+    routed.length = 0;
+    authorized.length = 0;
+    waves.length = 0;
+    const separatedStartedAt = clock.now();
+    await method.call(owner);
+    assert.equal(owner.config.leadershipWaitTimeoutMs, SHARED_BUDGET_MS,
+      'the original election wait stays one second');
+    assert.deepEqual(routed.map(({payload}) => payload.partitionId), expected);
+    assert.equal(waves.length, 1);
+    const separatedDeadline = routed[0].payload.deadlineAtMs;
+    assert.ok(separatedDeadline >= separatedStartedAt + 20000 &&
+      separatedDeadline <= clock.now() + 20000,
+    'a new release interval is measured exactly once by the original clock');
+    assert.equal(waves[0].deadlineAtMs, separatedDeadline);
+    for (const {payload, options} of routed) {
+      assert.equal(payload.deadlineAtMs, separatedDeadline,
+        'a separated budget does not renew any per-partition deadline');
+      assert.ok(options.timeoutMs > 0 && options.timeoutMs <= 5000,
+        'individual delivery still has its original shorter request bound');
+    }
+
+    for (const invalidBudget of [null, 0, -1, '20000', 1.5,
+      Number.MAX_SAFE_INTEGER + 1]) {
+      owner.config.seedParticipantReleaseBudgetMs = invalidBudget;
+      routed.length = 0;
+      authorized.length = 0;
+      waves.length = 0;
+      await assert.rejects(() => method.call(owner),
+        /Invalid seed participant release budget/u);
+      assert.equal(routed.length, 0,
+        'an invalid explicit budget must refuse before any release is sent');
+      assert.equal(waves.length, 0,
+        'invalid budget creates no control-wave permission');
+      assert.equal(authorized.length, 0,
+        'invalid budget requests no fresh-seed authority');
+    }
   });
