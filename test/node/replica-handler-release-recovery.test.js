@@ -1016,12 +1016,14 @@ test('cleanup debt retains all seven acquired resources on the installing schedu
           {owner: timeSource, field: 'setTimeout', descriptor: setDescriptor},
           {owner: clockB, field: 'now', descriptor: clockBNowDescriptor},
         ], 'cleanup-debt assertion');
-        failure = await membership.retire(failure,
-          'cleanup-debt final membership custody failed');
+        // Restore the most recently installed membership gate first, so
+        // cleanup after an earlier assertion cannot mask its own failure.
         if (freshMembership !== null) {
           failure = await freshMembership.retire(failure,
             'cleanup-debt final fresh membership custody failed');
         }
+        failure = await membership.retire(failure,
+          'cleanup-debt final membership custody failed');
       }
       if (failure !== null) throw failure;
     }, {timeSource: clockA});
