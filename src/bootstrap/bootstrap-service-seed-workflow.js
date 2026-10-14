@@ -351,7 +351,13 @@ function createBootstrapServiceSeedWorkflowMethods() {
           await this.sleep(Math.min(retryAfterMs,
             Math.max(0, deadline - timeSource.now())));
         } while (timeSource.now() <= deadline);
-        if (answer?.outcome !== PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER) {
+        // The caller's absolute admission deadline is independent of
+        // whether a previously admitted Raft operation ultimately committed.
+        // Preserve a late CUT_OVER in the error evidence, but never promote
+        // the entire seed to READY from a reply settled after expiry.
+        // No await separates this final owner-clock fence from completed++.
+        if (answer?.outcome !== PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER ||
+            timeSource.now() >= deadline) {
           const terminalObservation = readParticipantReleaseClock(timeSource);
           const seedRelease = seedReleaseFailureProjection({startObservation,
             terminalObservation, budgetMs, ordinal: completed + 1,
