@@ -1,0 +1,34 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "seed-shared-current-control-wave",
+  "status": "fail",
+  "base": "47ceb42e4a36757007f0d8006d2014fa1400d9c8",
+  "receipts": [
+    {
+      "id": "measured-old-two-full-control-calls-per-dependent",
+      "passed": false,
+      "detail": "WIP design/no production wave implementation. Historical diagnostics are not proof of this new interaction."
+    },
+    {
+      "id": "wave-control-authority-and-current-member-proof",
+      "passed": false,
+      "detail": "WIP design/no production wave implementation. Historical diagnostics are not proof of this new interaction."
+    },
+    {
+      "id": "failure-deadline-restart-and-cancellation-closeout",
+      "passed": false,
+      "detail": "WIP design/no production wave implementation. Historical diagnostics are not proof of this new interaction."
+    },
+    {
+      "id": "original-1000-5000-ms-full-startup-positive",
+      "passed": false,
+      "detail": "WIP design/no production wave implementation. Historical diagnostics are not proof of this new interaction."
+    },
+    {
+      "id": "independent-source-static-multihost-and-cutover-gates",
+      "passed": false,
+      "detail": "WIP design/no production wave implementation. Historical diagnostics are not proof of this new interaction."
+    }
+  ],
+  "evidenceLimit": "All original 1000/5000ms startup gates and full distributed certification remain RED/UNPROVEN. No main merge."
+}
