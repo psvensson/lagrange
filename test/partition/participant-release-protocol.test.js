@@ -308,19 +308,21 @@ test('real RESUME recipient refuses admission if original deadline expires durin
     let originalRaftFactReads = 0;
     const realMembership = originallyHostedPort.readCommittedMembership
       .bind(originallyHostedPort);
-    const proxy = new Proxy(originallyHostedPort, {
-      get(target, field) {
-        if (field === 'readCommittedMembership') {
-          return async (...args) => {
-            const result = await realMembership(...args);
-            originalRaftFactReads += 1;
-            current = deadlineAtMs + 1;
-            return result;
-          };
-        }
-        const value = Reflect.get(target, field, target);
-        return typeof value === 'function' ? value.bind(target) : value;
+    // Actual port methods are immutable own data properties: a Proxy cannot
+    // replace their values without violating JS proxy invariants. Shadow on
+    // a new adapter with the REAL port as prototype instead; all read facts
+    // still come from the underlying Raft owner, not a fabricated witness.
+    const adapter = Object.create(originallyHostedPort);
+    Object.defineProperty(adapter, 'readCommittedMembership', {
+      value: async (...args) => {
+        const result = await realMembership(...args);
+        originalRaftFactReads += 1;
+        current = deadlineAtMs + 1;
+        return result;
       },
+    });
+    Object.defineProperty(adapter, 'readStatus', {
+      value: (...args) => originallyHostedPort.readStatus(...args),
     });
     const build = await runtimeBuildProvenance();
     assert.equal(build.state, 'measured');
@@ -347,7 +349,7 @@ test('real RESUME recipient refuses admission if original deadline expires durin
     try {
       handler.timeSource = {...prior, now: () => current};
       Object.defineProperty(service, 'raft',
-        {configurable: true, enumerable: true, writable: true, value: proxy});
+        {configurable: true, enumerable: true, writable: true, value: adapter});
       const answer = await sendRegisteredRelease(handler, transport, request);
       assert.equal(originalRaftFactReads > 0, true,
         'the real recipient has awaited actual committed Raft membership: ' +
