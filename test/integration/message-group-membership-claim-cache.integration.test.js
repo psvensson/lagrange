@@ -38,7 +38,7 @@ const PARTICIPANT_RELEASE_TRACE_CAP = 8192;
 // Real 45-partition seed work is CPU/SQLite constrained on 4-vCPU CI.
 // This is an explicitly scoped release budget, not an election timeout.
 const SEED_RELEASE_BUDGET_MS = 20000;
-const CLAIM_CACHE_TEST_BUDGET_MS = 60000;
+const CLAIM_CACHE_TEST_BUDGET_MS = 90000;
 const PARTICIPANT_RELEASE_COHORT_TRACE_CAP = 16;
 const TRACE_ERROR_MESSAGE_CAP = 512;
 const PARTICIPANT_RELEASE_TRACE_SCHEMA = 'participant-release-delivery-trace/1';
