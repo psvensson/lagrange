@@ -1,0 +1,85 @@
+# A single hosted machine compares passive original MessageRouter.deliver
+# timing on immutable serial seed source with/without current-control fast proof.
+name: rs-raft-fast-control-timing-pair
+on:
+  push:
+    branches: [diagnostic/rs-raft-fast-control-timing-pair-20261014]
+    paths: [.github/workflows/rs-raft-fast-control-timing-pair.yml]
+permissions:
+  contents: read
+jobs:
+  compare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Passive paired current control release duration at original deadline
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT="$GITHUB_WORKSPACE/test-output/fast-control-timing-pair"
+          mkdir -p "$OUT"
+          BASE=31f35ac44845b343131ac032ec3a5b44f7c649d7
+          CANDIDATE=135d9b67dbf39a09ee598627205aa3761a0d0ebc
+          PASSIVE=db5f17dea023116dee4aebf09dd1bb21a63ce27d
+          TEST=test/integration/message-group-membership-claim-cache.integration.test.js
+          SCRIPT=scripts/quest-evidence/summarize-seed-release-timings.mjs
+          git show "$PASSIVE:$TEST" > "$OUT/instrumented-test.js"
+          git show "$PASSIVE:$SCRIPT" > "$OUT/summarize.mjs"
+          sha256sum "$OUT/instrumented-test.js" > "$OUT/instrumented-test.sha256"
+          sha256sum "$OUT/summarize.mjs" > "$OUT/summary-implementation.sha256"
+          git diff --name-only "$BASE" "$CANDIDATE" -- src > "$OUT/source-diff.txt"
+          grep -Fx src/node/replica-handler-participant-cutover.js "$OUT/source-diff.txt" || exit 1
+          test "$(wc -l < "$OUT/source-diff.txt")" -eq 1 || exit 1
+          originalBlob=$(git rev-parse "$BASE:$TEST")
+          newBlob=$(git rev-parse "$CANDIDATE:$TEST")
+          test "$originalBlob" = "$newBlob" || {
+            echo 'Source-only paired original test is not identical'; exit 1;
+          }
+          for label in original fastProof; do
+            if test "$label" = original; then REF="$BASE"; else REF="$CANDIDATE"; fi
+            ROOT="$RUNNER_TEMP/current-proof-$label"
+            git worktree add --detach "$ROOT" "$REF" > "$OUT/$label.worktree.log" 2>&1 || exit 1
+            cp "$OUT/instrumented-test.js" "$ROOT/$TEST" || exit 1
+            git -C "$ROOT" rev-parse HEAD > "$OUT/$label.head"
+            git -C "$ROOT" rev-parse HEAD^{tree} > "$OUT/$label.tree"
+            (cd "$ROOT" && npm ci) > "$OUT/$label.install.log" 2>&1
+            install=$?
+            test "$install" -eq 0 || { echo 'Dependency preparation failed'; exit 1; }
+            (cd "$ROOT" && npm run -s test:file -- "$TEST") > "$OUT/$label.run.log" 2>&1
+            status=$?
+            printf '%s\n' "$status" > "$OUT/$label.status"
+            RAW="$ROOT/.tap/test-results/$TEST.tap"
+            test -f "$RAW" || { echo 'Missing original full TAP'; exit 1; }
+            cp "$RAW" "$OUT/$label.full.tap"
+            sha256sum "$OUT/$label.full.tap" > "$OUT/$label.full.sha256"
+            node "$OUT/summarize.mjs" "$RAW" "$OUT/$label.timing.json" \
+              > "$OUT/$label.brief.json" 2> "$OUT/$label.timing-error.log"
+            summary=$?
+            printf '%s\n' "$summary" > "$OUT/$label.summary.status"
+            test "$summary" -eq 0 || { cat "$OUT/$label.timing-error.log"; exit 1; }
+            echo "source=$REF original 1000ms test $label status=$status"
+            cat "$OUT/$label.brief.json"
+            grep -E 'Seed participant release failed|test-files total' "$OUT/$label.run.log" \
+              | tail -n 4 | cut -c 1-1200 || true
+          done
+          echo 'Passive comparison complete; no latency result is release acceptance'
+      - name: Preserve unchanged runtime, measured passive test and both full TAPs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-fast-control-timing-${{ github.sha }}
+          path: test-output/fast-control-timing-pair/
+          retention-days: 14
+          if-no-files-found: warn
