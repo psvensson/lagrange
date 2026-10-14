@@ -249,7 +249,16 @@ function finalResumeFactsMatch(handler, service, facts, request, status) {
     status.configurationKey === request.release.configurationKey;
 }
 
+function resumeDeadlineExpired(handler, request) {
+  return !Number.isSafeInteger(request.deadlineAtMs) ||
+    handler.timeSource.now() >= request.deadlineAtMs;
+}
+
 async function resumeParticipantCutoverAdmission(handler, service, request) {
+  // Entry and final admission are separate authority boundaries: an
+  // otherwise-current, delayed member read must not commit OPEN after the
+  // incoming original absolute deadline has expired.
+  if (resumeDeadlineExpired(handler, request)) return OUTCOME.UNAVAILABLE;
   const lifecycleRefusal = refuseStaleResume(handler, service);
   if (lifecycleRefusal !== null) return lifecycleRefusal;
   const current = participantReleaseAdmissionOf(service);
@@ -272,6 +281,10 @@ async function resumeParticipantCutoverAdmission(handler, service, request) {
   const status = service.raft.readStatus();
   if (refuseStaleResume(handler, service) !== null ||
       !finalResumeFactsMatch(handler, service, facts, request, status)) return OUTCOME.STALE;
+  // The authoritative OPEN mutation happens here, *after* awaited facts.
+  // Neither a pre-await deadline check nor a transport timeout grants
+  // permission to reopen once this absolute timestamp is spent.
+  if (resumeDeadlineExpired(handler, request)) return OUTCOME.UNAVAILABLE;
   ADMISSIONS.set(service, Object.freeze({...current, state: ADMISSION.OPEN,
     releaseId: request.release.releaseId, proof: Object.freeze({term: status.term,
       leaderId: status.leaderId, configurationKey: status.configurationKey,
