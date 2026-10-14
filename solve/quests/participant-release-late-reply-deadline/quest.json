@@ -1,0 +1,53 @@
+{
+  "schema": "solve-quest/2",
+  "id": "participant-release-late-reply-deadline",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "A participant release caller whose original bounded deadline expires while awaiting a delivered reply cannot treat that reply's CUT_OVER, OBSERVED or other positive outcome as current permission. The one canonical participant-release-client response boundary must fail closed based on the same original TimeSource, without cancelling durable effects or inventing a new transport driver.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/participant-release-late-reply-deadline/evidence/receipt.json",
+      "requiredReceipts": [
+        "engaged-old-source-late-positive-negative",
+        "candidate-exact-caller-deadline-refusal",
+        "redirect-and-nonobservation-action-proof",
+        "protocol-recovery-transaction-native-regressions",
+        "independent-source-static-and-distributed-acceptance"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "single-client-owner",
+      "statement": "Only existing src/node/participant-release-client.js owns caller deadline classification after await. Reuse its original timeSource and release contract; do not modify Raft, replica receipt, transit transport, membership, admission, origin, session clocks or add a second delayed callback."
+    },
+    {
+      "id": "truth-and-durability",
+      "statement": "After an original non-OBSERVE request's successful transport delivery, check that original caller deadline is still unspent before interpreting positive answer or redirect. A late positive becomes typed UNAVAILABLE with missingFact RELEASE_DEADLINE; never report an already-committed action as rolled back. Existing partition/recovery owners reconstruct durable outcome instead of treating late reply as authorization."
+    },
+    {
+      "id": "strict-order",
+      "statement": "The existing original request validation, before-send timeout, transport classification, and OBSERVE_APPLIED_POSITION's independently owned observation deadline remain unchanged. Unavailable/invalid reply precedence and malformed deadline handling must preserve existing behavior; prevent NOT_LEADER redirect if the first reply arrives after deadline."
+    },
+    {
+      "id": "engaged-negative",
+      "statement": "Use a deterministic TimeSource with an actual accepted and classified original delivery response: clock advances beyond the same request.deadlineAtMs strictly while awaiting. Original caller currently reports CUT_OVER: named source-only negative must engage its actual client route rather than a fake outcome checker, trivial zero budget, timer cancellation or virtual worker simulation."
+    },
+    {
+      "id": "steady-and-unknown",
+      "statement": "Use a controlled test with before/at/after boundary, no positive may cross expiry; no extra delivery or timeout scheduled and same one original clock; preserve earlier healthy completion. A delivered operation after expiry may still be durable and cannot be uncommitted; failure must retain recovery responsibility."
+    },
+    {
+      "id": "full-composition",
+      "statement": "Retain original 20s release / 1s election benchmark separation and lossless test evidence, unchanged native V10, release protocol, recovery, TX1/TX2, FreshMG, off-seed, CDC and zero-legacy checks; independent current-source review and locked-host 3/5-node gates before any merge/main or receipt completion."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "retry-loops",
+    "admission-gating",
+    "harness-fidelity",
+    "concurrency-serialization"
+  ]
+}
