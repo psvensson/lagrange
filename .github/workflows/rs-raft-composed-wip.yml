@@ -1,0 +1,148 @@
+# Hosted WIP exploratory evidence, NOT the locked-host Quest or publisher gate.
+name: rs-raft-composed-wip
+on:
+  push:
+    branches: [continue/rs-raft-composed-candidate-20261014]
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-composed-wip
+  cancel-in-progress: false
+jobs:
+  focused-and-baseline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - run: npm ci
+      - name: Exact composed candidate files, each once; never mask a failure
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          mkdir -p test-output/composed-candidate
+          git rev-parse HEAD > test-output/composed-candidate/source-sha.txt
+          for f in \
+            test/partition/participant-release-protocol.test.js \
+            test/partition/participant-release-applied-position.test.js \
+            test/node/replica-handler-release-recovery.test.js \
+            test/partition/participant-release-native-application-order.test.js \
+            test/raft/raft-rs-backend/persistence-admission.test.js \
+            test/raft/raft-rs-backend/runtime-turn-integrity.test.js \
+            test/raft/raft-rs-backend/transfer-leadership-drain-anchors.test.js; do
+            name="${f##*/}"
+            node --check "$f" > "test-output/composed-candidate/$name.syntax.log" 2>&1
+            echo "$?" > "test-output/composed-candidate/$name.syntax.status"
+            npm run -s test:file -- "$f" > "test-output/composed-candidate/$name.log" 2>&1
+            echo "$?" > "test-output/composed-candidate/$name.status"
+            echo "$f result=$(cat "test-output/composed-candidate/$name.status")"
+            grep -A 14 -B 1 -E '^not ok|^  error:|^  failureType:' "test-output/composed-candidate/$name.log" | head -n 70 || true
+            tail -n 9 "test-output/composed-candidate/$name.log"
+            if test -d test-output/reports; then
+              mkdir -p "test-output/composed-candidate/$name.canonical"
+              find test-output/reports -maxdepth 1 -type f -name '*.ndjson' -exec cp {} "test-output/composed-candidate/$name.canonical/" \;
+            fi
+          done
+          failed=0
+          for f in test-output/composed-candidate/*.status; do
+            test "$(cat "$f")" = "0" || failed=1
+          done
+          exit "$failed"
+      - name: Source-only unreferenced native timer predecessor, same hosted machine
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT="$GITHUB_WORKSPACE/test-output/composed-native-negative"
+          mkdir -p "$OUT"
+          echo c60bc9eba953c6788f7cec79249a4c9864ccb0ac > "$OUT/source-sha.txt"
+          git worktree add --detach "$RUNNER_TEMP/rs-raft-negative" c60bc9eba953c6788f7cec79249a4c9864ccb0ac > "$OUT/worktree.log" 2>&1
+          add_status=$?
+          echo "$add_status" > "$OUT/worktree.status"
+          if test "$add_status" -ne 0; then
+            cat "$OUT/worktree.log"
+            exit 1
+          fi
+          cd "$RUNNER_TEMP/rs-raft-negative" || exit 1
+          npm ci > "$OUT/npm-ci.log" 2>&1
+          ci_status=$?
+          echo "$ci_status" > "$OUT/npm-ci.status"
+          if test "$ci_status" -ne 0; then
+            tail -n 25 "$OUT/npm-ci.log"
+            exit 1
+          fi
+          npm run -s test:file -- test/partition/participant-release-native-application-order.test.js > "$OUT/native.log" 2>&1
+          status=$?
+          echo "$status" > "$OUT/native.status"
+          if test -d test-output/reports; then
+            cp test-output/reports/*.ndjson "$OUT/" 2>/dev/null || true
+          fi
+          echo "predecessor native test status=$status"
+          grep -A 12 -B 1 -E '^not ok|^  error:|^  failureType:' "$OUT/native.log" | head -n 65 || true
+          tail -n 16 "$OUT/native.log"
+          # The predecessor should fail the native assertion or cancel; a
+          # positive is a disqualifying counterexample to this differential.
+          test "$status" -ne 0
+      - name: Preserve both exact candidates and each attempted output
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-composed-${{ github.sha }}
+          path: |
+            test-output/composed-candidate/
+            test-output/composed-native-negative/
+          retention-days: 14
+          if-no-files-found: warn
+  static:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - run: npm ci
+      - name: Existing contract/static gates without baseline increases
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          mkdir -p test-output/composed-static
+          git rev-parse HEAD > test-output/composed-static/source-sha.txt
+          for gate in test:deps audit:shards audit:impact-contracts test:unused:ratchet test:complexity:scoped; do
+            safe="${gate//:/-}"
+            npm run -s "$gate" > "test-output/composed-static/$safe.log" 2>&1
+            echo "$?" > "test-output/composed-static/$safe.status"
+            echo "$gate status=$(cat "test-output/composed-static/$safe.status")"
+            tail -n 16 "test-output/composed-static/$safe.log"
+          done
+          failed=0
+          for f in test-output/composed-static/*.status; do
+            test "$(cat "$f")" = "0" || failed=1
+          done
+          exit "$failed"
+      - name: Preserve red static evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-static-${{ github.sha }}
+          path: test-output/composed-static/
+          retention-days: 14
+          if-no-files-found: warn
