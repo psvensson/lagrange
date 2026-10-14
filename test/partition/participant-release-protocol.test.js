@@ -15,9 +15,10 @@ import {SQL_TRANSACTIONS_SCHEMA} from
 import {readTransactionSchemaEnforcement} from
   '../../src/query/distributed/distributed-transaction-schema-enforcement.js';
 import {participantCutoverPauseOf, participantReleaseAdmissionOf,
-  readParticipantReleaseFacts} from
+  raiseParticipantCutoverPause, readParticipantReleaseFacts} from
   '../../src/partition/partition-participant-transaction-pause.js';
 import {readPartitionWriteOrigin} from '../../src/partition/partition-participant-transaction-store.js';
+import {releaseIdentityOf} from '../../src/partition/partition-participant-release-contract.js';
 import {readCommittedStatementOutcome} from
   '../../src/partition/partition-committed-statement-outcome.js';
 import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from
@@ -27,6 +28,7 @@ import {PARTICIPANT_CUTOVER_OUTCOME as OUTCOME} from
 import {
   PARTICIPANT_RELEASE_ACTION as RELEASE_ACTION,
   PARTICIPANT_RELEASE_ADMISSION as ADMISSION,
+  PARTICIPANT_RELEASE_MISSING_FACT as MISSING_FACT,
   PARTICIPANT_RELEASE_RESULT_FIELD,
   PARTICIPANT_RELEASE_ROUTE_SUFFIX,
   PARTICIPANT_RELEASE_TRIGGER,
@@ -282,6 +284,88 @@ test('real release route pauses initial writes, applies origin, censuses and res
       5000, 20), true, 'production lifecycle trigger must re-census without explicit release');
     assert.deepEqual(readPartitionWriteOrigin(replacement.db), origin);
     assert.equal((await replacement.executeQuery(SQL, ['restarted', 'written'])).success, true);
+  }));
+
+test('real RESUME recipient refuses admission if original deadline expires during awaited Raft facts',
+  () => fixture(async ({handler, service, transport, release}) => {
+    const first = await release();
+    assert.equal(first.outcome, OUTCOME.CUT_OVER,
+      'the real release establishes committed origin and an authentic OPEN cohort');
+    assert.notEqual(readPartitionWriteOrigin(service.db), null);
+    raiseParticipantCutoverPause(service);
+    assert.equal(participantReleaseAdmissionOf(service).state, ADMISSION.CLOSED);
+    const own = await readParticipantReleaseFacts(handler, service);
+    assert.equal(own.outcome, OUTCOME.OBSERVED);
+    assert.equal(own.paused, true);
+    const prior = handler.timeSource;
+    const originallyHostedPort = service.raft;
+    const portDescriptor = Object.getOwnPropertyDescriptor(service, 'raft');
+    const started = prior.now();
+    const deadlineAtMs = started + 100;
+    let current = started;
+    let originalRaftFactReads = 0;
+    const realMembership = originallyHostedPort.readCommittedMembership
+      .bind(originallyHostedPort);
+    const proxy = new Proxy(originallyHostedPort, {
+      get(target, field) {
+        if (field === 'readCommittedMembership') {
+          return async (...args) => {
+            const result = await realMembership(...args);
+            originalRaftFactReads += 1;
+            current = deadlineAtMs + 1;
+            return result;
+          };
+        }
+        const value = Reflect.get(target, field, target);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    });
+    const build = await runtimeBuildProvenance();
+    assert.equal(build.state, 'measured');
+    const identity = releaseIdentityOf({partitionId: service.partitionId,
+      targetBuildDigest: build.digest,
+      configurationKey: own.membership.configurationKey,
+      membershipGenerationIndex: own.membership.membershipGenerationIndex});
+    assert.notEqual(identity, null);
+    const request = registeredReleaseRequest({
+      action: RELEASE_ACTION.RESUME, partitionId: service.partitionId,
+      replicaId: service.replicaId, targetBuildDigest: build.digest,
+      release: identity,
+      target: own.generation,
+      attempt: {leaderReplicaId: service.replicaId,
+        term: own.membership.term,
+        leaderLifecycleIncarnation: own.generation.lifecycleIncarnation,
+        deadlineAtMs},
+      census: [own], deadlineAtMs,
+    });
+    let failure = null;
+    try {
+      handler.timeSource = {...prior, now: () => current};
+      Object.defineProperty(service, 'raft',
+        {configurable: true, enumerable: true, writable: true, value: proxy});
+      const answer = await sendRegisteredRelease(handler, transport, request);
+      assert.equal(originalRaftFactReads > 0, true,
+        'the real recipient has awaited actual committed Raft membership');
+      assert.equal(current, deadlineAtMs + 1,
+        'the original handler clock expired during that original membership wait');
+      assert.equal(answer.outcome, OUTCOME.UNAVAILABLE,
+        'the original recipient may not perform a post-deadline RESUME mutation');
+      assert.equal(answer.missingFact, MISSING_FACT.RELEASE_DEADLINE);
+      assert.equal(participantReleaseAdmissionOf(service).state, ADMISSION.CLOSED,
+        'a late result cannot reopen current SQL/partition admission');
+    } catch (error) {
+      failure = error;
+    } finally {
+      handler.timeSource = prior;
+      try {
+        if (portDescriptor === undefined) delete service.raft;
+        else Object.defineProperty(service, 'raft', portDescriptor);
+      } catch (error) {
+        failure = retainFailure(failure, error,
+          'original Raft owner descriptor restoration refused');
+      }
+    }
+    if (failure !== null) throw failure;
   }));
 
 test('no-origin release without fresh storage or operator authority stays closed', () =>
