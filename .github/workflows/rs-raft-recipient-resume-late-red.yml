@@ -4,7 +4,9 @@ name: rs-raft-recipient-resume-late-red
 on:
   push:
     branches: [work/rs-raft-recipient-postawait-fence-20261014]
-    paths: [.github/workflows/rs-raft-recipient-resume-late-red.yml]
+    paths:
+      - .github/workflows/rs-raft-recipient-resume-late-red.yml
+      - test/partition/participant-release-protocol.test.js
 permissions:
   contents: read
 jobs:
