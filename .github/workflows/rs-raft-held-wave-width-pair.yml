@@ -1,0 +1,86 @@
+# Same-host diagnostic source-only comparison. No increase to the original
+# 1000ms claim/cache deadline; red is preserved and never accepted as green.
+name: rs-raft-held-wave-width-pair
+on:
+  push:
+    branches: [experiment/rs-raft-control-wave-width4-20261014]
+    paths: [.github/workflows/rs-raft-held-wave-width-pair.yml]
+permissions:
+  contents: read
+jobs:
+  compare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 27
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Run all original 1000ms bodies with immutable test bytes, one host
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT="$GITHUB_WORKSPACE/test-output/rs-raft-held-wave-widths"
+          mkdir -p "$OUT"
+          TEST=test/integration/message-group-membership-claim-cache.integration.test.js
+          SERIAL=ebe35f1c8944ae7c7da483eae458c44f2500ac4e
+          WIDTH2=f188632c9ba5295f7f1fd50d964ff8c9394cfa27
+          WIDTH4=b722934a67ca61b36c59d33e9890c765feec4b6e
+          original=$(git rev-parse "$SERIAL:$TEST")
+          printf '%s\n' "$original" > "$OUT/unchanged-original-test-blob.txt"
+          for item in "serial:$SERIAL" "width2:$WIDTH2" "width4:$WIDTH4"; do
+            name="${item%%:*}"
+            ref="${item#*:}"
+            ROOT="$RUNNER_TEMP/held-wave-$name"
+            git worktree add --detach "$ROOT" "$ref" > "$OUT/$name.worktree.log" 2>&1 || exit 1
+            test "$(git rev-parse "$ref:$TEST")" = "$original" || {
+              echo "Changed original test bytes for $name"; exit 1;
+            }
+            git diff --name-only "$SERIAL" "$ref" -- src > "$OUT/$name.src-diff.txt"
+            if test "$name" = serial; then
+              test ! -s "$OUT/$name.src-diff.txt" || exit 1
+            else
+              test "$(wc -l < "$OUT/$name.src-diff.txt")" -eq 1 || exit 1
+              grep -Fx src/bootstrap/bootstrap-service-seed-workflow.js "$OUT/$name.src-diff.txt" || exit 1
+            fi
+            git -C "$ROOT" rev-parse HEAD > "$OUT/$name.head.txt"
+            git -C "$ROOT" rev-parse HEAD^{tree} > "$OUT/$name.tree.txt"
+            (cd "$ROOT" && npm ci) > "$OUT/$name.install.log" 2>&1
+            if test "$?" -ne 0; then echo "Dependency prep failed for $name"; exit 1; fi
+            (cd "$ROOT" && npm run -s test:metadata:refresh) > "$OUT/$name.metadata.log" 2>&1
+            if test "$?" -ne 0; then echo "Metadata producer failed for $name"; exit 1; fi
+            (cd "$ROOT" && npm run -s test:file -- "$TEST") > "$OUT/$name.original-test.log" 2>&1
+            status=$?
+            printf '%s\n' "$status" > "$OUT/$name.test.status"
+            RAW="$ROOT/.tap/test-results/$TEST.tap"
+            test -f "$RAW" || { echo "Missing full original TAP for $name"; exit 1; }
+            cp "$RAW" "$OUT/$name.original.tap"
+            sha256sum "$RAW" > "$OUT/$name.tap-sha256.txt"
+            node "$GITHUB_WORKSPACE/scripts/quest-evidence/summarize-seed-release-trace.mjs" \
+              "$RAW" "$OUT/$name.census.json" > "$OUT/$name.brief.json" \
+              2> "$OUT/$name.census-error.log"
+            census=$?
+            printf '%s\n' "$census" > "$OUT/$name.census.status"
+            if test "$census" -ne 0; then cat "$OUT/$name.census-error.log"; exit 1; fi
+            echo "original 1000ms $name exit=$status ref=$ref"
+            cat "$OUT/$name.brief.json"
+            grep -E 'Seed participant release failed|seed control wave|test-files total' \
+              "$OUT/$name.original-test.log" | tail -n 4 | cut -c 1-1150 || true
+          done
+          echo 'Diagnostic-only source pair finished; no green claims without full body success.'
+      - name: Archive all full original raw test outcomes and source tree identities
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-held-wave-widths-${{ github.sha }}
+          path: test-output/rs-raft-held-wave-widths/
+          retention-days: 14
+          if-no-files-found: warn
