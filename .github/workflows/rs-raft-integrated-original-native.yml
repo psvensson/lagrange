@@ -1,0 +1,64 @@
+# Same unchanged native V10 witness against exact composed runtime/release source.
+name: rs-raft-integrated-original-native
+on:
+  push:
+    branches: [continue/rs-raft-cloud-integrated-release-native-20261014]
+    paths:
+      - .github/workflows/rs-raft-integrated-original-native.yml
+permissions:
+  contents: read
+jobs:
+  original:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Measure immutable native V10 witness once on exact composite source
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OLD=c12840725e12c87855b2942566313ecee37bc487
+          TEST=test/partition/participant-release-native-application-order.test.js
+          OUT=test-output/rs-raft-integrated-original
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/integrated-head.txt"
+          git rev-parse HEAD^{tree} > "$OUT/integrated-source-tree.txt"
+          git rev-parse "$OLD:$TEST" > "$OUT/original-test-blob.txt"
+          git show "$OLD:$TEST" > "$TEST"
+          sha256sum "$TEST" > "$OUT/original-test-sha256.txt"
+          if grep -Eq 'installBeforeExitDiagnostic|setActualCoreEntryObserver|setNativeInboundStageObserver' "$TEST"; then
+            echo 'unexpected diagnostic observer on native V10' > "$OUT/invalid-input.txt"
+            exit 1
+          fi
+          npm ci > "$OUT/install.log" 2>&1
+          install=$?
+          printf '%s\n' "$install" > "$OUT/install.status"
+          if test "$install" -ne 0; then exit 1; fi
+          node --check "$TEST" > "$OUT/syntax.log" 2>&1
+          syntax=$?
+          printf '%s\n' "$syntax" > "$OUT/syntax.status"
+          npm run -s test:file -- "$TEST" > "$OUT/native-v10.log" 2>&1
+          status=$?
+          printf '%s\n' "$status" > "$OUT/native-v10.status"
+          tail -n 65 "$OUT/native-v10.log"
+          test ! -d test-output/reports || find test-output/reports -maxdepth 1 -type f -name '*.ndjson' -exec cp {} "$OUT/" \;
+          test "$syntax" -eq 0 && test "$status" -eq 0 || exit 1
+      - name: Preserve original native release proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-integrated-native-v10-${{ github.sha }}
+          path: test-output/rs-raft-integrated-original/
+          retention-days: 14
+          if-no-files-found: warn
