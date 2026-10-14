@@ -1,0 +1,71 @@
+# WIP exact-source static census. Inherited whole-tree reds remain red.
+name: rs-raft-native-owned-timer-static
+on:
+  push:
+    branches: [continue/rs-raft-cloud-native-inbound-owned-timer-v1-20261014]
+    paths:
+      - .github/workflows/rs-raft-native-owned-timer-static.yml
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-native-owned-timer-static
+  cancel-in-progress: false
+jobs:
+  audits:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install exact dependencies
+        run: npm ci
+      - name: Source-bound audits, preserve every inherited and new red
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-native-static
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/commit.txt"
+          git rev-parse HEAD^{tree} > "$OUT/tree.txt"
+          failed=0
+          for task in audit:shards audit:impact-contracts test:deps \
+            test:unused:ratchet audit:file-size:strict test:duplication:strict \
+            audit:no-legacy-consensus-references audit:guideline:ambient-intrinsics \
+            audit:guideline:silent-catch audit:owner-boundary-segments lint; do
+            safe="${task//:/-}"
+            npm run -s "$task" > "$OUT/$safe.log" 2>&1
+            status=$?
+            printf '%s\n' "$status" > "$OUT/$safe.status"
+            echo "$task status=$status"
+            if test "$status" -ne 0; then
+              failed=1
+              tail -n 25 "$OUT/$safe.log"
+            fi
+          done
+          npm run -s test:metadata:refresh > "$OUT/metadata-refresh.log" 2>&1
+          refresh=$?
+          printf '%s\n' "$refresh" > "$OUT/metadata-refresh.status"
+          git status --short > "$OUT/generated-drift.txt"
+          if test -s "$OUT/generated-drift.txt"; then
+            echo 'Tracked producer drift remains:'
+            cat "$OUT/generated-drift.txt"
+            failed=1
+          fi
+          if test "$refresh" -ne 0; then failed=1; fi
+          exit "$failed"
+      - name: Archive exact failures and static outputs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-native-static-${{ github.sha }}
+          path: test-output/rs-raft-native-static/
+          retention-days: 14
+          if-no-files-found: warn
