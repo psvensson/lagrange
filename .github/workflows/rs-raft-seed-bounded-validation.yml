@@ -1,0 +1,81 @@
+name: rs-raft-seed-bounded-validation
+on:
+  push:
+    branches: [continue/rs-raft-seed-bounded-concurrent-cohorts-20261014]
+    paths:
+      - .github/workflows/rs-raft-seed-bounded-validation.yml
+      - src/bootstrap/bootstrap-service-seed-workflow.js
+      - test/bootstrap/seed-release-once-per-cohort.test.js
+      - test/shards/impact-graph-seal.json
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-seed-bounded-validation
+  cancel-in-progress: false
+jobs:
+  existing-budgets:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install exactly locked dependencies
+        run: npm ci
+      - name: Source-bound candidate old-timeout proof, no retry
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-seed-bounded-validation
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/tree.txt"
+          npx eslint src/bootstrap/bootstrap-service-seed-workflow.js \
+            test/bootstrap/seed-release-once-per-cohort.test.js > "$OUT/lint.log" 2>&1
+          lint=$?
+          printf '%s\n' "$lint" > "$OUT/lint.status"
+          if test "$lint" -ne 0; then cat "$OUT/lint.log"; fi
+          failed=0
+          if test "$lint" -ne 0; then failed=1; fi
+          for f in \
+            test/bootstrap/seed-release-once-per-cohort.test.js \
+            test/integration/message-group-membership-claim-cache.integration.test.js \
+            test/bootstrap/node-bootstrap-consistency.property.test.js; do
+            name="${f##*/}"
+            npm run -s test:file -- "$f" > "$OUT/$name.log" 2>&1
+            status=$?
+            printf '%s\n' "$status" > "$OUT/$name.status"
+            echo "$f status=$status"
+            tail -n 50 "$OUT/$name.log" | cut -c 1-250
+            if test "$status" -ne 0; then
+              failed=1
+              grep -E 'not ok|Seed participant release failed|ERR_ASSERTION|cancelled|timeout' "$OUT/$name.log" | tail -n 27 | cut -c 1-900 || true
+            fi
+            if test -f ".tap/test-results/$f.tap"; then
+              cp ".tap/test-results/$f.tap" "$OUT/$name.full.tap"
+            fi
+            if test -d test-output/reports; then
+              mkdir -p "$OUT/$name.canonical"
+              find test-output/reports -maxdepth 1 -type f -name '*.ndjson' \
+                -exec cp {} "$OUT/$name.canonical/" \;
+            fi
+          done
+          exit "$failed"
+      - name: Preserve original full TAP, exact candidate and every red
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-seed-bounded-validation-${{ github.sha }}
+          path: test-output/rs-raft-seed-bounded-validation/
+          retention-days: 14
+          if-no-files-found: warn
