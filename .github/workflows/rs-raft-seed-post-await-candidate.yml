@@ -1,0 +1,84 @@
+# Exact WIP proof of caller-deadline semantics at the existing release
+# client. No timeout increased; before/after deadline are separate assertions.
+name: rs-raft-seed-post-await-candidate
+on:
+  push:
+    branches: [verify/rs-raft-seed-late-reply-fence-20261014]
+    paths:
+      - .github/workflows/rs-raft-seed-post-await-candidate.yml
+      - src/node/participant-release-client.js
+      - test/bootstrap/seed-release-once-per-cohort.test.js
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-seed-post-await-candidate
+  cancel-in-progress: false
+jobs:
+  current:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Exact locked dependencies
+        run: npm ci
+      - name: Original release owner, recovery and current-clock tests
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-seed-post-await-candidate
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/tree.txt"
+          failed=0
+          npx eslint src/node/participant-release-client.js \
+            test/bootstrap/seed-release-once-per-cohort.test.js > "$OUT/lint.log" 2>&1
+          lint=$?
+          printf '%s\n' "$lint" > "$OUT/lint.status"
+          if test "$lint" -ne 0; then failed=1; cat "$OUT/lint.log"; fi
+          for file in \
+            test/bootstrap/seed-release-once-per-cohort.test.js \
+            test/partition/participant-release-protocol.test.js \
+            test/partition/participant-release-applied-position.test.js \
+            test/node/replica-handler-release-recovery.test.js \
+            test/partition/control-wave-duplicate-boundary.test.js \
+            test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js \
+            test/integration/message-group-membership-claim-cache.integration.test.js; do
+            name="${file##*/}"
+            npm run -s test:file -- "$file" > "$OUT/$name.log" 2>&1
+            rc=$?
+            printf '%s\n' "$rc" > "$OUT/$name.status"
+            echo "$file status=$rc"
+            tail -n 18 "$OUT/$name.log" | cut -c 1-460
+            if test "$rc" -ne 0; then
+              failed=1
+              grep -E 'not ok|assert|error:|fail|cancel' "$OUT/$name.log" | tail -n 20 | cut -c 1-1200 || true
+            fi
+            if test -f ".tap/test-results/$file.tap"; then
+              cp ".tap/test-results/$file.tap" "$OUT/$name.full.tap"
+            fi
+            if test -d test-output/reports; then
+              mkdir -p "$OUT/$name.canonical"
+              find test-output/reports -maxdepth 1 -name '*.ndjson' -type f \
+                -exec cp {} "$OUT/$name.canonical/" \;
+            fi
+          done
+          exit "$failed"
+      - name: Preserve exact source statuses and original complete TAP
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-seed-post-await-${{ github.sha }}
+          path: test-output/rs-raft-seed-post-await-candidate/
+          retention-days: 14
+          if-no-files-found: warn
