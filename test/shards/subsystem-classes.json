@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 146,
     "solver-tooling": 7,
-    "storage-partition": 182,
+    "storage-partition": 183,
     "storage-raft": 129,
     "test-infrastructure": 143,
     "transactions": 16,
     "transport-messaging": 95,
     "wasm-toolchain": 57
   },
-  "censusSize": 2370,
-  "digest": "fnv1a32-c6f4618d",
+  "censusSize": 2371,
+  "digest": "fnv1a32-2130751d",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-3af53ad5",
+  "observationDigest": "fnv1a32-82a6919d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1262,6 +1262,7 @@
     "test/partition/message-handler-registry.test.js": "storage-partition",
     "test/partition/participant-decision-canonical-record.test.js": "storage-partition",
     "test/partition/participant-envelope-admission.test.js": "storage-partition",
+    "test/partition/participant-release-applied-position.test.js": "storage-partition",
     "test/partition/participant-release-build-provenance.test.js": "storage-partition",
     "test/partition/participant-release-native-application-order.test.js": "storage-partition",
     "test/partition/participant-release-protocol.test.js": "storage-partition",
@@ -8373,6 +8374,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-constants.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
@@ -8383,6 +8385,8 @@
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
         "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/participant-release-observer-resource-fixture.js",
+        "test/test-helpers/participant-release-recovery-harness.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
@@ -8746,6 +8750,30 @@
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
         "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/partition/participant-release-applied-position.test.js": {
+      "files": [
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/participant-release-observer-resource-fixture.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
