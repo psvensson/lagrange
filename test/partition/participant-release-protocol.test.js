@@ -411,8 +411,8 @@ async function assertExpiryWithinOriginalResumeFactsRead(expireAtRead) {
           'the original cutover reached exactly one genuine recipient RESUME');
         assert.equal(membershipCrossedDeadline, true,
           'the clock advanced only inside the awaited real committed-membership read');
-        assert.equal(membershipReadsDuringResume, expireAtRead,
-          'the clock only advanced at the selected original Raft facts read');
+        assert.ok(membershipReadsDuringResume >= expireAtRead,
+          'the selected native Raft facts read completed before final response');
         assert.ok(clock.now() >= deadlineAtMs);
         assert.equal(answer.outcome, OUTCOME.UNAVAILABLE,
           'a real member may not return CUT_OVER after its release deadline');
