@@ -9,7 +9,7 @@ on:
       - .github/workflows/rs-raft-seed-realistic-budget-and-trace.yml
       - src/bootstrap/bootstrap-service-seed-workflow.js
       - test/integration/message-group-membership-claim-cache.integration.test.js
-      - test/quest-evidence/participant-release-trace-envelope.test.js
+      - test/scripts/participant-release-trace-envelope.test.js
       - scripts/quest-evidence/participant-release-trace-envelope.mjs
       - scripts/quest-evidence/summarize-seed-release-trace.mjs
 permissions:
@@ -48,7 +48,7 @@ jobs:
           npx eslint \
             src/bootstrap/bootstrap-service-seed-workflow.js \
             test/integration/message-group-membership-claim-cache.integration.test.js \
-            test/quest-evidence/participant-release-trace-envelope.test.js \
+            test/scripts/participant-release-trace-envelope.test.js \
             scripts/quest-evidence/participant-release-trace-envelope.mjs \
             scripts/quest-evidence/summarize-seed-release-trace.mjs \
             > "$OUT/scoped-lint.log" 2>&1
@@ -56,7 +56,7 @@ jobs:
           printf '%s\n' "$lint" > "$OUT/scoped-lint.status"
           if test "$lint" -ne 0; then fail=1; cat "$OUT/scoped-lint.log"; fi
           for testfile in \
-            test/quest-evidence/participant-release-trace-envelope.test.js \
+            test/scripts/participant-release-trace-envelope.test.js \
             test/bootstrap/seed-release-once-per-cohort.test.js \
             test/integration/message-group-membership-claim-cache.integration.test.js \
             test/partition/control-wave-duplicate-boundary.test.js; do
