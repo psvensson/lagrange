@@ -430,6 +430,68 @@ test('control current-proof refuses schema drift during its second live census, 
   }, {partitionId: CONTROL_PARTITION, tableId: SQL_TRANSACTIONS_SCHEMA.tableName,
     tableName: SQL_TRANSACTIONS_SCHEMA.tableName, schema: SQL_TRANSACTIONS_SCHEMA}));
 
+
+test('expiry during awaited actual RESUME member read cannot reopen admission',
+  () => fixture(async ({handler, service, transport, release}) => {
+    // The original source accepts a complete valid first release. The next
+    // release is already-current, and we move only the recipient owner's clock
+    // after its second actual Raft committed-member read has engaged.
+    const initial = await release();
+    assert.equal(initial.outcome, OUTCOME.CUT_OVER, JSON.stringify(initial));
+    const origin = readPartitionWriteOrigin(service.db);
+    const originalDeliver = transport.deliver;
+    const originalClock = handler.timeSource;
+    const portDescriptor = Object.getOwnPropertyDescriptor(service, 'raft');
+    assert.ok(portDescriptor?.configurable, 'the original recipient port is replaceable');
+    const oldPort = service.raft;
+    let delayedResume = false;
+    let memberReads = 0;
+    let clockBias = 0;
+    handler.timeSource = Object.freeze({
+      ...originalClock, now: () => originalClock.now() + clockBias,
+    });
+    transport.deliver = function(...args) {
+      const request = args[1];
+      if (!delayedResume && request?.type === PARTICIPANT_RELEASE_TYPE &&
+          request.partitionId === CONTROL_PARTITION &&
+          request.action === RELEASE_ACTION.RESUME) {
+        delayedResume = true;
+        const fencedPort = Object.freeze({...oldPort,
+          async readCommittedMembership(...membershipArgs) {
+            memberReads += 1;
+            const observed = await Reflect.apply(
+              oldPort.readCommittedMembership, oldPort, membershipArgs);
+            if (memberReads === 2) clockBias = 60_000;
+            return observed;
+          },
+        });
+        Object.defineProperty(service, 'raft', {...portDescriptor, value: fencedPort});
+      }
+      return Reflect.apply(originalDeliver, this, args);
+    };
+    let answer = null;
+    try {
+      answer = await release();
+      assert.equal(delayedResume, true,
+        'the real PAUSE/RESUME protocol reached its final recipient');
+      assert.equal(memberReads >= 2, true,
+        'the original recipient performed its awaited authoritative membership read');
+      assert.equal(clockBias, 60_000,
+        'the recipient clock expired only AFTER the second current-member read');
+      assert.equal(answer.outcome, OUTCOME.UNAVAILABLE,
+        'the original recipient cannot OPEN after its absolute deadline');
+      assert.notEqual(participantCutoverPauseOf(service), null,
+        'the previous durable CUT_OVER does not make an expired new release OPEN');
+      assert.deepEqual(readPartitionWriteOrigin(service.db), origin,
+        'the old committed origin remains durable even when new release expires');
+    } finally {
+      transport.deliver = originalDeliver;
+      handler.timeSource = originalClock;
+      Object.defineProperty(service, 'raft', portDescriptor);
+    }
+  }, {partitionId: CONTROL_PARTITION, tableId: SQL_TRANSACTIONS_SCHEMA.tableName,
+    tableName: SQL_TRANSACTIONS_SCHEMA.tableName, schema: SQL_TRANSACTIONS_SCHEMA}));
+
 test('control cohort preserves unreconstructible legacy rows and reports exact activation debt',
   () => fixture(async ({service, release}) => {
     const transactionId = 'b'.repeat(32);
