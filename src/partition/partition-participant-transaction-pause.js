@@ -272,6 +272,12 @@ async function resumeParticipantCutoverAdmission(handler, service, request) {
   const status = service.raft.readStatus();
   if (refuseStaleResume(handler, service) !== null ||
       !finalResumeFactsMatch(handler, service, facts, request, status)) return OUTCOME.STALE;
+  // Current membership may have been awaited beyond the caller's original
+  // absolute release deadline. A previously committed origin is durable, but
+  // expiry cannot authorize NEW OPEN admission. No await follows this check
+  // before the recipient's one authoritative OPEN mutation.
+  if (!Number.isSafeInteger(request.deadlineAtMs) || request.deadlineAtMs < 0 ||
+      handler.timeSource.now() >= request.deadlineAtMs) return OUTCOME.UNAVAILABLE;
   ADMISSIONS.set(service, Object.freeze({...current, state: ADMISSION.OPEN,
     releaseId: request.release.releaseId, proof: Object.freeze({term: status.term,
       leaderId: status.leaderId, configurationKey: status.configurationKey,
