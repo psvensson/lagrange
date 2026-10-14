@@ -123,6 +123,52 @@ test('three actual current SQL control voters share one PAUSE census and each re
         assert.deepEqual(readPartitionWriteOrigin(service.db),
           origins[group.services.indexOf(service)]);
       }
+
+      // A real schema mutation AFTER the last member's PAUSE response is
+      // different from a mutation immediately before that member's RESUME:
+      // it can invalidate one remote member while the caller still holds
+      // the previously valid complete member census. The OLD second
+      // cross-member INSPECT must be tested as a causal comparator.
+      const lastMember = group.services.at(-1);
+      let pausedReplies = 0;
+      let schemaChanged = false;
+      transport.deliver = function(...args) {
+        const request = args[1];
+        const delivered = Reflect.apply(originalDeliver, this, args);
+        if (request?.type === PARTICIPANT_RELEASE_TYPE &&
+            request.partitionId === PARTITION_ID &&
+            request.action === ACTION.PAUSE) {
+          pausedReplies += 1;
+          if (pausedReplies === group.services.length) {
+            return Promise.resolve(delivered).then((response) => {
+              lastMember.db.exec('DROP TRIGGER sql_transactions_initial_lineage_v1');
+              schemaChanged = true;
+              return response;
+            });
+          }
+        }
+        return delivered;
+      };
+      let raced;
+      try {
+        raced = await release();
+      } finally {
+        transport.deliver = originalDeliver;
+      }
+      assert.equal(schemaChanged, true,
+        'a real control member schema changed after its returned PAUSE facts');
+      assert.equal(pausedReplies, group.services.length,
+        'the original complete three-member PAUSE cohort was reached');
+      assert.notEqual(raced.outcome, OUTCOME.CUT_OVER,
+        'invalid current schema cannot grant a successful control release');
+      const admissions = group.services.map((service) =>
+        participantReleaseAdmissionOf(service).state);
+      assert.deepEqual(admissions, [
+        ADMISSION.CLOSED, ADMISSION.CLOSED, ADMISSION.CLOSED,
+      ], 'a failed current member cohort must leave every other control voter CLOSED');
+      assert.deepEqual(group.services.map((service) =>
+        readPartitionWriteOrigin(service.db)), origins,
+      'a failed late schema proof must not rewrite any durable member origin');
     } catch (error) {
       failure = error;
     } finally {
