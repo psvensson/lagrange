@@ -1,0 +1,95 @@
+# Exploratory same-host serially executed release-width comparison.
+# No timeout changes, no skipped original body, no certification or main push.
+name: rs-raft-fast-control-widths-pair
+on:
+  push:
+    branches: [experiment/rs-raft-fast-control-width8-20261014]
+    paths: [.github/workflows/rs-raft-fast-control-widths-pair.yml]
+permissions:
+  contents: read
+jobs:
+  compare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Four source-bound original 1000ms claim/cache attempts, same VM
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT="$GITHUB_WORKSPACE/test-output/fast-control-widths-pair"
+          mkdir -p "$OUT"
+          TEST=test/integration/message-group-membership-claim-cache.integration.test.js
+          PAIRS=(
+            "serial:5ae6c761dbdea74f2c70550bafc48d7a74749b93"
+            "width2:83d16edf52acba3047ff1794b187008feda6373a"
+            "width4:7622f3dbba75e0bc2f7214894cb9ea697819a8b5"
+            "width8:f63a9eb5a1ad718a2458d22e27fe19136e66750a"
+          )
+          original=$(git rev-parse "5ae6c761dbdea74f2c70550bafc48d7a74749b93:$TEST")
+          printf '%s\n' "$original" > "$OUT/immutable-test-blob.txt"
+          for pair in "${PAIRS[@]}"; do
+            label="${pair%%:*}"
+            ref="${pair#*:}"
+            ROOT="$RUNNER_TEMP/control-width-$label"
+            git worktree add --detach "$ROOT" "$ref" > "$OUT/$label.worktree.log" 2>&1 || exit 1
+            actual=$(git rev-parse "$ref:$TEST")
+            test "$original" = "$actual" || {
+              echo "REFUSED changed original test bytes at $label"; exit 1;
+            }
+            git -C "$ROOT" rev-parse HEAD > "$OUT/$label.sha"
+            git -C "$ROOT" rev-parse HEAD^{tree} > "$OUT/$label.tree"
+            git -C "$ROOT" diff --name-only 5ae6c761dbdea74f2c70550bafc48d7a74749b93 "$ref" -- src \
+              > "$OUT/$label.source-paths"
+            if test "$label" = serial; then
+              test ! -s "$OUT/$label.source-paths" || exit 1
+            else
+              test "$(wc -l < "$OUT/$label.source-paths")" = 1 || exit 1
+              grep -Fx 'src/bootstrap/bootstrap-service-seed-workflow.js' "$OUT/$label.source-paths" || exit 1
+            fi
+            (cd "$ROOT" && npm ci) > "$OUT/$label.install.log" 2>&1
+            install=$?
+            printf '%s\n' "$install" > "$OUT/$label.install.status"
+            test "$install" -eq 0 || { echo "Dependency failure is not a semantic result"; exit 1; }
+            (cd "$ROOT" && npm run -s test:file -- "$TEST") > "$OUT/$label.run.log" 2>&1
+            run=$?
+            printf '%s\n' "$run" > "$OUT/$label.test.status"
+            RAW="$ROOT/.tap/test-results/$TEST.tap"
+            test -f "$RAW" || { echo "Missing original TAP for $label"; exit 1; }
+            cp "$RAW" "$OUT/$label.full.tap"
+            sha256sum "$OUT/$label.full.tap" > "$OUT/$label.full.sha256"
+            node "$GITHUB_WORKSPACE/scripts/quest-evidence/summarize-seed-release-trace.mjs" \
+              "$RAW" "$OUT/$label.release-census.json" > "$OUT/$label.summary.json" \
+              2> "$OUT/$label.summary-error.log"
+            parse=$?
+            printf '%s\n' "$parse" > "$OUT/$label.parse.status"
+            test "$parse" -eq 0 || {
+              echo "REFUSED incomplete tracer for $label"
+              cat "$OUT/$label.summary-error.log"
+              exit 1
+            }
+            echo "original 1000ms $label test exit=$run, ref=$ref"
+            cat "$OUT/$label.summary.json"
+            grep -E 'Seed participant release failed|test-files total' "$OUT/$label.run.log" \
+              | tail -n 3 | cut -c 1-1200 || true
+          done
+          echo 'Experiment complete; no source approved without independent review.'
+      - name: Preserve all full original TAPs and correct-source summaries
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-control-widths-${{ github.sha }}
+          path: test-output/fast-control-widths-pair/
+          retention-days: 14
+          if-no-files-found: warn
