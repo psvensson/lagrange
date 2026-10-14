@@ -349,10 +349,9 @@ test('control cohort origin installs the fixed coordinator schema atomically and
   }, {tableId: SQL_TRANSACTIONS_SCHEMA.tableName,
     tableName: SQL_TRANSACTIONS_SCHEMA.tableName, schema: SQL_TRANSACTIONS_SCHEMA}));
 
-test('expired RESUME after awaited current Raft facts cannot reopen SQL control',
-  () => {
-    const clock = new VirtualTimeSource({startMs: 1000});
-    return fixture(async ({handler, service, release, transport}) => {
+async function assertExpiryWithinOriginalResumeFactsRead(expireAtRead) {
+  const clock = new VirtualTimeSource({startMs: 1000});
+  return fixture(async ({handler, service, release, transport}) => {
       const initial = await release();
       assert.equal(initial.outcome, OUTCOME.CUT_OVER, JSON.stringify(initial));
       const origin = readPartitionWriteOrigin(service.db);
@@ -390,7 +389,8 @@ test('expired RESUME after awaited current Raft facts cannot reopen SQL control'
           const realMembership = await Reflect.apply(originalMembership, originalPort, args);
           if (resumeIngress) {
             membershipReadsDuringResume += 1;
-            if (!membershipCrossedDeadline) {
+            if (!membershipCrossedDeadline &&
+                membershipReadsDuringResume === expireAtRead) {
               membershipCrossedDeadline = true;
               clock.advance(11);
             }
@@ -411,7 +411,8 @@ test('expired RESUME after awaited current Raft facts cannot reopen SQL control'
           'the original cutover reached exactly one genuine recipient RESUME');
         assert.equal(membershipCrossedDeadline, true,
           'the clock advanced only inside the awaited real committed-membership read');
-        assert.ok(membershipReadsDuringResume >= 1);
+        assert.equal(membershipReadsDuringResume, expireAtRead,
+          'the clock only advanced at the selected original Raft facts read');
         assert.ok(clock.now() >= deadlineAtMs);
         assert.equal(answer.outcome, OUTCOME.UNAVAILABLE,
           'a real member may not return CUT_OVER after its release deadline');
@@ -431,10 +432,16 @@ test('expired RESUME after awaited current Raft facts cannot reopen SQL control'
       assert.equal(retried.outcome, OUTCOME.CUT_OVER, JSON.stringify(retried));
       assert.equal(participantReleaseAdmissionOf(service).state, ADMISSION.OPEN);
       assert.deepEqual(readPartitionWriteOrigin(service.db), origin);
-    }, {partitionId: CONTROL_PARTITION, tableId: SQL_TRANSACTIONS_SCHEMA.tableName,
-      tableName: SQL_TRANSACTIONS_SCHEMA.tableName, schema: SQL_TRANSACTIONS_SCHEMA},
-    {timeSource: clock});
-  });
+  }, {partitionId: CONTROL_PARTITION, tableId: SQL_TRANSACTIONS_SCHEMA.tableName,
+    tableName: SQL_TRANSACTIONS_SCHEMA.tableName, schema: SQL_TRANSACTIONS_SCHEMA},
+  {timeSource: clock});
+}
+
+test('expired RESUME after awaited current Raft facts cannot reopen SQL control',
+  () => assertExpiryWithinOriginalResumeFactsRead(1));
+
+test('expired during final receiver RESUME facts cannot commit OPEN',
+  () => assertExpiryWithinOriginalResumeFactsRead(2));
 
 test('already-current control cohort proves release with fewer original route calls',
   () => fixture(async ({handler, service, release, transport}) => {
