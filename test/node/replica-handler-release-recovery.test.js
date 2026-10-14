@@ -1008,7 +1008,8 @@ test('cleanup debt retains all seven acquired resources on the installing schedu
           'replacement scheduler only clears handles it actually acquired');
         assert.equal(observerSubscriptions.size, 0);
         assert.equal(observationTimerOwnedCount(timeSource), timerBaseline);
-        assert.equal(registry.serviceListeners.size, registryBaseline);
+        assert.equal(registry.serviceListeners.size, 0,
+          'handler shutdown retires the recovery subscriber as well as the observer');
         assert.equal(leader.listenerCount(PARTITION_SERVICE_EVENT.SHUTDOWN_STARTED),
           serviceBaseline);
       } catch (error) {
