@@ -303,8 +303,15 @@ function createBootstrapServiceSeedWorkflowMethods() {
       const startMs = timeSource.now();
       const startObservation = observeParticipantReleaseClockValue(startMs);
       const deadline = startMs + budgetMs;
-      let completed = 0;
-      for (const service of cohorts) {
+      // Reuse the existing bound for bootstrap service actions. Each
+      // cutover owns its own consensus group; their shared control partition
+      // is still serialized by runParticipantCutover's existing single-flight.
+      // No caller infers OPEN or skips either current control check.
+      const capacity = this.config.maxConcurrentServiceActions;
+      if (!Number.isSafeInteger(capacity) || capacity <= 0) {
+        throw new Error('Seed participant release service-action bound unavailable');
+      }
+      const attemptCohort = async (service) => {
         const authorization = this.replicaHandler
           .participantReleaseAuthorizationOwner.authorizeFreshSeed({
             partitionId: service.partitionId,
@@ -339,16 +346,37 @@ function createBootstrapServiceSeedWorkflowMethods() {
           await this.sleep(Math.min(retryAfterMs,
             Math.max(0, deadline - timeSource.now())));
         } while (timeSource.now() <= deadline);
-        if (answer?.outcome !== PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER) {
-          const terminalObservation = readParticipantReleaseClock(timeSource);
-          const seedRelease = seedReleaseFailureProjection({startObservation,
-            terminalObservation, budgetMs, ordinal: completed + 1,
-            total: cohorts.length, completed, attemptCount, firstBlockedDrain,
-            firstJoinedAttempt});
-          throw new Error('Seed participant release failed: ' +
-            JSON.stringify({partitionId: service.partitionId, answer, seedRelease}));
+        return {answer, attemptCount, firstBlockedDrain, firstJoinedAttempt,
+          terminalObservation: answer?.outcome !== PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER ?
+            readParticipantReleaseClock(timeSource) : null};
+      };
+
+      let completed = 0;
+      for (let offset = 0; offset < cohorts.length;) {
+        // If the shared window is already spent, let one actual cutover owner
+        // return its typed expiry rather than admitting a whole expired wave.
+        const width = timeSource.now() >= deadline ? 1 : capacity;
+        const batch = cohorts.slice(offset, offset + width);
+        // Every admitted task is joined, even if one cohort failed. Never
+        // abandon a live release, launch later tasks after an observed error,
+        // or mistake a later successful group for a completed ordered prefix.
+        const settled = await Promise.allSettled(batch.map(attemptCohort));
+        for (let index = 0; index < settled.length; index += 1) {
+          const outcome = settled[index];
+          if (outcome.status === 'rejected') throw outcome.reason;
+          const {answer, attemptCount, firstBlockedDrain, firstJoinedAttempt,
+            terminalObservation} = outcome.value;
+          if (answer?.outcome !== PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER) {
+            const seedRelease = seedReleaseFailureProjection({startObservation,
+              terminalObservation, budgetMs, ordinal: completed + 1,
+              total: cohorts.length, completed, attemptCount, firstBlockedDrain,
+              firstJoinedAttempt});
+            throw new Error('Seed participant release failed: ' +
+              JSON.stringify({partitionId: batch[index].partitionId, answer, seedRelease}));
+          }
+          completed += 1;
         }
-        completed += 1;
+        offset += batch.length;
       }
     },
     buildSeedCheckpointSteps(startupPipelineRunner, seedPlan) {
