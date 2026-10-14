@@ -61,13 +61,6 @@ function currentReleaseOf(facts) {
   });
 }
 
-function observationSubscriptionCount(service) {
-  return [RAFT_EVENT.APPLIED_PROGRESS, RAFT_EVENT.TERM_CHANGE,
-    RAFT_EVENT.LEADER_CHANGE, RAFT_EVENT.MEMBERSHIP_CHANGED]
-    .reduce((count, eventName) => count +
-      (service.controllablePort.listeners.get(eventName)?.size ?? 0), 0);
-}
-
 function flattenedErrors(error) {
   return error instanceof AggregateError ?
     error.errors.flatMap((nested) => flattenedErrors(nested)) : [error];
