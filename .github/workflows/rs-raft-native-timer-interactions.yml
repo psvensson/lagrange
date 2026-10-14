@@ -1,0 +1,75 @@
+# WIP owner-interaction cone: exact source, original declared bounds, no retries.
+name: rs-raft-native-timer-interactions
+on:
+  push:
+    branches: [continue/rs-raft-cloud-native-inbound-owned-timer-v1-20261014]
+    paths:
+      - .github/workflows/rs-raft-native-timer-interactions.yml
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-native-timer-interactions
+  cancel-in-progress: false
+jobs:
+  interaction:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install exact locked dependencies
+        run: npm ci
+      - name: Measure native runtime, port and replacement interactions without hiding red
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-native-timer-interactions
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/head.txt"
+          git rev-parse HEAD^{tree} > "$OUT/tree.txt"
+          fail=0
+          for f in \
+            test/raft/raft-rs-backend/operation-port-lifecycle.test.js \
+            test/raft/raft-rs-backend/operation-port-status-observation.test.js \
+            test/raft/raft-rs-backend/operation-port-throw-containment.test.js \
+            test/raft/raft-rs-backend/runtime-turn-integrity.test.js \
+            test/raft/raft-rs-backend/runtime-wait-bound-spent.test.js \
+            test/raft/raft-rs-backend/runtime-trap-and-restore.test.js \
+            test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js \
+            test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js \
+            test/raft/raft-rs-backend/message-group-membership-semantic-port.test.js \
+            test/raft/raft-rs-backend/zero-legacy-consensus-runtime.test.js; do
+            file="${f##*/}"
+            npm run -s test:file -- "$f" > "$OUT/$file.log" 2>&1
+            status=$?
+            echo "$f status=$status"
+            printf '%s\n' "$status" > "$OUT/$file.status"
+            tail -n 12 "$OUT/$file.log"
+            if test "$status" -ne 0; then
+              fail=1
+              grep -E 'not ok|fail|cancel|error|timeout' "$OUT/$file.log" | tail -n 35 || true
+            fi
+            if test -d test-output/reports; then
+              mkdir -p "$OUT/$file.canonical"
+              find test-output/reports -maxdepth 1 -type f -name '*.ndjson' -exec cp {} "$OUT/$file.canonical/" \;
+            fi
+          done
+          exit "$fail"
+      - name: Preserve exact-sha ten-file interaction outcomes
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-native-interactions-${{ github.sha }}
+          path: test-output/rs-raft-native-timer-interactions/
+          retention-days: 14
+          if-no-files-found: warn
