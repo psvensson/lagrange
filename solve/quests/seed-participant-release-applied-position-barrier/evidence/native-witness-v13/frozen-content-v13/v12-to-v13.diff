@@ -1,0 +1,289 @@
+diff --git a/test/partition/participant-release-native-application-order.test.js b/test/partition/participant-release-native-application-order.test.js
+index bc8f62340..a2aeac5d1 100644
+--- a/test/partition/participant-release-native-application-order.test.js
++++ b/test/partition/participant-release-native-application-order.test.js
+@@ -5,8 +5,6 @@
+ // supplies release facts.
+ 
+ import assert from 'node:assert/strict';
+-import {Buffer} from 'node:buffer';
+-import {writeSync} from 'node:fs';
+ import path from 'node:path';
+ import {test} from 'node:test';
+ 
+@@ -14,6 +12,8 @@ import Database from 'better-sqlite3';
+ 
+ import {formAdmittedGroup} from './partition-admitted-group-fixture.js';
+ import {attachPartitionReleaseOwners} from './partition-release-fixture.js';
++import {installBeforeExitDiagnostic} from
++  './participant-release-native-exit-diagnostic.js';
+ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+ import {LoggingService} from '../../src/logging/logging-service.js';
+ import {
+@@ -61,7 +61,6 @@ const TEST_TIMEOUT_MS = 30000;
+ const GROUP_BUDGET_MS = 10000;
+ const CARRIER_COUNT_CAP = 64;
+ const ROUTE_RECORD_CAP = 24;
+-const EXIT_DIAGNOSTIC_BYTE_CAP = 4096;
+ const GROUP_TIMING = Object.freeze({
+   heartbeatIntervalMs: 20,
+   electionTimeoutMinMs: 150,
+@@ -422,7 +421,28 @@ function createMembershipReadState({service, status, settled}) {
+     capturedSignal, currentSignal, progressSignal, routeSignal, hold,
+     captureStarted: false, currentStarted: false, released: false,
+     routeResult: null, routeOutcome: null, unsubscribe: null,
+-    carrierOutcome: null, heldTask: null, passiveTasks: [], errors: []};
++    carrierOutcome: null, stepOutcome: null, stepArmed: false,
++    heldTask: null, passiveTasks: [], errors: []};
++
++  const step = function(...args) {
++    const capture = state.stepArmed;
++    state.stepArmed = false;
++    let result;
++    try {
++      result = Reflect.apply(native.step, this, args);
++    } catch (error) {
++      if (capture) state.stepOutcome = Object.freeze({kind: 'owned-threw', error});
++      throw error;
++    }
++    if (capture) {
++      try {
++        recordOwnedSettlement(state, 'stepOutcome', result);
++      } catch (error) {
++        membershipReadFailure(state, 'step-observer', error);
++      }
++    }
++    return result;
++  };
+ 
+   const readCommittedMembership = function(request) {
+     const result = Reflect.apply(native.readCommittedMembership, native, [request]);
+@@ -453,7 +473,7 @@ function createMembershipReadState({service, status, settled}) {
+     passivelyRecordCurrentMembership(state, request, result);
+     return result;
+   };
+-  state.wrapper = createRaftOperationPort({...native, readCommittedMembership});
++  state.wrapper = createRaftOperationPort({...native, step, readCommittedMembership});
+   service.raft = state.wrapper;
+   return state;
+ }
+@@ -524,6 +544,12 @@ function createMembershipReadTreatment(followers, settled) {
+     expectCurrent(index) {
+       for (const state of states.values()) state.expectedIndex = index;
+     },
++    armStep(replicaId) {
++      const state = states.get(replicaId);
++      assert.equal(state.stepArmed, false,
++        `${replicaId}: one exact native step capture is armed`);
++      state.stepArmed = true;
++    },
+     subscribeProgress() {
+       for (const state of states.values()) {
+         assert.equal(state.unsubscribe, null,
+@@ -567,17 +593,23 @@ async function requireTreatmentRecord(state, field, signal, releaseSettled,
+   return record;
+ }
+ 
+-function recordOwnedSettlement(state, promise) {
+-  assert.equal(state.carrierOutcome, null,
+-    `${state.replicaId}: one exact carrier settlement is retained`);
+-  const observer = Promise.prototype.then.call(promise,
++function recordOwnedSettlement(state, field, result) {
++  assert.equal(state[field], null,
++    `${state.replicaId}: one exact ${field} settlement is retained`);
++  const retain = (kind, value) => {
++    state[field] = Object.freeze({kind, ...value});
++    return state[field];
++  };
++  if (result === null || typeof result?.then !== 'function') {
++    retain('owned-settled', {value: result});
++    return null;
++  }
++  const observer = Promise.prototype.then.call(result,
+     (value) => {
+-      state.carrierOutcome = Object.freeze({kind: 'owned-settled', value});
+-      return state.carrierOutcome;
++      return retain('owned-settled', {value});
+     },
+     (error) => {
+-      state.carrierOutcome = Object.freeze({kind: 'owned-threw', error});
+-      return state.carrierOutcome;
++      return retain('owned-threw', {error});
+     });
+   state.passiveTasks.push(observer);
+   void Promise.prototype.catch.call(observer, () => undefined);
+@@ -1062,70 +1094,6 @@ function diagnosticText(value) {
+   }
+ }
+ 
+-function gateDiagnosticOf(gate) {
+-  if (gate === null) return null;
+-  const result = {followers: 0, matched: 0, suppressed: 0, overflow: 0,
+-    forwarded: 0, restored: 0};
+-  for (const facts of gate.diagnosticFacts()) {
+-    result.followers += 1;
+-    result.matched += facts.matched;
+-    result.suppressed += facts.suppressed;
+-    result.overflow += Number(facts.overflow);
+-    result.forwarded += Number(facts.forwarded);
+-    result.restored += Number(facts.restored);
+-  }
+-  return Object.freeze(result);
+-}
+-
+-function membershipDiagnosticOf(membershipReads) {
+-  if (membershipReads === null) return null;
+-  const result = {followers: 0, captureStarted: 0, captured: 0, carrier: 0,
+-    progress: 0, currentStarted: 0, current: 0, route: 0, errors: 0};
+-  for (const state of membershipReads.states) {
+-    result.followers += 1;
+-    result.captureStarted += Number(state.captureStarted);
+-    result.captured += Number(state.captured !== null);
+-    result.carrier += Number(state.carrierOutcome !== null);
+-    result.progress += Number(state.progress !== null);
+-    result.currentStarted += Number(state.currentStarted);
+-    result.current += Number(state.current !== null);
+-    result.route += Number(state.routeOutcome !== null);
+-    result.errors += state.errors.length;
+-  }
+-  return Object.freeze(result);
+-}
+-
+-function installBeforeExitDiagnostic(context) {
+-  const listener = () => {
+-    try {
+-      const snapshot = Object.freeze({kind: 'native-before-exit',
+-        partitionId: PARTITION_ID, phase: context.phase,
+-        edge: context.edgeKind, cleanupEntered: context.cleanupEntered,
+-        releaseSettled: context.trackedRelease?.settled ?? false,
+-        routerInitialized: context.routerInitialized,
+-        groupFormed: context.groupFormed,
+-        settledObserved: context.settledObserved,
+-        releaseOwnersAttached: context.releaseOwnersAttached,
+-        gate: gateDiagnosticOf(context.gate),
+-        membership: membershipDiagnosticOf(context.membershipReads),
+-        route: context.route?.diagnosticFacts() ?? null});
+-      const serialized = JSON.stringify(snapshot);
+-      const line = Buffer.byteLength(serialized) <= EXIT_DIAGNOSTIC_BYTE_CAP ?
+-        serialized : JSON.stringify({kind: 'native-before-exit',
+-          phase: context.phase, diagnosticOverflow: true});
+-      const output = `${line}\n`;
+-      const written = writeSync(2, output);
+-      if (written !== Buffer.byteLength(output)) {
+-        context.error = new Error('native before-exit diagnostic write incomplete');
+-      }
+-    } catch (error) {
+-      context.error = error;
+-    }
+-  };
+-  context.listener = listener;
+-  process.once('beforeExit', listener);
+-}
+-
+ function assertFinalRelease(answer, route, held) {
+   const routeFacts = route.facts();
+   assert.deepEqual(routeFacts.errors, [],
+@@ -1311,7 +1279,8 @@ test('the real participant release owner waits for every native voter origin ' +
+   let primary = null;
+ 
+   try {
+-    exitDiagnostic = {phase: 'router-initialize', edgeKind: null,
++    exitDiagnostic = {partitionId: PARTITION_ID,
++      phase: 'router-initialize', edgeKind: null,
+       cleanupEntered: false, trackedRelease: null, listener: null,
+       error: null, routerInitialized: false, groupFormed: false,
+       settledObserved: false, releaseOwnersAttached: false,
+@@ -1417,9 +1386,10 @@ test('the real participant release owner waits for every native voter origin ' +
+       'the same release remains pending while both native N answers are held');
+     membershipReads.subscribeProgress();
+     const forwarded = membershipReads.states.map((state) => {
++      membershipReads.armStep(state.replicaId);
+       const promise = gate.forward(state.replicaId);
+       return Object.freeze({state,
+-        signal: recordOwnedSettlement(state, promise)});
++        signal: recordOwnedSettlement(state, 'carrierOutcome', promise)});
+     });
+     gate.disarm();
+     for (const replicaId of gate.followerIds) gate.restore(replicaId);
+diff --git a/test/partition/participant-release-native-exit-diagnostic.js b/test/partition/participant-release-native-exit-diagnostic.js
+new file mode 100644
+index 000000000..542bd8e8c
+--- /dev/null
++++ b/test/partition/participant-release-native-exit-diagnostic.js
+@@ -0,0 +1,76 @@
++import {Buffer} from 'node:buffer';
++import {writeSync} from 'node:fs';
++
++const EXIT_DIAGNOSTIC_BYTE_CAP = 4096;
++
++function gateDiagnosticOf(gate) {
++  if (gate === null) return null;
++  const result = {followers: 0, matched: 0, suppressed: 0, overflow: 0,
++    forwarded: 0, restored: 0};
++  for (const facts of gate.diagnosticFacts()) {
++    result.followers += 1;
++    result.matched += facts.matched;
++    result.suppressed += facts.suppressed;
++    result.overflow += Number(facts.overflow);
++    result.forwarded += Number(facts.forwarded);
++    result.restored += Number(facts.restored);
++  }
++  return Object.freeze(result);
++}
++
++function membershipDiagnosticOf(membershipReads) {
++  if (membershipReads === null) return null;
++  return membershipReads.states.map((state) => Object.freeze({
++    replicaId: state.replicaId,
++    captureStarted: state.captureStarted,
++    captured: state.captured !== null,
++    carrier: state.carrierOutcome?.kind ?? null,
++    progress: state.progress !== null,
++    currentStarted: state.currentStarted,
++    current: state.current !== null,
++    route: state.routeOutcome?.kind ?? null,
++    errors: state.errors.length,
++    ...stepDiagnosticOf(state.stepOutcome),
++  }));
++}
++
++function stepDiagnosticOf(record) {
++  if (record === null) {
++    return {stepKind: null, stepOutcome: null, stepReason: null};
++  }
++  const value = record.value;
++  return {stepKind: record.kind, stepOutcome: value?.outcome ?? null,
++    stepReason: value?.reason ?? null};
++}
++
++function installBeforeExitDiagnostic(context) {
++  const listener = () => {
++    try {
++      const snapshot = Object.freeze({kind: 'native-before-exit',
++        partitionId: context.partitionId, phase: context.phase,
++        edge: context.edgeKind, cleanupEntered: context.cleanupEntered,
++        releaseSettled: context.trackedRelease?.settled ?? false,
++        routerInitialized: context.routerInitialized,
++        groupFormed: context.groupFormed,
++        settledObserved: context.settledObserved,
++        releaseOwnersAttached: context.releaseOwnersAttached,
++        gate: gateDiagnosticOf(context.gate),
++        membership: membershipDiagnosticOf(context.membershipReads),
++        route: context.route?.diagnosticFacts() ?? null});
++      const serialized = JSON.stringify(snapshot);
++      const line = Buffer.byteLength(serialized) <= EXIT_DIAGNOSTIC_BYTE_CAP ?
++        serialized : JSON.stringify({kind: 'native-before-exit',
++          phase: context.phase, diagnosticOverflow: true});
++      const output = `${line}\n`;
++      if (writeSync(2, output) !== Buffer.byteLength(output)) {
++        context.error = new Error('native before-exit diagnostic write incomplete');
++      }
++    } catch (error) {
++      context.error = error;
++    }
++  };
++  context.listener = listener;
++  process.once('beforeExit', listener);
++}
++
++export {installBeforeExitDiagnostic};

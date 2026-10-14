@@ -1,0 +1,10 @@
+
+> lagrange-server@0.2.6 test:metrics:scoped:strict
+> node scripts/check-scoped-ratchets.js --strict test/partition/participant-release-native-application-order.test.js test/partition/participant-release-native-exit-diagnostic.js
+
+
+Cyclomatic complexity
+No complexity violations (threshold: 12).
+
+Cognitive complexity
+No cognitive complexity violations (threshold: 20).

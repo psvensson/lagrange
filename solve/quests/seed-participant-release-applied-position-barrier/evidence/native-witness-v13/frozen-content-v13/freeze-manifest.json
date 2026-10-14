@@ -1,0 +1,25 @@
+{
+  "schema": "native-step-discriminator-freeze/13",
+  "head": "6fe2c2b77c52e7ae42d807f9d7f813922588c302",
+  "sourceTree": "7cf388f79e6afccf3d4311a475147147106e15a5",
+  "behavioralRuns": 0,
+  "paths": [
+    {"path": "test/partition/participant-release-native-application-order.test.js", "sha256": "e29b9ff4e60787f7b0f5f9cdc649be8baa3ac9c6809c7088cda00a348f8d374b", "lines": 1451, "bytes": 60917},
+    {"path": "test/partition/participant-release-native-exit-diagnostic.js", "sha256": "eff7e9d4e990bdf720a6d32bb55e7200e6d88c916ed90b456047d56d00c1e440", "lines": 76, "bytes": 2821}
+  ],
+  "deltaSha256": "7b87579ce868efd6176f94ec9ecbcd61137633ad3fe8db3ba3463c96091f0a6d",
+  "checks": {
+    "syntax": 0,
+    "eslint": 0,
+    "strictMetrics": 0,
+    "strictFileSize": 0,
+    "trackedDiffCheck": 0,
+    "newHelperWhitespace": 0
+  },
+  "initialStaticFinding": {
+    "check": "strictMetrics",
+    "exit": 1,
+    "finding": "extracted membership projection arrow complexity 13",
+    "resolution": "cohesive step scalar projection extracted; final complexity 12/20"
+  }
+}

@@ -1,0 +1,6 @@
+
+> lagrange-server@0.2.6 audit:file-size:strict
+> node scripts/check-file-size-thresholds.js --strict test/partition/participant-release-native-application-order.test.js test/partition/participant-release-native-exit-diagnostic.js
+
+Source oversized-file ratchet: 0/27 over 800 lines.
+Test oversized-file ratchet: 0/21 over 1500 lines.
