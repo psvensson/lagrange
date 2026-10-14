@@ -1,0 +1,85 @@
+# Original, single authoritative RUNS + release recovery interaction.
+# Real SQL three-voter/control plus two real dependent groups; one recovery
+# VirtualTimeSource for honest deterministic cadence. No extra driver.
+name: rs-raft-control-wave-recovery-pair-candidate
+on:
+  push:
+    branches: [work/rs-raft-control-wave-recovery-owner-pair-20261014]
+    paths:
+      - .github/workflows/rs-raft-control-wave-recovery-pair-candidate.yml
+      - src/node/replica-handler-participant-cutover.js
+      - src/node/replica-handler-release-recovery.js
+      - src/partition/partition-participant-transaction-cutover-constants.js
+      - test/partition/control-wave-duplicate-boundary.test.js
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-control-wave-recovery-pair-candidate
+  cancel-in-progress: false
+jobs:
+  candidate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 24
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Exact dependency installation
+        run: npm ci
+      - name: Paired RUNS/recovery and adjacent original suites
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-wave-recovery-pair-candidate
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/tree.txt"
+          files=(src/node/replica-handler-participant-cutover.js
+            src/node/replica-handler-release-recovery.js
+            src/partition/partition-participant-transaction-cutover-constants.js
+            test/partition/control-wave-duplicate-boundary.test.js)
+          npx eslint "${files[@]}" > "$OUT/lint.log" 2>&1
+          lint=$?
+          printf '%s\n' "$lint" > "$OUT/lint.status"
+          fail=0
+          if test "$lint" -ne 0; then fail=1; cat "$OUT/lint.log"; fi
+          for file in \
+            test/partition/control-wave-duplicate-boundary.test.js \
+            test/partition/participant-release-protocol.test.js \
+            test/node/replica-handler-release-recovery.test.js \
+            test/partition/participant-release-applied-position.test.js \
+            test/partition/participant-release-native-application-order.test.js; do
+            name="${file##*/}"
+            npm run -s test:file -- "$file" > "$OUT/$name.log" 2>&1
+            result=$?
+            printf '%s\n' "$result" > "$OUT/$name.status"
+            echo "$file status=$result"
+            tail -n 36 "$OUT/$name.log" | cut -c 1-850
+            if test "$result" -ne 0; then fail=1; fi
+            if test -f ".tap/test-results/$file.tap"; then
+              cp ".tap/test-results/$file.tap" "$OUT/$name.full.tap"
+            fi
+            if test -d test-output/reports; then
+              mkdir -p "$OUT/$name.canonical"
+              find test-output/reports -maxdepth 1 -type f -name '*.ndjson' \
+                -exec cp {} "$OUT/$name.canonical/" \;
+            fi
+          done
+          exit "$fail"
+      - name: Preserve all actual red/green owner interaction evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-wave-recovery-pair-${{ github.sha }}
+          path: test-output/rs-raft-wave-recovery-pair-candidate/
+          retention-days: 14
+          if-no-files-found: warn
