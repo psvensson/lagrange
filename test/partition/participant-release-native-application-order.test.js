@@ -12,7 +12,7 @@ import Database from 'better-sqlite3';
 
 import {formAdmittedGroup} from './partition-admitted-group-fixture.js';
 import {attachPartitionReleaseOwners} from './partition-release-fixture.js';
-import {installBeforeExitDiagnostic} from
+import {createNativeDrainStageCapture, installBeforeExitDiagnostic} from
   './participant-release-native-exit-diagnostic.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -45,6 +45,8 @@ import {
   '../../src/raft/raft-committed-membership-constants.js';
 import {createRaftOperationPort} from '../../src/raft/raft-operation-port.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
+import {setActualCoreEntryObserver, setNativeInboundStageObserver} from
+  '../../src/raft/raft-rs-runtime-owner.js';
 import {
   RAFT_RS_MESSAGE_TYPE,
   RAFT_RS_TRANSPORT_PROTOCOL,
@@ -1210,6 +1212,9 @@ async function cleanupExitDiagnostic(exitDiagnostic, cleanupErrors) {
 async function cleanupNativeWitness({gate, membershipReads, releasePromise, route,
   releaseOwners, group, router, exitDiagnostic}, primary) {
   const cleanupErrors = [];
+  // The passive observer ends before cleanup's own core operations.
+  setNativeInboundStageObserver(null);
+  setActualCoreEntryObserver(null);
   if (exitDiagnostic !== null) {
     exitDiagnostic.cleanupEntered = true;
     exitDiagnostic.phase = 'cleanup';
@@ -1284,7 +1289,9 @@ test('the real participant release owner waits for every native voter origin ' +
       cleanupEntered: false, trackedRelease: null, listener: null,
       error: null, routerInitialized: false, groupFormed: false,
       settledObserved: false, releaseOwnersAttached: false,
-      gate: null, membershipReads: null, route: null};
+      gate: null, membershipReads: null, route: null,
+      nativeCore: {observerInstalled: false, groupEntries: 0, groupStepCalls: 0},
+      nativeDrainInstalled: false, nativeDrain: null};
     installBeforeExitDiagnostic(exitDiagnostic);
     await router.initialize({startServer: false});
     exitDiagnostic.routerInitialized = true;
@@ -1385,6 +1392,19 @@ test('the real participant release owner waits for every native voter origin ' +
     assert.equal(trackedRelease.settled, false,
       'the same release remains pending while both native N answers are held');
     membershipReads.subscribeProgress();
+    // Test-only existing observer; group-wide counts prove no per-follower attribution.
+    // Arm only after real N capture, immediately before the two retained carriers.
+    setActualCoreEntryObserver((entry) => {
+      if (entry.groupId !== PARTITION_ID) return;
+      exitDiagnostic.nativeCore.groupEntries += 1;
+      if (entry.operation === 'step') exitDiagnostic.nativeCore.groupStepCalls += 1;
+    });
+    exitDiagnostic.nativeCore.observerInstalled = true;
+    const drainStages = createNativeDrainStageCapture(PARTITION_ID,
+      membershipReads.states.map(({replicaId}) => replicaId));
+    exitDiagnostic.nativeDrain = drainStages.records;
+    setNativeInboundStageObserver(drainStages.capture);
+    exitDiagnostic.nativeDrainInstalled = true;
     const forwarded = membershipReads.states.map((state) => {
       membershipReads.armStep(state.replicaId);
       const promise = gate.forward(state.replicaId);

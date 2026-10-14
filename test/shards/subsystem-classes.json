@@ -19,16 +19,16 @@
     "services-runtime": 146,
     "solver-tooling": 7,
     "storage-partition": 182,
-    "storage-raft": 128,
+    "storage-raft": 129,
     "test-infrastructure": 143,
     "transactions": 16,
     "transport-messaging": 95,
     "wasm-toolchain": 57
   },
-  "censusSize": 2369,
-  "digest": "fnv1a32-ebdf0e25",
+  "censusSize": 2370,
+  "digest": "fnv1a32-c6f4618d",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-9261dc72",
+  "observationDigest": "fnv1a32-3af53ad5",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1585,6 +1585,7 @@
     "test/raft/raft-rs-backend/host-contract-citations.test.js": "storage-raft",
     "test/raft/raft-rs-backend/identity-record-window.test.js": "storage-raft",
     "test/raft/raft-rs-backend/identity-reuse-reseed-hold.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/inbound-drain-owned-timer.test.js": "storage-raft",
     "test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js": "storage-raft",
     "test/raft/raft-rs-backend/joining-genesis-tripwire.test.js": "storage-raft",
     "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js": "storage-raft",
@@ -8778,6 +8779,7 @@
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
+        "src/raft/raft-rs-runtime-owner.js",
         "test/partition/participant-release-native-exit-diagnostic.js",
         "test/test-helpers/boot-incarnation-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
@@ -10589,6 +10591,18 @@
         "src/raft/raft-rs-ingress-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/inbound-drain-owned-timer.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-ingress-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner-constants.js",
         "src/raft/raft-rs-runtime-owner.js"
       ]
     },

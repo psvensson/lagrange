@@ -25,6 +25,9 @@ const HEALTHY = 'healthy';
 const UNHEALTHY = 'unhealthy';
 const REPLACING = 'replacing';
 const RUNTIME_RESUME_DELAY_MS = 0;
+// An accepted native inbound wake whose timer fired during a shared replacement.
+// This belongs to the runtime group, not to a release observer or caller.
+const INBOUND_WAKE_DEBT = Object.freeze({NONE: 'none', SHARED_RUNTIME: 'shared-runtime'});
 const USABLE = 'usable';
 const RECOVERY_REQUIRED = 'recovery-required';
 const NO_LEADER = '0';
@@ -102,6 +105,7 @@ const RUNTIME_PHASE = Object.freeze({
   APPLICATION: 'application',
   READY_DRAIN: 'ready-drain',
   READY_PERSISTENCE: 'ready-persistence',
+  INBOUND_TIMER_CLEANUP: 'inbound-timer-cleanup',
   CAMPAIGN_ELIGIBILITY: 'campaign-eligibility',
   DISPATCH: 'dispatch',
   ADMISSION: 'admission',
@@ -240,6 +244,7 @@ export {
   DURABLE_PROGRESS_OBSERVATION,
   HEALTHY,
   INBOUND_DRAIN_DELAY_MS,
+  INBOUND_WAKE_DEBT,
   INBOUND_STEP_REFUSAL_OBSERVATION_LIMIT,
   NO_LEADER,
   PEER_ADDRESS_STATUS,

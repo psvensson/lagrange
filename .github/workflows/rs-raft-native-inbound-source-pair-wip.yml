@@ -1,0 +1,89 @@
+# Same hosted VM, same exact native test: current WIP vs immutable unref source.
+# Source-only engagement attribution, not locked-lab or independent acceptance.
+name: rs-raft-native-inbound-source-pair-wip
+on:
+  push:
+    branches: [continue/rs-raft-cloud-native-inbound-owned-timer-v1-20261014]
+    paths:
+      - .github/workflows/rs-raft-native-inbound-source-pair-wip.yml
+      - test/raft/raft-rs-backend/inbound-drain-owned-timer.test.js
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-native-inbound-source-pair-wip
+  cancel-in-progress: false
+jobs:
+  pair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Exact immutable candidate and source-only predecessor, one runner
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT="$GITHUB_WORKSPACE/test-output/rs-raft-native-inbound-pair"
+          mkdir -p "$OUT"
+          OLD=a9506863ab58493add5f7762dd05e8ef915f9844
+          TEST_SOURCE=f43aee168439b431be50de90fa9ed4a4b0c4f4cc
+          TEST=test/raft/raft-rs-backend/inbound-drain-owned-timer.test.js
+          EXPECT='admitted Raft work keeps the Node event loop alive until its own turn'
+          FILTER='an accepted native envelope references its original Node timer until its real turn'
+          printf '%s\n' "$GITHUB_SHA" > "$OUT/candidate-sha.txt"
+          printf '%s\n' "$OLD" > "$OUT/negative-sha.txt"
+          printf '%s\n' "$TEST_SOURCE" > "$OUT/test-source-sha.txt"
+          git rev-parse "$TEST_SOURCE:$TEST" > "$OUT/pinned-test-blob.txt"
+          git cat-file -e "$OLD^{commit}" || exit 1
+          git rev-parse HEAD^{tree} > "$OUT/candidate-tree.txt"
+          git rev-parse "$OLD^{tree}" > "$OUT/negative-tree.txt"
+          NEG="$RUNNER_TEMP/native-timer-unref-source"
+          git worktree add --detach "$NEG" "$OLD" > "$OUT/negative-worktree.log" 2>&1 || exit 1
+          # Pin unchanged pre-replacement diagnostic test bytes. The later
+          # replacement-race test imports a seam absent from the old source.
+          git show "$TEST_SOURCE:$TEST" > "$TEST" || exit 1
+          git show "$TEST_SOURCE:$TEST" > "$NEG/$TEST" || exit 1
+          cmp "$TEST" "$NEG/$TEST" || exit 1
+          sha256sum "$TEST" > "$OUT/candidate-test-sha256.txt"
+          (cd "$NEG" && sha256sum "$TEST") > "$OUT/negative-test-sha256.txt"
+          npm ci > "$OUT/candidate-install.log" 2>&1
+          candidateInstall=$?
+          (cd "$NEG" && npm ci) > "$OUT/negative-install.log" 2>&1
+          negativeInstall=$?
+          printf '%s\n' "$candidateInstall" > "$OUT/candidate-install.status"
+          printf '%s\n' "$negativeInstall" > "$OUT/negative-install.status"
+          if test "$candidateInstall" -ne 0 || test "$negativeInstall" -ne 0; then
+            echo 'Dependency preparation refused; no semantic pair'
+            exit 1
+          fi
+          (cd "$NEG" && node --test --test-name-pattern="$FILTER" "$TEST") > "$OUT/negative.tap" 2>&1
+          negative=$?
+          node --test --test-name-pattern="$FILTER" "$TEST" > "$OUT/candidate.tap" 2>&1
+          candidate=$?
+          printf '%s\n' "$negative" > "$OUT/negative.status"
+          printf '%s\n' "$candidate" > "$OUT/candidate.status"
+          tail -n 48 "$OUT/negative.tap"
+          tail -n 35 "$OUT/candidate.tap"
+          echo "same-VM immutable old=$OLD status=$negative candidate=$GITHUB_SHA status=$candidate"
+          test "$negative" -ne 0 || exit 1
+          grep -F "$EXPECT" "$OUT/negative.tap" || exit 1
+          grep -F 'ERR_ASSERTION' "$OUT/negative.tap" || exit 1
+          grep -F 'actual: false' "$OUT/negative.tap" || exit 1
+          grep -F 'expected: true' "$OUT/negative.tap" || exit 1
+          test "$candidate" -eq 0 || exit 1
+      - name: Preserve negative and positive raw TAP, exact SHAs and install receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-inbound-source-pair-${{ github.sha }}
+          path: test-output/rs-raft-native-inbound-pair/
+          retention-days: 14
+          if-no-files-found: warn
