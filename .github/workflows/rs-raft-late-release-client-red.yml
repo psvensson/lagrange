@@ -51,7 +51,7 @@ jobs:
             "$OUT/old-source-negative.tap" || exit 1
           grep -F "code: 'ERR_ASSERTION'" "$OUT/old-source-negative.tap" || exit 1
           grep -F "actual: 'cut_over'" "$OUT/old-source-negative.tap" || exit 1
-          grep -F "expected: 'unavailable'" "$OUT/old-source-negative.tap" || exit 1
+          grep -F "expected: 'release_fact_unavailable'" "$OUT/old-source-negative.tap" || exit 1
           echo 'Original client accepts stale positive reply: engaged RED proven.'
       - name: Preserve raw original-client test failure and immutable source
         if: always()
