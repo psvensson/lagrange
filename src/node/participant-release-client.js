@@ -119,6 +119,15 @@ async function askParticipantRelease(owner, nodeId, request) {
       {...prepared.request, type: PARTICIPANT_RELEASE_TYPE},
       {targetNodeId: nodeId, deliveryPriority: PARTICIPANT_RELEASE_PRIORITY,
         timeoutMs: prepared.timeoutMs}));
+    // MessageRouter may resolve an already-delivered durable operation after
+    // the caller's absolute deadline. It is no longer a timely authorization
+    // reply: return uncertainty at the original client owner rather than
+    // falsely reporting bounded completion. This does NOT undo a Raft commit.
+    if (Number.isSafeInteger(prepared.request.deadlineAtMs) &&
+        ownerNow(owner) >= prepared.request.deadlineAtMs) {
+      return releaseAnswer(OUTCOME.UNAVAILABLE, prepared.request,
+        {missingFact: MISSING_FACT.RELEASE_DEADLINE, owner: nodeId});
+    }
     return participantReleaseDeliveryAnswer(response, prepared, nodeId);
   } catch (error) {
     const delivery = classifyTransportDeliveryOutcome(error);
