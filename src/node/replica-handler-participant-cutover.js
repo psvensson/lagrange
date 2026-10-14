@@ -199,25 +199,18 @@ function cleanCurrentControlCohort(service, release, attempt, census) {
 }
 
 async function proveCurrentControlCohort(handler, service, request,
-  release, attempt, cohort, pausedCensus) {
+  release, attempt, pausedCensus) {
   if (!cleanCurrentControlCohort(service, release, attempt, pausedCensus)) return null;
-  // A new INSPECT of every current member after the first validation is
-  // mandatory: a previous reply never authorizes subsequent resume.
-  const current = await readCohort(handler, service.partitionId, cohort,
-    attempt.deadlineAtMs);
-  const unavailable = unavailableCensus(current);
-  if (unavailable !== null) return unavailable;
-  if (!cleanCurrentControlCohort(service, release, attempt, current)) {
-    // The source raced a current-member mutation after PAUSE. Keep it closed
-    // and defer to a *new* release attempt instead of falling through to
-    // ENABLE or treating the earlier, now stale facts as permission.
-    return attemptRefusal({...request, release}, OUTCOME.STALE);
-  }
+  // Each PAUSE recipient has already closed admission and supplied its fresh
+  // membership, generation, origin, work and schema facts. RESUME itself
+  // obtains newer local facts and fences OPEN on that complete census, so a
+  // second caller-side INSPECT cannot authorize anything RESUME would refuse.
+  // Any intervening change keeps the affected recipient closed.
   const resumed = await actOnCohort(handler, release, attempt, ACTION.RESUME,
-    current, {census: current});
+    pausedCensus, {census: pausedCensus});
   const refusal = resumed.find((answer) => answer.outcome !== OUTCOME.RESUMED);
   return refusal ?? releaseAnswer(OUTCOME.CUT_OVER, {...request, release},
-    {release, census: current});
+    {release, census: pausedCensus});
 }
 
 async function reopenCohort(handler, service, request, release, attempt, census) {
@@ -311,7 +304,7 @@ async function runCutoverAttempt(handler, request) {
       {blockedDrain: {generation: blockedDrain.generation, work: blockedDrain.work}});
   }
   const currentControl = await proveCurrentControlCohort(handler, service,
-    request, release, attempt, cohort, census);
+    request, release, attempt, census);
   if (currentControl !== null) return currentControl;
   const reopened = await reopenCohort(handler, service, request, release, attempt, census);
   if (reopened !== null) return reopened;
