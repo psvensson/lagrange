@@ -167,6 +167,10 @@ export const SUBSYSTEM_RULES = Object.freeze([
 // semantic home differs from what their path implies. Each must name exactly
 // one live test and carry a reason, so a stale override fails like a dead rule.
 export const SUBSYSTEM_OVERRIDES = Object.freeze({
+  'test/quest-evidence/participant-release-trace-envelope.test.js': {
+    subsystem: SUBSYSTEM_TEST_INFRASTRUCTURE,
+    reason: 'proves bounded, lossless original TAP evidence transport and hash verification; SQL/Raft release behavior is exercised by other native and integration tests',
+  },
   'test/integration/message-group-learner-discovery.integration.test.js': {
     subsystem: SUBSYSTEM_TRANSPORT_MESSAGING,
     reason: 'proves the owned discovery triggers (restart scan, sweep, replicated-row wake) driving the registered recipient read over real routers and the real lane; native and operation SQL provide the exact-action evidence',
