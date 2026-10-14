@@ -1,0 +1,63 @@
+# Exact old-source falsifier: receiver must not return OPEN/CUT_OVER when
+# its real committed-membership read crossed the originally carried deadline.
+name: rs-raft-postawait-deadline-red
+on:
+  push:
+    branches: [continue/rs-raft-postawait-release-deadline-20261014]
+    paths:
+      - .github/workflows/rs-raft-postawait-deadline-red.yml
+      - test/partition/participant-release-protocol.test.js
+permissions:
+  contents: read
+jobs:
+  red:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install and preflight immutable old owner source
+        run: |
+          set -euo pipefail
+          test -z "$(git diff --name-only 7d0042659daaed7d38e9e586454861c21df3d838 HEAD -- src)"
+          npm ci
+          node --check test/partition/participant-release-protocol.test.js
+      - name: Require engaged old-source late-cutover refusal negative
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-postawait-deadline-red
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/tree.txt"
+          TEST=test/partition/participant-release-protocol.test.js
+          NAME='expired RESUME after awaited current Raft facts cannot reopen SQL control'
+          node --test --test-name-pattern="$NAME" "$TEST" > "$OUT/old-source.tap" 2>&1
+          status=$?
+          printf '%s\n' "$status" > "$OUT/status.txt"
+          tail -n 95 "$OUT/old-source.tap"
+          test "$status" -ne 0 || exit 1
+          grep -F "$NAME" "$OUT/old-source.tap" || exit 1
+          grep -F "code: 'ERR_ASSERTION'" "$OUT/old-source.tap" || exit 1
+          grep -F 'a real member may not return CUT_OVER after its release deadline' "$OUT/old-source.tap" || exit 1
+          grep -F "actual: 'cut_over'" "$OUT/old-source.tap" || exit 1
+          grep -F "expected: 'unavailable'" "$OUT/old-source.tap" || exit 1
+          echo 'Source-only post-await expired RESUME still returned CUT_OVER; engaged negative.'
+      - name: Preserve all exact red or setup failure evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-postawait-deadline-red-${{ github.sha }}
+          path: test-output/rs-raft-postawait-deadline-red/
+          retention-days: 14
+          if-no-files-found: warn
