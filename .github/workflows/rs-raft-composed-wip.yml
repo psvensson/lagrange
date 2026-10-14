@@ -105,6 +105,58 @@ jobs:
             test-output/composed-native-negative/
           retention-days: 14
           if-no-files-found: warn
+  startup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - run: npm ci
+      - name: Original startup and claim-cache bodies at unchanged budgets
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          mkdir -p test-output/composed-startup
+          git rev-parse HEAD > test-output/composed-startup/source-sha.txt
+          for f in \
+            test/bootstrap/node-bootstrap-consistency.property.test.js \
+            test/integration/message-group-membership-claim-cache.integration.test.js; do
+            name="${f##*/}"
+            node --check "$f" > "test-output/composed-startup/$name.syntax.log" 2>&1
+            echo "$?" > "test-output/composed-startup/$name.syntax.status"
+            npm run -s test:file -- "$f" > "test-output/composed-startup/$name.log" 2>&1
+            echo "$?" > "test-output/composed-startup/$name.status"
+            echo "$f status=$(cat "test-output/composed-startup/$name.status")"
+            grep -A 18 -B 1 -E '^not ok|^  error:|^  failureType:' "test-output/composed-startup/$name.log" | head -n 95 || true
+            tail -n 22 "test-output/composed-startup/$name.log"
+            if test -d test-output/reports; then
+              mkdir -p "test-output/composed-startup/$name.canonical"
+              find test-output/reports -maxdepth 1 -type f -name '*.ndjson' -exec cp {} "test-output/composed-startup/$name.canonical/" \;
+            fi
+          done
+          failed=0
+          for f in test-output/composed-startup/*.status; do
+            test "$(cat "$f")" = "0" || failed=1
+          done
+          exit "$failed"
+      - name: Preserve unchanged-budget bootstrap failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-startup-${{ github.sha }}
+          path: test-output/composed-startup/
+          retention-days: 14
+          if-no-files-found: warn
   static:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
