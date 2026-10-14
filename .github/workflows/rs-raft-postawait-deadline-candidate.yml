@@ -1,0 +1,121 @@
+# WIP exact current-code deadline fence and immutable old-source red, one VM.
+# This is not independent review or permission to land rs-raft on main.
+name: rs-raft-postawait-deadline-candidate
+on:
+  push:
+    branches: [continue/rs-raft-postawait-release-deadline-20261014]
+    paths:
+      - .github/workflows/rs-raft-postawait-deadline-candidate.yml
+      - src/partition/partition-participant-release-contract.js
+      - src/partition/partition-participant-transaction-pause.js
+      - src/node/replica-handler-participant-release.js
+      - test/partition/participant-release-protocol.test.js
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-postawait-deadline-candidate
+  cancel-in-progress: false
+jobs:
+  focused:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 38
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Exact dependency installation
+        run: npm ci
+      - name: Same-host old postawait success forbidden on new exact candidate
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-postawait-deadline-candidate
+          mkdir -p "$OUT"
+          ORIGINAL=4d599cca19d302fdfca357fb3aed61435c11ea45
+          TEST=test/partition/participant-release-protocol.test.js
+          CASE='expired RESUME after awaited current Raft facts cannot reopen SQL control'
+          git rev-parse HEAD > "$OUT/source-sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/source-tree.txt"
+          git diff --name-only "$ORIGINAL" HEAD -- src > "$OUT/production-paths.txt"
+          expected=$'src/node/replica-handler-participant-release.js\nsrc/partition/partition-participant-release-contract.js\nsrc/partition/partition-participant-transaction-pause.js'
+          test "$(cat "$OUT/production-paths.txt")" = "$expected" || {
+            echo 'REFUSED: unexpected production path';
+            cat "$OUT/production-paths.txt"; exit 1;
+          }
+          OLD="$RUNNER_TEMP/rs-raft-postawait-original"
+          git worktree add --detach "$OLD" "$ORIGINAL" > "$OUT/old-worktree.log" 2>&1 || exit 1
+          cmp "$TEST" "$OLD/$TEST" || exit 1
+          sha256sum "$TEST" > "$OUT/candidate-test.sha256"
+          (cd "$OLD" && sha256sum "$TEST") > "$OUT/old-test.sha256"
+          (cd "$OLD" && npm ci) > "$OUT/old-install.log" 2>&1
+          if test "$?" -ne 0; then echo 'Old lock install invalid'; exit 1; fi
+          (cd "$OLD" && node --test --test-name-pattern="$CASE" "$TEST") \
+            > "$OUT/old.tap" 2>&1
+          red=$?
+          node --test --test-name-pattern="$CASE" "$TEST" > "$OUT/current.tap" 2>&1
+          green=$?
+          printf '%s\n' "$red" > "$OUT/old.status"
+          printf '%s\n' "$green" > "$OUT/current.status"
+          echo "same original test bytes old=$ORIGINAL rc=$red candidate=$GITHUB_SHA rc=$green"
+          tail -n 55 "$OUT/old.tap"
+          tail -n 55 "$OUT/current.tap"
+          test "$red" -ne 0 || exit 1
+          grep -F 'a real member may not return CUT_OVER after its release deadline' "$OUT/old.tap" || exit 1
+          grep -F "actual: 'cut_over'" "$OUT/old.tap" || exit 1
+          grep -F "expected: 'release_fact_unavailable'" "$OUT/old.tap" || exit 1
+          test "$green" -eq 0 || exit 1
+          grep -F "ok 1 - $CASE" "$OUT/current.tap" || exit 1
+      - name: Scoped lint and existing release/native/transaction interactions
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-postawait-deadline-candidate
+          failed=0
+          npx eslint \
+            src/partition/partition-participant-release-contract.js \
+            src/partition/partition-participant-transaction-pause.js \
+            src/node/replica-handler-participant-release.js \
+            test/partition/participant-release-protocol.test.js \
+            > "$OUT/scoped-lint.log" 2>&1
+          lint=$?
+          printf '%s\n' "$lint" > "$OUT/scoped-lint.status"
+          if test "$lint" -ne 0; then failed=1; cat "$OUT/scoped-lint.log"; fi
+          for file in \
+            test/partition/participant-release-protocol.test.js \
+            test/partition/participant-release-applied-position.test.js \
+            test/node/replica-handler-release-recovery.test.js \
+            test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js \
+            test/raft/raft-rs-backend/inbound-drain-owned-timer.test.js \
+            test/partition/control-wave-duplicate-boundary.test.js; do
+            name="${file##*/}"
+            npm run -s test:file -- "$file" > "$OUT/$name.log" 2>&1
+            rc=$?
+            printf '%s\n' "$rc" > "$OUT/$name.status"
+            echo "$file status=$rc"
+            tail -n 22 "$OUT/$name.log" | cut -c 1-550
+            if test "$rc" -ne 0; then failed=1; fi
+            if test -d test-output/reports; then
+              mkdir -p "$OUT/$name.canonical"
+              find test-output/reports -maxdepth 1 -type f -name '*.ndjson' \
+                -exec cp {} "$OUT/$name.canonical/" \;
+            fi
+          done
+          exit "$failed"
+      - name: Preserve all exact red and green evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-postawait-deadline-candidate-${{ github.sha }}
+          path: test-output/rs-raft-postawait-deadline-candidate/
+          retention-days: 14
+          if-no-files-found: warn
