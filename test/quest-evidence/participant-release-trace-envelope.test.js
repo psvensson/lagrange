@@ -8,7 +8,7 @@ import {emitCompleteParticipantReleaseTrace, parseCompleteParticipantReleaseTrac
   '../../scripts/quest-evidence/participant-release-trace-envelope.mjs';
 
 const SOURCE_SCHEMA = 'participant-release-delivery-trace/1';
-const SHA = (source) => createHash('sha256').update(source).digest('hex');
+const digestSha256 = (source) => createHash('sha256').update(source).digest('hex');
 const BIG = 'real three-voter SQL/Рафт/🚀'.repeat(110000);
 
 function fixture() {
@@ -35,12 +35,12 @@ test('complete 3MB+ trace stays inside original 1MB TAP analysis line limit',
     assert.ok(lines.every((line) => Buffer.byteLength(line) < 1024 * 1024),
       'no emitted line can escape the original runner analysis bound');
     assert.equal(metadata.rawBytes, sourceBytes.length);
-    assert.equal(metadata.rawSha256, SHA(sourceBytes));
+    assert.equal(metadata.rawSha256, digestSha256(sourceBytes));
     assert.equal(metadata.totalChunks, Math.ceil(sourceBytes.length / CHUNK_BYTE_MAX));
     const parsed = parseCompleteParticipantReleaseTrace(lines.join('\n'));
     assert.equal(parsed.encoding, 'verified-bounded-chunks');
     assert.equal(parsed.rawBytes, sourceBytes.length);
-    assert.equal(parsed.rawSha256, SHA(sourceBytes));
+    assert.equal(parsed.rawSha256, digestSha256(sourceBytes));
     assert.equal(parsed.report.schema, SOURCE_SCHEMA);
     assert.equal(parsed.report.payload.length, BIG.length);
     assert.equal(parsed.report.payload.slice(0, 100), BIG.slice(0, 100));
