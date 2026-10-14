@@ -179,3 +179,85 @@ test('independent seed partition intents overlap only after actual control relea
     assert.ok(controller.maximum >= 2,
       'at least two independent real release intents must be in flight together');
   });
+
+
+test('first ordered refusal joins every started cohort and never admits the next wave',
+  async () => {
+    const controlId = CONTROL;
+    const firstDependent = 'seed-bounded-00-p1';
+    const dependentIds = Array.from({length: 13}, (_, index) =>
+      `seed-bounded-${String(index).padStart(2, '0')}-p1`);
+    const services = new Map();
+    for (const partitionId of [controlId, ...dependentIds]) {
+      for (let index = 1; index <= 3; index += 1) {
+        const replica = localReplica(partitionId,
+          partitionId === controlId ? TABLES.SQL_TRANSACTIONS : TABLES.CONTEXTS,
+          `${partitionId}-r${index}`);
+        services.set(replica.replicaId, replica);
+      }
+    }
+    const state = {begun: [], active: 0, settled: 0, controlComplete: false};
+    const clock = new RealTimeSource();
+    const owner = {
+      partitionServices: services,
+      nodeService: {getTimeSource: () => clock},
+      config: {leadershipWaitTimeoutMs: SHARED_BUDGET_MS},
+      replicaHandler: {
+        nodeId: 'seed-failure-wave-test',
+        timeSource: clock,
+        participantReleaseAuthorizationOwner: {
+          authorizeFreshSeed() {
+            return Object.freeze({kind: 'test-only-authority'});
+          },
+        },
+        messageRouter: {
+          deliver(_address, payload) {
+            state.begun.push(payload.partitionId);
+            if (payload.partitionId !== controlId) {
+              assert.equal(state.controlComplete, true,
+                'control must complete before dependent release begins');
+              state.active += 1;
+            }
+            return new Promise((resolve) => {
+              setTimeout(() => {
+                if (payload.partitionId === controlId) state.controlComplete = true;
+                else state.active -= 1;
+                state.settled += 1;
+                const answer = payload.partitionId === firstDependent ?
+                  {outcome: OUTCOME.UNAVAILABLE, missingFact: 'held-control-fact'} :
+                  {outcome: OUTCOME.CUT_OVER};
+                resolve({acknowledged: true, deliveryState: 'delivered',
+                  [PARTICIPANT_RELEASE_RESULT_FIELD]: answer});
+              }, payload.partitionId === firstDependent ? 2 : 22);
+            });
+          },
+        },
+      },
+      sleep() {
+        throw new Error('a terminal fact refusal must not be retried');
+      },
+    };
+    let caught = null;
+    try {
+      await createBootstrapServiceSeedWorkflowMethods()
+        .releaseSeedParticipantCohorts.call(owner);
+    } catch (error) {
+      caught = error;
+    }
+    assert.ok(caught instanceof Error, 'the first terminal refusal must be surfaced');
+    const prefix = 'Seed participant release failed: ';
+    assert.ok(caught.message.startsWith(prefix), caught.message);
+    const fact = JSON.parse(caught.message.slice(prefix.length));
+    assert.equal(fact.partitionId, firstDependent,
+      'later successes cannot replace the earlier ordered refusal');
+    assert.equal(fact.seedRelease.ordinal, 2,
+      'control and then the first dependent retain sorted ordinal semantics');
+    assert.equal(fact.seedRelease.completed, 1,
+      'only the guaranteed successful ordered prefix counts as completed');
+    assert.equal(state.active, 0,
+      'all already-admitted waves are joined before throwing the first refusal');
+    assert.equal(state.settled, state.begun.length,
+      'no outstanding original delivery promise was abandoned');
+    assert.ok(state.begun.length > 2 && state.begun.length < dependentIds.length + 1,
+      'one bounded wave started, but no work from a later wave was admitted');
+  });
