@@ -1733,8 +1733,12 @@ function scheduleInboundDrain(group) {
     return;
   }
   group.inboundDrainScheduled = true;
+  // Accepted inbound envelopes are an outstanding execution obligation.
+  // Keep this original scheduled drain referenced until it executes or the
+  // group's existing lifecycle timer owner cancels it. Passive observations
+  // and the periodic idle tick remain unreferenced.
   group.timers.setTimeout(() => runScheduledInboundDrain(group),
-    INBOUND_DRAIN_DELAY_MS)?.unref?.();
+    INBOUND_DRAIN_DELAY_MS);
 }
 
 function retryInboundDrainWhenAdmitted(group) {
