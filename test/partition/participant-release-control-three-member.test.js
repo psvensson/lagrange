@@ -119,7 +119,7 @@ test('three actual current SQL control voters share one PAUSE census and each re
         assert.equal(count(ACTION.ENABLE), 0);
         assert.equal(count(ACTION.OBSERVE_APPLIED_POSITION), 0);
         assert.equal(participantReleaseAdmissionOf(service).state, ADMISSION.OPEN,
-          'only the current original recipient's release identity reopens admission');
+          'only the current original recipient can reopen its admission');
         assert.deepEqual(readPartitionWriteOrigin(service.db),
           origins[group.services.indexOf(service)]);
       }
