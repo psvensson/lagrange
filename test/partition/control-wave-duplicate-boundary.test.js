@@ -240,6 +240,7 @@ test('one canonical wave holds three real control voters across two released nat
       const originalLateDeliver = transport.deliver;
       let delayedFirstInspect = false;
       let lateDependentPauses = 0;
+      let controlInspectsSeen = 0;
       let lateRelease = null;
       try {
         transport.deliver = async function(...args) {
@@ -247,6 +248,10 @@ test('one canonical wave holds three real control voters across two released nat
           if (req?.type === PARTICIPANT_RELEASE_TYPE &&
               req.partitionId === DEPENDENTS[0].id && req.action === ACTION.PAUSE) {
             lateDependentPauses += 1;
+          }
+          if (req?.type === PARTICIPANT_RELEASE_TYPE &&
+              req.partitionId === CONTROL && req.action === ACTION.INSPECT) {
+            controlInspectsSeen += 1;
           }
           if (!delayedFirstInspect && req?.type === PARTICIPANT_RELEASE_TYPE &&
               req.partitionId === CONTROL && req.action === ACTION.INSPECT) {
@@ -266,7 +271,19 @@ test('one canonical wave holds three real control voters across two released nat
             partitionId: DEPENDENTS[0].id, targetBuildDigest: build.digest,
             trigger: TRIGGER.FRESH_SEED, deadlineAtMs,
             authorization: dependentAuthorization, [WAVE_FIELD]: inFlightToken});
-          await inspected.promise;
+          let inspectTimeout = null;
+          try {
+            await Promise.race([
+              inspected.promise,
+              new Promise((_, reject) => {
+                inspectTimeout = setTimeout(() =>
+                  reject(new Error(`late reply test did not engage control inspect; ` +
+                    `observed=${controlInspectsSeen}`)), 2000);
+              }),
+            ]);
+          } finally {
+            if (inspectTimeout !== null) clearTimeout(inspectTimeout);
+          }
           // Deliberately return early. No permission may outlive its owner.
         });
         assert.equal(participantReleaseAdmissionOf(controlLeader).state,
