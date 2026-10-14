@@ -1,0 +1,160 @@
+diff --git a/test/partition/participant-release-native-application-order.test.js b/test/partition/participant-release-native-application-order.test.js
+index ab0937c7a..bc8f62340 100644
+--- a/test/partition/participant-release-native-application-order.test.js
++++ b/test/partition/participant-release-native-application-order.test.js
+@@ -5,6 +5,8 @@
+ // supplies release facts.
+ 
+ import assert from 'node:assert/strict';
++import {Buffer} from 'node:buffer';
++import {writeSync} from 'node:fs';
+ import path from 'node:path';
+ import {test} from 'node:test';
+ 
+@@ -59,6 +61,7 @@ const TEST_TIMEOUT_MS = 30000;
+ const GROUP_BUDGET_MS = 10000;
+ const CARRIER_COUNT_CAP = 64;
+ const ROUTE_RECORD_CAP = 24;
++const EXIT_DIAGNOSTIC_BYTE_CAP = 4096;
+ const GROUP_TIMING = Object.freeze({
+   heartbeatIntervalMs: 20,
+   electionTimeoutMinMs: 150,
+@@ -1059,26 +1062,62 @@ function diagnosticText(value) {
+   }
+ }
+ 
+-function installBeforeExitDiagnostic(t, context) {
++function gateDiagnosticOf(gate) {
++  if (gate === null) return null;
++  const result = {followers: 0, matched: 0, suppressed: 0, overflow: 0,
++    forwarded: 0, restored: 0};
++  for (const facts of gate.diagnosticFacts()) {
++    result.followers += 1;
++    result.matched += facts.matched;
++    result.suppressed += facts.suppressed;
++    result.overflow += Number(facts.overflow);
++    result.forwarded += Number(facts.forwarded);
++    result.restored += Number(facts.restored);
++  }
++  return Object.freeze(result);
++}
++
++function membershipDiagnosticOf(membershipReads) {
++  if (membershipReads === null) return null;
++  const result = {followers: 0, captureStarted: 0, captured: 0, carrier: 0,
++    progress: 0, currentStarted: 0, current: 0, route: 0, errors: 0};
++  for (const state of membershipReads.states) {
++    result.followers += 1;
++    result.captureStarted += Number(state.captureStarted);
++    result.captured += Number(state.captured !== null);
++    result.carrier += Number(state.carrierOutcome !== null);
++    result.progress += Number(state.progress !== null);
++    result.currentStarted += Number(state.currentStarted);
++    result.current += Number(state.current !== null);
++    result.route += Number(state.routeOutcome !== null);
++    result.errors += state.errors.length;
++  }
++  return Object.freeze(result);
++}
++
++function installBeforeExitDiagnostic(context) {
+   const listener = () => {
+     try {
+-      const followers = context.membershipReads.states.map((state) =>
+-        Object.freeze({replicaId: state.replicaId,
+-          captureStarted: state.captureStarted,
+-          captured: state.captured !== null,
+-          carrier: state.carrierOutcome?.kind ?? null,
+-          progress: state.progress !== null,
+-          currentStarted: state.currentStarted,
+-          current: state.current !== null,
+-          route: state.routeOutcome?.kind ?? null,
+-          errors: state.errors.length}));
+-      const carriers = context.gate.diagnosticFacts();
+       const snapshot = Object.freeze({kind: 'native-before-exit',
+         partitionId: PARTITION_ID, phase: context.phase,
+         edge: context.edgeKind, cleanupEntered: context.cleanupEntered,
+         releaseSettled: context.trackedRelease?.settled ?? false,
+-        route: context.route.diagnosticFacts(), carriers, followers});
+-      t.diagnostic(JSON.stringify(snapshot));
++        routerInitialized: context.routerInitialized,
++        groupFormed: context.groupFormed,
++        settledObserved: context.settledObserved,
++        releaseOwnersAttached: context.releaseOwnersAttached,
++        gate: gateDiagnosticOf(context.gate),
++        membership: membershipDiagnosticOf(context.membershipReads),
++        route: context.route?.diagnosticFacts() ?? null});
++      const serialized = JSON.stringify(snapshot);
++      const line = Buffer.byteLength(serialized) <= EXIT_DIAGNOSTIC_BYTE_CAP ?
++        serialized : JSON.stringify({kind: 'native-before-exit',
++          phase: context.phase, diagnosticOverflow: true});
++      const output = `${line}\n`;
++      const written = writeSync(2, output);
++      if (written !== Buffer.byteLength(output)) {
++        context.error = new Error('native before-exit diagnostic write incomplete');
++      }
+     } catch (error) {
+       context.error = error;
+     }
+@@ -1257,7 +1296,7 @@ async function cleanupNativeWitness({gate, membershipReads, releasePromise, rout
+ 
+ test('the real participant release owner waits for every native voter origin ' +
+   'publication before final census and resumes the same attempt',
+-{timeout: TEST_TIMEOUT_MS}, async (t) => {
++{timeout: TEST_TIMEOUT_MS}, async () => {
+   initializeEnvironment();
+   const router = new MessageRouter({nodeId: NODE_ID,
+     bootIncarnation: TEST_BOOT_INCARNATION});
+@@ -1272,7 +1311,15 @@ test('the real participant release owner waits for every native voter origin ' +
+   let primary = null;
+ 
+   try {
++    exitDiagnostic = {phase: 'router-initialize', edgeKind: null,
++      cleanupEntered: false, trackedRelease: null, listener: null,
++      error: null, routerInitialized: false, groupFormed: false,
++      settledObserved: false, releaseOwnersAttached: false,
++      gate: null, membershipReads: null, route: null};
++    installBeforeExitDiagnostic(exitDiagnostic);
+     await router.initialize({startServer: false});
++    exitDiagnostic.routerInitialized = true;
++    exitDiagnostic.phase = 'group-formation';
+     group = await formAdmittedGroup({
+       partitionId: PARTITION_ID,
+       members: MEMBERS,
+@@ -1281,16 +1328,21 @@ test('the real participant release owner waits for every native voter origin ' +
+       budgetMs: GROUP_BUDGET_MS,
+       transport: router,
+     });
++    exitDiagnostic.groupFormed = true;
++    exitDiagnostic.phase = 'settled-position';
+     assert.equal(await group.waitFor(() =>
+       settledPositionOf(allDurableViews(group)) !== null), true,
+     'setup: all three real voters have one settled native position');
++    exitDiagnostic.settledObserved = true;
+     const settled = settledPositionOf(allDurableViews(group));
+     assert.ok(settled, 'setup: settled position N is observed passively');
+     const current = leaderStatusOf(group.services);
++    exitDiagnostic.phase = 'release-owner-attachment';
+     releaseOwners = await attachPartitionReleaseOwners(group.services, {
+       directory: path.dirname(group.dbFileOf(MEMBERS[0])),
+       budgetMs: GROUP_BUDGET_MS,
+     });
++    exitDiagnostic.releaseOwnersAttached = true;
+     gate = createCommitCarrierGate(router, {
+       leader: current.leader,
+       followers: current.statuses.filter(({status}) =>
+@@ -1304,10 +1356,10 @@ test('the real participant release owner waits for every native voter origin ' +
+       leader: current.leader, statuses: current.statuses, settled,
+       membershipReads});
+ 
+-    exitDiagnostic = {phase: 'release-start', edgeKind: null,
+-      cleanupEntered: false, trackedRelease: null, listener: null,
+-      error: null, gate, membershipReads, route};
+-    installBeforeExitDiagnostic(t, exitDiagnostic);
++    exitDiagnostic.gate = gate;
++    exitDiagnostic.membershipReads = membershipReads;
++    exitDiagnostic.route = route;
++    exitDiagnostic.phase = 'release-start';
+     releasePromise = releaseOwners.releaseOnce(PARTITION_ID);
+     trackedRelease = track(releasePromise);
+     exitDiagnostic.trackedRelease = trackedRelease;

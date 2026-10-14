@@ -1,0 +1,47 @@
+{
+  "inputCommit": "2c525806e4510de82315f836b8343fafc51280ec",
+  "purpose": "instrumented diagnostic only",
+  "result": "cancelledByParent, unresolved Promise, no diagnostic line; pending stage unmeasured",
+  "artifacts": [
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v11/lab-diagnostic-v1/adam-laptop.raw.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v11/lab-diagnostic-v1/adam-laptop.raw.log",
+      "sha256": "cbc8ff20e36d41f826b4307dff46ee2a654a7e566d55c629809aebeeb6e1a90b",
+      "bytes": 1894
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v11/lab-diagnostic-v1/adam-laptop.status.json",
+      "sha256": "3ffe09ecc4a1f39ac6f78caca24c95a5d1182b4dbd23662d5e5938bcc488a56f",
+      "bytes": 36
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v11/lab-diagnostic-v1/fleet.json",
+      "sha256": "fa66714351ba46e0beb674b751cb428e241c212b7706d2c4ec1dc6476aad1a9c",
+      "bytes": 12642
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v11/lab-diagnostic-v1/input.json",
+      "sha256": "f9b77fdc4d8d58bda517b21b7f13c039fe73107e26b85263a5e0c86a45ee22d0",
+      "bytes": 630
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v11/lab-diagnostic-v1/lab.log",
+      "sha256": "10c131e8bac9d886123d84119479d57497cdfa585b7ac735a877fe9f0ab73af8",
+      "bytes": 2361
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v11/lab-diagnostic-v1/result.json",
+      "sha256": "6a4c3c9a0ab3154ab545619393d470e4210e220dd4f1a14260566ea45b62330d",
+      "bytes": 62
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/native-witness-v11/lab-diagnostic-v1/test-results-adam-laptop.ndjson",
+      "sha256": "5aeb783bc566d993e6b19ddfb8ab192982f10f7d8af6e84f52effaa3183aa017",
+      "bytes": 319
+    }
+  ]
+}

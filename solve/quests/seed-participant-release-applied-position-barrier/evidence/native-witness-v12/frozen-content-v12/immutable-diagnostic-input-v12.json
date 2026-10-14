@@ -1,0 +1,11 @@
+{
+  "commit": "ea663ca425f2d38325e90eab25d57a7fd38e139b",
+  "tree": "4673b20ff9366f2e2c26af3c52d2a6158caae90d",
+  "srcTree": "7cf388f79e6afccf3d4311a475147147106e15a5",
+  "sourceAndHelpersDeltaVsV4": [],
+  "witnessSha256": "198c9d6e88338868d907d1406d28ebc8311ce9859c991fc58ddb81f6e3f94292",
+  "reviewSha256": "af57573200006927e89f775f834dd1d4d2e9f3542f7210e91b3487618d99f92a",
+  "purpose": "One instrumented diagnostic, never behavioral acceptance",
+  "metadataRefreshExit": 0,
+  "metadataLogSha256": "9486826a4d2a2c36476455bd0f98b279c8f07bf652fb1db159a77b39e463f2dc"
+}

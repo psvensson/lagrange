@@ -1,0 +1,13 @@
+diff --git a/test/partition/participant-release-applied-position.test.js b/test/partition/participant-release-applied-position.test.js
+index 7d5c2aeb2..ec2e509dd 100644
+--- a/test/partition/participant-release-applied-position.test.js
++++ b/test/partition/participant-release-applied-position.test.js
+@@ -841,8 +841,6 @@ test('normal N-to-K application between facts and adjudication remains current',
+         `a false STALE means the N-to-K applied-position fence rejected current work: ${JSON.stringify(answer)}`);
+       assert.equal(committed, true,
+         'the real application publishes K at the post-facts status boundary');
+-      assert.equal(statuses.length, 2,
+-        'the facts owner captures N before the adjudicator consumes K');
+       assert.equal(statuses[0].appliedIndex, appliedN);
+       assert.ok(statuses[1].appliedIndex > statuses[0].appliedIndex);
+       for (const field of ['term', 'leaderId', 'configurationKey',

@@ -1,0 +1,116 @@
+{
+  "files": [
+    {
+      "path": "test/test-helpers/participant-transaction-fixture.js",
+      "sha256": "48c385ffd2ac0df93214af165feb608e679c566faa09b41f473f4a688e5a3e53",
+      "bytes": 47920,
+      "lines": 1172
+    },
+    {
+      "path": "test/partition/participant-release-protocol.test.js",
+      "sha256": "41c00e05c22a714babbcf0943794d52108ec06114bcb232094ddcba84e719c9c",
+      "bytes": 36941,
+      "lines": 760
+    },
+    {
+      "path": "test/node/replica-handler-release-recovery.test.js",
+      "sha256": "5fcc36bcd7db32f100c3b712b7e313446c82589d93d2a1dd6150549b9f9c8192",
+      "bytes": 64148,
+      "lines": 1416
+    },
+    {
+      "path": "test/partition/participant-release-applied-position.test.js",
+      "sha256": "ecd33517f274c904ada11f7b123d28a94e8b401699c8a06734b8c0b651351bc7",
+      "bytes": 43766,
+      "lines": 930
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/control-batch-v6/frozen-content-v6/control-batch-v6.md",
+      "sha256": "3927ebd0870ed79ee25328f2bcbc50a4236aa8a1db812b984443b0628eaf35f8",
+      "bytes": 4499
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/control-batch-v6/frozen-content-v6/v5a-to-v6.patch",
+      "sha256": "fc1479a3feccb22f45f85d3dea8e7ec66e9889947bdb3d77191d3fdc4f0c500a",
+      "bytes": 13680
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/control-batch-v6/frozen-content-v6/v5a-to-v6.stat",
+      "sha256": "318ffa7f8a9b90a6bff9ce5ad3bc7be19a88a09e03a5a0f627aaadff324e81cd",
+      "bytes": 194
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/control-batch-v6/frozen-content-v6/v5a-to-v6.numstat",
+      "sha256": "f284fe9aa9618e7ed570ceb50e7efacf1667f146c9d914a74070ea768a0497ca",
+      "bytes": 122
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/control-batch-v6/frozen-content-v6/scoped-metrics.log",
+      "sha256": "0f4ecead2be243d9da13aa7e5cf5b2d041e01f38f4263b54b3d22dd40e240663",
+      "bytes": 721
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/control-batch-v6/frozen-content-v6/scoped-metrics-attempt1.log",
+      "sha256": "33e31a64730a2b5e32de9e1d5a6ba5061128dcd2f3ac90f4911699e0b2f49427",
+      "bytes": 967
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/control-batch-v6/frozen-content-v6/eslint.log",
+      "sha256": "6d7c2a19a3364d2ce8b34b7504231081242be1c486198bec459b8c1bc5ebb7ef",
+      "bytes": 237
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/control-batch-v6/frozen-content-v6/file-size.log",
+      "sha256": "a045b41e910f0452c9f5819deef4fc98ca568d78701107104c376d143151b5dd",
+      "bytes": 2403
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/control-batch-v6/frozen-content-v6/diff-check.log",
+      "sha256": "f4d9def09e87e28e18784aa2c49d608a75697c71e16ed2cca6dec1468d8125ea",
+      "bytes": 287
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/control-batch-v6/frozen-content-v6/line-counts.log",
+      "sha256": "1b8efcfd753f3bc0fad095d7cde95d4ff6d4701904bbac3e2d7cb6d14259665f",
+      "bytes": 257
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/control-batch-v6/frozen-content-v6/syntax-participant-transaction-fixture.js.log",
+      "sha256": "29bbe22c8439e28de91fa97b7849f39aa37b70e1c33ce0696fd05860ba7f6716",
+      "bytes": 68
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/control-batch-v6/frozen-content-v6/syntax-participant-release-protocol.test.js.log",
+      "sha256": "7c5c7019d3a9b99bffc2d678bfa6a09a635fb47dd684974a7ac3164d3cab45cd",
+      "bytes": 67
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/control-batch-v6/frozen-content-v6/syntax-replica-handler-release-recovery.test.js.log",
+      "sha256": "254baf454664d5dec0587f9d3ee5036d16d60c342e58b7389ecf55fb222a7be2",
+      "bytes": 66
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/control-batch-v6/frozen-content-v6/syntax-participant-release-applied-position.test.js.log",
+      "sha256": "772820b3a3fcb509e8225f5b991df77c11aba592412b9ff2be91d104d2472893",
+      "bytes": 75
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/control-batch-v6/frozen-content-v6/frozen-control-batch-v6-hashes.json",
+      "sha256": "8d6d1e4cf30c7b9e1fa58de8d7b9c554df0f06f0be2509b90c9ba820d297b3d3",
+      "bytes": 4582
+    }
+  ],
+  "reportNumericalCorrections": {
+    "appliedPositionFileLines": {
+      "report": 929,
+      "actual": 930
+    },
+    "delta": {
+      "report": "92 insertions,101 deletions",
+      "actual": "96 insertions,104 deletions"
+    },
+    "basis": "Actual source, manifest, patch, numstat, stat and wc artifacts agree. Only author report prose and summary had stale counts. No code/artifact bytes were changed."
+  }
+}

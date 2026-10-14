@@ -1,0 +1,2 @@
+$ git diff --check 7596c52c23e0b9167356d4841c5975ebcafd83ca -- test/test-helpers/participant-transaction-fixture.js test/partition/participant-release-protocol.test.js test/node/replica-handler-release-recovery.test.js test/partition/participant-release-applied-position.test.js
+exit: 0
