@@ -616,6 +616,26 @@ async function joinParticipantCutover(handler, current) {
   return releaseAnswer(answer.outcome, answer, {...answer, joinedAttempt});
 }
 
+function waveJoinAuthorized(handler, request, current) {
+  const hasWave = Object.hasOwn(request, WAVE_FIELD);
+  if (hasWave !== current.hasControlWaveToken) return false;
+  if (!hasWave) return true;
+  const wave = runsFor(handler).get(CONTROL_PARTITION);
+  return wave?.kind === SEED_WAVE_KIND &&
+    wave.state === SEED_WAVE_STATE.HELD &&
+    wave.token === request[WAVE_FIELD] &&
+    current.controlWaveToken === request[WAVE_FIELD] &&
+    request.trigger === TRIGGER.FRESH_SEED &&
+    request.targetBuildDigest === wave.targetBuildDigest &&
+    request.deadlineAtMs === wave.deadlineAtMs &&
+    handler.timeSource.now() < wave.deadlineAtMs &&
+    wave.partitions.includes(request.partitionId) &&
+    currentWaveChildOwned(handler, wave, request.partitionId) &&
+    handler.participantReleaseAuthorizationOwner.validatesFreshSeed(
+      request.authorization, {partitionId: request.partitionId,
+        targetBuildDigest: request.targetBuildDigest});
+}
+
 async function runParticipantCutover(handler, request) {
   const runs = runsFor(handler);
   const current = runs.get(request.partitionId);
@@ -623,6 +643,10 @@ async function runParticipantCutover(handler, request) {
     // A held control wave has no ordinary CUT_OVER promise to join. Recovery
     // and unrelated operator attempts cannot accidentally reopen its members.
     if (current.kind === SEED_WAVE_KIND) return waveRefusal(request);
+    // Sharing an existing RUNS result is itself authorization: a foreign
+    // caller cannot launder a successful wave child's CUT_OVER through
+    // same-build deduplication. Ordinary non-wave joining remains unchanged.
+    if (!waveJoinAuthorized(handler, request, current)) return waveRefusal(request);
     return current.targetBuildDigest === request.targetBuildDigest ?
       joinParticipantCutover(handler, current) : releaseAnswer(OUTCOME.INVALID, request);
   }
@@ -631,7 +655,9 @@ async function runParticipantCutover(handler, request) {
   const running = runCutoverAttempt(handler, request).catch((error) =>
     attemptRefusal(request, OUTCOME.UNAVAILABLE, {reason: String(error?.message ?? error)}));
   const record = {targetBuildDigest: request.targetBuildDigest, originalTrigger,
-    startObservation, promise: running};
+    startObservation, promise: running,
+    hasControlWaveToken: Object.hasOwn(request, WAVE_FIELD),
+    controlWaveToken: request[WAVE_FIELD] ?? null};
   runs.set(request.partitionId, record);
   try {
     return await running;
