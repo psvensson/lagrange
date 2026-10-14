@@ -1,0 +1,70 @@
+# Passive V14 diagnostic only, never a cutover/Quest/native positive proof.
+name: rs-raft-cloud-native-v14-diagnostic
+on:
+  push:
+    branches: [continue/rs-raft-cloud-native-v14-core-stage-diagnostic-20261014]
+    paths:
+      - .github/workflows/rs-raft-cloud-native-v14.yml
+      - test/partition/participant-release-native-application-order.test.js
+      - test/partition/participant-release-native-exit-diagnostic.js
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-cloud-native-v14
+  cancel-in-progress: false
+jobs:
+  passive:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Execute exactly one passive diagnostic, retain red
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/native-v14-hosted-diagnostic
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/source-sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/source-tree.txt"
+          node --check test/partition/participant-release-native-application-order.test.js > "$OUT/syntax-main.log" 2>&1
+          checkMain=$?
+          node --check test/partition/participant-release-native-exit-diagnostic.js > "$OUT/syntax-helper.log" 2>&1
+          checkHelper=$?
+          printf '%s\n' "$checkMain" > "$OUT/syntax-main.status"
+          printf '%s\n' "$checkHelper" > "$OUT/syntax-helper.status"
+          if test "$checkMain" != 0 || test "$checkHelper" != 0; then
+            echo 'Diagnostic refused: syntax failure'
+            exit 1
+          fi
+          npm run -s test:file -- test/partition/participant-release-native-application-order.test.js > "$OUT/canonical-run.log" 2>&1
+          result=$?
+          printf '%s\n' "$result" > "$OUT/canonical-status.txt"
+          find test-output/reports -maxdepth 1 -type f -name '*.ndjson' -exec cp {} "$OUT/" \; 2>/dev/null
+          if test -d .tap/test-results; then
+            cp -r .tap/test-results "$OUT/tap-results"
+          fi
+          echo "V14 exact hosted diagnostic status=$result; no native behavior acceptance"
+          tail -n 95 "$OUT/canonical-run.log"
+          exit "$result"
+      - name: Retain raw and canonical diagnostic artifacts regardless of failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-cloud-native-v14-${{ github.sha }}
+          path: test-output/native-v14-hosted-diagnostic/
+          retention-days: 10
+          if-no-files-found: warn
