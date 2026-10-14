@@ -1730,8 +1730,11 @@ function scheduleInboundDrain(group) {
     return;
   }
   group.inboundDrainScheduled = true;
+  // Accepted inbound envelopes are an outstanding execution obligation.
+  // Only the native owner schedules this drain, and its original timer keeps
+  // the process alive until the admitted work is executed or cancelled.
   group.timers.setTimeout(() => runScheduledInboundDrain(group),
-    INBOUND_DRAIN_DELAY_MS)?.unref?.();
+    INBOUND_DRAIN_DELAY_MS);
 }
 
 function retryInboundDrainWhenAdmitted(group) {
@@ -1750,8 +1753,10 @@ function retryInboundDrainWhenAdmitted(group) {
     return;
   }
   group.inboundDrainScheduled = true;
+  // Admission postponement cannot discard the original queue obligation.
+  // Keep this one existing continuation alive until it runs or times out.
   group.timers.setTimeout(() => runScheduledInboundDrain(group),
-    PERSISTENCE_ADMISSION_WAIT.POLL_INTERVAL_MS)?.unref?.();
+    PERSISTENCE_ADMISSION_WAIT.POLL_INTERVAL_MS);
 }
 
 function runScheduledInboundDrain(group) {
