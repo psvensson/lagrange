@@ -1,6 +1,8 @@
 import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from './raft-committed-membership-constants.js';
 import {instantiateRaftRsCore, verifyRaftRsBinding} from './raft-rs-binding-owner.js';
 import {RaftRsDurableStore} from './raft-rs-durable-store.js';
+import {armOwnedInboundDrainTimer, cancelOwnedInboundDrainTimer} from
+  './raft-rs-inbound-timer-custody.js';
 import {
   RAFT_RS_RECORD_COMPATIBILITY,
   RAFT_RS_COMMIT_DURABILITY,
@@ -49,6 +51,7 @@ import {
   FOLLOWER_RAFT_STATE,
   HEALTHY,
   INBOUND_DRAIN_DELAY_MS,
+  INBOUND_WAKE_DEBT,
   NO_LEADER,
   PERSISTENCE_ADMISSION_WAIT,
   RECOVERY_REQUIRED,
@@ -123,6 +126,7 @@ let nativeInboundStageObserver = null;
 const NATIVE_INBOUND_STAGE = Object.freeze({
   ACCEPTED: 'accepted', COALESCED: 'coalesced',
   REQUEST: 'request', RETRY_REQUEST: 'retry-request', CALLBACK: 'callback',
+  RUNTIME_HELD: 'runtime-held',
   CLOSED_OR_EMPTY: 'closed-or-empty', PERSISTENCE_WAIT: 'persistence-wait',
   TURN_REQUEST: 'turn-request', WAIT_BOUND: 'wait-bound',
 });
@@ -636,6 +640,17 @@ function resumeRuntimeGroup(group) {
     if (result.outcome !== CORE_OK && runtimeHealth === HEALTHY &&
         group.health !== RECOVERY_REQUIRED) {
       groupFailed(group, hostFailure(result.phase, result.reason, true));
+    }
+    // The shared runtime's successful resumption is the existing owner
+    // transition that can discharge an accepted wake consumed by its barrier.
+    // This re-enters the ONE inbound scheduler, never a recovery-side driver.
+    if (result.outcome === CORE_OK && runtimeHealth === HEALTHY &&
+        expectedGeneration === runtimeGeneration && !group.closed &&
+        group.inboundWakeDebt === INBOUND_WAKE_DEBT.SHARED_RUNTIME) {
+      if (group.inbound.length > 0) {
+        scheduleInboundDrain(group);
+      }
+      group.inboundWakeDebt = INBOUND_WAKE_DEBT.NONE;
     }
     return result;
   };
@@ -1739,15 +1754,23 @@ function perform(group, command) {
 // envelopes stay queued and the drain retries on the group's own timers,
 // outside the queue, until the store admits persistence again or the
 // admission bound passes (then the next operation drains them).
+function armInboundWake(group, delayMs) {
+  group.inboundDrainScheduled = true;
+  try {
+    armOwnedInboundDrainTimer(group, delayMs, () => runScheduledInboundDrain(group));
+  } catch (error) {
+    group.inboundDrainScheduled = false;
+    throw error;
+  }
+}
+
 function scheduleInboundDrain(group) {
   if (group.inboundDrainScheduled) {
     reportNativeInboundStage(group, NATIVE_INBOUND_STAGE.COALESCED);
     return;
   }
-  group.inboundDrainScheduled = true;
   reportNativeInboundStage(group, NATIVE_INBOUND_STAGE.REQUEST);
-  group.timers.setTimeout(() => runScheduledInboundDrain(group),
-    INBOUND_DRAIN_DELAY_MS)?.unref?.();
+  armInboundWake(group, INBOUND_DRAIN_DELAY_MS);
 }
 
 function retryInboundDrainWhenAdmitted(group) {
@@ -1766,18 +1789,25 @@ function retryInboundDrainWhenAdmitted(group) {
     reportNativeInboundStage(group, NATIVE_INBOUND_STAGE.WAIT_BOUND);
     return;
   }
-  group.inboundDrainScheduled = true;
   reportNativeInboundStage(group, NATIVE_INBOUND_STAGE.RETRY_REQUEST);
-  group.timers.setTimeout(() => runScheduledInboundDrain(group),
-    PERSISTENCE_ADMISSION_WAIT.POLL_INTERVAL_MS)?.unref?.();
+  armInboundWake(group, PERSISTENCE_ADMISSION_WAIT.POLL_INTERVAL_MS);
 }
 
 function runScheduledInboundDrain(group) {
   group.inboundDrainScheduled = false;
   reportNativeInboundStage(group, NATIVE_INBOUND_STAGE.CALLBACK);
   if (group.closed || group.inbound.length === 0) {
+    group.inboundWakeDebt = INBOUND_WAKE_DEBT.NONE;
     group.inboundDrainDeadline = null;
     reportNativeInboundStage(group, NATIVE_INBOUND_STAGE.CLOSED_OR_EMPTY);
+    return;
+  }
+  if (runtimeHealth !== HEALTHY) {
+    // A shared core rebuild temporarily excludes this exact accepted group.
+    // The resumption owner reoffers its wake after publishing healthy.
+    group.inboundWakeDebt = INBOUND_WAKE_DEBT.SHARED_RUNTIME;
+    group.inboundDrainDeadline = null;
+    reportNativeInboundStage(group, NATIVE_INBOUND_STAGE.RUNTIME_HELD);
     return;
   }
   if (!persistenceAdmitted(group)) {
@@ -1878,6 +1908,8 @@ function createRuntimeDispatcher(request) {
     tail: null,
     inbound: [],
     inboundDrainScheduled: false,
+    inboundDrainTimer: null,
+    inboundWakeDebt: INBOUND_WAKE_DEBT.NONE,
     inboundDrainDeadline: null,
     peerDelivery: new Map(),
     // One group-wide membership lane means one transient stage fence is
@@ -1964,10 +1996,22 @@ function createRuntimeDispatcher(request) {
       containUnexpectedThrow(group, error)),
     close: Object.freeze(({enterCore}) => {
       group.closed = true;
+      group.inboundWakeDebt = INBOUND_WAKE_DEBT.NONE;
+      const timerCleanupError = cancelOwnedInboundDrainTimer(group);
+      // Even a timer-clear failure must not skip release of the native group.
+      const complete = (result) => {
+        if (timerCleanupError === null) return result;
+        return result.outcome === CORE_OK ?
+          outcome(HOST_FAILURE, {
+            phase: RUNTIME_PHASE.INBOUND_TIMER_CLEANUP,
+            reason: String(timerCleanupError?.message ?? timerCleanupError),
+            timerCleanupError}) :
+          outcome(result.outcome, {...result, timerCleanupError});
+      };
       cancelRuntimeResumption(group);
       if (runtimeHealth === REPLACING) {
-        return outcome(CORE_OK, {
-          reason: RUNTIME_REASON.CLOSED_WITHOUT_CORE_ENTRY});
+        return complete(outcome(CORE_OK, {
+          reason: RUNTIME_REASON.CLOSED_WITHOUT_CORE_ENTRY}));
       }
       groups.delete(group.key);
       if (groups.size === 0 && runtimeHealth !== HEALTHY) {
@@ -1978,13 +2022,13 @@ function createRuntimeDispatcher(request) {
       }
       // A failed group's node lives in the current core until it is freed.
       if (!enterCore || group.handle === null || runtimeHealth !== HEALTHY) {
-        return outcome(CORE_OK, {
+        return complete(outcome(CORE_OK, {
           reason: RUNTIME_REASON.CLOSED_WITHOUT_CORE_ENTRY,
-        });
+        }));
       }
       const freed = invokeCore(group, 'free');
-      return freed.ok ? outcome(CORE_OK, {reason: RUNTIME_REASON.CLOSED}) :
-        freed.result;
+      return complete(freed.ok ? outcome(CORE_OK, {reason: RUNTIME_REASON.CLOSED}) :
+        freed.result);
     }),
   });
 }

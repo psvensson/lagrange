@@ -28,19 +28,19 @@ function createNativeDrainStageCapture(partitionId, replicaIds) {
     }
     record.lastStage = event.stage;
     switch (event.stage) {
-      case NATIVE_INBOUND_STAGE.ACCEPTED:
-        record.accepted += 1;
-        if (event.scheduled) record.acceptedWithTimer += 1;
-        break;
-      case NATIVE_INBOUND_STAGE.COALESCED: record.coalesced += 1; break;
-      case NATIVE_INBOUND_STAGE.REQUEST: record.requests += 1; break;
-      case NATIVE_INBOUND_STAGE.RETRY_REQUEST: record.retryRequests += 1; break;
-      case NATIVE_INBOUND_STAGE.CALLBACK: record.callbacks += 1; break;
-      case NATIVE_INBOUND_STAGE.PERSISTENCE_WAIT: record.persistenceWaits += 1; break;
-      case NATIVE_INBOUND_STAGE.TURN_REQUEST: record.turnRequests += 1; break;
-      case NATIVE_INBOUND_STAGE.CLOSED_OR_EMPTY: record.closedOrEmpty += 1; break;
-      case NATIVE_INBOUND_STAGE.WAIT_BOUND: record.waitBound += 1; break;
-      default: record.other += 1;
+    case NATIVE_INBOUND_STAGE.ACCEPTED:
+      record.accepted += 1;
+      if (event.scheduled) record.acceptedWithTimer += 1;
+      break;
+    case NATIVE_INBOUND_STAGE.COALESCED: record.coalesced += 1; break;
+    case NATIVE_INBOUND_STAGE.REQUEST: record.requests += 1; break;
+    case NATIVE_INBOUND_STAGE.RETRY_REQUEST: record.retryRequests += 1; break;
+    case NATIVE_INBOUND_STAGE.CALLBACK: record.callbacks += 1; break;
+    case NATIVE_INBOUND_STAGE.PERSISTENCE_WAIT: record.persistenceWaits += 1; break;
+    case NATIVE_INBOUND_STAGE.TURN_REQUEST: record.turnRequests += 1; break;
+    case NATIVE_INBOUND_STAGE.CLOSED_OR_EMPTY: record.closedOrEmpty += 1; break;
+    case NATIVE_INBOUND_STAGE.WAIT_BOUND: record.waitBound += 1; break;
+    default: record.other += 1;
     }
   };
   return {records, capture};
