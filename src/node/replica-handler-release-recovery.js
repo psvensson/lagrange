@@ -118,8 +118,13 @@ function createParticipantReleaseRecovery(handler) {
         running.size >= MAX_CONCURRENT_ATTEMPTS) return;
     const next = Math.min(...pending.values());
     try {
-      timer = handler.timeSource.setTimeout(dispatch, Math.max(0, next - now()));
-      timer.unref?.();
+      // Keep the original scheduler with this timer. A later handler clock
+      // replacement may schedule new work, but must never clear a handle
+      // owned by another clock's recovery lane.
+      const source = handler.timeSource;
+      const handle = source.setTimeout(dispatch, Math.max(0, next - now()));
+      timer = Object.freeze({source, handle});
+      handle?.unref?.();
     } catch (error) {
       timer = null;
       const stranded = [...pending.keys()];
@@ -137,7 +142,7 @@ function createParticipantReleaseRecovery(handler) {
     const due = now() + delay;
     pending.set(partitionId, Math.min(pending.get(partitionId) ?? due, due));
     // A new owner event may need to wake sooner than an old recovery retry.
-    if (timer !== null) handler.timeSource.clearTimeout(timer);
+    if (timer !== null) timer.source.clearTimeout(timer.handle);
     timer = null;
     arm();
   }
@@ -146,7 +151,7 @@ function createParticipantReleaseRecovery(handler) {
     pending.delete(partitionId);
     reported.delete(partitionId);
     if (pending.size === 0 && timer !== null) {
-      handler.timeSource.clearTimeout(timer);
+      timer.source.clearTimeout(timer.handle);
       timer = null;
     }
   }
@@ -296,7 +301,7 @@ function createParticipantReleaseRecovery(handler) {
       stopped = true;
       stopServices();
       stopConsensus();
-      if (timer !== null) handler.timeSource.clearTimeout(timer);
+      if (timer !== null) timer.source.clearTimeout(timer.handle);
       timer = null;
       pending.clear();
       reported.clear();
