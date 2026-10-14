@@ -51,6 +51,7 @@ import {
   FOLLOWER_RAFT_STATE,
   HEALTHY,
   INBOUND_DRAIN_DELAY_MS,
+  INBOUND_WAKE_DEBT,
   NO_LEADER,
   PERSISTENCE_ADMISSION_WAIT,
   RECOVERY_REQUIRED,
@@ -125,6 +126,7 @@ let nativeInboundStageObserver = null;
 const NATIVE_INBOUND_STAGE = Object.freeze({
   ACCEPTED: 'accepted', COALESCED: 'coalesced',
   REQUEST: 'request', RETRY_REQUEST: 'retry-request', CALLBACK: 'callback',
+  RUNTIME_HELD: 'runtime-held',
   CLOSED_OR_EMPTY: 'closed-or-empty', PERSISTENCE_WAIT: 'persistence-wait',
   TURN_REQUEST: 'turn-request', WAIT_BOUND: 'wait-bound',
 });
@@ -638,6 +640,15 @@ function resumeRuntimeGroup(group) {
     if (result.outcome !== CORE_OK && runtimeHealth === HEALTHY &&
         group.health !== RECOVERY_REQUIRED) {
       groupFailed(group, hostFailure(result.phase, result.reason, true));
+    }
+    // The shared runtime's successful resumption is the existing owner
+    // transition that can discharge an accepted wake consumed by its barrier.
+    // This re-enters the ONE inbound scheduler, never a recovery-side driver.
+    if (result.outcome === CORE_OK && runtimeHealth === HEALTHY &&
+        expectedGeneration === runtimeGeneration && !group.closed &&
+        group.inboundWakeDebt === INBOUND_WAKE_DEBT.SHARED_RUNTIME) {
+      if (group.inbound.length > 0) scheduleInboundDrain(group);
+      group.inboundWakeDebt = INBOUND_WAKE_DEBT.NONE;
     }
     return result;
   };
@@ -1784,8 +1795,17 @@ function runScheduledInboundDrain(group) {
   group.inboundDrainScheduled = false;
   reportNativeInboundStage(group, NATIVE_INBOUND_STAGE.CALLBACK);
   if (group.closed || group.inbound.length === 0) {
+    group.inboundWakeDebt = INBOUND_WAKE_DEBT.NONE;
     group.inboundDrainDeadline = null;
     reportNativeInboundStage(group, NATIVE_INBOUND_STAGE.CLOSED_OR_EMPTY);
+    return;
+  }
+  if (runtimeHealth !== HEALTHY) {
+    // A shared core rebuild temporarily excludes this exact accepted group.
+    // The resumption owner reoffers its wake after publishing healthy.
+    group.inboundWakeDebt = INBOUND_WAKE_DEBT.SHARED_RUNTIME;
+    group.inboundDrainDeadline = null;
+    reportNativeInboundStage(group, NATIVE_INBOUND_STAGE.RUNTIME_HELD);
     return;
   }
   if (!persistenceAdmitted(group)) {
@@ -1887,6 +1907,7 @@ function createRuntimeDispatcher(request) {
     inbound: [],
     inboundDrainScheduled: false,
     inboundDrainTimer: null,
+    inboundWakeDebt: INBOUND_WAKE_DEBT.NONE,
     inboundDrainDeadline: null,
     peerDelivery: new Map(),
     // One group-wide membership lane means one transient stage fence is
@@ -1973,6 +1994,7 @@ function createRuntimeDispatcher(request) {
       containUnexpectedThrow(group, error)),
     close: Object.freeze(({enterCore}) => {
       group.closed = true;
+      group.inboundWakeDebt = INBOUND_WAKE_DEBT.NONE;
       const timerCleanupError = cancelOwnedInboundDrainTimer(group);
       // Even a timer-clear failure must not skip release of the native group.
       const complete = (result) => {
