@@ -1,0 +1,66 @@
+# Actual three-voter SQL_TRANSACTIONS current-control proof, no fabricated
+# Raft membership/generation/admission facts and no timeout ratchet.
+name: rs-raft-control-three-voter
+on:
+  push:
+    branches: [continue/rs-raft-control-pause-census-20261014]
+    paths: [.github/workflows/rs-raft-control-three-voter.yml]
+permissions:
+  contents: read
+jobs:
+  three-voter:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 24
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Exact dependencies
+        run: npm ci
+      - name: Actual admitted native SQL control three-member proof and lint
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-control-three-voter
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/tree.txt"
+          FILE=test/partition/participant-release-control-three-member.test.js
+          node --check "$FILE" > "$OUT/syntax.log" 2>&1
+          syntax=$?
+          npx eslint "$FILE" > "$OUT/lint.log" 2>&1
+          lint=$?
+          printf '%s\n' "$syntax" > "$OUT/syntax.status"
+          printf '%s\n' "$lint" > "$OUT/lint.status"
+          if test "$syntax" -ne 0; then cat "$OUT/syntax.log"; fi
+          if test "$lint" -ne 0; then cat "$OUT/lint.log"; fi
+          npm run -s test:file -- "$FILE" > "$OUT/three-member-original.log" 2>&1
+          rc=$?
+          printf '%s\n' "$rc" > "$OUT/test.status"
+          tail -n 95 "$OUT/three-member-original.log" | cut -c 1-850
+          if test -f ".tap/test-results/$FILE.tap"; then
+            cp ".tap/test-results/$FILE.tap" "$OUT/three-member-full.tap"
+            sha256sum "$OUT/three-member-full.tap" > "$OUT/tap.sha256"
+          fi
+          if test -d test-output/reports; then
+            find test-output/reports -maxdepth 1 -type f -name '*.ndjson' \
+              -exec cp {} "$OUT/" \;
+          fi
+          test "$syntax" -eq 0 && test "$lint" -eq 0 && test "$rc" -eq 0
+      - name: Preserve source-bound green/red, full original TAP and cleanup evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-control-three-voter-${{ github.sha }}
+          path: test-output/rs-raft-control-three-voter/
+          retention-days: 14
+          if-no-files-found: warn
