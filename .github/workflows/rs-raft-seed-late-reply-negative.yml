@@ -5,6 +5,7 @@ on:
     branches: [verify/rs-raft-seed-late-reply-deadline-20261014]
     paths:
       - .github/workflows/rs-raft-seed-late-reply-negative.yml
+      - test/bootstrap/seed-release-once-per-cohort.test.js
 permissions:
   contents: read
 jobs:
