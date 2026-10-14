@@ -148,6 +148,31 @@ test('one canonical wave holds three real control voters across two released nat
             partitionIds: DEPENDENTS.map((item) => item.id),
           }, async (controlWaveToken) => {
             const answers = [];
+            const first = DEPENDENTS[0];
+            const freshAuthorization = handler.participantReleaseAuthorizationOwner
+              .authorizeFreshSeed({partitionId: first.id,
+                targetBuildDigest: build.digest, membershipOwnerOutcome: seedProof});
+            const baseRequest = {partitionId: first.id,
+              targetBuildDigest: build.digest, deadlineAtMs,
+              trigger: TRIGGER.FRESH_SEED, authorization: freshAuthorization};
+            const serializedToken = JSON.parse(JSON.stringify(controlWaveToken));
+            const forged = await requestParticipantRelease(handler, {
+              ...baseRequest, [WAVE_FIELD]: serializedToken});
+            assert.equal(forged.outcome, OUTCOME.UNAVAILABLE,
+              'JSON-cloned correlation cannot grant fresh control authority');
+            assert.equal(forged.missingFact, 'current_control_owner_fact');
+            const operatorAuthorization = handler.participantReleaseAuthorizationOwner
+              .authorizeOperator({partitionId: first.id, targetBuildDigest: build.digest});
+            const foreignKind = await requestParticipantRelease(handler, {
+              ...baseRequest, authorization: operatorAuthorization,
+              [WAVE_FIELD]: controlWaveToken});
+            assert.equal(foreignKind.outcome, OUTCOME.UNAVAILABLE,
+              'an operator credential cannot join an active fresh-seed wave');
+            assert.equal(foreignKind.missingFact, 'current_control_owner_fact');
+            const eligibleFirstService = groups[1].services[0];
+            assert.equal(participantReleaseAdmissionOf(eligibleFirstService).state,
+              ADMISSION.CLOSED,
+              'neither forgery can reopen the still-unreleased dependent');
             for (const item of DEPENDENTS) {
               const authorization = handler.participantReleaseAuthorizationOwner
                 .authorizeFreshSeed({partitionId: item.id,
