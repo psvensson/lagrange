@@ -1,0 +1,43 @@
+name: rs-raft-seed-post-await-static
+on:
+  push:
+    branches: [verify/rs-raft-seed-late-reply-fence-20261014]
+    paths: [.github/workflows/rs-raft-seed-post-await-static.yml]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 37
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+      - run: npm ci
+      - name: Static gates with preserved statuses
+        shell: bash
+        run: |
+          set +e
+          mkdir -p test-output/rs-raft-post-await-static
+          git rev-parse HEAD > test-output/rs-raft-post-await-static/sha.txt
+          rc=0
+          for task in audit:shards audit:impact-contracts test:deps test:unused:ratchet audit:file-size:strict test:duplication:strict lint audit:no-legacy-consensus-references audit:owner-boundary-segments; do
+            slug="${task//:/_}"
+            npm run -s "$task" > "test-output/rs-raft-post-await-static/$slug.log" 2>&1
+            result=$?
+            echo "$result" > "test-output/rs-raft-post-await-static/$slug.status"
+            echo "$task status=$result"
+            if test "$result" -ne 0; then rc=1; tail -n 8 "test-output/rs-raft-post-await-static/$slug.log"; fi
+          done
+          exit "$rc"
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-post-await-static-${{ github.sha }}
+          path: test-output/rs-raft-post-await-static/
+          retention-days: 14
