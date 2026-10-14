@@ -56,7 +56,9 @@ function installBeforeExitDiagnostic(context) {
         releaseOwnersAttached: context.releaseOwnersAttached,
         gate: gateDiagnosticOf(context.gate),
         membership: membershipDiagnosticOf(context.membershipReads),
-        route: context.route?.diagnosticFacts() ?? null});
+        route: context.route?.diagnosticFacts() ?? null,
+        // Existing core-entry seam is group-scoped, never follower-attributed.
+        nativeGroupCore: context.nativeCore ?? null});
       const serialized = JSON.stringify(snapshot);
       const line = Buffer.byteLength(serialized) <= EXIT_DIAGNOSTIC_BYTE_CAP ?
         serialized : JSON.stringify({kind: 'native-before-exit',
