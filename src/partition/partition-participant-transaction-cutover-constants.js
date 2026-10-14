@@ -34,6 +34,7 @@ const PARTICIPANT_RELEASE_REASON = Object.freeze({
 const PARTICIPANT_RELEASE_MISSING_FACT = Object.freeze({
   COMMITTED_REPLICA_ROUTES: 'committed_replica_routes',
   CURRENT_CONTROL_OWNER: 'current_control_owner_fact',
+  CONTROL_WAVE_OWNED: 'control_wave_owned_by_current_cutover',
   FRESH_STORAGE_OR_OPERATOR_AUTHORITY: 'fresh_storage_or_operator_authority',
   HOSTED_PARTITION: 'hosted_partition',
   HOSTED_REPLICA: 'hosted_replica',
