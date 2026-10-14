@@ -242,7 +242,9 @@ test('seed still accepts a release reply received just before deadline', async (
       nodeId: 'on-time-control',
       timeSource: clock,
       participantReleaseAuthorizationOwner: {
-        authorizeFreshSeed() {return Object.freeze({kind: 'fixture'});},
+        authorizeFreshSeed() {
+          return Object.freeze({kind: 'fixture'});
+        },
       },
       messageRouter: {
         deliver(_address, request) {
