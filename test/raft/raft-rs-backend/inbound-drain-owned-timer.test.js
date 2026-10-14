@@ -9,7 +9,8 @@ import {RAFT_OPERATION_OUTCOME} from
   '../../../src/raft/raft-operation-port-constants.js';
 import {PERSISTENCE_ADMISSION_WAIT} from
   '../../../src/raft/raft-rs-runtime-owner-constants.js';
-import {setCoreFaultInjector} from
+import {setActualCoreEntryObserver, setCoreFaultInjector,
+  setNativeInboundStageObserver} from
   '../../../src/raft/raft-rs-runtime-owner.js';
 import {PartitionNodeCluster} from './partition-node-cluster.js';
 import {coreTrappingAppend} from './core-trap-envelope.js';
@@ -212,6 +213,102 @@ test('an accepted inbound retry stays bounded and close retires its original clo
     assert.equal(owned.clock.pendingTimerCount(), baseline,
       'nothing rearms a retry after native group close');
   }));
+
+
+test('a replacement-time native drain preserves the admitted follower debt',
+  () => {
+    const partitionId = 'native-inbound-replacement-p1';
+    const triggerId = 'native-inbound-replacement-trigger';
+    const replicaIds = ['debt-r1', 'debt-r2', 'debt-r3'];
+    const clocks = new Map(replicaIds.map((id) => [id, observedClock()]));
+    const first = new PartitionNodeCluster({
+      partitionId, replicaIds,
+      substrateFor: (id) => ({timeSource: clocks.get(id).clock}),
+    });
+    const second = new PartitionNodeCluster({
+      partitionId: triggerId, replicaIds: ['trigger-r1'],
+    });
+    const recipient = first.replica('debt-r2');
+    const originalScheduler = clocks.get('debt-r2').clock;
+    const stages = [];
+    let coreSteps = 0;
+    let injected = false;
+    let advancedDuringReplacement = false;
+    let failure = null;
+    try {
+      const status = recipient.node.readStatus();
+      const sender = first.node('debt-r1').readStatus();
+      assert.equal(status.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
+      assert.equal(sender.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
+      assert.equal(originalScheduler.pendingTimerCount(), 0);
+      const envelope = coreTrappingAppend({dbFile: recipient.dbFile,
+        groupId: partitionId, status, from: sender.peerId, term: '1'});
+      setCoreFaultInjector(null);
+      setNativeInboundStageObserver((event) => {
+        if (event.groupId === partitionId &&
+            event.replicaIdentity === 'debt-r2') {
+          stages.push(event.stage);
+        }
+      });
+      const accepted = recipient.node.step(envelope);
+      assert.equal(accepted.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
+      assert.equal(accepted.reason, 'inbound-enqueued');
+      assert.equal(originalScheduler.pendingTimerCount(), 1,
+        'one accepted inbound wake is owned before the replacement');
+      setActualCoreEntryObserver((entry) => {
+        if (entry.groupId === partitionId && entry.operation === 'step') {
+          coreSteps += 1;
+        }
+        if (!advancedDuringReplacement && entry.groupId === partitionId &&
+            entry.operation === 'create_node') {
+          advancedDuringReplacement = true;
+          // Exercise exactly the previously armed timer while the shared
+          // runtime is rebuilding, not by manually ticking the recipient.
+          originalScheduler.advance(0);
+        }
+      });
+      setCoreFaultInjector((groupId, operation) => {
+        if (!injected && groupId === triggerId && operation === 'tick') {
+          injected = true;
+          setCoreFaultInjector(null);
+          throw new globalThis.WebAssembly.RuntimeError(
+            'injected shared-core replacement');
+        }
+      });
+      const trapped = second.node('trigger-r1').tick();
+      assert.equal(injected, true, 'the real second group traps its core');
+      assert.notEqual(trapped.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
+      // Existing trigger-group recovery drives the shared replacement once;
+      // no caller-side status read or tick touches the queued recipient.
+      second.node('trigger-r1').readStatus();
+      assert.equal(advancedDuringReplacement, true,
+        'the accepted timer fired inside the shared reconstruction barrier');
+      assert.ok(stages.includes('callback') && stages.includes('turn-request'),
+        'the exact follower attempted its existing lifecycle-admitted turn');
+      assert.equal(coreSteps, 0,
+        'a queued follower cannot enter an obsolete core mid-replacement');
+      originalScheduler.advance(0);
+      assert.ok(coreSteps > 0,
+        'after shared recovery, exact accepted inbound debt must reenter native core ' +
+        'without an unrelated reader or tick');
+    } catch (error) {
+      failure = error;
+    } finally {
+      setCoreFaultInjector(null);
+      setActualCoreEntryObserver(null);
+      setNativeInboundStageObserver(null);
+      for (const cluster of [second, first]) {
+        try {
+          cluster.dispose();
+        } catch (error) {
+          failure = failure === null ? error :
+            new AggregateError([failure, error],
+              'shared replacement native timer cleanup failed');
+        }
+      }
+    }
+    if (failure !== null) throw failure;
+  });
 
 test('a failed timer clear is typed without skipping actual native group close',
   async () => withAcceptedFollower('native-inbound-timer-clear-fault', async ({
