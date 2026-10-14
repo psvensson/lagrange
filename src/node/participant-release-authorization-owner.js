@@ -63,6 +63,16 @@ function createParticipantReleaseAuthorizationOwner(handler) {
       return proof?.handler === handler && proof.partitionId === partitionId &&
         proof.targetBuildDigest === targetBuildDigest;
     },
+    // A held control wave is exclusively a fresh-seed operation; ordinary
+    // OPERATOR and FRESH_CREATE tokens cannot name or join its lifetime.
+    validatesFreshSeed(token, {partitionId, targetBuildDigest}) {
+      const proof = AUTHORIZATION.get(token);
+      return proof?.handler === handler &&
+        proof.kind === PARTICIPANT_RELEASE_AUTHORIZATION_KIND.FRESH_SEED &&
+        proof.partitionId === partitionId &&
+        proof.targetBuildDigest === targetBuildDigest &&
+        freshSeedOwnerProofValid(proof.evidence);
+    },
   });
 }
 
