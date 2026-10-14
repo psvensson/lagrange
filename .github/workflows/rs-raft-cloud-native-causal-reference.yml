@@ -4,7 +4,7 @@ on:
   push:
     branches: [continue/rs-raft-cloud-native-causal-reference-v1-20261014]
     paths:
-      - .github/workflows/rs-raft-cloud-native-causal-ref.yml
+      - .github/workflows/rs-raft-cloud-native-causal-reference.yml
       - test/partition/participant-release-native-application-order.test.js
       - test/partition/participant-release-native-exit-diagnostic.js
       - src/raft/raft-rs-runtime-owner.js
