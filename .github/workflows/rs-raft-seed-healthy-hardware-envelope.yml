@@ -1,0 +1,111 @@
+# Full success envelope on the SAME immutable native source. These explicit
+# fixture-only bounds (15/20s for seed and 60s for entire test) are diagnostic,
+# not a modified release policy, bypassed test body or merge acceptance.
+name: rs-raft-seed-healthy-hardware-envelope
+on:
+  push:
+    branches: [diagnostic/rs-raft-seed-virtual-hardware-budget-20261014]
+    paths:
+      - .github/workflows/rs-raft-seed-healthy-hardware-envelope.yml
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-seed-healthy-hardware-envelope
+  cancel-in-progress: false
+jobs:
+  healthy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Exact production commit and VM capacity
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT=test-output/rs-raft-seed-healthy-hardware
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/head.txt"
+          git rev-parse HEAD^{tree} > "$OUT/tree.txt"
+          git diff --name-only a7bb214bfc77f9dacda1b4fd27b5e9edaec92347 HEAD -- src \
+            > "$OUT/production-changes.txt"
+          test ! -s "$OUT/production-changes.txt"
+          node -e 'const os=require("os");console.log(JSON.stringify({schema:"runner-host/1",logical:os.cpus().length,available:os.availableParallelism(),model:os.cpus()[0].model,totalMemBytes:os.totalmem(),node:process.version}))' \
+            > "$OUT/runner-hardware.json"
+          cat /sys/fs/cgroup/cpu.max > "$OUT/cgroup-cpu-max.txt" 2>/dev/null || true
+          git show HEAD:test/integration/message-group-membership-claim-cache.integration.test.js \
+            > "$OUT/original-test.js"
+          sha256sum "$OUT/original-test.js" > "$OUT/original-test.sha256"
+          npm ci
+      - name: Healthy original SQL Raft CDC claim/cache body at measured fixture limits
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-seed-healthy-hardware
+          TEST=test/integration/message-group-membership-claim-cache.integration.test.js
+          PREP=scripts/quest-evidence/prepare-seed-budget-diagnostic.mjs
+          failures=0
+          for key in 1-15000 2-20000 3-15000; do
+            budget="${key#*-}"
+            cp "$OUT/original-test.js" "$TEST"
+            node "$PREP" "$TEST" "$budget" "$OUT/$key.test-diagnostic.js" 60000 \
+              > "$OUT/$key.instrumentation.json" 2> "$OUT/$key.instrumentation-error.log"
+            prep=$?
+            if test "$prep" -ne 0; then
+              failures=1
+              cat "$OUT/$key.instrumentation-error.log"
+              continue
+            fi
+            cp "$OUT/$key.test-diagnostic.js" "$TEST"
+            node --check "$TEST" > "$OUT/$key.syntax.log" 2>&1
+            if test "$?" -ne 0; then failures=1; cat "$OUT/$key.syntax.log"; continue; fi
+            ( /usr/bin/time -f 'wallSeconds=%e\nuserSeconds=%U\nsystemSeconds=%S\nmaxRssKiB=%M' \
+              npm run -s test:file -- "$TEST" ) > "$OUT/$key.run.log" \
+              2> "$OUT/$key.resource.log"
+            rc=$?
+            printf '%s\n' "$rc" > "$OUT/$key.test.status"
+            RAW=".tap/test-results/$TEST.tap"
+            if test ! -f "$RAW"; then
+              echo "missing original TAP: $key"
+              failures=1
+              continue
+            fi
+            cp "$RAW" "$OUT/$key.full.tap"
+            sha256sum "$OUT/$key.full.tap" > "$OUT/$key.tap.sha256"
+            node scripts/quest-evidence/summarize-seed-release-trace.mjs \
+              "$RAW" "$OUT/$key.census.json" > "$OUT/$key.summary-line.json" \
+              2> "$OUT/$key.census-error.log"
+            census=$?
+            printf '%s\n' "$census" > "$OUT/$key.census.status"
+            if test "$census" -ne 0; then failures=1; cat "$OUT/$key.census-error.log"; fi
+            echo "original-body $key status=$rc, source HEAD=$GITHUB_SHA"
+            grep -F 'seed-release-real-hardware-timing/1' "$OUT/$key.run.log" \
+              | tail -n 1 | cut -c 1-1650 || true
+            grep -F 'membership-cache-timing/2' "$OUT/$key.run.log" \
+              | tail -n 1 | cut -c 1-1700 || true
+            grep -F 'test-files total' "$OUT/$key.run.log" | tail -n 1 || true
+            cat "$OUT/$key.resource.log"
+            if test "$rc" -ne 0; then failures=1; fi
+          done
+          cp "$OUT/original-test.js" "$TEST"
+          git diff --name-only > "$OUT/restored-paths.txt"
+          test ! -s "$OUT/restored-paths.txt" || failures=1
+          exit "$failures"
+      - name: Preserve full healthy/rejected original body receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-seed-healthy-hardware-${{ github.sha }}
+          path: test-output/rs-raft-seed-healthy-hardware/
+          retention-days: 14
+          if-no-files-found: warn
