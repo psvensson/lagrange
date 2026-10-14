@@ -243,31 +243,31 @@ test('one canonical wave holds three real control voters across two released nat
       let controlInspectsSeen = 0;
       let lateRelease = null;
       try {
-        transport.deliver = async function(...args) {
-          const req = args[1];
-          if (req?.type === PARTICIPANT_RELEASE_TYPE &&
-              req.partitionId === DEPENDENTS[0].id && req.action === ACTION.PAUSE) {
-            lateDependentPauses += 1;
-          }
-          if (req?.type === PARTICIPANT_RELEASE_TYPE &&
-              req.partitionId === CONTROL && req.action === ACTION.INSPECT) {
-            controlInspectsSeen += 1;
-          }
-          if (!delayedFirstInspect && req?.type === PARTICIPANT_RELEASE_TYPE &&
-              req.partitionId === CONTROL && req.action === ACTION.INSPECT) {
-            delayedFirstInspect = true;
-            const oldFacts = await Reflect.apply(originalLateDeliver, this, args);
-            inspected.resolve();
-            await deliverOldFacts.promise;
-            return oldFacts;
-          }
-          return Reflect.apply(originalLateDeliver, this, args);
-        };
         await handler.participantReleaseRecovery.withFreshSeedControlWave({
           targetBuildDigest: build.digest, deadlineAtMs, controlAuthorization,
           partitionIds: [DEPENDENTS[0].id],
         }, async (inFlightToken) => {
-          lateRelease = requestParticipantRelease(handler, {
+          transport.deliver = async function(...args) {
+            const req = args[1];
+            if (req?.type === PARTICIPANT_RELEASE_TYPE &&
+                req.partitionId === DEPENDENTS[0].id && req.action === ACTION.PAUSE) {
+              lateDependentPauses += 1;
+            }
+            if (req?.type === PARTICIPANT_RELEASE_TYPE &&
+                req.partitionId === CONTROL && req.action === ACTION.INSPECT) {
+              controlInspectsSeen += 1;
+            }
+            if (!delayedFirstInspect && req?.type === PARTICIPANT_RELEASE_TYPE &&
+                req.partitionId === CONTROL && req.action === ACTION.INSPECT) {
+              delayedFirstInspect = true;
+              const oldFacts = await Reflect.apply(originalLateDeliver, this, args);
+              inspected.resolve();
+              await deliverOldFacts.promise;
+              return oldFacts;
+            }
+            return Reflect.apply(originalLateDeliver, this, args);
+          };
+            lateRelease = requestParticipantRelease(handler, {
             partitionId: DEPENDENTS[0].id, targetBuildDigest: build.digest,
             trigger: TRIGGER.FRESH_SEED, deadlineAtMs,
             authorization: dependentAuthorization, [WAVE_FIELD]: inFlightToken});
@@ -277,7 +277,7 @@ test('one canonical wave holds three real control voters across two released nat
               inspected.promise,
               new Promise((_, reject) => {
                 inspectTimeout = setTimeout(() =>
-                  reject(new Error(`late reply test did not engage control inspect; ` +
+                  reject(new Error('late reply test did not engage control inspect; ' +
                     `observed=${controlInspectsSeen}`)), 2000);
               }),
             ]);
