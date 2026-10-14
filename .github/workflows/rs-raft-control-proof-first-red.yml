@@ -1,0 +1,61 @@
+# Only the original source negative. No controller optimization implementation.
+name: rs-raft-control-proof-first-red
+on:
+  push:
+    branches: [continue/rs-raft-seed-control-proof-amortization-20261014]
+    paths: [.github/workflows/rs-raft-control-proof-first-red.yml]
+permissions:
+  contents: read
+jobs:
+  engage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Source-only old fast proof negative, same original test bytes
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          BASE=31f35ac44845b343131ac032ec3a5b44f7c649d7
+          TEST=test/partition/participant-release-protocol.test.js
+          FILTER='already-current control cohort proves release with fewer original route calls'
+          OUT=test-output/rs-raft-control-proof-negative
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/head.txt"
+          git rev-parse "$BASE^{tree}" > "$OUT/original-tree.txt"
+          OLD="$RUNNER_TEMP/control-proof-original"
+          git worktree add --detach "$OLD" "$BASE" > "$OUT/worktree.log" 2>&1 || exit 1
+          cp "$TEST" "$OLD/$TEST" || exit 1
+          cmp "$TEST" "$OLD/$TEST" || exit 1
+          sha256sum "$TEST" > "$OUT/test.sha256"
+          (cd "$OLD" && npm ci) > "$OUT/install.log" 2>&1
+          code=$?
+          test "$code" -eq 0 || exit 1
+          (cd "$OLD" && node --test --test-name-pattern="$FILTER" "$TEST") > "$OUT/negative.tap" 2>&1
+          result=$?
+          printf '%s\n' "$result" > "$OUT/negative.status"
+          tail -n 80 "$OUT/negative.tap"
+          test "$result" -ne 0 || exit 1
+          grep -F 'the already-current authoritative control owner must not replay' "$OUT/negative.tap" || exit 1
+          grep -F 'ERR_ASSERTION' "$OUT/negative.tap" || exit 1
+          grep -F 'not ok' "$OUT/negative.tap" || exit 1
+          echo 'Original real control release succeeded twice; named idempotent work negative engaged'
+      - name: Preserve old-test error and original exact source
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-control-proof-red-${{ github.sha }}
+          path: test-output/rs-raft-control-proof-negative/
+          retention-days: 14
+          if-no-files-found: warn
