@@ -185,7 +185,7 @@ test('first ordered refusal joins every started cohort and never admits the next
   async () => {
     const controlId = CONTROL;
     const firstDependent = 'seed-bounded-00-p1';
-    const dependentIds = Array.from({length: 13}, (_, index) =>
+    const dependentIds = Array.from({length: 60}, (_, index) =>
       `seed-bounded-${String(index).padStart(2, '0')}-p1`);
     const services = new Map();
     for (const partitionId of [controlId, ...dependentIds]) {
