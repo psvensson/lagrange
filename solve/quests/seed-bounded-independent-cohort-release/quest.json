@@ -1,0 +1,54 @@
+{
+  "schema": "solve-quest/2",
+  "id": "seed-bounded-independent-cohort-release",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "Seed bootstrap must release its distinct eligible partition cohorts within the existing one shared original deadline, while completing sql_transactions control first and preserving each independent partition cutover's current full membership, control-owner pre/post validation and complete pause/enable/observe/final census/resume protocol. A bounded concurrency owner may submit distinct cohorts together; concurrent nested control RELEASE requests must join the canonical single RUNS owner, never cache control permission.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/seed-bounded-independent-cohort-release/evidence/receipt.json",
+      "requiredReceipts": [
+        "measured-sequential-budget-exhaustion",
+        "engaged-independent-cohort-overlap-source-negative",
+        "bounded-admission-drain-and-deterministic-refusal",
+        "fresh-seed-original-budget-success",
+        "independent-source-static-and-multihost-composition"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "explicit-narrow-supersession",
+      "statement": "This is the explicit successor to the seed-release-once-per-partition-cohort serialization constraint ONLY for concurrently executing independent partition IDs. Preserve the complete input-sorted one-intent-per-partition list, SQL_TRANSACTIONS as a hard successful predecessor, original authorizations, authentic existing member cohorts, and all current control pre/post release checks. A single partition never has concurrent seed release intents. No new permission cache, second coordinator, status reader, leader shortcut, or relaxed OPEN guard."
+    },
+    {
+      "id": "bounded-lifecycle",
+      "statement": "Use one seed workflow owner for bounded independent partition concurrency with an immutable, conservatively small cap. No detached tasks, fire-and-forget dispatch, unobserved Promise rejection, or mutable global batch state. On any refusal the owner must join every already-started task before throwing a deterministic first-by-input-order failure. Do not send additional work after detecting failure, including while settling already-started tasks; source must prove this."
+    },
+    {
+      "id": "budget-and-order",
+      "statement": "Use the ONE existing timeSource and absolute shared 1000/5000ms deadline, no per-cohort renewal or timeout increases. Maintain sorted deterministic launch order and a stable, first-by-input-order error projection even when sibling promises finish out of order. Each existing request retains its original retry policy and observably typed answer."
+    },
+    {
+      "id": "safety-and-control",
+      "statement": "Concurrency is allowed only across distinct Raft partition groups after full current SQL_TRANSACTIONS cutover succeeds. The canonical replica-handler RUNS owner coalesces concurrent nested control releases with matching build; it alone validates current control authority, real generation and actual member census before/after each dependent cutover. A failed control owner must block dependent release, never grant permission by prior success."
+    },
+    {
+      "id": "adversarial-and-proof",
+      "statement": "Measure named engaged red on serial source using the exact same orchestration test. Test maximum in-flight, control-first barrier, ordinal and completion-failure preservation, retry failure with all started in-flight settled, no new task after refusal and no fake activation. Independently prove real source on same physical host against original 1000ms claim/cache and 5000ms bootstrap full body, plus exact source controls, native V10, TX1/TX2, FreshMG, restart, seed-loss and zero-Liferaft gates."
+    },
+    {
+      "id": "acceptance-scope",
+      "statement": "Original 1000ms test is currently red despite one intent per cohort: exact hosted trace reports 514 completed deliveries, of which 347 control, with 21 complete control RELEASE calls for 10 non-control partitions, all trace drops/errors zero. No ratchet/budget increase, skipped body, fixture shadow, or recovery state forgery counts as success; source-only and hosted evidence are WIP until independent review and locked host acceptance."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "concurrency-serialization",
+    "formation-circularity",
+    "harness-fidelity",
+    "retry-loops",
+    "admission-gating"
+  ]
+}
