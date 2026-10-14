@@ -1,0 +1,33 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "seed-bounded-independent-cohort-release",
+  "status": "fail",
+  "base": "31f35ac44845b343131ac032ec3a5b44f7c649d7",
+  "receipts": [
+    {
+      "id": "measured-sequential-budget-exhaustion",
+      "passed": false,
+      "detail": "Not independently accepted; WIP measurements are not merger/publisher receipts."
+    },
+    {
+      "id": "engaged-independent-cohort-overlap-source-negative",
+      "passed": false,
+      "detail": "Not independently accepted; WIP measurements are not merger/publisher receipts."
+    },
+    {
+      "id": "bounded-admission-drain-and-deterministic-refusal",
+      "passed": false,
+      "detail": "Not independently accepted; WIP measurements are not merger/publisher receipts."
+    },
+    {
+      "id": "fresh-seed-original-budget-success",
+      "passed": false,
+      "detail": "Not independently accepted; WIP measurements are not merger/publisher receipts."
+    },
+    {
+      "id": "independent-source-static-and-multihost-composition",
+      "passed": false,
+      "detail": "Not independently accepted; WIP measurements are not merger/publisher receipts."
+    }
+  ]
+}
