@@ -5,6 +5,13 @@ on:
     branches: [continue/rs-raft-cloud-native-inbound-owned-timer-v1-20261014]
     paths:
       - .github/workflows/rs-raft-native-timer-interactions.yml
+      - src/raft/raft-rs-inbound-timer-custody.js
+      - src/raft/raft-rs-runtime-owner.js
+      - src/raft/raft-rs-runtime-owner-constants.js
+      - test/raft/raft-rs-backend/inbound-drain-owned-timer.test.js
+      - test/partition/participant-release-native-application-order.test.js
+      - test/shards/subsystem-classes.json
+      - test/shards/impact-graph-seal.json
 permissions:
   contents: read
 concurrency:
