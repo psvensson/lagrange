@@ -29,6 +29,15 @@ const ordinal = (value) => numberIsSafeInteger(value) && value >= 0;
 const positiveInteger = (value) => numberIsSafeInteger(value) && value > 0;
 const incarnation = (value) => nonempty(value) || positiveInteger(value);
 
+// The canonical release deadline belongs to the original caller, not a
+// per-RPC, per-recipient or retry-created timer. Receivers recheck this value
+// after awaited facts and immediately before an admission mutation.
+function participantReleaseDeadlineExpired(timeSource, deadlineAtMs) {
+  if (!ordinal(deadlineAtMs)) return false;
+  const nowMs = timeSource?.now?.();
+  return !ordinal(nowMs) || nowMs >= deadlineAtMs;
+}
+
 function exactRecord(value, fields) {
   return value !== null && typeof value === 'object' && !Array.isArray(value) &&
     Object.keys(value).length === fields.length &&
@@ -198,7 +207,8 @@ function releaseAnswer(outcome, request = {}, fields = {}) {
 }
 
 export {isReleaseDrained, originEqual, releaseAnswer, releaseCensusDefect,
-  participantReleaseGenerationValid, releaseFactsDefect, releaseIdentityOf,
+  participantReleaseDeadlineExpired, participantReleaseGenerationValid,
+  releaseFactsDefect, releaseIdentityOf,
   releaseIdentityValid, releaseMemberIds,
   sameReplicaGeneration,
   transactionReleaseProofValid};
