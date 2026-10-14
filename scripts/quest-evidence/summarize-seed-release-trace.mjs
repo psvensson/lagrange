@@ -3,26 +3,16 @@
 // No new producer, no response manipulation, no source-layer effects.
 import {createHash} from 'node:crypto';
 import fs from 'node:fs';
+import {parseCompleteParticipantReleaseTrace} from
+  './participant-release-trace-envelope.mjs';
 
 const [input, output] = process.argv.slice(2);
 if (!input || !output) {
   throw new Error('usage: summarize-seed-release-trace.mjs <raw-tap> <summary.json>');
 }
 const raw = fs.readFileSync(input);
-const text = raw.toString('utf8');
-const marker = '{"schema":"participant-release-delivery-trace/1"';
-const all = text.split('\n').filter((line) => line.includes(marker));
-if (all.length !== 1) {
-  throw new Error(`expected one original delivery trace, found ${all.length}`);
-}
-const line = all[0];
-const json = line.slice(line.indexOf(marker));
-let trace;
-try {
-  trace = JSON.parse(json);
-} catch (error) {
-  throw new Error('original TAP trace is not complete JSON: ' + error.message);
-}
+const {report: trace, encoding, rawSha256: sourceRawSha256,
+  rawBytes: sourceRawBytes} = parseCompleteParticipantReleaseTrace(raw);
 if (!Array.isArray(trace.records) ||
     trace.records.length !== trace.recordedCount ||
     trace.droppedCount !== 0 || trace.captureErrorCount !== 0 ||
@@ -82,6 +72,9 @@ const result = {
   inputBytes: raw.length,
   inputSha256: createHash('sha256').update(raw).digest('hex'),
   sourceTraceSchema: trace.schema,
+  sourceEnvelopeEncoding: encoding,
+  sourceRawSha256,
+  sourceRawBytes,
   matchedCount: trace.matchedCount, recordedCount: trace.recordedCount,
   completionCount: trace.completionCount,
   droppedCount: trace.droppedCount, captureErrorCount: trace.captureErrorCount,
