@@ -221,6 +221,40 @@ the existing mechanisms and verifying parity.
    WASM can remain lighter and capability bounded. Host implementation
    differences are allowed; observable Lagrange host API differences are not.
 
+## First R0 inventory: actual WIT surface (observed, not yet certified)
+
+The canonical [WIT file](../wit/world.wit) has two host-import
+interfaces and four worlds. This is the starting *implemented-ABI census*;
+it does not claim working OCI SDK projections.
+
+| WIT world or interface | Declared surface | Existing host/owner evidence | Native SDK state |
+| --- | --- | --- | --- |
+| request context | read(table slot, key), write(table slot, key, value), capability(slot) | WASI Cell worker context; request-mode authority from the Binding/runtime access owner | Target only; native per-capability parity not certified |
+| request context | call-binding(name, arguments) returning result or binding-call-error | RequestCellCallBridge -> CallCellInvoker; caller-derived identity and authorized outbound policy | Target only; the broker may transport but must not re-decide permission |
+| call-context | emit(key, string partial) returning deny-code | call-cell-context-host + Call Cell partial/reduce owners | Target only; no new native partial publication path |
+| call-context | call-bounded(export, argument) returning deny-code | call-cell-context-host under mode-specific nested-call budget | Target only; cannot become unrestricted RPC |
+| request-cell | run(request) -> response | Request Binding receiver and invocation journal | Native handler must preserve the request owner |
+| call-cell | run(batch, arguments), reduce(partials, arguments) | CallCellInvoker / shard receiver / reduce lease | Native Call Cell explicitly planned, not currently running |
+| service-cell | combined request and Call Cell entrypoints with distinct live imports per Binding | Existing combined WASM world | Native composition must not widen the live world |
+| service-cell-v2 | handler/operation ID explicit in the exports | Additive generated-entry interface; not equivalent to claiming all public toolchains target v2 | Native mapping must be versioned and matched to deployed manifest |
+
+There are already **different error contracts** in WIT:
+request calls return a binding-call-error record (including retryable), while
+call-context functions use deny-code. That distinction may be justified by
+their semantics; converting both to a generic SDK exception before proving
+parity would erase information. WIT itself has no distributed cancellation,
+cross-partition snapshot, generic object method-send, broadcast/lookup or
+arbitrary native-process SQL capability in this public service world.
+Those must not appear as *Lagrange-host* SDK methods without a new owned,
+versioned public contract. Ordinary PostgreSQL client use is a separate path.
+
+The current source evidence does **not** prove an OCI projection of this
+matrix. It identifies the first cross-runtime acceptance work: each row
+requires a positive and negative conformance witness against exactly the
+same operation, world, Binding intent and authority. The result could be
+generated from WIT plus machine-checked semantic test vectors; manually
+re-coding the contract independently in every SDK would create drift.
+
 ## First research/proof program (no implementation authorized yet)
 
 ### R0 — Exact capability census
