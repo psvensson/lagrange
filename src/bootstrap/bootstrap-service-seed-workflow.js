@@ -20,13 +20,14 @@ import {
 import {runtimeBuildProvenance, RUNTIME_BUILD_STATE} from
   '../diagnostics/runtime-build-provenance.js';
 import {requestParticipantRelease} from '../node/participant-release-client.js';
+import {releaseAnswer} from '../partition/partition-participant-release-contract.js';
 import {INITIAL_PARTITION_IDS} from './system-table-schemas-constants.js';
 import {observeParticipantReleaseClockValue,
   participantReleaseSeedBudgetObservation, readParticipantReleaseClock} from
   '../node/participant-release-diagnostic-observation.js';
 import {PARTICIPANT_CUTOVER_BOUND, PARTICIPANT_CUTOVER_OUTCOME,
   PARTICIPANT_RELEASE_CONTROL_WAVE_FIELD as WAVE_FIELD,
-  PARTICIPANT_RELEASE_TRIGGER} from
+  PARTICIPANT_RELEASE_MISSING_FACT, PARTICIPANT_RELEASE_TRIGGER} from
   '../partition/partition-participant-transaction-cutover-constants.js';
 import {
   NodeState,
@@ -341,6 +342,16 @@ function createBootstrapServiceSeedWorkflowMethods() {
             firstBlockedDrain, answer.blockedDrain);
           firstJoinedAttempt = retainFirstReleaseObservation(
             firstJoinedAttempt, answer.joinedAttempt);
+          // A positive reply may arrive after the bounded owner deadline.
+          // RETRY was already fenced below, but a successful reply bypassed
+          // that check. Only the seed owner decides whether all current
+          // partition releases completed within its one original budget.
+          if (timeSource.now() >= deadline) {
+            answer = releaseAnswer(PARTICIPANT_CUTOVER_OUTCOME.UNAVAILABLE,
+              {partitionId: service.partitionId},
+              {missingFact: PARTICIPANT_RELEASE_MISSING_FACT.RELEASE_DEADLINE});
+            break;
+          }
           if (answer.outcome === PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER) break;
           const retryAfterMs = answer.outcome ===
               PARTICIPANT_CUTOVER_OUTCOME.NOT_LEADER ?
