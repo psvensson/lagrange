@@ -326,7 +326,7 @@ function createBootstrapServiceSeedWorkflowMethods() {
             partitionId: service.partitionId, targetBuildDigest: build.digest,
             trigger: PARTICIPANT_RELEASE_TRIGGER.FRESH_SEED,
             deadlineAtMs: deadline, authorization,
-              ...(controlWaveToken === null ? {} : {[WAVE_FIELD]: controlWaveToken}),
+            ...(controlWaveToken === null ? {} : {[WAVE_FIELD]: controlWaveToken}),
           });
           firstBlockedDrain = retainFirstReleaseObservation(
             firstBlockedDrain, answer.blockedDrain);
