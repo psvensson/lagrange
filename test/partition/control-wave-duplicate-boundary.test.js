@@ -233,7 +233,7 @@ test('one canonical wave holds three real control voters across two released nat
 
       let capturedLateRefusal = null;
       let heldClosedAfterSchemaMutation = false;
-      const failure = await handler.participantReleaseRecovery.withFreshSeedControlWave({
+      const endFailure = await handler.participantReleaseRecovery.withFreshSeedControlWave({
         targetBuildDigest: build.digest, deadlineAtMs,
         controlAuthorization, partitionIds: [DEPENDENTS[0].id],
       }, async (newWaveToken) => {
@@ -251,14 +251,16 @@ test('one canonical wave holds three real control voters across two released nat
         'a malformed control schema keeps its authoritative control recipient closed');
       assert.equal(capturedLateRefusal?.outcome, OUTCOME.UNAVAILABLE);
       assert.equal(capturedLateRefusal.missingFact, MISSING_FACT.CURRENT_CONTROL_OWNER);
-      assert.ok(failure instanceof Error,
+      assert.ok(endFailure instanceof Error,
         'the final control-wave membership/schema fence must refuse END');
-      assert.match(failure.message, /Current control wave END census refused/u);
-      const repaired = await release(CONTROL);
-      assert.equal(repaired.outcome, OUTCOME.CUT_OVER,
-        'normal canonical release must repair the failed control wave: ' +
-          JSON.stringify(repaired));
-
+      assert.match(endFailure.message, /Current control wave END census refused/u);
+      const refusedRecovery = await release(CONTROL);
+      assert.equal(refusedRecovery.outcome, OUTCOME.CENSUS_REFUSED,
+        'divergent real member schema cannot be silently repaired as a new cutover');
+      for (const service of control.services) {
+        assert.equal(participantReleaseAdmissionOf(service).state, ADMISSION.CLOSED,
+          'every control voter remains CLOSED while the real cohort disagrees');
+      }
     } catch (error) {
       failure = error;
     } finally {
