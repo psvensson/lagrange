@@ -31,7 +31,8 @@ jobs:
           BEFORE="$GITHUB_SHA"
           test "$(git rev-parse HEAD)" = "$BEFORE"
           npm ci
-          npm run -s audit:impact-contracts
+          # The canonical producer updates the new test's primary class
+          # before the strict impact contract audit reads it.
           npm run -s test:metadata:refresh
           git diff --check
           git diff --name-status
