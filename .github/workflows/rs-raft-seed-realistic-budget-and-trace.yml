@@ -1,0 +1,98 @@
+# WIP bounded correctness gate: election still 1s, explicit 20s release,
+# 60s full SQL/Raft/CDC integration body, all original assertions and 45 groups.
+# The complete release trace is preserved as SHA-bound sub-1MB TAP lines.
+name: rs-raft-seed-realistic-budget-and-trace
+on:
+  push:
+    branches: [work/rs-raft-seed-release-budget-independent-20261014]
+    paths:
+      - .github/workflows/rs-raft-seed-realistic-budget-and-trace.yml
+      - src/bootstrap/bootstrap-service-seed-workflow.js
+      - test/integration/message-group-membership-claim-cache.integration.test.js
+      - test/quest-evidence/participant-release-trace-envelope.test.js
+      - scripts/quest-evidence/participant-release-trace-envelope.mjs
+      - scripts/quest-evidence/summarize-seed-release-trace.mjs
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-seed-realistic-budget-and-trace
+  cancel-in-progress: false
+jobs:
+  exact:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install exact lock
+        run: npm ci
+      - name: Run strict exact scopes and complete original business logic
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-seed-realistic-budget
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/source-sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/source-tree.txt"
+          fail=0
+          npx eslint \
+            src/bootstrap/bootstrap-service-seed-workflow.js \
+            test/integration/message-group-membership-claim-cache.integration.test.js \
+            test/quest-evidence/participant-release-trace-envelope.test.js \
+            scripts/quest-evidence/participant-release-trace-envelope.mjs \
+            scripts/quest-evidence/summarize-seed-release-trace.mjs \
+            > "$OUT/scoped-lint.log" 2>&1
+          lint=$?
+          printf '%s\n' "$lint" > "$OUT/scoped-lint.status"
+          if test "$lint" -ne 0; then fail=1; cat "$OUT/scoped-lint.log"; fi
+          for testfile in \
+            test/quest-evidence/participant-release-trace-envelope.test.js \
+            test/bootstrap/seed-release-once-per-cohort.test.js \
+            test/integration/message-group-membership-claim-cache.integration.test.js \
+            test/partition/control-wave-duplicate-boundary.test.js; do
+            name="${testfile##*/}"
+            ( /usr/bin/time -f 'wallSeconds=%e\nuserSeconds=%U\nsystemSeconds=%S\nmaxRssKiB=%M' \
+              npm run -s test:file -- "$testfile" ) > "$OUT/$name.log" \
+              2> "$OUT/$name.resources.log"
+            rc=$?
+            printf '%s\n' "$rc" > "$OUT/$name.status"
+            echo "$testfile status=$rc"
+            tail -n 20 "$OUT/$name.log" | cut -c 1-460
+            if test "$rc" -ne 0; then fail=1; fi
+            if test -f ".tap/test-results/$testfile.tap"; then
+              cp ".tap/test-results/$testfile.tap" "$OUT/$name.full.tap"
+              sha256sum "$OUT/$name.full.tap" > "$OUT/$name.tap-sha256.txt"
+            fi
+            if test "$name" = "message-group-membership-claim-cache.integration.test.js"; then
+              node scripts/quest-evidence/summarize-seed-release-trace.mjs \
+                "$OUT/$name.full.tap" "$OUT/$name.release-census.json" \
+                > "$OUT/$name.release-one-line.json" 2> "$OUT/$name.release-error.log"
+              parse=$?
+              printf '%s\n' "$parse" > "$OUT/$name.release-parse.status"
+              if test "$parse" -ne 0; then
+                fail=1
+                cat "$OUT/$name.release-error.log"
+              else
+                cat "$OUT/$name.release-one-line.json" | cut -c 1-2500
+              fi
+            fi
+          done
+          exit "$fail"
+      - name: Preserve complete bounded raw TAP and caller-owned failure evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-seed-realistic-budget-${{ github.sha }}
+          path: test-output/rs-raft-seed-realistic-budget/
+          retention-days: 14
+          if-no-files-found: warn
