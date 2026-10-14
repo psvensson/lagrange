@@ -1,0 +1,106 @@
+# One guarded composition into a WIP branch, never into main.
+# Merges exact immutable candidates; generated conflicts use only canonical producer.
+name: rs-raft-receipts-compose-publish-wip
+on:
+  push:
+    branches: [integrate/rs-raft-receipts-wip-20261014]
+    paths: [.github/workflows/rs-raft-receipts-compose-publish-wip.yml]
+permissions:
+  contents: write
+concurrency:
+  group: rs-raft-receipts-compose-publish-wip
+  cancel-in-progress: false
+jobs:
+  compose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Provenance-bound WIP composition and canonical metadata regeneration
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONTROLS=08a4e95ee147762069bd047af1fe770964800793
+          NATIVE=d7570ecc449d8827d0187e6ee8a24fee1a4ab603
+          OUT=test-output/rs-raft-receipts-publish
+          mkdir -p "$OUT"
+          INPUT="$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$INPUT"
+          printf '%s\n' "$INPUT" > "$OUT/starting-head.txt"
+          printf '%s\n' "$CONTROLS" > "$OUT/controls-input.txt"
+          printf '%s\n' "$NATIVE" > "$OUT/native-input.txt"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          for name in controls native; do
+            if test "$name" = controls; then ref="$CONTROLS"; else ref="$NATIVE"; fi
+            git cat-file -e "$ref^{commit}"
+            set +e
+            git merge --no-commit --no-ff "$ref" > "$OUT/$name-merge.log" 2>&1
+            status=$?
+            set -e
+            printf '%s\n' "$status" > "$OUT/$name-merge.status"
+            git diff --name-only --diff-filter=U > "$OUT/$name-conflicts.txt"
+            echo "$name generated conflicts:"
+            cat "$OUT/$name-conflicts.txt"
+            while IFS= read -r path; do
+              case "$path" in
+                test/shards/primary-classes.json|test/shards/resource-classes.json|test/shards/subsystem-classes.json|test/shards/impact-graph-seal.json)
+                  git checkout --ours -- "$path"; git add -- "$path" ;;
+                *) echo "REFUSED non-generated conflict: $path"; exit 1 ;;
+              esac
+            done < "$OUT/$name-conflicts.txt"
+            if test "$status" -ne 0 && test ! -s "$OUT/$name-conflicts.txt"; then
+              echo "REFUSED non-conflict merge error: $name"; exit 1
+            fi
+            if test -n "$(git ls-files -u)"; then
+              echo "REFUSED unresolved merge entries"; exit 1
+            fi
+            git diff --check
+            git -c core.hooksPath=/dev/null commit -m "WIP compose pinned $name candidate (uncertified)" > "$OUT/$name-commit.log"
+            git rev-parse HEAD > "$OUT/$name-local-commit.txt"
+          done
+          npm ci > "$OUT/install.log" 2>&1
+          npm run -s test:metadata:refresh > "$OUT/metadata-refresh.log" 2>&1
+          git diff --check
+          git diff --name-only > "$OUT/regenerated-paths.txt"
+          echo 'Canonical regenerated paths:'
+          cat "$OUT/regenerated-paths.txt"
+          while IFS= read -r path; do
+            test -n "$path" || continue
+            case "$path" in
+              test/shards/primary-classes.json|test/shards/resource-classes.json|test/shards/subsystem-classes.json|test/shards/impact-graph-seal.json) ;;
+              *) echo "REFUSED unexpected canonical producer path $path"; exit 1 ;;
+            esac
+          done < "$OUT/regenerated-paths.txt"
+          npm run -s audit:shards > "$OUT/shard-audit.log" 2>&1
+          git add -- test/shards/primary-classes.json test/shards/resource-classes.json test/shards/subsystem-classes.json test/shards/impact-graph-seal.json
+          if ! git diff --cached --quiet; then
+            git -c core.hooksPath=/dev/null commit -m 'WIP rs-raft: regenerate composed controls/native shard manifests' > "$OUT/metadata-commit.log"
+          fi
+          git status --short > "$OUT/final-tree-status.txt"
+          test ! -s "$OUT/final-tree-status.txt"
+          git rev-parse HEAD > "$OUT/composed-head.txt"
+          git rev-parse HEAD^{tree} > "$OUT/composed-tree.txt"
+          git diff-tree --name-status -r "$INPUT" HEAD > "$OUT/composed-paths.txt"
+          git fetch --no-tags origin refs/heads/integrate/rs-raft-receipts-wip-20261014
+          test "$(git rev-parse FETCH_HEAD)" = "$INPUT" || {
+            echo 'REFUSED changed WIP integration branch during compose'; exit 1
+          }
+          git push origin HEAD:refs/heads/integrate/rs-raft-receipts-wip-20261014
+          echo "Published UNVERIFIED WIP composition $(cat "$OUT/composed-head.txt")"
+      - name: Archive merge and producer receipts even on failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-receipts-publish-${{ github.sha }}
+          path: test-output/rs-raft-receipts-publish/
+          retention-days: 14
+          if-no-files-found: warn
