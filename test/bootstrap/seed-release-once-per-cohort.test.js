@@ -7,7 +7,7 @@ import {test} from 'node:test';
 import {createBootstrapServiceSeedWorkflowMethods} from
   '../../src/bootstrap/bootstrap-service-seed-workflow.js';
 import {TABLES} from '../../src/constants/tables.js';
-import {RealTimeSource} from '../../src/time/time-source.js';
+import {RealTimeSource, VirtualTimeSource} from '../../src/time/time-source.js';
 import {PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
   PARTICIPANT_RELEASE_CONTROL_WAVE_FIELD as WAVE_FIELD,
   PARTICIPANT_RELEASE_RESULT_FIELD, PARTICIPANT_RELEASE_TYPE,
@@ -161,4 +161,68 @@ test('seed issues one serialized real partition release intent, not one per repl
       assert.equal(authorized.length, 0,
         'invalid budget requests no fresh-seed authority');
     }
+  });
+
+test('seed must not claim readiness from a successful delivery observed after its deadline',
+  async () => {
+    // The router can return a valid already-completed commit after the caller's
+    // absolute budget expires. We must NOT retroactively roll back its durable
+    // result, but seed's bounded readiness report must refuse the late reply.
+    // This fake clock advances only when the original delivery has engaged.
+    const clock = new VirtualTimeSource({startMs: 100000});
+    const budgetMs = 1000;
+    const auth = Object.freeze({kind: 'fixture-fresh-seed'});
+    const sent = [];
+    const owner = {
+      partitionServices: new Map([['control-r1',
+        localReplica(CONTROL, TABLES.SQL_TRANSACTIONS, 'control-r1')]]),
+      nodeService: {getTimeSource: () => clock},
+      config: {leadershipWaitTimeoutMs: 1000,
+        seedParticipantReleaseBudgetMs: budgetMs},
+      replicaHandler: {
+        nodeId: 'late-seed-reply-fixture',
+        timeSource: clock,
+        participantReleaseAuthorizationOwner: {
+          authorizeFreshSeed() {
+            return auth;
+          },
+        },
+        messageRouter: {
+          deliver(_address, request, options) {
+            sent.push({request, options});
+            assert.equal(request.partitionId, CONTROL,
+              'the original control release actually entered the route');
+            assert.equal(request.deadlineAtMs, 101000);
+            assert.ok(options.timeoutMs > 0 && options.timeoutMs <= budgetMs);
+            clock.advance(budgetMs + 1);
+            return Promise.resolve({acknowledged: true,
+              deliveryState: 'delivered',
+              [PARTICIPANT_RELEASE_RESULT_FIELD]:
+                {outcome: OUTCOME.CUT_OVER, releaseId: 'durably-finished-earlier'}});
+          },
+        },
+      },
+      sleep() {
+        throw new Error('successful routing needs no retry');
+      },
+    };
+    let resultError = null;
+    try {
+      await createBootstrapServiceSeedWorkflowMethods()
+        .releaseSeedParticipantCohorts.call(owner);
+    } catch (error) {
+      resultError = error;
+    }
+    assert.equal(sent.length, 1,
+      'the late typed delivery must be from the actual first release');
+    assert.ok(resultError instanceof Error,
+      'seed cannot declare a bounded successful release after deadline');
+    assert.match(resultError.message, /^Seed participant release failed: /u);
+    const failure = JSON.parse(resultError.message.replace(
+      /^Seed participant release failed: /u, ''));
+    assert.equal(failure.partitionId, CONTROL);
+    assert.equal(failure.answer.outcome, OUTCOME.CUT_OVER,
+      'diagnostic retains actual commit outcome; does not fabricate rollback');
+    assert.equal(failure.seedRelease.budgetMs, budgetMs);
+    assert.ok(clock.now() > 101000);
   });
