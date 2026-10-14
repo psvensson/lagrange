@@ -3,35 +3,63 @@ import fs from 'node:fs';
 import {mkdtemp, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
-import {afterEach, describe, it} from 'node:test';
+import {after, afterEach, before, describe, it} from 'node:test';
 import {resolveTapTimeout, runTestFiles} from '../../scripts/run-test-files.js';
 
 const FIXTURE_DIRECTORY = 'test/scripts/__fixtures__/run-test-files';
 const TWO_TOP_LEVEL_TIMED_FIXTURE =
   `${FIXTURE_DIRECTORY}/tap-two-top-level-timed.fixture.mjs`;
-const NODE_TEST_PASS_FIXTURE = `${FIXTURE_DIRECTORY}/node-test-pass.fixture.mjs`;
 const HANGS_FIXTURE = `${FIXTURE_DIRECTORY}/hangs.fixture.mjs`;
 
 const DEFAULT_WATCHDOG_MS = 600000;
 
+// Strip any ambient lane- or host-owned budget policy for the whole suite (T1):
+// CI lanes legitimately export TAP_TIMEOUT_FLOOR and a placed lab run exports
+// LAGRANGE_TEST_MACHINE_FACTOR, and every admissions case must observe the
+// runner's own derived decision for the reference machine unless the case
+// supplies its own env. Unrelated variables pass through untouched.
+const AMBIENT_BUDGET_KEYS = [
+  'TAP_TIMEOUT',
+  'TAP_TIMEOUT_FLOOR',
+  'LAGRANGE_TEST_MACHINE_FACTOR',
+];
+
 describe('runner budget admission', () => {
+  const ambientBudgetValues = {};
   const temporaryDirectories = [];
+
+  before(() => {
+    for (const key of AMBIENT_BUDGET_KEYS) {
+      ambientBudgetValues[key] = process.env[key];
+      delete process.env[key];
+    }
+  });
+
+  after(() => {
+    for (const key of AMBIENT_BUDGET_KEYS) {
+      if (ambientBudgetValues[key] === undefined) delete process.env[key];
+      else process.env[key] = ambientBudgetValues[key];
+    }
+  });
 
   afterEach(async () => {
     await Promise.all(temporaryDirectories.splice(0).map((directory) =>
       rm(directory, {recursive: true, force: true})));
   });
 
-  // Dynamically generated fixtures under a per-test directory of test/,
-  // cleaned by afterEach — nothing tracked, nothing run corpus-wide.
+  // Dynamically generated fixtures beneath the gitignored test-output/ tree:
+  // inside the checkout the runner requires, outside the tracked test corpus,
+  // and removed with the temporary directories.
   async function makeFixture(body) {
-    const directory = await mkdtemp(path.join('test', 'admission-'));
+    const directory = await mkdtemp(path.join('test-output',
+      'budget-admission-'));
     temporaryDirectories.push(directory);
     const fixtureFile = path.join(directory, 'fixture.mjs');
     const marker = JSON.stringify(
       `file://${path.resolve(directory, 'body-ran.marker')}`);
     fs.writeFileSync(fixtureFile, body({
       marker, tap: JSON.stringify('../../src/test-helpers/tap.js'),
+      nodeTest: JSON.stringify('node:test'),
     }));
     return {fixtureFile, marker: path.join(directory, 'body-ran.marker')};
   }
@@ -43,13 +71,32 @@ describe('runner budget admission', () => {
       jobs: 1, print: false, resultsDirectory, ...options,
     });
     const result = summary.results?.[0];
+    const artifact = path.join(resultsDirectory, `${file}.tap`);
     return {
       summary,
       result,
       reasons: JSON.stringify(result?.reasons ?? []),
-      artifact: path.join(resultsDirectory, `${file}.tap`),
-      stderr: `${path.join(resultsDirectory, `${file}.tap`)}.stderr`,
+      artifact,
+      stderr: `${artifact}.stderr`,
     };
+  }
+
+  function assertRefusal(admitted, {requestedRootSeconds, marginSeconds}) {
+    assert.equal(admitted.result?.failureCode, 'BUDGET_UNFIT',
+      `the refusal is typed: ${admitted.reasons}`);
+    assert.equal(admitted.result?.status, 'not_started',
+      'a refused file never started a process');
+    if (requestedRootSeconds !== undefined) {
+      assert.equal(admitted.result?.requestedRootSeconds, requestedRootSeconds,
+        `the refusal names the requested root: ${admitted.reasons}`);
+    }
+    if (marginSeconds !== undefined) {
+      assert.equal(admitted.result?.marginSeconds, marginSeconds,
+        `the refusal names the available margin: ${admitted.reasons}`);
+    }
+    assert.equal(admitted.summary.ok, false, 'an unfit configuration is a refusal');
+    assert.match(admitted.reasons, /BUDGET_UNFIT/,
+      `the reason carries the machine-readable code: ${admitted.reasons}`);
   }
 
   it('F1 refuses a declared 600s budget that cannot fit the default watchdog, before execution', async () => {
@@ -61,13 +108,7 @@ test('declared 600s', {timeout: 600000}, async () => {
 });
 `);
     const admitted = await admit(fixtureFile);
-    assert.match(admitted.reasons, /BUDGET_UNFIT/,
-      `the runner must refuse a root budget that cannot fit: ${admitted.reasons}`);
-    assert.equal(admitted.summary.ok, false, 'an unfit configuration is a refusal');
-    assert.match(admitted.reasons, /600/,
-      `the refusal names the requested root: ${admitted.reasons}`);
-    assert.match(admitted.reasons, /540/,
-      `the refusal names the available margin: ${admitted.reasons}`);
+    assertRefusal(admitted, {requestedRootSeconds: 600, marginSeconds: 540});
     assert.equal(fs.existsSync(marker), false,
       'the test body must never execute under a refusal');
   });
@@ -81,10 +122,7 @@ test('undeclared', async () => {
 });
 `);
     const admitted = await admit(fixtureFile, {env: {TAP_TIMEOUT_FLOOR: '591'}});
-    assert.match(admitted.reasons, /BUDGET_UNFIT/,
-      'a floor above the margin must refuse, ' +
-      `not arm an unreportable timer: ${admitted.reasons}`);
-    assert.equal(admitted.summary.ok, false, 'an unfit configuration is a refusal');
+    assertRefusal(admitted, {requestedRootSeconds: 591, marginSeconds: 540});
     assert.equal(fs.existsSync(marker), false,
       'the floor must not silently start the file beyond the margin');
   });
@@ -98,12 +136,9 @@ test('undeclared', async () => {
 });
 `);
     const admitted = await admit(fixtureFile, {env: {TAP_TIMEOUT: '900'}});
-    assert.match(admitted.reasons, /BUDGET_UNFIT/,
-      'an explicit 900s timeout must refuse ' +
-      `against a 600s watchdog: ${admitted.reasons}`);
-    assert.equal(admitted.summary.ok, false, 'an unfit explicit value is a refusal');
+    assertRefusal(admitted, {requestedRootSeconds: 900, marginSeconds: 540});
     assert.equal(fs.existsSync(marker), false,
-      'the explicit value cannot start a file the watchdog cannot bound');
+      'an explicit value cannot start a file the watchdog cannot bound');
   });
 
   it('F4 refuses a watchdog shorter than the TAP default root timer it reports through', async () => {
@@ -115,15 +150,13 @@ test('undeclared', async () => {
 });
 `);
     const admitted = await admit(fixtureFile, {timeoutMs: 20000});
-    assert.match(admitted.reasons, /BUDGET_UNFIT/,
-      `a 20s watchdog cannot honour the 30s TAP default: ${admitted.reasons}`);
-    assert.equal(admitted.summary.ok, false, 'an unfit watchdog is a refusal');
+    assertRefusal(admitted, {requestedRootSeconds: 30, marginSeconds: 18});
     assert.equal(fs.existsSync(marker), false,
       'the default root timer cannot be armed under this watchdog');
   });
 
-  it('F5 refusal happens before the output files are opened or the process spawned', async () => {
-    const {fixtureFile} = await makeFixture(({marker, tap}) => `
+  it('F5 refusal happens before the output files are opened, created or truncated', async () => {
+    const {fixtureFile, marker} = await makeFixture(({marker, tap}) => `
 import fs from 'node:fs';
 import {test} from ${tap};
 test('declared 600s', {timeout: 600000}, async () => {
@@ -131,12 +164,16 @@ test('declared 600s', {timeout: 600000}, async () => {
 });
 `);
     const admitted = await admit(fixtureFile);
-    assert.match(admitted.reasons, /BUDGET_UNFIT/, `the refusal is typed: ${admitted.reasons}`);
-    assert.equal(admitted.summary.ok, false, 'an unfit configuration is a refusal');
-    assert.equal(fs.existsSync(admitted.artifact), false,
-      'no TAP result file may be created for a refused file');
-    assert.equal(fs.existsSync(admitted.stderr), false,
-      'no stderr file may be created for a refused file');
+    assertRefusal(admitted, {requestedRootSeconds: 600, marginSeconds: 540});
+    // Both artifacts are pre-seeded: a refusal must leave exactly what was
+    // there before - no truncation through an opened 'w' descriptor, no
+    // directory creation through the results path.
+    assert.equal(fs.readFileSync(admitted.artifact, 'utf8'), 'sentinel-tap',
+      'an existing TAP artifact must survive a refusal untruncated');
+    assert.equal(fs.readFileSync(admitted.stderr, 'utf8'), 'sentinel-stderr',
+      'an existing stderr artifact must survive a refusal untruncated');
+    assert.equal(fs.existsSync(marker), false,
+      'no pre-execution side effect reaches the fixture');
   });
 
   it('control: the derived top-level sum is the root the runner exports', () => {
@@ -145,6 +182,9 @@ test('declared 600s', {timeout: 600000}, async () => {
   });
 
   it('control: an explicit short TAP_TIMEOUT stays an intentional in-test override', async () => {
+    assert.equal(resolveTapTimeout(TWO_TOP_LEVEL_TIMED_FIXTURE,
+      {TAP_TIMEOUT: '1'}, DEFAULT_WATCHDOG_MS), '1',
+    'a fitting explicit value remains authoritative over its own declarations');
     const {summary, reasons} = await admit(TWO_TOP_LEVEL_TIMED_FIXTURE, {
       env: {TAP_TIMEOUT: '1'},
     });
@@ -158,10 +198,32 @@ test('declared 600s', {timeout: 600000}, async () => {
       {TAP_TIMEOUT_FLOOR: '120'}, DEFAULT_WATCHDOG_MS), '120');
   });
 
-  it('control: a node:test file is never subject to TAP admission', async () => {
-    const {summary, reasons} = await admit(NODE_TEST_PASS_FIXTURE, {});
-    assert.equal(summary.ok, true, `node:test files run as before: ${reasons}`);
-    assert.doesNotMatch(reasons, /BUDGET_UNFIT/);
+  it('control: node:test files run under configurations a TAP file must refuse', async () => {
+    const nodeTestCases = [
+      {name: 'an explicit 900s TAP_TIMEOUT under a 600s watchdog', options: {
+        env: {TAP_TIMEOUT: '900'},
+      }},
+      {name: 'a 20s watchdog where TAP itself would refuse, and a 600s declaration',
+        options: {timeoutMs: 20000}},
+    ];
+    for (const nodeTestCase of nodeTestCases) {
+      const {fixtureFile, marker} = await makeFixture(({marker, nodeTest}) => `
+import fs from 'node:fs';
+import {test} from ${nodeTest};
+test('node test body', {timeout: 600000}, () => {
+  fs.writeFileSync(new URL(${marker}), 'ran', 'utf8');
+});
+`);
+      const admitted = await admit(fixtureFile, nodeTestCase.options);
+      assert.equal(admitted.summary.ok, true,
+        `${nodeTestCase.name}: node:test is not a TAP budget consumer: ` +
+        `${admitted.reasons}`);
+      assert.doesNotMatch(admitted.reasons, /BUDGET_UNFIT/,
+        `${nodeTestCase.name}: no TAP refusal reaches node:test: ` +
+        `${admitted.reasons}`);
+      assert.equal(fs.existsSync(marker), true,
+        `${nodeTestCase.name}: the node:test body ran`);
+    }
   });
 
   it('control: the outer-watchdog failure classification is unchanged', async () => {
