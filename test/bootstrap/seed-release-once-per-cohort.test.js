@@ -162,3 +162,66 @@ test('seed issues one serialized real partition release intent, not one per repl
         'invalid budget requests no fresh-seed authority');
     }
   });
+
+
+test('a successful release reply after the original absolute deadline cannot publish seed success',
+  async () => {
+    let nowMs = 100000;
+    const deadlineAtMs = nowMs + 1000;
+    const clock = {now: () => nowMs};
+    const routed = [];
+    const service = localReplica(CONTROL, TABLES.SQL_TRANSACTIONS,
+      `${CONTROL}-late-control-r1`);
+    const owner = {
+      partitionServices: new Map([[service.replicaId, service]]),
+      nodeService: {getTimeSource: () => clock},
+      config: {leadershipWaitTimeoutMs: 5000,
+        seedParticipantReleaseBudgetMs: 1000},
+      replicaHandler: {
+        nodeId: 'late-success-seed-owner',
+        timeSource: clock,
+        participantReleaseAuthorizationOwner: {
+          authorizeFreshSeed() {
+            return Object.freeze({kind: 'fixture-fresh-seed'});
+          },
+        },
+        messageRouter: {
+          async deliver(_address, request) {
+            routed.push(request);
+            assert.equal(request.deadlineAtMs, deadlineAtMs);
+            assert.equal(request.partitionId, CONTROL);
+            // The reply reports a genuine success, but it is delivered after
+            // the one seed-owned absolute deadline. A successful result does
+            // not prove that readiness was established before expiry.
+            nowMs = deadlineAtMs + 1;
+            return {acknowledged: true, deliveryState: 'delivered',
+              [PARTICIPANT_RELEASE_RESULT_FIELD]: {outcome: OUTCOME.CUT_OVER}};
+          },
+        },
+      },
+      sleep() {
+        throw new Error('the successful original reply must not be retried');
+      },
+    };
+    let failure = null;
+    try {
+      await createBootstrapServiceSeedWorkflowMethods()
+        .releaseSeedParticipantCohorts.call(owner);
+    } catch (error) {
+      failure = error;
+    }
+    assert.ok(failure instanceof Error,
+      'expired post-await success must never publish a successful seed release');
+    assert.match(failure.message, /^Seed participant release failed: /u);
+    const detail = JSON.parse(failure.message.slice(
+      'Seed participant release failed: '.length));
+    assert.equal(detail.partitionId, CONTROL);
+    assert.equal(detail.answer.outcome, OUTCOME.CUT_OVER,
+      'preserve the real delivered answer, not synthesize a false failure');
+    assert.equal(detail.seedRelease.completed, 0,
+      'no partition is counted as ready after the original deadline');
+    assert.equal(owner.config.leadershipWaitTimeoutMs, 5000,
+      'leadership election budget remains independent');
+    assert.equal(routed.length, 1,
+      'no second RELEASE or new timer is introduced by deadline expiry');
+  });
