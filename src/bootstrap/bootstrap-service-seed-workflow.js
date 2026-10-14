@@ -404,6 +404,13 @@ function createBootstrapServiceSeedWorkflowMethods() {
           await releaseOne(service, controlWaveToken);
         }
       });
+      // The child release attempts may all finish before expiry while the
+      // control owner's awaited END/cleanup reply arrives afterward. Seed
+      // readiness belongs to this original deadline, not the last child or
+      // a prior successful control member observation.
+      if (timeSource.now() >= deadline) {
+        throw new Error('Seed participant control wave END deadline expired');
+      }
     },
     buildSeedCheckpointSteps(startupPipelineRunner, seedPlan) {
       const phases = Array.isArray(seedPlan?.phases) ? seedPlan.phases : [];
