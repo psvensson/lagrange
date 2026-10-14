@@ -20,10 +20,12 @@ import {
 import {runtimeBuildProvenance, RUNTIME_BUILD_STATE} from
   '../diagnostics/runtime-build-provenance.js';
 import {requestParticipantRelease} from '../node/participant-release-client.js';
+import {INITIAL_PARTITION_IDS} from './system-table-schemas-constants.js';
 import {observeParticipantReleaseClockValue,
   participantReleaseSeedBudgetObservation, readParticipantReleaseClock} from
   '../node/participant-release-diagnostic-observation.js';
 import {PARTICIPANT_CUTOVER_BOUND, PARTICIPANT_CUTOVER_OUTCOME,
+  PARTICIPANT_RELEASE_CONTROL_WAVE_FIELD as WAVE_FIELD,
   PARTICIPANT_RELEASE_TRIGGER} from
   '../partition/partition-participant-transaction-cutover-constants.js';
 import {
@@ -304,7 +306,7 @@ function createBootstrapServiceSeedWorkflowMethods() {
       const startObservation = observeParticipantReleaseClockValue(startMs);
       const deadline = startMs + budgetMs;
       let completed = 0;
-      for (const service of cohorts) {
+      const releaseOne = async (service, controlWaveToken = null) => {
         const authorization = this.replicaHandler
           .participantReleaseAuthorizationOwner.authorizeFreshSeed({
             partitionId: service.partitionId,
@@ -324,6 +326,7 @@ function createBootstrapServiceSeedWorkflowMethods() {
             partitionId: service.partitionId, targetBuildDigest: build.digest,
             trigger: PARTICIPANT_RELEASE_TRIGGER.FRESH_SEED,
             deadlineAtMs: deadline, authorization,
+              ...(controlWaveToken === null ? {} : {[WAVE_FIELD]: controlWaveToken}),
           });
           firstBlockedDrain = retainFirstReleaseObservation(
             firstBlockedDrain, answer.blockedDrain);
@@ -349,7 +352,38 @@ function createBootstrapServiceSeedWorkflowMethods() {
             JSON.stringify({partitionId: service.partitionId, answer, seedRelease}));
         }
         completed += 1;
+      };
+      if (cohorts.length === 0) return;
+      const control = cohorts[0];
+      if (control.tableName !== TABLES.SQL_TRANSACTIONS ||
+          control.partitionId !== INITIAL_PARTITION_IDS[TABLES.SQL_TRANSACTIONS]) {
+        throw new Error('Fresh seed lacks the authoritative SQL_TRANSACTIONS control cohort');
       }
+      // The first SQL transaction control release is the ordinary full
+      // protocol. Only later independent cohorts may be grouped under its
+      // original owner-held CLOSED control wave.
+      await releaseOne(control);
+      if (cohorts.length === 1) return;
+      const controlAuthorization = this.replicaHandler
+        .participantReleaseAuthorizationOwner.authorizeFreshSeed({
+          partitionId: control.partitionId, targetBuildDigest: build.digest,
+          membershipOwnerOutcome: this.membershipOwnerOutcome,
+        });
+      if (controlAuthorization === null) {
+        throw new Error('Seed control wave authorization unavailable');
+      }
+      // Wave admission, member inspection, held-control lifetime and cleanup
+      // are owned by the existing replica-handler release owner. The seed
+      // submits only distinct partition intents under ONE original deadline.
+      await this.replicaHandler.participantReleaseRecovery.withFreshSeedControlWave({
+        controlAuthorization, targetBuildDigest: build.digest,
+        deadlineAtMs: deadline,
+        partitionIds: cohorts.slice(1).map((service) => service.partitionId),
+      }, async (controlWaveToken) => {
+        for (const service of cohorts.slice(1)) {
+          await releaseOne(service, controlWaveToken);
+        }
+      });
     },
     buildSeedCheckpointSteps(startupPipelineRunner, seedPlan) {
       const phases = Array.isArray(seedPlan?.phases) ? seedPlan.phases : [];
