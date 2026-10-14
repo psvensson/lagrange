@@ -1,0 +1,34 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "seed-control-wave-recovery-handoff",
+  "status": "fail",
+  "base": "ffa78370f6b1fa661ae87310e26b584f0016dc05",
+  "receipts": [
+    {
+      "id": "engaged-wave-recovery-retry-pingpong-negative",
+      "passed": false,
+      "detail": "Initial red; no owner interaction proof or independent acceptance."
+    },
+    {
+      "id": "wave-held-no-poll-and-conflicting-release-refusal",
+      "passed": false,
+      "detail": "Initial red; no owner interaction proof or independent acceptance."
+    },
+    {
+      "id": "wave-terminal-failure-rearms-existing-recovery",
+      "passed": false,
+      "detail": "Initial red; no owner interaction proof or independent acceptance."
+    },
+    {
+      "id": "current-generation-race-and-adjacent-release-recovery-gates",
+      "passed": false,
+      "detail": "Initial red; no owner interaction proof or independent acceptance."
+    },
+    {
+      "id": "independent-static-multihost-approval",
+      "passed": false,
+      "detail": "Initial red; no owner interaction proof or independent acceptance."
+    }
+  ],
+  "note": "Does not supersede other rs-raft Quest acceptance criteria. All historical reds and remaining multihost gates remain open."
+}
