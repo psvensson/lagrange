@@ -1,0 +1,34 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "rs-raft-admitted-inbound-liveness",
+  "status": "fail",
+  "base": "4e81ba09747e128d386895a8e6212785555a0578",
+  "receipts": [
+    {
+      "id": "identity-correct-native-stage-attribution",
+      "passed": false,
+      "detail": "Initial red candidate; V13/V14 evidence is diagnostic only. Exact identity-correct stage, engaged negative, native positive, lifetime proof and independent gates are still missing."
+    },
+    {
+      "id": "source-only-engaged-liveness-negative",
+      "passed": false,
+      "detail": "Initial red candidate; V13/V14 evidence is diagnostic only. Exact identity-correct stage, engaged negative, native positive, lifetime proof and independent gates are still missing."
+    },
+    {
+      "id": "candidate-native-progress-positive",
+      "passed": false,
+      "detail": "Initial red candidate; V13/V14 evidence is diagnostic only. Exact identity-correct stage, engaged negative, native positive, lifetime proof and independent gates are still missing."
+    },
+    {
+      "id": "bounded-retry-close-and-recovery-ownership",
+      "passed": false,
+      "detail": "Initial red candidate; V13/V14 evidence is diagnostic only. Exact identity-correct stage, engaged negative, native positive, lifetime proof and independent gates are still missing."
+    },
+    {
+      "id": "independent-static-and-composed-gates",
+      "passed": false,
+      "detail": "Initial red candidate; V13/V14 evidence is diagnostic only. Exact identity-correct stage, engaged negative, native positive, lifetime proof and independent gates are still missing."
+    }
+  ],
+  "evidenceLimit": "No timer ref repair, source approval, native positive, release composition or main cutover is claimed."
+}
