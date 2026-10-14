@@ -1,19 +1,17 @@
-# Original canonical owner source, paired red. This exact test uses real
-# registered three-voter SQL control, real dependents, and a single VirtualTimeSource
-# owned by the existing recovery queue; no new release driver, no extra deadline.
+# True reverted-source negative: exact CURRENT test bytes on the original
+# RUNS/recovery source, one host. The only changed production axis is the
+# canonical typed ownership deferral and recovery retry classification.
 name: rs-raft-control-wave-recovery-pair-red
 on:
   push:
     branches: [work/rs-raft-control-wave-recovery-owner-pair-20261014]
-    paths:
-      - .github/workflows/rs-raft-control-wave-recovery-pair-red.yml
-      - test/partition/control-wave-duplicate-boundary.test.js
+    paths: [.github/workflows/rs-raft-control-wave-recovery-pair-red.yml]
 permissions:
   contents: read
 jobs:
-  red:
+  reverted:
     runs-on: ubuntu-24.04
-    timeout-minutes: 18
+    timeout-minutes: 16
     env:
       LAGRANGE_RETRY_FAILED_ONCE: '0'
     steps:
@@ -26,48 +24,57 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Exact prior production source and locked dependencies
+      - name: Only three authoritative production files differ
         shell: bash
         run: |
           set -euo pipefail
           BASE=ffa78370f6b1fa661ae87310e26b584f0016dc05
-          test -z "$(git diff --name-only "$BASE" HEAD -- src)"
-          npm ci
-      - name: Semantic recovery ping-pong old-source negative
+          OUT=test-output/rs-raft-wave-recovery-pingpong-reverted
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/candidate-sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/candidate-tree.txt"
+          git rev-parse "$BASE^{tree}" > "$OUT/reverted-tree.txt"
+          git diff --name-only "$BASE" HEAD -- src > "$OUT/source-differences.txt"
+          cat "$OUT/source-differences.txt"
+          test "$(wc -l < "$OUT/source-differences.txt")" -eq 3
+          for expected in \
+            src/node/replica-handler-participant-cutover.js \
+            src/node/replica-handler-release-recovery.js \
+            src/partition/partition-participant-transaction-cutover-constants.js; do
+            grep -Fx "$expected" "$OUT/source-differences.txt"
+          done
+          TEST=test/partition/control-wave-duplicate-boundary.test.js
+          sha256sum "$TEST" > "$OUT/current-test.sha256"
+          NEG="$RUNNER_TEMP/rs-raft-wave-recovery-old-source"
+          git worktree add --detach "$NEG" "$BASE" > "$OUT/old-worktree.log" 2>&1
+          cp "$TEST" "$NEG/$TEST"
+          cmp "$TEST" "$NEG/$TEST"
+          (cd "$NEG" && sha256sum "$TEST") > "$OUT/reverted-test.sha256"
+          (cd "$NEG" && npm ci) > "$OUT/old-install.log" 2>&1
+          echo "$NEG" > "$OUT/negative-worktree-path.txt"
+      - name: Same real cohort, one owner clock: old source must repeatedly retry
         shell: bash
         run: |
           set +e
           set -uo pipefail
-          OUT=test-output/rs-raft-wave-recovery-pingpong-red
-          mkdir -p "$OUT"
+          OUT=test-output/rs-raft-wave-recovery-pingpong-reverted
+          NEG=$(cat "$OUT/negative-worktree-path.txt")
           TEST=test/partition/control-wave-duplicate-boundary.test.js
-          git rev-parse HEAD > "$OUT/source-sha.txt"
-          git rev-parse HEAD^{tree} > "$OUT/source-tree.txt"
-          sha256sum "$TEST" > "$OUT/test-bytes.sha256"
-          node --check "$TEST" > "$OUT/syntax.log" 2>&1
-          syntax=$?
-          npx eslint "$TEST" > "$OUT/lint.log" 2>&1
-          lint=$?
-          printf '%s\n' "$syntax" > "$OUT/syntax.status"
-          printf '%s\n' "$lint" > "$OUT/lint.status"
-          if test "$syntax" -ne 0 || test "$lint" -ne 0; then
-            cat "$OUT/syntax.log" "$OUT/lint.log"
-            exit 1
-          fi
-          node --test "$TEST" > "$OUT/old-source.tap" 2>&1
+          (cd "$NEG" && node --test "$TEST") > "$OUT/reverted.tap" 2>&1
           rc=$?
-          printf '%s\n' "$rc" > "$OUT/original.status"
-          tail -n 78 "$OUT/old-source.tap"
+          printf '%s\n' "$rc" > "$OUT/reverted.status"
+          tail -n 75 "$OUT/reverted.tap"
           test "$rc" -ne 0 || exit 1
-          grep -F 'held control RUNS must not ping-pong a second recovery driver' "$OUT/old-source.tap" || exit 1
-          grep -F "code: 'ERR_ASSERTION'" "$OUT/old-source.tap" || exit 1
-          grep -F 'expected: 0' "$OUT/old-source.tap" || exit 1
-          echo 'Source-only negative actually engaged timer rearming; no timeout/setup red counts.'
-      - name: Preserve old source, full original TAP and every refusal
+          grep -F 'held control RUNS must not ping-pong a second recovery driver' "$OUT/reverted.tap" || exit 1
+          grep -F "code: 'ERR_ASSERTION'" "$OUT/reverted.tap" || exit 1
+          grep -F 'actual: 4' "$OUT/reverted.tap" || exit 1
+          grep -F 'expected: 0' "$OUT/reverted.tap" || exit 1
+          echo 'Original RUNS source remains RED under byte-identical updated paired witness.'
+      - name: Preserve immutable reverted-source and test-byte evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: rs-raft-wave-recovery-pingpong-red-${{ github.sha }}
-          path: test-output/rs-raft-wave-recovery-pingpong-red/
+          name: rs-raft-wave-recovery-pingpong-reverted-${{ github.sha }}
+          path: test-output/rs-raft-wave-recovery-pingpong-reverted/
           retention-days: 14
           if-no-files-found: warn
