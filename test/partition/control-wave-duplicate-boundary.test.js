@@ -243,7 +243,7 @@ test('one canonical wave holds three real control voters across two released nat
       let controlInspectsSeen = 0;
       let lateRelease = null;
       try {
-        await handler.participantReleaseRecovery.withFreshSeedControlWave({
+        const lateWave = handler.participantReleaseRecovery.withFreshSeedControlWave({
           targetBuildDigest: build.digest, deadlineAtMs, controlAuthorization,
           partitionIds: [DEPENDENTS[0].id],
         }, async (inFlightToken) => {
@@ -286,15 +286,20 @@ test('one canonical wave holds three real control voters across two released nat
           }
           // Deliberately return early. No permission may outlive its owner.
         });
+        await inspected.promise;
+        await new Promise((resolve) => setTimeout(resolve, 80));
         assert.equal(participantReleaseAdmissionOf(controlLeader).state,
-          ADMISSION.OPEN, 'the control owner has actually completed END');
+          ADMISSION.CLOSED,
+          'END must wait for a child whose current-control INSPECT reply is held');
         deliverOldFacts.resolve();
-        const stale = await lateRelease;
-        assert.equal(stale.outcome, OUTCOME.UNAVAILABLE,
-          'retired control replies cannot return a positive dependent release');
-        assert.equal(stale.missingFact, MISSING_FACT.CURRENT_CONTROL_OWNER);
-        assert.equal(lateDependentPauses, 0,
-          'an awaited reply captured before END cannot authorize PAUSE after END');
+        const admitted = await lateRelease;
+        assert.equal(admitted.outcome, OUTCOME.CUT_OVER,
+          'already admitted child completes under the still-held current control wave');
+        await lateWave;
+        assert.equal(lateDependentPauses, 1,
+          'the child can PAUSE only while its control owner remains held');
+        assert.equal(participantReleaseAdmissionOf(controlLeader).state,
+          ADMISSION.OPEN, 'END reopens control only after the held child settles');
       } finally {
         deliverOldFacts.resolve();
         transport.deliver = originalLateDeliver;
