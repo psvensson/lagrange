@@ -9,7 +9,8 @@ import {readPartitionWriteOrigin} from '../partition/partition-participant-trans
 import {invalidateParticipantReleaseAdmission, participantCutoverPauseOf} from
   '../partition/partition-participant-transaction-pause.js';
 import {PARTICIPANT_CUTOVER_BOUND as BOUND, PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
-  PARTICIPANT_RELEASE_LOG, PARTICIPANT_RELEASE_TRIGGER as TRIGGER} from
+  PARTICIPANT_RELEASE_LOG, PARTICIPANT_RELEASE_MISSING_FACT as MISSING_FACT,
+  PARTICIPANT_RELEASE_TRIGGER as TRIGGER} from
   '../partition/partition-participant-transaction-cutover-constants.js';
 import {runParticipantCutover, withFreshSeedControlWave} from
   './replica-handler-participant-cutover.js';
@@ -215,6 +216,12 @@ function createParticipantReleaseRecovery(handler) {
       targetBuildDigest: build.digest, trigger: TRIGGER.EXISTING_ORIGIN,
       deadlineAtMs: now() + BOUND.DRAIN_DEADLINE_MS});
     report(partitionId, answer);
+    // The canonical RUNS owner currently holds an admitted control wave.
+    // Do not ping-pong another RELEASE into it every retry interval. The
+    // wave owner hands incomplete END/ABORT back through requestRecovery,
+    // while a successful END needs no rearm; existing Raft/service events
+    // continue to wake this one recovery owner.
+    if (answer.missingFact === MISSING_FACT.CONTROL_WAVE_OWNED) return;
     if (answer.outcome !== OUTCOME.CUT_OVER) enqueue(partitionId, BOUND.RECOVERY_RETRY_MS);
   }
 
