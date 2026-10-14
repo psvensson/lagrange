@@ -301,6 +301,69 @@ test('one canonical wave holds three real control voters across two released nat
         if (lateRelease !== null) await Promise.allSettled([lateRelease]);
       }
 
+      // The callback's completion is not proof that already-started child
+      // cutovers have finished. Trap the next real dependent PAUSE response,
+      // return from the callback, and verify END cannot resume control until
+      // that admitted child settles under its original request deadline.
+      const pausedChild = Promise.withResolvers();
+      const allowChildPause = Promise.withResolvers();
+      const originalHeldDeliver = transport.deliver;
+      const pendingPartition = DEPENDENTS[1].id;
+      const pendingAuthorization = handler.participantReleaseAuthorizationOwner
+        .authorizeFreshSeed({partitionId: pendingPartition,
+          targetBuildDigest: build.digest, membershipOwnerOutcome: seedProof});
+      let trappedPause = false;
+      let earlyResumes = 0;
+      let pausePermitOpen = false;
+      let admittedChild = null;
+      let earlyReturnWave = null;
+      try {
+        earlyReturnWave = handler.participantReleaseRecovery.withFreshSeedControlWave({
+          targetBuildDigest: build.digest, deadlineAtMs, controlAuthorization,
+          partitionIds: [pendingPartition],
+        }, async (token) => {
+          transport.deliver = async function(...args) {
+            const req = args[1];
+            if (req?.type === PARTICIPANT_RELEASE_TYPE &&
+                req.partitionId === CONTROL && req.action === ACTION.RESUME &&
+                !pausePermitOpen) {
+              earlyResumes += 1;
+            }
+            if (!trappedPause && req?.type === PARTICIPANT_RELEASE_TYPE &&
+                req.partitionId === pendingPartition &&
+                req.action === ACTION.PAUSE) {
+              trappedPause = true;
+              pausedChild.resolve();
+              await allowChildPause.promise;
+            }
+            return Reflect.apply(originalHeldDeliver, this, args);
+          };
+          admittedChild = requestParticipantRelease(handler, {
+            partitionId: pendingPartition, targetBuildDigest: build.digest,
+            trigger: TRIGGER.FRESH_SEED, deadlineAtMs,
+            authorization: pendingAuthorization, [WAVE_FIELD]: token});
+          await pausedChild.promise;
+          // Deliberately return before the actual dependent response settles.
+        });
+        await pausedChild.promise;
+        await new Promise((resolve) => setTimeout(resolve, 80));
+        assert.equal(earlyResumes, 0,
+          'wave END must not RESUME current control while an admitted child is held');
+        pausePermitOpen = true;
+        allowChildPause.resolve();
+        const [answer, waveAnswer] = await Promise.all([
+          admittedChild, earlyReturnWave]);
+        assert.equal(answer.outcome, OUTCOME.CUT_OVER, JSON.stringify(answer));
+        assert.equal(waveAnswer, undefined,
+          'the wave owns the child lifetime but does not invent a completion result');
+        assert.equal(participantReleaseAdmissionOf(controlLeader).state, ADMISSION.OPEN);
+      } finally {
+        pausePermitOpen = true;
+        allowChildPause.resolve();
+        transport.deliver = originalHeldDeliver;
+        await Promise.allSettled([admittedChild, earlyReturnWave].filter(Boolean));
+      }
+
       let capturedLateRefusal = null;
       let heldClosedAfterSchemaMutation = false;
       const endFailure = await handler.participantReleaseRecovery.withFreshSeedControlWave({
