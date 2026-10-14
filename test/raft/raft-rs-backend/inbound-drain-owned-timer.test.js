@@ -311,6 +311,112 @@ test('a replacement-time native drain preserves the admitted follower debt',
     if (failure !== null) throw failure;
   });
 
+test('failed shared reconstruction retains the exact admitted wake until a later valid retry',
+  () => {
+    const partitionId = 'inbound-owned-runtime-retry-p1';
+    const triggerId = 'inbound-owned-runtime-retry-trigger';
+    const replicas = ['retry-a', 'retry-b', 'retry-c'];
+    const clocks = new Map(replicas.map((id) => [id, observedClock()]));
+    const triggerClock = new VirtualTimeSource({startMs: 1000});
+    const group = new PartitionNodeCluster({
+      partitionId, replicaIds: replicas,
+      substrateFor: (id) => ({timeSource: clocks.get(id).clock}),
+    });
+    const triggerGroup = new PartitionNodeCluster({
+      partitionId: triggerId, replicaIds: ['retry-trigger'],
+      substrateFor: () => ({timeSource: triggerClock}),
+    });
+    const recipient = group.replica('retry-b');
+    const scheduler = clocks.get('retry-b').clock;
+    const stages = [];
+    let trappedTick = false;
+    let trappedReplacement = false;
+    let callbackInReplacement = false;
+    let stepped = 0;
+    let failure = null;
+    try {
+      const status = recipient.node.readStatus();
+      const sender = group.node('retry-a').readStatus();
+      const envelope = coreTrappingAppend({dbFile: recipient.dbFile,
+        groupId: partitionId, status,
+        from: sender.peerId, term: '1'});
+      setCoreFaultInjector(null);
+      const admitted = recipient.node.step(envelope);
+      assert.equal(admitted.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
+      assert.equal(admitted.reason, 'inbound-enqueued');
+      assert.equal(scheduler.pendingTimerCount(), 1);
+      setNativeInboundStageObserver((event) => {
+        if (event.groupId === partitionId &&
+            event.replicaIdentity === 'retry-b') {
+          stages.push(event.stage);
+        }
+      });
+      setActualCoreEntryObserver((entry) => {
+        if (entry.groupId === partitionId && entry.operation === 'step') {
+          stepped += 1;
+        }
+        if (!callbackInReplacement && entry.groupId === partitionId &&
+            entry.operation === 'create_node') {
+          callbackInReplacement = true;
+          scheduler.advance(0);
+        }
+      });
+      setCoreFaultInjector((id, operation) => {
+        if (id !== triggerId) return;
+        if (!trappedTick && operation === 'tick') {
+          trappedTick = true;
+          throw new globalThis.WebAssembly.RuntimeError('first shared core trap');
+        }
+        if (trappedTick && !trappedReplacement && operation === 'create_node') {
+          trappedReplacement = true;
+          setCoreFaultInjector(null);
+          throw new globalThis.WebAssembly.RuntimeError(
+            'injected failed shared reconstruction');
+        }
+      });
+      const first = triggerGroup.node('retry-trigger').tick();
+      assert.equal(trappedTick, true, 'the real core tick traps once');
+      assert.notEqual(first.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
+      const failed = triggerGroup.node('retry-trigger').readStatus();
+      assert.equal(trappedReplacement, true,
+        'the first real shared reconstruction fails after accepted-wake callback');
+      assert.equal(callbackInReplacement, true,
+        'the native wake ran inside the first shared replacement barrier');
+      assert.equal(failed.outcome, RAFT_OPERATION_OUTCOME.HOST_FAILURE);
+      assert.ok(stages.includes('runtime-held'),
+        'the first replacement retains a typed transient inbound debt');
+      assert.equal(stepped, 0,
+        'no accepted inbound step enters an invalid core generation');
+      assert.ok(Number.isSafeInteger(failed.retryAfterMs) && failed.retryAfterMs > 0,
+        'the existing recovery owner retains a finite retry budget');
+      scheduler.advance(0);
+      assert.equal(stepped, 0,
+        'no old timer may claim the accepted work while reconstruction is held');
+      triggerClock.advance(failed.retryAfterMs);
+      const resumed = triggerGroup.node('retry-trigger').readStatus();
+      assert.equal(resumed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
+        'a later allowed runtime retry reconstructs the original groups');
+      scheduler.advance(0);
+      assert.ok(stepped > 0,
+        'post-retry current-generation owner resubmits the one accepted inbound wake');
+    } catch (error) {
+      failure = error;
+    } finally {
+      setCoreFaultInjector(null);
+      setActualCoreEntryObserver(null);
+      setNativeInboundStageObserver(null);
+      for (const cluster of [triggerGroup, group]) {
+        try {
+          cluster.dispose();
+        } catch (error) {
+          failure = failure === null ? error : new AggregateError([failure, error],
+            'failed shared runtime retry and accepted timer cleanup failed');
+        }
+      }
+    }
+    if (failure !== null) throw failure;
+  });
+
 test('a failed timer clear is typed without skipping actual native group close',
   async () => withAcceptedFollower('native-inbound-timer-clear-fault', async ({
     cluster, recipient, owned, envelope,
