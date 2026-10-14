@@ -347,6 +347,47 @@ test('control cohort origin installs the fixed coordinator schema atomically and
   }, {tableId: SQL_TRANSACTIONS_SCHEMA.tableName,
     tableName: SQL_TRANSACTIONS_SCHEMA.tableName, schema: SQL_TRANSACTIONS_SCHEMA}));
 
+test('already-current control cohort proves release with fewer original route calls',
+  () => fixture(async ({handler, service, release, transport}) => {
+    const originalDeliver = transport.deliver;
+    const calls = [];
+    transport.deliver = function(...args) {
+      const request = args[1];
+      if (request?.type === PARTICIPANT_RELEASE_TYPE &&
+          request.partitionId === service.partitionId) {
+        calls.push(request.action);
+      }
+      return Reflect.apply(originalDeliver, this, args);
+    };
+    try {
+      const first = await release();
+      assert.equal(first.outcome, OUTCOME.CUT_OVER, JSON.stringify(first));
+      const origin = readPartitionWriteOrigin(service.db);
+      assert.notEqual(origin, null, 'first source establishes a durable origin');
+      const originalCalls = [...calls];
+      assert.ok(originalCalls.includes(RELEASE_ACTION.ENABLE) &&
+        originalCalls.includes(RELEASE_ACTION.RESUME),
+      'full first real cutover engaged origin and member admission owners');
+      calls.length = 0;
+      const second = await release();
+      assert.equal(second.outcome, OUTCOME.CUT_OVER, JSON.stringify(second));
+      const repeatedCalls = [...calls];
+      assert.deepEqual(readPartitionWriteOrigin(service.db), origin,
+        'the same durable origin is still current and unchanged');
+      assert.equal(participantReleaseAdmissionOf(service).state, ADMISSION.OPEN);
+      assert.ok(repeatedCalls.length > 0,
+        'the second control attempt genuinely reached the same release route');
+      assert.ok(repeatedCalls.length < originalCalls.length,
+        'the already-current authoritative control owner must not replay ' +
+        'every original ENABLE/OBSERVE/current-census step');
+      assert.ok(handler.localServices.get(service.replicaId) === service,
+        'no replacement or foreign test-side owner supplied the second result');
+    } finally {
+      transport.deliver = originalDeliver;
+    }
+  }, {tableId: SQL_TRANSACTIONS_SCHEMA.tableName,
+    tableName: SQL_TRANSACTIONS_SCHEMA.tableName, schema: SQL_TRANSACTIONS_SCHEMA}));
+
 test('control cohort preserves unreconstructible legacy rows and reports exact activation debt',
   () => fixture(async ({service, release}) => {
     const transactionId = 'b'.repeat(32);
