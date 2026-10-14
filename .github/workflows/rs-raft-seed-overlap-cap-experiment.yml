@@ -1,0 +1,81 @@
+# Experimental upper-bound of overlap. WIP only: 45 is NOT an accepted
+# production concurrency bound, and this comparison never qualifies a lab.
+name: rs-raft-seed-overlap-cap-experiment
+on:
+  push:
+    branches: [experiment/rs-raft-seed-full-overlap-20261014]
+    paths: [.github/workflows/rs-raft-seed-overlap-cap-experiment.yml]
+permissions:
+  contents: read
+jobs:
+  paired:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Run both source conditions on one hosted machine, same old fixture
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          BASE=cf3a8bb8c33ffc898a49e1e8b6f5185e488dffe6
+          TEST=test/integration/message-group-membership-claim-cache.integration.test.js
+          OUT="$GITHUB_WORKSPACE/test-output/rs-raft-overlap-cap-experiment"
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/candidate-sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/candidate-tree.txt"
+          git rev-parse "$BASE^{tree}" > "$OUT/baseline-tree.txt"
+          git rev-parse "$BASE:$TEST" > "$OUT/baseline-test-blob.txt"
+          git rev-parse "HEAD:$TEST" > "$OUT/candidate-test-blob.txt"
+          test "$(cat "$OUT/baseline-test-blob.txt")" = "$(cat "$OUT/candidate-test-blob.txt")" || exit 1
+          git diff --name-only "$BASE" HEAD -- src > "$OUT/production-changed-paths.txt"
+          grep -Fx src/bootstrap/bootstrap-service-seed-workflow.js "$OUT/production-changed-paths.txt" || exit 1
+          test "$(wc -l < "$OUT/production-changed-paths.txt")" -eq 1 || exit 1
+          OLD="$RUNNER_TEMP/rs-raft-overlap-width8"
+          git worktree add --detach "$OLD" "$BASE" > "$OUT/worktree.log" 2>&1 || exit 1
+          npm ci > "$OUT/candidate-install.log" 2>&1
+          x=$?
+          (cd "$OLD" && npm ci) > "$OUT/baseline-install.log" 2>&1
+          y=$?
+          test "$x" = 0 && test "$y" = 0 || exit 1
+          for which in width8 upper45; do
+            if test "$which" = width8; then ROOT="$OLD"; else ROOT="$GITHUB_WORKSPACE"; fi
+            (cd "$ROOT" && npm run -s test:file -- "$TEST") > "$OUT/$which.run.log" 2>&1
+            code=$?
+            printf '%s\n' "$code" > "$OUT/$which.status"
+            RAW="$ROOT/.tap/test-results/$TEST.tap"
+            if test ! -f "$RAW"; then
+              echo "Original complete TAP missing for $which"
+              exit 1
+            fi
+            cp "$RAW" "$OUT/$which.raw.tap"
+            sha256sum "$RAW" > "$OUT/$which-raw.sha256"
+            node "$GITHUB_WORKSPACE/scripts/quest-evidence/summarize-seed-release-trace.mjs" \
+              "$RAW" "$OUT/$which.census.json" > "$OUT/$which.census-oneline.json" \
+              2> "$OUT/$which.census-error.log"
+            parsed=$?
+            test "$parsed" -eq 0 || { cat "$OUT/$which.census-error.log"; exit 1; }
+            echo "diagnostic $which original 1000ms test status=$code"
+            cat "$OUT/$which.census-oneline.json"
+            grep -E 'Seed participant release failed|test-files total' "$OUT/$which.run.log" | \
+              tail -n 4 | cut -c 1-1250 || true
+          done
+          echo 'Exploratory paired same-host comparison complete; no positive is acceptance'
+      - name: Preserve original complete TAP from both conditions, including reds
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-seed-overlap-cap-${{ github.sha }}
+          path: test-output/rs-raft-overlap-cap-experiment/
+          retention-days: 14
+          if-no-files-found: warn
