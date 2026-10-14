@@ -1,0 +1,79 @@
+# WIP exact deterministic expiry falsifier. The old source must fail the
+# named expiry assertion while the inside-deadline control remains green.
+name: rs-raft-seed-expired-success-falsifier
+on:
+  push:
+    branches: [fix/rs-raft-seed-expired-success-20261014]
+    paths:
+      - .github/workflows/rs-raft-seed-expired-success-falsifier.yml
+      - src/bootstrap/bootstrap-service-seed-workflow.js
+      - test/bootstrap/seed-release-expired-success.test.js
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-seed-expired-success-falsifier
+  cancel-in-progress: false
+jobs:
+  proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Exact dependencies
+        run: npm ci
+      - name: Keep both original deadlines, direct clock falsifier and full controls
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-seed-expired-success
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/source-sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/source-tree.txt"
+          fail=0
+          npx eslint src/bootstrap/bootstrap-service-seed-workflow.js \
+            test/bootstrap/seed-release-expired-success.test.js \
+            > "$OUT/scoped-eslint.log" 2>&1
+          lint=$?
+          printf '%s\n' "$lint" > "$OUT/scoped-eslint.status"
+          if test "$lint" != 0; then fail=1; cat "$OUT/scoped-eslint.log"; fi
+          for f in \
+            test/bootstrap/seed-release-expired-success.test.js \
+            test/bootstrap/seed-release-once-per-cohort.test.js \
+            test/partition/control-wave-duplicate-boundary.test.js \
+            test/node/replica-handler-release-recovery.test.js; do
+            name="${f##*/}"
+            npm run -s test:file -- "$f" > "$OUT/$name.log" 2>&1
+            status=$?
+            printf '%s\n' "$status" > "$OUT/$name.status"
+            echo "exact test $f status=$status"
+            tail -n 45 "$OUT/$name.log" | cut -c 1-1100
+            if test "$status" != 0; then fail=1; fi
+            if test -f ".tap/test-results/$f.tap"; then
+              cp ".tap/test-results/$f.tap" "$OUT/$name.full.tap"
+            fi
+            if test -d test-output/reports; then
+              mkdir -p "$OUT/$name.canonical"
+              find test-output/reports -maxdepth 1 -type f -name '*.ndjson' \
+                -exec cp {} "$OUT/$name.canonical/" \;
+            fi
+          done
+          exit "$fail"
+      - name: Preserve raw and canonical results, even on source red
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-expired-success-${{ github.sha }}
+          path: test-output/rs-raft-seed-expired-success/
+          retention-days: 14
+          if-no-files-found: warn
