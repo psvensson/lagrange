@@ -1,0 +1,56 @@
+# Regenerate canonical shard metadata on a WIP branch only. No ratchet changes.
+name: rs-raft-seed-post-await-metadata
+on:
+  push:
+    branches: [verify/rs-raft-seed-late-reply-fence-20261014]
+    paths: [.github/workflows/rs-raft-seed-post-await-metadata.yml]
+permissions:
+  contents: write
+concurrency:
+  group: rs-raft-seed-post-await-metadata
+  cancel-in-progress: false
+jobs:
+  canonical:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Canonical producer, exact expected file scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          H="$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$H"
+          npm ci
+          npm run -s test:metadata:refresh
+          git diff --check
+          git diff --name-status
+          while IFS= read -r file; do
+            test -z "$file" && continue
+            case "$file" in
+              test/shards/impact-graph-seal.json|test/shards/primary-classes.json|test/shards/resource-classes.json|test/shards/subsystem-classes.json) ;;
+              *) echo "REFUSED unrelated canonical producer mutation $file"; exit 1 ;;
+            esac
+          done < <(git diff --name-only)
+          npm run -s audit:shards
+          git add -- test/shards/impact-graph-seal.json test/shards/primary-classes.json test/shards/resource-classes.json test/shards/subsystem-classes.json
+          if git diff --cached --quiet; then
+            echo 'No generated drift at this exact source'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'WIP rs-raft: refresh canonical late-release reply impact metadata'
+          git fetch --no-tags origin refs/heads/verify/rs-raft-seed-late-reply-fence-20261014
+          test "$(git rev-parse FETCH_HEAD)" = "$H" || {
+            echo 'WIP ref moved; refuse stale metadata publication'; exit 1
+          }
+          git push origin HEAD:refs/heads/verify/rs-raft-seed-late-reply-fence-20261014
