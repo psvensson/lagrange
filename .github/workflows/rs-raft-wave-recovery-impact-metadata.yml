@@ -1,0 +1,58 @@
+# Canonical impact metadata ownership, guarded WIP-only publication.
+# No tests are skipped and no static acceptance baseline is raised.
+name: rs-raft-wave-recovery-impact-metadata
+on:
+  push:
+    branches: [work/rs-raft-control-wave-recovery-owner-pair-20261014]
+    paths: [.github/workflows/rs-raft-wave-recovery-impact-metadata.yml]
+permissions:
+  contents: write
+concurrency:
+  group: rs-raft-wave-recovery-impact-metadata
+  cancel-in-progress: false
+jobs:
+  producer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Canonical test impact metadata producer, current exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          BEFORE="$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$BEFORE"
+          npm ci
+          npm run -s audit:impact-contracts
+          npm run -s test:metadata:refresh
+          git diff --check
+          git diff --name-status
+          while IFS= read -r changed; do
+            test -n "$changed" || continue
+            case "$changed" in
+              test/shards/impact-graph-seal.json|test/shards/primary-classes.json|test/shards/resource-classes.json|test/shards/subsystem-classes.json) ;;
+              *) echo "REFUSED non-generated modification: $changed"; exit 1 ;;
+            esac
+          done < <(git diff --name-only)
+          npm run -s audit:shards
+          git add -- test/shards/impact-graph-seal.json \
+            test/shards/primary-classes.json \
+            test/shards/resource-classes.json \
+            test/shards/subsystem-classes.json
+          if git diff --cached --quiet; then echo 'Canonical metadata current'; exit 0; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'WIP rs-raft: regenerate canonical control-wave/recovery impact classes'
+          git fetch --no-tags origin refs/heads/work/rs-raft-control-wave-recovery-owner-pair-20261014
+          test "$(git rev-parse FETCH_HEAD)" = "$BEFORE" || {
+            echo 'Ref moved while producer ran: refuse WIP publication'; exit 1
+          }
+          git push origin HEAD:refs/heads/work/rs-raft-control-wave-recovery-owner-pair-20261014
