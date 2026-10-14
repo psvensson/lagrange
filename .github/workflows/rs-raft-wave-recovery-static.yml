@@ -1,0 +1,69 @@
+# Source-bound WIP static gates. Every inherited red is preserved as red.
+# No ratchet, baseline or generated digest is hand-edited.
+name: rs-raft-wave-recovery-static
+on:
+  push:
+    branches: [work/rs-raft-control-wave-recovery-owner-pair-20261014]
+    paths: [.github/workflows/rs-raft-wave-recovery-static.yml]
+permissions:
+  contents: read
+jobs:
+  census:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Locked dependencies
+        run: npm ci
+      - name: Classify complete source-bound structural and owner gates
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-wave-recovery-static
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/tree.txt"
+          fail=0
+          for task in \
+            audit:impact-contracts \
+            audit:shards \
+            test:deps \
+            test:unused:ratchet \
+            audit:file-size:strict \
+            test:duplication:strict \
+            lint \
+            audit:no-legacy-consensus-references \
+            audit:owner-boundary-segments \
+            audit:guideline:silent-catch; do
+            slug="${task//:/-}"
+            npm run -s "$task" > "$OUT/$slug.log" 2>&1
+            rc=$?
+            printf '%s\n' "$rc" > "$OUT/$slug.status"
+            echo "$task status=$rc"
+            if test "$rc" -ne 0; then
+              fail=1
+              tail -n 26 "$OUT/$slug.log" | cut -c 1-700
+            fi
+          done
+          git diff --check > "$OUT/check-diff.log" 2>&1
+          code=$?
+          printf '%s\n' "$code" > "$OUT/check-diff.status"
+          if test "$code" -ne 0; then fail=1; fi
+          exit "$fail"
+      - name: Preserve every red and original immutable source
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-wave-recovery-static-${{ github.sha }}
+          path: test-output/rs-raft-wave-recovery-static/
+          retention-days: 14
+          if-no-files-found: warn
