@@ -243,15 +243,20 @@ function waveMemberCensusCurrent(record, current) {
     facts));
 }
 
+function currentWaveLeader(handler, record) {
+  return !handler.shuttingDown && !record.service.isShutdown &&
+    handler.localServices.get(record.service.replicaId) === record.service &&
+    localLeader(handler, {partitionId: CONTROL_PARTITION}) === record.service;
+}
+
 async function readWaveCensus(handler, record) {
-  if (handler.shuttingDown || record.service.isShutdown ||
-      handler.localServices.get(record.service.replicaId) !== record.service ||
-      localLeader(handler, {partitionId: CONTROL_PARTITION}) !== record.service) {
-    return null;
-  }
+  if (!currentWaveLeader(handler, record)) return null;
   const current = await readCohort(handler, CONTROL_PARTITION, record.cohort,
     record.deadlineAtMs);
-  return unavailableCensus(current) === null &&
+  // The registry/lifecycle may change while readCohort awaits remote members.
+  // The old object never inherits the newer owner's permission.
+  return currentWaveLeader(handler, record) &&
+    unavailableCensus(current) === null &&
     waveMemberCensusCurrent(record, current) ? current : null;
 }
 
@@ -308,6 +313,7 @@ async function withFreshSeedControlWave(handler, options, execute) {
   let error = null;
   let value;
   let paused = false;
+  let resumedControl = false;
   try {
     const request = {partitionId: CONTROL_PARTITION, targetBuildDigest,
       deadlineAtMs, trigger: TRIGGER.FRESH_SEED,
@@ -352,8 +358,9 @@ async function withFreshSeedControlWave(handler, options, execute) {
     }
     const held = await actOnCohort(handler, release, attempt, ACTION.PAUSE, before);
     if (unavailableCensus(held) !== null ||
-        !cleanCurrentControlCohort(leader, release, attempt, held)) {
-      throw new Error('Current control member PAUSE or drain unavailable');
+        !cleanCurrentControlCohort(leader, release, attempt, held) ||
+        !currentWaveLeader(handler, record)) {
+      throw new Error('Current control member PAUSE, identity or drain unavailable');
     }
     Object.assign(record, {release, cohort, attempt, census: held,
       state: SEED_WAVE_STATE.HELD});
@@ -373,15 +380,24 @@ async function withFreshSeedControlWave(handler, options, execute) {
     if (resumed.some((answer) => answer.outcome !== OUTCOME.RESUMED)) {
       throw new Error('Current control wave final member RESUME refused');
     }
+    resumedControl = true;
   } catch (cause) {
     error = error === null ? cause :
       new AggregateError([error, cause], 'seed control wave AND cleanup refused');
   } finally {
     record.state = SEED_WAVE_STATE.RETIRED;
     if (runs.get(CONTROL_PARTITION) === record) runs.delete(CONTROL_PARTITION);
-    // Existing release recovery has the ONLY retry path for any still-CLOSED
-    // control member; never grant OPEN from a timed-out volatile session.
-    if (paused) handler.participantReleaseRecovery?.requestRecovery(CONTROL_PARTITION);
+    // Only an incomplete control wave retains volatile recovery debt. After
+    // successful RESUME, no redundant recovery wake should compete with the
+    // next seed partition. A failing wake retains its exact original error.
+    if (paused && !resumedControl) {
+      try {
+        handler.participantReleaseRecovery?.requestRecovery(CONTROL_PARTITION);
+      } catch (wakeError) {
+        error = error === null ? wakeError : new AggregateError([error, wakeError],
+          'Control wave refusal and recovery wake both failed');
+      }
+    }
   }
   if (error !== null) throw error;
   return value;
