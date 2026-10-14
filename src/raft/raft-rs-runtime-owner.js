@@ -1746,8 +1746,10 @@ function scheduleInboundDrain(group) {
   }
   group.inboundDrainScheduled = true;
   reportNativeInboundStage(group, NATIVE_INBOUND_STAGE.REQUEST);
+  // CAUSAL EXPERIMENT ONLY: keep accepted inbound live until the callback.
+  // This is NOT a production fix: close/replacement timer custody is missing.
   group.timers.setTimeout(() => runScheduledInboundDrain(group),
-    INBOUND_DRAIN_DELAY_MS)?.unref?.();
+    INBOUND_DRAIN_DELAY_MS);
 }
 
 function retryInboundDrainWhenAdmitted(group) {
