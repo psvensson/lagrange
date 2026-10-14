@@ -205,7 +205,7 @@ test('held control wave joins every started child and never admits another wave 
     assert.equal(state.active, 0,
       'all admitted promises must settle before the wave returns failure');
     assert.equal(state.settled, state.requests.length,
-      'no started dependent release escapes the one owner's allSettled join');
+      'no started dependent release escapes the canonical allSettled join');
     assert.deepEqual(state.requests.map((record) => record.partitionId),
       [CONTROL, ...dependentIds.slice(0, 4)],
       'the failure does not admit any second wave of independent partitions');
