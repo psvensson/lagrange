@@ -1,0 +1,63 @@
+# Exact semantic pre-repair negative, no production edits. The one-per-cohort
+# seed source still serializes distinct partition intents.
+name: rs-raft-seed-bounded-overlap-red
+on:
+  push:
+    branches: [continue/rs-raft-seed-bounded-concurrent-cohorts-20261014]
+    paths: [.github/workflows/rs-raft-seed-bounded-overlap-red.yml]
+permissions:
+  contents: read
+jobs:
+  negative:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Witness old serial source fails at engaged real intent overlap
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          BASE=bcca98ef427339b927a9b74707525fd18cf81dac
+          TEST=test/bootstrap/seed-release-once-per-cohort.test.js
+          FILTER='independent seed partition intents overlap only after actual control release completes'
+          OUT=test-output/rs-raft-bounded-overlap-negative
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/head.txt"
+          git rev-parse "$BASE^{tree}" > "$OUT/old-tree.txt"
+          git rev-parse HEAD^{tree} > "$OUT/current-tree.txt"
+          OLD="$RUNNER_TEMP/rs-raft-old-seed-serial"
+          git worktree add --detach "$OLD" "$BASE" > "$OUT/worktree.log" 2>&1 || exit 1
+          cp "$TEST" "$OLD/$TEST" || exit 1
+          cmp "$TEST" "$OLD/$TEST" || exit 1
+          sha256sum "$TEST" > "$OUT/candidate-test.sha256"
+          (cd "$OLD" && sha256sum "$TEST") > "$OUT/old-test.sha256"
+          (cd "$OLD" && npm ci) > "$OUT/install.log" 2>&1
+          install=$?
+          printf '%s\n' "$install" > "$OUT/install.status"
+          test "$install" -eq 0 || exit 1
+          (cd "$OLD" && node --test --test-name-pattern="$FILTER" "$TEST") > "$OUT/old-source.tap" 2>&1
+          status=$?
+          printf '%s\n' "$status" > "$OUT/old.status"
+          tail -n 60 "$OUT/old-source.tap"
+          test "$status" -ne 0 || exit 1
+          grep -F 'at least two independent real release intents must be in flight together' "$OUT/old-source.tap" || exit 1
+          grep -F 'ERR_ASSERTION' "$OUT/old-source.tap" || exit 1
+          grep -F 'not ok' "$OUT/old-source.tap" || exit 1
+          echo "Meaningful old-source negative, exact test bytes preserved; candidate remains unproven."
+      - name: Retain original error and exact source identity
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-seed-overlap-negative-${{ github.sha }}
+          path: test-output/rs-raft-bounded-overlap-negative/
+          retention-days: 14
+          if-no-files-found: warn
