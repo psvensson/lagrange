@@ -225,3 +225,78 @@ test('a successful release reply after the original absolute deadline cannot pub
     assert.equal(routed.length, 1,
       'no second RELEASE or new timer is introduced by deadline expiry');
   });
+
+
+test('the seed refuses an otherwise successful wave whose END completes after its deadline',
+  async () => {
+    let nowMs = 200000;
+    const deadlineAtMs = nowMs + 1000;
+    const clock = {now: () => nowMs};
+    const routed = [];
+    const waveToken = Object.freeze(Object.create(null));
+    const partitions = [CONTROL, PAYLOADS];
+    const services = new Map(partitions.map((partitionId) => {
+      const service = localReplica(partitionId,
+        partitionId === CONTROL ? TABLES.SQL_TRANSACTIONS : TABLES.ARTIFACT_PAYLOADS,
+        `${partitionId}-wave-late-r1`);
+      return [service.replicaId, service];
+    }));
+    const owner = {
+      partitionServices: services,
+      nodeService: {getTimeSource: () => clock},
+      config: {leadershipWaitTimeoutMs: 5000,
+        seedParticipantReleaseBudgetMs: 1000},
+      replicaHandler: {
+        nodeId: 'late-wave-end-seed-owner',
+        timeSource: clock,
+        participantReleaseAuthorizationOwner: {
+          authorizeFreshSeed() {
+            return Object.freeze({kind: 'fixture-fresh-seed'});
+          },
+        },
+        participantReleaseRecovery: {
+          async withFreshSeedControlWave(options, execute) {
+            assert.equal(options.deadlineAtMs, deadlineAtMs);
+            assert.deepEqual(options.partitionIds, [PAYLOADS]);
+            await execute(waveToken);
+            assert.deepEqual(routed.map((r) => r.partitionId), partitions,
+              'every individual partition success occurred before END');
+            // Simulate an original control-wave END reply that is delayed
+            // beyond the seed owner's shared absolute deadline.
+            nowMs = deadlineAtMs + 1;
+          },
+        },
+        messageRouter: {
+          async deliver(_address, request) {
+            routed.push(request);
+            assert.equal(request.deadlineAtMs, deadlineAtMs);
+            assert.ok(nowMs < deadlineAtMs,
+              'both true partition answers arrive while release is valid');
+            return {acknowledged: true, deliveryState: 'delivered',
+              [PARTICIPANT_RELEASE_RESULT_FIELD]: {outcome: OUTCOME.CUT_OVER}};
+          },
+        },
+      },
+      sleep() {
+        throw new Error('a positive partition answer never requires a retry');
+      },
+    };
+    let failure = null;
+    try {
+      await createBootstrapServiceSeedWorkflowMethods()
+        .releaseSeedParticipantCohorts.call(owner);
+    } catch (error) {
+      failure = error;
+    }
+    assert.ok(failure instanceof Error,
+      'a delayed held-control END cannot publish seed readiness after expiration');
+    assert.match(failure.message, /^Seed participant release failed: /u);
+    const detail = JSON.parse(failure.message.slice(
+      'Seed participant release failed: '.length));
+    assert.equal(detail.phase, 'control_wave_end');
+    assert.equal(detail.seedRelease.completed, 2,
+      'both genuine partition results remain recorded without false completion');
+    assert.equal(detail.seedRelease.remainingMs, 0);
+    assert.equal(routed.length, 2, 'no new release or retry after late END');
+    assert.equal(owner.config.leadershipWaitTimeoutMs, 5000);
+  });
