@@ -49,5 +49,6 @@
     "harness-fidelity",
     "formation-circularity",
     "adversarial-js-intrinsics"
-  ]
+  ],
+  "sealedAt": "01ccac020143d2a61887712431188e206e02f51e"
 }
