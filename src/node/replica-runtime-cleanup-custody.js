@@ -10,28 +10,6 @@ import {cancelParticipantAppliedPositionObservations} from
 
 const RUNTIME_CLEANUP_PENDING = 'Replica runtime cleanup is still pending';
 const RUNTIME_SHUTDOWN_FAILED = 'Replica handler still owns failed runtime shutdowns';
-const AggregateErrorConstructor = AggregateError;
-const objectDefineProperty = Object.defineProperty;
-const symbolIterator = Symbol.iterator;
-
-function appendFailure(failures, error) {
-  objectDefineProperty(failures, failures.length,
-    {value: error, writable: true, enumerable: true, configurable: true});
-}
-
-function exactFailureIterable(failures) {
-  return {
-    [symbolIterator]() {
-      let index = 0;
-      return {next() {
-        if (index >= failures.length) return {done: true};
-        const value = failures[index];
-        index += 1;
-        return {done: false, value};
-      }};
-    },
-  };
-}
 
 /** Continue prior release before fresh physical work; this grants no CREATE authority.
  * @param {Object} handler - ReplicaHandler.
@@ -134,7 +112,7 @@ function shutdownReplicaHandler(handler, options) {
         if (typeof service.shutdown === 'function') await service.shutdown();
         handler.pendingRuntimeShutdowns.delete(service);
       } catch (error) {
-        appendFailure(failures, error);
+        failures.push(error);
         // Even a later routing change cannot discard the failed instance.
         if (!handler.pendingRuntimeShutdowns.has(service)) {
           handler.pendingRuntimeShutdowns.set(service,
@@ -142,14 +120,8 @@ function shutdownReplicaHandler(handler, options) {
         }
       }
     }
-    const observationFailures = cancelParticipantAppliedPositionObservations(handler);
-    for (let index = 0; index < observationFailures.length; index += 1) {
-      appendFailure(failures, observationFailures[index]);
-    }
-    if (failures.length > 0) {
-      throw new AggregateErrorConstructor(
-        exactFailureIterable(failures), RUNTIME_SHUTDOWN_FAILED);
-    }
+    failures.push(...cancelParticipantAppliedPositionObservations(handler));
+    if (failures.length > 0) throw new AggregateError(failures, RUNTIME_SHUTDOWN_FAILED);
     handler.creationProgressByReplica.clear();
     handler.inProgressOperations.clear();
     handler.localServices.clear();

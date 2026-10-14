@@ -7,7 +7,6 @@ import {originEqual, releaseAnswer, sameReplicaGeneration} from
   '../partition/partition-participant-release-contract.js';
 import {PARTICIPANT_CUTOVER_BOUND as BOUND,
   PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
-  PARTICIPANT_RELEASE_MISSING_FACT as MISSING_FACT,
   PARTICIPANT_RELEASE_REASON as REASON} from
   '../partition/partition-participant-transaction-cutover-constants.js';
 import {TRANSPORT_DELIVERY_OUTCOME_REASON_CODE} from
@@ -16,13 +15,8 @@ import {participantReleaseAbsoluteClockValid, participantReleaseRequestBudget} f
   './participant-release-client.js';
 import {participantReleaseClockMeasured, readParticipantReleaseClock} from
   './participant-release-diagnostic-observation.js';
-import {copyMapValuesToArray} from '../utils/map-values-array.js';
 
 const OBSERVATIONS = new WeakMap();
-const arrayFlatMap = Function.call.bind(Array.prototype.flatMap);
-const arrayMap = Function.call.bind(Array.prototype.map);
-const arraySome = Function.call.bind(Array.prototype.some);
-const objectDefineProperty = Object.defineProperty;
 const reflectApply = Reflect.apply;
 const SLOT_STATE = Object.freeze({
   RETIRED: 'retired', PENDING: 'pending', OWNED: 'owned', FAILED: 'failed',
@@ -31,18 +25,6 @@ const RAFT_WAKE_EVENTS = Object.freeze([
   RAFT_EVENT.APPLIED_PROGRESS, RAFT_EVENT.TERM_CHANGE,
   RAFT_EVENT.LEADER_CHANGE, RAFT_EVENT.MEMBERSHIP_CHANGED,
 ]);
-const RESOURCE_INDEX = Object.freeze({
-  SERVICE_REGISTRY: RAFT_WAKE_EVENTS.length,
-  SERVICE_SHUTDOWN: RAFT_WAKE_EVENTS.length + 1,
-  TIMER: RAFT_WAKE_EVENTS.length + 2,
-});
-const RESOURCE_NAME = Object.freeze({
-  SERVICE_REGISTRY: 'service-registry',
-  SERVICE_SHUTDOWN: 'service-shutdown',
-  TIMER: 'timer',
-});
-const SERVICE_SHUTDOWN_LISTENER_OWNER_UNAVAILABLE =
-  'service shutdown listener owner unavailable';
 const REFRESH_AGAIN = Symbol('refresh-again');
 const WAIT_FOR_WAKE = Symbol('wait-for-wake');
 
@@ -67,7 +49,7 @@ function matchingObservation(record, request) {
 
 function unavailable(request, reason = null) {
   return releaseAnswer(OUTCOME.UNAVAILABLE, request,
-    {missingFact: MISSING_FACT.REPLICA_RELEASE_REPLY,
+    {missingFact: 'replica_release_reply',
       ...(reason === null ? {} : {reason}),
       retryAfterMs: BOUND.PAUSE_RETRY_AFTER_MS});
 }
@@ -78,22 +60,14 @@ function newSlot(name) {
 }
 
 function newResourceSlots() {
-  const slots = arrayMap(RAFT_WAKE_EVENTS,
-    (eventName) => newSlot(`raft:${eventName}`));
-  objectDefineProperty(slots, RESOURCE_INDEX.SERVICE_REGISTRY,
-    {value: newSlot(RESOURCE_NAME.SERVICE_REGISTRY), writable: true,
-      enumerable: true, configurable: true});
-  objectDefineProperty(slots, RESOURCE_INDEX.SERVICE_SHUTDOWN,
-    {value: newSlot(RESOURCE_NAME.SERVICE_SHUTDOWN), writable: true,
-      enumerable: true, configurable: true});
-  objectDefineProperty(slots, RESOURCE_INDEX.TIMER,
-    {value: newSlot(RESOURCE_NAME.TIMER), writable: true,
-      enumerable: true, configurable: true});
-  return slots;
+  return [
+    ...RAFT_WAKE_EVENTS.map((eventName) => newSlot(`raft:${eventName}`)),
+    newSlot('service-registry'), newSlot('service-shutdown'), newSlot('timer'),
+  ];
 }
 
 function currentCleanupErrors(record) {
-  return arrayFlatMap(record.resources, (slot) =>
+  return record.resources.flatMap((slot) =>
     slot.state === SLOT_STATE.FAILED && slot.hasError ? [slot.error] : []);
 }
 
@@ -127,10 +101,8 @@ function removeExactRecord(record) {
 }
 
 function finishRecord(record) {
-  for (let index = 0; index < record.resources.length; index += 1) {
-    cleanupSlot(record.resources[index]);
-  }
-  if (record.installing || arraySome(record.resources, (slot) =>
+  for (const slot of record.resources) cleanupSlot(slot);
+  if (record.installing || record.resources.some((slot) =>
     slot.state === SLOT_STATE.PENDING || slot.releasing)) return;
   const failures = currentCleanupErrors(record);
   if (!record.settled) {
@@ -164,19 +136,22 @@ function clockAnswer(record) {
   }
   if (observed.value >= record.request.deadlineAtMs) {
     return releaseAnswer(OUTCOME.UNAVAILABLE, record.request,
-      {missingFact: MISSING_FACT.RELEASE_DEADLINE});
+      {missingFact: 'release_deadline'});
   }
   return observed.value >= record.deadlineAtMs ? unavailable(record.request,
     TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT) : null;
 }
 
-function observationResult(record, assessment) {
+async function observeOnce(record) {
+  record.dirty = false;
+  if (!lifecycleCurrent(record)) return releaseAnswer(OUTCOME.STALE, record.request);
+  const decision = await record.decide(record.handler, record.service,
+    record.request, record.port);
   if (!record.active) return WAIT_FOR_WAKE;
   if (!lifecycleCurrent(record)) return releaseAnswer(OUTCOME.STALE, record.request);
   const expired = clockAnswer(record);
   if (expired !== null) return expired;
-  const {answer, refreshEligible} = record.adjudicate(record.handler,
-    record.service, record.request, record.port, assessment);
+  const {answer, refreshEligible} = decision;
   if (answer.outcome !== OUTCOME.OBSERVED) {
     return refreshEligible && record.dirty ? REFRESH_AGAIN : answer;
   }
@@ -189,13 +164,7 @@ async function refresh(record) {
   record.refreshing = true;
   try {
     while (record.active) {
-      record.dirty = false;
-      if (!lifecycleCurrent(record)) {
-        terminal(record, releaseAnswer(OUTCOME.STALE, record.request));
-        break;
-      }
-      const assessment = await record.read(record.handler, record.service);
-      const result = observationResult(record, assessment);
+      const result = await observeOnce(record);
       if (result === REFRESH_AGAIN) continue;
       if (result !== WAIT_FOR_WAKE) terminal(record, result);
       break;
@@ -263,7 +232,7 @@ function serviceShutdownSubscription(record, slot) {
     const service = record.service;
     const remove = typeof service.off === 'function' ? service.off : service.removeListener;
     if (typeof service.on !== 'function' || typeof remove !== 'function') {
-      throw new TypeError(SERVICE_SHUTDOWN_LISTENER_OWNER_UNAVAILABLE);
+      throw new TypeError('service shutdown listener owner unavailable');
     }
     const listener = () => terminal(record, releaseAnswer(OUTCOME.STALE, record.request));
     reflectApply(service.on, service, [PARTITION_SERVICE_EVENT.SHUTDOWN_STARTED, listener]);
@@ -305,30 +274,28 @@ function timerSubscription(record, slot) {
 
 function installObservation(record) {
   record.installing = true;
-  for (let index = 0; index < RAFT_WAKE_EVENTS.length; index += 1) {
-    if (!raftSubscription(record, record.resources[index],
-      RAFT_WAKE_EVENTS[index])) break;
+  let index = 0;
+  for (const eventName of RAFT_WAKE_EVENTS) {
+    if (!raftSubscription(record, record.resources[index], eventName)) break;
+    index += 1;
   }
-  if (record.active && registrySubscription(record,
-    record.resources[RESOURCE_INDEX.SERVICE_REGISTRY]) &&
-      serviceShutdownSubscription(record,
-        record.resources[RESOURCE_INDEX.SERVICE_SHUTDOWN])) {
-    timerSubscription(record, record.resources[RESOURCE_INDEX.TIMER]);
+  if (record.active && registrySubscription(record, record.resources[4]) &&
+      serviceShutdownSubscription(record, record.resources[5])) {
+    timerSubscription(record, record.resources[6]);
   }
   record.installing = false;
   if (record.active) void refresh(record);
   else finishRecord(record);
 }
 
-function newObservation(handler, service, request, read, adjudicate, records) {
+function newObservation(handler, service, request, decide, records) {
   const scheduler = handler.timeSource;
   const budget = participantReleaseRequestBudget({timeSource: scheduler},
     request.deadlineAtMs, request.observationDeadlineAtMs);
   if (budget === null) return unavailable(request);
   if (budget.timeoutMs <= 0) {
     return budget.nowMs >= request.deadlineAtMs ?
-      releaseAnswer(OUTCOME.UNAVAILABLE, request,
-        {missingFact: MISSING_FACT.RELEASE_DEADLINE}) :
+      releaseAnswer(OUTCOME.UNAVAILABLE, request, {missingFact: 'release_deadline'}) :
       unavailable(request, TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT);
   }
   if (records === undefined) {
@@ -336,8 +303,7 @@ function newObservation(handler, service, request, read, adjudicate, records) {
     OBSERVATIONS.set(handler, records);
   }
   const settlement = Promise.withResolvers();
-  const record = {handler, service, port: service.raft, scheduler, request,
-    read, adjudicate,
+  const record = {handler, service, port: service.raft, scheduler, request, decide,
     resolve: settlement.resolve, promise: settlement.promise,
     deadlineAtMs: budget.observationDeadlineAtMs, timeoutMs: budget.timeoutMs,
     active: true, settled: false, terminalAnswer: null, dirty: false,
@@ -347,8 +313,7 @@ function newObservation(handler, service, request, read, adjudicate, records) {
   return record.promise;
 }
 
-function observeParticipantAppliedPosition(handler, service, request, read,
-  adjudicate) {
+function observeParticipantAppliedPosition(handler, service, request, decide) {
   const records = OBSERVATIONS.get(handler);
   const current = records?.get(request.replicaId);
   if (current !== undefined) {
@@ -357,17 +322,16 @@ function observeParticipantAppliedPosition(handler, service, request, read,
     if (matches && !current.active) finishRecord(current);
     return matches ? promise : releaseAnswer(OUTCOME.STALE, request);
   }
-  return newObservation(handler, service, request, read, adjudicate, records);
+  return newObservation(handler, service, request, decide, records);
 }
 
 function cancelParticipantAppliedPositionObservations(handler) {
   const records = OBSERVATIONS.get(handler);
   if (records === undefined) return [];
-  const snapshot = copyMapValuesToArray(records);
-  for (let index = 0; index < snapshot.length; index += 1) {
-    terminal(snapshot[index], releaseAnswer(OUTCOME.STALE, snapshot[index].request));
+  for (const record of [...records.values()]) {
+    terminal(record, releaseAnswer(OUTCOME.STALE, record.request));
   }
-  return arrayFlatMap(snapshot, currentCleanupErrors);
+  return [...records.values()].flatMap(currentCleanupErrors);
 }
 
 export {cancelParticipantAppliedPositionObservations,

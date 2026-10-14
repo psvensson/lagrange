@@ -15,15 +15,13 @@ import {participantCutoverPauseOf, participantReleaseReplicaGenerationOf,
 import {enableParticipantTransactionAdmission} from
   '../partition/partition-participant-transaction-request.js';
 import {PARTICIPANT_RELEASE_ACTION as ACTION, PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
-  PARTICIPANT_RELEASE_MISSING_FACT as MISSING_FACT, PARTICIPANT_RELEASE_TYPE} from
+  PARTICIPANT_RELEASE_TYPE} from
   '../partition/partition-participant-transaction-cutover-constants.js';
 import {observeParticipantAppliedPosition} from
   './participant-release-applied-position-observation.js';
 import {participantReleaseSafeClockInteger} from
   './participant-release-diagnostic-observation.js';
 import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
-import {REPLICA_HANDLER_PARTICIPANT_RELEASE_DISPATCH_KIND as DISPATCH_KIND} from
-  './replica-handler-constants.js';
 
 const objectFreeze = Object.freeze;
 const objectHasOwn = Object.hasOwn;
@@ -41,10 +39,6 @@ function validIncarnation(value) {
   return nonempty(value) || positiveInteger(value);
 }
 
-function record(value) {
-  return value !== null && typeof value === 'object';
-}
-
 function actionRequiresIdentity(action) {
   return action === ACTION.PAUSE || action === ACTION.REOPEN ||
     action === ACTION.ENABLE || action === ACTION.OBSERVE_APPLIED_POSITION ||
@@ -52,7 +46,7 @@ function actionRequiresIdentity(action) {
 }
 
 function releaseScalarsValid(release) {
-  return record(release) && nonempty(release.partitionId) &&
+  return release !== null && nonempty(release.partitionId) &&
     nonempty(release.targetBuildDigest) && nonempty(release.configurationKey) &&
     nonempty(release.releaseId) &&
     participantReleaseSafeClockInteger(release.protocolVersion) &&
@@ -61,7 +55,7 @@ function releaseScalarsValid(release) {
 }
 
 function attemptScalarsValid(attempt) {
-  return record(attempt) && positiveInteger(attempt.term) &&
+  return attempt !== null && positiveInteger(attempt.term) &&
     nonempty(attempt.leaderReplicaId) &&
     validIncarnation(attempt.leaderLifecycleIncarnation) &&
     participantReleaseSafeClockInteger(attempt.deadlineAtMs) &&
@@ -69,7 +63,7 @@ function attemptScalarsValid(attempt) {
 }
 
 function originScalarsValid(origin) {
-  return record(origin) && positiveInteger(origin.originIndex) &&
+  return origin !== null && positiveInteger(origin.originIndex) &&
     positiveInteger(origin.originTerm) && originEqual(origin, origin);
 }
 
@@ -84,15 +78,14 @@ function safeInvalidRequest(request) {
 }
 
 function invalidReleaseDispatch(request) {
-  return objectFreeze({kind: DISPATCH_KIND.RELEASE, request,
+  return objectFreeze({kind: 'release', request,
     refusal: releaseAnswer(OUTCOME.INVALID, safeInvalidRequest(request)),
     observationValidated: false});
 }
 
 function captureReleaseNestedRecords(request) {
   let valid = true;
-  for (let index = 0; index < RELEASE_NESTED_FIELDS.length; index += 1) {
-    const field = RELEASE_NESTED_FIELDS[index];
+  for (const field of RELEASE_NESTED_FIELDS) {
     if (!objectHasOwn(request, field) || request[field] === null ||
         request[field] === undefined) continue;
     const nested = copyStrictOwnDataRecord(request[field]);
@@ -137,10 +130,10 @@ function observationRequestCoherent(request) {
 function captureParticipantReleaseDispatch(payload) {
   const request = copyStrictOwnDataRecord(payload);
   if (request === null || typeof request.type !== 'string') {
-    return objectFreeze({kind: DISPATCH_KIND.MALFORMED});
+    return objectFreeze({kind: 'malformed'});
   }
   if (request.type !== PARTICIPANT_RELEASE_TYPE) {
-    return objectFreeze({kind: DISPATCH_KIND.ORDINARY, type: request.type,
+    return objectFreeze({kind: 'ordinary', type: request.type,
       operationId: request.operationId});
   }
   const nestedValid = captureReleaseNestedRecords(request);
@@ -150,10 +143,10 @@ function captureParticipantReleaseDispatch(payload) {
   }
   if (!releaseRequestIdentityValid(captured)) return invalidReleaseDispatch(captured);
   if (captured.action !== ACTION.OBSERVE_APPLIED_POSITION) {
-    return objectFreeze({kind: DISPATCH_KIND.RELEASE, request: captured, refusal: null,
+    return objectFreeze({kind: 'release', request: captured, refusal: null,
       observationValidated: false});
   }
-  return observationRequestCoherent(captured) ? objectFreeze({kind: DISPATCH_KIND.RELEASE,
+  return observationRequestCoherent(captured) ? objectFreeze({kind: 'release',
     request: captured, refusal: null, observationValidated: true}) :
     invalidReleaseDispatch(captured);
 }
@@ -276,7 +269,7 @@ function observationStatusMatches(handler, service, request, context, status) {
     status.term === context.term && status.leaderId === context.leaderReplicaId &&
     status.configurationKey === context.configurationKey &&
     status.membershipGenerationIndex === context.membershipGenerationIndex &&
-    status.appliedIndex >= context.appliedIndex;
+    status.appliedIndex === context.appliedIndex;
 }
 
 function observationContextMatches(handler, service, request, context, expectedPort) {
@@ -289,8 +282,9 @@ function observationContextMatches(handler, service, request, context, expectedP
     observationLifecycleCurrent(handler, service, request, expectedPort);
 }
 
-function adjudicateParticipantReleaseObservation(handler, service, request,
-  expectedPort, assessment) {
+async function participantReleaseObservationDecision(handler, service, request,
+  expectedPort) {
+  const assessment = await readParticipantReleaseObservationAssessment(handler, service);
   if (!observationLifecycleCurrent(handler, service, request, expectedPort)) {
     return {answer: releaseAnswer(OUTCOME.STALE, request), refreshEligible: false};
   }
@@ -326,18 +320,16 @@ async function receiveParticipantRelease(handler, request,
   try {
     if (requestDeadlineSpent(handler, request)) {
       return releaseAnswer(OUTCOME.UNAVAILABLE, request,
-        {missingFact: MISSING_FACT.RELEASE_DEADLINE});
+        {missingFact: 'release_deadline'});
     }
     const service = handler.localServices.get(request.replicaId);
     if (!service || service.partitionId !== request.partitionId) {
-      return releaseAnswer(OUTCOME.UNAVAILABLE, request,
-        {missingFact: MISSING_FACT.HOSTED_REPLICA});
+      return releaseAnswer(OUTCOME.UNAVAILABLE, request, {missingFact: 'hosted_replica'});
     }
     if (request.action === ACTION.OBSERVE_APPLIED_POSITION) {
       if (!observationValidated) return releaseAnswer(OUTCOME.INVALID, request);
       return observeParticipantAppliedPosition(handler, service, request,
-        readParticipantReleaseObservationAssessment,
-        adjudicateParticipantReleaseObservation);
+        participantReleaseObservationDecision);
     }
     return receiveCurrentParticipantRelease(handler, service, request);
   } catch (error) {
