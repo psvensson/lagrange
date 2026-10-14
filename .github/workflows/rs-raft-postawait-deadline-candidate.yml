@@ -53,6 +53,7 @@ jobs:
           }
           OLD="$RUNNER_TEMP/rs-raft-postawait-original"
           git worktree add --detach "$OLD" "$ORIGINAL" > "$OUT/old-worktree.log" 2>&1 || exit 1
+          cp "$TEST" "$OLD/$TEST" || exit 1
           cmp "$TEST" "$OLD/$TEST" || exit 1
           sha256sum "$TEST" > "$OUT/candidate-test.sha256"
           (cd "$OLD" && sha256sum "$TEST") > "$OUT/old-test.sha256"
@@ -74,6 +75,23 @@ jobs:
           grep -F "expected: 'release_fact_unavailable'" "$OUT/old.tap" || exit 1
           test "$green" -eq 0 || exit 1
           grep -F "ok 1 - $CASE" "$OUT/current.tap" || exit 1
+          CASE_FINAL='expired during final receiver RESUME facts cannot commit OPEN'
+          (cd "$OLD" && node --test --test-name-pattern="$CASE_FINAL" "$TEST") \
+            > "$OUT/old-final.tap" 2>&1
+          old_final=$?
+          node --test --test-name-pattern="$CASE_FINAL" "$TEST" \
+            > "$OUT/current-final.tap" 2>&1
+          current_final=$?
+          printf '%s\n' "$old_final" > "$OUT/old-final.status"
+          printf '%s\n' "$current_final" > "$OUT/current-final.status"
+          echo "same test final RESUME precommit old=$old_final candidate=$current_final"
+          tail -n 40 "$OUT/old-final.tap"
+          tail -n 32 "$OUT/current-final.tap"
+          test "$old_final" -ne 0 || exit 1
+          grep -F 'a real member may not return CUT_OVER after its release deadline' "$OUT/old-final.tap" || exit 1
+          grep -F "actual: 'cut_over'" "$OUT/old-final.tap" || exit 1
+          test "$current_final" -eq 0 || exit 1
+          grep -F "ok 1 - $CASE_FINAL" "$OUT/current-final.tap" || exit 1
       - name: Scoped lint and existing release/native/transaction interactions
         shell: bash
         run: |
