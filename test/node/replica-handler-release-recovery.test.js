@@ -842,10 +842,20 @@ test('cleanup debt retains all seven acquired resources on the installing schedu
         if (handle === lastObservationTimerHandle(timeSource)) timerHandle = handle;
         return handle;
       };
-      let clockBClears = 0;
+      // The replacement clock also hosts recovery timers. Distinguish its
+      // actual acquisitions from foreign observation-owned handles.
+      const clockBSetDescriptor = Object.getOwnPropertyDescriptor(clockB, 'setTimeout');
+      const clockBSet = clockB.setTimeout.bind(clockB);
+      const clockBHandles = new Set();
+      clockB.setTimeout = (...args) => {
+        const handle = clockBSet(...args);
+        clockBHandles.add(handle);
+        return handle;
+      };
+      let clockBForeignClears = 0;
       const clockBClear = clockB.clearTimeout.bind(clockB);
       clockB.clearTimeout = (handle) => {
-        clockBClears += 1;
+        if (!clockBHandles.has(handle)) clockBForeignClears += 1;
         return clockBClear(handle);
       };
       const timerBaseline = observationTimerOwnedCount(timeSource);
@@ -993,8 +1003,8 @@ test('cleanup debt retains all seven acquired resources on the installing schedu
         }
         faultsEnabled = false;
         await handler.shutdown();
-        assert.equal(clockBClears, 0,
-          'the replacement handler clock never clears an A-owned observation');
+        assert.equal(clockBForeignClears, 0,
+          'replacement scheduler only clears handles it actually acquired');
         assert.equal(observerSubscriptions.size, 0);
         assert.equal(observationTimerOwnedCount(timeSource), timerBaseline);
         assert.equal(registry.serviceListeners.size, registryBaseline);
@@ -1022,6 +1032,7 @@ test('cleanup debt retains all seven acquired resources on the installing schedu
           {owner: timeSource, field: 'clearTimeout', descriptor: clearDescriptor},
           {owner: timeSource, field: 'setTimeout', descriptor: setDescriptor},
           {owner: clockB, field: 'now', descriptor: clockBNowDescriptor},
+          {owner: clockB, field: 'setTimeout', descriptor: clockBSetDescriptor},
         ], 'cleanup-debt assertion');
         // Restore the most recently installed membership gate first, so
         // cleanup after an earlier assertion cannot mask its own failure.
