@@ -1,0 +1,50 @@
+{
+  "schema": "solve-quest/2",
+  "id": "seed-release-bounded-independent-cohort-overlap",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "The fresh-seed bootstrap release owner may overlap independent partition cohort cutovers in a bounded admission window while retaining the original SQL_TRANSACTIONS-first priority, deterministic input-order accountability, one original shared 1000/5000ms deadline, exactly one intent per partition, and all per-cohort authentic membership/control pre/post safety. It must await and account for every admitted operation before reporting startup success/failure, so no orphaned release runs survive a refusal.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/seed-release-bounded-independent-cohort-overlap/evidence/receipt.json",
+      "requiredReceipts": [
+        "actual-serial-budget-exhaustion-and-owner-independence",
+        "same-host-bounded-overlap-falsifier",
+        "exact-startup-both-1000-and-5000-budgets",
+        "failure-drain-current-control-and-single-flight",
+        "independent-review-static-composed-lab"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "scope-and-judgment",
+      "statement": "This is a proposed change of prior seed-release serialization. The previous seed-release-once-per-partition-cohort and original seed-participant-release-applied-position-barrier Quests remain sealed/open with their original acceptance and no automatic supersession. This WIP is not an accepted new contract until explicit owner judgment and independent review; only an isolated branch may test it."
+    },
+    {
+      "id": "separate-authorities",
+      "statement": "The existing bootstrap workflow exclusively selects sorted fresh seed partition release intents; the existing registered replica cutover owner owns true member census, current generation, control validations, write pause, origin and admission. Do not implement a second cutover, control classifier or cached OPEN proof. Reuse existing runParticipantCutover per-partition single-flight for naturally overlapping control requests."
+    },
+    {
+      "id": "existing-resource-bound",
+      "statement": "Bound launched release tasks by the existing bootstrap config.maxConcurrentServiceActions validated positive integer, not a newly invented timeout, parallelism knob, unbounded Promise.all, poll loop or new scheduler. One shared absolute deadline from nodeService timeSource applies to every task, including deferred slots. No per-cohort budget renewal or test budget increase."
+    },
+    {
+      "id": "ordered-results-and-cleanup",
+      "statement": "SQL_TRANSACTIONS is first in stable sorted intent order. All submitted releases retain their individual fresh-seed authorization tokens and exact current per-member and control pre/post revalidation. Launches may overlap; resolve results in input order, and after a failed batch, await all already admitted tasks before propagating the first source-ordered failure. No work may be launched after that failure. No partial success is treated as startup-ready."
+    },
+    {
+      "id": "proof-ceiling",
+      "statement": "Original 1s claim/cache trace is 514 complete calls including 21 SQL_TRANSACTIONS nested releases and ten distinct non-control partitions, zero dropped/unfinished, under the single deadline. Compare exact same test, same physical runner WIP source-only negative and candidate positive. Run genuine original 1s and 5s tests, unsafe/corrupt/close/recovery controls and native V10. A green mock or adjusted budget is never enough; require independent review and locked real distributed evidence before main."
+    }
+  ],
+  "verificationTemplates": [
+    "formation-circularity",
+    "owner-interaction",
+    "concurrency-serialization",
+    "retry-loops",
+    "resource-lifetime",
+    "harness-fidelity"
+  ]
+}
