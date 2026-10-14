@@ -1,0 +1,68 @@
+# The two exact real-startup files from the local-agent V4 handover.
+# Single hosted VM only; never claim this is locked physical-lab certification.
+name: rs-raft-integrated-original-startup
+on:
+  push:
+    branches: [continue/rs-raft-cloud-integrated-release-native-20261014]
+    paths:
+      - .github/workflows/rs-raft-integrated-original-startup.yml
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-integrated-original-startup
+  cancel-in-progress: false
+jobs:
+  startup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install exact dependencies
+        run: npm ci
+      - name: Measure the original bootstrap and claim/cache files without retry
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-integrated-startup
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/head-sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/tree-sha.txt"
+          failed=0
+          for f in \
+            test/bootstrap/node-bootstrap-consistency.property.test.js \
+            test/integration/message-group-membership-claim-cache.integration.test.js; do
+            name="${f##*/}"
+            npm run -s test:file -- "$f" > "$OUT/$name.raw.log" 2>&1
+            status=$?
+            printf '%s\n' "$status" > "$OUT/$name.exit"
+            echo "$f status=$status"
+            tail -n 35 "$OUT/$name.raw.log"
+            if test "$status" -ne 0; then
+              failed=1
+              grep -E 'not ok|fail|reason|phase|deadline|timeout|error|cancel' "$OUT/$name.raw.log" | tail -n 60 || true
+            fi
+            if test -d test-output/reports; then
+              mkdir -p "$OUT/$name.canonical"
+              find test-output/reports -maxdepth 1 -type f -name '*.ndjson' -exec cp {} "$OUT/$name.canonical/" \;
+            fi
+          done
+          exit "$failed"
+      - name: Preserve raw startup failures and canonical results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-integrated-startup-${{ github.sha }}
+          path: test-output/rs-raft-integrated-startup/
+          retention-days: 14
+          if-no-files-found: warn
