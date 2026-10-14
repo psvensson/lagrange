@@ -647,7 +647,9 @@ function resumeRuntimeGroup(group) {
     if (result.outcome === CORE_OK && runtimeHealth === HEALTHY &&
         expectedGeneration === runtimeGeneration && !group.closed &&
         group.inboundWakeDebt === INBOUND_WAKE_DEBT.SHARED_RUNTIME) {
-      if (group.inbound.length > 0) scheduleInboundDrain(group);
+      if (group.inbound.length > 0) {
+        scheduleInboundDrain(group);
+      }
       group.inboundWakeDebt = INBOUND_WAKE_DEBT.NONE;
     }
     return result;
