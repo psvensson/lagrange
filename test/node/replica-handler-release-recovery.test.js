@@ -72,7 +72,10 @@ async function currentResumeRequest(handler, service) {
   assert.equal(facts.outcome, OUTCOME.OBSERVED, JSON.stringify(facts));
   const release = currentReleaseOf(facts);
   assert.notEqual(release, null);
-  return {release, census: [facts]};
+  // The original direct-resume fixture must carry the same finite caller
+  // deadline as a real routed request. Reentry uses the SAME immutable
+  // request, never a renewed budget.
+  return {release, census: [facts], deadlineAtMs: handler.timeSource.now() + 30000};
 }
 
 async function withActualHandler(measure, options = {}) {
