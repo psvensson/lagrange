@@ -1,0 +1,56 @@
+# Redundant independent hosted execution when the broader preflight is held.
+# Original source frozen; this runs only the last-hop adversarial case.
+name: rs-raft-control-proof-resume-race-direct
+on:
+  push:
+    branches: [verify/rs-raft-control-proof-resume-race-20261014]
+    paths: [.github/workflows/rs-raft-control-proof-resume-race-direct.yml]
+permissions:
+  contents: read
+jobs:
+  direct:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Prepare source-frozen original test
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "$(git diff --name-only 47ceb42e4a36757007f0d8006d2014fa1400d9c8 HEAD -- src)"
+          npm ci
+      - name: Unmodified recipient RESUME owner catches post-census schema change
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-resume-race-direct
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/tree.txt"
+          TEST=test/partition/participant-release-protocol.test.js
+          node --test \
+            --test-name-pattern='control current-proof refuses an enforcer mutation at final actual RESUME' \
+            "$TEST" > "$OUT/target.tap" 2>&1
+          rc=$?
+          printf '%s\n' "$rc" > "$OUT/status.txt"
+          cat "$OUT/target.tap" | tail -n 80
+          test "$rc" = 0
+      - name: Preserve bound result regardless of success
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-resume-race-direct-${{ github.sha }}
+          path: test-output/rs-raft-resume-race-direct/
+          retention-days: 14
+          if-no-files-found: warn
