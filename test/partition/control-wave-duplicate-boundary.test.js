@@ -11,6 +11,10 @@ import {createLoopbackTransport} from './partition-service-test-support.js';
 import {ReplicaHandler} from '../../src/node/replica-handler-class.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {runtimeBuildProvenance} from '../../src/diagnostics/runtime-build-provenance.js';
+import {requestParticipantRelease} from '../../src/node/participant-release-client.js';
+import {MEMBERSHIP_OWNER_OUTCOME_TYPE, MEMBERSHIP_OWNER_REASON,
+  STARTUP_JOIN_MODE, TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT} from
+  '../../src/bootstrap/rejoin-hints-constants.js';
 import {SQL_TRANSACTIONS_SCHEMA} from
   '../../src/bootstrap/system-table-workflow-schema-definitions.js';
 import {INITIAL_PARTITION_IDS} from
@@ -20,6 +24,8 @@ import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
   PARTICIPANT_RELEASE_ACTION as ACTION,
   PARTICIPANT_RELEASE_ADMISSION as ADMISSION,
+  PARTICIPANT_RELEASE_CONTROL_WAVE_FIELD as WAVE_FIELD,
+  PARTICIPANT_RELEASE_TRIGGER as TRIGGER,
   PARTICIPANT_RELEASE_TYPE} from
   '../../src/partition/partition-participant-transaction-cutover-constants.js';
 import {participantReleaseAdmissionOf} from
@@ -46,7 +52,7 @@ function collectFailure(first, error, message) {
   return first === null ? error : new AggregateError([first, error], message);
 }
 
-test('two distinct real seed cohorts should share one fenced current-control PAUSE lifecycle',
+test('one canonical wave holds three real control voters across two released native cohorts',
   {timeout: TEST_TIMEOUT_MS}, async () => {
     const transport = createLoopbackTransport();
     const groups = [];
@@ -118,11 +124,44 @@ test('two distinct real seed cohorts should share one fenced current-control PAU
         }
         return Reflect.apply(originalDeliver, this, args);
       };
-      const dependentAnswers = [];
+      const seedProof = Object.freeze({
+        semanticOwner: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.SEMANTIC_OWNER,
+        boundary: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.BOUNDARY,
+        outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.BOOTSTRAP_SEED,
+        startupMode: STARTUP_JOIN_MODE.SEED,
+        reasonCode: MEMBERSHIP_OWNER_REASON.FRESH_SEED,
+        durableStateDetected: false,
+        identityMismatch: false,
+      });
+      const deadlineAtMs = handler.timeSource.now() + RELEASE_BUDGET_MS;
+      const controlAuthorization = handler.participantReleaseAuthorizationOwner
+        .authorizeFreshSeed({partitionId: CONTROL, targetBuildDigest: build.digest,
+          membershipOwnerOutcome: seedProof});
+      assert.notEqual(controlAuthorization, null,
+        'the real fresh-seed token owner accepted the seed contract');
+      let dependentAnswers;
       try {
-        for (const item of DEPENDENTS) {
-          dependentAnswers.push(await release(item.id));
-        }
+        dependentAnswers = await handler.participantReleaseRecovery
+          .withFreshSeedControlWave({
+            targetBuildDigest: build.digest,
+            deadlineAtMs, controlAuthorization,
+            partitionIds: DEPENDENTS.map((item) => item.id),
+          }, async (controlWaveToken) => {
+            const answers = [];
+            for (const item of DEPENDENTS) {
+              const authorization = handler.participantReleaseAuthorizationOwner
+                .authorizeFreshSeed({partitionId: item.id,
+                  targetBuildDigest: build.digest, membershipOwnerOutcome: seedProof});
+              assert.notEqual(authorization, null,
+                'a dependent release needs its own current fresh seed authorization');
+              answers.push(await requestParticipantRelease(handler, {
+                partitionId: item.id, targetBuildDigest: build.digest,
+                trigger: TRIGGER.FRESH_SEED, deadlineAtMs, authorization,
+                [WAVE_FIELD]: controlWaveToken,
+              }));
+            }
+            return answers;
+          });
       } finally {
         transport.deliver = originalDeliver;
       }
