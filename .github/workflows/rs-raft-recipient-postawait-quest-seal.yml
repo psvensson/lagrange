@@ -1,0 +1,53 @@
+# Canonical measured RED seal before touching original recipient production.
+name: rs-raft-recipient-postawait-quest-seal
+on:
+  push:
+    branches: [work/rs-raft-recipient-postawait-fence-20261014]
+    paths: [.github/workflows/rs-raft-recipient-postawait-quest-seal.yml]
+permissions:
+  contents: write
+jobs:
+  red:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Seal still-original recipient source with original measured red
+        shell: bash
+        run: |
+          set -euo pipefail
+          H="$GITHUB_SHA"
+          BASE=7d0042659daaed7d38e9e586454861c21df3d838
+          npm ci
+          test "$(git rev-parse HEAD:src/node/replica-handler-participant-release.js)" = \
+            "$(git rev-parse "$BASE:src/node/replica-handler-participant-release.js")"
+          test "$(git rev-parse HEAD:src/partition/partition-participant-transaction-pause.js)" = \
+            "$(git rev-parse "$BASE:src/partition/partition-participant-transaction-pause.js")"
+          node scripts/solve.js start --id participant-release-recipient-postawait-deadline --json
+          node scripts/solve.js probe --id participant-release-recipient-postawait-deadline --json
+          git diff --check
+          git add solve/quests/participant-release-recipient-postawait-deadline/quest.json solve/quests/participant-release-recipient-postawait-deadline/log.ndjson
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'WIP rs-raft: seal recipient admission post-await deadline Quest RED'
+          git fetch --no-tags origin refs/heads/work/rs-raft-recipient-postawait-fence-20261014
+          test "$(git rev-parse FETCH_HEAD)" = "$H" || {
+            echo 'Concurrent branch movement, refuse seal publication'; exit 1
+          }
+          git push origin HEAD:refs/heads/work/rs-raft-recipient-postawait-fence-20261014
+      - name: Retain original measured red Quest
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-recipient-quest-seal-${{ github.sha }}
+          path: solve/quests/participant-release-recipient-postawait-deadline/
+          retention-days: 14
+          if-no-files-found: warn
