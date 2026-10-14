@@ -365,10 +365,13 @@ test('expired RESUME after awaited current Raft facts cannot reopen SQL control'
       assert.notEqual(authorization, null);
       const deadlineAtMs = clock.now() + 10;
       const originalDeliver = transport.deliver;
-      const port = service.controllablePort;
-      const originalMembership = port.committedMembershipHandler;
+      const originalPort = service.raft;
+      const originalMembership = originalPort.readCommittedMembership;
       assert.equal(typeof originalMembership, 'function',
-        'actual single-replica committed-membership owner must be installed');
+        'actual native committed-membership read must be installed');
+      // The production port is deliberately immutable. Install an exact
+      // per-service test forwarding port instead of mutating the Raft owner.
+      const interceptedPort = Object.create(originalPort);
       let resumeIngress = false;
       let membershipCrossedDeadline = false;
       let resumedRequests = 0;
@@ -382,17 +385,21 @@ test('expired RESUME after awaited current Raft facts cannot reopen SQL control'
         }
         return Reflect.apply(originalDeliver, this, args);
       };
-      port.committedMembershipHandler = async (...args) => {
-        const realMembership = await Reflect.apply(originalMembership, port, args);
-        if (resumeIngress) {
-          membershipReadsDuringResume += 1;
-          if (!membershipCrossedDeadline) {
-            membershipCrossedDeadline = true;
-            clock.advance(11);
+      Object.defineProperty(interceptedPort, 'readCommittedMembership', {
+        value: async (...args) => {
+          const realMembership = await Reflect.apply(originalMembership, originalPort, args);
+          if (resumeIngress) {
+            membershipReadsDuringResume += 1;
+            if (!membershipCrossedDeadline) {
+              membershipCrossedDeadline = true;
+              clock.advance(11);
+            }
           }
-        }
-        return realMembership;
-      };
+          return realMembership;
+        },
+        configurable: true,
+      });
+      service.raft = interceptedPort;
       let failure = null;
       try {
         const answer = await requestParticipantRelease(handler, {
@@ -417,9 +424,7 @@ test('expired RESUME after awaited current Raft facts cannot reopen SQL control'
         failure = error;
       } finally {
         transport.deliver = originalDeliver;
-        if (port.committedMembershipHandler !== originalMembership) {
-          port.committedMembershipHandler = originalMembership;
-        }
+        service.raft = originalPort;
       }
       if (failure !== null) throw failure;
       const retried = await release();
