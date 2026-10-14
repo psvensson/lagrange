@@ -25,6 +25,7 @@ import {PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
   PARTICIPANT_RELEASE_ACTION as ACTION,
   PARTICIPANT_RELEASE_ADMISSION as ADMISSION,
   PARTICIPANT_RELEASE_CONTROL_WAVE_FIELD as WAVE_FIELD,
+  PARTICIPANT_RELEASE_MISSING_FACT as MISSING_FACT,
   PARTICIPANT_RELEASE_TRIGGER as TRIGGER,
   PARTICIPANT_RELEASE_TYPE} from
   '../../src/partition/partition-participant-transaction-cutover-constants.js';
@@ -160,7 +161,7 @@ test('one canonical wave holds three real control voters across two released nat
               ...baseRequest, [WAVE_FIELD]: serializedToken});
             assert.equal(forged.outcome, OUTCOME.UNAVAILABLE,
               'JSON-cloned correlation cannot grant fresh control authority');
-            assert.equal(forged.missingFact, 'current_control_owner_fact');
+            assert.equal(forged.missingFact, MISSING_FACT.CURRENT_CONTROL_OWNER);
             const operatorAuthorization = handler.participantReleaseAuthorizationOwner
               .authorizeOperator({partitionId: first.id, targetBuildDigest: build.digest});
             const foreignKind = await requestParticipantRelease(handler, {
@@ -168,7 +169,7 @@ test('one canonical wave holds three real control voters across two released nat
               [WAVE_FIELD]: controlWaveToken});
             assert.equal(foreignKind.outcome, OUTCOME.UNAVAILABLE,
               'an operator credential cannot join an active fresh-seed wave');
-            assert.equal(foreignKind.missingFact, 'current_control_owner_fact');
+            assert.equal(foreignKind.missingFact, MISSING_FACT.CURRENT_CONTROL_OWNER);
             const eligibleFirstService = groups[1].services[0];
             assert.equal(participantReleaseAdmissionOf(eligibleFirstService).state,
               ADMISSION.CLOSED,
