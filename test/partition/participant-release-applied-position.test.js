@@ -44,6 +44,8 @@ import {
   track,
 } from '../test-helpers/participant-transaction-fixture.js';
 import {replacePrototypeProperty} from '../helpers/hostile-intrinsics.js';
+import {captureParticipantReleaseObservationTimer, observationTimerOwnedCount} from
+  '../test-helpers/participant-release-observer-resource-fixture.js';
 
 beforeEach(resetFixtureSingletons);
 afterEach(clearFixtureSingletons);
@@ -70,6 +72,7 @@ async function withRegisteredObservationOwner(measure, options = {}) {
   let leader = null;
   let handler = null;
   let failure = null;
+  let timerCapture = null;
   const ownSettlement = (owner, settlement) => {
     const promise = Promise.resolve(settlement);
     settlements.push([owner, () => promise]);
@@ -84,10 +87,19 @@ async function withRegisteredObservationOwner(measure, options = {}) {
       dataDir: directory, timeSource: clock});
     handler.registerWithRouter(transport);
     handler.localServices.set(leader.replicaId, leader);
+    timerCapture = captureParticipantReleaseObservationTimer(leader, clock);
     await measure({handler, leader, proposed: started.proposed, transport, clock,
       ownSettlement});
   } catch (error) {
     failure = error;
+  }
+  if (timerCapture !== null) {
+    try {
+      timerCapture.restore();
+    } catch (error) {
+      failure = retainFailure(failure, error,
+        'applied-position timer capture and assertion cleanup failed');
+    }
   }
   failure = await cleanOwnedParticipantFixture({directory, failure,
     label: 'applied-position', operations: [
@@ -182,7 +194,7 @@ test('applied-position client preserves overall and RPC deadlines without strand
         const senderNowMs = clock.now();
         const senderClock = scriptedTimeSource([senderNowMs]);
         const sender = {messageRouter: transport, timeSource: senderClock};
-        const timerBaseline = clock.pendingTimerCount();
+        const timerBaseline = observationTimerOwnedCount(clock);
         const pending = gate.trackSettlement(`${control.label} observation`,
           askParticipantRelease(sender, handler.nodeId, request));
         let failure = null;
@@ -198,7 +210,7 @@ test('applied-position client preserves overall and RPC deadlines without strand
           assert.equal(delivered.payload.deadlineAtMs, request.deadlineAtMs);
           assert.deepEqual(delivered.payload.release, request.release);
           assert.equal(releaseListenerCount(leader), 1);
-          assert.equal(clock.pendingTimerCount(), timerBaseline + 1);
+          assert.equal(observationTimerOwnedCount(clock), timerBaseline + 1);
 
           clock.advance(control.expectedTimeoutMs);
           const answer = await pending;
@@ -210,7 +222,7 @@ test('applied-position client preserves overall and RPC deadlines without strand
           assert.equal(answer.releaseId, request.release.releaseId);
           assert.equal(participantReleaseAdmissionOf(leader).state, ADMISSION.CLOSED);
           assert.equal(releaseListenerCount(leader), 0);
-          assert.equal(clock.pendingTimerCount(), timerBaseline);
+          assert.equal(observationTimerOwnedCount(clock), timerBaseline);
 
           gate.release();
           gate.restore();
@@ -222,7 +234,7 @@ test('applied-position client preserves overall and RPC deadlines without strand
           assert.equal(successor.partitionId, successorRequest.partitionId);
           assert.deepEqual(successor.generation, successorRequest.target);
           assert.equal(releaseListenerCount(leader), 0);
-          assert.equal(clock.pendingTimerCount(), timerBaseline);
+          assert.equal(observationTimerOwnedCount(clock), timerBaseline);
         } catch (error) {
           failure = error;
         } finally {
@@ -345,7 +357,7 @@ test('transport queue delay consumes the carried applied-position RPC window', (
       clock.advance(4000);
       return originalDeliver(address, payload, options);
     };
-    const timerBaseline = clock.pendingTimerCount();
+    const timerBaseline = observationTimerOwnedCount(clock);
     const pending = gate.trackSettlement('queue-delayed observation',
       askParticipantRelease(handler, handler.nodeId, request));
     let failure = null;
@@ -355,7 +367,7 @@ test('transport queue delay consumes the carried applied-position RPC window', (
       assert.equal(delivered.payload.observationDeadlineAtMs, 6000,
         'the sender carries its one start sample instead of an arrival-relative deadline');
       assert.equal(clock.now(), 5000);
-      assert.equal(clock.pendingTimerCount(), timerBaseline + 1);
+      assert.equal(observationTimerOwnedCount(clock), timerBaseline + 1);
       clock.advance(999);
       assert.equal(releaseListenerCount(leader), 1);
       clock.advance(1);
@@ -368,7 +380,7 @@ test('transport queue delay consumes the carried applied-position RPC window', (
       assert.equal(answer.releaseId, request.release.releaseId);
       assert.equal(clock.now(), delivered.payload.observationDeadlineAtMs);
       assert.equal(releaseListenerCount(leader), 0);
-      assert.equal(clock.pendingTimerCount(), timerBaseline);
+      assert.equal(observationTimerOwnedCount(clock), timerBaseline);
     } catch (error) {
       failure = error;
     } finally {
@@ -411,7 +423,7 @@ test('one applied-position observation owns duplicate, conflict and successor li
       {deadlineAtMs: clock.now() + 30000,
         observationDeadlineAtMs: clock.now() + BOUND.REQUEST_TIMEOUT_MS});
     const gate = deferObservationMembership(leader);
-    const timerBaseline = clock.pendingTimerCount();
+    const timerBaseline = observationTimerOwnedCount(clock);
     const starter = gate.trackSettlement('starter observation',
       sendRegisteredObservation(handler, transport, request));
     let failure = null;
@@ -429,7 +441,7 @@ test('one applied-position observation owns duplicate, conflict and successor li
       rawJoin.release.releaseId = 'mutated-after-dispatch';
       assert.equal(gate.reads(), 1, 'matching recipients share one canonical facts read');
       assert.equal(releaseListenerCount(leader), 1);
-      assert.equal(clock.pendingTimerCount(), timerBaseline + 1);
+      assert.equal(observationTimerOwnedCount(clock), timerBaseline + 1);
 
       let topAccessorReads = 0;
       const unsafeJoin = {...request};
@@ -492,7 +504,7 @@ test('one applied-position observation owns duplicate, conflict and successor li
             conflict.request.release.releaseId);
         assert.equal(releaseListenerCount(leader), 1,
           'a conflict cannot detach the current starter');
-        assert.equal(clock.pendingTimerCount(), timerBaseline + 1);
+        assert.equal(observationTimerOwnedCount(clock), timerBaseline + 1);
       }
       assert.equal(coercionReads, 0,
         'nested identity scalars are pinned before hashing or serialization');
@@ -509,7 +521,7 @@ test('one applied-position observation owns duplicate, conflict and successor li
       assert.equal(starterAnswer.releaseId, request.release.releaseId);
       assert.equal(gate.reads(), 1);
       assert.equal(releaseListenerCount(leader), 0);
-      assert.equal(clock.pendingTimerCount(), timerBaseline);
+      assert.equal(observationTimerOwnedCount(clock), timerBaseline);
       gate.restore();
 
       const successorRequest = await currentObservationRequest(handler, leader,
@@ -523,7 +535,7 @@ test('one applied-position observation owns duplicate, conflict and successor li
         assert.equal(successorGate.reads(), 1,
           'the prior starter cleanup cannot remove a fresh successor record');
         assert.equal(releaseListenerCount(leader), 1);
-        assert.equal(clock.pendingTimerCount(), timerBaseline + 1);
+        assert.equal(observationTimerOwnedCount(clock), timerBaseline + 1);
 
         gate.release();
         await gate.finished;
@@ -542,7 +554,7 @@ test('one applied-position observation owns duplicate, conflict and successor li
         assert.equal(conflictAnswer.releaseId, successorRequest.release.releaseId);
         assert.equal(releaseListenerCount(leader), 1,
           'the returned old membership read cannot detach the held successor');
-        assert.equal(clock.pendingTimerCount(), timerBaseline + 1,
+        assert.equal(observationTimerOwnedCount(clock), timerBaseline + 1,
           'the returned old membership read cannot cancel the successor deadline');
 
         successorGate.release();
@@ -552,7 +564,7 @@ test('one applied-position observation owns duplicate, conflict and successor li
         assert.equal(successorAnswer.partitionId, successorRequest.partitionId);
         assert.deepEqual(successorAnswer.generation, successorRequest.target);
         assert.equal(releaseListenerCount(leader), 0);
-        assert.equal(clock.pendingTimerCount(), timerBaseline);
+        assert.equal(observationTimerOwnedCount(clock), timerBaseline);
       } catch (error) {
         successorFailure = error;
       } finally {
@@ -572,7 +584,7 @@ test('one applied-position observation owns duplicate, conflict and successor li
 test('shared ingress refuses unsafe envelopes and facts refuse malformed owner generations', () =>
   withRegisteredObservationOwner(async ({handler, leader, transport, clock}) => {
     const request = await currentObservationRequest(handler, leader);
-    const timerBaseline = clock.pendingTimerCount();
+    const timerBaseline = observationTimerOwnedCount(clock);
     let hostileReads = 0;
     let failure = null;
     const gate = deferObservationMembership(leader);
@@ -611,7 +623,7 @@ test('shared ingress refuses unsafe envelopes and facts refuse malformed owner g
       assert.equal(hostileReads, 0);
       assert.equal(gate.reads(), 0);
       assert.equal(releaseListenerCount(leader), 0);
-      assert.equal(clock.pendingTimerCount(), timerBaseline);
+      assert.equal(observationTimerOwnedCount(clock), timerBaseline);
       const valid = gate.trackSettlement('valid observation after ingress refusals',
         sendRegisteredObservation(handler, transport, request));
       await gate.started;
@@ -654,7 +666,7 @@ test('shared ingress refuses unsafe envelopes and facts refuse malformed owner g
 test('applied-position receiver refuses malformed observation clocks without effects', () =>
   withRegisteredObservationOwner(async ({handler, leader, transport, clock}) => {
     const request = await currentObservationRequest(handler, leader);
-    const timerBaseline = clock.pendingTimerCount();
+    const timerBaseline = observationTimerOwnedCount(clock);
     const missingDeadline = {...request};
     delete missingDeadline.observationDeadlineAtMs;
     assert.equal((await sendRegisteredObservation(handler, transport, missingDeadline)).outcome,
@@ -669,7 +681,7 @@ test('applied-position receiver refuses malformed observation clocks without eff
       assert.equal(answer.releaseId, request.release.releaseId);
       assert.equal(answer.phase, request.action);
       assert.equal(releaseListenerCount(leader), 0);
-      assert.equal(clock.pendingTimerCount(), timerBaseline);
+      assert.equal(observationTimerOwnedCount(clock), timerBaseline);
       assert.equal(participantReleaseAdmissionOf(leader).state, ADMISSION.CLOSED);
     }
 
@@ -683,7 +695,7 @@ test('applied-position receiver refuses malformed observation clocks without eff
       const refusal = await sendRegisteredObservation(handler, transport, request);
       assert.equal(refusal.outcome, OUTCOME.UNAVAILABLE);
       assert.equal(refusal.missingFact, 'replica_release_reply');
-      assert.equal(clock.pendingTimerCount(), timerBaseline);
+      assert.equal(observationTimerOwnedCount(clock), timerBaseline);
       clock.now = () => samples.shift() ?? registrationNow - 1;
       const pending = track(gate.trackSettlement('backward timer observation',
         sendRegisteredObservation(handler, transport, request)));
@@ -698,7 +710,7 @@ test('applied-position receiver refuses malformed observation clocks without eff
       assert.equal(answer.reason,
         TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT);
       assert.equal(releaseListenerCount(leader), 0);
-      assert.equal(clock.pendingTimerCount(), timerBaseline);
+      assert.equal(observationTimerOwnedCount(clock), timerBaseline);
     } catch (error) {
       timerFailure = error;
     } finally {
@@ -891,7 +903,7 @@ test('an applied-progress wake reflected by the first facts read needs no forced
       {purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS});
     const request = await currentObservationRequest(handler, leader);
     const gate = deferObservationMembership(leader);
-    const timerBaseline = clock.pendingTimerCount();
+    const timerBaseline = observationTimerOwnedCount(clock);
     const observation = gate.trackSettlement('fresh-first-read observation',
       sendRegisteredObservation(handler, transport, request));
     let failure = null;
@@ -918,7 +930,7 @@ test('an applied-progress wake reflected by the first facts read needs no forced
         anchoredMembership.membershipGenerationIndex,
         'an ordinary command does not advance membership generation');
       assert.equal(releaseListenerCount(leader), 0);
-      assert.equal(clock.pendingTimerCount(), timerBaseline);
+      assert.equal(observationTimerOwnedCount(clock), timerBaseline);
     } catch (error) {
       failure = error;
     } finally {
