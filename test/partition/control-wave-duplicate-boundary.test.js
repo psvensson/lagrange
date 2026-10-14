@@ -12,6 +12,7 @@ import {ReplicaHandler} from '../../src/node/replica-handler-class.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {runtimeBuildProvenance} from '../../src/diagnostics/runtime-build-provenance.js';
 import {requestParticipantRelease} from '../../src/node/participant-release-client.js';
+import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {MEMBERSHIP_OWNER_OUTCOME_TYPE, MEMBERSHIP_OWNER_REASON,
   STARTUP_JOIN_MODE, TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT} from
   '../../src/bootstrap/rejoin-hints-constants.js';
@@ -23,6 +24,7 @@ import {TABLES} from '../../src/constants/tables.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
   PARTICIPANT_RELEASE_ACTION as ACTION,
+  PARTICIPANT_CUTOVER_BOUND as BOUND,
   PARTICIPANT_RELEASE_ADMISSION as ADMISSION,
   PARTICIPANT_RELEASE_CONTROL_WAVE_FIELD as WAVE_FIELD,
   PARTICIPANT_RELEASE_MISSING_FACT as MISSING_FACT,
@@ -87,8 +89,19 @@ test('one canonical wave holds three real control voters across two released nat
       const controlLeader = control.services.find((service) =>
         service.raft.readStatus().role === RAFT_ROLE.LEADER);
       assert.ok(controlLeader, 'the three control voters have a real leader');
+      // The single original release-recovery owner sees one controllable
+      // clock for BOTH its deadlines and its retry timer. Actual SQL and
+      // Raft recipient implementations and the registered router are real.
+      const recoveryClock = new VirtualTimeSource({startMs: Date.now()});
+      const recoveryTimers = [];
+      const setRecoveryTimer = recoveryClock.setTimeout.bind(recoveryClock);
+      recoveryClock.setTimeout = (callback, delay, ...args) => {
+        const handle = setRecoveryTimer(callback, delay, ...args);
+        recoveryTimers.push({delay, acquiredAtMs: recoveryClock.now(), handle});
+        return handle;
+      };
       handler = new ReplicaHandler({
-        nodeId: NODE, ownerIncarnation: 1,
+        nodeId: NODE, ownerIncarnation: 1, timeSource: recoveryClock,
         systemTableCache: controlLeader.systemTableCache,
         cdcIntegrationService: {},
         createPartitionService: (options) => new PartitionService(options),
@@ -176,6 +189,31 @@ test('one canonical wave holds three real control voters across two released nat
             assert.equal(participantReleaseAdmissionOf(eligibleFirstService).state,
               ADMISSION.CLOSED,
               'neither forgery can reopen the still-unreleased dependent');
+            // The held wave already owns progress. Waking the existing
+            // release-recovery queue must not keep running the *same*
+            // control RELEASE every RECOVERY_RETRY_MS and bouncing back
+            // from the canonical RUNS hold. It must keep event/retry
+            // ownership available for a *failed* terminal wave.
+            const firstRecoveryTimer = recoveryTimers.length;
+            handler.participantReleaseRecovery.requestRecovery(CONTROL);
+            const settleRecoveryTurn = async () => {
+              for (let turn = 0; turn < 8; turn += 1) {
+                await new Promise((resolve) => setImmediate(resolve));
+              }
+            };
+            recoveryClock.advance(0);
+            await settleRecoveryTurn();
+            for (let turn = 0; turn < 3; turn += 1) {
+              recoveryClock.advance(BOUND.RECOVERY_RETRY_MS);
+              await settleRecoveryTurn();
+            }
+            const waveRetryTimers = recoveryTimers.slice(firstRecoveryTimer)
+              .filter(({delay}) => delay === BOUND.RECOVERY_RETRY_MS);
+            assert.equal(waveRetryTimers.length, 0,
+              'held control RUNS must not ping-pong a second recovery driver');
+            assert.equal(participantReleaseAdmissionOf(controlLeader).state,
+              ADMISSION.CLOSED,
+              'recovery deferred to wave owner without reopening admission');
             for (const item of DEPENDENTS) {
               const authorization = handler.participantReleaseAuthorizationOwner
                 .authorizeFreshSeed({partitionId: item.id,
