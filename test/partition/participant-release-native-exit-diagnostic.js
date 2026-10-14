@@ -11,7 +11,8 @@ const NATIVE_STAGE_EVENT_CAP = 32;
 function createNativeDrainStageCapture(partitionId, replicaIds) {
   const records = {};
   for (const replicaId of replicaIds) {
-    records[replicaId] = {requests: 0, retryRequests: 0,
+    records[replicaId] = {accepted: 0, acceptedWithTimer: 0,
+      coalesced: 0, requests: 0, retryRequests: 0,
       callbacks: 0, persistenceWaits: 0, turnRequests: 0,
       closedOrEmpty: 0, waitBound: 0, other: 0,
       events: 0, overflow: 0, lastStage: null};
@@ -27,6 +28,11 @@ function createNativeDrainStageCapture(partitionId, replicaIds) {
     }
     record.lastStage = event.stage;
     switch (event.stage) {
+      case NATIVE_INBOUND_STAGE.ACCEPTED:
+        record.accepted += 1;
+        if (event.scheduled) record.acceptedWithTimer += 1;
+        break;
+      case NATIVE_INBOUND_STAGE.COALESCED: record.coalesced += 1; break;
       case NATIVE_INBOUND_STAGE.REQUEST: record.requests += 1; break;
       case NATIVE_INBOUND_STAGE.RETRY_REQUEST: record.retryRequests += 1; break;
       case NATIVE_INBOUND_STAGE.CALLBACK: record.callbacks += 1; break;
