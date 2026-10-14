@@ -44,12 +44,13 @@ jobs:
             audit:file-size:strict \
             test:duplication:strict \
             lint; do
-            npm run -s "$entry" > "$OUT/$entry.log" 2>&1
+            label="${entry//:/_}"
+            npm run -s "$entry" > "$OUT/$label.log" 2>&1
             code=$?
-            printf '%s\n' "$code" > "$OUT/$entry.status"
+            printf '%s\n' "$code" > "$OUT/$label.status"
             echo "$entry status=$code"
             if test "$code" -ne 0; then
-              grep -E 'ERROR|error|fail|exceeded|stale|baseline|not found' "$OUT/$entry.log" | tail -n 16 || true
+              tail -n 30 "$OUT/$label.log" || true
               all_ok=1
             fi
           done
