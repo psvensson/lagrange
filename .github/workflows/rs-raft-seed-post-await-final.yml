@@ -1,0 +1,50 @@
+name: rs-raft-seed-post-await-final
+on:
+  push:
+    branches: [verify/rs-raft-seed-late-reply-fence-20261014]
+    paths: [.github/workflows/rs-raft-seed-post-await-final.yml]
+permissions:
+  contents: read
+jobs:
+  focused:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+      - run: npm ci
+      - name: Execute exact source and retain each original test
+        shell: bash
+        run: |
+          set +e
+          OUT=test-output/rs-raft-post-await-final
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/sha.txt"
+          failed=0
+          for file in test/scripts/participant-release-trace-envelope.test.js test/bootstrap/seed-release-once-per-cohort.test.js test/integration/message-group-membership-claim-cache.integration.test.js test/partition/participant-release-protocol.test.js test/partition/partition-participant-transaction-apply.test.js test/raft/raft-rs-backend/zero-legacy-consensus-runtime.test.js; do
+            name="${file##*/}"
+            npm run -s test:file -- "$file" > "$OUT/$name.log" 2>&1
+            rc=$?
+            echo "$rc" > "$OUT/$name.status"
+            echo "$file status=$rc"
+            tail -n 10 "$OUT/$name.log" | cut -c 1-500
+            if test "$rc" -ne 0; then failed=1; fi
+            if test -f ".tap/test-results/$file.tap"; then
+              cp ".tap/test-results/$file.tap" "$OUT/$name.full.tap"
+            fi
+          done
+          exit "$failed"
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-post-await-final-${{ github.sha }}
+          path: test-output/rs-raft-post-await-final/
+          retention-days: 14
