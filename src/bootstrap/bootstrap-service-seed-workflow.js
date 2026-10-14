@@ -351,8 +351,17 @@ function createBootstrapServiceSeedWorkflowMethods() {
           await this.sleep(Math.min(retryAfterMs,
             Math.max(0, deadline - timeSource.now())));
         } while (timeSource.now() <= deadline);
-        if (answer?.outcome !== PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER) {
-          const terminalObservation = readParticipantReleaseClock(timeSource);
+        // The original transport may return a legitimate CUT_OVER reply
+        // *after* the seed's absolute deadline. That durable outcome remains
+        // evidence, but it cannot independently publish TRAFFIC_READY once
+        // the seed owner has exhausted its original bounded release window.
+        // One clock read owns this final classification; no new timer, retry
+        // or second release decision is introduced here.
+        const terminalMs = timeSource.now();
+        const timely = Number.isSafeInteger(terminalMs) &&
+          terminalMs >= startMs && terminalMs < deadline;
+        if (answer?.outcome !== PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER || !timely) {
+          const terminalObservation = observeParticipantReleaseClockValue(terminalMs);
           const seedRelease = seedReleaseFailureProjection({startObservation,
             terminalObservation, budgetMs, ordinal: completed + 1,
             total: cohorts.length, completed, attemptCount, firstBlockedDrain,
