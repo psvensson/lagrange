@@ -272,6 +272,13 @@ async function resumeParticipantCutoverAdmission(handler, service, request) {
   const status = service.raft.readStatus();
   if (refuseStaleResume(handler, service) !== null ||
       !finalResumeFactsMatch(handler, service, facts, request, status)) return OUTCOME.STALE;
+  // This is the only physical CLOSED -> OPEN commit. No await intervenes
+  // between this clock check and the original admission mutation. The outer
+  // recipient's check before awaiting facts cannot authorize a late RESUME.
+  const nowMs = handler.timeSource?.now?.();
+  if (!Number.isSafeInteger(nowMs) ||
+      !Number.isSafeInteger(request.deadlineAtMs) ||
+      nowMs >= request.deadlineAtMs) return OUTCOME.UNAVAILABLE;
   ADMISSIONS.set(service, Object.freeze({...current, state: ADMISSION.OPEN,
     releaseId: request.release.releaseId, proof: Object.freeze({term: status.term,
       leaderId: status.leaderId, configurationKey: status.configurationKey,
