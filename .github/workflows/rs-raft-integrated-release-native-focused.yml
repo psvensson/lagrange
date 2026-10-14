@@ -1,4 +1,5 @@
 # Exact-blob composition validation, not a Quest landing or cutover.
+# Run on exact composition after the canonical producer finished at 42e704f11.
 name: rs-raft-integrated-release-native-focused
 on:
   push:
