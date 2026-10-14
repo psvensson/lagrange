@@ -12,7 +12,8 @@ import {raiseParticipantCutoverPause, readParticipantReleaseFacts} from
 import {readPartitionWriteOrigin} from
   '../partition/partition-participant-transaction-store.js';
 import {isReleaseDrained, releaseAnswer, releaseCensusDefect, releaseIdentityOf,
-  releaseIdentityValid, releaseMemberIds} from
+  releaseIdentityValid, releaseMemberIds, originEqual,
+  sameReplicaGeneration} from
   '../partition/partition-participant-release-contract.js';
 import {askParticipantRelease, releaseNodeOfAddress, requestParticipantRelease} from
   './participant-release-client.js';
@@ -27,7 +28,9 @@ import {TRANSACTION_SCHEMA_ENFORCEMENT_STATE} from
   '../query/distributed/distributed-transaction-schema-enforcement.js';
 import {PARTICIPANT_RELEASE_ACTION as ACTION, PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
   PARTICIPANT_CUTOVER_BOUND as BOUND,
-  PARTICIPANT_RELEASE_MISSING_FACT as MISSING_FACT} from
+  PARTICIPANT_RELEASE_CONTROL_WAVE_FIELD as WAVE_FIELD,
+  PARTICIPANT_RELEASE_MISSING_FACT as MISSING_FACT,
+  PARTICIPANT_RELEASE_TRIGGER as TRIGGER} from
   '../partition/partition-participant-transaction-cutover-constants.js';
 
 const RUNS = new WeakMap();
@@ -150,6 +153,9 @@ function controlReleaseAnswerValid(answer, targetBuildDigest) {
 
 async function releaseControlOwnerFirst(handler, service, request) {
   if (service.tableName === TABLES.SQL_TRANSACTIONS) return null;
+  if (Object.hasOwn(request, WAVE_FIELD)) {
+    return currentSeedControlWave(handler, request);
+  }
   const partitionId = INITIAL_PARTITION_IDS[TABLES.SQL_TRANSACTIONS];
   const localControlLeader = [...handler.localServices.values()].find((candidate) =>
     candidate.initialized && !candidate.isShutdown &&
@@ -196,6 +202,189 @@ function cleanCurrentControlCohort(service, release, attempt, census) {
       facts.queryCensus.enforcement?.state ===
         TRANSACTION_SCHEMA_ENFORCEMENT_STATE.ENFORCED) &&
     releaseCensusDefect(release, census, local, {attempt}) === null;
+}
+
+// RUNS is the one authoritative in-flight cutover owner. A seed wave is one
+// exceptional, bounded *held CLOSED* control invocation on that same key.
+// Its opaque token only correlates callers; each check re-reads authoritative
+// current member facts and validates the original seed authorization.
+const SEED_WAVE_KIND = 'seed-control-wave';
+const SEED_WAVE_STATE = Object.freeze({
+  PREPARING: 'preparing', HELD: 'held', ENDING: 'ending', RETIRED: 'retired',
+});
+const CONTROL_PARTITION = INITIAL_PARTITION_IDS[TABLES.SQL_TRANSACTIONS];
+
+function runsFor(handler) {
+  let runs = RUNS.get(handler);
+  if (runs === undefined) {
+    runs = new Map();
+    RUNS.set(handler, runs);
+  }
+  return runs;
+}
+
+function sameWaveMember(held, current) {
+  return held !== undefined && current !== undefined &&
+    sameReplicaGeneration(held.generation, current.generation) &&
+    originEqual(held.origin, current.origin) &&
+    held.queryCensus?.rowGenerationDigest === current.queryCensus?.rowGenerationDigest &&
+    held.queryCensus?.enforcement?.schemaDigest ===
+      current.queryCensus?.enforcement?.schemaDigest &&
+    held.queryCensus?.enforcement?.enforcerDigest ===
+      current.queryCensus?.enforcement?.enforcerDigest;
+}
+
+function waveMemberCensusCurrent(record, current) {
+  const {service, release, attempt, census} = record;
+  if (!Array.isArray(current) || current.length !== census.length ||
+      !cleanCurrentControlCohort(service, release, attempt, current)) return false;
+  return current.every((facts) => sameWaveMember(
+    census.find((held) => held.generation.replicaId === facts.generation.replicaId),
+    facts));
+}
+
+async function readWaveCensus(handler, record) {
+  if (handler.shuttingDown || record.service.isShutdown ||
+      handler.localServices.get(record.service.replicaId) !== record.service ||
+      localLeader(handler, {partitionId: CONTROL_PARTITION}) !== record.service) {
+    return null;
+  }
+  const current = await readCohort(handler, CONTROL_PARTITION, record.cohort,
+    record.deadlineAtMs);
+  return unavailableCensus(current) === null &&
+    waveMemberCensusCurrent(record, current) ? current : null;
+}
+
+function waveRefusal(request, fact = MISSING_FACT.CURRENT_CONTROL_OWNER) {
+  return attemptRefusal(request, OUTCOME.UNAVAILABLE,
+    {missingFact: fact, controlPartitionId: CONTROL_PARTITION});
+}
+
+async function currentSeedControlWave(handler, request) {
+  const record = RUNS.get(handler)?.get(CONTROL_PARTITION);
+  if (record?.kind !== SEED_WAVE_KIND ||
+      record.state !== SEED_WAVE_STATE.HELD ||
+      record.token !== request[WAVE_FIELD] ||
+      request.trigger !== TRIGGER.FRESH_SEED ||
+      request.deadlineAtMs !== record.deadlineAtMs ||
+      request.targetBuildDigest !== record.targetBuildDigest ||
+      !record.partitions.includes(request.partitionId) ||
+      !handler.participantReleaseAuthorizationOwner.validatesFreshSeed(
+        request.authorization, {partitionId: request.partitionId,
+          targetBuildDigest: request.targetBuildDigest})) {
+    return waveRefusal(request);
+  }
+  if (handler.timeSource.now() >= record.deadlineAtMs) {
+    return waveRefusal(request, MISSING_FACT.RELEASE_DEADLINE);
+  }
+  const current = await readWaveCensus(handler, record);
+  return current === null ? waveRefusal(request) : null;
+}
+
+// This is explicitly a single-process fresh-SEED owner interaction. A
+// serialized JSON transport copies the token, so remote or replayed calls
+// cannot pass identity and must remain unavailable until normal recovery.
+async function withFreshSeedControlWave(handler, options, execute) {
+  const {targetBuildDigest, deadlineAtMs, controlAuthorization, partitionIds} = options;
+  if (typeof execute !== 'function' || handler.shuttingDown ||
+      !Array.isArray(partitionIds) || partitionIds.length === 0 ||
+      new Set(partitionIds).size !== partitionIds.length ||
+      partitionIds.includes(CONTROL_PARTITION) ||
+      !Number.isSafeInteger(deadlineAtMs) ||
+      handler.timeSource.now() >= deadlineAtMs ||
+      !handler.participantReleaseAuthorizationOwner.validatesFreshSeed(
+        controlAuthorization, {partitionId: CONTROL_PARTITION, targetBuildDigest})) {
+    throw new Error('Fresh-seed current-control wave authority unavailable');
+  }
+  const runs = runsFor(handler);
+  if (runs.has(CONTROL_PARTITION)) {
+    throw new Error('Current control owner has an earlier release obligation');
+  }
+  const record = {kind: SEED_WAVE_KIND, state: SEED_WAVE_STATE.PREPARING,
+    targetBuildDigest, deadlineAtMs, token: Object.freeze(Object.create(null)),
+    partitions: Object.freeze([...partitionIds]), service: null,
+    cohort: null, release: null, attempt: null, census: null};
+  runs.set(CONTROL_PARTITION, record);
+  let error = null;
+  let value;
+  let paused = false;
+  try {
+    const request = {partitionId: CONTROL_PARTITION, targetBuildDigest,
+      deadlineAtMs, trigger: TRIGGER.FRESH_SEED,
+      authorization: controlAuthorization};
+    const leader = localLeader(handler, request);
+    if (leader === null || leader.raft?.readStatus().role !== RAFT_ROLE.LEADER) {
+      throw new Error('Fresh-seed control leader unavailable');
+    }
+    // Existing durable origin decides whether initial full release is needed.
+    // This read does NOT grant permission: the full pause/census below does.
+    if (readPartitionWriteOrigin(leader.db) === null) {
+      const initial = await runCutoverAttempt(handler, request);
+      if (initial.outcome !== OUTCOME.CUT_OVER) {
+        throw new Error('Initial SQL control release refused: ' +
+          JSON.stringify(initial));
+      }
+    }
+    if (handler.timeSource.now() >= deadlineAtMs) {
+      throw new Error('Fresh-seed control wave deadline expired');
+    }
+    record.service = leader;
+    raiseParticipantCutoverPause(leader);
+    paused = true;
+    const own = await readParticipantReleaseFacts(handler, leader,
+      COMMITTED_MEMBERSHIP_READ_PURPOSE.RETIREMENT);
+    if (own.outcome !== OUTCOME.OBSERVED) {
+      throw new Error('Current control leader facts unavailable');
+    }
+    const release = releaseIdentityOf({partitionId: CONTROL_PARTITION,
+      targetBuildDigest, configurationKey: own.membership.configurationKey,
+      membershipGenerationIndex: own.membership.membershipGenerationIndex});
+    const cohort = cohortOf(handler, own);
+    if (release === null || cohort === null) {
+      throw new Error('Current control committed cohort unavailable');
+    }
+    const attempt = Object.freeze({leaderReplicaId: leader.replicaId,
+      term: own.membership.term, leaderLifecycleIncarnation: own.generation.lifecycleIncarnation,
+      deadlineAtMs});
+    const before = await readCohort(handler, CONTROL_PARTITION, cohort, deadlineAtMs);
+    if (unavailableCensus(before) !== null) {
+      throw new Error('Current control initial member census unavailable');
+    }
+    const held = await actOnCohort(handler, release, attempt, ACTION.PAUSE, before);
+    if (unavailableCensus(held) !== null ||
+        !cleanCurrentControlCohort(leader, release, attempt, held)) {
+      throw new Error('Current control member PAUSE or drain unavailable');
+    }
+    Object.assign(record, {release, cohort, attempt, census: held,
+      state: SEED_WAVE_STATE.HELD});
+    try {
+      value = await execute(record.token);
+    } catch (cause) {
+      error = cause;
+    }
+    record.state = SEED_WAVE_STATE.ENDING;
+    if (handler.timeSource.now() >= deadlineAtMs) {
+      throw new Error('Current control wave END deadline expired');
+    }
+    const current = await readWaveCensus(handler, record);
+    if (current === null) throw new Error('Current control wave END census refused');
+    const resumed = await actOnCohort(handler, release, attempt, ACTION.RESUME,
+      current, {census: current});
+    if (resumed.some((answer) => answer.outcome !== OUTCOME.RESUMED)) {
+      throw new Error('Current control wave final member RESUME refused');
+    }
+  } catch (cause) {
+    error = error === null ? cause :
+      new AggregateError([error, cause], 'seed control wave AND cleanup refused');
+  } finally {
+    record.state = SEED_WAVE_STATE.RETIRED;
+    if (runs.get(CONTROL_PARTITION) === record) runs.delete(CONTROL_PARTITION);
+    // Existing release recovery has the ONLY retry path for any still-CLOSED
+    // control member; never grant OPEN from a timed-out volatile session.
+    if (paused) handler.participantReleaseRecovery?.requestRecovery(CONTROL_PARTITION);
+  }
+  if (error !== null) throw error;
+  return value;
 }
 
 async function proveCurrentControlCohort(handler, service, request,
@@ -370,13 +559,12 @@ async function joinParticipantCutover(handler, current) {
 }
 
 async function runParticipantCutover(handler, request) {
-  let runs = RUNS.get(handler);
-  if (runs === undefined) {
-    runs = new Map();
-    RUNS.set(handler, runs);
-  }
+  const runs = runsFor(handler);
   const current = runs.get(request.partitionId);
   if (current) {
+    // A held control wave has no ordinary CUT_OVER promise to join. Recovery
+    // and unrelated operator attempts cannot accidentally reopen its members.
+    if (current.kind === SEED_WAVE_KIND) return waveRefusal(request);
     return current.targetBuildDigest === request.targetBuildDigest ?
       joinParticipantCutover(handler, current) : releaseAnswer(OUTCOME.INVALID, request);
   }
@@ -394,4 +582,4 @@ async function runParticipantCutover(handler, request) {
   }
 }
 
-export {runParticipantCutover};
+export {runParticipantCutover, withFreshSeedControlWave};
