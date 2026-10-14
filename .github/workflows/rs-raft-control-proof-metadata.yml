@@ -1,4 +1,5 @@
 # Producer-only metadata custody on the control release WIP branch.
+# Regenerate against exact canonical SQL_TRANSACTIONS fixture candidate.
 name: rs-raft-control-proof-metadata
 on:
   push:
