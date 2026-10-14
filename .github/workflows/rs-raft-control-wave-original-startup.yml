@@ -6,6 +6,12 @@ on:
     branches: [work/rs-raft-seed-control-wave-v1-20261014]
     paths:
       - .github/workflows/rs-raft-control-wave-original-startup.yml
+      - src/bootstrap/bootstrap-service-seed-workflow.js
+      - src/node/replica-handler-participant-cutover.js
+      - src/node/replica-handler-release-recovery.js
+      - src/node/participant-release-authorization-owner.js
+      - src/partition/partition-participant-transaction-cutover-constants.js
+      - test/bootstrap/seed-release-once-per-cohort.test.js
 permissions:
   contents: read
 jobs:
