@@ -228,3 +228,35 @@ test('seed must not claim readiness from a successful delivery observed after it
     assert.equal(failure.seedRelease.budgetMs, budgetMs);
     assert.ok(clock.now() > 101000);
   });
+
+test('seed still accepts a release reply received just before deadline', async () => {
+  const clock = new VirtualTimeSource({startMs: 200000});
+  const budgetMs = 1000;
+  let delivered = 0;
+  const owner = {
+    partitionServices: new Map([['control',
+      localReplica(CONTROL, TABLES.SQL_TRANSACTIONS, 'control')]]),
+    nodeService: {getTimeSource: () => clock},
+    config: {leadershipWaitTimeoutMs: budgetMs},
+    replicaHandler: {
+      nodeId: 'on-time-control',
+      timeSource: clock,
+      participantReleaseAuthorizationOwner: {
+        authorizeFreshSeed() {return Object.freeze({kind: 'fixture'});},
+      },
+      messageRouter: {
+        deliver(_address, request) {
+          assert.equal(request.deadlineAtMs, 201000);
+          delivered += 1;
+          clock.advance(999);
+          return Promise.resolve({acknowledged: true, deliveryState: 'delivered',
+            [PARTICIPANT_RELEASE_RESULT_FIELD]: {outcome: OUTCOME.CUT_OVER}});
+        },
+      },
+    },
+  };
+  await createBootstrapServiceSeedWorkflowMethods()
+    .releaseSeedParticipantCohorts.call(owner);
+  assert.equal(delivered, 1);
+  assert.equal(clock.now(), 200999);
+});
