@@ -1,0 +1,168 @@
+# WIP composed rs-raft candidate. No main merge or acceptance promotion.
+# Tests use actual original source at the exact GitHub commit; no retries.
+name: rs-raft-wave-realistic-budget-gates
+on:
+  push:
+    branches: [integrate/rs-raft-wave-realistic-budget-20261014]
+    paths:
+      - .github/workflows/rs-raft-wave-realistic-budget-gates.yml
+      - src/bootstrap/bootstrap-service-seed-workflow.js
+      - src/node/replica-handler-participant-cutover.js
+      - src/node/replica-handler-release-recovery.js
+      - src/node/participant-release-authorization-owner.js
+      - test/bootstrap/seed-release-once-per-cohort.test.js
+      - test/integration/message-group-membership-claim-cache.integration.test.js
+      - test/partition/control-wave-duplicate-boundary.test.js
+      - scripts/quest-evidence/participant-release-trace-envelope.mjs
+      - scripts/quest-evidence/summarize-seed-release-trace.mjs
+      - test/shards/impact-graph-seal.json
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-wave-realistic-budget-gates
+  cancel-in-progress: false
+jobs:
+  focused:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 38
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - run: npm ci
+      - name: Exact composed source and fast safety/recovery gates
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-wave-composed-focused
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/source-sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/source-tree.txt"
+          failed=0
+          npx eslint \
+            src/bootstrap/bootstrap-service-seed-workflow.js \
+            src/node/replica-handler-participant-cutover.js \
+            src/node/replica-handler-release-recovery.js \
+            src/node/participant-release-authorization-owner.js \
+            test/bootstrap/seed-release-once-per-cohort.test.js \
+            test/partition/control-wave-duplicate-boundary.test.js \
+            test/integration/message-group-membership-claim-cache.integration.test.js \
+            scripts/quest-evidence/participant-release-trace-envelope.mjs \
+            scripts/quest-evidence/summarize-seed-release-trace.mjs \
+            > "$OUT/scoped-lint.log" 2>&1
+          lint=$?
+          printf '%s\n' "$lint" > "$OUT/lint.status"
+          if test "$lint" != 0; then
+            failed=1
+            tail -n 55 "$OUT/scoped-lint.log"
+          fi
+          for task in audit:no-legacy-consensus-references audit:owner-boundary-segments; do
+            slug="${task//:/-}"
+            npm run -s "$task" > "$OUT/$slug.log" 2>&1
+            status=$?
+            printf '%s\n' "$status" > "$OUT/$slug.status"
+            echo "$task status=$status"
+            if test "$status" != 0; then failed=1; tail -n 35 "$OUT/$slug.log"; fi
+          done
+          for file in \
+            test/quest-evidence/participant-release-trace-envelope.test.js \
+            test/bootstrap/seed-release-once-per-cohort.test.js \
+            test/partition/control-wave-duplicate-boundary.test.js \
+            test/partition/participant-release-protocol.test.js \
+            test/node/replica-handler-release-recovery.test.js \
+            test/raft/raft-rs-backend/inbound-drain-owned-timer.test.js \
+            test/bootstrap/node-bootstrap-consistency.property.test.js \
+            test/raft/raft-rs-backend/zero-legacy-consensus-runtime.test.js; do
+            slug="${file##*/}"
+            npm run -s test:file -- "$file" > "$OUT/$slug.log" 2>&1
+            status=$?
+            printf '%s\n' "$status" > "$OUT/$slug.status"
+            echo "$file status=$status"
+            tail -n 14 "$OUT/$slug.log" | cut -c 1-420
+            if test "$status" != 0; then failed=1; fi
+            if test -f ".tap/test-results/$file.tap"; then
+              cp ".tap/test-results/$file.tap" "$OUT/$slug.full.tap"
+            fi
+            if test -d test-output/reports; then
+              mkdir -p "$OUT/$slug.canonical"
+              find test-output/reports -maxdepth 1 -type f -name '*.ndjson' \
+                -exec cp {} "$OUT/$slug.canonical/" \;
+            fi
+          done
+          exit "$failed"
+      - name: Preserve all red and green exact-source receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-wave-composed-focused-${{ github.sha }}
+          path: test-output/rs-raft-wave-composed-focused/
+          retention-days: 14
+          if-no-files-found: warn
+  original-integration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 26
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - run: npm ci
+      - name: Actual 45-partition SQL Raft CDC claim/cache test under explicit hardware budget
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-wave-composed-original
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/source-sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/source-tree.txt"
+          FILE=test/integration/message-group-membership-claim-cache.integration.test.js
+          sha256sum "$FILE" > "$OUT/original-test-sha256.txt"
+          npm run -s test:file -- "$FILE" > "$OUT/run.log" 2>&1
+          result=$?
+          printf '%s\n' "$result" > "$OUT/original-body.status"
+          echo "original complete SQL/Raft/CDC status=$result"
+          tail -n 32 "$OUT/run.log" | cut -c 1-1100
+          RAW=".tap/test-results/$FILE.tap"
+          if test -f "$RAW"; then
+            cp "$RAW" "$OUT/original-full.tap"
+            sha256sum "$RAW" > "$OUT/original-full.sha256"
+            node scripts/quest-evidence/summarize-seed-release-trace.mjs \
+              "$RAW" "$OUT/census.json" > "$OUT/census-line.json" 2> "$OUT/census-error.log"
+            observed=$?
+            printf '%s\n' "$observed" > "$OUT/census.status"
+            if test "$observed" = 0; then cat "$OUT/census-line.json"; else cat "$OUT/census-error.log"; fi
+          else
+            echo 'Missing complete source-bound original TAP'
+            observed=1
+          fi
+          if test -d test-output/reports; then
+            find test-output/reports -maxdepth 1 -type f -name '*.ndjson' \
+              -exec cp {} "$OUT/" \;
+          fi
+          test "$result" = 0 && test "$observed" = 0
+      - name: Preserve full original response and canonical trace even if red
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-wave-composed-original-${{ github.sha }}
+          path: test-output/rs-raft-wave-composed-original/
+          retention-days: 14
+          if-no-files-found: warn
