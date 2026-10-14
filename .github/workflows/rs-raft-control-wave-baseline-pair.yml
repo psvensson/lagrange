@@ -1,0 +1,72 @@
+# Diagnostic-only same-host comparison of legacy full control re-release
+# and the newer single-PAUSE-census source. The actual three native control
+# voters and both dependent groups are untouched, with identical test bytes.
+name: rs-raft-control-wave-baseline-pair
+on:
+  push:
+    branches: [design/rs-raft-seed-control-wave-20261014]
+    paths: [.github/workflows/rs-raft-control-wave-baseline-pair.yml]
+permissions:
+  contents: read
+jobs:
+  pair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Two real native old-owner implementations and identical original test
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OLD=47ceb42e4a36757007f0d8006d2014fa1400d9c8
+          RECENT=c0c71e6011d3a4ccbe4f1a874240a5c51ca251ee
+          TEST=test/partition/control-wave-duplicate-boundary.test.js
+          OUT="$GITHUB_WORKSPACE/test-output/rs-raft-wave-baseline-pair"
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/test-source.txt"
+          sha256sum "$TEST" > "$OUT/test-sha256.txt"
+          for entry in "first:$OLD" "oneCensus:$RECENT"; do
+            label="${entry%%:*}"
+            ref="${entry#*:}"
+            ROOT="$RUNNER_TEMP/rs-raft-wave-baseline-$label"
+            git worktree add --detach "$ROOT" "$ref" > "$OUT/$label.worktree.log" 2>&1
+            if test "$?" != 0; then exit 1; fi
+            cp "$TEST" "$ROOT/$TEST" || exit 1
+            cmp "$TEST" "$ROOT/$TEST" || exit 1
+            git -C "$ROOT" rev-parse HEAD > "$OUT/$label.sha.txt"
+            git -C "$ROOT" rev-parse HEAD^{tree} > "$OUT/$label.tree.txt"
+            (cd "$ROOT" && npm ci) > "$OUT/$label.install.log" 2>&1
+            if test "$?" != 0; then
+              echo "Install refused for $label, not a semantic result"; exit 1
+            fi
+            (cd "$ROOT" && node --test "$TEST") > "$OUT/$label.full.tap" 2>&1
+            result=$?
+            printf '%s\n' "$result" > "$OUT/$label.status"
+            echo "$label native original test exit=$result"
+            tail -n 38 "$OUT/$label.full.tap"
+            test "$result" -ne 0 || exit 1
+            grep -F 'one joined control wave must hold all actual current control voters' "$OUT/$label.full.tap" || exit 1
+            grep -F "code: 'ERR_ASSERTION'" "$OUT/$label.full.tap" || exit 1
+            grep -F 'actual: 12' "$OUT/$label.full.tap" || exit 1
+            grep -F 'expected: 3' "$OUT/$label.full.tap" || exit 1
+          done
+          echo 'Both original cutover revisions preserve the same specific control-wave duplication.'
+      - name: Preserve complete original TAP and both immutable source identities
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-wave-baseline-pair-${{ github.sha }}
+          path: test-output/rs-raft-wave-baseline-pair/
+          retention-days: 14
+          if-no-files-found: warn
