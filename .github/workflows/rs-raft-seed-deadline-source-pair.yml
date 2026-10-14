@@ -1,0 +1,79 @@
+# Deterministic old-source RED/new-source green on the SAME hosted machine,
+# with byte-identical test and a single production owner change.
+name: rs-raft-seed-deadline-source-pair
+on:
+  push:
+    branches: [continue/rs-raft-seed-deadline-semantics-20261014]
+    paths: [.github/workflows/rs-raft-seed-deadline-source-pair.yml]
+permissions:
+  contents: read
+jobs:
+  pair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 17
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Same source test on old and new seed owners, no retries
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OLD=0446b7f3a569abd8f00f7c510ad87956b8fa843c
+          TEST=test/bootstrap/seed-release-once-per-cohort.test.js
+          PATTERN='a successful release reply after the original absolute deadline|the seed refuses an otherwise successful wave whose END completes after its deadline'
+          OUT="$GITHUB_WORKSPACE/test-output/rs-raft-seed-deadline-pair"
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/candidate-sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/candidate-tree.txt"
+          git rev-parse "$OLD^{tree}" > "$OUT/old-tree.txt"
+          git diff --name-only "$OLD" HEAD -- src > "$OUT/changed-production-paths.txt"
+          test "$(wc -l < "$OUT/changed-production-paths.txt")" -eq 1 || exit 1
+          grep -Fx src/bootstrap/bootstrap-service-seed-workflow.js \
+            "$OUT/changed-production-paths.txt" || exit 1
+          NEG="$RUNNER_TEMP/rs-raft-seed-deadline-old"
+          git worktree add --detach "$NEG" "$OLD" > "$OUT/worktree.log" 2>&1 || exit 1
+          cp "$TEST" "$NEG/$TEST" || exit 1
+          cmp "$TEST" "$NEG/$TEST" || exit 1
+          sha256sum "$TEST" > "$OUT/candidate-test.sha256"
+          (cd "$NEG" && sha256sum "$TEST") > "$OUT/old-test.sha256"
+          npm ci > "$OUT/candidate-install.log" 2>&1
+          c=$?
+          (cd "$NEG" && npm ci) > "$OUT/old-install.log" 2>&1
+          o=$?
+          test "$c" -eq 0 && test "$o" -eq 0 || {
+            echo 'Dependency installation failure is not an engaged negative'; exit 1
+          }
+          (cd "$NEG" && node --test --test-name-pattern="$PATTERN" "$TEST") \
+            > "$OUT/old.tap" 2>&1
+          red=$?
+          node --test --test-name-pattern="$PATTERN" "$TEST" > "$OUT/candidate.tap" 2>&1
+          green=$?
+          printf '%s\n' "$red" > "$OUT/old.status"
+          printf '%s\n' "$green" > "$OUT/candidate.status"
+          echo "original SOURCE-only red status=$red candidate=$green"
+          tail -n 58 "$OUT/old.tap"
+          tail -n 44 "$OUT/candidate.tap"
+          test "$red" -ne 0 || exit 1
+          grep -F 'expired post-await success must never publish' "$OUT/old.tap" || exit 1
+          grep -F 'a delayed held-control END cannot publish' "$OUT/old.tap" || exit 1
+          grep -F "code: 'ERR_ASSERTION'" "$OUT/old.tap" || exit 1
+          test "$green" -eq 0 || exit 1
+          grep -F 'pass 2' "$OUT/candidate.tap" || exit 1
+      - name: Preserve paired original full TAPs and exact hashes
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-seed-deadline-pair-${{ github.sha }}
+          path: test-output/rs-raft-seed-deadline-pair/
+          retention-days: 14
+          if-no-files-found: warn
