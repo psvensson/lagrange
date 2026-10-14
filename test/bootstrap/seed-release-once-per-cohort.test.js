@@ -10,6 +10,7 @@ import {TABLES} from '../../src/constants/tables.js';
 import {RealTimeSource, VirtualTimeSource} from '../../src/time/time-source.js';
 import {PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
   PARTICIPANT_RELEASE_CONTROL_WAVE_FIELD as WAVE_FIELD,
+  PARTICIPANT_RELEASE_MISSING_FACT as MISSING_FACT,
   PARTICIPANT_RELEASE_RESULT_FIELD, PARTICIPANT_RELEASE_TYPE,
   PARTICIPANT_RELEASE_TRIGGER} from
   '../../src/partition/partition-participant-transaction-cutover-constants.js';
@@ -221,8 +222,9 @@ test('seed must not claim readiness from a successful delivery observed after it
     const failure = JSON.parse(resultError.message.replace(
       /^Seed participant release failed: /u, ''));
     assert.equal(failure.partitionId, CONTROL);
-    assert.equal(failure.answer.outcome, OUTCOME.CUT_OVER,
-      'diagnostic retains actual commit outcome; does not fabricate rollback');
+    assert.equal(failure.answer.outcome, OUTCOME.UNAVAILABLE,
+      'an expired release reply must not satisfy seed readiness');
+    assert.equal(failure.answer.missingFact, MISSING_FACT.RELEASE_DEADLINE);
     assert.equal(failure.seedRelease.budgetMs, budgetMs);
     assert.ok(clock.now() > 101000);
   });
