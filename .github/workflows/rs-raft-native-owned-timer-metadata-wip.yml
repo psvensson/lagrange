@@ -5,6 +5,7 @@ on:
     branches: [continue/rs-raft-cloud-native-inbound-owned-timer-v1-20261014]
     paths:
       - .github/workflows/rs-raft-native-owned-timer-metadata-wip.yml
+      - test/raft/raft-rs-backend/inbound-drain-owned-timer.test.js
 permissions:
   contents: write
 concurrency:
