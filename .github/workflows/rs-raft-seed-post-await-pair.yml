@@ -1,0 +1,45 @@
+name: rs-raft-seed-post-await-pair
+on:
+  push:
+    branches: [verify/rs-raft-seed-late-reply-fence-20261014]
+    paths: [.github/workflows/rs-raft-seed-post-await-pair.yml]
+permissions:
+  contents: read
+jobs:
+  pair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+      - name: Exact source-only comparison on one VM
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE=7d0042659daaed7d38e9e586454861c21df3d838
+          FILE=test/bootstrap/seed-release-once-per-cohort.test.js
+          CASE='seed must not claim readiness from a successful delivery observed after its deadline'
+          git diff --name-only "$BASE" HEAD -- src > changed.txt
+          test "$(cat changed.txt)" = src/node/participant-release-client.js
+          git worktree add --detach /tmp/old-client "$BASE"
+          cp "$FILE" "/tmp/old-client/$FILE"
+          cmp "$FILE" "/tmp/old-client/$FILE"
+          npm ci > /tmp/new-install.log 2>&1
+          (cd /tmp/old-client && npm ci) > /tmp/old-install.log 2>&1
+          set +e
+          (cd /tmp/old-client && node --test --test-name-pattern="$CASE" "$FILE") > old.tap 2>&1
+          old=$?
+          node --test --test-name-pattern="$CASE" "$FILE" > new.tap 2>&1
+          new=$?
+          set -e
+          echo "old=$old new=$new"
+          tail -n 15 old.tap
+          tail -n 15 new.tap
+          test "$old" -ne 0
+          grep -F 'seed cannot declare a bounded successful release after deadline' old.tap
+          test "$new" -eq 0
