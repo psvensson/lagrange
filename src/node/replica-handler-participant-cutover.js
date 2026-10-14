@@ -181,6 +181,44 @@ async function releaseControlOwnerFirst(handler, service, request) {
   return null;
 }
 
+// A post-origin, empty coordinator cohort needs no second ENABLE or origin
+// replication. This is a *fresh*, paused current-member proof, not a reused
+// CUT_OVER answer. The normal full release remains authoritative for a dirty,
+// unavailable or schema-incomplete cohort.
+function cleanCurrentControlCohort(service, release, attempt, census) {
+  if (service.tableName !== TABLES.SQL_TRANSACTIONS) return false;
+  const local = census.find((facts) =>
+    facts?.generation?.replicaId === service.replicaId);
+  return local !== undefined &&
+    census.every((facts) =>
+      facts?.queryCensus?.state === TRANSACTION_RELEASE_CENSUS_STATE.CLEAR &&
+      facts.queryCensus.enforcement?.state ===
+        TRANSACTION_SCHEMA_ENFORCEMENT_STATE.ENFORCED) &&
+    releaseCensusDefect(release, census, local, {attempt}) === null;
+}
+
+async function proveCurrentControlCohort(handler, service, request,
+  release, attempt, cohort, pausedCensus) {
+  if (!cleanCurrentControlCohort(service, release, attempt, pausedCensus)) return null;
+  // A new INSPECT of every current member after the first validation is
+  // mandatory: a previous reply never authorizes subsequent resume.
+  const current = await readCohort(handler, service.partitionId, cohort,
+    attempt.deadlineAtMs);
+  const unavailable = unavailableCensus(current);
+  if (unavailable !== null) return unavailable;
+  if (!cleanCurrentControlCohort(service, release, attempt, current)) {
+    // The source raced a current-member mutation after PAUSE. Keep it closed
+    // and defer to a *new* release attempt instead of falling through to
+    // ENABLE or treating the earlier, now stale facts as permission.
+    return attemptRefusal({...request, release}, OUTCOME.STALE);
+  }
+  const resumed = await actOnCohort(handler, release, attempt, ACTION.RESUME,
+    current, {census: current});
+  const refusal = resumed.find((answer) => answer.outcome !== OUTCOME.RESUMED);
+  return refusal ?? releaseAnswer(OUTCOME.CUT_OVER, {...request, release},
+    {release, census: current});
+}
+
 async function reopenCohort(handler, service, request, release, attempt, census) {
   // Reopen followers before transferring leadership. The transfer answer
   // means requested; a fresh attempt must observe the new term and cohort.
@@ -271,6 +309,9 @@ async function runCutoverAttempt(handler, request) {
     return attemptRefusal({...request, release}, OUTCOME.DRAIN_PENDING,
       {blockedDrain: {generation: blockedDrain.generation, work: blockedDrain.work}});
   }
+  const currentControl = await proveCurrentControlCohort(handler, service,
+    request, release, attempt, cohort, census);
+  if (currentControl !== null) return currentControl;
   const reopened = await reopenCohort(handler, service, request, release, attempt, census);
   if (reopened !== null) return reopened;
   const queryRelease = await settleQueryRelease(handler, service, release, attempt,
