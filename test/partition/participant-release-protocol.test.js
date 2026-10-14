@@ -472,7 +472,9 @@ test('real recipient refuses OPEN when its absolute deadline expires during awai
           inResume = true;
           enteredBeforeDeadline = observedClock.now() < request.deadlineAtMs;
           const result = Reflect.apply(originalDeliver, this, args);
-          return Promise.resolve(result).finally(() => {inResume = false;});
+          return Promise.resolve(result).finally(() => {
+            inResume = false;
+          });
         }
         return Reflect.apply(originalDeliver, this, args);
       };
