@@ -288,7 +288,7 @@ test('real release route pauses initial writes, applies origin, censuses and res
     assert.equal((await replacement.executeQuery(SQL, ['restarted', 'written'])).success, true);
   }));
 
-test('real RESUME recipient refuses admission if original deadline expires during awaited Raft facts',
+test('real RESUME recipient refuses expiry after either original Raft membership await',
   () => fixture(async ({handler, service, transport, release}) => {
     const first = await release();
     assert.equal(first.outcome, OUTCOME.CUT_OVER,
@@ -299,81 +299,83 @@ test('real RESUME recipient refuses admission if original deadline expires durin
     const own = await readParticipantReleaseFacts(handler, service);
     assert.equal(own.outcome, OUTCOME.OBSERVED);
     assert.equal(own.paused, true);
-    const prior = handler.timeSource;
-    const originallyHostedPort = service.raft;
-    const portDescriptor = Object.getOwnPropertyDescriptor(service, 'raft');
-    const started = prior.now();
-    const deadlineAtMs = started + 100;
-    let current = started;
-    let originalRaftFactReads = 0;
-    const realMembership = originallyHostedPort.readCommittedMembership
-      .bind(originallyHostedPort);
-    // Actual port methods are immutable own data properties: a Proxy cannot
-    // replace their values without violating JS proxy invariants. Shadow on
-    // a new adapter with the REAL port as prototype instead; all read facts
-    // still come from the underlying Raft owner, not a fabricated witness.
-    const adapter = Object.create(originallyHostedPort);
-    Object.defineProperty(adapter, 'readCommittedMembership', {
-      value: async (...args) => {
-        const result = await realMembership(...args);
-        originalRaftFactReads += 1;
-        current = deadlineAtMs + 1;
-        return result;
-      },
-    });
-    Object.defineProperty(adapter, 'readStatus', {
-      value: (...args) => originallyHostedPort.readStatus(...args),
-    });
-    const build = await runtimeBuildProvenance();
-    assert.equal(build.state, 'measured');
-    const identity = releaseIdentityOf({partitionId: service.partitionId,
-      targetBuildDigest: build.digest,
-      configurationKey: own.membership.configurationKey,
-      membershipGenerationIndex: own.membership.membershipGenerationIndex});
-    assert.notEqual(identity, null);
-    const request = registeredReleaseRequest({
-      action: RELEASE_ACTION.RESUME, partitionId: service.partitionId,
-      replicaId: service.replicaId, targetBuildDigest: build.digest,
-      release: identity,
-      target: own.generation,
-      attempt: {leaderReplicaId: service.replicaId,
-        term: own.membership.term,
-        leaderLifecycleIncarnation: own.generation.lifecycleIncarnation,
-        deadlineAtMs},
-      census: [own], deadlineAtMs,
-    });
-    const captured = captureParticipantReleaseDispatch(request);
-    assert.equal(captured.refusal, null,
-      'the real registered RESUME must pass canonical strict request identity');
-    let failure = null;
-    try {
-      handler.timeSource = {...prior, now: () => current};
-      Object.defineProperty(service, 'raft',
-        {configurable: true, enumerable: true, writable: true, value: adapter});
-      const answer = await sendRegisteredRelease(handler, transport, request);
-      assert.equal(originalRaftFactReads > 0, true,
-        'the real recipient has awaited actual committed Raft membership: ' +
-          JSON.stringify({reply: answer, captured: captured.kind}));
-      assert.equal(current, deadlineAtMs + 1,
-        'the original handler clock expired during that original membership wait');
-      assert.equal(answer.outcome, OUTCOME.UNAVAILABLE,
-        'the original recipient may not perform a post-deadline RESUME mutation');
-      assert.equal(answer.missingFact, MISSING_FACT.RELEASE_DEADLINE);
-      assert.equal(participantReleaseAdmissionOf(service).state, ADMISSION.CLOSED,
-        'a late result cannot reopen current SQL/partition admission');
-    } catch (error) {
-      failure = error;
-    } finally {
-      handler.timeSource = prior;
+    for (const expireAfterRead of [1, 2]) {
+      const prior = handler.timeSource;
+      const originallyHostedPort = service.raft;
+      const portDescriptor = Object.getOwnPropertyDescriptor(service, 'raft');
+      const started = prior.now();
+      const deadlineAtMs = started + 100;
+      let current = started;
+      let originalRaftFactReads = 0;
+      const realMembership = originallyHostedPort.readCommittedMembership
+        .bind(originallyHostedPort);
+      // Actual port methods are immutable own data properties: a Proxy cannot
+      // replace their values without violating JS proxy invariants. Shadow on
+      // a new adapter with the REAL port as prototype instead; all read facts
+      // still come from the underlying Raft owner, not a fabricated witness.
+      const adapter = Object.create(originallyHostedPort);
+      Object.defineProperty(adapter, 'readCommittedMembership', {
+        value: async (...args) => {
+          const result = await realMembership(...args);
+          originalRaftFactReads += 1;
+          if (originalRaftFactReads === expireAfterRead) current = deadlineAtMs + 1;
+          return result;
+        },
+      });
+      Object.defineProperty(adapter, 'readStatus', {
+        value: (...args) => originallyHostedPort.readStatus(...args),
+      });
+      const build = await runtimeBuildProvenance();
+      assert.equal(build.state, 'measured');
+      const identity = releaseIdentityOf({partitionId: service.partitionId,
+        targetBuildDigest: build.digest,
+        configurationKey: own.membership.configurationKey,
+        membershipGenerationIndex: own.membership.membershipGenerationIndex});
+      assert.notEqual(identity, null);
+      const request = registeredReleaseRequest({
+        action: RELEASE_ACTION.RESUME, partitionId: service.partitionId,
+        replicaId: service.replicaId, targetBuildDigest: build.digest,
+        release: identity,
+        target: own.generation,
+        attempt: {leaderReplicaId: service.replicaId,
+          term: own.membership.term,
+          leaderLifecycleIncarnation: own.generation.lifecycleIncarnation,
+          deadlineAtMs},
+        census: [own], deadlineAtMs,
+      });
+      const captured = captureParticipantReleaseDispatch(request);
+      assert.equal(captured.refusal, null,
+        'the real registered RESUME must pass canonical strict request identity');
+      let failure = null;
       try {
-        if (portDescriptor === undefined) delete service.raft;
-        else Object.defineProperty(service, 'raft', portDescriptor);
+        handler.timeSource = {...prior, now: () => current};
+        Object.defineProperty(service, 'raft',
+          {configurable: true, enumerable: true, writable: true, value: adapter});
+        const answer = await sendRegisteredRelease(handler, transport, request);
+        assert.equal(originalRaftFactReads >= expireAfterRead, true,
+          'the real recipient has awaited actual committed Raft membership: ' +
+            JSON.stringify({reply: answer, captured: captured.kind}));
+        assert.equal(current, deadlineAtMs + 1,
+          'the original clock expired at its selected awaited membership phase');
+        assert.equal(answer.outcome, OUTCOME.UNAVAILABLE,
+          'the original recipient may not reopen admission after either expired Raft read');
+        assert.equal(answer.missingFact, MISSING_FACT.RELEASE_DEADLINE);
+        assert.equal(participantReleaseAdmissionOf(service).state, ADMISSION.CLOSED,
+          'a late result cannot reopen current SQL/partition admission');
       } catch (error) {
-        failure = retainFailure(failure, error,
-          'original Raft owner descriptor restoration refused');
+        failure = error;
+      } finally {
+        handler.timeSource = prior;
+        try {
+          if (portDescriptor === undefined) delete service.raft;
+          else Object.defineProperty(service, 'raft', portDescriptor);
+        } catch (error) {
+          failure = retainFailure(failure, error,
+            'original Raft owner descriptor restoration refused');
+        }
       }
+      if (failure !== null) throw failure;
     }
-    if (failure !== null) throw failure;
   }));
 
 test('no-origin release without fresh storage or operator authority stays closed', () =>
