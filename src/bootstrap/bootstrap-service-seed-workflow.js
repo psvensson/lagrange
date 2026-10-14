@@ -87,6 +87,74 @@ const DEFERRED_LATENCY_TOPOLOGY_FAILURE =
   'Deferred latency topology lifecycle start failed';
 const EMPTY_PARTICIPANT_RELEASE_DIAGNOSTIC_OBSERVATION = null;
 
+// One seed-workflow scheduling bound, never a release/Raft execution driver.
+// Independent partition cohorts have distinct Raft owners and SQLite stores;
+// their nested control RELEASEs join the one canonical control RUNS owner.
+const SEED_INDEPENDENT_COHORT_WIDTH = 4;
+
+async function attemptSeedCohortRelease(owner, service, buildDigest, deadline, timeSource) {
+  const authorization = owner.replicaHandler
+    .participantReleaseAuthorizationOwner.authorizeFreshSeed({
+      partitionId: service.partitionId,
+      targetBuildDigest: buildDigest,
+      membershipOwnerOutcome: owner.membershipOwnerOutcome,
+    });
+  if (authorization === null) {
+    throw new Error('Seed participant release authority unavailable');
+  }
+  let answer = null;
+  let attemptCount = 0;
+  let firstBlockedDrain = EMPTY_PARTICIPANT_RELEASE_DIAGNOSTIC_OBSERVATION;
+  let firstJoinedAttempt = EMPTY_PARTICIPANT_RELEASE_DIAGNOSTIC_OBSERVATION;
+  do {
+    attemptCount += 1;
+    answer = await requestParticipantRelease(owner.replicaHandler, {
+      partitionId: service.partitionId, targetBuildDigest: buildDigest,
+      trigger: PARTICIPANT_RELEASE_TRIGGER.FRESH_SEED,
+      deadlineAtMs: deadline, authorization,
+    });
+    firstBlockedDrain = retainFirstReleaseObservation(
+      firstBlockedDrain, answer.blockedDrain);
+    firstJoinedAttempt = retainFirstReleaseObservation(
+      firstJoinedAttempt, answer.joinedAttempt);
+    if (answer.outcome === PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER) break;
+    const retryAfterMs = answer.outcome === PARTICIPANT_CUTOVER_OUTCOME.NOT_LEADER ?
+      PARTICIPANT_CUTOVER_BOUND.PAUSE_RETRY_AFTER_MS : answer.retryAfterMs;
+    if (!Number.isSafeInteger(retryAfterMs) || retryAfterMs < 0 ||
+        timeSource.now() + retryAfterMs > deadline) break;
+    await owner.sleep(Math.min(retryAfterMs,
+      Math.max(0, deadline - timeSource.now())));
+  } while (timeSource.now() <= deadline);
+  return {answer, attemptCount, firstBlockedDrain, firstJoinedAttempt};
+}
+
+// The first selected failure is deterministic by admission order. No failed
+// wave can launch another wave; already-started release attempts are joined
+// before propagating a refusal. Their canonical handler owns actual cleanup.
+async function releaseSeedCohortWave(owner, cohorts, offset, context) {
+  const results = await Promise.allSettled(cohorts.map((service) =>
+    attemptSeedCohortRelease(owner, service, context.buildDigest,
+      context.deadline, context.timeSource)));
+  for (let index = 0; index < results.length; index += 1) {
+    const settled = results[index];
+    if (settled.status === 'rejected') throw settled.reason;
+    const {answer, attemptCount, firstBlockedDrain, firstJoinedAttempt} =
+      settled.value;
+    if (answer?.outcome === PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER) continue;
+    const completed = offset + index;
+    const terminalObservation = readParticipantReleaseClock(context.timeSource);
+    const seedRelease = seedReleaseFailureProjection({
+      startObservation: context.startObservation,
+      terminalObservation, budgetMs: context.budgetMs,
+      ordinal: completed + 1, total: context.total, completed, attemptCount,
+      firstBlockedDrain, firstJoinedAttempt,
+    });
+    throw new Error('Seed participant release failed: ' +
+      JSON.stringify({partitionId: cohorts[index].partitionId, answer, seedRelease}));
+  }
+}
+
+
 function retainFirstReleaseObservation(current, value) {
   return current === null && value !== undefined ? value : current;
 }
@@ -303,52 +371,23 @@ function createBootstrapServiceSeedWorkflowMethods() {
       const startMs = timeSource.now();
       const startObservation = observeParticipantReleaseClockValue(startMs);
       const deadline = startMs + budgetMs;
-      let completed = 0;
-      for (const service of cohorts) {
-        const authorization = this.replicaHandler
-          .participantReleaseAuthorizationOwner.authorizeFreshSeed({
-            partitionId: service.partitionId,
-            targetBuildDigest: build.digest,
-            membershipOwnerOutcome: this.membershipOwnerOutcome,
-          });
-        if (authorization === null) {
-          throw new Error('Seed participant release authority unavailable');
-        }
-        let answer = null;
-        let attemptCount = 0;
-        let firstBlockedDrain = EMPTY_PARTICIPANT_RELEASE_DIAGNOSTIC_OBSERVATION;
-        let firstJoinedAttempt = EMPTY_PARTICIPANT_RELEASE_DIAGNOSTIC_OBSERVATION;
-        do {
-          attemptCount += 1;
-          answer = await requestParticipantRelease(this.replicaHandler, {
-            partitionId: service.partitionId, targetBuildDigest: build.digest,
-            trigger: PARTICIPANT_RELEASE_TRIGGER.FRESH_SEED,
-            deadlineAtMs: deadline, authorization,
-          });
-          firstBlockedDrain = retainFirstReleaseObservation(
-            firstBlockedDrain, answer.blockedDrain);
-          firstJoinedAttempt = retainFirstReleaseObservation(
-            firstJoinedAttempt, answer.joinedAttempt);
-          if (answer.outcome === PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER) break;
-          const retryAfterMs = answer.outcome ===
-              PARTICIPANT_CUTOVER_OUTCOME.NOT_LEADER ?
-            PARTICIPANT_CUTOVER_BOUND.PAUSE_RETRY_AFTER_MS :
-            answer.retryAfterMs;
-          if (!Number.isSafeInteger(retryAfterMs) || retryAfterMs < 0 ||
-              timeSource.now() + retryAfterMs > deadline) break;
-          await this.sleep(Math.min(retryAfterMs,
-            Math.max(0, deadline - timeSource.now())));
-        } while (timeSource.now() <= deadline);
-        if (answer?.outcome !== PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER) {
-          const terminalObservation = readParticipantReleaseClock(timeSource);
-          const seedRelease = seedReleaseFailureProjection({startObservation,
-            terminalObservation, budgetMs, ordinal: completed + 1,
-            total: cohorts.length, completed, attemptCount, firstBlockedDrain,
-            firstJoinedAttempt});
-          throw new Error('Seed participant release failed: ' +
-            JSON.stringify({partitionId: service.partitionId, answer, seedRelease}));
-        }
-        completed += 1;
+      const context = {buildDigest: build.digest, deadline, timeSource,
+        startObservation, budgetMs, total: cohorts.length};
+      // The current control table must be fully cut over before any dependent
+      // group starts. Later control pre/post checks remain the cutover owner's
+      // original fresh, complete RELEASE; concurrent requests join RUNS.
+      let next = 0;
+      if (cohorts[0]?.tableName === TABLES.SQL_TRANSACTIONS) {
+        await releaseSeedCohortWave(this, [cohorts[0]], 0, context);
+        next = 1;
+      }
+      // Admit independent partition cohorts in their original sorted order.
+      // The fixed-width wave joins every in-flight attempt before a new wave,
+      // so no failure can be stranded or followed by unobserved new work.
+      while (next < cohorts.length) {
+        const wave = cohorts.slice(next, next + SEED_INDEPENDENT_COHORT_WIDTH);
+        await releaseSeedCohortWave(this, wave, next, context);
+        next += wave.length;
       }
     },
     buildSeedCheckpointSteps(startupPipelineRunner, seedPlan) {
