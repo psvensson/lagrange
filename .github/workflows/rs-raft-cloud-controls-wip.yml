@@ -10,6 +10,8 @@ on:
       - test/node/replica-handler-release-recovery.test.js
       - test/partition/participant-release-protocol.test.js
       - test/test-helpers/participant-transaction-fixture.js
+      - test/test-helpers/participant-release-recovery-harness.js
+      - test/test-helpers/participant-release-observer-resource-fixture.js
       - src/partition/partition-participant-transaction-pause.js
       - src/node/replica-handler-participant-release.js
       - src/node/replica-handler-release-recovery.js
