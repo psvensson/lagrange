@@ -254,6 +254,11 @@ function createParticipantReleaseRecovery(handler) {
   });
 
   return Object.freeze({
+    // Wake the same canonical reconcile owner after an interrupted held
+    // control wave. This does not admit or execute a second release path.
+    requestRecovery(partitionId) {
+      enqueue(partitionId);
+    },
     async releaseFreshCreate(partitionId, options = {}) {
       const build = await runtimeBuildProvenance();
       if (build.state !== RUNTIME_BUILD_STATE.MEASURED) {
