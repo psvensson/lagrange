@@ -98,5 +98,11 @@ function observationTimerAcquisitions(scheduler) {
   return records.length;
 }
 
+function lastObservationTimerHandle(scheduler) {
+  const records = CAPTURES.get(scheduler);
+  if (records === undefined) throw new Error('observation scheduler not captured');
+  return records.length === 0 ? null : records[records.length - 1].handle;
+}
+
 export {captureParticipantReleaseObservationTimer, observationTimerOwnedCount,
-  observationTimerAcquisitions};
+  observationTimerAcquisitions, lastObservationTimerHandle};
