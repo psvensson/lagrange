@@ -7,7 +7,7 @@ import {test} from 'node:test';
 import {createBootstrapServiceSeedWorkflowMethods} from
   '../../src/bootstrap/bootstrap-service-seed-workflow.js';
 import {TABLES} from '../../src/constants/tables.js';
-import {RealTimeSource} from '../../src/time/time-source.js';
+import {RealTimeSource, VirtualTimeSource} from '../../src/time/time-source.js';
 import {PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
   PARTICIPANT_RELEASE_CONTROL_WAVE_FIELD as WAVE_FIELD,
   PARTICIPANT_RELEASE_RESULT_FIELD, PARTICIPANT_RELEASE_TYPE,
@@ -161,4 +161,58 @@ test('seed issues one serialized real partition release intent, not one per repl
       assert.equal(authorized.length, 0,
         'invalid budget requests no fresh-seed authority');
     }
+  });
+
+test('late successful cohort reply cannot authorize seed TRAFFIC_READY after absolute deadline',
+  async () => {
+    // This isolates the *seed caller's* final return boundary. The release
+    // answer remains a truthful CUT_OVER of potentially committed durable work;
+    // expiry is not permission to claim whole-seed startup success.
+    const clock = new VirtualTimeSource({startMs: 1000});
+    const originalBudgetMs = 10;
+    const control = localReplica(CONTROL, TABLES.SQL_TRANSACTIONS, 'late-control-r1');
+    const requests = [];
+    const owner = {
+      partitionServices: new Map([[control.replicaId, control]]),
+      nodeService: {getTimeSource: () => clock},
+      config: {leadershipWaitTimeoutMs: originalBudgetMs},
+      replicaHandler: {
+        nodeId: 'late-release-caller',
+        timeSource: clock,
+        participantReleaseAuthorizationOwner: {
+          authorizeFreshSeed() { return Object.freeze({kind: 'authorized-seed'}); },
+        },
+        messageRouter: {
+          deliver(_address, payload, options) {
+            requests.push({payload, options});
+            assert.equal(payload.partitionId, CONTROL);
+            assert.equal(payload.deadlineAtMs, 1010,
+              'original clock owns a single finite absolute deadline');
+            assert.ok(options.timeoutMs > 0);
+            clock.advance(11);
+            return Promise.resolve({
+              acknowledged: true, deliveryState: 'delivered',
+              [PARTICIPANT_RELEASE_RESULT_FIELD]: {outcome: OUTCOME.CUT_OVER},
+            });
+          },
+        },
+      },
+      sleep() { throw new Error('a complete reply needs no retry or timer'); },
+    };
+    const method = createBootstrapServiceSeedWorkflowMethods()
+      .releaseSeedParticipantCohorts;
+    await assert.rejects(() => method.call(owner), (error) => {
+      assert.match(error.message, /Seed participant release failed/u);
+      const result = JSON.parse(error.message.slice(
+        'Seed participant release failed: '.length));
+      assert.equal(result.answer.outcome, OUTCOME.CUT_OVER,
+        'the original successful durable reply is preserved, never falsified');
+      assert.equal(result.seedRelease.completed, 0,
+        'a late reply cannot mark a new seed cohort authorized');
+      return true;
+    });
+    assert.equal(requests.length, 1,
+      'expiry does not start another release, renewal or retry');
+    assert.equal(clock.now(), 1011,
+      'the virtual clock did not advance through synthetic extra work');
   });
