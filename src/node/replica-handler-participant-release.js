@@ -211,9 +211,11 @@ async function executeReleaseAction(handler, service, request, facts) {
     return answer.success === true ? readParticipantReleaseFacts(handler, service) :
       releaseAnswer(OUTCOME.ENABLE_REFUSED, request, {answer});
   }
-  case ACTION.RESUME:
-    return releaseAnswer(
-      await resumeParticipantCutoverAdmission(handler, service, request), request);
+  case ACTION.RESUME: {
+    const result = await resumeParticipantCutoverAdmission(handler, service, request);
+    return result === OUTCOME.UNAVAILABLE && requestDeadlineSpent(handler, request) ?
+      expiredReleaseAnswer(request) : releaseAnswer(result, request);
+  }
   default:
     return releaseAnswer(OUTCOME.INVALID, request);
   }
@@ -352,11 +354,25 @@ function requestDeadlineSpent(handler, request) {
     handler.timeSource.now() >= request.deadlineAtMs;
 }
 
+function expiredReleaseAnswer(request) {
+  return releaseAnswer(OUTCOME.UNAVAILABLE, request,
+    {missingFact: MISSING_FACT.RELEASE_DEADLINE});
+}
+
 async function receiveCurrentParticipantRelease(handler, service, request) {
   const purpose = request.action === ACTION.INSPECT && request.leaderCohort === true ?
     COMMITTED_MEMBERSHIP_READ_PURPOSE.RETIREMENT :
     COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS;
   const facts = await readParticipantReleaseFacts(handler, service, purpose);
+  // The first ingress deadline is not enough: the authentic committed
+  // membership read can finish after expiry. No later ENABLE or RESUME
+  // authority can be derived from an earlier-started operation.
+  if (requestDeadlineSpent(handler, request)) {
+    // PAUSE already reached its original recipient before expiry. Do not
+    // abandon a reachable member OPEN if its awaited facts finish late.
+    if (request.action === ACTION.PAUSE) raiseParticipantCutoverPause(service);
+    return expiredReleaseAnswer(request);
+  }
   if (request.action === ACTION.INSPECT) return facts;
   const refusal = releaseRequestRefusal(handler, service, request, facts);
   return refusal ?? executeReleaseAction(handler, service, request, facts);
@@ -366,8 +382,7 @@ async function receiveParticipantRelease(handler, request,
   observationValidated = false) {
   try {
     if (requestDeadlineSpent(handler, request)) {
-      return releaseAnswer(OUTCOME.UNAVAILABLE, request,
-        {missingFact: MISSING_FACT.RELEASE_DEADLINE});
+      return expiredReleaseAnswer(request);
     }
     const service = handler.localServices.get(request.replicaId);
     if (!service || service.partitionId !== request.partitionId) {
