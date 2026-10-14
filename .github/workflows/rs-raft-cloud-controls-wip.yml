@@ -12,6 +12,7 @@ on:
       - test/test-helpers/participant-transaction-fixture.js
       - src/partition/partition-participant-transaction-pause.js
       - src/node/replica-handler-participant-release.js
+      - src/node/replica-handler-release-recovery.js
   workflow_dispatch: {}
 permissions:
   contents: read
