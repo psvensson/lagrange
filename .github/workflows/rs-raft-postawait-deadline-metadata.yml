@@ -1,4 +1,5 @@
 # Exact-source WIP canonical metadata refresh; preserve every source audit
+# Include source-owner classification of exact SHA-verified quest-evidence tests.
 # red, no baseline/ratchet increases, no main updates.
 name: rs-raft-postawait-deadline-metadata
 on:
