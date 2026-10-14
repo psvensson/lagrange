@@ -88,6 +88,68 @@ const PHASE_EVENT = Object.freeze({
 const DEFERRED_LATENCY_TOPOLOGY_FAILURE =
   'Deferred latency topology lifecycle start failed';
 const EMPTY_PARTICIPANT_RELEASE_DIAGNOSTIC_OBSERVATION = null;
+// A bounded wave is admitted only *inside* the existing canonical held
+// SQL control owner. Independent partitions have separate Raft/SQLite owners;
+// a red wave joins every admitted child before admitting any later cohort.
+const SEED_CONTROL_WAVE_WIDTH = 2;
+
+async function releaseIndependentSeedWave(owner, services, offset, context, waveToken) {
+  const settled = await Promise.allSettled(services.map(async (service) => {
+    const authorization = owner.replicaHandler
+      .participantReleaseAuthorizationOwner.authorizeFreshSeed({
+        partitionId: service.partitionId,
+        targetBuildDigest: context.buildDigest,
+        membershipOwnerOutcome: owner.membershipOwnerOutcome,
+      });
+    if (authorization === null) {
+      throw new Error('Seed participant release authority unavailable');
+    }
+    let answer = null;
+    let attemptCount = 0;
+    let firstBlockedDrain = EMPTY_PARTICIPANT_RELEASE_DIAGNOSTIC_OBSERVATION;
+    let firstJoinedAttempt = EMPTY_PARTICIPANT_RELEASE_DIAGNOSTIC_OBSERVATION;
+    do {
+      attemptCount += 1;
+      answer = await requestParticipantRelease(owner.replicaHandler, {
+        partitionId: service.partitionId, targetBuildDigest: context.buildDigest,
+        trigger: PARTICIPANT_RELEASE_TRIGGER.FRESH_SEED,
+        deadlineAtMs: context.deadline, authorization,
+        [WAVE_FIELD]: waveToken,
+      });
+      firstBlockedDrain = retainFirstReleaseObservation(firstBlockedDrain,
+        answer.blockedDrain);
+      firstJoinedAttempt = retainFirstReleaseObservation(firstJoinedAttempt,
+        answer.joinedAttempt);
+      if (answer.outcome === PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER) break;
+      const retryAfterMs = answer.outcome === PARTICIPANT_CUTOVER_OUTCOME.NOT_LEADER ?
+        PARTICIPANT_CUTOVER_BOUND.PAUSE_RETRY_AFTER_MS : answer.retryAfterMs;
+      if (!Number.isSafeInteger(retryAfterMs) || retryAfterMs < 0 ||
+          context.timeSource.now() + retryAfterMs > context.deadline) break;
+      await owner.sleep(Math.min(retryAfterMs,
+        Math.max(0, context.deadline - context.timeSource.now())));
+    } while (context.timeSource.now() <= context.deadline);
+    return {answer, attemptCount, firstBlockedDrain, firstJoinedAttempt};
+  }));
+  // allSettled retains exact task ownership, including a fast refusal while
+  // another admitted partition release is still applying in Raft.
+  for (let i = 0; i < settled.length; i += 1) {
+    const result = settled[i];
+    if (result.status === 'rejected') throw result.reason;
+    const {answer, attemptCount, firstBlockedDrain, firstJoinedAttempt} = result.value;
+    if (answer?.outcome === PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER) continue;
+    const completed = offset + i;
+    const terminalObservation = readParticipantReleaseClock(context.timeSource);
+    const seedRelease = seedReleaseFailureProjection({
+      startObservation: context.startObservation,
+      terminalObservation, budgetMs: context.budgetMs,
+      ordinal: completed + 1, total: context.total, completed,
+      attemptCount, firstBlockedDrain, firstJoinedAttempt,
+    });
+    throw new Error('Seed participant release failed: ' +
+      JSON.stringify({partitionId: services[i].partitionId, answer, seedRelease}));
+  }
+}
+
 
 function retainFirstReleaseObservation(current, value) {
   return current === null && value !== undefined ? value : current;
@@ -380,8 +442,13 @@ function createBootstrapServiceSeedWorkflowMethods() {
         deadlineAtMs: deadline,
         partitionIds: cohorts.slice(1).map((service) => service.partitionId),
       }, async (controlWaveToken) => {
-        for (const service of cohorts.slice(1)) {
-          await releaseOne(service, controlWaveToken);
+        const context = {buildDigest: build.digest, deadline, timeSource,
+          startObservation, budgetMs, total: cohorts.length};
+        let next = 1;
+        while (next < cohorts.length) {
+          const wave = cohorts.slice(next, next + SEED_CONTROL_WAVE_WIDTH);
+          await releaseIndependentSeedWave(this, wave, next, context, controlWaveToken);
+          next += wave.length;
         }
       });
     },
