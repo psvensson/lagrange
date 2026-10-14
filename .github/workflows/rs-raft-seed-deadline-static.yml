@@ -1,4 +1,5 @@
 # Exact candidate strict static/corpus audit; no ratchet/baseline changes.
+# Repeat on the exact canonical 2,374-test generated classification candidate.
 name: rs-raft-seed-deadline-static
 on:
   push:
