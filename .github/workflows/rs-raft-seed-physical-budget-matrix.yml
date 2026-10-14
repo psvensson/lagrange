@@ -1,0 +1,127 @@
+# Diagnostic only: same immutable production source, one physical hosted VM,
+# original real SQL/Raft/CDC startup test; vary the test fixture's 1s/5s/10s
+# seed release budget explicitly to MEASURE hardware time, not certify a bypass.
+name: rs-raft-seed-physical-budget-matrix
+on:
+  push:
+    branches: [diagnostic/rs-raft-seed-virtual-hardware-budget-20261014]
+    paths: [.github/workflows/rs-raft-seed-physical-budget-matrix.yml]
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-seed-physical-budget-matrix
+  cancel-in-progress: false
+jobs:
+  measure:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Exact lock and runner virtual-hardware facts
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT=test-output/rs-raft-physical-budget-matrix
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/source-sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/source-tree.txt"
+          git diff --name-only  a7bb214bfc77f9dacda1b4fd27b5e9edaec92347 HEAD -- src \
+            > "$OUT/production-diff.txt"
+          test ! -s "$OUT/production-diff.txt"
+          node -e 'const os=require("os");console.log(JSON.stringify({schema:"runner-host/1",node:process.version,platform:process.platform,arch:process.arch,logical:os.cpus().length,available:os.availableParallelism(),model:os.cpus()[0]?.model,totalMemBytes:os.totalmem(),freeMemBytes:os.freemem(),loadavg:os.loadavg(),uptimeSec:os.uptime()}))' > "$OUT/runner-hardware.json"
+          cat /sys/fs/cgroup/cpu.max > "$OUT/cgroup-cpu-max.txt" 2>/dev/null || true
+          cat /sys/fs/cgroup/memory.max > "$OUT/cgroup-mem-max.txt" 2>/dev/null || true
+          cat /proc/cpuinfo > "$OUT/proc-cpuinfo.txt"
+          lscpu -J > "$OUT/lscpu.json" 2>/dev/null || true
+          git show HEAD:test/integration/message-group-membership-claim-cache.integration.test.js > "$OUT/original-test.js"
+          sha256sum "$OUT/original-test.js" > "$OUT/original-test.sha256"
+          cat "$OUT/runner-hardware.json"
+          echo 'host cgroup cpu.max:'; cat "$OUT/cgroup-cpu-max.txt"
+          npm ci
+      - name: Exact source with original and measured diagnostic budgets
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-physical-budget-matrix
+          TEST=test/integration/message-group-membership-claim-cache.integration.test.js
+          PREP=scripts/quest-evidence/prepare-seed-budget-diagnostic.mjs
+          attempt=0
+          overall=0
+          for budget in 1000 5000 10000 5000 1000; do
+            attempt=$((attempt+1))
+            label="$attempt-$budget"
+            cp "$OUT/original-test.js" "$TEST"
+            node "$PREP" "$TEST" "$budget" "$OUT/$label.test-diagnostic.js" \
+              > "$OUT/$label.source-generation.json" 2> "$OUT/$label.source-generation-error.log"
+            pre=$?
+            if test "$pre" -ne 0; then
+              echo "refused faulty diagnostic source $label"
+              cat "$OUT/$label.source-generation-error.log"
+              overall=1
+              continue
+            fi
+            cp "$OUT/$label.test-diagnostic.js" "$TEST"
+            node --check "$TEST" > "$OUT/$label.syntax.log" 2>&1
+            syntax=$?
+            if test "$syntax" -ne 0; then
+              cat "$OUT/$label.syntax.log"
+              overall=1
+              continue
+            fi
+            ( /usr/bin/time -f 'wallSeconds=%e\nuserSeconds=%U\nsystemSeconds=%S\nmaxRssKiB=%M\nvoluntaryContextSwitches=%w\ninvoluntaryContextSwitches=%c' \
+              npm run -s test:file -- "$TEST" ) \
+              > "$OUT/$label.run.log" 2> "$OUT/$label.resource.log"
+            rc=$?
+            printf '%s\n' "$rc" > "$OUT/$label.original-body.status"
+            RAW=".tap/test-results/$TEST.tap"
+            if test -f "$RAW"; then
+              cp "$RAW" "$OUT/$label.full.tap"
+              sha256sum "$OUT/$label.full.tap" > "$OUT/$label.tap.sha256"
+              node scripts/quest-evidence/summarize-seed-release-trace.mjs \
+                "$RAW" "$OUT/$label.release-summary.json" \
+                > "$OUT/$label.summary-line.json" 2> "$OUT/$label.summary-error.log"
+              parse=$?
+              printf '%s\n' "$parse" > "$OUT/$label.summary.status"
+              if test "$parse" -ne 0; then
+                cat "$OUT/$label.summary-error.log"
+                overall=1
+              fi
+            else
+              echo "No complete original TAP on $label"
+              overall=1
+            fi
+            echo "physical-run label=$label original-full-body-status=$rc"
+            grep -F 'seed-release-real-hardware-timing/1' "$OUT/$label.run.log" \
+              | tail -n 2 | cut -c 1-1400 || true
+            grep -F 'membership-cache-timing/2' "$OUT/$label.run.log" \
+              | tail -n 2 | cut -c 1-1100 || true
+            if test -f "$OUT/$label.summary-line.json"; then
+              head -c 1500 "$OUT/$label.summary-line.json"
+              echo
+            fi
+            cat "$OUT/$label.resource.log" | tail -n 9
+          done
+          cp "$OUT/original-test.js" "$TEST"
+          git diff --check > "$OUT/restore-diff-check.log" 2>&1
+          git diff --name-only > "$OUT/restore-diff-paths.txt"
+          test ! -s "$OUT/restore-diff-paths.txt" || overall=1
+          exit "$overall"
+      - name: Preserve runner capabilities and every original full TAP
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-physical-budget-matrix-${{ github.sha }}
+          path: test-output/rs-raft-physical-budget-matrix/
+          retention-days: 14
+          if-no-files-found: warn
