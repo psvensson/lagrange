@@ -118,6 +118,18 @@ let runtimeRecovery = null;
 let nextGroupKey = 1;
 let actualCoreEntries = 0;
 let actualCoreEntryObserver = null;
+// Passive test-only native drain stage witness, never a progress driver.
+let nativeInboundStageObserver = null;
+const NATIVE_INBOUND_STAGE = Object.freeze({
+  REQUEST: 'request', RETRY_REQUEST: 'retry-request', CALLBACK: 'callback',
+  CLOSED_OR_EMPTY: 'closed-or-empty', PERSISTENCE_WAIT: 'persistence-wait',
+  TURN_REQUEST: 'turn-request', WAIT_BOUND: 'wait-bound',
+});
+function reportNativeInboundStage(group, stage) {
+  if (nativeInboundStageObserver === null) return;
+  nativeInboundStageObserver(Object.freeze({groupId: group.groupId,
+    replicaIdentity: group.replicaIdentity, stage, queued: group.inbound.length}));
+}
 // A test's fault at the core boundary: called inside the core call's
 // containment with the group, the operation and its arguments, it may throw
 // as the core itself would (a WebAssembly.RuntimeError is a trap). No peer
@@ -1730,6 +1742,7 @@ function scheduleInboundDrain(group) {
     return;
   }
   group.inboundDrainScheduled = true;
+  reportNativeInboundStage(group, NATIVE_INBOUND_STAGE.REQUEST);
   group.timers.setTimeout(() => runScheduledInboundDrain(group),
     INBOUND_DRAIN_DELAY_MS)?.unref?.();
 }
@@ -1747,24 +1760,30 @@ function retryInboundDrainWhenAdmitted(group) {
         queuedInbound: group.inbound.length,
       });
     group.inboundDrainDeadline = null;
+    reportNativeInboundStage(group, NATIVE_INBOUND_STAGE.WAIT_BOUND);
     return;
   }
   group.inboundDrainScheduled = true;
+  reportNativeInboundStage(group, NATIVE_INBOUND_STAGE.RETRY_REQUEST);
   group.timers.setTimeout(() => runScheduledInboundDrain(group),
     PERSISTENCE_ADMISSION_WAIT.POLL_INTERVAL_MS)?.unref?.();
 }
 
 function runScheduledInboundDrain(group) {
   group.inboundDrainScheduled = false;
+  reportNativeInboundStage(group, NATIVE_INBOUND_STAGE.CALLBACK);
   if (group.closed || group.inbound.length === 0) {
     group.inboundDrainDeadline = null;
+    reportNativeInboundStage(group, NATIVE_INBOUND_STAGE.CLOSED_OR_EMPTY);
     return;
   }
   if (!persistenceAdmitted(group)) {
+    reportNativeInboundStage(group, NATIVE_INBOUND_STAGE.PERSISTENCE_WAIT);
     retryInboundDrainWhenAdmitted(group);
     return;
   }
   group.inboundDrainDeadline = null;
+  reportNativeInboundStage(group, NATIVE_INBOUND_STAGE.TURN_REQUEST);
   const drained = group.admitScheduledEntry(() => enqueue(group, () =>
     perform(group, {type: RUNTIME_COMMAND.DRAIN_INBOUND})));
   if (drained && typeof drained.catch === 'function') {
@@ -1970,6 +1989,10 @@ function setActualCoreEntryObserver(observer) {
   actualCoreEntryObserver = typeof observer === 'function' ? observer : null;
 }
 
+function setNativeInboundStageObserver(observer) {
+  nativeInboundStageObserver = typeof observer === 'function' ? observer : null;
+}
+
 /**
  * Test seam: a fault injected at the core boundary (see coreFaultInjector).
  * @param {Function|null} injector - (groupId, operation, args) => void, or
@@ -1982,8 +2005,10 @@ function setCoreFaultInjector(injector) {
 export {
   CORE_OK,
   CORE_REFUSED,
+  NATIVE_INBOUND_STAGE,
   createRuntimeDispatcher,
   setActualCoreEntryObserver,
+  setNativeInboundStageObserver,
   setCoreFaultInjector,
   verifyRaftRsBinding,
 };
