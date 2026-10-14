@@ -21,6 +21,8 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
+      - name: Install locked Solver dependencies
+        run: npm ci
       - name: Canonical red seal, no code execution or gate bypass
         shell: bash
         run: |
