@@ -163,27 +163,14 @@ test('declared 600s', {timeout: 600000}, async () => {
   fs.writeFileSync(new URL(${marker}), 'ran', 'utf8');
 });
 `);
-    const resultsDirectory = await mkdtemp(path.join(tmpdir(), 'admission-'));
-    temporaryDirectories.push(resultsDirectory);
-    const artifact = path.join(resultsDirectory, `${fixtureFile}.tap`);
+    const admitted = await admit(fixtureFile);
+    assertRefusal(admitted, {requestedRootSeconds: 600, marginSeconds: 540});
     // Both artifacts are pre-seeded: a refusal must leave exactly what was
     // there before - no truncation through an opened 'w' descriptor, no
     // directory creation through the results path.
-    fs.mkdirSync(path.dirname(artifact), {recursive: true});
-    fs.writeFileSync(artifact, 'sentinel-tap', 'utf8');
-    fs.writeFileSync(`${artifact}.stderr`, 'sentinel-stderr', 'utf8');
-    const summary = await runTestFiles([fixtureFile], {
-      jobs: 1, print: false, resultsDirectory,
-    });
-    const result = summary.results?.[0];
-    const admitted = {summary, result, artifact,
-      reasons: JSON.stringify(result?.reasons ?? [])};
-    assertRefusal(admitted, {requestedRootSeconds: 600, marginSeconds: 540});
     assert.equal(fs.readFileSync(admitted.artifact, 'utf8'), 'sentinel-tap',
       'an existing TAP artifact must survive a refusal untruncated');
-    assert.equal(
-      fs.readFileSync(`${admitted.artifact}.stderr`, 'utf8'),
-      'sentinel-stderr',
+    assert.equal(fs.readFileSync(admitted.stderr, 'utf8'), 'sentinel-stderr',
       'an existing stderr artifact must survive a refusal untruncated');
     assert.equal(fs.existsSync(marker), false,
       'no pre-execution side effect reaches the fixture');

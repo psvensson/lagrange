@@ -36,19 +36,16 @@ const TEST_ROOT_NAMES = Object.freeze(new Set([
   'test', 't', 'tap', 'it', 'describe', 'suite',
 ]));
 const TEST_MODIFIER_NAMES = Object.freeze(new Set(['only', 'skip', 'todo']));
-const TAP_MODULE_SPECIFIER = 'tap';
-const NODE_TEST_MODULE = 'node:test';
-const SHARED_TAP_MODULE_SUFFIX = `${'src'}${path.sep}${'test-helpers'}${path.sep}${'tap.js'}`;
 const SET_TIMEOUT_METHOD = 'setTimeout';
 const NODE_TYPE = Object.freeze({
   ASSIGNMENT: 'AssignmentExpression',
   AWAIT: 'AwaitExpression',
-  IMPORT_DECLARATION: 'ImportDeclaration',
   BINARY: 'BinaryExpression',
   CALL: 'CallExpression',
   EXPRESSION_STATEMENT: 'ExpressionStatement',
   SPREAD: 'SpreadElement',
   VARIABLE_DECLARATION: 'VariableDeclaration',
+  IMPORT_DECLARATION: 'ImportDeclaration',
   IMPORT_SPECIFIER: 'ImportSpecifier',
   IDENTIFIER: 'Identifier',
   LITERAL: 'Literal',
@@ -90,7 +87,6 @@ const AST_METADATA_KEYS = Object.freeze(new Set(['loc', 'range', 'parent']));
 // Ambient-intrinsic hardening (system-guidelines): capture at module load so a
 // replaced prototype cannot reroute declaration resolution.
 const stringStartsWith = Function.call.bind(String.prototype.startsWith);
-const stringEndsWith = Function.call.bind(String.prototype.endsWith);
 
 function applyArithmetic(operator, left, right) {
   if (operator === OPERATOR_MULTIPLY) return left * right;
@@ -362,41 +358,6 @@ function declaredRootTimeout(call, bindings, filePath, problems) {
     fromFile: filePath,
     location: `${filePath}:${line}`,
   }, problems);
-}
-
-// Which test runtime a file declares, from its static imports: the runner
-// must know whether a file arms tap's root timer before spending a budget
-// decision on it. A file imports the tap runner either directly (`tap`) or
-// through the repository's one shared tap-exports module, whose resolved
-// path ends in the shared suffix defined below - that module is the owner of
-// the single `import('tap')`. A file that imports `node:test` without
-// importing the tap runner runs entirely under node:test and never consumes
-// TAP_TIMEOUT. The runtime is decided by declared imports, never by a
-// filename pattern, and a file importing both budgets as a TAP consumer
-// (its tap tests arm the shared root timer even when node:test helpers are
-// imported beside them).
-export function declaredTestRuntime(source, filePath) {
-  let ast;
-  try {
-    ast = espree.parse(source, PARSE_OPTIONS);
-  } catch {
-    return {nodeTest: false, tap: true};
-  }
-  let nodeTest = false;
-  let tap = false;
-  const directory = path.dirname(filePath);
-  for (const node of ast.body) {
-    if (node.type !== NODE_TYPE.IMPORT_DECLARATION) continue;
-    const specifier = node.source?.value;
-    if (typeof specifier !== 'string') continue;
-    if (specifier === NODE_TEST_MODULE) nodeTest = true;
-    if (specifier === TAP_MODULE_SPECIFIER ||
-        stringEndsWith(path.resolve(directory, specifier),
-          SHARED_TAP_MODULE_SUFFIX)) {
-      tap = true;
-    }
-  }
-  return {nodeTest, tap};
 }
 
 // Returns {milliseconds, topLevelMilliseconds, fileMilliseconds, problems}.
