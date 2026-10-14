@@ -91,7 +91,7 @@ const EMPTY_PARTICIPANT_RELEASE_DIAGNOSTIC_OBSERVATION = null;
 // A bounded wave is admitted only *inside* the existing canonical held
 // SQL control owner. Independent partitions have separate Raft/SQLite owners;
 // a red wave joins every admitted child before admitting any later cohort.
-const SEED_CONTROL_WAVE_WIDTH = 2;
+const SEED_CONTROL_WAVE_WIDTH = 4;
 
 async function releaseIndependentSeedWave(owner, services, offset, context, waveToken) {
   const settled = await Promise.allSettled(services.map(async (service) => {
