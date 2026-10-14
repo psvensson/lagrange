@@ -285,13 +285,26 @@ function createBootstrapServiceSeedWorkflowMethods() {
         const rightControl = right.tableName === TABLES.SQL_TRANSACTIONS ? 0 : 1;
         return leftControl - rightControl || left.partitionId.localeCompare(right.partitionId);
       });
+      // The registry has one entry per local REPLICA. Release authority,
+      // however, is owned by one PARTITION cohort and its full current
+      // membership. A second local replica must not restart the same entire
+      // pause/enable/observe/control/resume protocol under this shared budget.
+      // This Set tracks only which intents the seed issues, never OPEN or
+      // other consensus/authorization facts. Their owner still checks every
+      // current member and both control fences on each actual release.
+      const selectedPartitionIds = new Set();
+      const cohorts = services.filter((service) => {
+        if (selectedPartitionIds.has(service.partitionId)) return false;
+        selectedPartitionIds.add(service.partitionId);
+        return true;
+      });
       const timeSource = this.nodeService.getTimeSource();
       const budgetMs = this.config.leadershipWaitTimeoutMs;
       const startMs = timeSource.now();
       const startObservation = observeParticipantReleaseClockValue(startMs);
       const deadline = startMs + budgetMs;
       let completed = 0;
-      for (const service of services) {
+      for (const service of cohorts) {
         const authorization = this.replicaHandler
           .participantReleaseAuthorizationOwner.authorizeFreshSeed({
             partitionId: service.partitionId,
@@ -330,7 +343,7 @@ function createBootstrapServiceSeedWorkflowMethods() {
           const terminalObservation = readParticipantReleaseClock(timeSource);
           const seedRelease = seedReleaseFailureProjection({startObservation,
             terminalObservation, budgetMs, ordinal: completed + 1,
-            total: services.length, completed, attemptCount, firstBlockedDrain,
+            total: cohorts.length, completed, attemptCount, firstBlockedDrain,
             firstJoinedAttempt});
           throw new Error('Seed participant release failed: ' +
             JSON.stringify({partitionId: service.partitionId, answer, seedRelease}));
