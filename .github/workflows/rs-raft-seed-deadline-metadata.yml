@@ -1,5 +1,6 @@
 # Canonical generated metadata only, non-main WIP. No manual hash, skipped
 # gate, ratchet change or ref rewrite; only guarded fast-forward.
+# Rerun after exact trace-envelope test gained its authoritative subsystem class.
 name: rs-raft-seed-deadline-metadata
 on:
   push:
