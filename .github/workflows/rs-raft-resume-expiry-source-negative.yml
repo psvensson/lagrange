@@ -1,0 +1,63 @@
+# Source-only negative: real native recipient held in committed membership
+# after dispatch/PAUSE but before final RESUME authorization. No production fix.
+name: rs-raft-resume-expiry-source-negative
+on:
+  push:
+    branches: [fix/rs-raft-release-deadline-post-await-20261014]
+    paths:
+      - .github/workflows/rs-raft-resume-expiry-source-negative.yml
+      - test/partition/participant-release-resume-expiry.test.js
+permissions:
+  contents: read
+jobs:
+  focused:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install old source and verify target only
+        run: |
+          set -euo pipefail
+          test -z "$(git diff --name-only 7d0042659daaed7d38e9e586454861c21df3d838 HEAD -- src)"
+          npm ci
+          node --check test/partition/participant-release-resume-expiry.test.js
+          npx eslint test/partition/participant-release-resume-expiry.test.js
+      - name: Preserve actual expired-open negative and valid in-budget positive
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-resume-expiry-red
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/tree.txt"
+          FILE=test/partition/participant-release-resume-expiry.test.js
+          node --test "$FILE" > "$OUT/full.tap" 2>&1
+          rc=$?
+          printf '%s\n' "$rc" > "$OUT/status.txt"
+          cat "$OUT/full.tap" | tail -n 95
+          test "$rc" -ne 0 || exit 1
+          grep -F 'expired real recipient RESUME after awaited membership stays CLOSED' "$OUT/full.tap" || exit 1
+          grep -F 'an expired actual RESUME must never authorize OPEN after awaited facts' "$OUT/full.tap" || exit 1
+          grep -F "code: 'ERR_ASSERTION'" "$OUT/full.tap" || exit 1
+          grep -F 'in-budget real recipient RESUME after awaited membership opens normally' "$OUT/full.tap" || exit 1
+          grep -F 'ok 2 -' "$OUT/full.tap" || exit 1
+          echo 'VALID OLD-SOURCE NEGATIVE: old recipient reopens after its original clock expired.'
+      - name: Preserve original full TAP and source tree even on refusal
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-resume-expiry-red-${{ github.sha }}
+          path: test-output/rs-raft-resume-expiry-red/
+          retention-days: 14
+          if-no-files-found: warn
