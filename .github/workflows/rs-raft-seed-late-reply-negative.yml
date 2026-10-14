@@ -1,0 +1,59 @@
+# One source-only engaged negative; no production modifications or budget rise.
+name: rs-raft-seed-late-reply-negative
+on:
+  push:
+    branches: [verify/rs-raft-seed-late-reply-deadline-20261014]
+    paths:
+      - .github/workflows/rs-raft-seed-late-reply-negative.yml
+permissions:
+  contents: read
+jobs:
+  refusal:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - run: npm ci
+      - name: Unchanged seed source must fail at late-success semantic assertion
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-seed-late-reply-negative
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/tree.txt"
+          test -z "$(git diff --name-only 075aa572f6667225ba876e3cf0602e0be2925de4 HEAD -- src)" || exit 1
+          FILE=test/bootstrap/seed-release-once-per-cohort.test.js
+          npx eslint "$FILE" > "$OUT/lint.log" 2>&1
+          lint=$?
+          printf '%s\n' "$lint" > "$OUT/lint.status"
+          if test "$lint" != 0; then cat "$OUT/lint.log"; exit 1; fi
+          node --test --test-name-pattern='late successful cohort reply cannot authorize seed TRAFFIC_READY after absolute deadline' "$FILE" \
+            > "$OUT/negative.tap" 2>&1
+          result=$?
+          printf '%s\n' "$result" > "$OUT/negative.status"
+          tail -n 65 "$OUT/negative.tap"
+          test "$result" -ne 0 || exit 1
+          grep -F 'late successful cohort reply cannot authorize seed TRAFFIC_READY after absolute deadline' "$OUT/negative.tap" || exit 1
+          grep -F 'Missing expected rejection' "$OUT/negative.tap" || exit 1
+          grep -F "code: 'ERR_ASSERTION'" "$OUT/negative.tap" || exit 1
+          echo 'Old seed falsely returns a successful result after its original absolute deadline'
+      - name: Archive exact red source and unabridged TAP
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-seed-late-reply-negative-${{ github.sha }}
+          path: test-output/rs-raft-seed-late-reply-negative/
+          retention-days: 14
+          if-no-files-found: warn
