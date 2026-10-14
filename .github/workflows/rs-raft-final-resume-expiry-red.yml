@@ -1,0 +1,58 @@
+# Actual recipient proof: deadline must be checked at its final OPEN
+# boundary even when transport accepted the request before expiration.
+name: rs-raft-final-resume-expiry-red
+on:
+  push:
+    branches: [verify/rs-raft-final-resume-expiry-20261014]
+    paths: [.github/workflows/rs-raft-final-resume-expiry-red.yml]
+permissions:
+  contents: read
+jobs:
+  negative:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - run: npm ci
+      - name: Original recipient awaits membership past deadline and must not OPEN
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-final-resume-expiry-negative
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/tree.txt"
+          test -z "$(git diff --name-only 075aa572f6667225ba876e3cf0602e0be2925de4 HEAD -- src)" || exit 1
+          FILE=test/partition/participant-release-protocol.test.js
+          npx eslint "$FILE" > "$OUT/lint.log" 2>&1
+          l=$?
+          printf '%s\n' "$l" > "$OUT/lint.status"
+          if test "$l" != 0; then cat "$OUT/lint.log"; exit 1; fi
+          node --test --test-name-pattern='expiry during awaited actual RESUME member read cannot reopen admission' "$FILE" \
+            > "$OUT/source-negative.tap" 2>&1
+          rc=$?
+          printf '%s\n' "$rc" > "$OUT/test.status"
+          tail -n 80 "$OUT/source-negative.tap"
+          test "$rc" -ne 0 || exit 1
+          grep -F 'the original recipient cannot OPEN after its absolute deadline' "$OUT/source-negative.tap" || exit 1
+          grep -F 'ERR_ASSERTION' "$OUT/source-negative.tap" || exit 1
+          echo 'Meaningful old-source post-await OPEN deadline regression engaged'
+      - name: Preserve complete exact old-source native recipient refusal
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-final-resume-expiry-red-${{ github.sha }}
+          path: test-output/rs-raft-final-resume-expiry-negative/
+          retention-days: 14
+          if-no-files-found: warn
