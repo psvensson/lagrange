@@ -79,7 +79,11 @@ test('an accepted native envelope references its original Node timer until its r
     recipient, owned, envelope,
   }) => {
     const issuedBefore = owned.issued.length;
-    const accepted = await recipient.node.step(envelope);
+    // Capture the scheduling obligation at the synchronous admission boundary;
+    // awaiting a settled step can allow its 0ms callback to retire the timer.
+    const accepted = recipient.node.step(envelope);
+    assert.notEqual(typeof accepted?.then, 'function',
+      'native ingress returns its typed enqueue outcome before the drain');
     assert.equal(accepted.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
     assert.equal(accepted.reason, 'inbound-enqueued',
       'the real native peer ingress admits the exact envelope');
