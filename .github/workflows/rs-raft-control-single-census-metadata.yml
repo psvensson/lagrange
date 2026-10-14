@@ -3,7 +3,9 @@ name: rs-raft-control-single-census-metadata
 on:
   push:
     branches: [continue/rs-raft-control-pause-census-20261014]
-    paths: [.github/workflows/rs-raft-control-single-census-metadata.yml]
+    paths:
+      - .github/workflows/rs-raft-control-single-census-metadata.yml
+      - test/partition/participant-release-control-three-member.test.js
 permissions:
   contents: write
 concurrency:
