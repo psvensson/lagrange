@@ -1,4 +1,5 @@
 # Canonical generated metadata, WIP fast-forward only; never main.
+# This rerun includes the actual three-member control-voter test (2373 files).
 name: rs-raft-control-single-census-metadata
 on:
   push:
