@@ -766,6 +766,7 @@ test('cleanup debt retains all seven acquired resources on the installing schedu
       const sentinels = Array.from({length: 7}, (_, index) => index === 6 ? null :
         new Error(`observation cleanup sentinel ${index + 1}`));
       const releaseCalls = Array(7).fill(0);
+      const observerSubscriptions = new Set();
       let faultsEnabled = true;
       let reenteredCleanup = false;
       let timerHandle = null;
@@ -774,6 +775,7 @@ test('cleanup debt retains all seven acquired resources on the installing schedu
           const index = [RAFT_EVENT.APPLIED_PROGRESS, RAFT_EVENT.TERM_CHANGE,
             RAFT_EVENT.LEADER_CHANGE, RAFT_EVENT.MEMBERSHIP_CHANGED].indexOf(eventName);
           const unsubscribe = actualPort.subscribe(eventName, listener);
+          observerSubscriptions.add(listener);
           return () => {
             releaseCalls[index] += 1;
             if (index === 0 && !reenteredCleanup) {
@@ -782,7 +784,9 @@ test('cleanup debt retains all seven acquired resources on the installing schedu
               handler.localServices.delete(leader.replicaId);
             }
             if (faultsEnabled) throw sentinels[index];
-            return unsubscribe();
+            const result = unsubscribe();
+            observerSubscriptions.delete(listener);
+            return result;
           };
         }});
       Object.defineProperty(leader, 'raft', {...portDescriptor, value: wrappedPort});
@@ -845,7 +849,7 @@ test('cleanup debt retains all seven acquired resources on the installing schedu
         const observation = track(membership.trackSettlement('cleanup-debt observation',
           sendRegisteredObservation(handler, transport, request)));
         await membership.started;
-        assert.equal(observationSubscriptionCount(leader), 4);
+        assert.equal(observerSubscriptions.size, 4);
         assert.equal(registry.serviceListeners.size, registryBaseline + 1);
         assert.equal(leader.listenerCount(PARTITION_SERVICE_EVENT.SHUTDOWN_STARTED),
           serviceBaseline + 1);
@@ -902,7 +906,7 @@ test('cleanup debt retains all seven acquired resources on the installing schedu
           'the exact retained promise answers the join that discharges cleanup debt');
         assert.equal(membership.reads(), readsBeforeJoin,
           'cleanup discharge acquires no replacement facts owner');
-        assert.equal(observationSubscriptionCount(leader), 0);
+        assert.equal(observerSubscriptions.size, 0);
         assert.equal(observationTimerOwnedCount(timeSource), timerBaseline);
         assert.equal(registry.serviceListeners.size, registryBaseline);
         assert.equal(leader.listenerCount(PARTITION_SERVICE_EVENT.SHUTDOWN_STARTED),
@@ -920,7 +924,7 @@ test('cleanup debt retains all seven acquired resources on the installing schedu
         await freshMembership.started;
         assert.equal(freshMembership.reads(), 1,
           'a later request creates a new observation after the clean record was removed');
-        assert.equal(observationSubscriptionCount(leader), 4);
+        assert.equal(observerSubscriptions.size, 4);
         assert.equal(observationTimerOwnedCount(timeSource), timerBaseline + 1);
         faultsEnabled = true;
         assert.equal(registry.delete(leader.replicaId), true);
@@ -974,7 +978,7 @@ test('cleanup debt retains all seven acquired resources on the installing schedu
         await handler.shutdown();
         assert.equal(clockBClears, 0,
           'the replacement handler clock never clears an A-owned observation');
-        assert.equal(observationSubscriptionCount(leader), 0);
+        assert.equal(observerSubscriptions.size, 0);
         assert.equal(observationTimerOwnedCount(timeSource), timerBaseline);
         assert.equal(registry.serviceListeners.size, registryBaseline);
         assert.equal(leader.listenerCount(PARTITION_SERVICE_EVENT.SHUTDOWN_STARTED),
