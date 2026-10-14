@@ -1,0 +1,56 @@
+# Read-only classification of already-retained complete candidate TAP bytes.
+name: rs-raft-seed-healthy-failure-attribution
+on:
+  push:
+    branches: [diagnostic/rs-raft-seed-virtual-hardware-budget-20261014]
+    paths: [.github/workflows/rs-raft-seed-healthy-failure-attribution.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  parse:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Classify original 15s and 20s full-body failures by source payload
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          DIR="$RUNNER_TEMP/rs-raft-original-full-body"
+          mkdir -p "$DIR"
+          gh api repos/psvensson/lagrange/actions/artifacts/11884558074/zip > "$DIR/raw.zip"
+          unzip -q "$DIR/raw.zip" -d "$DIR/raw"
+          ARTIFACT="$DIR/raw" node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          const root = process.env.ARTIFACT;
+          const files = fs.readdirSync(root,{recursive:true});
+          for (const key of ['1-15000','2-20000','3-15000']) {
+            const name = files.find(p=>p.endsWith(`${key}.run.log`));
+            if (!name) throw new Error(`Missing ${key} original log`);
+            const full = fs.readFileSync(path.join(root,name),'utf8');
+            const lines = full.split('\n');
+            const marker = '{"schema":"membership-cache-error-summary/1"';
+            const summarized = lines.filter(x=>x.includes(marker)).map(x=>{
+              try {return JSON.parse(x.slice(x.indexOf(marker)));}
+              catch(error){return {parseError:String(error),partial:x.slice(0,900)};}
+            });
+            const conditions=lines.filter(x=>/AssertionError|ERROR|Error:|ERR_ASSERTION|not ok|test-files total|failed|refused|timeout|TAP assertions/.test(x))
+              .filter(x=>!x.includes('participant-release-delivery-trace/1'))
+              .slice(-38).map(x=>x.slice(0,1150));
+            console.log(JSON.stringify({key,name,primarySummaries:summarized,tail:conditions}));
+            const filename=files.find(p=>p.endsWith(`${key}.full.tap`));
+            if(filename){
+              const tap=fs.readFileSync(path.join(root,filename),'utf8');
+              console.log(JSON.stringify({key,tapBytes:tap.length,
+                tapFirst:tap.split('\n').slice(0,6).map(x=>x.slice(0,900)),
+                tapTail:tap.split('\n').slice(-8).map(x=>x.slice(0,900))}));
+            }
+          }
+          NODE
