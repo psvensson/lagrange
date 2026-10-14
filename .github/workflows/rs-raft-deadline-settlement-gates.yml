@@ -1,0 +1,126 @@
+# WIP: original absolute caller deadline, no ratchet changes.
+name: rs-raft-deadline-settlement-gates
+on:
+  push:
+    branches: [wip/rs-raft-deadline-settlement-20261014]
+    paths:
+      - .github/workflows/rs-raft-deadline-settlement-gates.yml
+      - src/bootstrap/bootstrap-service-seed-workflow.js
+      - test/bootstrap/seed-release-once-per-cohort.test.js
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-deadline-settlement-gates
+  cancel-in-progress: false
+jobs:
+  owner:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - run: npm ci
+      - name: Preserve caller deadline, route success and non-vacuous original tests
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-deadline-settlement-owner
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/tree.txt"
+          npx eslint src/bootstrap/bootstrap-service-seed-workflow.js \
+            test/bootstrap/seed-release-once-per-cohort.test.js > "$OUT/lint.log" 2>&1
+          lint=$?
+          printf '%s\n' "$lint" > "$OUT/lint.status"
+          if test "$lint" != 0; then cat "$OUT/lint.log"; fi
+          failed=0
+          test "$lint" = 0 || failed=1
+          for file in \
+            test/bootstrap/seed-release-once-per-cohort.test.js \
+            test/partition/control-wave-duplicate-boundary.test.js \
+            test/partition/participant-release-protocol.test.js \
+            test/node/replica-handler-release-recovery.test.js \
+            test/bootstrap/node-bootstrap-consistency.property.test.js; do
+            name="${file##*/}"
+            npm run -s test:file -- "$file" > "$OUT/$name.log" 2>&1
+            result=$?
+            printf '%s\n' "$result" > "$OUT/$name.status"
+            echo "$file status=$result"
+            tail -n 16 "$OUT/$name.log" | cut -c 1-680
+            if test "$result" != 0; then failed=1; fi
+            if test -f ".tap/test-results/$file.tap"; then
+              cp ".tap/test-results/$file.tap" "$OUT/$name.full.tap"
+            fi
+          done
+          exit "$failed"
+      - name: Archive every code-bound result
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-deadline-settlement-owner-${{ github.sha }}
+          path: test-output/rs-raft-deadline-settlement-owner/
+          retention-days: 14
+          if-no-files-found: warn
+  original-real-startup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - run: npm ci
+      - name: Original complete SQL/Raft/CDC healthy 45-partition startup
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-deadline-settlement-real-startup
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/tree.txt"
+          FILE=test/integration/message-group-membership-claim-cache.integration.test.js
+          sha256sum "$FILE" > "$OUT/test.sha256"
+          npm run -s test:file -- "$FILE" > "$OUT/original.log" 2>&1
+          result=$?
+          printf '%s\n' "$result" > "$OUT/original.status"
+          echo "full original test status=$result"
+          tail -n 21 "$OUT/original.log" | cut -c 1-1600
+          RAW=".tap/test-results/$FILE.tap"
+          if test -f "$RAW"; then
+            cp "$RAW" "$OUT/original-full.tap"
+            node scripts/quest-evidence/summarize-seed-release-trace.mjs \
+              "$RAW" "$OUT/trace-census.json" > "$OUT/trace-summary.json" 2> "$OUT/trace-error.log"
+            census=$?
+            printf '%s\n' "$census" > "$OUT/trace.status"
+            test "$census" = 0 && cat "$OUT/trace-summary.json"
+          else
+            census=1
+            echo 'No original TAP, refusing positive'
+          fi
+          test "$result" = 0 && test "$census" = 0
+      - name: Preserve all original full-body evidence and SHA
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-deadline-settlement-original-${{ github.sha }}
+          path: test-output/rs-raft-deadline-settlement-real-startup/
+          retention-days: 14
+          if-no-files-found: warn
