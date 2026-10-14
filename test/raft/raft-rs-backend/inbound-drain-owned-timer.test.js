@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
-import {VirtualTimeSource} from '../../../src/time/time-source.js';
+import {RealTimeSource, VirtualTimeSource} from '../../../src/time/time-source.js';
 import {RAFT_OPERATION_OUTCOME} from
   '../../../src/raft/raft-operation-port-constants.js';
 import {PERSISTENCE_ADMISSION_WAIT} from
@@ -14,8 +14,7 @@ import {setCoreFaultInjector} from
 import {PartitionNodeCluster} from './partition-node-cluster.js';
 import {coreTrappingAppend} from './core-trap-envelope.js';
 
-function observedClock() {
-  const clock = new VirtualTimeSource({startMs: 1000});
+function observedClock(clock = new VirtualTimeSource({startMs: 1000})) {
   const originalSet = clock.setTimeout.bind(clock);
   const originalClear = clock.clearTimeout.bind(clock);
   const issued = [];
@@ -32,9 +31,9 @@ function observedClock() {
   return {clock, issued, cleared};
 }
 
-async function withAcceptedFollower(partitionId, body) {
+async function withAcceptedFollower(partitionId, body, createClock = observedClock) {
   const replicaIds = ['timer-r1', 'timer-r2', 'timer-r3'];
-  const clocks = new Map(replicaIds.map((id) => [id, observedClock()]));
+  const clocks = new Map(replicaIds.map((id) => [id, createClock()]));
   const cluster = new PartitionNodeCluster({
     partitionId, replicaIds,
     substrateFor: (replicaId) => ({timeSource: clocks.get(replicaId).clock}),
@@ -47,7 +46,8 @@ async function withAcceptedFollower(partitionId, body) {
     const recipientId = replicaIds.find((id) => id !== leader);
     const recipient = cluster.replica(recipientId);
     const owned = clocks.get(recipientId);
-    owned.clock.advance(0);
+    if (typeof owned.clock.advance === 'function') owned.clock.advance(0);
+    else await new Promise((resolve) => setImmediate(resolve));
     const status = recipient.node.readStatus();
     assert.equal(status.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
     const envelope = coreTrappingAppend({
@@ -73,6 +73,30 @@ async function withAcceptedFollower(partitionId, body) {
   }
   if (failure !== null) throw failure;
 }
+
+test('an accepted native envelope references its original Node timer until its real turn',
+  async () => withAcceptedFollower('native-inbound-foreground-liveness', async ({
+    recipient, owned, envelope,
+  }) => {
+    const issuedBefore = owned.issued.length;
+    const accepted = await recipient.node.step(envelope);
+    assert.equal(accepted.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
+    assert.equal(accepted.reason, 'inbound-enqueued',
+      'the real native peer ingress admits the exact envelope');
+    const current = owned.issued.slice(issuedBefore)
+      .filter((record) => record.ms === 0);
+    assert.equal(current.length, 1,
+      'the original scheduler owns one newly accepted native drain');
+    const handle = current[0].handle;
+    assert.equal(typeof handle?.hasRef, 'function',
+      'the native test observes an actual platform timeout');
+    assert.equal(handle.hasRef(), true,
+      'admitted Raft work keeps the Node event loop alive until its own turn');
+    const closed = recipient.node.close();
+    assert.equal(closed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
+    assert.equal(owned.cleared.filter((value) => value === handle).length, 1,
+      'the original timer is retired by exact close instead of a stray callback');
+  }, () => observedClock(new RealTimeSource())));
 
 test('two admitted native envelopes share one timer, then close cancels its exact handle',
   async () => withAcceptedFollower('native-inbound-timer-close', async ({
