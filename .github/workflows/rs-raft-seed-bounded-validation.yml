@@ -63,6 +63,19 @@ jobs:
             fi
             if test -f ".tap/test-results/$f.tap"; then
               cp ".tap/test-results/$f.tap" "$OUT/$name.full.tap"
+              if test "$name" = "message-group-membership-claim-cache.integration.test.js"; then
+                node scripts/quest-evidence/summarize-seed-release-trace.mjs \
+                  "$OUT/$name.full.tap" "$OUT/$name.release-census.json" \
+                  > "$OUT/$name.census-one-line.json" 2> "$OUT/$name.census-error.log"
+                census=$?
+                printf '%s\\n' "$census" > "$OUT/$name.census.status"
+                if test "$census" -ne 0; then
+                  cat "$OUT/$name.census-error.log"
+                  failed=1
+                else
+                  cat "$OUT/$name.census-one-line.json"
+                fi
+              fi
             fi
             if test -d test-output/reports; then
               mkdir -p "$OUT/$name.canonical"
