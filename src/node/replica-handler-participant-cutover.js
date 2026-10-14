@@ -186,7 +186,8 @@ async function releaseControlOwnerFirst(handler, service, request) {
 // CUT_OVER answer. The normal full release remains authoritative for a dirty,
 // unavailable or schema-incomplete cohort.
 function cleanCurrentControlCohort(service, release, attempt, census) {
-  if (service.tableName !== TABLES.SQL_TRANSACTIONS) return false;
+  if (service.tableName !== TABLES.SQL_TRANSACTIONS ||
+      service.partitionId !== INITIAL_PARTITION_IDS[TABLES.SQL_TRANSACTIONS]) return false;
   const local = census.find((facts) =>
     facts?.generation?.replicaId === service.replicaId);
   return local !== undefined &&
