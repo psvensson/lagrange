@@ -1,0 +1,33 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "participant-resume-post-await-deadline-fence",
+  "status": "fail",
+  "base": "7d0042659daaed7d38e9e586454861c21df3d838",
+  "receipts": [
+    {
+      "id": "engaged-post-await-old-source-unsafe-open-negative",
+      "passed": false,
+      "detail": "No source-only engaged negative or independent current-byte approval yet. Explicit post-await expiry verification pending."
+    },
+    {
+      "id": "one-canonical-clock-expiry-owner-and-final-commit-fence",
+      "passed": false,
+      "detail": "No source-only engaged negative or independent current-byte approval yet. Explicit post-await expiry verification pending."
+    },
+    {
+      "id": "same-real-recipient-expired-and-nonexpired-positive",
+      "passed": false,
+      "detail": "No source-only engaged negative or independent current-byte approval yet. Explicit post-await expiry verification pending."
+    },
+    {
+      "id": "full-seed-20s-and-original-fast-timeout-negative",
+      "passed": false,
+      "detail": "No source-only engaged negative or independent current-byte approval yet. Explicit post-await expiry verification pending."
+    },
+    {
+      "id": "independent-static-tx-recovery-and-multihost-review",
+      "passed": false,
+      "detail": "No source-only engaged negative or independent current-byte approval yet. Explicit post-await expiry verification pending."
+    }
+  ]
+}
