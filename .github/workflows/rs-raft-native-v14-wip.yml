@@ -1,0 +1,65 @@
+# One instrumented native witness only; no certification/merge authority.
+name: rs-raft-native-v14-wip
+on:
+  push:
+    branches: [continue/rs-raft-native-v14-core-turn-identity-20261014]
+    paths:
+      - .github/workflows/rs-raft-native-v14-wip.yml
+      - src/raft/raft-rs-runtime-owner.js
+      - test/partition/participant-release-native-application-order.test.js
+      - test/partition/participant-release-native-exit-diagnostic.js
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-native-v14-wip
+  cancel-in-progress: false
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - run: npm ci
+      - name: One exact instrumented native test, never retry a red
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          mkdir -p test-output/native-v14-github
+          git rev-parse HEAD > test-output/native-v14-github/source-sha.txt
+          node --check test/partition/participant-release-native-exit-diagnostic.js > test-output/native-v14-github/check-helper.log 2>&1
+          echo "$?" > test-output/native-v14-github/check-helper.status
+          node --check test/partition/participant-release-native-application-order.test.js > test-output/native-v14-github/check-test.log 2>&1
+          echo "$?" > test-output/native-v14-github/check-test.status
+          npm run -s test:file -- test/partition/participant-release-native-application-order.test.js > test-output/native-v14-github/test.log 2>&1
+          echo "$?" > test-output/native-v14-github/test.status
+          if test -d test-output/reports; then
+            cp test-output/reports/*.ndjson test-output/native-v14-github/ 2>/dev/null || true
+          fi
+          grep 'native-before-exit' test-output/native-v14-github/test.log | tail -n 3 || true
+          grep -A 18 -B 2 -E '^not ok|^  error:|^  failureType:' test-output/native-v14-github/test.log | head -n 90 || true
+          tail -n 18 test-output/native-v14-github/test.log
+          failed=0
+          for s in test-output/native-v14-github/*.status; do
+            test "$(cat "$s")" = "0" || failed=1
+          done
+          exit "$failed"
+      - name: Preserve source-bound native witness and original red
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: native-v14-wip-${{ github.sha }}
+          path: test-output/native-v14-github/
+          retention-days: 10
+          if-no-files-found: warn
