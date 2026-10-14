@@ -367,6 +367,10 @@ test('one canonical wave holds three real control voters across two released nat
           trigger: TRIGGER.FRESH_SEED, deadlineAtMs,
           authorization: pendingAuthorization,
           [WAVE_FIELD]: Object.freeze(Object.create(null))});
+        const permittedJoin = requestParticipantRelease(handler, {
+          partitionId: pendingPartition, targetBuildDigest: build.digest,
+          trigger: TRIGGER.FRESH_SEED, deadlineAtMs,
+          authorization: pendingAuthorization, [WAVE_FIELD]: liveWaveToken});
         // Both invalid deliveries reach the original registered RELEASE
         // handler while the first valid RUNS promise is still held at PAUSE.
         await new Promise((resolve) => setTimeout(resolve, 80));
@@ -374,14 +378,17 @@ test('one canonical wave holds three real control voters across two released nat
           'wave END must not RESUME current control while an admitted child is held');
         pausePermitOpen = true;
         allowChildPause.resolve();
-        const [answer, waveAnswer, wrongKindAnswer, forgedAnswer] = await Promise.all([
-          admittedChild, earlyReturnWave, wrongKind, forged]);
+        const [answer, waveAnswer, wrongKindAnswer, forgedAnswer, joinedAnswer] =
+          await Promise.all([admittedChild, earlyReturnWave, wrongKind, forged,
+            permittedJoin]);
         assert.equal(wrongKindAnswer.outcome, OUTCOME.UNAVAILABLE,
           'an operator request must not join a held legitimate wave child RUNS');
         assert.equal(wrongKindAnswer.missingFact, MISSING_FACT.CURRENT_CONTROL_OWNER);
         assert.equal(forgedAnswer.outcome, OUTCOME.UNAVAILABLE,
           'a forged wave correlation must not join the same active child RUNS');
         assert.equal(forgedAnswer.missingFact, MISSING_FACT.CURRENT_CONTROL_OWNER);
+        assert.equal(joinedAnswer.outcome, OUTCOME.CUT_OVER,
+          'an exact fresh-seed caller may still join its own in-flight RUNS');
         assert.equal(answer.outcome, OUTCOME.CUT_OVER, JSON.stringify(answer));
         assert.equal(waveAnswer, undefined,
           'the wave owns the child lifetime but does not invent a completion result');
