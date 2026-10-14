@@ -1,9 +1,12 @@
 # Regenerate canonical shard metadata on a WIP branch only. No ratchet changes.
+# The trace-envelope test has been moved into existing test/scripts ownership.
 name: rs-raft-seed-post-await-metadata
 on:
   push:
     branches: [verify/rs-raft-seed-late-reply-fence-20261014]
-    paths: [.github/workflows/rs-raft-seed-post-await-metadata.yml]
+    paths:
+      - .github/workflows/rs-raft-seed-post-await-metadata.yml
+      - test/scripts/participant-release-trace-envelope.test.js
 permissions:
   contents: write
 concurrency:
