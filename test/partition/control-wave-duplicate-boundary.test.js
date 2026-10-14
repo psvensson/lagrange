@@ -267,7 +267,7 @@ test('one canonical wave holds three real control voters across two released nat
             }
             return Reflect.apply(originalLateDeliver, this, args);
           };
-            lateRelease = requestParticipantRelease(handler, {
+          lateRelease = requestParticipantRelease(handler, {
             partitionId: DEPENDENTS[0].id, targetBuildDigest: build.digest,
             trigger: TRIGGER.FRESH_SEED, deadlineAtMs,
             authorization: dependentAuthorization, [WAVE_FIELD]: inFlightToken});
