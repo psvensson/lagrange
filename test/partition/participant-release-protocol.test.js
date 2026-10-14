@@ -388,6 +388,45 @@ test('already-current control cohort proves release with fewer original route ca
   }, {partitionId: CONTROL_PARTITION, tableId: SQL_TRANSACTIONS_SCHEMA.tableName,
     tableName: SQL_TRANSACTIONS_SCHEMA.tableName, schema: SQL_TRANSACTIONS_SCHEMA}));
 
+test('already-clean control release consumes one post-pause census at original recipient',
+  () => fixture(async ({handler, service, release, transport}) => {
+    const originalOrigin = await release();
+    assert.equal(originalOrigin.outcome, OUTCOME.CUT_OVER,
+      JSON.stringify(originalOrigin));
+    const origin = readPartitionWriteOrigin(service.db);
+    assert.notEqual(origin, null, 'the original full release wrote real durable origin');
+    const originalDeliver = transport.deliver;
+    const actions = [];
+    transport.deliver = function(...args) {
+      const request = args[1];
+      if (request?.type === PARTICIPANT_RELEASE_TYPE &&
+          request.partitionId === CONTROL_PARTITION) actions.push(request.action);
+      return Reflect.apply(originalDeliver, this, args);
+    };
+    let answer;
+    try {
+      answer = await release();
+    } finally {
+      transport.deliver = originalDeliver;
+    }
+    assert.equal(answer.outcome, OUTCOME.CUT_OVER, JSON.stringify(answer));
+    assert.equal(actions.filter((action) => action === RELEASE_ACTION.INSPECT).length, 1,
+      'a real current-control cohort already has a complete post-PAUSE member census');
+    assert.equal(actions.filter((action) => action === RELEASE_ACTION.PAUSE).length, 1,
+      'the original recipient still closes admission before the fresh assessment');
+    assert.equal(actions.filter((action) => action === RELEASE_ACTION.RESUME).length, 1,
+      'only the original recipient can reopen after its own final fresh facts read');
+    assert.equal(actions.filter((action) =>
+      action === RELEASE_ACTION.ENABLE ||
+      action === RELEASE_ACTION.OBSERVE_APPLIED_POSITION).length, 0,
+    'clean current control never reissues ENABLE or origin observation');
+    assert.deepEqual(readPartitionWriteOrigin(service.db), origin,
+      'the shortcut does not replace durable origin');
+    assert.equal(participantReleaseAdmissionOf(service).state, ADMISSION.OPEN);
+    assert.strictEqual(handler.localServices.get(service.replicaId), service);
+  }, {partitionId: CONTROL_PARTITION, tableId: SQL_TRANSACTIONS_SCHEMA.tableName,
+    tableName: SQL_TRANSACTIONS_SCHEMA.tableName, schema: SQL_TRANSACTIONS_SCHEMA}));
+
 test('control current-proof refuses schema drift during its second live census, then repairs',
   () => fixture(async ({service, release, transport}) => {
     const first = await release();
