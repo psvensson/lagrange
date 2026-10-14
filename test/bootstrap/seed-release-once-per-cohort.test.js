@@ -9,6 +9,7 @@ import {createBootstrapServiceSeedWorkflowMethods} from
 import {TABLES} from '../../src/constants/tables.js';
 import {RealTimeSource} from '../../src/time/time-source.js';
 import {PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
+  PARTICIPANT_RELEASE_CONTROL_WAVE_FIELD as WAVE_FIELD,
   PARTICIPANT_RELEASE_RESULT_FIELD, PARTICIPANT_RELEASE_TYPE,
   PARTICIPANT_RELEASE_TRIGGER} from
   '../../src/partition/partition-participant-transaction-cutover-constants.js';
@@ -42,6 +43,8 @@ test('seed issues one serialized real partition release intent, not one per repl
     const routed = [];
     const authorized = [];
     const token = Object.freeze({kind: 'test-only-authority-token'});
+    const waveToken = Object.freeze(Object.create(null));
+    const waves = [];
     const owner = {
       partitionServices: services,
       nodeService: {getTimeSource: () => clock},
@@ -55,6 +58,15 @@ test('seed issues one serialized real partition release intent, not one per repl
             assert.equal(request.targetBuildDigest.length, 64,
               'the real build measurement is available for fresh seed');
             return token;
+          },
+        },
+        participantReleaseRecovery: {
+          async withFreshSeedControlWave(options, execute) {
+            waves.push(options);
+            assert.deepEqual(options.partitionIds, [PAYLOADS, RESULTS],
+              'seed submits the exact sorted dependent partition IDs, not replicas');
+            assert.strictEqual(options.controlAuthorization, token);
+            return execute(waveToken);
           },
         },
         messageRouter: {
@@ -81,18 +93,29 @@ test('seed issues one serialized real partition release intent, not one per repl
       'the real seed registry still contains all three replicas per partition');
     assert.deepEqual(requested, expected,
       'the seed starts one full-cohort RELEASE for each distinct partition in order');
-    assert.deepEqual(authorized, expected,
-      'only the existing fresh-seed authorization owner is asked per cohort');
+    assert.deepEqual(authorized, [CONTROL, CONTROL, PAYLOADS, RESULTS],
+      'one ordinary control intent, one exact control-wave admission, and two child intents');
+    assert.equal(waves.length, 1,
+      'the seed requests exactly one canonical control-owner wave');
     const firstDeadline = routed[0]?.payload.deadlineAtMs;
     assert.ok(Number.isSafeInteger(firstDeadline) &&
       firstDeadline >= startedAt &&
       firstDeadline <= clock.now() + SHARED_BUDGET_MS,
     'the existing seed clock owns the one unextended absolute deadline');
+    assert.equal(waves[0].deadlineAtMs, firstDeadline,
+      'the wave and every dependent retain the original absolute seed deadline');
+    assert.equal(waves[0].targetBuildDigest.length, 64);
+    assert.equal(Object.hasOwn(routed[0].payload, WAVE_FIELD), false,
+      'the first control release remains the ordinary full source');
     for (const {payload, options} of routed) {
       assert.equal(payload.type, PARTICIPANT_RELEASE_TYPE);
       assert.equal(payload.action, 'release');
       assert.equal(payload.trigger, PARTICIPANT_RELEASE_TRIGGER.FRESH_SEED);
       assert.equal(payload.authorization, token);
+      if (payload.partitionId !== CONTROL) {
+        assert.strictEqual(payload[WAVE_FIELD], waveToken,
+          'dependent carries only the opaque correlation, not control permission');
+      }
       assert.equal(payload.deadlineAtMs, firstDeadline,
         'all distinct cohorts share the original seed deadline');
       assert.ok(options.timeoutMs > 0 &&
