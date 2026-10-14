@@ -1,4 +1,5 @@
 # Exact source-only integrated WIP; metadata is derived, never authority.
+# Re-run after final composed workflow content is installed; preserve fast-forward lease.
 name: rs-raft-integrated-wip-metadata
 on:
   push:
