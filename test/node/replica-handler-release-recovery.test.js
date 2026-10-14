@@ -738,7 +738,7 @@ test('synchronous acquisition cancellation retires late subscription and timer h
           assert.equal(timerAcquisitions, phase === 'timer' ? 1 : 0);
           assert.equal(observationTimerOwnedCount(timeSource), timerBaseline);
           assert.equal(observedSubscriptions.every(({eventName, listener}) =>
-            actualPort.listeners.get(eventName)?.has(listener) !== true), true,
+            leader.controllablePort.listeners.get(eventName)?.has(listener) !== true), true,
           'every exact acquired observation callback is unsubscribed');
           assert.equal(handler.localServices.serviceListeners.size, registryBaseline);
           assert.equal(leader.listenerCount(PARTITION_SERVICE_EVENT.SHUTDOWN_STARTED),
@@ -1052,7 +1052,7 @@ test('host-held recovery uses the fixed owner cadence and never reads retryAfter
     await settleOwnerTurns();
     assert.equal(statusReads, 1,
       'a synchronous consensus wake coalesces into the current held turn');
-    assert.equal(observationTimerOwnedCount(timeSource), 1);
+    assert.equal(timeSource.pendingTimerCount(), 1);
     timeSource.advance(BOUND.RECOVERY_RETRY_MS - 1);
     await settleOwnerTurns();
     assert.equal(statusReads, 1, 'the retained observation does not run before its due time');
@@ -1064,7 +1064,7 @@ test('host-held recovery uses the fixed owner cadence and never reads retryAfter
       await settleOwnerTurns();
       assert.equal(statusReads, turn + 1,
         'each continuously held turn waits for the fixed owner cadence');
-      assert.equal(observationTimerOwnedCount(timeSource), 1,
+      assert.equal(timeSource.pendingTimerCount(), 1,
         'one hosted partition retains one timer-backed observation debt');
     }
     assert.equal(retryFieldReads, 0,
@@ -1112,7 +1112,7 @@ test('host-held recovery uses the fixed owner cadence and never reads retryAfter
     await settleOwnerTurns();
     assert.equal(statusReads, beforeBurst + 1,
       'a real event burst advances one coalesced partition observation');
-    assert.equal(observationTimerOwnedCount(timeSource), 1);
+    assert.equal(timeSource.pendingTimerCount(), 1);
   }));
 
 test('ordered hosted observations prefer a leader and retain no earlier held debt',
@@ -1147,7 +1147,7 @@ test('ordered hosted observations prefer a leader and retain no earlier held deb
     assert.equal(heldReads, 1);
     assert.equal(leaderReads, 1);
     assert.equal(laterHeldReads, 0, 'the first actual leader ends the ordered observation');
-    assert.equal(observationTimerOwnedCount(timeSource), 0,
+    assert.equal(timeSource.pendingTimerCount(), 0,
       'an earlier held snapshot grants no timed debt after a current leader is found');
     assert.equal(reports.length, 1);
     assert.equal(reports[0].outcome, OUTCOME.OPERATOR_REQUIRED);
@@ -1178,7 +1178,7 @@ test('no-leader observation gives canonical held status precedence over unavaila
     await settleOwnerTurns();
     assert.equal(unavailableReads, 1);
     assert.equal(heldReads, 1);
-    assert.equal(observationTimerOwnedCount(timeSource), 1,
+    assert.equal(timeSource.pendingTimerCount(), 1,
       'one canonical held member retains one partition debt');
     assert.equal(reports.length, 1);
     assert.equal(reports[0].blockedReplicaId, held.replicaId);
@@ -1231,7 +1231,7 @@ test('healthy nonleaders do not poll while malformed status is typed and event-d
     assert.equal(malformedReads, 1);
     assert.equal(nullReads, 1);
     assert.equal(uninitializedReads, 0);
-    assert.equal(observationTimerOwnedCount(timeSource), 0);
+    assert.equal(timeSource.pendingTimerCount(), 0);
     assert.equal(reports.length, 3,
       'healthy nonleaders are silent and unavailable status remains visible');
     const reportByPartition = new Map(reports.map((report) => [report.partitionId, report]));
