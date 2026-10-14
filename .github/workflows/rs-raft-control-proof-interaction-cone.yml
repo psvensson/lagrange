@@ -1,0 +1,79 @@
+# WIP exact-source interaction cone on the canonical control fast proof;
+# extends beyond focused release tests but cannot certify full rs-raft cutover.
+name: rs-raft-control-proof-interaction-cone
+on:
+  push:
+    branches: [verify/rs-raft-control-proof-resume-race-20261014]
+    paths: [.github/workflows/rs-raft-control-proof-interaction-cone.yml]
+permissions:
+  contents: read
+jobs:
+  interaction:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Exact frozen production source and locked dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          REF=47ceb42e4a36757007f0d8006d2014fa1400d9c8
+          test -z "$(git diff --name-only "$REF" HEAD -- src)"
+          npm ci
+      - name: TX1, admission, topology, split/merge and zero legacy interactions
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-control-proof-interactions
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/source-head.txt"
+          git rev-parse HEAD^{tree} > "$OUT/source-tree.txt"
+          failed=0
+          for file in \
+            test/partition/partition-participant-release-admission.test.js \
+            test/partition/partition-participant-transaction-apply.test.js \
+            test/partition/partition-participant-transaction-staging.test.js \
+            test/partition/partition-participant-transaction-topology.test.js \
+            test/partition/partition-tx1-single-path-alpha.test.js \
+            test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js \
+            test/partition/split-recovery-after-restart.test.js \
+            test/partition/split-mirror-write-identity.test.js \
+            test/partition/merge-cutover-coordination.test.js \
+            test/raft/raft-rs-backend/zero-legacy-consensus-runtime.test.js; do
+            n="${file##*/}"
+            npm run -s test:file -- "$file" > "$OUT/$n.log" 2>&1
+            status=$?
+            printf '%s\n' "$status" > "$OUT/$n.status"
+            echo "$file status=$status"
+            tail -n 19 "$OUT/$n.log" | cut -c 1-420
+            if test "$status" -ne 0; then
+              failed=1
+              grep -E 'not ok|fail|cancel|error|timeout' "$OUT/$n.log" \
+                | tail -n 22 | cut -c 1-850 || true
+            fi
+            if test -d test-output/reports; then
+              mkdir -p "$OUT/$n.canonical"
+              find test-output/reports -maxdepth 1 -type f -name '*.ndjson' \
+                -exec cp {} "$OUT/$n.canonical/" \;
+            fi
+          done
+          exit "$failed"
+      - name: Preserve every red including original TAP, exact source and statuses
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-control-proof-interactions-${{ github.sha }}
+          path: test-output/rs-raft-control-proof-interactions/
+          retention-days: 14
+          if-no-files-found: warn
