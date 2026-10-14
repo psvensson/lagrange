@@ -18,7 +18,7 @@ import {PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
 const CONTROL = 'sql_transactions-p1';
 const BUDGET_MS = 1000;
 
-function ownerWithDeliveryAdvance(advanceMs) {
+function ownerWithDeliveryAdvance(advanceMs, acceptedPartitions = [CONTROL]) {
   const timeSource = new VirtualTimeSource({startMs: 12000});
   const events = [];
   const replica = {partitionId: CONTROL,
@@ -44,7 +44,7 @@ function ownerWithDeliveryAdvance(advanceMs) {
             timeoutMs: deliveryOptions.timeoutMs,
             payload});
           if (payload.type !== PARTICIPANT_RELEASE_TYPE ||
-              payload.partitionId !== CONTROL) {
+              !acceptedPartitions.includes(payload.partitionId)) {
             throw new Error('The original control release route was not exercised');
           }
           timeSource.advance(advanceMs);
@@ -99,10 +99,11 @@ test('typed control reply completed inside the shared deadline is accepted',
 
 test('expired successful control-wave END cannot complete seed startup readiness',
   async () => {
-    const {owner, timeSource, events} = ownerWithDeliveryAdvance(0);
     const dependent = {partitionId: 'artifact_payloads-p1',
       tableName: TABLES.ARTIFACT_PAYLOADS,
       replicaId: 'seed-deadline-payloads-r1'};
+    const {owner, timeSource, events} = ownerWithDeliveryAdvance(0,
+      [CONTROL, dependent.partitionId]);
     owner.partitionServices.set(dependent.replicaId, dependent);
     let waveStarted = false;
     let waveReturnedAfterDeadline = false;
