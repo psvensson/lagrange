@@ -36,6 +36,8 @@ jobs:
           git merge-base "$MAIN" "$CANDIDATE" > "$OUT/merge-base.txt"
           git checkout --detach "$MAIN" > "$OUT/main-checkout.log" 2>&1
           test "$(git rev-parse HEAD)" = "$MAIN" || exit 1
+          git config user.name 'rs-raft-mergetree-diagnostic'
+          git config user.email 'diagnostic@example.invalid'
           GIT_MERGE_AUTOEDIT=no git -c core.hooksPath=/dev/null merge \
             --no-commit --no-ff "$CANDIDATE" > "$OUT/merge.stdout" 2> "$OUT/merge.stderr"
           rc=$?
