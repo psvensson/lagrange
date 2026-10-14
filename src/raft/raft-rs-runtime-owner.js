@@ -121,6 +121,7 @@ let actualCoreEntryObserver = null;
 // Passive test-only native drain stage witness, never a progress driver.
 let nativeInboundStageObserver = null;
 const NATIVE_INBOUND_STAGE = Object.freeze({
+  ACCEPTED: 'accepted', COALESCED: 'coalesced',
   REQUEST: 'request', RETRY_REQUEST: 'retry-request', CALLBACK: 'callback',
   CLOSED_OR_EMPTY: 'closed-or-empty', PERSISTENCE_WAIT: 'persistence-wait',
   TURN_REQUEST: 'turn-request', WAIT_BOUND: 'wait-bound',
@@ -128,7 +129,8 @@ const NATIVE_INBOUND_STAGE = Object.freeze({
 function reportNativeInboundStage(group, stage) {
   if (nativeInboundStageObserver === null) return;
   nativeInboundStageObserver(Object.freeze({groupId: group.groupId,
-    replicaIdentity: group.replicaIdentity, stage, queued: group.inbound.length}));
+    replicaIdentity: group.replicaIdentity, stage, queued: group.inbound.length,
+    scheduled: group.inboundDrainScheduled}));
 }
 // A test's fault at the core boundary: called inside the core call's
 // containment with the group, the operation and its arguments, it may throw
@@ -1739,6 +1741,7 @@ function perform(group, command) {
 // admission bound passes (then the next operation drains them).
 function scheduleInboundDrain(group) {
   if (group.inboundDrainScheduled) {
+    reportNativeInboundStage(group, NATIVE_INBOUND_STAGE.COALESCED);
     return;
   }
   group.inboundDrainScheduled = true;
@@ -1942,6 +1945,7 @@ function createRuntimeDispatcher(request) {
           reason: PARTICIPATION_GATE.INBOUND_DROPPED_IDENTITY_UNRECORDED});
       }
       group.inbound.push(snapshotEnvelope(envelope));
+      reportNativeInboundStage(group, NATIVE_INBOUND_STAGE.ACCEPTED);
       scheduleInboundDrain(group);
       return outcome(CORE_OK, {reason: RUNTIME_REASON.INBOUND_ENQUEUED});
     }),
