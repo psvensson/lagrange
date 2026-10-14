@@ -1,0 +1,59 @@
+# WIP bounded wave adversary. This does not qualify original startup.
+name: rs-raft-held-wave-bounded-refusal
+on:
+  push:
+    branches: [experiment/rs-raft-control-wave-width4-20261014]
+    paths:
+      - .github/workflows/rs-raft-held-wave-bounded-refusal.yml
+      - test/bootstrap/seed-release-once-per-cohort.test.js
+permissions:
+  contents: read
+jobs:
+  bounded:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Exact locked dependencies
+        run: npm ci
+      - name: Enforce syntax, style, first failure ordering and joined children
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/held-wave-bounded-refusal
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/tree.txt"
+          FILE=test/bootstrap/seed-release-once-per-cohort.test.js
+          node --check "$FILE" > "$OUT/syntax.log" 2>&1
+          syntax=$?
+          npx eslint "$FILE" src/bootstrap/bootstrap-service-seed-workflow.js > "$OUT/lint.log" 2>&1
+          lint=$?
+          node --test "$FILE" > "$OUT/bounded-original.tap" 2>&1
+          teststatus=$?
+          printf '%s\n' "$syntax" > "$OUT/syntax.status"
+          printf '%s\n' "$lint" > "$OUT/lint.status"
+          printf '%s\n' "$teststatus" > "$OUT/test.status"
+          if test "$syntax" != 0; then cat "$OUT/syntax.log"; fi
+          if test "$lint" != 0; then cat "$OUT/lint.log"; fi
+          tail -n 100 "$OUT/bounded-original.tap"
+          test "$syntax" = 0 && test "$lint" = 0 && test "$teststatus" = 0
+      - name: Preserve all source-bound outcomes and original errors
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-held-bounded-refusal-${{ github.sha }}
+          path: test-output/held-wave-bounded-refusal/
+          retention-days: 14
+          if-no-files-found: warn
