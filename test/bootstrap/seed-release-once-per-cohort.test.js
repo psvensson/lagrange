@@ -7,7 +7,7 @@ import {test} from 'node:test';
 import {createBootstrapServiceSeedWorkflowMethods} from
   '../../src/bootstrap/bootstrap-service-seed-workflow.js';
 import {TABLES} from '../../src/constants/tables.js';
-import {RealTimeSource} from '../../src/time/time-source.js';
+import {RealTimeSource, VirtualTimeSource} from '../../src/time/time-source.js';
 import {PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
   PARTICIPANT_RELEASE_CONTROL_WAVE_FIELD as WAVE_FIELD,
   PARTICIPANT_RELEASE_RESULT_FIELD, PARTICIPANT_RELEASE_TYPE,
@@ -161,4 +161,55 @@ test('seed issues one serialized real partition release intent, not one per repl
       assert.equal(authorized.length, 0,
         'invalid budget requests no fresh-seed authority');
     }
+  });
+
+test('seed refuses an acknowledged CUT_OVER delivered after the single absolute deadline',
+  {timeout: 10000}, async () => {
+    const clock = new VirtualTimeSource({startMs: 1000});
+    const entry = localReplica(CONTROL, TABLES.SQL_TRANSACTIONS, 'late-control-r1');
+    const partitionServices = new Map([[entry.replicaId, entry]]);
+    const entered = Promise.withResolvers();
+    const heldReply = Promise.withResolvers();
+    const calls = [];
+    const owner = {
+      partitionServices,
+      nodeService: {getTimeSource: () => clock},
+      config: {leadershipWaitTimeoutMs: SHARED_BUDGET_MS},
+      replicaHandler: {
+        nodeId: 'seed-absolute-deadline-test',
+        timeSource: clock,
+        participantReleaseAuthorizationOwner: {
+          authorizeFreshSeed() {
+            return Object.freeze({kind: 'test-only-authorization'});
+          },
+        },
+        messageRouter: {
+          deliver(_address, request, options) {
+            calls.push({request, options});
+            entered.resolve();
+            return heldReply.promise;
+          },
+        },
+      },
+      sleep() {
+        throw new Error('valid late CUT_OVER has no eligible retry');
+      },
+    };
+    const release = createBootstrapServiceSeedWorkflowMethods()
+      .releaseSeedParticipantCohorts.call(owner);
+    await entered.promise;
+    assert.equal(calls.length, 1,
+      'an actual partition release request was admitted before the deadline');
+    assert.equal(calls[0].request.deadlineAtMs, 2000,
+      'the original seed owner captured one absolute 1000ms budget');
+    assert.equal(calls[0].options.timeoutMs, SHARED_BUDGET_MS);
+    // One already-admitted callback finishes after the deadline; it must not
+    // turn the seed traffic-ready state green even if its durable work succeeded.
+    clock.advance(SHARED_BUDGET_MS + 1);
+    heldReply.resolve({acknowledged: true, deliveryState: 'delivered',
+      [PARTICIPANT_RELEASE_RESULT_FIELD]: {outcome: OUTCOME.CUT_OVER}});
+    await assert.rejects(release, /Seed participant release failed:/u,
+      'an expired caller cannot accept a late positive release answer');
+    assert.equal(calls.length, 1,
+      'no new release or renewed timeout follows an expired positive answer');
   });
