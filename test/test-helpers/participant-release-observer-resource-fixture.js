@@ -78,8 +78,10 @@ function captureParticipantReleaseObservationTimer(service, scheduler) {
           errors.push(error);
         }
       }
-      if (errors.length) throw new AggregateError(errors,
-        'applied-position timer capture restoration failed');
+      if (errors.length) {
+        throw new AggregateError(errors,
+          'applied-position timer capture restoration failed');
+      }
     },
   };
 }
@@ -92,12 +94,6 @@ function observationTimerOwnedCount(scheduler) {
   return records.filter((record) => record.active).length;
 }
 
-function observationTimerAcquisitions(scheduler) {
-  const records = CAPTURES.get(scheduler);
-  if (records === undefined) throw new Error('observation scheduler not captured');
-  return records.length;
-}
-
 function lastObservationTimerHandle(scheduler) {
   const records = CAPTURES.get(scheduler);
   if (records === undefined) throw new Error('observation scheduler not captured');
@@ -105,4 +101,4 @@ function lastObservationTimerHandle(scheduler) {
 }
 
 export {captureParticipantReleaseObservationTimer, observationTimerOwnedCount,
-  observationTimerAcquisitions, lastObservationTimerHandle};
+  lastObservationTimerHandle};
