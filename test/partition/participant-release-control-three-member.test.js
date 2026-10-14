@@ -19,6 +19,7 @@ import {TABLES} from '../../src/constants/tables.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
   PARTICIPANT_RELEASE_ACTION as ACTION,
+  PARTICIPANT_RELEASE_ADMISSION as ADMISSION,
   PARTICIPANT_RELEASE_TYPE} from
   '../../src/partition/partition-participant-transaction-cutover-constants.js';
 import {participantReleaseAdmissionOf} from
@@ -117,7 +118,7 @@ test('three actual current SQL control voters share one PAUSE census and each re
           `${service.replicaId}: original recipient performs fresh final RESUME checks`);
         assert.equal(count(ACTION.ENABLE), 0);
         assert.equal(count(ACTION.OBSERVE_APPLIED_POSITION), 0);
-        assert.equal(participantReleaseAdmissionOf(service).state, 'open',
+        assert.equal(participantReleaseAdmissionOf(service).state, ADMISSION.OPEN,
           'only the current original recipient's release identity reopens admission');
         assert.deepEqual(readPartitionWriteOrigin(service.db),
           origins[group.services.indexOf(service)]);
