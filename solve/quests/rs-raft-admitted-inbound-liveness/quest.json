@@ -1,0 +1,53 @@
+{
+  "schema": "solve-quest/2",
+  "id": "rs-raft-admitted-inbound-liveness",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "A native Raft group that accepts an exact, durable-identity inbound envelope as CORE_OK/inbound-enqueued must own the bounded scheduled drain as admitted work, even when no unrelated event-loop handle remains. Every admitted envelope either reaches the real lifecycle-admitted core/Ready/application/publication path, or stays as explicitly owned and typed deferred debt; it cannot disappear on idle-process exit. Close and replacement retire its exact scheduling resources without leaving referenced background work.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/rs-raft-admitted-inbound-liveness/evidence/receipt.json",
+      "requiredReceipts": [
+        "identity-correct-native-stage-attribution",
+        "source-only-engaged-liveness-negative",
+        "candidate-native-progress-positive",
+        "bounded-retry-close-and-recovery-ownership",
+        "independent-static-and-composed-gates"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "new-runtime-lifecycle-scope",
+      "statement": "This is a separate bounded runtime scheduling/lifetime repair. The existing seed-participant-release-applied-position-barrier Quest remains open and does not authorize scheduling changes. Change only the canonical native runtime/operation-port timer-lifecycle interaction and owned tests. Do not alter release OBSERVE, PA/R/K assessment, application commit, transport ACK, Raft queue semantics or membership."
+    },
+    {
+      "id": "admitted-foreground-versus-idle",
+      "statement": "An acknowledged queued inbound message is admitted work and cannot rely on an unrelated socket, polling reader or observer timeout to keep its one scheduled turn alive. Idle background election/diagnostic timers do not gain process liveness. Do not add a second execution driver, a new timer, a caller-local tick or a read side effect."
+    },
+    {
+      "id": "lifecycle-and-bounds",
+      "statement": "Use existing inbound drain scheduler and existing persistence-admission retry bound. Preserve one pending timer and its original timeSource/handle, deterministic cleanup on close/replacement, no expired timer resurrection, no stale owner entry. Do not increase existing retry budgets, ratchets or deadlines; a healthy exhausted bound remains red."
+    },
+    {
+      "id": "causal-discriminator",
+      "statement": "V13 two exact original step results are CORE_OK/inbound-enqueued, yet both progress callbacks remain absent and a Node beforeExit listener emits a bounded record. V14 uses the original core-entry seam to observe zero whole-group core entries after both accepted handoffs. Those are diagnostics, not proof of which private timer branch executed. First add identity-correct passive scheduling/entry/retirement evidence without reads, refs, timers or changing the original promises. Never attribute group-only counters to a replica."
+    },
+    {
+      "id": "meaningful-negative-and-positive",
+      "statement": "Prove an engaged, named failure from the unchanged-runtime source, not mere unresolved Promise, missing symbol, timeout or setup. Prove uninstrumented native N-to-K candidate success with identical controls on the same physical host as an unchanged-source negative. Native diagnostic runs on hosted CI can qualify stage attribution but never replace a locked-host positive."
+    },
+    {
+      "id": "closure-and-composition",
+      "statement": "Independently review exact source and all affected timer, operation-port and shutdown categories before landing. Preserve clean source-only negative, current-identity custody and complete artifact hashes. Refresh canonical test impact metadata, then validate genuine fresh-seed, FreshMG, TX1/TX2, CDC, snapshot, zero-legacy and off-seed recovery on final composition. This Quest alone does not merge or publish main."
+    }
+  ],
+  "verificationTemplates": [
+    "concurrency-serialization",
+    "owner-interaction",
+    "harness-fidelity",
+    "formation-circularity",
+    "adversarial-js-intrinsics"
+  ]
+}
