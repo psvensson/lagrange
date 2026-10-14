@@ -388,6 +388,48 @@ test('already-current control cohort proves release with fewer original route ca
   }, {tableId: SQL_TRANSACTIONS_SCHEMA.tableName,
     tableName: SQL_TRANSACTIONS_SCHEMA.tableName, schema: SQL_TRANSACTIONS_SCHEMA}));
 
+test('control current-proof refuses schema drift during its second live census, then repairs',
+  () => fixture(async ({service, release, transport}) => {
+    const first = await release();
+    assert.equal(first.outcome, OUTCOME.CUT_OVER, JSON.stringify(first));
+    const origin = readPartitionWriteOrigin(service.db);
+    const originalDeliver = transport.deliver;
+    let inspectCount = 0;
+    transport.deliver = function(...args) {
+      if (args[1]?.type === PARTICIPANT_RELEASE_TYPE &&
+          args[1].partitionId === service.partitionId &&
+          args[1].action === RELEASE_ACTION.INSPECT) {
+        inspectCount += 1;
+        if (inspectCount === 2) {
+          // The first PAUSE/assessment was clean. A live mutation before the
+          // required second INSPECT invalidates that earlier observation.
+          service.db.exec('DROP TRIGGER sql_transactions_initial_lineage_v1');
+        }
+      }
+      return Reflect.apply(originalDeliver, this, args);
+    };
+    let raced;
+    try {
+      raced = await release();
+    } finally {
+      transport.deliver = originalDeliver;
+    }
+    assert.equal(inspectCount, 2,
+      'the candidate performs the second current member census before RESUME');
+    assert.equal(raced.outcome, OUTCOME.STALE, JSON.stringify(raced));
+    assert.notEqual(participantCutoverPauseOf(service), null,
+      'an obsolete clean snapshot never opens admission after a schema mutation');
+    assert.equal(readTransactionSchemaEnforcement(service.db).state, 'install_required');
+    assert.deepEqual(readPartitionWriteOrigin(service.db), origin,
+      'the refusal never forges or overwrites durable origin');
+    const recovered = await release();
+    assert.equal(recovered.outcome, OUTCOME.CUT_OVER, JSON.stringify(recovered));
+    assert.equal(readTransactionSchemaEnforcement(service.db).state, 'enforced',
+      'the canonical full release repairs the missing enforcer');
+    assert.deepEqual(readPartitionWriteOrigin(service.db), origin);
+  }, {tableId: SQL_TRANSACTIONS_SCHEMA.tableName,
+    tableName: SQL_TRANSACTIONS_SCHEMA.tableName, schema: SQL_TRANSACTIONS_SCHEMA}));
+
 test('control cohort preserves unreconstructible legacy rows and reports exact activation debt',
   () => fixture(async ({service, release}) => {
     const transactionId = 'b'.repeat(32);
