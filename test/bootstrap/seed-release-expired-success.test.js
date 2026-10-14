@@ -96,3 +96,39 @@ test('typed control reply completed inside the shared deadline is accepted',
     assert.equal(events[0].deadlineAtMs, 13000);
     assert.equal(events[0].timeoutMs, BUDGET_MS);
   });
+
+test('expired successful control-wave END cannot complete seed startup readiness',
+  async () => {
+    const {owner, timeSource, events} = ownerWithDeliveryAdvance(0);
+    const dependent = {partitionId: 'artifact_payloads-p1',
+      tableName: TABLES.ARTIFACT_PAYLOADS,
+      replicaId: 'seed-deadline-payloads-r1'};
+    owner.partitionServices.set(dependent.replicaId, dependent);
+    let waveStarted = false;
+    let waveReturnedAfterDeadline = false;
+    owner.replicaHandler.participantReleaseRecovery = {
+      async withFreshSeedControlWave(options, execute) {
+        waveStarted = true;
+        assert.deepEqual(options.partitionIds, [dependent.partitionId]);
+        assert.equal(options.deadlineAtMs, 13000);
+        await execute(Object.freeze(Object.create(null)));
+        assert.equal(events.length, 2,
+          'both real seed partition intents have already been answered');
+        timeSource.advance(BUDGET_MS + 1);
+        waveReturnedAfterDeadline = true;
+      },
+    };
+    await assert.rejects(() =>
+      createBootstrapServiceSeedWorkflowMethods()
+        .releaseSeedParticipantCohorts.call(owner),
+    /Seed participant control wave END deadline expired/u);
+    assert.equal(waveStarted, true, 'the original control wave owner was called');
+    assert.equal(waveReturnedAfterDeadline, true,
+      'the slow success path, not a refused or skipped control wave, engaged');
+    assert.equal(timeSource.now(), 13001);
+    assert.deepEqual(events.map((entry) => entry.payload.partitionId),
+      [CONTROL, dependent.partitionId],
+      'original one-per-partition intents remain unchanged');
+    assert.ok(events.every((entry) => entry.deadlineAtMs === 13000),
+      'every original request retains one absolute deadline');
+  });
