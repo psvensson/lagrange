@@ -322,6 +322,13 @@ function createBootstrapServiceSeedWorkflowMethods() {
       const startMs = timeSource.now();
       const startObservation = observeParticipantReleaseClockValue(startMs);
       const deadline = startMs + budgetMs;
+      // A valid interval can still overflow an absolute timestamp. Never
+      // dispatch any release with an unrepresentable deadline, where lower
+      // transport layers might otherwise use a default request timeout.
+      if (!Number.isSafeInteger(startMs) ||
+          !Number.isSafeInteger(deadline) || deadline <= startMs) {
+        throw new Error('Invalid seed participant release budget');
+      }
       let completed = 0;
       const releaseOne = async (service, controlWaveToken = null) => {
         const authorization = this.replicaHandler
