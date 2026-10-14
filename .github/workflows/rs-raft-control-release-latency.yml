@@ -1,0 +1,70 @@
+# Passive WIP monotonic timestamps inside original deliver trace, never
+# accepted as behavioral/source approval or a valid increase of the 1000ms.
+name: rs-raft-control-release-latency
+on:
+  push:
+    branches: [diagnostic/rs-raft-control-release-latency-20261014]
+    paths: [.github/workflows/rs-raft-control-release-latency.yml]
+permissions:
+  contents: read
+jobs:
+  capture:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install and check unchanged production tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --name-only 31f35ac44845b343131ac032ec3a5b44f7c649d7 HEAD -- src | tee /tmp/no-production-changes.txt
+          test ! -s /tmp/no-production-changes.txt
+          npm ci
+          node --check test/integration/message-group-membership-claim-cache.integration.test.js
+          node --check scripts/quest-evidence/summarize-seed-release-timings.mjs
+      - name: Run original test with two passive times, preserve original transcript
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          TEST=test/integration/message-group-membership-claim-cache.integration.test.js
+          OUT=test-output/control-release-timing
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/source-sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/tree-sha.txt"
+          sha256sum "$TEST" > "$OUT/instrumented-original-test-sha256.txt"
+          npm run -s test:file -- "$TEST" > "$OUT/test-run.log" 2>&1
+          status=$?
+          printf '%s\n' "$status" > "$OUT/original-body.status"
+          RAW=".tap/test-results/$TEST.tap"
+          if test ! -f "$RAW"; then echo 'Missing original full TAP'; exit 1; fi
+          cp "$RAW" "$OUT/full-original.tap"
+          sha256sum "$RAW" > "$OUT/raw-sha256.txt"
+          node scripts/quest-evidence/summarize-seed-release-timings.mjs \
+            "$RAW" "$OUT/timing-census.json" > "$OUT/brief.json" \
+            2> "$OUT/timing-error.log"
+          parsed=$?
+          printf '%s\n' "$parsed" > "$OUT/census.status"
+          echo "Original seed claim/cache body status=$status, unchanged 1000ms budget"
+          if test "$parsed" -eq 0; then cat "$OUT/brief.json"; else cat "$OUT/timing-error.log"; fi
+          grep -E 'Seed participant release failed|test-files total' "$OUT/test-run.log" | \
+            tail -n 6 | cut -c 1-1200 || true
+          test "$parsed" -eq 0
+      - name: Preserve exact unabridged original trace with passive timestamps
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-control-release-timing-${{ github.sha }}
+          path: test-output/control-release-timing/
+          retention-days: 14
+          if-no-files-found: warn
