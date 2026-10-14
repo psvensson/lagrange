@@ -266,27 +266,61 @@ function observationLifecycleCurrent(handler, service, request, expectedPort) {
     handler.localServices.get(request.replicaId) === service;
 }
 
-function observationStatusMatches(handler, service, request, context, status) {
-  const generation = participantReleaseReplicaGenerationOf(handler, service, status);
-  if (!participantReleaseGenerationValid(generation) ||
-      !sameReplicaGeneration(request.target, generation) ||
-      !sameReplicaGeneration(context.generation, generation)) return false;
+// The post-await recipient fence must distinguish a KNOWN changed identity
+// from a status whose current identity is unavailable. A boolean mismatch
+// would incorrectly turn either into STALE.
+function observationStatusDisposition(handler, service, request, context, status) {
+  let generation;
+  try {
+    generation = participantReleaseReplicaGenerationOf(handler, service, status);
+  } catch {
+    return OUTCOME.UNAVAILABLE;
+  }
+  if (!participantReleaseGenerationValid(generation)) return OUTCOME.UNAVAILABLE;
+  if (!sameReplicaGeneration(request.target, generation) ||
+      !sameReplicaGeneration(context.generation, generation)) return OUTCOME.STALE;
+
+  // CORE_OK alone does not prove all of the fields compared below are
+  // present and measurable. Unknown fields cannot establish a known veto.
+  if (!Number.isSafeInteger(status.term) || status.term < 0 ||
+      !Number.isSafeInteger(status.appliedIndex) || status.appliedIndex < 0 ||
+      !Number.isSafeInteger(status.membershipGenerationIndex) ||
+      status.membershipGenerationIndex < 0 ||
+      !nonempty(status.configurationKey) ||
+      !objectHasOwn(status, 'leaderId') ||
+      (status.leaderId !== null && !nonempty(status.leaderId)) ||
+      !Number.isSafeInteger(context.appliedIndex) || context.appliedIndex < 0 ||
+      !Number.isSafeInteger(context.membershipGenerationIndex) ||
+      context.membershipGenerationIndex < 0 ||
+      !nonempty(context.configurationKey) ||
+      !objectHasOwn(context, 'leaderReplicaId')) return OUTCOME.UNAVAILABLE;
+
   return releaseStatusMatches(service, request, status) &&
     status.membershipGenerationIndex === request.release.membershipGenerationIndex &&
     status.term === context.term && status.leaderId === context.leaderReplicaId &&
     status.configurationKey === context.configurationKey &&
     status.membershipGenerationIndex === context.membershipGenerationIndex &&
-    status.appliedIndex >= context.appliedIndex;
+    status.appliedIndex >= context.appliedIndex ? null : OUTCOME.STALE;
 }
 
-function observationContextMatches(handler, service, request, context, expectedPort) {
-  if (!observationLifecycleCurrent(handler, service, request, expectedPort)) return false;
+function observationContextDisposition(handler, service, request, context, expectedPort) {
+  if (!observationLifecycleCurrent(handler, service, request, expectedPort)) {
+    return OUTCOME.STALE;
+  }
   if (context.buildDigest !== request.release.targetBuildDigest ||
-      context.paused !== true || participantCutoverPauseOf(service) === null) return false;
+      context.paused !== true || participantCutoverPauseOf(service) === null) {
+    return OUTCOME.STALE;
+  }
   const status = expectedPort.readStatus();
-  if (status.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) return false;
-  return observationStatusMatches(handler, service, request, context, status) &&
-    observationLifecycleCurrent(handler, service, request, expectedPort);
+  if (status?.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
+    return OUTCOME.UNAVAILABLE;
+  }
+  const disposition = observationStatusDisposition(handler, service, request,
+    context, status);
+  if (!observationLifecycleCurrent(handler, service, request, expectedPort)) {
+    return OUTCOME.STALE;
+  }
+  return disposition;
 }
 
 function adjudicateParticipantReleaseObservation(handler, service, request,
@@ -297,9 +331,16 @@ function adjudicateParticipantReleaseObservation(handler, service, request,
   if (assessment.context === null) {
     return {answer: observationAnswer(request, assessment.answer), refreshEligible: false};
   }
-  if (!observationContextMatches(handler, service, request, assessment.context,
-    expectedPort)) {
+  const disposition = observationContextDisposition(handler, service, request,
+    assessment.context, expectedPort);
+  if (disposition === OUTCOME.STALE) {
     return {answer: releaseAnswer(OUTCOME.STALE, request), refreshEligible: false};
+  }
+  if (disposition === OUTCOME.UNAVAILABLE) {
+    return {answer: assessment.answer.outcome === OUTCOME.UNAVAILABLE ?
+      observationAnswer(request, assessment.answer) :
+      releaseAnswer(OUTCOME.UNAVAILABLE, request, {
+        missingFact: 'current_replica_generation'}), refreshEligible: false};
   }
   return {answer: observationAnswer(request, assessment.answer),
     refreshEligible: assessment.refreshEligible};

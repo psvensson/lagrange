@@ -142,8 +142,22 @@ async function readParticipantReleaseFactsAssessment(handler, service,
     const membership = await service.raft.readCommittedMembership({purpose});
     const status = service.raft.readStatus();
     if (!committedMembershipAvailable(membership, status)) {
-      return participantReleaseFactsAssessment(
-        unavailable(FACT.MEMBERSHIP, membership.reason ?? status.reason));
+      const refusal = unavailable(FACT.MEMBERSHIP,
+        membership.reason ?? status.reason);
+      // Only the OBSERVE continuation needs independent identity context
+      // when the membership owner refuses. Ordinary facts preserve their
+      // original refusal precedence and do not touch admission/pause owners.
+      if (!requireMembershipGeneration ||
+          status.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
+        return participantReleaseFactsAssessment(refusal);
+      }
+      const refusalGeneration = replicaGenerationOf(handler, service, status);
+      if (!participantReleaseGenerationValid(refusalGeneration)) {
+        return participantReleaseFactsAssessment(refusal);
+      }
+      return participantReleaseFactsAssessment(refusal,
+        releaseFactsContext(build, refusalGeneration,
+          participantCutoverPauseOf(service) !== null, status));
     }
     const generation = replicaGenerationOf(handler, service, status);
     if (!participantReleaseGenerationValid(generation)) {
