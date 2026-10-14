@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 146,
     "solver-tooling": 7,
-    "storage-partition": 183,
+    "storage-partition": 184,
     "storage-raft": 129,
-    "test-infrastructure": 143,
+    "test-infrastructure": 144,
     "transactions": 16,
     "transport-messaging": 95,
     "wasm-toolchain": 57
   },
-  "censusSize": 2372,
-  "digest": "fnv1a32-ae976d3c",
+  "censusSize": 2374,
+  "digest": "fnv1a32-3275ee82",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-1f0c723d",
+  "observationDigest": "fnv1a32-aafe4370",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1236,6 +1236,7 @@
     "test/partition/committed-statement-outcome.test.js": "storage-partition",
     "test/partition/complete-peer-list.property.test.js": "storage-partition",
     "test/partition/contiguous-non-overlapping-ranges.property.test.js": "storage-partition",
+    "test/partition/control-wave-duplicate-boundary.test.js": "storage-partition",
     "test/partition/default-replica-count.property.test.js": "storage-partition",
     "test/partition/durable-replay-cursor.test.js": "storage-partition",
     "test/partition/durable-voter-visibility-role-write.test.js": "storage-partition",
@@ -2133,6 +2134,7 @@
     "test/scripts/no-legacy-consensus-reference-audit.test.js": "test-infrastructure",
     "test/scripts/no-legacy-consensus-reference-ratchet.test.js": "test-infrastructure",
     "test/scripts/observation-census.test.js": "test-infrastructure",
+    "test/scripts/participant-release-trace-envelope.test.js": "test-infrastructure",
     "test/scripts/pre-push-hook-control-flow.test.js": "test-infrastructure",
     "test/scripts/pre-push-stage-manifest.test.js": "test-infrastructure",
     "test/scripts/priority-recovery-current-artifact-fixture.test.js": "test-infrastructure",
@@ -7413,6 +7415,7 @@
     },
     "test/integration/message-group-membership-claim-cache.integration.test.js": {
       "files": [
+        "scripts/quest-evidence/participant-release-trace-envelope.mjs",
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
@@ -8665,6 +8668,23 @@
     },
     "test/partition/complete-peer-list.property.test.js": {
       "files": [
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/partition/control-wave-duplicate-boundary.test.js": {
+      "files": [
+        "src/bootstrap/rejoin-hints-constants.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/bootstrap/system-table-workflow-schema-definitions.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-store.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
@@ -14291,6 +14311,11 @@
         "LAGRANGE_PROBE",
         "LAGRANGE_TEST_MACHINE_FACTOR",
         "OTHER_THING"
+      ]
+    },
+    "test/scripts/participant-release-trace-envelope.test.js": {
+      "files": [
+        "scripts/quest-evidence/participant-release-trace-envelope.mjs"
       ]
     },
     "test/scripts/pre-push-hook-control-flow.test.js": {
