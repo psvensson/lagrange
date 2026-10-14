@@ -642,7 +642,11 @@ async function runParticipantCutover(handler, request) {
   if (current) {
     // A held control wave has no ordinary CUT_OVER promise to join. Recovery
     // and unrelated operator attempts cannot accidentally reopen its members.
-    if (current.kind === SEED_WAVE_KIND) return waveRefusal(request);
+    if (current.kind === SEED_WAVE_KIND) {
+      // The same RUNS owner has acknowledged the held control obligation.
+      // This is not missing authority and does not invite a competing retry.
+      return waveRefusal(request, MISSING_FACT.CONTROL_WAVE_OWNED);
+    }
     // Sharing an existing RUNS result is itself authorization: a foreign
     // caller cannot launder a successful wave child's CUT_OVER through
     // same-build deduplication. Ordinary non-wave joining remains unchanged.
