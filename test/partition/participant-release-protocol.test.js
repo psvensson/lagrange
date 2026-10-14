@@ -175,7 +175,8 @@ async function fixture(measure, table = {tableId: TABLE, tableName: TABLE,
   const transport = createInProcessMockTransport();
   const options = {nodeId: NODE, partitionId: PARTITION, replicaId: REPLICA,
     replicaIds: [REPLICA], ...table, dbPath: path.join(directory, 'partition.db'),
-    systemTableCache: cache, deferElection: true};
+    systemTableCache: cache, deferElection: true,
+    ...(fixtureOptions.timeSource ? {timeSource: fixtureOptions.timeSource} : {})};
   const create = (overrides) => new PartitionService(withFoundingStamp({...options, ...overrides}));
   const topologyOwner = fixtureOptions.remoteControl === true ? {
     resolveCanonicalPartitionLeaderNodeId(partitionId) {
@@ -192,7 +193,8 @@ async function fixture(measure, table = {tableId: TABLE, tableName: TABLE,
   try {
     handler = new ReplicaHandler({nodeId: NODE, ownerIncarnation: 1,
       systemTableCache: cache, cdcIntegrationService, createPartitionService: create,
-      messageRouter: transport, dataDir: directory});
+      messageRouter: transport, dataDir: directory,
+      ...(fixtureOptions.timeSource ? {timeSource: fixtureOptions.timeSource} : {})});
     handler.registerWithRouter(transport);
     service = create();
     if (table.tableName !== SQL_TRANSACTIONS_SCHEMA.tableName &&
@@ -346,6 +348,88 @@ test('control cohort origin installs the fixed coordinator schema atomically and
     assert.deepEqual(readPartitionWriteOrigin(service.db), origin);
   }, {tableId: SQL_TRANSACTIONS_SCHEMA.tableName,
     tableName: SQL_TRANSACTIONS_SCHEMA.tableName, schema: SQL_TRANSACTIONS_SCHEMA}));
+
+test('expired RESUME after awaited current Raft facts cannot reopen SQL control',
+  () => {
+    const clock = new VirtualTimeSource({startMs: 1000});
+    return fixture(async ({handler, service, release, transport}) => {
+      const initial = await release();
+      assert.equal(initial.outcome, OUTCOME.CUT_OVER, JSON.stringify(initial));
+      const origin = readPartitionWriteOrigin(service.db);
+      assert.notEqual(origin, null, 'full real control release owns durable origin');
+
+      const build = await runtimeBuildProvenance();
+      const authorization = handler.participantReleaseAuthorizationOwner.authorizeOperator({
+        partitionId: CONTROL_PARTITION, targetBuildDigest: build.digest,
+      });
+      assert.notEqual(authorization, null);
+      const deadlineAtMs = clock.now() + 10;
+      const originalDeliver = transport.deliver;
+      const port = service.controllablePort;
+      const originalMembership = port.committedMembershipHandler;
+      assert.equal(typeof originalMembership, 'function',
+        'actual single-replica committed-membership owner must be installed');
+      let resumeIngress = false;
+      let membershipCrossedDeadline = false;
+      let resumedRequests = 0;
+      let membershipReadsDuringResume = 0;
+      transport.deliver = function(...args) {
+        if (args[1]?.type === PARTICIPANT_RELEASE_TYPE &&
+            args[1].partitionId === CONTROL_PARTITION &&
+            args[1].action === RELEASE_ACTION.RESUME) {
+          resumeIngress = true;
+          resumedRequests += 1;
+        }
+        return Reflect.apply(originalDeliver, this, args);
+      };
+      port.committedMembershipHandler = async (...args) => {
+        const realMembership = await Reflect.apply(originalMembership, port, args);
+        if (resumeIngress) {
+          membershipReadsDuringResume += 1;
+          if (!membershipCrossedDeadline) {
+            membershipCrossedDeadline = true;
+            clock.advance(11);
+          }
+        }
+        return realMembership;
+      };
+      let failure = null;
+      try {
+        const answer = await requestParticipantRelease(handler, {
+          partitionId: CONTROL_PARTITION, targetBuildDigest: build.digest,
+          trigger: PARTICIPANT_RELEASE_TRIGGER.OPERATOR,
+          deadlineAtMs, authorization,
+        });
+        assert.equal(resumedRequests, 1,
+          'the original cutover reached exactly one genuine recipient RESUME');
+        assert.equal(membershipCrossedDeadline, true,
+          'the clock advanced only inside the awaited real committed-membership read');
+        assert.ok(membershipReadsDuringResume >= 1);
+        assert.ok(clock.now() >= deadlineAtMs);
+        assert.equal(answer.outcome, OUTCOME.UNAVAILABLE,
+          'a real member may not return CUT_OVER after its release deadline');
+        assert.equal(answer.missingFact, 'release_deadline');
+        assert.equal(participantReleaseAdmissionOf(service).state, ADMISSION.CLOSED,
+          'an expired post-await RESUME cannot write OPEN');
+        assert.deepEqual(readPartitionWriteOrigin(service.db), origin,
+          'deadline refusal preserves the existing durable Raft write origin');
+      } catch (error) {
+        failure = error;
+      } finally {
+        transport.deliver = originalDeliver;
+        if (port.committedMembershipHandler !== originalMembership) {
+          port.committedMembershipHandler = originalMembership;
+        }
+      }
+      if (failure !== null) throw failure;
+      const retried = await release();
+      assert.equal(retried.outcome, OUTCOME.CUT_OVER, JSON.stringify(retried));
+      assert.equal(participantReleaseAdmissionOf(service).state, ADMISSION.OPEN);
+      assert.deepEqual(readPartitionWriteOrigin(service.db), origin);
+    }, {partitionId: CONTROL_PARTITION, tableId: SQL_TRANSACTIONS_SCHEMA.tableName,
+      tableName: SQL_TRANSACTIONS_SCHEMA.tableName, schema: SQL_TRANSACTIONS_SCHEMA},
+    {timeSource: clock});
+  });
 
 test('already-current control cohort proves release with fewer original route calls',
   () => fixture(async ({handler, service, release, transport}) => {
