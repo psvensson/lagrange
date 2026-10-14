@@ -1,0 +1,51 @@
+# Shared current SQL control fence for bounded seed release waves — design V1
+
+**Status:** design/WIP only. The Quest remains RED; this document is not an independent implementation approval, test result, or permission to change the existing 1,000/5,000ms startup acceptance budgets. Starting implementation source `47ceb42e4a36757007f0d8006d2014fa1400d9c8`; the separate single-post-PAUSE-census candidate is deliberately not an implicit dependency.
+
+## Source-backed critical path
+
+`bootstrap-service-seed-workflow.js` now issues one partition-level RELEASE per actual partitionId in the existing deterministic SQL_TRANSACTIONS-first order. The existing `replica-handler-participant-cutover.js` invokes `releaseControlOwnerFirst` **twice** per dependent cohort, before pausing and after the full final member census. Each invocation currently calls a FULL SQL_TRANSACTIONS RELEASE. After first origin, the latest clean-control candidate still performs fresh committed-member `INSPECT`, `PAUSE`, `RESUME` and schema/work validation. It is not a cached admission.
+
+Complete original-router TAP evidence (all no-drops) retained under runs `38522151540`, `38523389252`, `38529770672`. Same-host experiments of serial, widths 2/4/8 all remain red on the original 1,000ms full claim/cache body at `38529042758`; a width45 attempt was worse (`38525302263`). Subtracting round trips and removing repeated control open/close ownership is desirable, but no benchmark itself licenses skipping an authorization fact.
+
+## One interaction owner, not a new authority
+
+The canonical existing `RUNS` partition cutover owner in `replica-handler-participant-cutover.js` is extended to retain ONE *held-control-wave* invocation for the exact `sql_transactions-p1`. There is no second controller/Map, no durable permit table, and no seed-local cache of `CUT_OVER`. The token is an **opaque correlation locator**, not an authorization or current-membership proof. The control group remains under its original Raft membership/storage owner; the original participant admission code alone changes CLOSED/OPEN.
+
+- **Seed owner:** selects one complete distinct-partition wave within the existing shared seed absolute deadline, captures first and all late failures, joins all admitted child tasks and invokes the control-wave owner to finish/retire. It never asserts OPEN or reconstructs membership.
+- **Control cutover owner:** performs normal first-ever SQL_TRANSACTIONS RELEASE if durable origin/schema is not yet present; later holds a complete currently admitted control cohort PAUSED; responds to *each* valid dependent request with an independent, fresh current-control verdict sourced from all current members; finally revalidates and asks each exact original recipient to RESUME. It serializes conflicting control operator/recovery RELEASEs under that same partition owner rather than accidentally allowing a competing RELEASE to reopen control mid-wave.
+- **Dependent cutover owner:** stays the existing `runCutoverAttempt`: pre- and post-control calls remain. A new typed `CURRENT_CONTROL_WAVE` answer is consumed only for that exact outer attempt (partitionId, digest, initiating handler, deadline and trigger), not transformed into a fabricated `CUT_OVER`. All existing dependency PAUSE, actual member census, query settle, durable origin ENABLE/OBSERVE and final recipient RESUME continue unchanged.
+- **Raft/SQLite owner:** supplies fresh term, current committed membership, every physical member generation and durable origin/enforcement/transaction work. Seed can't infer them from maps, service order, a prior event, the token or cache.
+
+The interaction must be a named contract and validated as one unit. If an independent review finds the current `RUNS` object incapable of retaining a completed-but-paused wave without introducing a competing owner, refuse implementation and redesign; do not add a parallel success path.
+
+## Transition and actual authority
+
+| Transition | Trigger and must-have current facts | Authorized effect / commit point | Failure, loss or restart |
+| --- | --- | --- | --- |
+| BEGIN | Original measured build, original single deadline, real current control leader, existing full control RELEASE achieved durable origin and enforced schema | Pause each current member through its original `PAUSE` owner. Validate complete committed cohort and query CLEAR/ENFORCED using `releaseCensusDefect`. Retain owner-local session identity + immutable exact member epoch; no new durable mutation beyond the original PAUSE state | No member may be presumed paused from missing reply. Refuse/retain original recovery debt. |
+| CHECK before dependent PAUSE | Exact live session + fresh complete current `INSPECT` from all original current member owners, all actually CLOSED, same immutable release identity/term/generation/origin and schema CLEAR/ENFORCED, valid caller authority and deadline | Return a *new typed single-call* control-current verdict. No OPEN mutation, cached verdict or retry-budget reset | Unknown, stopped member, malformed/expired session, mismatched caller/build/generation -> typed UNAVAILABLE/STALE; dependent remains CLOSED. |
+| CHECK after dependent final census | The same facts refreshed **again** for the exact outer attempt; no old reply reused | Acknowledge only current control verdict for that call, permitting outer original `RESUME` to proceed; final dependent local receiver still validates itself | Changed/unknown control fact vetoes subsequent dependent RESUME and remains owed to existing recovery. |
+| END | All accepted dependent promises joined; original deadline still valid; fresh control member census with exact captured epoch | Original `RESUME` to current control members, whose own `resumeParticipantCutoverAdmission` revalidates one last time and writes OPEN; retire volatile session | Partial unknown/failed RESUME never promotes session to success. Keep remaining control CLOSED and enter the existing recovery owner; no owner-free lingering timer. |
+| ABORT / restart | Any failed child, lost deadline, owner shutdown or cluster restart | Revoke opaque session locator. Never publish control current/open. Durable origin and current committed membership remain authoritative for a new normal release | No volatile permit is replayed. The normal replica-handler release-recovery queue owns persistent-close follow-up. |
+
+The actual durable facts are Raft-origin and committed membership, and the actual OPEN commit remains the per-replica admission mutation. BEGIN/CHECK are observations and retained volatile scheduling, not new durable write decisions.
+
+## Strong refusal requirements
+
+1. **No inherited authority.** Session bytes or a joined `RUNS` promise are not sufficient. The original authorizeFreshSeed/authorizeControlFrom path still validates caller authority and exact target build. A foreign/operator caller with a guessed token, incorrect trigger, separate handler, expired deadline, or wrong outer partition gets no positive answer.
+2. **No silent cohort shrink.** `cohortOf` derives every current voter from committed membership. A missing/changed member, leader handoff, generation increment, learner transition, split/merge/reconfiguration or reachable-but-stale replica invalidates the held epoch; it cannot be satisfied from local replica inventory only.
+3. **No active SQL transaction.** A prepared transaction, pending SQLite session, query-census HELD, legacy row, missing enforcer or changed durable origin invalidates the proof; never return CURRENT_CONTROL_WAVE from an earlier CLEAR snapshot.
+4. **No admission reopened during hold.** Every member is actually CLOSED after BEGIN and stays CLOSED until END. A concurrent ordinary control RELEASE must join the *same explicit wave semantics* only with exact authority, or receive a typed defer; it must never execute ordinary RESUME in the held interval.
+5. **No lost work on interruption.** An aborted or expired session does not erase a committed origin or permanent Raft work. Child callers are settled/joined. If CLOSE/cleanup fails, the original specific Error and deferred debt remain visible; on restart the all-CLOSED default and recovery re-establish safe admission.
+6. **No clock shortcuts.** The original `leadershipWaitTimeoutMs` is captured once at seed start. No helper creates a fresh time budget, new polling process or timer owned by a caller. A finite retry must remain under the same original deadline.
+
+## Proof design before source
+
+First build a source-only test with 3 real control voters and at least two distinct dependent native groups, using the existing real registered recipients. On the old source, even after one control clean RELEASE, two dependent cutovers naturally produce at least four whole-control PAUSE/RESUME sequences. That is the **named engaged RED** (not a timeout or missing symbol). Then require the candidate to retain only one held BEGIN/END across a wave while still returning **fresh current** control verdicts at each of four pre/post edges. Do not skip a single dependent RESUME, origin or member.
+
+Next adversaries: alter a real control member's schema/term or replace its registered service between CHECKs; drop one control route; exhaust the shared deadline; submit an unauthorized foreign token and two overlapping wave attempts; inject an out-of-order late reply after ABORT; crash before BEGIN response and after END's first member RESUME; leave an in-flight dependent active while END arrives; revoke control mid-wave. Witness no dependent OPEN under veto and no stale token recovery; restart from durable rows rather than the session object.
+
+Only after those do original full 1,000/5,000ms tests, real locked-host 3/5-node formation, off-seed replacement, seed-loss, TX1/TX2, FreshMG, CDC/snapshot and complete static/zero-Liferaft gates qualify the source. The historical `38532659013`, `38532721171` and `38533833431` single-census positives concern one **different** scoped optimization and are not this wave's acceptance.
+
+**Exit condition:** if this owner interaction cannot guarantee the current member evidence while control is held, or introduces a circular recovery prerequisite, it is rejected rather than implemented as a cached successful release.
