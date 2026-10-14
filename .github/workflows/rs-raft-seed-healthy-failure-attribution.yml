@@ -41,10 +41,14 @@ jobs:
               try {return JSON.parse(x.slice(x.indexOf(marker)));}
               catch(error){return {parseError:String(error),partial:x.slice(0,900)};}
             });
+            const verdictIndex=lines.findIndex(x=>
+              x.startsWith('not ok test/integration/message-group-membership-claim-cache'));
+            const verdictAndCause=verdictIndex<0?[]:
+              lines.slice(verdictIndex,verdictIndex+10).map(x=>x.slice(0,2000));
             const conditions=lines.filter(x=>/AssertionError|ERROR|Error:|ERR_ASSERTION|not ok|test-files total|failed|refused|timeout|TAP assertions/.test(x))
               .filter(x=>!x.includes('participant-release-delivery-trace/1'))
               .slice(-38).map(x=>x.slice(0,1150));
-            console.log(JSON.stringify({key,name,primarySummaries:summarized,tail:conditions}));
+            console.log(JSON.stringify({key,name,primarySummaries:summarized,verdictAndCause,tail:conditions}));
             const filename=files.find(p=>p.endsWith(`${key}.full.tap`));
             if(filename){
               const tap=fs.readFileSync(path.join(root,filename),'utf8');
