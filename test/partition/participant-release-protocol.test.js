@@ -8,6 +8,8 @@ import {afterEach, beforeEach, test} from 'node:test';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {ReplicaHandler} from '../../src/node/replica-handler-class.js';
 import {requestParticipantRelease} from '../../src/node/participant-release-client.js';
+import {captureParticipantReleaseDispatch} from
+  '../../src/node/replica-handler-participant-release.js';
 import {runtimeBuildProvenance} from '../../src/diagnostics/runtime-build-provenance.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {SQL_TRANSACTIONS_SCHEMA} from
@@ -338,6 +340,9 @@ test('real RESUME recipient refuses admission if original deadline expires durin
         deadlineAtMs},
       census: [own], deadlineAtMs,
     });
+    const captured = captureParticipantReleaseDispatch(request);
+    assert.equal(captured.refusal, null,
+      'the real registered RESUME must pass canonical strict request identity');
     let failure = null;
     try {
       handler.timeSource = {...prior, now: () => current};
@@ -345,7 +350,8 @@ test('real RESUME recipient refuses admission if original deadline expires durin
         {configurable: true, enumerable: true, writable: true, value: proxy});
       const answer = await sendRegisteredRelease(handler, transport, request);
       assert.equal(originalRaftFactReads > 0, true,
-        'the real recipient has awaited actual committed Raft membership');
+        'the real recipient has awaited actual committed Raft membership: ' +
+          JSON.stringify({reply: answer, captured: captured.kind}));
       assert.equal(current, deadlineAtMs + 1,
         'the original handler clock expired during that original membership wait');
       assert.equal(answer.outcome, OUTCOME.UNAVAILABLE,
