@@ -5,8 +5,9 @@ import {RAFT_ROLE} from '../raft/constants.js';
 import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
 import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from '../raft/raft-committed-membership-constants.js';
 import {buildReplacementServiceOptions} from '../partition/partition-reopen-options.js';
-import {isReleaseDrained, originEqual, participantReleaseGenerationValid,
-  releaseAnswer, releaseCensusDefect, releaseIdentityValid, sameReplicaGeneration} from
+import {isReleaseDrained, originEqual, participantReleaseDeadlineExpired,
+  participantReleaseGenerationValid, releaseAnswer, releaseCensusDefect,
+  releaseIdentityValid, sameReplicaGeneration} from
   '../partition/partition-participant-release-contract.js';
 import {participantCutoverPauseOf, participantReleaseReplicaGenerationOf,
   raiseParticipantCutoverPause, readParticipantReleaseFacts,
@@ -211,9 +212,16 @@ async function executeReleaseAction(handler, service, request, facts) {
     return answer.success === true ? readParticipantReleaseFacts(handler, service) :
       releaseAnswer(OUTCOME.ENABLE_REFUSED, request, {answer});
   }
-  case ACTION.RESUME:
-    return releaseAnswer(
-      await resumeParticipantCutoverAdmission(handler, service, request), request);
+  case ACTION.RESUME: {
+    const result = await resumeParticipantCutoverAdmission(handler, service, request);
+    // Only an expired original caller maps a post-await unavailable reply to
+    // deadline debt. A RESUMED verdict committed before expiry stays RESUMED,
+    // even if a later reply arrives after that already-valid admission.
+    return result === OUTCOME.UNAVAILABLE && requestDeadlineSpent(handler, request) ?
+      releaseAnswer(OUTCOME.UNAVAILABLE, request,
+        {missingFact: MISSING_FACT.RELEASE_DEADLINE}) :
+      releaseAnswer(result, request);
+  }
   default:
     return releaseAnswer(OUTCOME.INVALID, request);
   }
@@ -348,8 +356,7 @@ function adjudicateParticipantReleaseObservation(handler, service, request,
 
 function requestDeadlineSpent(handler, request) {
   return request.action !== ACTION.OBSERVE_APPLIED_POSITION &&
-    Number.isSafeInteger(request.deadlineAtMs) &&
-    handler.timeSource.now() >= request.deadlineAtMs;
+    participantReleaseDeadlineExpired(handler.timeSource, request.deadlineAtMs);
 }
 
 async function receiveCurrentParticipantRelease(handler, service, request) {
@@ -357,6 +364,13 @@ async function receiveCurrentParticipantRelease(handler, service, request) {
     COMMITTED_MEMBERSHIP_READ_PURPOSE.RETIREMENT :
     COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS;
   const facts = await readParticipantReleaseFacts(handler, service, purpose);
+  // The original ingress check is not enough: membership may finish after
+  // the sender's deadline. Refuse stale INSPECT/PAUSE/ENABLE/RESUME work from
+  // that point instead of resuming with an expired caller's snapshot.
+  if (requestDeadlineSpent(handler, request)) {
+    return releaseAnswer(OUTCOME.UNAVAILABLE, request,
+      {missingFact: MISSING_FACT.RELEASE_DEADLINE});
+  }
   if (request.action === ACTION.INSPECT) return facts;
   const refusal = releaseRequestRefusal(handler, service, request, facts);
   return refusal ?? executeReleaseAction(handler, service, request, facts);
