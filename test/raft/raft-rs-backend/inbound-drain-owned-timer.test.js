@@ -149,7 +149,9 @@ test('a failed timer clear is typed without skipping actual native group close',
     assert.equal((await recipient.node.step(envelope)).reason, 'inbound-enqueued');
     const originalClear = owned.clock.clearTimeout;
     const refusal = new Error('timer cancellation refused by source clock');
-    owned.clock.clearTimeout = () => { throw refusal; };
+    owned.clock.clearTimeout = () => {
+      throw refusal;
+    };
     let closed;
     try {
       closed = recipient.node.close();
