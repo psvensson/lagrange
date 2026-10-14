@@ -1,0 +1,104 @@
+# Exact-blob composition validation, not a Quest landing or cutover.
+name: rs-raft-integrated-release-native-focused
+on:
+  push:
+    branches: [continue/rs-raft-cloud-integrated-release-native-20261014]
+    paths:
+      - .github/workflows/rs-raft-integrated-release-native-focused.yml
+      - test/shards/impact-graph-seal.json
+      - test/shards/primary-classes.json
+      - test/shards/resource-classes.json
+      - test/shards/subsystem-classes.json
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-integrated-release-native-focused
+  cancel-in-progress: false
+jobs:
+  composite:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install pinned dependencies
+        run: npm ci
+      - name: Source-bound controls, native and seed/query entrance
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-integrated-wip
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/candidate-sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/candidate-tree.txt"
+          git diff --exit-code > "$OUT/initial-clean-tree.log" 2>&1
+          clean=$?
+          printf '%s\n' "$clean" > "$OUT/initial-clean-tree.status"
+          npm run -s audit:shards > "$OUT/impact-audit.log" 2>&1
+          audit=$?
+          printf '%s\n' "$audit" > "$OUT/impact-audit.status"
+          npx eslint \
+            src/node/replica-handler-participant-release.js \
+            src/node/replica-handler-release-recovery.js \
+            src/partition/partition-participant-transaction-pause.js \
+            src/raft/raft-rs-runtime-owner.js \
+            src/raft/raft-rs-runtime-owner-constants.js \
+            src/raft/raft-rs-inbound-timer-custody.js \
+            test/node/replica-handler-release-recovery.test.js \
+            test/partition/participant-release-applied-position.test.js \
+            test/partition/participant-release-protocol.test.js \
+            test/raft/raft-rs-backend/inbound-drain-owned-timer.test.js \
+            test/test-helpers/participant-release-observer-resource-fixture.js \
+            test/test-helpers/participant-release-recovery-harness.js \
+            test/test-helpers/participant-transaction-fixture.js \
+            > "$OUT/scoped-eslint.log" 2>&1
+          lint=$?
+          printf '%s\n' "$lint" > "$OUT/scoped-eslint.status"
+          if test "$lint" -ne 0; then tail -n 35 "$OUT/scoped-eslint.log"; fi
+          failed=0
+          if test "$audit" -ne 0 || test "$lint" -ne 0 || test "$clean" -ne 0; then failed=1; fi
+          for f in \
+            test/partition/participant-release-protocol.test.js \
+            test/partition/participant-release-applied-position.test.js \
+            test/node/replica-handler-release-recovery.test.js \
+            test/raft/raft-rs-backend/inbound-drain-owned-timer.test.js \
+            test/raft/raft-rs-backend/operation-port-ready-recovery.test.js \
+            test/partition/participant-release-native-application-order.test.js \
+            test/bootstrap/seed-participant-release-failure-projection.test.js \
+            test/bootstrap/seed-registration-phase.test.js \
+            test/bootstrap/seed-registration-election-scheduling.test.js \
+            test/query/transaction-release-census.test.js; do
+            name="${f##*/}"
+            npm run -s test:file -- "$f" > "$OUT/$name.log" 2>&1
+            status=$?
+            printf '%s\n' "$status" > "$OUT/$name.status"
+            echo "$f status=$status"
+            tail -n 15 "$OUT/$name.log"
+            if test "$status" -ne 0; then
+              failed=1
+              grep -E 'not ok|fail|cancel|error|timeout' "$OUT/$name.log" | tail -n 55 || true
+            fi
+            if test -d test-output/reports; then
+              mkdir -p "$OUT/$name.canonical"
+              find test-output/reports -maxdepth 1 -type f -name '*.ndjson' -exec cp {} "$OUT/$name.canonical/" \;
+            fi
+          done
+          exit "$failed"
+      - name: Retain candidate source and every positive and negative result
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-integrated-wip-${{ github.sha }}
+          path: test-output/rs-raft-integrated-wip/
+          retention-days: 14
+          if-no-files-found: warn
