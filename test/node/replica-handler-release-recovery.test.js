@@ -32,6 +32,8 @@ import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {createInProcessMockTransport} from
   '../test-helpers/replica-handler-identity-fixture.js';
 import {replacePrototypeProperty} from '../helpers/hostile-intrinsics.js';
+import {captureParticipantReleaseObservationTimer, observationTimerOwnedCount} from
+  '../test-helpers/participant-release-observer-resource-fixture.js';
 import {
   changeFixtureParticipantMembership,
   clearFixtureSingletons,
@@ -174,6 +176,7 @@ async function withActualHandler(measure, options = {}) {
   const transport = createInProcessMockTransport();
   let leader = null;
   let handler = null;
+  let timerCapture = null;
   let failure = null;
   try {
     ({leader} = await startLeader(options.leader));
@@ -191,9 +194,18 @@ async function withActualHandler(measure, options = {}) {
     });
     handler.registerWithRouter(transport);
     handler.localServices.set(leader.replicaId, leader);
+    timerCapture = captureParticipantReleaseObservationTimer(leader, handlerTimeSource);
     await measure({handler, leader, transport, timeSource: handlerTimeSource});
   } catch (error) {
     failure = error;
+  }
+  if (timerCapture !== null) {
+    try {
+      timerCapture.restore();
+    } catch (error) {
+      failure = retainFailure(failure, error,
+        'observation timer capture and assertion cleanup failed');
+    }
   }
   let shutdownFailed = false;
   if (handler !== null) {
@@ -345,7 +357,7 @@ test('handler shutdown cancels an applied-position observation before held facts
     await withActualHandler(async ({handler, leader, transport}) => {
       const request = await currentObservationRequest(handler, leader);
       const membership = deferCommittedMembership(leader);
-      const timerBaseline = handler.timeSource.pendingTimerCount();
+      const timerBaseline = observationTimerOwnedCount(handler.timeSource);
       const observation = track(membership.trackSettlement('observation',
         sendRegisteredObservation(handler, transport, request)));
       await membership.started;
@@ -353,7 +365,7 @@ test('handler shutdown cancels an applied-position observation before held facts
       let failure = null;
       try {
         assert.equal(observationListenerCount(leader), 1);
-        assert.equal(handler.timeSource.pendingTimerCount(), timerBaseline + 1);
+        assert.equal(observationTimerOwnedCount(handler.timeSource), timerBaseline + 1);
         shutdown = handler.shutdown();
         await settle();
         assert.equal(observation.settled, true,
@@ -365,7 +377,7 @@ test('handler shutdown cancels an applied-position observation before held facts
         assert.equal(answer.releaseId, request.release.releaseId);
         assert.equal(participantReleaseAdmissionOf(leader).state, ADMISSION.CLOSED);
         assert.equal(observationListenerCount(leader), 0);
-        assert.equal(handler.timeSource.pendingTimerCount(), timerBaseline);
+        assert.equal(observationTimerOwnedCount(handler.timeSource), timerBaseline);
       } catch (error) {
         failure = error;
       } finally {
@@ -399,7 +411,7 @@ test('service shutdown entry wakes and cancels observation before held facts rel
   async () => withActualHandler(async ({handler, leader, transport}) => {
     const request = await currentObservationRequest(handler, leader);
     const membership = deferCommittedMembership(leader);
-    const timerBaseline = handler.timeSource.pendingTimerCount();
+    const timerBaseline = observationTimerOwnedCount(handler.timeSource);
     const observation = track(membership.trackSettlement('observation',
       sendRegisteredObservation(handler, transport, request)));
     await membership.started;
@@ -425,7 +437,7 @@ test('service shutdown entry wakes and cancels observation before held facts rel
       assert.equal(answer.releaseId, request.release.releaseId);
       assert.equal(participantReleaseAdmissionOf(leader).state, ADMISSION.CLOSED);
       assert.equal(observationListenerCount(leader), 0);
-      assert.equal(handler.timeSource.pendingTimerCount(), timerBaseline);
+      assert.equal(observationTimerOwnedCount(handler.timeSource), timerBaseline);
     } catch (error) {
       failure = error;
     } finally {
@@ -472,7 +484,7 @@ test('post-await term and generation changes keep applied-position observation s
       await withActualHandler(async ({handler, leader, transport}) => {
         const request = await currentObservationRequest(handler, leader);
         const membership = deferCommittedMembership(leader);
-        const timerBaseline = handler.timeSource.pendingTimerCount();
+        const timerBaseline = observationTimerOwnedCount(handler.timeSource);
         const observation = membership.trackSettlement(`${control.label} observation`,
           sendRegisteredObservation(handler, transport, request));
         let failure = null;
@@ -488,7 +500,7 @@ test('post-await term and generation changes keep applied-position observation s
           assert.equal(answer.releaseId, request.release.releaseId);
           assert.equal(participantReleaseAdmissionOf(leader).state, ADMISSION.CLOSED);
           assert.equal(observationListenerCount(leader), 0);
-          assert.equal(handler.timeSource.pendingTimerCount(), timerBaseline);
+          assert.equal(observationTimerOwnedCount(handler.timeSource), timerBaseline);
         } catch (error) {
           failure = error;
         } finally {
@@ -508,7 +520,7 @@ test('follower reentry revalidates the latest generation after canonical facts',
     const request = await currentObservationRequest(handler, leader);
     assert.equal(request.attempt.leaderReplicaId, 'remote-leader-r2');
     const membership = deferCommittedMembership(leader);
-    const timerBaseline = timeSource.pendingTimerCount();
+    const timerBaseline = observationTimerOwnedCount(timeSource);
     const descriptor = Object.getOwnPropertyDescriptor(port, 'runtimeGeneration');
     const capturedGeneration = descriptor.value;
     let generationReads = 0;
@@ -531,7 +543,7 @@ test('follower reentry revalidates the latest generation after canonical facts',
       assert.ok(generationReads >= 2,
         'facts N is fenced by a later current-context generation N+1 read');
       assert.equal(observationListenerCount(leader), 0);
-      assert.equal(timeSource.pendingTimerCount(), timerBaseline);
+      assert.equal(observationTimerOwnedCount(timeSource), timerBaseline);
     } catch (error) {
       failure = error;
     } finally {
@@ -556,7 +568,7 @@ test('dirty terminal membership refusal stays unavailable unless current lineage
           reason: COMMITTED_MEMBERSHIP_REFUSAL.MEMBERSHIP_UNREADABLE});
         port.committedMembershipHandler = refused;
         const membership = deferCommittedMembership(leader);
-        const timerBaseline = timeSource.pendingTimerCount();
+        const timerBaseline = observationTimerOwnedCount(timeSource);
         let failure = null;
         try {
           const observation = membership.trackSettlement('typed unavailable observation',
@@ -578,7 +590,7 @@ test('dirty terminal membership refusal stays unavailable unless current lineage
           assert.equal(membership.reads(), 1,
             'a dirty terminal refusal is never relabelled as refreshable stale-applied facts');
           assert.equal(observationListenerCount(leader), 0);
-          assert.equal(timeSource.pendingTimerCount(), timerBaseline);
+          assert.equal(observationTimerOwnedCount(timeSource), timerBaseline);
         } catch (error) {
           failure = error;
         } finally {
@@ -605,7 +617,7 @@ test('registry replacement and deletion promptly retire old observers before hel
       await withActualHandler(async ({handler, leader, transport, timeSource}) => {
         const request = await currentObservationRequest(handler, leader);
         const membership = deferCommittedMembership(leader);
-        const timerBaseline = timeSource.pendingTimerCount();
+        const timerBaseline = observationTimerOwnedCount(timeSource);
         const oldObservation = track(membership.trackSettlement(`${mutation} observation`,
           sendRegisteredObservation(handler, transport, request)));
         await membership.started;
@@ -627,7 +639,7 @@ test('registry replacement and deletion promptly retire old observers before hel
           assert.equal(oldAnswer.phase, request.action);
           assert.equal(oldAnswer.releaseId, request.release.releaseId);
           assert.equal(observationListenerCount(leader), 0);
-          assert.equal(timeSource.pendingTimerCount(), timerBaseline);
+          assert.equal(observationTimerOwnedCount(timeSource), timerBaseline);
           if (mutation === 'delete') {
             handler.localServices.set(leader.replicaId, replacement);
           }
@@ -707,7 +719,7 @@ test('synchronous acquisition cancellation retires late subscription and timer h
           clearedTimer = handle;
           return actualClearTimeout(handle);
         };
-        const timerBaseline = timeSource.pendingTimerCount();
+        const timerBaseline = observationTimerOwnedCount(timeSource);
         let failure = null;
         try {
           const observation = track(membership.trackSettlement(`${phase} acquisition`,
@@ -720,7 +732,7 @@ test('synchronous acquisition cancellation retires late subscription and timer h
           assert.equal(subscriptionAcquisitions, phase === 'subscription' ? 1 : 4);
           assert.equal(subscriptionReleases, subscriptionAcquisitions);
           assert.equal(timerAcquisitions, phase === 'timer' ? 1 : 0);
-          assert.equal(timeSource.pendingTimerCount(), timerBaseline);
+          assert.equal(observationTimerOwnedCount(timeSource), timerBaseline);
           assert.equal(observationSubscriptionCount(leader), 0);
           assert.equal(handler.localServices.serviceListeners.size, registryBaseline);
           assert.equal(leader.listenerCount(PARTITION_SERVICE_EVENT.SHUTDOWN_STARTED),
@@ -815,7 +827,7 @@ test('cleanup debt retains all seven acquired resources on the installing schedu
         clockBClears += 1;
         return clockBClear(handle);
       };
-      const timerBaseline = timeSource.pendingTimerCount();
+      const timerBaseline = observationTimerOwnedCount(timeSource);
       const registryBaseline = registry.serviceListeners.size;
       const serviceBaseline = leader.listenerCount(PARTITION_SERVICE_EVENT.SHUTDOWN_STARTED);
       const clockBNowDescriptor = Object.getOwnPropertyDescriptor(clockB, 'now');
@@ -837,7 +849,7 @@ test('cleanup debt retains all seven acquired resources on the installing schedu
         assert.equal(registry.serviceListeners.size, registryBaseline + 1);
         assert.equal(leader.listenerCount(PARTITION_SERVICE_EVENT.SHUTDOWN_STARTED),
           serviceBaseline + 1);
-        assert.equal(timeSource.pendingTimerCount(), timerBaseline + 1);
+        assert.equal(observationTimerOwnedCount(timeSource), timerBaseline + 1);
 
         handler.timeSource = clockB;
         clockB.advance(BOUND.REQUEST_TIMEOUT_MS * 2);
@@ -847,7 +859,7 @@ test('cleanup debt retains all seven acquired resources on the installing schedu
           'a divergent current handler clock cannot expire the A-owned record');
         assert.equal(clockBReads, 0,
           'an exact join samples neither a replacement clock nor a new budget');
-        assert.equal(timeSource.pendingTimerCount(), timerBaseline + 1);
+        assert.equal(observationTimerOwnedCount(timeSource), timerBaseline + 1);
 
         assert.equal(registry.delete(leader.replicaId), true);
         await settle();
@@ -891,7 +903,7 @@ test('cleanup debt retains all seven acquired resources on the installing schedu
         assert.equal(membership.reads(), readsBeforeJoin,
           'cleanup discharge acquires no replacement facts owner');
         assert.equal(observationSubscriptionCount(leader), 0);
-        assert.equal(timeSource.pendingTimerCount(), timerBaseline);
+        assert.equal(observationTimerOwnedCount(timeSource), timerBaseline);
         assert.equal(registry.serviceListeners.size, registryBaseline);
         assert.equal(leader.listenerCount(PARTITION_SERVICE_EVENT.SHUTDOWN_STARTED),
           serviceBaseline);
@@ -909,7 +921,7 @@ test('cleanup debt retains all seven acquired resources on the installing schedu
         assert.equal(freshMembership.reads(), 1,
           'a later request creates a new observation after the clean record was removed');
         assert.equal(observationSubscriptionCount(leader), 4);
-        assert.equal(timeSource.pendingTimerCount(), timerBaseline + 1);
+        assert.equal(observationTimerOwnedCount(timeSource), timerBaseline + 1);
         faultsEnabled = true;
         assert.equal(registry.delete(leader.replicaId), true);
         await settle();
@@ -963,7 +975,7 @@ test('cleanup debt retains all seven acquired resources on the installing schedu
         assert.equal(clockBClears, 0,
           'the replacement handler clock never clears an A-owned observation');
         assert.equal(observationSubscriptionCount(leader), 0);
-        assert.equal(timeSource.pendingTimerCount(), timerBaseline);
+        assert.equal(observationTimerOwnedCount(timeSource), timerBaseline);
         assert.equal(registry.serviceListeners.size, registryBaseline);
         assert.equal(leader.listenerCount(PARTITION_SERVICE_EVENT.SHUTDOWN_STARTED),
           serviceBaseline);
@@ -1026,7 +1038,7 @@ test('host-held recovery uses the fixed owner cadence and never reads retryAfter
     await settleOwnerTurns();
     assert.equal(statusReads, 1,
       'a synchronous consensus wake coalesces into the current held turn');
-    assert.equal(timeSource.pendingTimerCount(), 1);
+    assert.equal(observationTimerOwnedCount(timeSource), 1);
     timeSource.advance(BOUND.RECOVERY_RETRY_MS - 1);
     await settleOwnerTurns();
     assert.equal(statusReads, 1, 'the retained observation does not run before its due time');
@@ -1038,7 +1050,7 @@ test('host-held recovery uses the fixed owner cadence and never reads retryAfter
       await settleOwnerTurns();
       assert.equal(statusReads, turn + 1,
         'each continuously held turn waits for the fixed owner cadence');
-      assert.equal(timeSource.pendingTimerCount(), 1,
+      assert.equal(observationTimerOwnedCount(timeSource), 1,
         'one hosted partition retains one timer-backed observation debt');
     }
     assert.equal(retryFieldReads, 0,
@@ -1086,7 +1098,7 @@ test('host-held recovery uses the fixed owner cadence and never reads retryAfter
     await settleOwnerTurns();
     assert.equal(statusReads, beforeBurst + 1,
       'a real event burst advances one coalesced partition observation');
-    assert.equal(timeSource.pendingTimerCount(), 1);
+    assert.equal(observationTimerOwnedCount(timeSource), 1);
   }));
 
 test('ordered hosted observations prefer a leader and retain no earlier held debt',
@@ -1121,7 +1133,7 @@ test('ordered hosted observations prefer a leader and retain no earlier held deb
     assert.equal(heldReads, 1);
     assert.equal(leaderReads, 1);
     assert.equal(laterHeldReads, 0, 'the first actual leader ends the ordered observation');
-    assert.equal(timeSource.pendingTimerCount(), 0,
+    assert.equal(observationTimerOwnedCount(timeSource), 0,
       'an earlier held snapshot grants no timed debt after a current leader is found');
     assert.equal(reports.length, 1);
     assert.equal(reports[0].outcome, OUTCOME.OPERATOR_REQUIRED);
@@ -1152,7 +1164,7 @@ test('no-leader observation gives canonical held status precedence over unavaila
     await settleOwnerTurns();
     assert.equal(unavailableReads, 1);
     assert.equal(heldReads, 1);
-    assert.equal(timeSource.pendingTimerCount(), 1,
+    assert.equal(observationTimerOwnedCount(timeSource), 1,
       'one canonical held member retains one partition debt');
     assert.equal(reports.length, 1);
     assert.equal(reports[0].blockedReplicaId, held.replicaId);
@@ -1205,7 +1217,7 @@ test('healthy nonleaders do not poll while malformed status is typed and event-d
     assert.equal(malformedReads, 1);
     assert.equal(nullReads, 1);
     assert.equal(uninitializedReads, 0);
-    assert.equal(timeSource.pendingTimerCount(), 0);
+    assert.equal(observationTimerOwnedCount(timeSource), 0);
     assert.equal(reports.length, 3,
       'healthy nonleaders are silent and unavailable status remains visible');
     const reportByPartition = new Map(reports.map((report) => [report.partitionId, report]));
