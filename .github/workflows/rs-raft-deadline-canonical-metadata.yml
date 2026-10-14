@@ -1,0 +1,57 @@
+# Generated test classifications on pinned WIP deadline correction only.
+# No baseline changes, no source edits, no main mutation, guarded fast-forward.
+name: rs-raft-deadline-canonical-metadata
+on:
+  push:
+    branches: [fix/rs-raft-participant-resume-deadline-20261014]
+    paths: [.github/workflows/rs-raft-deadline-canonical-metadata.yml]
+permissions:
+  contents: write
+concurrency:
+  group: rs-raft-deadline-canonical-metadata
+  cancel-in-progress: false
+jobs:
+  producer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Locked producer and safe WIP fast-forward
+        shell: bash
+        run: |
+          set -euo pipefail
+          BEFORE="$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$BEFORE"
+          npm ci
+          npm run -s test:metadata:refresh
+          git diff --check
+          git diff --name-status
+          while IFS= read -r file; do
+            test -z "$file" && continue
+            case "$file" in
+              test/shards/impact-graph-seal.json|test/shards/primary-classes.json|test/shards/resource-classes.json|test/shards/subsystem-classes.json) ;;
+              *) echo "REFUSED non-generated modification: $file"; exit 1 ;;
+            esac
+          done < <(git diff --name-only)
+          npm run -s audit:shards
+          git add -- test/shards/impact-graph-seal.json test/shards/primary-classes.json test/shards/resource-classes.json test/shards/subsystem-classes.json
+          if git diff --cached --quiet; then
+            echo 'Canonical metadata already matches exact current source'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'WIP rs-raft: canonical deadline-owner impact metadata (no baseline edits)'
+          git fetch --no-tags origin refs/heads/fix/rs-raft-participant-resume-deadline-20261014
+          test "$(git rev-parse FETCH_HEAD)" = "$BEFORE" || {
+            echo 'Concurrent WIP branch moved, refuse publication'; exit 1
+          }
+          git push origin HEAD:refs/heads/fix/rs-raft-participant-resume-deadline-20261014
