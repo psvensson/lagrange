@@ -31,15 +31,20 @@ function cancelOwnedInboundDrainTimer(group) {
   const record = group.inboundDrainTimer;
   if (record === null) {
     group.inboundDrainScheduled = false;
-    return;
+    return null;
   }
-  // Preserve the exact identity for retry if a hostile clock refuses clear.
-  // The closed flag at the runtime owner prevents any late callback entering
-  // the core, regardless of the result of timer cleanup.
-  if (record.handle !== null) record.source.clearTimeout(record.handle);
+  // Even a hostile clock's failed clear cannot leave an active callback
+  // authorized on a closed group. Return the original Error for close custody.
+  let cleanupError = null;
+  try {
+    if (record.handle !== null) record.source.clearTimeout(record.handle);
+  } catch (error) {
+    cleanupError = error;
+  }
   record.active = false;
   if (group.inboundDrainTimer === record) group.inboundDrainTimer = null;
   group.inboundDrainScheduled = false;
+  return cleanupError;
 }
 
 export {armOwnedInboundDrainTimer, cancelOwnedInboundDrainTimer};
