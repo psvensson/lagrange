@@ -865,6 +865,8 @@ test('cleanup debt retains all seven acquired resources on the installing schedu
           'one owned release synchronously reenters the same lifecycle record');
         assert.equal(releaseCalls[0], 1,
           'a reentrant lifecycle callback cannot release the active slot twice');
+        registry.set(leader.replicaId, leader);
+        await settle();
         const callsBeforeJoin = [...releaseCalls];
         const readsBeforeJoin = membership.reads();
 
@@ -898,10 +900,9 @@ test('cleanup debt retains all seven acquired resources on the installing schedu
 
         failure = await membership.retire(failure,
           'cleanup-debt first membership custody failed');
-        registry.set(leader.replicaId, leader);
         handler.timeSource = timeSource;
-        freshMembership = deferCommittedMembership(leader);
         const freshRequest = await currentObservationRequest(handler, leader);
+        freshMembership = deferCommittedMembership(leader);
         const fresh = track(freshMembership.trackSettlement('fresh cleanup-debt observation',
           sendRegisteredObservation(handler, transport, freshRequest)));
         await freshMembership.started;
