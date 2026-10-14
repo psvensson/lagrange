@@ -1,0 +1,86 @@
+# Two exact authority commits: 1) seed readiness completion, 2) original
+# participant RESUME OPEN mutation. No new timers or larger release budgets.
+# Retains original 1s election, separate 20s seed, 90s test harness.
+name: rs-raft-deadline-composed-original
+on:
+  push:
+    branches: [fix/rs-raft-participant-resume-deadline-20261014]
+    paths: [.github/workflows/rs-raft-deadline-composed-original.yml]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 27
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Lock install
+        run: npm ci
+      - name: Run deadline contract, actual Raft and complete original SQL CDC integration
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-deadline-composed
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/source-sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/source-tree.txt"
+          failures=0
+          for task in \
+            audit:no-legacy-consensus-references \
+            audit:owner-boundary-segments \
+            test:deps; do
+            slug="${task//:/_}"
+            npm run -s "$task" > "$OUT/$slug.log" 2>&1
+            status=$?
+            printf '%s\n' "$status" > "$OUT/$slug.status"
+            echo "$task status=$status"
+            if test "$status" -ne 0; then failures=1; tail -n 15 "$OUT/$slug.log"; fi
+          done
+          for file in \
+            test/bootstrap/seed-release-expired-success.test.js \
+            test/bootstrap/seed-release-once-per-cohort.test.js \
+            test/partition/participant-release-protocol.test.js \
+            test/node/replica-handler-release-recovery.test.js \
+            test/partition/participant-release-applied-position.test.js \
+            test/partition/control-wave-duplicate-boundary.test.js \
+            test/raft/raft-rs-backend/inbound-drain-owned-timer.test.js \
+            test/bootstrap/node-bootstrap-consistency.property.test.js \
+            test/integration/message-group-membership-claim-cache.integration.test.js; do
+            name="${file##*/}"
+            npm run -s test:file -- "$file" > "$OUT/$name.log" 2>&1
+            rc=$?
+            printf '%s\n' "$rc" > "$OUT/$name.status"
+            echo "$file complete original test status=$rc"
+            grep -E 'test-files total|Seed participant release failed|not ok' "$OUT/$name.log" \
+              | tail -n 7 | cut -c 1-1250 || true
+            if test "$rc" -ne 0; then failures=1; fi
+            if test -f ".tap/test-results/$file.tap"; then
+              cp ".tap/test-results/$file.tap" "$OUT/$name.full.tap"
+              sha256sum "$OUT/$name.full.tap" > "$OUT/$name.tap.sha256"
+            fi
+            if test -d test-output/reports; then
+              mkdir -p "$OUT/$name.canonical"
+              find test-output/reports -maxdepth 1 -type f -name '*.ndjson' \
+                -exec cp {} "$OUT/$name.canonical/" \;
+            fi
+          done
+          exit "$failures"
+      - name: Preserve complete source-bound raw/canonical outcomes even on red
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-deadline-composed-${{ github.sha }}
+          path: test-output/rs-raft-deadline-composed/
+          retention-days: 14
+          if-no-files-found: warn
