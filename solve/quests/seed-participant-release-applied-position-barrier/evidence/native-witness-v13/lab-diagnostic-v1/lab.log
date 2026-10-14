@@ -1,0 +1,42 @@
+lab test: adam-laptop: ordinary (1 files) cores=8 mem=15.5GiB speed x1.96
+[adam-laptop] placement-shell=1912043
+[adam-laptop] placement-head=a9506863ab58493add5f7762dd05e8ef915f9844
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2 mode:local retry: timeout: lanecap:7
+[adam-laptop] placement-pid=1912469
+[adam-laptop] # test-files planned=1
+[adam-laptop] classified lane ordinary: 1 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 77C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 77C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 41C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] not ok test/partition/participant-release-native-application-order.test.js (1 assertions, 4021ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] # Subtest: the real participant release owner waits for every native voter origin publication before final census and resumes the same attempt
+[adam-laptop] not ok 1 - the real participant release owner waits for every native voter origin publication before final census and resumes the same attempt
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 2824.065572
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/a9506863ab58-mv7dtezh-2408753/test/partition/participant-release-native-application-order.test.js:1265:1'
+[adam-laptop]   failureType: 'cancelledByParent'
+[adam-laptop]   error: 'Promise resolution is still pending but the event loop has already resolved'
+[adam-laptop]   code: 'ERR_TEST_FAILURE'
+[adam-laptop]   stack: |-
+[adam-laptop]     process.emit (node:events:531:35)
+[adam-laptop]   ...
+[adam-laptop] 1..1
+[adam-laptop] # tests 1
+[adam-laptop] # suites 0
+[adam-laptop] # pass 0
+[adam-laptop] # fail 0
+[adam-laptop] # cancelled 1
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 2828.447844
+[adam-laptop] # time=4021ms
+[adam-laptop] # test-files total=1 pass=0 fail=1 assertions=1
+[adam-laptop] {"kind":"native-before-exit","partitionId":"participant-release-native-p1","phase":"applied-progress","edge":"observation","cleanupEntered":false,"releaseSettled":false,"routerInitialized":true,"groupFormed":true,"settledObserved":true,"releaseOwnersAttached":true,"gate":{"followers":2,"matched":4,"suppressed":2,"overflow":0,"forwarded":2,"restored":2},"membership":[{"replicaId":"participant-release-native-p1-r2","captureStarted":true,"captured":true,"carrier":"owned-settled","progress":false,"currentStarted":false,"current":false,"route":null,"errors":0,"stepKind":"owned-settled","stepOutcome":"CORE_OK","stepReason":"inbound-enqueued"},{"replicaId":"participant-release-native-p1-r3","captureStarted":true,"captured":true,"carrier":"owned-settled","progress":false,"currentStarted":false,"current":false,"route":null,"errors":0,"stepKind":"owned-settled","stepOutcome":"CORE_OK","stepReason":"inbound-enqueued"}],"route":{"pauseComplete":true,"enableComplete":true,"observationCalls":3,"matched":11,"dropped":0,"errorCount":0,"errorOverflow":false,"routeOverflow":false}}
+lab test: adam-laptop: # test-files total=1 pass=0 fail=1 assertions=1
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=1 pass=0 fail=1 assertions=1

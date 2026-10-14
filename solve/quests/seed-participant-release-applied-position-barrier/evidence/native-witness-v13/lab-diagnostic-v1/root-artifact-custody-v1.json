@@ -1,0 +1,49 @@
+{
+  "kind": "root-artifact-custody",
+  "input": "a9506863ab58493add5f7762dd05e8ef915f9844",
+  "sourceTree": "7cf388f79e6afccf3d4311a475147147106e15a5",
+  "host": "adam-laptop",
+  "scope": "Instrumented diagnostic only. Red cancellation, no native positive or qualified-negative behavior acceptance.",
+  "artifacts": [
+    {
+      "path": "adam-laptop.raw.err",
+      "bytes": 1081,
+      "sha256": "5422b29c2f428083e432cb8adafbb835d119b4b6e64796c29d0de445cbdbc6a5"
+    },
+    {
+      "path": "adam-laptop.raw.log",
+      "bytes": 1894,
+      "sha256": "dfa7e4301eff81dacd92aed5c787ffc7684cfc46b34e877f878aa0a27b0b81f6"
+    },
+    {
+      "path": "adam-laptop.status.json",
+      "bytes": 36,
+      "sha256": "3ffe09ecc4a1f39ac6f78caca24c95a5d1182b4dbd23662d5e5938bcc488a56f"
+    },
+    {
+      "path": "fleet.json",
+      "bytes": 12697,
+      "sha256": "6d6928d0256d6ca2f30e95af8401f39774923b467490961e3cd9121889a2ea57"
+    },
+    {
+      "path": "input.json",
+      "bytes": 630,
+      "sha256": "525aa8523db486226a56582fdfd168f3aafb486f94345d48fd455dc144b55ed1"
+    },
+    {
+      "path": "lab.log",
+      "bytes": 3456,
+      "sha256": "5bfa876a75d464987f900e57cc4ceb7fdbbf0b9c1fc3e2319f89b9e3978db242"
+    },
+    {
+      "path": "result.json",
+      "bytes": 62,
+      "sha256": "9ab25ece19cd881d803501456f27a3ef12dee3127fd71fadba106cdd4c600e80"
+    },
+    {
+      "path": "test-results-adam-laptop.ndjson",
+      "bytes": 319,
+      "sha256": "2cd1b7d285aefecfc9978f3b2b74f995bf26ca0b153d2b3e180cdab32d59ac26"
+    }
+  ]
+}

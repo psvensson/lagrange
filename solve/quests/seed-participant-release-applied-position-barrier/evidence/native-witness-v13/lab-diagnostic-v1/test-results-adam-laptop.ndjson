@@ -1,0 +1,1 @@
+{"file":"test/partition/participant-release-native-application-order.test.js","attempt":1,"ok":false,"assertions":1,"durationMs":4021,"retriedOnce":false,"firstFailureLine":"not ok 1 - the real participant release owner waits for every native voter origin publication before final census and resumes the same attempt"}
