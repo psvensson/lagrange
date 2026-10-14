@@ -237,7 +237,7 @@ async function fixture(measure, table = {tableId: TABLE, tableName: TABLE,
     }
     const release = (targetBuildDigest = build.digest) =>
       handler.participantReleaseRecovery.releaseOperator({
-        partitionId: PARTITION, targetBuildDigest,
+        partitionId: options.partitionId, targetBuildDigest,
         deadlineAtMs: handler.timeSource.now() + 30000,
       });
     await measure({handler, service, controlService, transport, release, create,
@@ -385,7 +385,7 @@ test('already-current control cohort proves release with fewer original route ca
     } finally {
       transport.deliver = originalDeliver;
     }
-  }, {tableId: SQL_TRANSACTIONS_SCHEMA.tableName,
+  }, {partitionId: CONTROL_PARTITION, tableId: SQL_TRANSACTIONS_SCHEMA.tableName,
     tableName: SQL_TRANSACTIONS_SCHEMA.tableName, schema: SQL_TRANSACTIONS_SCHEMA}));
 
 test('control current-proof refuses schema drift during its second live census, then repairs',
@@ -427,7 +427,7 @@ test('control current-proof refuses schema drift during its second live census, 
     assert.equal(readTransactionSchemaEnforcement(service.db).state, 'enforced',
       'the canonical full release repairs the missing enforcer');
     assert.deepEqual(readPartitionWriteOrigin(service.db), origin);
-  }, {tableId: SQL_TRANSACTIONS_SCHEMA.tableName,
+  }, {partitionId: CONTROL_PARTITION, tableId: SQL_TRANSACTIONS_SCHEMA.tableName,
     tableName: SQL_TRANSACTIONS_SCHEMA.tableName, schema: SQL_TRANSACTIONS_SCHEMA}));
 
 test('control cohort preserves unreconstructible legacy rows and reports exact activation debt',
