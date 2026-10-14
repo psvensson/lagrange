@@ -1,0 +1,49 @@
+{
+  "schema": "solve-quest/2",
+  "id": "participant-resume-post-await-deadline-fence",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "A real participant RESUME must not authorize OPEN after the exact original absolute release deadline has expired while its membership/SQL facts await an asynchronous current owner. The same validated monotonic/absolute clock source must be checked at dispatch and immediately before the actual OPEN mutation, without a renewed retry/timer, fabricated generation or collapsed authorization owner.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/participant-resume-post-await-deadline-fence/evidence/receipt.json",
+      "requiredReceipts": [
+        "engaged-post-await-old-source-unsafe-open-negative",
+        "one-canonical-clock-expiry-owner-and-final-commit-fence",
+        "same-real-recipient-expired-and-nonexpired-positive",
+        "full-seed-20s-and-original-fast-timeout-negative",
+        "independent-static-tx-recovery-and-multihost-review"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "one-deadline-owner",
+      "statement": "Use the existing release request deadline and the authoritative recipient/transaction admission owner; do not add a new caller deadline, timer, polling watcher, or unrelated progress driver. Keep the original 1000ms historical performance red and separate measured 20s seed-release budget, do not weaken identity or membership tests."
+    },
+    {
+      "id": "exact-expiry-semantics",
+      "statement": "Expiry before admission has committed refuses OPEN, even when earlier request was valid or membership facts were captured earlier. A reply received after expiry for an OPEN committed before expiry is distinct and must not be retroactively rolled back. Every cross-await recipient mutation requires explicit expiry review."
+    },
+    {
+      "id": "no-ping-pong",
+      "statement": "Do not fix by retrying, renewing deadline per participant, or repeated status reads from a second owner. Keep one absolute clock deadline, show resource cleanup after refusal and no stale/late replay. Retain typed failure precedence and OBSERVE_APPLIED_POSITION separate caller deadline and transport witness."
+    },
+    {
+      "id": "real-adversary",
+      "statement": "Source-only negative must hold genuine registered participant RESUME during real committed membership read while original owner clock advances past deadline. Prove original admission incorrectly OPEN and repaired source remains CLOSED. Include nonexpired original native port/SQL positive and actual three voter where feasible."
+    },
+    {
+      "id": "composed-gates",
+      "statement": "Require exact source static checks, TX1/TX2, FreshMG, restart/seed-loss, CDC and snapshot, real locked-host acceptance and independent review; do not promote to main until full rs-raft release Quest and zero-legacy gates are green."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "concurrency-serialization",
+    "admission-gating",
+    "harness-fidelity",
+    "retry-loops"
+  ]
+}
