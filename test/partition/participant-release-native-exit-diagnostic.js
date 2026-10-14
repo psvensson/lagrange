@@ -43,6 +43,30 @@ function stepDiagnosticOf(record) {
     stepReason: value?.reason ?? null};
 }
 
+// No polling, clock, port read, Promise, event subscription, or scheduler
+// is introduced. The runtime's existing core-entry observer supplies a
+// synchronous signal before an actual native call. Counts are per exact
+// replica identity, never inferred from the shared groupId.
+function createNativeCoreEntryWitness(replicaIds) {
+  const counters = new Map(replicaIds.map((replicaId) => [
+    replicaId, {replicaId, step: 0, ready: 0, advance: 0, other: 0,
+      excess: 0},
+  ]));
+  const capture = (entry) => {
+    const current = counters.get(entry.replicaIdentity);
+    if (current === undefined) return;
+    const field = entry.operation === 'step' ? 'step' :
+      entry.operation === 'ready' ? 'ready' :
+      entry.operation === 'advance' ? 'advance' : 'other';
+    if (current[field] < 10000) current[field] += 1;
+    else current.excess += 1;
+  };
+  return Object.freeze({
+    capture,
+    facts: () => [...counters.values()].map((row) => Object.freeze({...row})),
+  });
+}
+
 function installBeforeExitDiagnostic(context) {
   const listener = () => {
     try {
@@ -56,6 +80,7 @@ function installBeforeExitDiagnostic(context) {
         releaseOwnersAttached: context.releaseOwnersAttached,
         gate: gateDiagnosticOf(context.gate),
         membership: membershipDiagnosticOf(context.membershipReads),
+        core: context.core?.facts() ?? null,
         route: context.route?.diagnosticFacts() ?? null});
       const serialized = JSON.stringify(snapshot);
       const line = Buffer.byteLength(serialized) <= EXIT_DIAGNOSTIC_BYTE_CAP ?
@@ -73,4 +98,4 @@ function installBeforeExitDiagnostic(context) {
   process.once('beforeExit', listener);
 }
 
-export {installBeforeExitDiagnostic};
+export {createNativeCoreEntryWitness, installBeforeExitDiagnostic};
