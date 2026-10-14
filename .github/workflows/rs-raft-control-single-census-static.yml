@@ -1,4 +1,5 @@
 # Candidate static/corpus gate evidence; never reset baselines, skip checks
+# Re-run against canonical 2373-test classification including real SQL control voters.
 # or count inherited strict reds as merge acceptance.
 name: rs-raft-control-single-census-static
 on:
