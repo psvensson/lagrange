@@ -149,7 +149,7 @@ export const SUBSYSTEM_RULES = Object.freeze([
   {id: 'directory-wasm', pattern: new RegExp(`^test\\/wasm-service\\/${NOT_PGWIRE}`), subsystem: SUBSYSTEM_WASM_TOOLCHAIN},
   {id: 'directory-cli', pattern: new RegExp(`^test\\/cli\\/${NOT_PGWIRE}`), subsystem: SUBSYSTEM_CLI_TOOLING},
   {id: 'directory-solve', pattern: new RegExp(`^test\\/solve\\/${NOT_PGWIRE}`), subsystem: SUBSYSTEM_SOLVER_TOOLING},
-  {id: 'directory-test-infrastructure', pattern: new RegExp(`^test\\/(scripts|test-helpers)\\/${NOT_PGWIRE}`), subsystem: SUBSYSTEM_TEST_INFRASTRUCTURE},
+  {id: 'directory-test-infrastructure', pattern: new RegExp(`^test\\/(scripts|test-helpers|quest-evidence)\\/${NOT_PGWIRE}`), subsystem: SUBSYSTEM_TEST_INFRASTRUCTURE},
   {id: 'directory-admin', pattern: new RegExp(`^test\\/(admin|diagnostics|debug|debug-runtime|logging)\\/${NOT_PGWIRE}`), subsystem: SUBSYSTEM_ADMIN_DIAGNOSTICS},
   {id: 'directory-convergence', pattern: new RegExp(`^test\\/(convergence|topology|active-gate)\\/${NOT_PGWIRE}`), subsystem: SUBSYSTEM_CONVERGENCE_TOPOLOGY},
   // The deterministic formation simulator (formation-seed-decoupling): a
