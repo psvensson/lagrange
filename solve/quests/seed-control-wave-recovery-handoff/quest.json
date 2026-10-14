@@ -1,0 +1,53 @@
+{
+  "schema": "solve-quest/2",
+  "id": "seed-control-wave-recovery-handoff",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "A held SQL_TRANSACTIONS fresh-seed control wave is the single progress owner until it RETIRES. Hosted participant-release recovery must not repeatedly launch ordinary control RELEASE attempts against that active owner; instead the canonical RUNS owner returns typed wave-owned deferral without granting any permission, and on failed/uncertain wave END it hands exact remaining recovery debt back to the existing recovery queue. Success must not enqueue redundant recovery. Prove the wave's safety and recovery liveness in one paired interaction witness.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/seed-control-wave-recovery-handoff/evidence/receipt.json",
+      "requiredReceipts": [
+        "engaged-wave-recovery-retry-pingpong-negative",
+        "wave-held-no-poll-and-conflicting-release-refusal",
+        "wave-terminal-failure-rearms-existing-recovery",
+        "current-generation-race-and-adjacent-release-recovery-gates",
+        "independent-static-multihost-approval"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "one-owner-handoff",
+      "statement": "The existing canonical cutover RUNS and existing release-recovery queue share one control-partition obligation; they do not both drive it. The cutover RUNS owner is the only source of active-wave identity and typed deferral, and the recovery queue has no new Map/state machine or raw RUNS read. No new fallback, retry driver, permit ledger, or duplicated pause/resume policy."
+    },
+    {
+      "id": "paired-safety-and-liveness",
+      "statement": "While current held wave owns control, an ordinary operator/recovery RELEASE must refuse and never grant CUT_OVER; no recurring recovery retry timer should be armed for the same wave-owned refusal. At END, success fully RESUMEs current members and has no pending recovery retry; failure/unknown/shutdown retains CLOSED and one existing owner wake/recovery obligation. Both properties must hold in the same real registered cohort witness."
+    },
+    {
+      "id": "deadline-discipline",
+      "statement": "A held-wave refusal carries one named transient missing fact but may not extend any captured seed, child or transport deadline. The original 20s bounded release config, original 1000/5000ms historical negative evidence and full 90s test envelope stay distinct. Do not fix by raising REQUEST_TIMEOUT_MS, RECOVERY_RETRY_MS or inserting sleeps/polling; caller timeout is not proof that admitted Raft work vanished."
+    },
+    {
+      "id": "authorization-and-identity",
+      "statement": "The typed wave-owned deferral is not proof of permission. Operator, malformed remote token, wrong trigger, unrelated build, replay after retirement, noncurrent leader, handler replacement and stale generation remain refused at their original owners. Reentry after wave failure reads current origin, membership and lifecycle; no previous held census or old CUT_OVER reused as current admission."
+    },
+    {
+      "id": "historical-regression-pair",
+      "statement": "Explicitly recheck the coupled Active Gate Convergence repair/backoff versus progress history and 2026-09-17 rebalancer-owner-clock-dt6-regression: corrections that remove a spin must not silently strand work; waits must use the same owner TimeSource that deadlines read. Use same source/host adversarial red-on-revert that verifies both suppression of ping-pong and retry wake after failure."
+    },
+    {
+      "id": "final-gates",
+      "statement": "Exact-source tests with real current control voters, complete failed-END recovery, timer acquisition and owner-level wake proof; original release protocol/recovery/native V10, fresh seed budget, TX1/TX2/FreshMG/CDC/snapshot, off-seed restart, static/impact contracts and independent review must all pass before the Quest or main can be marked complete."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "retry-loops",
+    "concurrency-serialization",
+    "formation-circularity",
+    "harness-fidelity"
+  ]
+}
