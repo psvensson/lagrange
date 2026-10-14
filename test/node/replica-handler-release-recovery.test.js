@@ -997,9 +997,10 @@ test('cleanup debt retains all seven acquired resources on the installing schedu
         }
         assert.ok(shutdownError instanceof AggregateError);
         const surfaced = flattenedErrors(shutdownError);
-        for (const sentinel of sentinels) {
+        for (let index = 0; index < sentinels.length; index += 1) {
+          const sentinel = sentinels[index];
           assert.equal(surfaced.filter((error) => error === sentinel).length, 1,
-            'handler shutdown retains each first resource error exactly once');
+            `handler shutdown retains resource ${index} first error exactly once`);
         }
         faultsEnabled = false;
         await handler.shutdown();
