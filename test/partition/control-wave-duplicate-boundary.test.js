@@ -141,6 +141,7 @@ test('one canonical wave holds three real control voters across two released nat
       assert.notEqual(controlAuthorization, null,
         'the real fresh-seed token owner accepted the seed contract');
       let dependentAnswers;
+      let finishedWaveToken = null;
       try {
         dependentAnswers = await handler.participantReleaseRecovery
           .withFreshSeedControlWave({
@@ -148,6 +149,7 @@ test('one canonical wave holds three real control voters across two released nat
             deadlineAtMs, controlAuthorization,
             partitionIds: DEPENDENTS.map((item) => item.id),
           }, async (controlWaveToken) => {
+            finishedWaveToken = controlWaveToken;
             const answers = [];
             const first = DEPENDENTS[0];
             const freshAuthorization = handler.participantReleaseAuthorizationOwner
@@ -216,6 +218,47 @@ test('one canonical wave holds three real control voters across two released nat
       assert.equal(counts(CONTROL, ACTION.RESUME), THREE_CONTROL.length,
         'one joined control wave must RESUME each current control voter ' +
           'only after both independently released partitions have settled');
+      const dependentAuthorization = handler.participantReleaseAuthorizationOwner
+        .authorizeFreshSeed({partitionId: DEPENDENTS[0].id,
+          targetBuildDigest: build.digest, membershipOwnerOutcome: seedProof});
+      const retired = await requestParticipantRelease(handler, {
+        partitionId: DEPENDENTS[0].id, targetBuildDigest: build.digest,
+        trigger: TRIGGER.FRESH_SEED, deadlineAtMs,
+        authorization: dependentAuthorization, [WAVE_FIELD]: finishedWaveToken});
+      assert.equal(retired.outcome, OUTCOME.UNAVAILABLE,
+        'a successfully retired wave token can never act as control permission');
+      assert.equal(retired.missingFact, MISSING_FACT.CURRENT_CONTROL_OWNER);
+      assert.equal(participantReleaseAdmissionOf(controlLeader).state, ADMISSION.OPEN,
+        'retired correlation cannot close or reopen the current control member');
+
+      let capturedLateRefusal = null;
+      let heldClosedAfterSchemaMutation = false;
+      const failure = await handler.participantReleaseRecovery.withFreshSeedControlWave({
+        targetBuildDigest: build.digest, deadlineAtMs,
+        controlAuthorization, partitionIds: [DEPENDENTS[0].id],
+      }, async (newWaveToken) => {
+        // A real coordinator-enforcer change after BEGIN invalidates every
+        // later CHECK and END. No earlier CLEAR observation may be reused.
+        controlLeader.db.exec('DROP TRIGGER sql_transactions_initial_lineage_v1');
+        capturedLateRefusal = await requestParticipantRelease(handler, {
+          partitionId: DEPENDENTS[0].id, targetBuildDigest: build.digest,
+          trigger: TRIGGER.FRESH_SEED, deadlineAtMs,
+          authorization: dependentAuthorization, [WAVE_FIELD]: newWaveToken});
+        heldClosedAfterSchemaMutation =
+          participantReleaseAdmissionOf(controlLeader).state === ADMISSION.CLOSED;
+      }).then(() => null, (error) => error);
+      assert.equal(heldClosedAfterSchemaMutation, true,
+        'a malformed control schema keeps its authoritative control recipient closed');
+      assert.equal(capturedLateRefusal?.outcome, OUTCOME.UNAVAILABLE);
+      assert.equal(capturedLateRefusal.missingFact, MISSING_FACT.CURRENT_CONTROL_OWNER);
+      assert.ok(failure instanceof Error,
+        'the final control-wave membership/schema fence must refuse END');
+      assert.match(failure.message, /Current control wave END census refused/u);
+      const repaired = await release(CONTROL);
+      assert.equal(repaired.outcome, OUTCOME.CUT_OVER,
+        'normal canonical release must repair the failed control wave: ' +
+          JSON.stringify(repaired));
+
     } catch (error) {
       failure = error;
     } finally {
