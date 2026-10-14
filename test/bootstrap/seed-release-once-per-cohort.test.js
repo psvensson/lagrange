@@ -173,7 +173,7 @@ test('independent seed partition intents overlap only after actual control relea
       'one real request for each eligible distinct partition');
     assert.deepEqual(intents.map((item) => item.partition),
       [CONTROL, PAYLOADS, RESULTS, 'code-p1', 'contexts-p1'],
-    'the seed begins by control then admits independent partitions in sorted order');
+      'the seed begins by control then admits independent partitions in sorted order');
     assert.equal(new Set(intents.map((item) => item.deadline)).size, 1,
       'all independent cohorts share the unchanged original absolute deadline');
     assert.ok(controller.maximum >= 2,
