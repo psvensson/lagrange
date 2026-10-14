@@ -13,8 +13,9 @@ import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
 import {deepFreeze} from '../raft/raft-operation-port.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from './partition-write-kernel.js';
 import {participantConnectionStampOf} from './partition-participant-transaction-connection.js';
-import {participantReleaseGenerationValid, releaseCensusDefect,
-  sameReplicaGeneration} from './partition-participant-release-contract.js';
+import {participantReleaseDeadlineExpired, participantReleaseGenerationValid,
+  releaseCensusDefect, sameReplicaGeneration} from
+  './partition-participant-release-contract.js';
 import {hasParticipantSession} from './partition-participant-transaction-session.js';
 import {readPreparedParticipantIds, readPartitionWriteOrigin} from
   './partition-participant-transaction-store.js';
@@ -250,6 +251,9 @@ function finalResumeFactsMatch(handler, service, facts, request, status) {
 }
 
 async function resumeParticipantCutoverAdmission(handler, service, request) {
+  if (participantReleaseDeadlineExpired(handler.timeSource, request.deadlineAtMs)) {
+    return OUTCOME.UNAVAILABLE;
+  }
   const lifecycleRefusal = refuseStaleResume(handler, service);
   if (lifecycleRefusal !== null) return lifecycleRefusal;
   const current = participantReleaseAdmissionOf(service);
@@ -262,6 +266,13 @@ async function resumeParticipantCutoverAdmission(handler, service, request) {
     return OUTCOME.STALE;
   }
   const facts = await readParticipantReleaseFacts(handler, service);
+  // The Raft committed-member read above may settle after the original
+  // caller's absolute deadline. OPEN is the authoritative local commit:
+  // an expired caller cannot create that new admission, even with once-valid
+  // member facts or an already-admitted native proposal.
+  if (participantReleaseDeadlineExpired(handler.timeSource, request.deadlineAtMs)) {
+    return OUTCOME.UNAVAILABLE;
+  }
   const postFactsLifecycleRefusal = refuseStaleResume(handler, service);
   if (postFactsLifecycleRefusal !== null) return postFactsLifecycleRefusal;
   if (facts.outcome !== OUTCOME.OBSERVED) return facts.outcome;
