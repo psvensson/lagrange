@@ -686,13 +686,16 @@ test('synchronous acquisition cancellation retires late subscription and timer h
         const actualPort = leader.raft;
         const registryBaseline = handler.localServices.serviceListeners.size;
         const serviceBaseline = leader.listenerCount(PARTITION_SERVICE_EVENT.SHUTDOWN_STARTED);
+        const observedSubscriptions = [];
         let subscriptionAcquisitions = 0;
         let subscriptionReleases = 0;
         let timerAcquisitions = 0;
         let clearedTimer = null;
+        let scheduledTimer = null;
         const wrappedPort = Object.freeze({...actualPort,
           subscribe(eventName, listener) {
             const unsubscribe = actualPort.subscribe(eventName, listener);
+            observedSubscriptions.push({eventName, listener});
             subscriptionAcquisitions += 1;
             if (phase === 'subscription' && subscriptionAcquisitions === 1) {
               handler.localServices.delete(leader.replicaId);
@@ -711,6 +714,7 @@ test('synchronous acquisition cancellation retires late subscription and timer h
         const actualClearTimeout = timeSource.clearTimeout.bind(timeSource);
         timeSource.setTimeout = (callback, delay, ...args) => {
           const handle = actualSetTimeout(callback, delay, ...args);
+          scheduledTimer = handle;
           timerAcquisitions += 1;
           if (phase === 'timer') handler.localServices.delete(leader.replicaId);
           return handle;
@@ -733,11 +737,17 @@ test('synchronous acquisition cancellation retires late subscription and timer h
           assert.equal(subscriptionReleases, subscriptionAcquisitions);
           assert.equal(timerAcquisitions, phase === 'timer' ? 1 : 0);
           assert.equal(observationTimerOwnedCount(timeSource), timerBaseline);
-          assert.equal(observationSubscriptionCount(leader), 0);
+          assert.equal(observedSubscriptions.every(({eventName, listener}) =>
+            actualPort.listeners.get(eventName)?.has(listener) !== true), true,
+          'every exact acquired observation callback is unsubscribed');
           assert.equal(handler.localServices.serviceListeners.size, registryBaseline);
           assert.equal(leader.listenerCount(PARTITION_SERVICE_EVENT.SHUTDOWN_STARTED),
             serviceBaseline);
-          if (phase === 'timer') assert.notEqual(clearedTimer, null);
+          if (phase === 'timer') {
+            assert.notEqual(scheduledTimer, null);
+            assert.equal(clearedTimer, scheduledTimer,
+              'cleanup clears the exact observation acquisition');
+          }
         } catch (error) {
           failure = error;
         } finally {
