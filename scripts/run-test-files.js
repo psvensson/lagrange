@@ -19,6 +19,7 @@ import {fileURLToPath} from 'node:url';
 import {Parser} from 'tap-parser';
 
 import {
+  declaredTestRuntime,
   extractTimeoutDeclarations,
 } from './checks/test-timeout-declarations.js';
 
@@ -148,6 +149,15 @@ const FAILURE_REASON = Object.freeze({
   STREAM_INCOMPLETE: 'TAP stream did not complete',
   TIMED_OUT: 'test process timed out',
 });
+
+// The typed admission verdict a test file receives before it starts (the
+// runner is the single owner of the effective TAP root budget): a TAP root
+// budget that cannot fit inside the per-file watchdog's reporting margin is
+// refused - never silently truncated, never silently inflated - because tap
+// could never deliver its own expiry before the kill speaks.
+const FAILURE_CODE = Object.freeze({BUDGET_UNFIT: 'BUDGET_UNFIT'});
+const BUDGET_UNFIT_REMEDY =
+  '--timeout-ms, lower the budget, or accept that the file must not start';
 
 // The loaders every test process starts with. Only the mock plugin serves
 // anything (t.mockImport, two files); @tapjs/typescript (+245 ms) and
@@ -295,9 +305,6 @@ function prepareTestRun(file, options) {
   const {absoluteFile, relativeFile} = normalizeTestFile(cwd, file);
   const outputFile = path.join(resultsDirectory, `${relativeFile}${TAP_RESULT_SUFFIX}`);
   const stderrFile = `${outputFile}${STDERR_RESULT_SUFFIX}`;
-  mkdirSync(path.dirname(outputFile), {recursive: true});
-  const stdoutFd = openSync(outputFile, 'w');
-  const stderrFd = openSync(stderrFile, 'w');
   // No test process inherits a git repository pointer: a push from a linked
   // worktree runs the gate with git's GIT_DIR exported, and a fixture that
   // commits, configures or resets would reach the pusher's repository
@@ -310,29 +317,18 @@ function prepareTestRun(file, options) {
     TAP_FAIL_TODO: '1',
     _TAPJS_PROCESSINFO_COVERAGE_: '0',
   };
-  // tap arms ONE root timer per file: TAP_TIMEOUT seconds (30 by default),
-  // started when the root test starts. A top-level test's {timeout: N} arms
-  // a second timer for that test alone and cannot extend the root's: when
-  // the root timer fires, whichever test is running dies with `expired:
-  // TAP` (two 700 ms tests under TAP_TIMEOUT=1: the second dies at 1.0 s,
-  // 2026-10-11). So the root budget a file needs is the SUM of its
-  // top-level declarations, not the largest - lifting to the largest is
-  // how three 120 s tests came to share one 120 s root timer and die at
-  // 167 s on the slowest lab host (ledger S1). The root timer is wall
-  // clock, so the sum is scaled by LAGRANGE_TEST_MACHINE_FACTOR (S2: the
-  // bootstrap-heavy files expired only on the x2.1 host), never falls
-  // below a file-level t.setTimeout (tap honours that call as its root
-  // timer; the export keeps the two in step), and stays below the per-file
-  // kill (--timeout-ms, default 600 s) so tap reports the expiry before
-  // the runner kills. An explicit caller TAP_TIMEOUT still wins outright;
-  // a caller that only wants a minimum (for example the classified
-  // exclusive lane) passes TAP_TIMEOUT_FLOOR instead, which raises
-  // undeclared files without cutting a file below its own declaration —
-  // clobbering declarations is exactly how a 480 s formation test came to
-  // die at 120 s while its declared budget said otherwise.
   const budgetMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const tapTimeout = resolveTapTimeout(absoluteFile, env, budgetMs);
-  if (tapTimeout !== undefined) env.TAP_TIMEOUT = tapTimeout;
+  // Budget admission precedes every filesystem effect (directories, output
+  // handles): a refused configuration creates, truncates and retains nothing.
+  // Only files that declare the tap runner arm its root timer; a node:test
+  // file never consumes TAP_TIMEOUT, so it is never budget-admitted here.
+  if (declaresTapRootTimer(absoluteFile)) {
+    const tapTimeout = resolveTapTimeout(absoluteFile, env, budgetMs);
+    if (tapTimeout !== undefined) env.TAP_TIMEOUT = tapTimeout;
+  }
+  mkdirSync(path.dirname(outputFile), {recursive: true});
+  const stdoutFd = openSync(outputFile, 'w');
+  const stderrFd = openSync(stderrFile, 'w');
   return {
     absoluteFile,
     budgetMs,
@@ -390,12 +386,46 @@ function declaredTimeouts(absoluteFile) {
   return declared;
 }
 
+// Goalies nothing by itself: which declared imports a file carries, decided
+// once by the extraction owner so no second parser exists. Only the tap
+// runtime arms the one root timer a budget decision spends.
+function declaresTapRootTimer(absoluteFile) {
+  const {tap} = declaredTestRuntime(readFileSync(absoluteFile, TEXT_ENCODING),
+    absoluteFile);
+  return tap;
+}
+
+// The typed refusal for a root budget that cannot fit the watchdog margin:
+// preparation-failure output carries its fields machine-readably.
+class RunnerBudgetRefusal extends Error {
+  constructor({marginSeconds, requestedRootSeconds, watchdogSeconds}) {
+    super(`${FAILURE_CODE.BUDGET_UNFIT}: a ${requestedRootSeconds}s TAP root ` +
+      `budget cannot fit inside the ${marginSeconds}s reporting margin of ` +
+      `this file's ${watchdogSeconds}s process watchdog; raise ` +
+      `${BUDGET_UNFIT_REMEDY}`);
+    this.failureCode = FAILURE_CODE.BUDGET_UNFIT;
+    this.marginSeconds = marginSeconds;
+    this.requestedRootSeconds = requestedRootSeconds;
+    this.watchdogSeconds = watchdogSeconds;
+  }
+}
+
+// The reporting margin the per-file kill leaves to tap's own expiry report
+// (tap arms the root timer only after module load and lets a stuck process
+// live 10 s past the fire before killing itself): nine tenths of the kill.
+function killMarginSeconds(budgetMs) {
+  return Math.floor(
+    (budgetMs - budgetMs / KILL_BUDGET_MARGIN_DIVISOR) /
+    MILLISECONDS_PER_SECOND);
+}
+
 // The root budget the declarations call for on this machine, in whole
 // seconds, or null when tap's own default already covers them: the top-level
 // sum, never below the largest declaration anywhere (a subtest may declare
 // more than its parent) nor below a file-level t.setTimeout, scaled by the
-// machine factor, and bounded so the kill cannot pre-empt tap's report.
-function deriveRootTimeoutSeconds(declared, machineFactor, budgetMs) {
+// machine factor. The kill margin is an admission question, decided by the
+// caller - a requested root is never silently truncated to the margin.
+function deriveRootTimeoutSeconds(declared, machineFactor) {
   if (declared === null) return null;
   const declaredMs = Math.max(declared.topLevelMilliseconds,
     declared.milliseconds, declared.fileMilliseconds);
@@ -403,31 +433,53 @@ function deriveRootTimeoutSeconds(declared, machineFactor, budgetMs) {
   // floating point, and a ceiling taken on that charges a whole second.
   const scaledSeconds = Math.ceil(
     Math.round(declaredMs * machineFactor) / MILLISECONDS_PER_SECOND);
-  const boundSeconds = Math.floor(
-    (budgetMs - budgetMs / KILL_BUDGET_MARGIN_DIVISOR) / MILLISECONDS_PER_SECOND);
-  const seconds = Math.min(scaledSeconds, boundSeconds);
-  return seconds > TAP_DEFAULT_TIMEOUT_SECONDS ? seconds : null;
+  return scaledSeconds > TAP_DEFAULT_TIMEOUT_SECONDS ? scaledSeconds : null;
+}
+
+// The root budget this file requests, before any admission decision: the
+// explicit caller TAP_TIMEOUT, else the derived and floored budget, else
+// null (tap's own 30 s default stands).
+function requestedTapRootSeconds(absoluteFile, env) {
+  if (env.TAP_TIMEOUT !== undefined) {
+    return Number.parseInt(env.TAP_TIMEOUT, 10);
+  }
+  const derivedSeconds = deriveRootTimeoutSeconds(declaredTimeouts(
+    absoluteFile), resolveTestMachineFactor(env));
+  const flooredSeconds = Math.max(
+    derivedSeconds ?? 0,
+    parsedTimeoutFloorSeconds(env.TAP_TIMEOUT_FLOOR),
+  );
+  return flooredSeconds > 0 ? flooredSeconds : null;
 }
 
 /**
  * The TAP_TIMEOUT a test file runs under: the caller's own when it set one,
  * else the budget derived from the file's declarations and the lane floor,
  * as the string the child's environment carries - or undefined when tap's
- * default stands.
+ * default stands. The effective root is admitted against the watchdog's
+ * reporting margin on the way through: a request that cannot fit is a typed
+ * RunnerBudgetRefusal, never a truncation and never an inflation.
  * @param {string} absoluteFile the test file
  * @param {object} env the child's environment so far
  * @param {number} budgetMs the per-file kill budget
  * @return {string|undefined}
  */
 function resolveTapTimeout(absoluteFile, env, budgetMs) {
+  const requestedSeconds = requestedTapRootSeconds(absoluteFile, env);
+  const seconds = requestedSeconds ?? TAP_DEFAULT_TIMEOUT_SECONDS;
+  const marginSeconds = killMarginSeconds(budgetMs);
+  if (seconds > marginSeconds) {
+    throw new RunnerBudgetRefusal({
+      marginSeconds,
+      requestedRootSeconds: seconds,
+      watchdogSeconds: Math.round(budgetMs / MILLISECONDS_PER_SECOND),
+    });
+  }
+  if (requestedSeconds === null) return undefined;
+  // The explicit caller value passes through as written; it was already the
+  // reference of the admission decision above.
   if (env.TAP_TIMEOUT !== undefined) return env.TAP_TIMEOUT;
-  const derivedSeconds = deriveRootTimeoutSeconds(
-    declaredTimeouts(absoluteFile), resolveTestMachineFactor(env), budgetMs);
-  const resolvedSeconds = Math.max(
-    derivedSeconds ?? 0,
-    parsedTimeoutFloorSeconds(env.TAP_TIMEOUT_FLOOR),
-  );
-  return resolvedSeconds > 0 ? String(resolvedSeconds) : undefined;
+  return String(seconds);
 }
 
 /**
@@ -704,7 +756,7 @@ function settleResult(result, options) {
 }
 
 function preparationFailure(file, error) {
-  return {
+  const preparation = {
     assertions: 0,
     elapsedMs: 0,
     file,
@@ -715,6 +767,16 @@ function preparationFailure(file, error) {
     status: TEST_PROCESS_NOT_STARTED,
     stderr: '',
   };
+  // A typed refusal keeps its machine-readable admission verdict beside the
+  // ordinary preparation failure shape - same ledger, same verdict line,
+  // same exit-code ownership.
+  if (error.failureCode !== undefined) {
+    preparation.failureCode = error.failureCode;
+    preparation.marginSeconds = error.marginSeconds;
+    preparation.requestedRootSeconds = error.requestedRootSeconds;
+    preparation.watchdogSeconds = error.watchdogSeconds;
+  }
+  return preparation;
 }
 
 function printTestResult(result) {

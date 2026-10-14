@@ -593,8 +593,12 @@ describe('per-file result ledger', () => {
   it('a file that times out carries the budget and the host load', async () => {
     const {ledgerFile, resultsDirectory} = await scratch();
     const budgetMs = 1500;
+    // A root budget must fit the watchdog's margin to be admitted at all
+    // (budget admission): the caller pins an explicit 1s root, the only one
+    // that fits a 1s margin, so the timeout path itself is what runs.
     const summary = await runTestFiles([HANGS_FIXTURE, TAP_PASS_FIXTURE],
-      {jobs: 2, ledgerFile, print: false, resultsDirectory, timeoutMs: budgetMs});
+      {env: {TAP_TIMEOUT: '1'}, jobs: 2, ledgerFile, print: false,
+        resultsDirectory, timeoutMs: budgetMs});
     assert.equal(summary.failed, 1);
     const byFile = Object.fromEntries(ledgerLines(ledgerFile)
       .map((line) => [line.file, line]));
@@ -710,12 +714,12 @@ describe('TAP root budget derivation', () => {
     'a non-numeric factor is the reference machine');
   });
 
-  it('stays below the per-file kill so tap reports its expiry before the runner kills', () => {
+  it('refuses a root budget that cannot fit the kill margin instead of truncating it', () => {
     const killBudgetMs = 60000;
-    const bounded = resolve(TWO_TOP_LEVEL_TIMED_FIXTURE, {}, killBudgetMs);
-    assert.equal(bounded, '54', '80s of declarations under a 60s kill is bounded');
-    assert.ok(Number(bounded) * 1000 < killBudgetMs,
-      'the root timer fires, and reports, before the kill');
+    assert.throws(() => resolve(TWO_TOP_LEVEL_TIMED_FIXTURE, {}, killBudgetMs),
+      (error) => error.failureCode === 'BUDGET_UNFIT' &&
+        error.requestedRootSeconds === 80 && error.marginSeconds === 54,
+      '80s of declarations under a 60s kill is admitted, never cut to 54s');
     assert.equal(resolve(TWO_TOP_LEVEL_TIMED_FIXTURE, {}, 100000), '80',
       'a kill budget with room leaves the derivation alone');
   });
