@@ -1,0 +1,55 @@
+name: rs-raft-seed-wave-end-deadline
+on:
+  push:
+    branches: [fix/rs-raft-participant-resume-deadline-20261014]
+    paths:
+      - .github/workflows/rs-raft-seed-wave-end-deadline.yml
+      - src/bootstrap/bootstrap-service-seed-workflow.js
+      - test/bootstrap/seed-release-expired-success.test.js
+permissions:
+  contents: read
+jobs:
+  exact:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Locked dependencies
+        run: npm ci
+      - name: Exact original async wave-END deadline falsifier
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-wave-end-deadline
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/tree.txt"
+          TEST=test/bootstrap/seed-release-expired-success.test.js
+          npx eslint src/bootstrap/bootstrap-service-seed-workflow.js "$TEST" > "$OUT/lint.log" 2>&1
+          lint=$?
+          printf '%s\n' "$lint" > "$OUT/lint.status"
+          if test "$lint" != 0; then cat "$OUT/lint.log"; fi
+          node --test "$TEST" > "$OUT/complete.tap" 2>&1
+          rc=$?
+          printf '%s\n' "$rc" > "$OUT/test.status"
+          tail -n 72 "$OUT/complete.tap"
+          test "$rc" = 0 && test "$lint" = 0
+      - name: Keep all raw red/green diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-wave-end-expiry-${{ github.sha }}
+          path: test-output/rs-raft-wave-end-deadline/
+          retention-days: 14
+          if-no-files-found: warn
