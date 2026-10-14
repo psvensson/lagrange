@@ -4,7 +4,10 @@ name: rs-raft-control-three-voter
 on:
   push:
     branches: [continue/rs-raft-control-pause-census-20261014]
-    paths: [.github/workflows/rs-raft-control-three-voter.yml]
+    paths:
+      - .github/workflows/rs-raft-control-three-voter.yml
+      - test/partition/participant-release-control-three-member.test.js
+      - src/node/replica-handler-participant-cutover.js
 permissions:
   contents: read
 jobs:
