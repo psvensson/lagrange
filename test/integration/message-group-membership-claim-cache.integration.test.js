@@ -186,6 +186,9 @@ function releaseAnswerTraceOf(answer) {
 }
 
 function createParticipantReleaseDeliveryTrace() {
+  // Diagnostic-only monotonic elapsed observations on the existing original
+  // MessageRouter.deliver wrapper. No new reads, timers, deliveries or owners.
+  const traceStartMs = performance.now();
   const records = [];
   const installations = [];
   let callOrdinal = 0;
@@ -207,6 +210,7 @@ function createParticipantReleaseDeliveryTrace() {
         routerId: installation.trace.routerId,
         nodeId: installation.trace.nodeId,
         callOrdinal: currentCallOrdinal, completionOrdinal: null,
+        callStartedMs: performance.now() - traceStartMs, completedMs: null,
         targetAddress: args[0], request: requestTraceOf(args[1]),
         response: null, error: null};
       records.push(record);
@@ -230,6 +234,7 @@ function createParticipantReleaseDeliveryTrace() {
       const errorTrace = traceErrorOf(error);
       completionOrdinal += 1;
       record.completionOrdinal = completionOrdinal;
+      record.completedMs = performance.now() - traceStartMs;
       record.response = responseTrace;
       record.error = errorTrace;
     } catch (_captureError) {
@@ -293,6 +298,8 @@ function createParticipantReleaseDeliveryTrace() {
     },
     report() {
       return {schema: PARTICIPANT_RELEASE_TRACE_SCHEMA,
+        diagnosticClock: 'monotonic-process-elapsed-ms',
+        traceElapsedMs: performance.now() - traceStartMs,
         cap: PARTICIPANT_RELEASE_TRACE_CAP, matchedCount,
         recordedCount: records.length, completionCount: completionOrdinal,
         droppedCount, captureErrorCount,
