@@ -147,7 +147,7 @@ test('seed issues one serialized real partition release intent, not one per repl
     }
 
     for (const invalidBudget of [null, 0, -1, '20000', 1.5,
-      Number.MAX_SAFE_INTEGER + 1]) {
+      Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER + 1]) {
       owner.config.seedParticipantReleaseBudgetMs = invalidBudget;
       routed.length = 0;
       authorized.length = 0;
