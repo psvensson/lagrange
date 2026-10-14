@@ -74,8 +74,53 @@ async function withAcceptedFollower(partitionId, body, createClock = observedClo
   if (failure !== null) throw failure;
 }
 
+// Start three real peers without delivering an earlier carrier into the
+// recipient: an existing zero-delay timer would coalesce a newly admitted
+// carrier and make its own acquisition impossible to measure.
+async function withFreshUnsteppedRecipient(partitionId, body) {
+  const replicaIds = ['timer-r1', 'timer-r2', 'timer-r3'];
+  const clocks = new Map(replicaIds.map((id) =>
+    [id, observedClock(new RealTimeSource())]));
+  const cluster = new PartitionNodeCluster({partitionId, replicaIds,
+    substrateFor: (id) => ({timeSource: clocks.get(id).clock})});
+  let failure = null;
+  try {
+    const sender = cluster.node(replicaIds[0]);
+    const recipient = cluster.replica(replicaIds[1]);
+    const owned = clocks.get(replicaIds[1]);
+    assert.equal(owned.issued.length, 0,
+      'a never-delivered recipient has no preexisting inbound wake');
+    const campaign = await sender.campaign();
+    assert.equal(campaign.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
+    const senderStatus = sender.readStatus();
+    const status = recipient.node.readStatus();
+    assert.equal(status.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
+    assert.ok(senderStatus.term > 0,
+      'the actual sending core produced a positive campaign term');
+    assert.equal(owned.issued.length, 0,
+      'sender campaign queued transport, but delivered no recipient carrier');
+    const envelope = coreTrappingAppend({
+      dbFile: recipient.dbFile, groupId: partitionId,
+      status, from: senderStatus.peerId, term: String(senderStatus.term),
+    });
+    setCoreFaultInjector(null);
+    await body({cluster, recipient, owned, envelope});
+  } catch (error) {
+    failure = error;
+  } finally {
+    setCoreFaultInjector(null);
+    try {
+      cluster.dispose();
+    } catch (error) {
+      failure = failure === null ? error : new AggregateError([failure, error],
+        'fresh unstepped native recipient cleanup failed');
+    }
+  }
+  if (failure !== null) throw failure;
+}
+
 test('an accepted native envelope references its original Node timer until its real turn',
-  async () => withAcceptedFollower('native-inbound-foreground-liveness', async ({
+  async () => withFreshUnsteppedRecipient('native-inbound-foreground-liveness', async ({
     recipient, owned, envelope,
   }) => {
     const issuedBefore = owned.issued.length;
@@ -100,7 +145,7 @@ test('an accepted native envelope references its original Node timer until its r
     assert.equal(closed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
     assert.equal(owned.cleared.filter((value) => value === handle).length, 1,
       'the original timer is retired by exact close instead of a stray callback');
-  }, () => observedClock(new RealTimeSource())));
+  }));
 
 test('two admitted native envelopes share one timer, then close cancels its exact handle',
   async () => withAcceptedFollower('native-inbound-timer-close', async ({
