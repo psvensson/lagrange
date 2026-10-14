@@ -265,6 +265,14 @@ function waveRefusal(request, fact = MISSING_FACT.CURRENT_CONTROL_OWNER) {
     {missingFact: fact, controlPartitionId: CONTROL_PARTITION});
 }
 
+// An early-returning seed callback does not discharge already admitted work.
+// After callback settlement, only releases already owned by RUNS before that
+// settlement remain eligible to finish under the same held control cohort.
+function currentWaveChildOwned(handler, record, partitionId) {
+  return record.executionSettled !== true ||
+    record.admittedRuns.get(partitionId) === RUNS.get(handler)?.get(partitionId);
+}
+
 async function currentSeedControlWave(handler, request) {
   const record = RUNS.get(handler)?.get(CONTROL_PARTITION);
   if (record?.kind !== SEED_WAVE_KIND ||
@@ -274,6 +282,7 @@ async function currentSeedControlWave(handler, request) {
       request.deadlineAtMs !== record.deadlineAtMs ||
       request.targetBuildDigest !== record.targetBuildDigest ||
       !record.partitions.includes(request.partitionId) ||
+      !currentWaveChildOwned(handler, record, request.partitionId) ||
       !handler.participantReleaseAuthorizationOwner.validatesFreshSeed(
         request.authorization, {partitionId: request.partitionId,
           targetBuildDigest: request.targetBuildDigest})) {
@@ -288,7 +297,8 @@ async function currentSeedControlWave(handler, request) {
   // any new dependent PAUSE. Recheck the exact owner record and state AFTER
   // the await, with no intervening yield before returning the verdict.
   if (RUNS.get(handler)?.get(CONTROL_PARTITION) !== record ||
-      record.state !== SEED_WAVE_STATE.HELD) {
+      record.state !== SEED_WAVE_STATE.HELD ||
+      !currentWaveChildOwned(handler, record, request.partitionId)) {
     return waveRefusal(request);
   }
   if (handler.timeSource.now() >= record.deadlineAtMs) {
@@ -319,7 +329,8 @@ async function withFreshSeedControlWave(handler, options, execute) {
   const record = {kind: SEED_WAVE_KIND, state: SEED_WAVE_STATE.PREPARING,
     targetBuildDigest, deadlineAtMs, token: Object.freeze(Object.create(null)),
     partitions: Object.freeze([...partitionIds]), service: null,
-    cohort: null, release: null, attempt: null, census: null};
+    cohort: null, release: null, attempt: null, census: null,
+    executionSettled: false, admittedRuns: null};
   runs.set(CONTROL_PARTITION, record);
   let error = null;
   let value;
@@ -380,6 +391,26 @@ async function withFreshSeedControlWave(handler, options, execute) {
     } catch (cause) {
       error = cause;
     }
+    // The original partition RUNS map is already the one in-flight execution
+    // owner. Snapshot the child attempts BEFORE END so a detached caller
+    // cannot subsequently register another wave participant.
+    record.admittedRuns = new Map(record.partitions.flatMap((partitionId) => {
+      const current = runs.get(partitionId);
+      return current?.promise ? [[partitionId, current]] : [];
+    }));
+    record.executionSettled = true;
+    const active = [...record.admittedRuns.values()];
+    const settlements = await Promise.allSettled(active.map((entry) => entry.promise));
+    for (const settlement of settlements) {
+      const resultError = settlement.status === 'rejected' ? settlement.reason :
+        settlement.value?.outcome === OUTCOME.CUT_OVER ? null :
+          new Error('An admitted seed-wave dependent release did not complete');
+      if (resultError !== null) {
+        error = error === null ? resultError :
+          new AggregateError([error, resultError], 'Seed-wave dependent settlement refused');
+      }
+    }
+    // END is not authorized until every child the owner admitted has settled.
     record.state = SEED_WAVE_STATE.ENDING;
     if (handler.timeSource.now() >= deadlineAtMs) {
       throw new Error('Current control wave END deadline expired');
