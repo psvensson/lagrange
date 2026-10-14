@@ -19,14 +19,13 @@ import {TABLES} from '../../src/constants/tables.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
   PARTICIPANT_RELEASE_ACTION as ACTION,
+  PARTICIPANT_RELEASE_ADMISSION as ADMISSION,
   PARTICIPANT_RELEASE_TYPE} from
   '../../src/partition/partition-participant-transaction-cutover-constants.js';
 import {participantReleaseAdmissionOf} from
   '../../src/partition/partition-participant-transaction-pause.js';
 import {readPartitionWriteOrigin} from
   '../../src/partition/partition-participant-transaction-store.js';
-import {PARTICIPANT_RELEASE_ADMISSION as ADMISSION} from
-  '../../src/partition/partition-participant-transaction-cutover-constants.js';
 
 const CONTROL = INITIAL_PARTITION_IDS[TABLES.SQL_TRANSACTIONS];
 const NODE = 'seed-control-wave-original-host';
