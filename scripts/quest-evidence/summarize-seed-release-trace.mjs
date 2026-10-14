@@ -66,7 +66,7 @@ const controlEvents = trace.records.filter((r) =>
 const nonControlRelease = releaseEvents.filter((r) => r.partition !== control);
 const uniqueRequested = new Set(nonControlRelease.map((r) => r.partition));
 const releasedPerPartition = Object.fromEntries(
-  partitionSummary.filter((p) => p.release > 0).map((p) => [p.partition,p.release]));
+  partitionSummary.filter((p) => p.release > 0).map((p) => [p.partition, p.release]));
 const result = {
   schema: 'seed-release-delivery-census/1',
   inputBytes: raw.length,
@@ -86,9 +86,9 @@ const result = {
   uniqueNonControlPartitionsRequested: uniqueRequested.size,
   partitionCounts: partitionSummary.length,
   partitionSummary,
-  controlFirst8: controlEvents.slice(0,8),
+  controlFirst8: controlEvents.slice(0, 8),
   controlLast8: controlEvents.slice(-8),
-  releaseFirst15: releaseEvents.slice(0,15),
+  releaseFirst15: releaseEvents.slice(0, 15),
   releaseLast15: releaseEvents.slice(-15),
   // No inferred durations, authorization success, seed success or policy decision.
 };
@@ -104,7 +104,7 @@ process.stdout.write(JSON.stringify({
   uniqueNonControlPartitionsRequested: result.uniqueNonControlPartitionsRequested,
   partitionCounts: result.partitionCounts,
   firstPartitionReleaseCounts: result.partitionSummary
-    .filter((x) => x.release > 0).slice(0,18)
+    .filter((x) => x.release > 0).slice(0, 18)
     .map((x) => ({partition: x.partition, release: x.release,
       deliveries: x.deliveries, controlUnavailable: x.controlUnavailable})),
 }) + '\n');
