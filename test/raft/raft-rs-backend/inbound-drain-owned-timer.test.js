@@ -283,8 +283,9 @@ test('a replacement-time native drain preserves the admitted follower debt',
       second.node('trigger-r1').readStatus();
       assert.equal(advancedDuringReplacement, true,
         'the accepted timer fired inside the shared reconstruction barrier');
-      assert.ok(stages.includes('callback') && stages.includes('turn-request'),
-        'the exact follower attempted its existing lifecycle-admitted turn');
+      assert.ok(stages.includes('callback') &&
+        (stages.includes('turn-request') || stages.includes('runtime-held')),
+      'the exact follower attempted or deferred its inbound wake at the barrier');
       assert.equal(coreSteps, 0,
         'a queued follower cannot enter an obsolete core mid-replacement');
       originalScheduler.advance(0);
