@@ -1,0 +1,34 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "participant-release-recipient-postawait-deadline",
+  "status": "fail",
+  "base": "94763ccf5f1cb71ab9b2e537dba6c5cdbf6f55c1",
+  "receipts": [
+    {
+      "id": "engaged-old-source-late-resume-open-negative",
+      "passed": false,
+      "detail": "Original red proved; candidate and independent review still required."
+    },
+    {
+      "id": "current-recipient-postawait-refusal-and-closed-admission",
+      "passed": false,
+      "detail": "Original red proved; candidate and independent review still required."
+    },
+    {
+      "id": "last-hop-resume-deadline-equality-and-current-identity",
+      "passed": false,
+      "detail": "Original red proved; candidate and independent review still required."
+    },
+    {
+      "id": "original-native-protocol-recovery-and-participant-transaction-cone",
+      "passed": false,
+      "detail": "Original red proved; candidate and independent review still required."
+    },
+    {
+      "id": "independent-review-static-multihost-merge-gates",
+      "passed": false,
+      "detail": "Original red proved; candidate and independent review still required."
+    }
+  ],
+  "evidenceLimit": "No main change or rs-raft release acceptance."
+}
