@@ -332,6 +332,9 @@ function invokeCore(group, operation, ...args) {
     sequence: actualCoreEntries,
     operation,
     groupId: group.groupId,
+    // Diagnostic identity is captured from this exact runtime group;
+    // groupId alone is not sufficient to distinguish local replicas.
+    replicaIdentity: group.replicaIdentity,
     runtimeGeneration,
   }));
   try {
