@@ -658,7 +658,8 @@
         "test/node/replica-handler-replica-membership.test.js",
         "test/partition/participant-release-protocol.test.js",
         "test/bootstrap/seed-participant-release-failure-projection.test.js",
-        "test/partition/participant-release-native-application-order.test.js"
+        "test/partition/participant-release-native-application-order.test.js",
+        "test/partition/control-wave-duplicate-boundary.test.js"
       ]
     },
     "partition-raft-operation-port": {
@@ -2089,6 +2090,30 @@
         "test/node/replica-runtime-cleanup-custody.integration.test.js",
         "test/wasm-service/wasm-service-lifecycle.test.js",
         "test/node/replica-failed-create-cleanup-generation.test.js"
+      ]
+    },
+    "seed-control-wave-release-recovery-handoff": {
+      "description": "A valid, admitted fresh-seed SQL_TRANSACTIONS control wave holds the one canonical partition RUNS execution identity while its actual physical members remain CLOSED. The participant-release recovery queue must not run a second ordinary control RELEASE every RECOVERY_RETRY_MS during that active ownership. A typed 'control_wave_owned_by_current_cutover' reply identifies the precise owner and defers competing retry; it never grants admission. On failed or incomplete wave END, the original wave owner joins admitted child work, retires its own entry, and wakes that same original recovery queue, which recomputes fresh committed facts. Successful END fully RESUMEs and does not leave a competing retry. Clock/wake ownership and authorization/protocol refusal are proved together, including the original three-voter SQL control and actual dependent groups.",
+      "endpoints": [
+        {
+          "id": "control-wave-owned-cutover",
+          "owners": [
+            "src/node/replica-handler-participant-cutover.js",
+            "src/partition/partition-participant-transaction-cutover-constants.js"
+          ]
+        },
+        {
+          "id": "original-release-recovery-continuation",
+          "owners": [
+            "src/node/replica-handler-release-recovery.js"
+          ]
+        }
+      ],
+      "contract": "raft-rs-runtime-application-transaction",
+      "witnessTests": [
+        "test/partition/control-wave-duplicate-boundary.test.js",
+        "test/node/replica-handler-release-recovery.test.js",
+        "test/partition/participant-release-protocol.test.js"
       ]
     }
   }
