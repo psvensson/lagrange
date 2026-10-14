@@ -322,11 +322,13 @@ test('one canonical wave holds three real control voters across two released nat
       let pausePermitOpen = false;
       let admittedChild = null;
       let earlyReturnWave = null;
+      let liveWaveToken = null;
       try {
         earlyReturnWave = handler.participantReleaseRecovery.withFreshSeedControlWave({
           targetBuildDigest: build.digest, deadlineAtMs, controlAuthorization,
           partitionIds: [pendingPartition],
         }, async (token) => {
+          liveWaveToken = token;
           transport.deliver = async function(...args) {
             const req = args[1];
             if (req?.type === PARTICIPANT_RELEASE_TYPE &&
@@ -351,13 +353,35 @@ test('one canonical wave holds three real control voters across two released nat
           // Deliberately return before the actual dependent response settles.
         });
         await pausedChild.promise;
+        assert.notEqual(liveWaveToken, null,
+          'the already admitted child is bound to an actual owner-issued wave');
+        const operatorAuthorization = handler.participantReleaseAuthorizationOwner
+          .authorizeOperator({partitionId: pendingPartition,
+            targetBuildDigest: build.digest});
+        const wrongKind = requestParticipantRelease(handler, {
+          partitionId: pendingPartition, targetBuildDigest: build.digest,
+          trigger: TRIGGER.OPERATOR, deadlineAtMs,
+          authorization: operatorAuthorization, [WAVE_FIELD]: liveWaveToken});
+        const forged = requestParticipantRelease(handler, {
+          partitionId: pendingPartition, targetBuildDigest: build.digest,
+          trigger: TRIGGER.FRESH_SEED, deadlineAtMs,
+          authorization: pendingAuthorization,
+          [WAVE_FIELD]: Object.freeze(Object.create(null))});
+        // Both invalid deliveries reach the original registered RELEASE
+        // handler while the first valid RUNS promise is still held at PAUSE.
         await new Promise((resolve) => setTimeout(resolve, 80));
         assert.equal(earlyResumes, 0,
           'wave END must not RESUME current control while an admitted child is held');
         pausePermitOpen = true;
         allowChildPause.resolve();
-        const [answer, waveAnswer] = await Promise.all([
-          admittedChild, earlyReturnWave]);
+        const [answer, waveAnswer, wrongKindAnswer, forgedAnswer] = await Promise.all([
+          admittedChild, earlyReturnWave, wrongKind, forged]);
+        assert.equal(wrongKindAnswer.outcome, OUTCOME.UNAVAILABLE,
+          'an operator request must not join a held legitimate wave child RUNS');
+        assert.equal(wrongKindAnswer.missingFact, MISSING_FACT.CURRENT_CONTROL_OWNER);
+        assert.equal(forgedAnswer.outcome, OUTCOME.UNAVAILABLE,
+          'a forged wave correlation must not join the same active child RUNS');
+        assert.equal(forgedAnswer.missingFact, MISSING_FACT.CURRENT_CONTROL_OWNER);
         assert.equal(answer.outcome, OUTCOME.CUT_OVER, JSON.stringify(answer));
         assert.equal(waveAnswer, undefined,
           'the wave owns the child lifetime but does not invent a completion result');
