@@ -1,0 +1,93 @@
+# Experimental one-owner held control wave, local fresh-seed only.
+# Not a validated remote protocol or merge candidate.
+name: rs-raft-control-wave-owner-v1
+on:
+  push:
+    branches: [work/rs-raft-seed-control-wave-v1-20261014]
+    paths:
+      - .github/workflows/rs-raft-control-wave-owner-v1.yml
+      - src/node/participant-release-authorization-owner.js
+      - src/node/replica-handler-participant-cutover.js
+      - src/node/replica-handler-release-recovery.js
+      - src/partition/partition-participant-transaction-cutover-constants.js
+      - test/partition/control-wave-duplicate-boundary.test.js
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-control-wave-owner-v1
+  cancel-in-progress: false
+jobs:
+  actual:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Test and lint original runtime owner plus native seed-wave interaction
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-control-wave-v1
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/source-sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/source-tree.txt"
+          failed=0
+          for file in \
+            src/node/replica-handler-participant-cutover.js \
+            src/node/participant-release-authorization-owner.js \
+            src/node/replica-handler-release-recovery.js \
+            src/partition/partition-participant-transaction-cutover-constants.js \
+            test/partition/control-wave-duplicate-boundary.test.js; do
+            node --check "$file" > "$OUT/${file##*/}.syntax.log" 2>&1
+            rc=$?
+            printf '%s\n' "$rc" > "$OUT/${file##*/}.syntax.status"
+            if test "$rc" != 0; then
+              failed=1
+              cat "$OUT/${file##*/}.syntax.log"
+            fi
+          done
+          npx eslint src/node/replica-handler-participant-cutover.js \
+            src/node/participant-release-authorization-owner.js \
+            src/node/replica-handler-release-recovery.js \
+            src/partition/partition-participant-transaction-cutover-constants.js \
+            test/partition/control-wave-duplicate-boundary.test.js \
+            > "$OUT/scoped-eslint.log" 2>&1
+          lint=$?
+          printf '%s\n' "$lint" > "$OUT/scoped-eslint.status"
+          if test "$lint" != 0; then
+            failed=1
+            cat "$OUT/scoped-eslint.log"
+          fi
+          for f in \
+            test/partition/control-wave-duplicate-boundary.test.js \
+            test/partition/participant-release-protocol.test.js \
+            test/node/replica-handler-release-recovery.test.js; do
+            n="${f##*/}"
+            node --test "$f" > "$OUT/$n.tap" 2>&1
+            rc=$?
+            printf '%s\n' "$rc" > "$OUT/$n.status"
+            echo "real test $f status=$rc"
+            tail -n 50 "$OUT/$n.tap" | cut -c 1-950
+            if test "$rc" != 0; then failed=1; fi
+          done
+          exit "$failed"
+      - name: Preserve all red/green source-bound evidence including setup failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-control-wave-v1-${{ github.sha }}
+          path: test-output/rs-raft-control-wave-v1/
+          retention-days: 14
+          if-no-files-found: warn
