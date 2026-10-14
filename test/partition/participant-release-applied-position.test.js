@@ -123,6 +123,7 @@ async function assertGenericUnsafeEnvelopes(handler, transport, request, onRead)
       status: ReplicaOperationResponseStatus.ERROR,
       error: REPLICA_HANDLER_ERROR_MSG.UNKNOWN_MESSAGE_TYPE(undefined),
       correlationId: 'fixture-participant-release',
+      acknowledged: true,
     });
   }
 }
@@ -904,6 +905,8 @@ test('an applied-progress wake reflected by the first facts read needs no forced
       assert.equal(answer.outcome, OUTCOME.OBSERVED, JSON.stringify(answer));
       assert.equal(answer.partitionId, request.partitionId);
       assert.deepEqual(answer.generation, request.target);
+      assert.equal(gate.reads(), 1,
+        'a first owner read made after the wake needs no unconditional reread');
       const afterApplication = await leader.raft.readCommittedMembership(
         {purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS});
       assert.ok(afterApplication.appliedIndex > anchoredMembership.appliedIndex,
@@ -914,8 +917,6 @@ test('an applied-progress wake reflected by the first facts read needs no forced
       assert.equal(afterApplication.membershipGenerationIndex,
         anchoredMembership.membershipGenerationIndex,
         'an ordinary command does not advance membership generation');
-      assert.equal(gate.reads(), 1,
-        'a first owner read made after the wake needs no unconditional reread');
       assert.equal(releaseListenerCount(leader), 0);
       assert.equal(clock.pendingTimerCount(), timerBaseline);
     } catch (error) {
