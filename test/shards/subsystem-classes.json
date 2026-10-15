@@ -28,7 +28,7 @@
   "censusSize": 2285,
   "digest": "fnv1a32-72594200",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-2b11ef3d",
+  "observationDigest": "fnv1a32-65d21535",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -12004,7 +12004,9 @@
         "docs/service-portability-capabilities.json",
         "examples/README.md",
         "src/query/callback/callback-runtime-driver-registry.js",
-        "src/runtime/oci-container-driver.js"
+        "src/runtime/oci-container-driver.js",
+        "test/fixtures/sdk-host-conformance-cases.json",
+        "wit/world.wit"
       ]
     },
     "test/scripts/service-portability-static-gate.test.js": {
