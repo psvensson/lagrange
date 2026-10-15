@@ -1,0 +1,16 @@
+lab test: adams-gamla: ordinary (1 files) cores=4 mem=15.6GiB speed x2.10
+[adams-gamla] placement-shell=1428112
+[adams-gamla] placement-head=c425ef42e18236ff1187e1112a971588bb02b496
+[adams-gamla] placement-link=node_modules
+[adams-gamla] placement-link=data/examples
+[adams-gamla] placement-prepared=import-graph
+[adams-gamla] placement-env=factor:2.1 mode:local retry: timeout: lanecap:3
+[adams-gamla] placement-pid=1428537
+[adams-gamla] # test-files planned=1
+[adams-gamla] classified lane ordinary: 1 file(s), jobs=3
+[adams-gamla] thermal: ok cpu 49C (coretemp/Package id 0) nvme unmeasured
+[adams-gamla] ok test/raft/raft-rs-backend/operation-port-ready-recovery.test.js (7 assertions, 804ms)
+[adams-gamla] # test-files total=1 pass=1 fail=0 assertions=7
+lab test: adams-gamla: # test-files total=1 pass=1 fail=0 assertions=7
+lab test: adams-gamla: results copied to test-output/reports/test-results-adams-gamla.ndjson
+# test-files total=1 pass=1 fail=0 assertions=7
