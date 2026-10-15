@@ -1,0 +1,13 @@
+{
+  "archive": "/home/peter/Downloads/LAGRANGE_W07_F1_ORDERING_REVIEW_20261015T175613Z.tar.gz",
+  "sha256": "4ac3fe1a00de994fbfab92212d94da18d519f9a345dc8dd3d8bf0801ac72f8fb",
+  "bytes": 2633055,
+  "payloadFiles": 534,
+  "manifestSha256": "e6c773b5ad33378da75c0b70f90c8f6b26ea7b0e5ef3b832442bbe344285cf1f",
+  "evidenceHead": "c3c9154b3a6e56e6cc709edc383d02e1cec24145",
+  "sourceHead": "4aa8780cfec6f2718b86b4d1e27ee9711492be59",
+  "localExtractionVerified": true,
+  "stagingDirectory": "/tmp/lagrange-w07-review-package-d0fu7zs_",
+  "verificationDirectory": "/tmp/lagrange-w07-review-verify-w40o8ka9",
+  "recordedAt": "2026-10-15T17:56:14.694775+00:00"
+}

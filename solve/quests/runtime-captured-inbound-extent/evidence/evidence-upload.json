@@ -1,0 +1,19 @@
+{
+  "id": "runtime-captured-inbound-extent",
+  "uploaded": {
+    "sha256": "4ac3fe1a00de994fbfab92212d94da18d519f9a345dc8dd3d8bf0801ac72f8fb",
+    "bytes": 2633055,
+    "asset": "runtime-captured-inbound-extent--LAGRANGE_W07_F1_ORDERING_REVIEW_20261015T175613Z.tar.gz",
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/runtime-captured-inbound-extent--LAGRANGE_W07_F1_ORDERING_REVIEW_20261015T175613Z.tar.gz"
+  },
+  "entry": {
+    "ts": "2026-10-15T17:56:30.396Z",
+    "type": "finding",
+    "kind": "evidence",
+    "text": "Frozen W07 source4aa8780cf, focused56pass, three semantic negatives, confirmed F1 contract regression and independently reviewed ordering proposal. Whole increment HOLD. Full534-payload archive with source/test/comparison identities, raw first results,1339pass96fail7incomplete cone, explicit normal Adam cancellation, static WIP qualifications and unchanged historical evidence. Local extraction and manifest verified; upload must re-download and rehash before recording.",
+    "evidence": "sha256:4ac3fe1a00de994fbfab92212d94da18d519f9a345dc8dd3d8bf0801ac72f8fb",
+    "asset": "runtime-captured-inbound-extent--LAGRANGE_W07_F1_ORDERING_REVIEW_20261015T175613Z.tar.gz",
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/runtime-captured-inbound-extent--LAGRANGE_W07_F1_ORDERING_REVIEW_20261015T175613Z.tar.gz",
+    "bytes": 2633055
+  }
+}

@@ -1,0 +1,186 @@
+Source oversized-file ratchet: 25/27 over 800 lines.
+Test oversized-file ratchet: 21/21 over 1500 lines.
+
+Largest oversized files (25 max):
+2820 test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js (threshold 1500)
+2232 test/distributed/harness/__tests__/cluster-load-readiness-stability-quiescence-test-cases.js (threshold 1500)
+2082 test/diagnostics/topology-convergence-graph.test.js (threshold 1500)
+2075 src/raft/raft-rs-runtime-owner.js (threshold 800)
+1884 test/distributed/harness/cluster-class-lifecycle-base.js (threshold 1500)
+1879 test/rebalancer/replace-replica-workflow-tail-more-test-cases.js (threshold 1500)
+1873 test/distributed/harness/assertions-convergence-wait.js (threshold 1500)
+1864 test/bootstrap/node-joining-service.test.js (threshold 1500)
+1770 test/distributed/harness/failure-bundle-diagnostics-artifact-builder.js (threshold 1500)
+1764 test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js (threshold 1500)
+1740 test/rebalancer/rebalance-coordinator-outcome-routing.test.js (threshold 1500)
+1714 test/admin/admin-control-snapshot-publication-convergence-membership-observation-test-cases.js (threshold 1500)
+1689 test/distributed/harness/post-rebalance-closure-contract.js (threshold 1500)
+1647 test/distributed/harness/__tests__/cluster-active-wait-startup-progress-witness-test-cases.js (threshold 1500)
+1633 test/rebalancer/priority-recovery-snapshot-handoff-timeout-reentry-test-cases.js (threshold 1500)
+1624 test/distributed/harness/cluster-class-control-snapshot-recovery.js (threshold 1500)
+1597 test/distributed/harness/cluster-class-quiescence.js (threshold 1500)
+1595 test/distributed/harness/report-writer.js (threshold 1500)
+1588 test/logging/logs-table-service.test.js (threshold 1500)
+1568 test/admin/admin-control-snapshot-deferred-refresh-membership-observation-test-cases.js (threshold 1500)
+1555 test/distributed/harness/__tests__/report-writer.test.js (threshold 1500)
+1513 test/distributed/harness/__tests__/run.test.js (threshold 1500)
+1264 src/rebalancer/operation-workflow-dispatch-response-reconcile.js (threshold 800)
+1068 src/control-plane/control-plane-readiness-priority-recovery-planning.js (threshold 800)
+1068 src/rebalancer/move-planner-move-calculation-methods.js (threshold 800)
+Scanned 8 JavaScript files
+Found 0 hot-path diagnostics violations
+Matched 31 inherited hot-path diagnostics baseline violations
+[review/runtime-captured-inbound-correction-20261015 c3c9154b3] docs(raft): preserve W07 correction evidence and F1 ordering hold
+ 154 files changed, 74922 insertions(+), 11 deletions(-)
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/ORDERING-DECISION.md
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/REVIEW-REPORT.md
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-ready/01/discovery.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-ready/01/exit-code.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-ready/01/plan.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-ready/01/raw.tap
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-ready/01/run.log.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-ready/02/discovery.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-ready/02/exit-code.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-ready/02/plan.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-ready/02/raw.tap
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-ready/02/run.log.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-ready/03/discovery.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-ready/03/exit-code.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-ready/03/plan.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-ready/03/raw.tap
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-ready/03/run.log.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-ready/request.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-ready/summary.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-recovery/01/discovery.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-recovery/01/exit-code.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-recovery/01/plan.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-recovery/01/raw.tap
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-recovery/01/run.log.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-recovery/02/discovery.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-recovery/02/exit-code.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-recovery/02/plan.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-recovery/02/raw.tap
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-recovery/02/run.log.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-recovery/03/discovery.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-recovery/03/exit-code.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-recovery/03/plan.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-recovery/03/raw.tap
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-recovery/03/run.log.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-recovery/request.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-recovery/summary.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-turn/01/discovery.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-turn/01/exit-code.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-turn/01/plan.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-turn/01/raw.tap
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-turn/01/run.log.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-turn/02/discovery.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-turn/02/exit-code.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-turn/02/plan.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-turn/02/raw.tap
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-turn/02/run.log.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-turn/03/discovery.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-turn/03/exit-code.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-turn/03/plan.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-turn/03/raw.tap
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-turn/03/run.log.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-turn/request.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-turn/summary.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/candidate-controls-independent-event-summary.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/candidate-controls-independent-review.md
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/candidate-controls/01/discovery.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/candidate-controls/01/exit-code.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/candidate-controls/01/plan.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/candidate-controls/01/raw.tap
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/candidate-controls/01/run.log.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/candidate-controls/02/discovery.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/candidate-controls/02/exit-code.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/candidate-controls/02/plan.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/candidate-controls/02/raw.tap
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/candidate-controls/02/run.log.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/candidate-controls/request.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/candidate-controls/summary.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/candidate-native-summary.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/canonical-cone-first-file-results.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/canonical-cone-receipt.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/comparison-bundle-verify.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/comparison-plan-independent-review.md
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/controlled-negatives-independent-event-summary.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/controlled-negatives-independent-review.md
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/f1-oracle-integration-independent-review.md
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/f1-oracle-integration-independent-summary.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/final-lab-discovery.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/final-quest-probe.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/negative-before-ensure/01/discovery.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/negative-before-ensure/01/exit-code.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/negative-before-ensure/01/plan.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/negative-before-ensure/01/raw.tap
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/negative-before-ensure/01/run.log.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/negative-before-ensure/request.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/negative-before-ensure/summary.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/negative-blanket-one/01/discovery.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/negative-blanket-one/01/exit-code.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/negative-blanket-one/01/plan.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/negative-blanket-one/01/raw.tap
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/negative-blanket-one/01/run.log.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/negative-blanket-one/request.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/negative-blanket-one/summary.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/negative-predecessor/01/discovery.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/negative-predecessor/01/exit-code.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/negative-predecessor/01/plan.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/negative-predecessor/01/raw.tap
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/negative-predecessor/01/run.log.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/negative-predecessor/request.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/negative-predecessor/summary.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/ordering-consumers-review.md
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/ordering-contract-review.md
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/ordering-decision-independent-review.md
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/ordering-three-traces-review.md
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/owned-cone-cancellation.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/remaining-adam-laptop/discovery.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/remaining-adam-laptop/execution-plan.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/remaining-adam-laptop/interrupted-exit-code.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/remaining-adam-laptop/request.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/remaining-adams-gamla/discovery.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/remaining-adams-gamla/execution-plan.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/remaining-adams-gamla/exit-code.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/remaining-adams-gamla/request.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/remaining-adams-gamla/run.log.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/remaining-adams-gamla/summary.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/remaining-adams-gamla/test-results.ndjson
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/remaining-first-failure-audit-round1.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/remaining-first-failure-audit-round1.md
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/remaining-first-failure-source-identity.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/remaining-proof-files.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/remaining-proof-plan-receipt.md
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/remaining-tv-dator/discovery.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/remaining-tv-dator/execution-plan.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/remaining-tv-dator/exit-code.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/remaining-tv-dator/request.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/remaining-tv-dator/run.log.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/remaining-tv-dator/summary.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/remaining-tv-dator/test-results.ndjson
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/runtime-collaborator-first-failures-review.md
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/shared-preservation-closeout.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/shared-preservation-final-observation.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/source-commit-wip.exit
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/source-commit-wip.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/source-preservation-receipt.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/source-proof-selection.exit
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/source-proof-selection.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/source-review-addendum-f1-conflict.md
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/source-review.md
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/transfer-oracle-candidate-lenovo/01/discovery.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/transfer-oracle-candidate-lenovo/01/exit-code.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/transfer-oracle-candidate-lenovo/01/plan.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/transfer-oracle-candidate-lenovo/01/raw.tap
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/transfer-oracle-candidate-lenovo/01/run.log.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/transfer-oracle-candidate-lenovo/request.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/transfer-oracle-candidate-lenovo/summary.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/transfer-oracle-predecessor-lenovo/01/discovery.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/transfer-oracle-predecessor-lenovo/01/exit-code.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/transfer-oracle-predecessor-lenovo/01/plan.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/transfer-oracle-predecessor-lenovo/01/raw.tap
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/transfer-oracle-predecessor-lenovo/01/run.log.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/transfer-oracle-predecessor-lenovo/request.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/transfer-oracle-predecessor-lenovo/summary.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/worktrees-final.txt
