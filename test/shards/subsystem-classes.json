@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 157,
     "storage-raft": 135,
-    "test-infrastructure": 137,
+    "test-infrastructure": 138,
     "transactions": 15,
     "transport-messaging": 92,
     "wasm-toolchain": 57
   },
-  "censusSize": 2285,
-  "digest": "fnv1a32-72594200",
+  "censusSize": 2286,
+  "digest": "fnv1a32-2a862867",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-65d21535",
+  "observationDigest": "fnv1a32-fbaf5eba",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2006,6 +2006,7 @@
     "test/scripts/impact-proof-cone-followed-file-races.test.js": "test-infrastructure",
     "test/scripts/impact-proof-cone-producer.test.js": "test-infrastructure",
     "test/scripts/impact-proof-cone.test.js": "test-infrastructure",
+    "test/scripts/inspect-wit-host-surface.test.js": "test-infrastructure",
     "test/scripts/install-git-hooks-stdout-purity.test.js": "test-infrastructure",
     "test/scripts/inventory-ordinal-segments.test.js": "test-infrastructure",
     "test/scripts/lab-fleet-discovery.test.js": "test-infrastructure",
@@ -11260,6 +11261,11 @@
         "src/test-helpers",
         "test",
         "wit"
+      ]
+    },
+    "test/scripts/inspect-wit-host-surface.test.js": {
+      "files": [
+        "wit/world.wit"
       ]
     },
     "test/scripts/install-git-hooks-stdout-purity.test.js": {
