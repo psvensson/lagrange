@@ -25,6 +25,9 @@ and [`docs/steering/`](../steering/)). Zoning rules:
   evidence boundaries
 - [capabilities-documentation.md](capabilities-documentation.md) — maintaining
   the generated human capabilities and limitations page
+- [WIT host-capability inventory](../../scripts/inspect-wit-host-surface.js) —
+  run `node scripts/inspect-wit-host-surface.js` to derive the declared worlds,
+  imports, and exports for SDK parity review; this is not native parity proof
 - [product-roadmap.md](product-roadmap.md) — cross-edition planning visibility;
   not an implementation source for the AGPL repository
 
