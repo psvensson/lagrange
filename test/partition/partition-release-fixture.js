@@ -138,7 +138,9 @@ async function attachPartitionReleaseOwners(services, {directory, budgetMs}) {
       `real release refused: ${JSON.stringify(answer)}`);
     return answer;
   };
-  return {host, release, releaseOnce, dispose, outcomes};
+  // Expose the existing native control service for witnesses that must read
+  // a real coordinator decision; its ownership and disposal stay here.
+  return {host, release, releaseOnce, dispose, outcomes, control};
 }
 
 export {attachPartitionReleaseOwners};
