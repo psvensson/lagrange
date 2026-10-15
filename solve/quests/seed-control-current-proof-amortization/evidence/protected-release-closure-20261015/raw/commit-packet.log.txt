@@ -1,0 +1,92 @@
+Source oversized-file ratchet: 25/27 over 800 lines.
+Test oversized-file ratchet: 21/21 over 1500 lines.
+
+Largest oversized files (25 max):
+2820 test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js (threshold 1500)
+2232 test/distributed/harness/__tests__/cluster-load-readiness-stability-quiescence-test-cases.js (threshold 1500)
+2082 test/diagnostics/topology-convergence-graph.test.js (threshold 1500)
+2063 src/raft/raft-rs-runtime-owner.js (threshold 800)
+1884 test/distributed/harness/cluster-class-lifecycle-base.js (threshold 1500)
+1879 test/rebalancer/replace-replica-workflow-tail-more-test-cases.js (threshold 1500)
+1873 test/distributed/harness/assertions-convergence-wait.js (threshold 1500)
+1864 test/bootstrap/node-joining-service.test.js (threshold 1500)
+1770 test/distributed/harness/failure-bundle-diagnostics-artifact-builder.js (threshold 1500)
+1764 test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js (threshold 1500)
+1740 test/rebalancer/rebalance-coordinator-outcome-routing.test.js (threshold 1500)
+1714 test/admin/admin-control-snapshot-publication-convergence-membership-observation-test-cases.js (threshold 1500)
+1689 test/distributed/harness/post-rebalance-closure-contract.js (threshold 1500)
+1647 test/distributed/harness/__tests__/cluster-active-wait-startup-progress-witness-test-cases.js (threshold 1500)
+1633 test/rebalancer/priority-recovery-snapshot-handoff-timeout-reentry-test-cases.js (threshold 1500)
+1624 test/distributed/harness/cluster-class-control-snapshot-recovery.js (threshold 1500)
+1597 test/distributed/harness/cluster-class-quiescence.js (threshold 1500)
+1595 test/distributed/harness/report-writer.js (threshold 1500)
+1588 test/logging/logs-table-service.test.js (threshold 1500)
+1568 test/admin/admin-control-snapshot-deferred-refresh-membership-observation-test-cases.js (threshold 1500)
+1555 test/distributed/harness/__tests__/report-writer.test.js (threshold 1500)
+1513 test/distributed/harness/__tests__/run.test.js (threshold 1500)
+1264 src/rebalancer/operation-workflow-dispatch-response-reconcile.js (threshold 800)
+1068 src/control-plane/control-plane-readiness-priority-recovery-planning.js (threshold 800)
+1068 src/rebalancer/move-planner-move-calculation-methods.js (threshold 800)
+Scanned 8 JavaScript files
+Found 0 hot-path diagnostics violations
+Matched 31 inherited hot-path diagnostics baseline violations
+[review/protected-release-closure-20261015 fee22f4ce] docs: preserve protected release closure contract and native plan
+ 59 files changed, 21137 insertions(+)
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/ARCHIVE-MANIFEST.json
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/ARCHIVE-RECEIPT.json
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/ARTIFACT-IDENTITIES.json
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/NATIVE-IMPLEMENTATION-PLAN.md
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/PROTECTED-CLOSURE-CONTRACT.md
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/README.md
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/REPRODUCTION.md
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/closure-traces.mjs.txt
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/draft1/PROTECTED-CLOSURE-CONTRACT.md
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/draft1/closure-traces.mjs.txt
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/draft1/first-run-receipt.json
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/draft1/positive.stderr
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/draft1/positive.stdout
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/draft1/split-negative.stderr
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/draft1/split-negative.stdout
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/draft1/timeout-negative.stderr
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/draft1/timeout-negative.stdout
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/draft2/closure-traces.mjs.txt
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/draft2/positive.stderr
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/draft2/positive.stdout
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/draft2/revised-run-receipt.json
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/draft2/split-negative.stderr
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/draft2/split-negative.stdout
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/draft2/timeout-negative.stderr
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/draft2/timeout-negative.stdout
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/evidence-publication.json
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/execution-boundary.json
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/final-run-receipt.json
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/independent-snapshot-auditor-7k9m73xk/preflight-identity-guard.txt
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/independent-snapshot-auditor-t92c0x43/PROTECTED-CLOSURE-CONTRACT.reviewed.md
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/independent-snapshot-auditor-t92c0x43/SHA256SUMS
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/independent-snapshot-auditor-t92c0x43/closure-traces.mjs.txt
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/independent-snapshot-auditor-t92c0x43/identity.json
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/independent-snapshot-auditor-t92c0x43/positive.command.json
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/independent-snapshot-auditor-t92c0x43/positive.exit-code
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/independent-snapshot-auditor-t92c0x43/positive.stderr
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/independent-snapshot-auditor-t92c0x43/positive.stdout
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/independent-snapshot-auditor-t92c0x43/run-summary.json
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/independent-snapshot-auditor-t92c0x43/split-exchange.command.json
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/independent-snapshot-auditor-t92c0x43/split-exchange.exit-code
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/independent-snapshot-auditor-t92c0x43/split-exchange.stderr
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/independent-snapshot-auditor-t92c0x43/split-exchange.stdout
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/independent-snapshot-auditor-t92c0x43/timeout-frees-custody.command.json
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/independent-snapshot-auditor-t92c0x43/timeout-frees-custody.exit-code
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/independent-snapshot-auditor-t92c0x43/timeout-frees-custody.stderr
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/independent-snapshot-auditor-t92c0x43/timeout-frees-custody.stdout
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/ownership-after.json
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/ownership-before.json
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/positive.stderr
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/positive.stdout
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/prior-preservation.json
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/source-manifest.json
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/split-negative.stderr
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/split-negative.stdout
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/timeout-negative.stderr
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/raw/timeout-negative.stdout
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/reviews/capacity-owner-review.md
+ create mode 100644 solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/reviews/independent-review.md
