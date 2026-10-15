@@ -245,3 +245,14 @@ tap.test('duplicate fixture identifiers are not allowed', (t) => {
   t.match(result.problems.join('; '), /duplicate or malformed case/u);
   t.end();
 });
+
+tap.test('an extra host interface on a single-mode WIT world is not ignored',
+  (t) => {
+    const inputs = sdkInputs();
+    inputs.inventory.worlds.find((world) =>
+      world.name === 'request-cell').declaredImports.push('call-context');
+    const result = evaluateSdkHostConformance(inputs);
+    t.equal(result.valid, false);
+    t.match(result.problems.join('; '), /WIT world admission changed/u);
+    t.end();
+  });
