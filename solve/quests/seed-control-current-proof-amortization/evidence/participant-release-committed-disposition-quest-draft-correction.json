@@ -1,0 +1,88 @@
+{
+  "schema": "solve-quest/2",
+  "draftStatus": "draft-unsealed-unactivated",
+  "draftNote": "Corrected successor draft per the independent review's transition-closeout instruction on the release-linearization verification model. Supersedes, as an unsealed draft text, participant-release-committed-disposition-quest-draft.json (revision 2, 3db821fa): the review retained counterexamples show the published T rows, ingress rules and draft constraints needed corrections (committed-effect binding, census-state binding, monotonicity, replay containment, PREPARE classification, outcome uncertainty, retention). Corrections are specified in release-linearization-rev2-addendum-20261015.md section 4-7 and are executable in test/model/participant-release-disposition/model.js under rules mode rev3-corrected. Still PREPARED DRAFT ONLY: not started, not sealed, not activated; no solve.js start has run, no quest directory exists, the doneWhen probe has never been measured, and sealing would require that probe to be red first. Stale Liferaft ownership references are corrected to the actual raft-rs owners and native fixtures. Supersession bookkeeping for the sealed seed-control-current-proof-amortization record remains the owner's later decision.",
+  "id": "participant-release-committed-disposition",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "designUnderReview": "solve/quests/seed-control-current-proof-amortization/evidence/release-linearization-rev2-addendum-20261015.md",
+  "supersedesDesign": "solve/quests/seed-control-current-proof-amortization/evidence/release-linearization-rev2-20261015.md",
+  "supersedesDraft": "solve/quests/seed-control-current-proof-amortization/evidence/participant-release-committed-disposition-quest-draft.json",
+  "verificationModel": {
+    "model": "test/model/participant-release-disposition/model.js",
+    "runner": "scripts/checks/participant-release-committed-disposition-transition-model.js",
+    "rules": {
+      "rev2Published": "the published revision-2 T rows, executable as-is; the retained counterexamples fire against them",
+      "rev3Corrected": "the addendum's corrected T rows; all modeled invariants and claims hold"
+    }
+  },
+  "statementDraft": "The release of a partition's protected write admission is linearized by one committed member of the existing PARTICIPANT_TRANSACTION_COMMAND family: every replica that applies the same committed command prefix persists the same release disposition for the same releaseEpoch, derived only from the command bytes and the replicated release state at that log position; the committed decision, its applied disposition, each replica's local serving eligibility, and the coordinator's observable outcome are separate named states, and D4 answers bind to exact request identity, immutable bytes and the relevant observed prefix, with a non-terminal PENDING class for anything not yet provably committed; authorization for a decision or for protected work consumes the exact expected HELD state and replicated preconditions at the application prefix (epoch, current disposition row, outstanding obligations), monotone in lastAppliedReleaseEpoch; every protected command carries its committed admissionEpoch so deterministic apply never consults the local gate; a later committed PARTICIPANT_RELEASE_HOLD fences all work ordered after it in log order without retroactively undoing committed history and without letting old work silently adopt a newer epoch; releaseIdentity (releaseId) and releaseEpoch remain distinct so retries, re-releases and supersessions are nameable, with a spent epoch never reclaimable and conflict annotations naming the winning disposition; restart, catch-up, replay and leadership change re-derive eligibility from the durable disposition rather than from transient proofs or lost acknowledgements, and an exact replay can never restore a superseded epoch's authority; the PREPARE path distinguishes settlement of replicated-staged obligations (applies regardless of HELD) from fresh admission (refused while HELD) from exact duplicates (no new effect); and per-epoch retention under an owned bound preserves fencing, closure and recovery while answering retired history with typed RETIRED rather than invented outcomes.",
+  "doneWhenDraft": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/participant-release-committed-disposition.js",
+      "target": 0
+    }
+  },
+  "constraintsDraft": [
+    {
+      "id": "deterministic-disposition-purity",
+      "statement": "The disposition persisted from a committed release command is a pure function of the command bytes and the replicated release state at that log position. Live term or leaderId, local lifecycle/runtime incarnations, local pending work, census re-reads, clock and transport answers are prohibited inputs to deterministic apply. Authorization (T1, T4, T6) additionally consumes the exact expected HELD state: the command's census must equal the digest of the replicated release state (epoch, current row, outstanding obligations) at the application prefix; E > L alone is never sufficient. Protected work and staging carry an immutable committed admissionEpoch and execute only while that epoch is the current applied APPROVED epoch (T7 binding), so no committed effect ever consults the local gate. A witness asserts byte-identical dispositions and identical committed effects across replicas in deliberately different local states, with local D3 legitimately differing."
+    },
+    {
+      "id": "replicated-authority-field-classification",
+      "statement": "Replicated authority is exactly the command binding: the releaseIdentityOf five-tuple, releaseEpoch, disposition APPROVED or REFUSED(reason), censusDigest over the committed census inputs, HOLD supersedesEpoch, the command's admissionEpoch binding, and provenance (leaderReplicaId, attemptTerm, canonical entryId). Lifecycle/runtime incarnation fields are local serving-eligibility observations only, recorded as typed local HELD reasons (INCARNATION_CHANGED, SUPERSEDED, IDENTITY_STALE, BEHIND_ON_APPLY), never persisted into the disposition and never consulted by deterministic apply."
+    },
+    {
+      "id": "decision-points-named",
+      "statement": "Committed history (D1 Raft commit), applied disposition (D2 deterministic durable record), local serving eligibility (D3 recomputable per replica), and observable coordinator outcome (D4) are distinct named states. A command may commit and deterministically evaluate to REFUSED; that is a decided, reported refusal, not an aborted attempt. D4 additionally owns a typed non-terminal PENDING class for anything not yet provably committed; intermediate answers are never terminal NOT_COMMITTED/ABORTED."
+    },
+    {
+      "id": "log-order-hold-fence",
+      "statement": "A committed PARTICIPANT_RELEASE_HOLD at log index h closes admission for every command committing at an index greater than h on every replica, because application is in strict log order, gating consults the durable record at execution time through the command's own admissionEpoch binding, and work bound to a superseded epoch refuses deterministically instead of adopting a newer one. It rewrites nothing: writes committed below h, PREPAREs, DECISIONs and their settlement obligations remain committed history owned by the existing settlement owners. No corrective re-PAUSE or reopening loop may claim to retract history, and no exact replay of already-settled results re-executes or re-admits."
+    },
+    {
+      "id": "identity-epoch-separation-and-monotonicity",
+      "statement": "releaseId (stable identity of the intent) and releaseEpoch (unique committed instance, allocated as exactly lastAppliedReleaseEpoch + 1 from a committed read) are distinct. lastAppliedReleaseEpoch is monotone: no refused, stale, invalid or conflicting command ever reduces it, writes a disposition row, or replaces the current disposition; T5 records a typed apply-refusal annotation only, and the offending epoch is nonetheless spent. Disposition rows are per-epoch, written once, never mutated; supersession adds a pointer only; rows are part of snapshot state, so log compaction cannot erase a decision unless the retention constraint retires it. Delayed RESUME or replay naming an old epoch answers typed SUPERSEDED/STALE/RETIRED/SPENT_WITHOUT_ROW from durable state; an epoch less than or equal to lastAppliedReleaseEpoch re-claimed by differing bytes deterministically evaluates to EPOCH_CONFLICT with the winning disposition named in the same annotation. An exact replay of a historical decision re-derives eligibility against the current applied epoch only and can never restore a superseded epoch's authority."
+    },
+    {
+      "id": "eligibility-derivation-not-proof-invalidation",
+      "statement": "admissionProofMatchesStatus narrows to a cache-invalidation trigger for deterministic re-derivation from the durable disposition record plus committed identity status; term and leaderId leave the invalidating set. Restart and catch-up start CLOSED, replay the decision entry idempotently to the byte-identical disposition, then re-derive eligibility; changed incarnations yield typed local HELD and a re-release at a new epoch; a leadership change alone re-derives and cannot re-raise the pause."
+    },
+    {
+      "id": "tx1-prepare-classification-and-ownership",
+      "statement": "The PREPARE path is classified at apply from replicated state at the prefix: (a) a replicated staging record applied at that prefix makes the PREPARE settlement, which applies regardless of HELD (the transaction owner's valid recovery semantics, unchanged); (b) an exact duplicate of an already-applied PREPARE replays with no new effect; (c) a fresh, unstaged PREPARE while the replicated release state is HELD is a typed PREPARE_ADMISSIBILITY_REFUSED with no effect, so fresh admission cannot bypass the fence; (d) a fresh PREPARE while admission is open is ordinary work. PARTICIPANT_DECISION applies as authoritative settlement regardless of HELD. Ordinary new TX1 work after an APPROVED release is normal post-release operation and is never by itself a HOLD cause; outstanding work during a new cutover is ordered by the existing drained-census proposal precondition and settled by its existing owners. TX1 coordinator authority and membership authority stay with their current owners; the release owner never acquires them."
+    },
+    {
+      "id": "committed-fact-outcome-classification",
+      "statement": "The coordinator outcome is classified from committed facts bound to exact request identity (entryId), immutable command bytes and the relevant observed prefix: PENDING (non-terminal) until the entry is observed committed at that prefix; then COMMITTED{epoch, disposition} or the typed apply-refusal/epoch-conflict outcome, classified from the durable record; a missing epoch row answers PENDING, SPENT_WITHOUT_ROW or RETIRED, never never-committed. NOT_COMMITTED remains only the typed pre-decision refusal (proposal refused before any entry was submitted) and the only aborted class. Timeout bounds waiting and never reclassifies; classification is monotone (PENDING may become COMMITTED; COMMITTED never reverts)."
+    },
+    {
+      "id": "retention-owned-bounded-fencing-preserving",
+      "statement": "Per-epoch disposition rows are an owned, bounded resource per partition: a retentionBound live-row budget, executed inside the same application transaction when the bound would be exceeded. Retention retires only rows strictly below the applied epoch, never the current epoch's row and never an epoch with an unresolved obligation, and advances a watermark. Fencing is preserved forever: lastAppliedReleaseEpoch is monotone and spent epochs are never reclaimable whether or not their row survives. Answers about retired history are typed RETIRED - unavailable, named, never reconstructed, never presented as never-committed; exact retained historical outcomes remain answerable while retained. At capacity retention runs first and the entry then applies: release decisions, HOLDs, settlement, replay of retained epochs and typed answers all remain possible, preserving safe closure and recovery."
+    },
+    {
+      "id": "no-new-machinery",
+      "statement": "New command types live in the existing PARTICIPANT_TRANSACTION_COMMAND family applied by the existing appliers; the durable record extends the release owner's existing row/table with the released DDL; proposals use the existing operation port and reroute/entryId path. No new ledger, second scheduler, INSPECT loop, consensus abstraction, admission service, fresh-facts RPC during apply, compensation loop, adapter or fallback path. Retention is an in-transaction bounded sweep of the release owner's own rows, not a background process. No timeout is changed: the exact incoming deadline and the original 1000/5000ms seed allowance stand, and expiry within them is a regression."
+    },
+    {
+      "id": "red-on-revert-witnesses",
+      "statement": "Each load-bearing mechanism has a deterministic red-on-revert witness on real native fixtures - real ReplicaHandlers over the raft-rs owners (raft-rs-operation-port.js, raft-rs-runtime-owner.js, raft-rs-application-transaction-owner.js, raft-rs-durable-store.js) and the native raft-rs-backend fixtures (test/raft/raft-rs-backend/), with real Raft consensus: disposition determinism across differing local states with committed-effect identity despite differing D3; census-state-bound authorization (stale attempt cannot reopen a newer HOLD by delayed submission, reallocation, replay or a numerically larger epoch); L monotonicity and replacement-proof for refused/stale/invalid commands; replay containment after HOLD; command binding across a HOLD boundary with legitimate re-admission separate from exact replay; PREPARE classification (settlement, duplicate, fresh-under-HELD refusal, fresh-under-open); D4 uncertainty (PENDING non-terminal, row absence never proof of never-committed, answers bound to identity/bytes/prefix); and retention (retired history typed, watermark denies but never invents, fencing at capacity). The three preserved witnesses (e15166a62, 1994870bb, 6a9a522d9) keep their bytes and obligations; any successor witness with different post-commit semantics documents why it supersedes the earlier expectation. No assertion becomes eventual and no ratchet baseline is raised."
+    }
+  ],
+  "verificationTemplatesDraft": [
+    "owner-interaction",
+    "concurrency-serialization",
+    "admission-gating",
+    "harness-fidelity",
+    "retry-loops"
+  ],
+  "outOfScopeDraft": [
+    "TX1 coordinator behaviour beyond its interaction with the release command family (owned by the transaction apply owner and coordinator handlers)",
+    "membership, term and configuration authority (owned by the raft operation port and the raft-rs runtime owner)",
+    "settlement of prepared transactions beyond the PREPARE classification at the interaction boundary (owned by the census and recovery owners)",
+    "the HELD seed-shared-current-control-wave investigation",
+    "changes to the sealed seed-control-current-proof-amortization record, its evidence or its log",
+    "any production implementation before independent review approves the corrected transition table"
+  ]
+}
