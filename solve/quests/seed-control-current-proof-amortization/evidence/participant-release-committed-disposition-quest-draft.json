@@ -1,0 +1,74 @@
+{
+  "schema": "solve-quest/2",
+  "draftStatus": "draft-unsealed-unactivated",
+  "draftNote": "Per the independent architecture review of release-linearization-design-20261015.md (verdict REVISE, no implementation authorization). PREPARED DRAFT ONLY: this file lives beside that review as evidence on the non-main preservation route. It is not started, not sealed, not activated: no solve.js start has run, no quest directory exists, the doneWhen probe has never been measured, and sealing would require that probe to be red first. Supersession bookkeeping for the sealed seed-control-current-proof-amortization record is the owner's later decision and is not exercised by this draft.",
+  "id": "participant-release-committed-disposition",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "designUnderReview": "solve/quests/seed-control-current-proof-amortization/evidence/release-linearization-rev2-20261015.md",
+  "supersedesDesign": "solve/quests/seed-control-current-proof-amortization/evidence/release-linearization-design-20261015.md",
+  "statementDraft": "The release of a partition's protected write admission is linearized by one committed member of the existing PARTICIPANT_TRANSACTION_COMMAND family: every replica that applies the same committed command prefix persists the same release disposition for the same releaseEpoch, derived only from the command bytes and the replicated release state already applied; the committed decision, its applied disposition, each replica's local serving eligibility, and the coordinator's observable outcome are separate named states; a later committed PARTICIPANT_RELEASE_HOLD fences all work ordered after it in log order without retroactively undoing committed history; releaseIdentity (releaseId) and releaseEpoch remain distinct so retries, re-releases and supersessions are nameable; restart, catch-up, replay and leadership change re-derive eligibility from the durable disposition rather than from transient proofs or lost acknowledgements; and a committed decision is never reported aborted because an acknowledgement disappeared.",
+  "doneWhenDraft": {
+    "probe": "script",
+    "args": {
+      "command": "node scripts/checks/participant-release-committed-disposition.js",
+      "target": 0
+    }
+  },
+  "constraintsDraft": [
+    {
+      "id": "deterministic-disposition-purity",
+      "statement": "The disposition persisted from a committed release command is a pure function of the command bytes and the replicated release state at that log position. Live term or leaderId, local lifecycle/runtime incarnations, local pending work, census re-reads, clock and transport answers are prohibited inputs to deterministic apply. A witness asserts byte-identical disposition rows across replicas in deliberately different local states applying one identical entry."
+    },
+    {
+      "id": "replicated-authority-field-classification",
+      "statement": "Replicated authority is exactly the command binding: the releaseIdentityOf five-tuple, releaseEpoch, disposition APPROVED or REFUSED(reason), censusDigest over the committed census inputs, HOLD supersedesEpoch, and provenance (leaderReplicaId, attemptTerm, canonical entryId). Lifecycle/runtime incarnation fields are local serving-eligibility observations only, recorded as typed local HELD reasons, never persisted into the disposition."
+    },
+    {
+      "id": "decision-points-named",
+      "statement": "Committed history (D1 Raft commit), applied disposition (D2 deterministic durable record), local serving eligibility (D3 recomputable per replica), and observable coordinator outcome (D4) are distinct named states. A command may commit and deterministically evaluate to REFUSED; that is a decided, reported refusal, not an aborted attempt."
+    },
+    {
+      "id": "log-order-hold-fence",
+      "statement": "A committed PARTICIPANT_RELEASE_HOLD at log index h closes admission for every command committing at an index greater than h on every replica, because application is in strict log order and gating consults the durable record at execution time. It rewrites nothing: writes committed below h, PREPAREs, DECISIONs and their settlement obligations remain committed history owned by the existing settlement owners. No corrective re-PAUSE or reopening loop may claim to retract history."
+    },
+    {
+      "id": "identity-epoch-separation-and-compaction",
+      "statement": "releaseId (stable identity of the intent) and releaseEpoch (unique committed instance, allocated as lastAppliedReleaseEpoch + 1) are distinct. Disposition rows are per-epoch, written once, never mutated; supersession adds a pointer only; the rows are part of snapshot state, so log compaction cannot erase a decision. Delayed RESUME or replay naming an old epoch answers typed SUPERSEDED/STALE/UNKNOWN_EPOCH from durable rows; an epoch less than or equal to lastAppliedReleaseEpoch with differing bytes deterministically evaluates to EPOCH_CONFLICT with no disposition change."
+    },
+    {
+      "id": "eligibility-derivation-not-proof-invalidation",
+      "statement": "admissionProofMatchesStatus narrows to a cache-invalidation trigger for deterministic re-derivation from the durable disposition record plus committed identity status; term and leaderId leave the invalidating set. Restart and catch-up start CLOSED, replay the decision entry idempotently to the byte-identical disposition, then re-derive eligibility; changed incarnations yield typed local HELD and a re-release at a new epoch; a leadership change alone re-derives and cannot re-raise the pause."
+    },
+    {
+      "id": "tx1-work-ownership-unchanged",
+      "statement": "Ordinary new TX1 work after an AUTHORIZED release is normal post-release operation and is never by itself a HOLD cause or a re-census refusal; there is no corrective reopening loop watching it. Outstanding work during a new cutover is ordered by the existing drained-census proposal precondition and settled by its existing owners (PARTICIPANT_DECISION applies while HELD). TX1 coordinator authority and membership authority stay with their current owners; the release owner never acquires them."
+    },
+    {
+      "id": "committed-fact-outcome-classification",
+      "statement": "The coordinator outcome is classified from committed facts only: NOT_COMMITTED (typed pre-decision refusal, provably nothing committed) is the only aborted class; a committed epoch is reported COMMITTED regardless of lost acknowledgements or pending application, with per-replica consumption reported as observations. Timeout bounds waiting and never reclassifies; classification is monotone."
+    },
+    {
+      "id": "no-new-machinery",
+      "statement": "New command types live in the existing PARTICIPANT_TRANSACTION_COMMAND family applied by the existing appliers; the durable record extends the release owner's existing row/table with the released DDL; proposals use the existing operation port and reroute/entryId path. No new ledger, second scheduler, INSPECT loop, consensus abstraction, adapter or fallback path. No timeout is changed: the exact incoming deadline and the original 1000/5000ms seed allowance stand, and expiry within them is a regression."
+    },
+    {
+      "id": "red-on-revert-witnesses",
+      "statement": "Each load-bearing mechanism has a deterministic red-on-revert witness on real native fixtures (real ReplicaHandler + liferaft + real Raft): disposition determinism across differing local states; follower loss before and after commitment; leader loss between commitment and application; in-flight protected write across a committed HOLD boundary (earlier write stays committed with visible settlement, later write refused); same releaseId across epochs with delayed RESUME; restart and catch-up with changed incarnation; TX1 during new cutover and normal TX1 after release. The three preserved witnesses (e15166a62, 1994870bb, 6a9a522d9) keep their bytes and obligations. No assertion becomes eventual and no ratchet baseline is raised."
+    }
+  ],
+  "verificationTemplatesDraft": [
+    "owner-interaction",
+    "concurrency-serialization",
+    "admission-gating",
+    "harness-fidelity",
+    "retry-loops"
+  ],
+  "outOfScopeDraft": [
+    "TX1 coordinator behaviour beyond its interaction with the release command family (owned by the transaction apply owner and coordinator handlers)",
+    "membership, term and configuration authority (owned by the raft operation port and liferaft)",
+    "settlement of prepared transactions (owned by the census and recovery owners)",
+    "the HELD seed-shared-current-control-wave investigation",
+    "changes to the sealed seed-control-current-proof-amortization record, its evidence or its log"
+  ]
+}
