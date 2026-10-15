@@ -1,0 +1,5 @@
+Source oversized-file ratchet: 1/27 over 800 lines.
+Test oversized-file ratchet: 0/21 over 1500 lines.
+
+Largest oversized files (25 max):
+2063 src/raft/raft-rs-runtime-owner.js (threshold 800)

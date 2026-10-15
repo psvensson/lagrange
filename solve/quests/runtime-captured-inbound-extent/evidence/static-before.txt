@@ -1,0 +1,11 @@
+
+Cyclomatic complexity
+Scoped complexity ratchet: 2 violation(s) in 1 target(s) (threshold: 12).
+src/raft/raft-rs-runtime-owner.js:342:1 Function 'invokeCore' has a complexity of 14. Maximum allowed is 12.
+src/raft/raft-rs-runtime-owner.js:721:1 Function 'replaceRuntime' has a complexity of 30. Maximum allowed is 12.
+Saved complexity report to test-output/analysis/complexity-scoped.json.
+
+Cognitive complexity
+Scoped cognitive complexity ratchet: 1 violation(s) in 1 target(s) (threshold: 20).
+src/raft/raft-rs-runtime-owner.js:721:10 Refactor this function to reduce its Cognitive Complexity from 30 to the 20 allowed.
+Saved cognitive complexity report to test-output/analysis/cognitive-complexity-scoped.json.

@@ -19,16 +19,16 @@
     "services-runtime": 146,
     "solver-tooling": 7,
     "storage-partition": 189,
-    "storage-raft": 130,
+    "storage-raft": 131,
     "test-infrastructure": 143,
     "transactions": 16,
     "transport-messaging": 95,
     "wasm-toolchain": 57
   },
-  "censusSize": 2379,
-  "digest": "fnv1a32-2ef39560",
+  "censusSize": 2380,
+  "digest": "fnv1a32-3db4ea2e",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-13a3a27e",
+  "observationDigest": "fnv1a32-11230b96",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1626,6 +1626,7 @@
     "test/raft/raft-rs-backend/replica-membership-witness.test.js": "storage-raft",
     "test/raft/raft-rs-backend/reseed-hold-durability.test.js": "storage-raft",
     "test/raft/raft-rs-backend/restart-from-durable-record.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js": "storage-raft",
@@ -11154,6 +11155,18 @@
         "src/raft/raft-rs-durable-store.js",
         "src/raft/raft-rs-host-contract.js",
         "src/raft/raft-rs-runtime-owner.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner-constants.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "test/raft/raft-rs-backend/runtime-captured-inbound-companion-fixture.js"
       ]
     },
     "test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js": {

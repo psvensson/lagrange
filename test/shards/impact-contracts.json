@@ -560,7 +560,7 @@
       ]
     },
     "raft-rs-runtime-lifecycle-entry": {
-      "description": "The replica lifecycle owner admits each semantic operation before the runtime owner can enter the raft-rs core, and durable retirement waits for admitted operations before becoming terminal. A constructor refused before runtime admission publishes no membership reservation owner or native handle; each service initialization retains the exact named consensus failure and releases its own opening resources before reporting refusal. Exact-incarnation native opening history is NEVER_OPENED or ESTABLISHED in the existing lifecycle row; legacy NULL is unknown. Bootstrap and establishment commit atomically at FULL before participation; intact history restores, while absent native state cannot reopen an established or unknown incarnation. Host prior-existence remains independent for complete storage loss. If startup cleanup also fails, the original typed refusal and immutable owner retry answer remain primary; the actual secondary failure is retained, exact unclosed resources remain with the service lifecycle, initialize stays held, and existing shutdown retries that same cleanup without a new scheduler. Failed WASM teardown is CLEANUP_REQUIRED, not STOPPED.",
+      "description": "The replica lifecycle owner admits each semantic operation before the runtime owner can enter the raft-rs core, and durable retirement waits for admitted operations before becoming terminal. A constructor refused before runtime admission publishes no membership reservation owner or native handle; each service initialization retains the exact named consensus failure and releases its own opening resources before reporting refusal. Exact-incarnation native opening history is NEVER_OPENED or ESTABLISHED in the existing lifecycle row; legacy NULL is unknown. Bootstrap and establishment commit atomically at FULL before participation; intact history restores, while absent native state cannot reopen an established or unknown incarnation. Host prior-existence remains independent for complete storage loss. If startup cleanup also fails, the original typed refusal and immutable owner retry answer remain primary; the actual secondary failure is retained, exact unclosed resources remain with the service lifecycle, initialize stays held, and existing shutdown retries that same cleanup without a new scheduler. Failed WASM teardown is CLEANUP_REQUIRED, not STOPPED. Each runtime turn captures its finite inbound extent after successful execution admission, checks current execution before dequeue, and leaves later accepted envelopes with the existing queue and owned wake; no later arrival enlarges that captured extent.",
       "owners": [
         "src/raft/raft-rs-replica-lifecycle-owner.js",
         "src/raft/raft-rs-lifecycle-administration.js",
@@ -593,7 +593,8 @@
         "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
         "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
         "test/raft/raft-opening-cleanup-error.test.js",
-        "test/raft/raft-rs-backend/startup-cleanup.integration.test.js"
+        "test/raft/raft-rs-backend/startup-cleanup.integration.test.js",
+        "test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js"
       ]
     },
     "raft-rs-runtime-application-transaction": {
@@ -661,7 +662,8 @@
         "test/partition/participant-release-native-application-order.test.js",
         "test/partition/participant-release-prepared-settlement-native.test.js",
         "test/partition/participant-release-delivery-recorder.test.js",
-        "test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js"
+        "test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js",
+        "test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js"
       ]
     },
     "partition-raft-operation-port": {

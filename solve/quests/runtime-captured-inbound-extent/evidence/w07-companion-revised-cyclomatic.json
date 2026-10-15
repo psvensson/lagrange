@@ -1,0 +1,11 @@
+{
+  "targetThreshold": 12,
+  "baselineCount": 1755,
+  "scoped": true,
+  "targets": [
+    "test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js",
+    "test/raft/raft-rs-backend/runtime-captured-inbound-companion-fixture.js"
+  ],
+  "count": 0,
+  "violations": []
+}

@@ -1,0 +1,92 @@
+[
+  {
+    "pid": 4316,
+    "cwd": "/mnt/data/peter/projects/lagrange",
+    "comm": "bash"
+  },
+  {
+    "pid": 10072,
+    "cwd": "/mnt/data/peter/projects/lagrange",
+    "comm": "bash"
+  },
+  {
+    "pid": 1193659,
+    "cwd": "/mnt/data/peter/projects/lagrange",
+    "comm": "codex"
+  },
+  {
+    "pid": 1193717,
+    "cwd": "/mnt/data/peter/projects/lagrange",
+    "comm": "codex"
+  },
+  {
+    "pid": 1193794,
+    "cwd": "/mnt/data/peter/projects/lagrange",
+    "comm": "codex"
+  },
+  {
+    "pid": 1193927,
+    "cwd": "/mnt/data/peter/projects/lagrange",
+    "comm": "node_repl"
+  },
+  {
+    "pid": 1193928,
+    "cwd": "/mnt/data/peter/projects/lagrange",
+    "comm": "MainThread"
+  },
+  {
+    "pid": 1193994,
+    "cwd": "/mnt/data/peter/projects/lagrange",
+    "comm": "node_repl"
+  },
+  {
+    "pid": 1203909,
+    "cwd": "/mnt/data/peter/projects/lagrange",
+    "comm": "codex-code-mode"
+  },
+  {
+    "pid": 1372482,
+    "cwd": "/mnt/data/peter/projects/lagrange",
+    "comm": "node_repl"
+  },
+  {
+    "pid": 1372483,
+    "cwd": "/mnt/data/peter/projects/lagrange",
+    "comm": "MainThread"
+  },
+  {
+    "pid": 1372585,
+    "cwd": "/mnt/data/peter/projects/lagrange",
+    "comm": "node_repl"
+  },
+  {
+    "pid": 1519945,
+    "cwd": "/mnt/data/peter/projects/lagrange",
+    "comm": "node_repl"
+  },
+  {
+    "pid": 1519946,
+    "cwd": "/mnt/data/peter/projects/lagrange",
+    "comm": "MainThread"
+  },
+  {
+    "pid": 1520064,
+    "cwd": "/mnt/data/peter/projects/lagrange",
+    "comm": "node_repl"
+  },
+  {
+    "pid": 1655112,
+    "cwd": "/mnt/data/peter/projects/lagrange",
+    "comm": "MainThread"
+  },
+  {
+    "pid": 1655113,
+    "cwd": "/mnt/data/peter/projects/lagrange",
+    "comm": "node_repl"
+  },
+  {
+    "pid": 1655141,
+    "cwd": "/mnt/data/peter/projects/lagrange",
+    "comm": "node_repl"
+  }
+]
