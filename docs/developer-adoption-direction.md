@@ -132,8 +132,8 @@ the reduced result with an independent oracle; show complete expected shard
 participation, bounded fanout/partial volume, request correlation, and a
 transparent explanation of actual concurrency and transfer costs.
 
-Show refusal or a typed incomplete outcome when a required shard fails.
-Exactly-once *visible result publication* is not exactly-once guest code
+Show a typed failure and publish no partial reduced result when a required
+shard fails. Exactly-once *visible result publication* is not exactly-once guest code
 execution and does not cover arbitrary external effects.
 
 ### C. Prove WASM/native provider parity
