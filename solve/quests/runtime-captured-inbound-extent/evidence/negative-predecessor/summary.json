@@ -1,0 +1,18 @@
+{
+  "sha": "19de88997fda4b6719bc0c1e46df61698bac1922",
+  "host": "lenovo-laptop",
+  "requested": [
+    "test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js"
+  ],
+  "results": [
+    {
+      "file": "test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js",
+      "code": 1,
+      "rawTap": true,
+      "testSha256": "07f9cd3a396b1036f96e2130efa454f1702b7acc6ad7e45b14274c5c3a3bce8d"
+    }
+  ],
+  "unrun": [],
+  "exitCode": 1,
+  "meaning": "Per-file original executions; no retries; no overall release certification"
+}

@@ -1,0 +1,983 @@
+{
+  "kind": "independent_read_only_candidate_artifact_analysis",
+  "candidate": "4aa8780cfec6f2718b86b4d1e27ee9711492be59",
+  "files": [
+    {
+      "directory": "01",
+      "plan": {
+        "sha": "4aa8780cfec6f2718b86b4d1e27ee9711492be59",
+        "host": "lenovo-laptop",
+        "file": "test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js",
+        "plan": [
+          {
+            "files": [
+              "test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js"
+            ],
+            "jobs": 4,
+            "resourceClass": "ordinary"
+          }
+        ],
+        "costs": [
+          {
+            "file": "test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js",
+            "jobs": 4,
+            "ms": 10000,
+            "lane": "ordinary"
+          }
+        ],
+        "results": ".tap/test-results/test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js.tap"
+      },
+      "exit": 0,
+      "placement_heads": [
+        "[lenovo-laptop] placement-head=4aa8780cfec6f2718b86b4d1e27ee9711492be59"
+      ],
+      "placement_env": [
+        "[lenovo-laptop] placement-env=factor:2.7 mode:local retry:0 timeout: lanecap:7"
+      ],
+      "native_reports": [
+        {
+          "subsystem": "raft-rs",
+          "report": "core-trapped",
+          "groupId": "w07-replacement-trigger",
+          "replicaIdentity": "w07-replacement-trigger",
+          "peerId": "8679879525687509139",
+          "operation": "tick",
+          "reason": "W07 declared shared runtime replacement",
+          "runtimeGeneration": 1,
+          "level": "error",
+          "message": "raft-rs core trapped"
+        },
+        {
+          "subsystem": "raft-rs",
+          "report": "runtime-replaced",
+          "groupId": "w07-replacement-trigger",
+          "replicaIdentity": "w07-replacement-trigger",
+          "peerId": "8679879525687509139",
+          "runtimeGeneration": 2,
+          "groupsRestored": 4,
+          "failure": null,
+          "level": "error",
+          "message": "raft-rs runtime replaced"
+        }
+      ],
+      "hashes": {
+        "discovery.json": "6be336c038b4989ae8e39b01be0c2b2026630914d62a40bcb244992d6ab82efb",
+        "exit-code.txt": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+        "plan.json": "3dd957b94af20eaa76d12be97291434b23c1ecfb64c1dcb86cfdbda1b20dd1d3",
+        "raw.tap": "a89de466a097830e12db5977adef6ed29cee43b4684044ac3fe1bcf5ae75cd0b",
+        "run.log": "f675ce0c2b09a36baa56f4eb91858056c6463928062fcb8bebe3612e720b1783"
+      },
+      "cases": [
+        {
+          "case": "w07-service-0",
+          "event_count": 28,
+          "accepted": 0,
+          "steps": [],
+          "replies": [],
+          "proposals": [
+            {
+              "sequence": 584,
+              "generation": 1,
+              "command": {
+                "w07": "already-owned-forwarded-proposal"
+              }
+            },
+            {
+              "sequence": 593,
+              "generation": 1,
+              "command": {
+                "w07": "queued-ordinary-proposal"
+              }
+            }
+          ],
+          "native_ticks": [],
+          "cuts_and_results": [
+            {
+              "index": 7,
+              "kind": "measurement-cut",
+              "arrivals": 0,
+              "serviceBound": 1,
+              "predecessor": "core-entered, Ready awaits its native forwarded send"
+            },
+            {
+              "index": 25,
+              "kind": "predecessor-result",
+              "result": {
+                "outcome": "CORE_OK",
+                "reason": "drained"
+              }
+            },
+            {
+              "index": 26,
+              "kind": "measurement-end",
+              "result": {
+                "outcome": "CORE_OK",
+                "reason": "drained"
+              }
+            },
+            {
+              "index": 27,
+              "kind": "service-observation",
+              "inboundBeforeSelected": 0,
+              "bound": 1,
+              "preservation": "passed"
+            }
+          ],
+          "cleanup": {
+            "w07Cleanup": "w07-service-0",
+            "settled": true,
+            "retainedDirectory": null,
+            "error": null
+          },
+          "checks": {
+            "message_hashes": true,
+            "packet_hashes": true,
+            "delivered_envelope_hashes": true,
+            "typed_admissions": true,
+            "native_origin_args": true
+          }
+        },
+        {
+          "case": "w07-generation",
+          "event_count": 75,
+          "accepted": 2,
+          "steps": [
+            {
+              "sequence": 1112,
+              "generation": 1,
+              "type": 8,
+              "hash": "56e97ea7f54309a1dace943e2324877cf8d9c2ef92acd30060f32d63e13352ea"
+            },
+            {
+              "sequence": 1160,
+              "generation": 2,
+              "type": 8,
+              "hash": "56e97ea7f54309a1dace943e2324877cf8d9c2ef92acd30060f32d63e13352ea"
+            }
+          ],
+          "replies": [
+            {
+              "index": 8,
+              "hash": "238b6964ce94d37f3e7500c0ba4443ddf847f28a385af5d1e75bd1abf78d38c9"
+            },
+            {
+              "index": 68,
+              "hash": "238b6964ce94d37f3e7500c0ba4443ddf847f28a385af5d1e75bd1abf78d38c9"
+            }
+          ],
+          "proposals": [],
+          "native_ticks": [
+            {
+              "kind": "core-entry",
+              "sequence": 1116,
+              "operation": "tick",
+              "groupId": "w07-replacement-trigger",
+              "runtimeGeneration": 1
+            },
+            {
+              "kind": "core-entry",
+              "sequence": 1150,
+              "operation": "tick",
+              "groupId": "w07-replacement-trigger",
+              "runtimeGeneration": 2
+            }
+          ],
+          "cuts_and_results": [
+            {
+              "index": 13,
+              "kind": "measurement-cut",
+              "originalGeneration": 1,
+              "ownedRemainder": "8a2a0506b1d981bd87c6658636116640d7fc6e8a570b011fa648afc5d608bd78",
+              "pending": {
+                "w07": "must-not-enter-after-replacement"
+              }
+            },
+            {
+              "index": 15,
+              "kind": "declared-one-shot-native-trap"
+            },
+            {
+              "index": 54,
+              "kind": "old-invocation-result",
+              "result": {
+                "outcome": "HOST_FAILURE",
+                "reason": "execution generation changed while host work was pending",
+                "phase": "runtime-generation-changed",
+                "retryable": true,
+                "recoveryRequired": true
+              }
+            },
+            {
+              "index": 55,
+              "kind": "inbound-stage",
+              "groupId": "w07-generation",
+              "replicaIdentity": "w07-b",
+              "stage": "callback",
+              "queued": 1,
+              "scheduled": false
+            },
+            {
+              "index": 56,
+              "kind": "inbound-stage",
+              "groupId": "w07-generation",
+              "replicaIdentity": "w07-b",
+              "stage": "turn-request",
+              "queued": 1,
+              "scheduled": false
+            },
+            {
+              "index": 74,
+              "kind": "measurement-end",
+              "preservedRemainder": true
+            }
+          ],
+          "cleanup": {
+            "w07Cleanup": "w07-generation",
+            "settled": true,
+            "retainedDirectory": null,
+            "error": null
+          },
+          "checks": {
+            "message_hashes": true,
+            "packet_hashes": true,
+            "delivered_envelope_hashes": true,
+            "typed_admissions": true,
+            "native_origin_args": true
+          }
+        },
+        {
+          "case": "w07-refusal",
+          "event_count": 35,
+          "accepted": 2,
+          "steps": [
+            {
+              "sequence": 1770,
+              "generation": 2,
+              "type": 4,
+              "hash": "5a0bee4ffe247643964d5d4e7f98e0da5e20c42249c6f9b842d1d0375e9c6e3e"
+            },
+            {
+              "sequence": 1774,
+              "generation": 2,
+              "type": 2,
+              "hash": "8321d4d6786b7d0cc078b3ddb5f50db9f220e9a358443e7609f2fcdce171feac"
+            }
+          ],
+          "replies": [],
+          "proposals": [
+            {
+              "sequence": 1783,
+              "generation": 2,
+              "command": {
+                "w07": "after-refused-and-valid-preaccepted"
+              }
+            }
+          ],
+          "native_ticks": [],
+          "cuts_and_results": [
+            {
+              "index": 0,
+              "kind": "measurement-cut",
+              "nativeOrigin": [
+                {
+                  "protocol": "raft-rs",
+                  "groupId": "w07-refusal",
+                  "from": "6226700366134270856",
+                  "to": "1786932791954462116",
+                  "message": {
+                    "from": "6226700366134270856",
+                    "to": "1786932791954462116",
+                    "term": "1",
+                    "logTerm": "0",
+                    "index": "3",
+                    "msgType": 4,
+                    "entries": [],
+                    "commit": "2",
+                    "reject": false,
+                    "rejectHint": "0"
+                  }
+                },
+                {
+                  "protocol": "raft-rs",
+                  "groupId": "w07-refusal",
+                  "from": "9071491718745019934",
+                  "to": "1786932791954462116",
+                  "message": {
+                    "from": "9071491718745019934",
+                    "to": "1786932791954462116",
+                    "term": "0",
+                    "logTerm": "0",
+                    "index": "0",
+                    "msgType": 2,
+                    "entries": [
+                      {
+                        "term": "0",
+                        "index": "0",
+                        "entryType": 0,
+                        "data": "eyJ3MDciOiJwcmVhY2NlcHRlZC10YWlsIn0="
+                      }
+                    ],
+                    "commit": "0",
+                    "reject": false,
+                    "rejectHint": "0"
+                  }
+                }
+              ]
+            },
+            {
+              "index": 30,
+              "kind": "measurement-end",
+              "result": {
+                "outcome": "CORE_OK",
+                "reason": "drained"
+              }
+            },
+            {
+              "index": 31,
+              "kind": "passive-durable-tail-proof",
+              "tailRows": [
+                {
+                  "log_index": 4,
+                  "term": 1,
+                  "entry_type": 0,
+                  "data": "eyJ3MDciOiJwcmVhY2NlcHRlZC10YWlsIn0="
+                }
+              ],
+              "selectedRows": [
+                {
+                  "log_index": 5,
+                  "term": 1,
+                  "entry_type": 0,
+                  "data": "eyJ3MDciOiJhZnRlci1yZWZ1c2VkLWFuZC12YWxpZC1wcmVhY2NlcHRlZCJ9"
+                }
+              ]
+            },
+            {
+              "index": 34,
+              "kind": "post-measurement-refusal",
+              "refusal": {
+                "from": "6226700366134270856",
+                "msgType": 4,
+                "outcome": "CORE_REFUSED",
+                "reason": "step: raft: cannot step as peer not found",
+                "phase": "step",
+                "refusalCount": 1
+              }
+            }
+          ],
+          "cleanup": {
+            "w07Cleanup": "w07-refusal",
+            "settled": true,
+            "retainedDirectory": null,
+            "error": null
+          },
+          "checks": {
+            "message_hashes": true,
+            "packet_hashes": true,
+            "delivered_envelope_hashes": true,
+            "typed_admissions": true,
+            "native_origin_args": true
+          }
+        },
+        {
+          "case": "w07-service-4",
+          "event_count": 95,
+          "accepted": 4,
+          "steps": [
+            {
+              "sequence": 2399,
+              "generation": 2,
+              "type": 8,
+              "hash": "56e97ea7f54309a1dace943e2324877cf8d9c2ef92acd30060f32d63e13352ea"
+            },
+            {
+              "sequence": 2417,
+              "generation": 2,
+              "type": 8,
+              "hash": "56e97ea7f54309a1dace943e2324877cf8d9c2ef92acd30060f32d63e13352ea"
+            },
+            {
+              "sequence": 2426,
+              "generation": 2,
+              "type": 8,
+              "hash": "56e97ea7f54309a1dace943e2324877cf8d9c2ef92acd30060f32d63e13352ea"
+            },
+            {
+              "sequence": 2435,
+              "generation": 2,
+              "type": 8,
+              "hash": "56e97ea7f54309a1dace943e2324877cf8d9c2ef92acd30060f32d63e13352ea"
+            }
+          ],
+          "replies": [
+            {
+              "index": 22,
+              "hash": "da547fbbd918e76e808e9f36cff5efdac05c330fe262822b8efe336ff1b389fc"
+            },
+            {
+              "index": 54,
+              "hash": "da547fbbd918e76e808e9f36cff5efdac05c330fe262822b8efe336ff1b389fc"
+            },
+            {
+              "index": 72,
+              "hash": "da547fbbd918e76e808e9f36cff5efdac05c330fe262822b8efe336ff1b389fc"
+            },
+            {
+              "index": 90,
+              "hash": "da547fbbd918e76e808e9f36cff5efdac05c330fe262822b8efe336ff1b389fc"
+            }
+          ],
+          "proposals": [
+            {
+              "sequence": 2390,
+              "generation": 2,
+              "command": {
+                "w07": "already-owned-forwarded-proposal"
+              }
+            },
+            {
+              "sequence": 2408,
+              "generation": 2,
+              "command": {
+                "w07": "queued-ordinary-proposal"
+              }
+            }
+          ],
+          "native_ticks": [],
+          "cuts_and_results": [
+            {
+              "index": 7,
+              "kind": "measurement-cut",
+              "arrivals": 4,
+              "serviceBound": 1,
+              "predecessor": "core-entered, Ready awaits its native forwarded send"
+            },
+            {
+              "index": 24,
+              "kind": "predecessor-result",
+              "result": {
+                "outcome": "CORE_OK",
+                "reason": "drained"
+              }
+            },
+            {
+              "index": 25,
+              "kind": "inbound-stage",
+              "groupId": "w07-service-4",
+              "replicaIdentity": "w07-b",
+              "stage": "callback",
+              "queued": 0,
+              "scheduled": false
+            },
+            {
+              "index": 26,
+              "kind": "inbound-stage",
+              "groupId": "w07-service-4",
+              "replicaIdentity": "w07-b",
+              "stage": "closed-or-empty",
+              "queued": 0,
+              "scheduled": false
+            },
+            {
+              "index": 30,
+              "kind": "inbound-stage",
+              "groupId": "w07-service-4",
+              "replicaIdentity": "w07-b",
+              "stage": "callback",
+              "queued": 1,
+              "scheduled": false
+            },
+            {
+              "index": 31,
+              "kind": "inbound-stage",
+              "groupId": "w07-service-4",
+              "replicaIdentity": "w07-b",
+              "stage": "turn-request",
+              "queued": 1,
+              "scheduled": false
+            },
+            {
+              "index": 59,
+              "kind": "inbound-stage",
+              "groupId": "w07-service-4",
+              "replicaIdentity": "w07-b",
+              "stage": "callback",
+              "queued": 1,
+              "scheduled": false
+            },
+            {
+              "index": 60,
+              "kind": "inbound-stage",
+              "groupId": "w07-service-4",
+              "replicaIdentity": "w07-b",
+              "stage": "turn-request",
+              "queued": 1,
+              "scheduled": false
+            },
+            {
+              "index": 77,
+              "kind": "inbound-stage",
+              "groupId": "w07-service-4",
+              "replicaIdentity": "w07-b",
+              "stage": "callback",
+              "queued": 1,
+              "scheduled": false
+            },
+            {
+              "index": 78,
+              "kind": "inbound-stage",
+              "groupId": "w07-service-4",
+              "replicaIdentity": "w07-b",
+              "stage": "turn-request",
+              "queued": 1,
+              "scheduled": false
+            },
+            {
+              "index": 93,
+              "kind": "measurement-end",
+              "result": {
+                "outcome": "CORE_OK",
+                "reason": "drained"
+              }
+            },
+            {
+              "index": 94,
+              "kind": "service-observation",
+              "inboundBeforeSelected": 1,
+              "bound": 1,
+              "preservation": "passed"
+            }
+          ],
+          "cleanup": {
+            "w07Cleanup": "w07-service-4",
+            "settled": true,
+            "retainedDirectory": null,
+            "error": null
+          },
+          "checks": {
+            "message_hashes": true,
+            "packet_hashes": true,
+            "delivered_envelope_hashes": true,
+            "typed_admissions": true,
+            "native_origin_args": true
+          }
+        }
+      ]
+    },
+    {
+      "directory": "02",
+      "plan": {
+        "sha": "4aa8780cfec6f2718b86b4d1e27ee9711492be59",
+        "host": "lenovo-laptop",
+        "file": "test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js",
+        "plan": [
+          {
+            "files": [
+              "test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js"
+            ],
+            "jobs": 4,
+            "resourceClass": "ordinary"
+          }
+        ],
+        "costs": [
+          {
+            "file": "test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js",
+            "jobs": 4,
+            "ms": 10000,
+            "lane": "ordinary"
+          }
+        ],
+        "results": ".tap/test-results/test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js.tap"
+      },
+      "exit": 0,
+      "placement_heads": [
+        "[lenovo-laptop] placement-head=4aa8780cfec6f2718b86b4d1e27ee9711492be59"
+      ],
+      "placement_env": [
+        "[lenovo-laptop] placement-env=factor:2.3 mode:local retry:0 timeout: lanecap:7"
+      ],
+      "native_reports": [
+        {
+          "subsystem": "raft-rs",
+          "report": "core-trapped",
+          "groupId": "w07-companion-pre-dequeue-guard",
+          "replicaIdentity": "w07-companion-b",
+          "peerId": "5993373093139411192",
+          "operation": "status",
+          "reason": "intentional final Ready announcement trap",
+          "runtimeGeneration": 1,
+          "level": "error",
+          "message": "raft-rs core trapped"
+        },
+        {
+          "subsystem": "raft-rs",
+          "report": "runtime-replaced",
+          "groupId": "w07-companion-pre-dequeue-guard",
+          "replicaIdentity": "w07-companion-b",
+          "peerId": "5993373093139411192",
+          "runtimeGeneration": 2,
+          "groupsRestored": 3,
+          "failure": null,
+          "level": "error",
+          "message": "raft-rs runtime replaced"
+        }
+      ],
+      "hashes": {
+        "discovery.json": "5c65748e64359953c6ad8fa7dc196d0c4bb127f8c6bf73d485535a1a942ee8e7",
+        "exit-code.txt": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+        "plan.json": "495ef06b082785b800b06fc2536f1282ec4d8e80a73e037d4646e801143b51d4",
+        "raw.tap": "96ba7c065ef046e55a13033d0cdd0be4950b62660b2aeb844fa917252ffe677e",
+        "run.log": "422f81cec76987fb4112039df01fb08b9f6f38b0c4d1870ac431ed4053a32b3b"
+      },
+      "cases": [
+        {
+          "case": "w07-companion-queued-capture",
+          "event_count": 55,
+          "accepted": 2,
+          "steps": [
+            {
+              "sequence": 639,
+              "generation": 1,
+              "type": 8,
+              "hash": "84e38d7ad20624da609237304532f4da3e4d1e860d44f39c76a55656f7600d41"
+            },
+            {
+              "sequence": 648,
+              "generation": 1,
+              "type": 8,
+              "hash": "84e38d7ad20624da609237304532f4da3e4d1e860d44f39c76a55656f7600d41"
+            }
+          ],
+          "replies": [
+            {
+              "index": 27,
+              "hash": "58a0733bf42da4df18fa373bf568c3f8cf3cca61b684cf23664cd6a18de134ea"
+            },
+            {
+              "index": 38,
+              "hash": "58a0733bf42da4df18fa373bf568c3f8cf3cca61b684cf23664cd6a18de134ea"
+            }
+          ],
+          "proposals": [
+            {
+              "sequence": 630,
+              "generation": 1,
+              "command": {
+                "w07Companion": "already-forwarding"
+              }
+            },
+            {
+              "sequence": 657,
+              "generation": 1,
+              "command": {
+                "w07Companion": "capture-after-queued-turn-is-admitted"
+              }
+            }
+          ],
+          "native_ticks": [],
+          "cuts_and_results": [
+            {
+              "index": 7,
+              "kind": "selected-enqueued",
+              "selected": {
+                "w07Companion": "capture-after-queued-turn-is-admitted"
+              }
+            },
+            {
+              "index": 14,
+              "kind": "inbound-stage",
+              "groupId": "w07-companion-queued-capture",
+              "replicaIdentity": "w07-companion-b",
+              "stage": "callback",
+              "queued": 2,
+              "scheduled": false
+            },
+            {
+              "index": 15,
+              "kind": "inbound-stage",
+              "groupId": "w07-companion-queued-capture",
+              "replicaIdentity": "w07-companion-b",
+              "stage": "turn-request",
+              "queued": 2,
+              "scheduled": false
+            }
+          ],
+          "cleanup": {
+            "w07CompanionCleanup": "w07-companion-queued-capture",
+            "settled": true,
+            "retainedDirectory": null,
+            "error": null
+          },
+          "checks": {
+            "message_hashes": true,
+            "packet_hashes": true,
+            "delivered_envelope_hashes": true,
+            "typed_admissions": true,
+            "native_origin_args": true
+          }
+        },
+        {
+          "case": "w07-companion-consumed-wake",
+          "event_count": 58,
+          "accepted": 2,
+          "steps": [
+            {
+              "sequence": 1327,
+              "generation": 1,
+              "type": 8,
+              "hash": "84e38d7ad20624da609237304532f4da3e4d1e860d44f39c76a55656f7600d41"
+            },
+            {
+              "sequence": 1345,
+              "generation": 1,
+              "type": 8,
+              "hash": "84e38d7ad20624da609237304532f4da3e4d1e860d44f39c76a55656f7600d41"
+            }
+          ],
+          "replies": [
+            {
+              "index": 22,
+              "hash": "d662083db9aacea176d9d6a0b314024e68e5afced5fc1d551d105d6e5416ddef"
+            },
+            {
+              "index": 52,
+              "hash": "d662083db9aacea176d9d6a0b314024e68e5afced5fc1d551d105d6e5416ddef"
+            }
+          ],
+          "proposals": [
+            {
+              "sequence": 1318,
+              "generation": 1,
+              "command": {
+                "w07Companion": "already-forwarding"
+              }
+            },
+            {
+              "sequence": 1336,
+              "generation": 1,
+              "command": {
+                "w07Companion": "remainder-owned-by-consumed-wake"
+              }
+            }
+          ],
+          "native_ticks": [],
+          "cuts_and_results": [
+            {
+              "index": 7,
+              "kind": "selected-enqueued",
+              "selected": {
+                "w07Companion": "remainder-owned-by-consumed-wake"
+              }
+            },
+            {
+              "index": 27,
+              "kind": "inbound-stage",
+              "groupId": "w07-companion-consumed-wake",
+              "replicaIdentity": "w07-companion-b",
+              "stage": "callback",
+              "queued": 1,
+              "scheduled": false
+            },
+            {
+              "index": 28,
+              "kind": "inbound-stage",
+              "groupId": "w07-companion-consumed-wake",
+              "replicaIdentity": "w07-companion-b",
+              "stage": "turn-request",
+              "queued": 1,
+              "scheduled": false
+            },
+            {
+              "index": 29,
+              "kind": "last-external-progress-event",
+              "event": "release-first-ready-send"
+            }
+          ],
+          "cleanup": {
+            "w07CompanionCleanup": "w07-companion-consumed-wake",
+            "settled": true,
+            "retainedDirectory": null,
+            "error": null
+          },
+          "checks": {
+            "message_hashes": true,
+            "packet_hashes": true,
+            "delivered_envelope_hashes": true,
+            "typed_admissions": true,
+            "native_origin_args": true
+          }
+        },
+        {
+          "case": "w07-companion-pre-dequeue-guard",
+          "event_count": 54,
+          "accepted": 2,
+          "steps": [
+            {
+              "sequence": 2026,
+              "generation": 1,
+              "type": 8,
+              "hash": "84e38d7ad20624da609237304532f4da3e4d1e860d44f39c76a55656f7600d41"
+            },
+            {
+              "sequence": 2055,
+              "generation": 2,
+              "type": 8,
+              "hash": "84e38d7ad20624da609237304532f4da3e4d1e860d44f39c76a55656f7600d41"
+            }
+          ],
+          "replies": [
+            {
+              "index": 11,
+              "hash": "ee3c0300d9c3dc7f10f2139c2d75cc74007011db65e7df68125296a16986f20c"
+            },
+            {
+              "index": 44,
+              "hash": "ee3c0300d9c3dc7f10f2139c2d75cc74007011db65e7df68125296a16986f20c"
+            }
+          ],
+          "proposals": [],
+          "native_ticks": [
+            {
+              "kind": "core-entry",
+              "sequence": 2064,
+              "operation": "tick",
+              "groupId": "w07-companion-pre-dequeue-guard",
+              "runtimeGeneration": 2
+            }
+          ],
+          "cuts_and_results": [
+            {
+              "index": 16,
+              "kind": "host-injected-final-announcement-trap"
+            },
+            {
+              "index": 17,
+              "kind": "recovery-phase-cut",
+              "initial": {
+                "outcome": "HOST_FAILURE",
+                "reason": "execution generation changed while host work was pending",
+                "phase": "runtime-generation-changed",
+                "retryable": true,
+                "recoveryRequired": true
+              },
+              "driver": "one explicit canonical B tick; this is preservation, not autonomous service"
+            }
+          ],
+          "cleanup": {
+            "w07CompanionCleanup": "w07-companion-pre-dequeue-guard",
+            "settled": true,
+            "retainedDirectory": null,
+            "error": null
+          },
+          "checks": {
+            "message_hashes": true,
+            "packet_hashes": true,
+            "delivered_envelope_hashes": true,
+            "typed_admissions": true,
+            "native_origin_args": true
+          }
+        },
+        {
+          "case": "w07-companion-reconstruction-capture",
+          "event_count": 45,
+          "accepted": 1,
+          "steps": [
+            {
+              "sequence": 2885,
+              "generation": 2,
+              "type": 8,
+              "hash": "84e38d7ad20624da609237304532f4da3e4d1e860d44f39c76a55656f7600d41"
+            }
+          ],
+          "replies": [
+            {
+              "index": 27,
+              "hash": "1757788e9159c7ae5c64ba04ba65b3bbe8fcdc7b3b88fc18809c70103118791b"
+            }
+          ],
+          "proposals": [
+            {
+              "sequence": 2894,
+              "generation": 2,
+              "command": {
+                "w07Companion": "capture-after-ensure-execution-completes"
+              }
+            }
+          ],
+          "native_ticks": [],
+          "cuts_and_results": [
+            {
+              "index": 0,
+              "kind": "setup-application-failure",
+              "result": {
+                "outcome": "HOST_FAILURE",
+                "reason": "intentional one-shot committed application host fault",
+                "phase": "application",
+                "retryable": true,
+                "recoveryRequired": true
+              },
+              "progress": {
+                "applied": 2,
+                "committed": 3
+              }
+            },
+            {
+              "index": 6,
+              "kind": "host-transaction-opened-during-reconstruction"
+            },
+            {
+              "index": 7,
+              "kind": "ensure-execution-still-awaiting-persistence"
+            },
+            {
+              "index": 11,
+              "kind": "inbound-stage",
+              "groupId": "w07-companion-reconstruction-capture",
+              "replicaIdentity": "w07-companion-b",
+              "stage": "callback",
+              "queued": 1,
+              "scheduled": false
+            },
+            {
+              "index": 12,
+              "kind": "inbound-stage",
+              "groupId": "w07-companion-reconstruction-capture",
+              "replicaIdentity": "w07-companion-b",
+              "stage": "turn-request",
+              "queued": 1,
+              "scheduled": false
+            },
+            {
+              "index": 44,
+              "kind": "selected-reconstruction-result",
+              "result": {
+                "outcome": "CORE_OK",
+                "reason": "drained"
+              },
+              "progress": {
+                "applied": 3,
+                "committed": 3
+              },
+              "markerCount": 1
+            }
+          ],
+          "cleanup": {
+            "w07CompanionCleanup": "w07-companion-reconstruction-capture",
+            "settled": true,
+            "retainedDirectory": null,
+            "error": null
+          },
+          "checks": {
+            "message_hashes": true,
+            "packet_hashes": true,
+            "delivered_envelope_hashes": true,
+            "typed_admissions": true,
+            "native_origin_args": true
+          }
+        }
+      ]
+    }
+  ],
+  "all_checks_agree": true,
+  "all_cleanup_settled": true
+}

@@ -1,0 +1,1641 @@
+{
+  "observedAt": "2026-10-15T17:28:00.215330+00:00",
+  "head": "4aa8780cfec6f2718b86b4d1e27ee9711492be59",
+  "sourceOnlyParent": "04391697aeabea5ddd504491321546212b95982e",
+  "scope": "read-only first failed assertion per reported file; jobs still running; no executions or changes",
+  "logs": [
+    {
+      "host": "tv-dator",
+      "path": "/tmp/lagrange-runtime-correction-20261015/remaining-tv-dator/run.log",
+      "prefixBytes": 145079,
+      "prefixLines": 1970,
+      "prefixSha256": "a75d438f42b363c65066b21cfe3f47ad749ddef1147019a36c11859b19691123"
+    },
+    {
+      "host": "adam-laptop",
+      "path": "/tmp/lagrange-runtime-correction-20261015/remaining-adam-laptop/run.log",
+      "prefixBytes": 476611,
+      "prefixLines": 9352,
+      "prefixSha256": "03cbcc7fca14181d185c6ef761bb395315f1c8cd87a00397ba4bfd4e40b3fa3b"
+    },
+    {
+      "host": "adams-gamla",
+      "path": "/tmp/lagrange-runtime-correction-20261015/remaining-adams-gamla/run.log",
+      "prefixBytes": 516889,
+      "prefixLines": 6420,
+      "prefixSha256": "9ad3efb96045a6f9479cf8cf7c9b9d99164190a0e78e0835e6a0bd9acd351b0a"
+    }
+  ],
+  "failures": [
+    {
+      "host": "tv-dator",
+      "file": "test/node/message-group-service-handler-membership.test.js",
+      "logLine": 22,
+      "firstAssertion": "not ok 1 - a real committed learner plus exact admission package is the only CREATE path",
+      "firstAssertionLogLine": 32,
+      "details": [
+        "failureType: 'testCodeFailure'",
+        "error: |-",
+        "the handler crosses its refusal only for the exact committed learner and admission CAS",
+        "+ actual - expected",
+        "",
+        "+ 'error'",
+        "- 'initiated'",
+        "",
+        "code: 'ERR_ASSERTION'",
+        "code: 'ERR_ASSERTION'",
+        "expected: 'initiated'",
+        "actual: 'error'"
+      ],
+      "locations": [
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18vl-2119947/test/node/message-group-service-handler-membership.test.js:60:1'",
+        "TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18vl-2119947/test/node/message-group-service-handler-membership.test.js:126:12)"
+      ],
+      "classification": "fresh-identity-capability",
+      "testBlobs": {
+        "a7e821154": "752ba6706c041b9bdc7d0d1bcfd2bb9c25de0760",
+        "04391697a": "752ba6706c041b9bdc7d0d1bcfd2bb9c25de0760",
+        "4aa8780cf": "752ba6706c041b9bdc7d0d1bcfd2bb9c25de0760"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/node/replica-create-admission-recovery.test.js",
+      "logLine": 76,
+      "firstAssertion": "not ok 2 - takes over CREATING work on the current boot and starts one worker",
+      "firstAssertionLogLine": 120,
+      "details": [
+        "failureType: 'cancelledByParent'",
+        "error: 'Promise resolution is still pending but the event loop has already resolved'",
+        "code: 'ERR_TEST_FAILURE'",
+        "failureType: 'cancelledByParent'",
+        "error: 'Promise resolution is still pending but the event loop has already resolved'",
+        "code: 'ERR_TEST_FAILURE'",
+        "failureType: 'cancelledByParent'",
+        "error: 'Promise resolution is still pending but the event loop has already resolved'",
+        "code: 'ERR_TEST_FAILURE'",
+        "failureType: 'cancelledByParent'",
+        "error: 'Promise resolution is still pending but the event loop has already resolved'",
+        "code: 'ERR_TEST_FAILURE'",
+        "failureType: 'cancelledByParent'",
+        "error: 'Promise resolution is still pending but the event loop has already resolved'",
+        "code: 'ERR_TEST_FAILURE'",
+        "failureType: 'cancelledByParent'"
+      ],
+      "locations": [
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18vl-2119947/test/node/replica-create-admission-recovery.test.js:301:3'",
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18vl-2119947/test/node/replica-create-admission-recovery.test.js:320:3'",
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18vl-2119947/test/node/replica-create-admission-recovery.test.js:355:3'",
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18vl-2119947/test/node/replica-create-admission-recovery.test.js:385:3'",
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18vl-2119947/test/node/replica-create-admission-recovery.test.js:396:3'"
+      ],
+      "classification": "create-release-fixture",
+      "testBlobs": {
+        "a7e821154": "a03596fb1d44a8f7c6b68ae37ba4ed190f99e662",
+        "04391697a": "a03596fb1d44a8f7c6b68ae37ba4ed190f99e662",
+        "4aa8780cf": "a03596fb1d44a8f7c6b68ae37ba4ed190f99e662"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/partition/participant-release-first-prepare-native.test.js",
+      "logLine": 251,
+      "firstAssertion": "not ok 1 - local staging grants no first PREPARE admission after the production PAUSE",
+      "firstAssertionLogLine": 255,
+      "details": [
+        "failureType: 'testCodeFailure'",
+        "error: |-",
+        "first PREPARE must not create a durable obligation across a later release fence",
+        "",
+        "true !== false",
+        "",
+        "code: 'ERR_ASSERTION'",
+        "name: 'AssertionError'",
+        "expected: false",
+        "code: 'ERR_ASSERTION'",
+        "expected: false",
+        "actual: true"
+      ],
+      "locations": [
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18vl-2119947/test/partition/participant-release-first-prepare-native.test.js:10:1'",
+        "TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18vl-2119947/test/partition/participant-release-first-prepare-native.test.js:30:12)"
+      ],
+      "classification": "retained-release-red",
+      "testBlobs": {
+        "a7e821154": "f31ae5ce64f0139c3f68bd4931b1577c44fdad51",
+        "04391697a": "f31ae5ce64f0139c3f68bd4931b1577c44fdad51",
+        "4aa8780cf": "f31ae5ce64f0139c3f68bd4931b1577c44fdad51"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/partition/partition-write-leadership-transfer-committed.test.js",
+      "logLine": 296,
+      "firstAssertion": "not ok 1 - a write the leader serves during a leadership transfer is committed: its row is stored and the log position it names holds it",
+      "firstAssertionLogLine": 300,
+      "details": [
+        "failureType: 'testCodeFailure'",
+        "error: |-",
+        "setup: the group serves a write",
+        "",
+        "false !== true",
+        "",
+        "code: 'ERR_ASSERTION'",
+        "name: 'AssertionError'",
+        "expected: true",
+        "code: 'ERR_ASSERTION'",
+        "expected: true",
+        "actual: false",
+        "failureType: 'testCodeFailure'",
+        "error: |-",
+        "setup: the group serves a write",
+        "",
+        "false !== true",
+        "",
+        "code: 'ERR_ASSERTION'",
+        "name: 'AssertionError'",
+        "expected: true"
+      ],
+      "locations": [
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18vl-2119947/test/partition/partition-write-leadership-transfer-committed.test.js:212:1'",
+        "withTransferToCutOffVoter (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18vl-2119947/test/partition/partition-write-leadership-transfer-committed.test.js:181:12)",
+        "async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18vl-2119947/test/partition/partition-write-leadership-transfer-committed.test.js:215:3)",
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18vl-2119947/test/partition/partition-write-leadership-transfer-committed.test.js:246:1'",
+        "async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18vl-2119947/test/partition/partition-write-leadership-transfer-committed.test.js:249:3)"
+      ],
+      "classification": "partition-release-setup",
+      "testBlobs": {
+        "a7e821154": "75afea99d2c55f20b95dd9034632cbd2f488e061",
+        "04391697a": "75afea99d2c55f20b95dd9034632cbd2f488e061",
+        "4aa8780cf": "75afea99d2c55f20b95dd9034632cbd2f488e061"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/partition/partition-write-leadership-transfer.test.js",
+      "logLine": 361,
+      "firstAssertion": "not ok 1 - a partition write during a leadership transfer is retried and served once the leader takes writes again, never refused",
+      "firstAssertionLogLine": 365,
+      "details": [
+        "failureType: 'testCodeFailure'",
+        "error: |-",
+        "setup: the group serves a write",
+        "",
+        "false !== true",
+        "",
+        "code: 'ERR_ASSERTION'",
+        "name: 'AssertionError'",
+        "expected: true",
+        "code: 'ERR_ASSERTION'",
+        "expected: true",
+        "actual: false",
+        "failureType: 'testCodeFailure'",
+        "error: |-",
+        "setup: the group serves a write",
+        "",
+        "false !== true",
+        "",
+        "code: 'ERR_ASSERTION'",
+        "name: 'AssertionError'",
+        "expected: true"
+      ],
+      "locations": [
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18vl-2119947/test/partition/partition-write-leadership-transfer.test.js:143:1'",
+        "withTransferRunning (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18vl-2119947/test/partition/partition-write-leadership-transfer.test.js:114:12)",
+        "async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18vl-2119947/test/partition/partition-write-leadership-transfer.test.js:146:3)",
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18vl-2119947/test/partition/partition-write-leadership-transfer.test.js:163:1'",
+        "async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18vl-2119947/test/partition/partition-write-leadership-transfer.test.js:165:3)"
+      ],
+      "classification": "partition-release-setup",
+      "testBlobs": {
+        "a7e821154": "0bc096631c07574a905d47bc1e21761e2e71b183",
+        "04391697a": "0bc096631c07574a905d47bc1e21761e2e71b183",
+        "4aa8780cf": "0bc096631c07574a905d47bc1e21761e2e71b183"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/raft/leadership-transfer-single-path.test.js",
+      "logLine": 434,
+      "firstAssertion": "not ok 2 - W5: the port operation has one partition issuer and one caller of it",
+      "firstAssertionLogLine": 444,
+      "details": [
+        "failureType: 'testCodeFailure'",
+        "error: |-",
+        "only the replica handler's handoff asks the partition issuer",
+        "+ actual - expected",
+        "",
+        "[",
+        "'src/node/replica-handler-leader-handoff-methods.js',",
+        "+   'src/node/replica-handler-participant-cutover.js'",
+        "]",
+        "code: 'ERR_ASSERTION'",
+        "expected:",
+        "actual:"
+      ],
+      "locations": [
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18vl-2119947/test/raft/leadership-transfer-single-path.test.js:77:1'",
+        "TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18vl-2119947/test/raft/leadership-transfer-single-path.test.js:84:12)"
+      ],
+      "classification": "static-contract",
+      "testBlobs": {
+        "a7e821154": "685f6841bc015d41e599d589e5c22d6a6eddf209",
+        "04391697a": "685f6841bc015d41e599d589e5c22d6a6eddf209",
+        "4aa8780cf": "685f6841bc015d41e599d589e5c22d6a6eddf209"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js",
+      "logLine": 497,
+      "firstAssertion": "not ok 1 - partition replica: the persist path syncs, the application does not",
+      "firstAssertionLogLine": 501,
+      "details": [
+        "failureType: 'testCodeFailure'",
+        "error: |-",
+        "{\"success\":false,\"error\":\"The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried\",\"failureCode\":\"partition_write_cutover_paused\",\"deferRetry\":true,\"retryAfterMs\":100,\"partitionId\":\"durable-kinds-partition\"}",
+        "",
+        "false !== true",
+        "",
+        "code: 'ERR_ASSERTION'",
+        "name: 'AssertionError'",
+        "expected: true",
+        "code: 'ERR_ASSERTION'",
+        "expected: true",
+        "actual: false",
+        "failureType: 'testCodeFailure'",
+        "error: |-",
+        "message group: application transactions keep NORMAL",
+        "+ actual - expected",
+        "",
+        "[",
+        "1,",
+        "+   2",
+        "]"
+      ],
+      "locations": [
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18vl-2119947/test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js:127:1'",
+        "TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18vl-2119947/test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js:155:14)",
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18vl-2119947/test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js:174:1'",
+        "assertKindDurability (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18vl-2119947/test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js:122:10)",
+        "TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18vl-2119947/test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js:206:5)"
+      ],
+      "classification": "partition-release-setup",
+      "testBlobs": {
+        "a7e821154": "0e007f9ae6ce7a45b05d4016149f1dc8f34437b8",
+        "04391697a": "0e007f9ae6ce7a45b05d4016149f1dc8f34437b8",
+        "4aa8780cf": "0e007f9ae6ce7a45b05d4016149f1dc8f34437b8"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/rebalancer/message-group-membership-change-parked.test.js",
+      "logLine": 613,
+      "firstAssertion": "not ok 2 - fresh-identity closing condition: seed-only mg-1 enters one REPLACE operation instead of the interim membership park",
+      "firstAssertionLogLine": 623,
+      "details": [
+        "failureType: 'testCodeFailure'",
+        "error: 'the approved fresh-identity path must cross the planner refusal'",
+        "code: 'ERR_ASSERTION'",
+        "expected: 'message_group_membership_change_unsupported'",
+        "actual: 'message_group_membership_change_unsupported'"
+      ],
+      "locations": [
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18vl-2119947/test/rebalancer/message-group-membership-change-parked.test.js:132:1'",
+        "TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18vl-2119947/test/rebalancer/message-group-membership-change-parked.test.js:141:12)"
+      ],
+      "classification": "fresh-identity-capability",
+      "testBlobs": {
+        "a7e821154": "bf2ac4bfa724ae23ade554538835640da021e2f7",
+        "04391697a": "bf2ac4bfa724ae23ade554538835640da021e2f7",
+        "4aa8780cf": "bf2ac4bfa724ae23ade554538835640da021e2f7"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/raft/raft-rs-backend/transfer-leadership-drain-oracle.test.js",
+      "logLine": 667,
+      "firstAssertion": "not ok 153 - mid-turn: D1 with pending MsgAppendResponse (a higher-term vote request arrives during an awaited send) [mid-turn-D1]",
+      "firstAssertionLogLine": 1583,
+      "details": [
+        "failureType: 'testCodeFailure'",
+        "error: |-",
+        "the answer equals the answer after the drain",
+        "+ actual - expected",
+        "",
+        "{",
+        "+   outcome: 'CORE_OK',",
+        "+   reason: 'transfer-requested'",
+        "-   outcome: 'CORE_REFUSED',",
+        "code: 'ERR_ASSERTION'",
+        "expected:",
+        "actual:",
+        "failureType: 'testCodeFailure'",
+        "error: |-",
+        "the answer equals the answer after the drain",
+        "+ actual - expected",
+        "",
+        "{",
+        "+   outcome: 'CORE_OK',",
+        "+   reason: 'transfer-requested'",
+        "-   outcome: 'CORE_REFUSED',"
+      ],
+      "locations": [
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18vl-2119947/test/raft/raft-rs-backend/transfer-leadership-drain-oracle.test.js:246:3'",
+        "TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18vl-2119947/test/raft/raft-rs-backend/transfer-leadership-drain-oracle.test.js:252:12)"
+      ],
+      "classification": "capture-contract",
+      "testBlobs": {
+        "a7e821154": "e19ae663954033dc0398c286f6d85e4060def4da",
+        "04391697a": "e19ae663954033dc0398c286f6d85e4060def4da",
+        "4aa8780cf": "e19ae663954033dc0398c286f6d85e4060def4da"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/query/unknown-outcome-same-entry.test.js",
+      "logLine": 1725,
+      "firstAssertion": "not ok 1 - W1 (R6-B): a registration INSERT cut by a runtime replacement, with no authoritative read, ends ACCEPTED - one row, no UNIQUE error, never \"not confirmed\"",
+      "firstAssertionLogLine": 1729,
+      "details": [
+        "failureType: 'testCodeFailure'",
+        "error: |-",
+        "setup: the engine serves a write",
+        "",
+        "false !== true",
+        "",
+        "code: 'ERR_ASSERTION'",
+        "name: 'AssertionError'",
+        "expected: true",
+        "code: 'ERR_ASSERTION'",
+        "expected: true",
+        "actual: false",
+        "failureType: 'testCodeFailure'",
+        "error: 'setup: the core trapped the write'",
+        "code: 'ERR_ASSERTION'",
+        "expected: true"
+      ],
+      "locations": [
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18vl-2119947/test/query/unknown-outcome-same-entry.test.js:140:1'",
+        "file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18vl-2119947/test/query/unknown-outcome-same-entry.test.js:145:12",
+        "async withSurface (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18vl-2119947/test/query/unknown-outcome-surface-fixture.js:283:5)",
+        "async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18vl-2119947/test/query/unknown-outcome-same-entry.test.js:143:3)",
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18vl-2119947/test/query/unknown-outcome-same-entry.test.js:191:3'"
+      ],
+      "classification": "partition-release-setup",
+      "testBlobs": {
+        "a7e821154": "a0fb7026a5a53558d67bc3b77684efe126cf420d",
+        "04391697a": "a0fb7026a5a53558d67bc3b77684efe126cf420d",
+        "4aa8780cf": "a0fb7026a5a53558d67bc3b77684efe126cf420d"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/config/code-path-uniqueness.property.test.js",
+      "logLine": 20,
+      "firstAssertion": "not ok 1 - No files should have core feature flags. Found: [{\"file\":\"node/replica-handler-participant-release.js\",\"coreFlags\":[\"ENABLE_REFUSED\"],\"observabilityFlags\":[],\"hasCoreFlags\":true},{\"file\":\"partition/partition-participant-transaction-cutover-constants.js\",\"coreFlags\":[\"ENABLE_REFUSED\",\"enable_refused\"],\"observabilityFlags\":[],\"hasCoreFlags\":true}]",
+      "firstAssertionLogLine": 30,
+      "details": [],
+      "locations": [
+        "Test.<anonymous> (test/config/code-path-uniqueness.property.test.js:259:7)"
+      ],
+      "classification": "static-contract",
+      "testBlobs": {
+        "a7e821154": "8d59c5a36a4de8ee887245292ff764a5a0b91abb",
+        "04391697a": "8d59c5a36a4de8ee887245292ff764a5a0b91abb",
+        "4aa8780cf": "8d59c5a36a4de8ee887245292ff764a5a0b91abb"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/index-management/index-maintenance-consistency.property.test.js",
+      "logLine": 121,
+      "firstAssertion": "not ok 1 - Property failed after 1 tests { seed: -553499010, path: \"0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0\", endOnFailure: true } Counterexample: [\"partition-0\",\"tbl_A00\",{\"id\":1,\"col_data\":\" \",\"col_num\":0}] Shrunk 23 time(s) Got error: Property failed by returning false  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run",
+      "firstAssertionLogLine": 125,
+      "details": [
+        "tapCaught: returnedPromiseRejection",
+        "tapCaught: returnedPromiseRejection",
+        "tapCaught: returnedPromiseRejection",
+        "tapCaught: returnedPromiseRejection"
+      ],
+      "locations": [],
+      "classification": "partition-release-setup",
+      "testBlobs": {
+        "a7e821154": "7197ffa23e36e6881233d229508d7ae2a4804074",
+        "04391697a": "7197ffa23e36e6881233d229508d7ae2a4804074",
+        "4aa8780cf": "7197ffa23e36e6881233d229508d7ae2a4804074"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/partition/partition-admission-redrive-wakes.test.js",
+      "logLine": 337,
+      "firstAssertion": "not ok 1 - every RAFT_EVENT member is a wake or classified as none",
+      "firstAssertionLogLine": 341,
+      "details": [],
+      "locations": [
+        "(test/partition/partition-admission-redrive-wakes.test.js:178:7)",
+        "test/partition/partition-admission-redrive-wakes.test.js:176:1"
+      ],
+      "classification": "static-contract",
+      "testBlobs": {
+        "a7e821154": "566c5b1d3543c8330d41e0764a385b3b44853ba9",
+        "04391697a": "566c5b1d3543c8330d41e0764a385b3b44853ba9",
+        "4aa8780cf": "566c5b1d3543c8330d41e0764a385b3b44853ba9"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/partition/partition-consensus-hold-log.test.js",
+      "logLine": 472,
+      "firstAssertion": "not ok 1 - F-an: a hold on a contained unexpected throw is named once at error level with its message, however often it throws again, and its end once at info",
+      "firstAssertionLogLine": 476,
+      "details": [
+        "failureType: 'testCodeFailure'",
+        "error: |-",
+        "setup: the lone leader serves a write",
+        "",
+        "false !== true",
+        "",
+        "code: 'ERR_ASSERTION'",
+        "name: 'AssertionError'",
+        "expected: true",
+        "code: 'ERR_ASSERTION'",
+        "expected: true",
+        "actual: false"
+      ],
+      "locations": [
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/test/partition/partition-consensus-hold-log.test.js:130:1'",
+        "TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/test/partition/partition-consensus-hold-log.test.js:154:12)"
+      ],
+      "classification": "partition-release-setup",
+      "testBlobs": {
+        "a7e821154": "a6667f71181d59bda6ff23a76aac51d40e708b80",
+        "04391697a": "a6667f71181d59bda6ff23a76aac51d40e708b80",
+        "4aa8780cf": "a6667f71181d59bda6ff23a76aac51d40e708b80"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/partition/partition-service-raft-noop-cdc-placement.test.js",
+      "logLine": 515,
+      "firstAssertion": "not ok 1 - should be equal",
+      "firstAssertionLogLine": 526,
+      "details": [],
+      "locations": [
+        "(test/partition/partition-service-raft-noop-cdc-placement.test.js:201:7)",
+        "(test/partition/partition-service-raft-noop-cdc-placement.test.js:202:7)"
+      ],
+      "classification": "partition-release-setup",
+      "testBlobs": {
+        "a7e821154": "1dd2b6218201c44280f49773d12edde63d95c6e0",
+        "04391697a": "1dd2b6218201c44280f49773d12edde63d95c6e0",
+        "4aa8780cf": "1dd2b6218201c44280f49773d12edde63d95c6e0"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/partition/partition-service-size-split-transport.test.js",
+      "logLine": 605,
+      "firstAssertion": "not ok 2 - failed delivery should be preserved in retry buffer",
+      "firstAssertionLogLine": 615,
+      "details": [
+        "tapCaught: returnedPromiseRejection",
+        "code: refused_transport_without_handler_identity",
+        "tapCaught: returnedPromiseRejection",
+        "code: refused_transport_without_handler_identity",
+        "tapCaught: returnedPromiseRejection",
+        "tapCaught: returnedPromiseRejection"
+      ],
+      "locations": [
+        "(test/partition/partition-service-size-split-transport.test.js:209:7)",
+        "(test/partition/partition-service-size-split-transport.test.js:227:7)",
+        "(test/partition/partition-service-size-split-transport.test.js:232:26)",
+        "(test/partition/partition-service-size-split-transport.test.js:275:5)",
+        "(test/partition/partition-service-size-split-transport.test.js:806:5)"
+      ],
+      "classification": "partition-release-setup",
+      "testBlobs": {
+        "a7e821154": "ad864c112498bc188f3083d52c8ef16816e6bffa",
+        "04391697a": "ad864c112498bc188f3083d52c8ef16816e6bffa",
+        "4aa8780cf": "ad864c112498bc188f3083d52c8ef16816e6bffa"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/partition/partition-write-kernel.test.js",
+      "logLine": 1201,
+      "firstAssertion": "not ok 1 - successful apply should return one explicit side-effect plan",
+      "firstAssertionLogLine": 1236,
+      "details": [],
+      "locations": [
+        "Test.<anonymous> (test/partition/partition-write-kernel.test.js:191:7)"
+      ],
+      "classification": "application-contract",
+      "testBlobs": {
+        "a7e821154": "4bdacd78562dcaad624cd180b0b51baafb03dcd0",
+        "04391697a": "4bdacd78562dcaad624cd180b0b51baafb03dcd0",
+        "4aa8780cf": "4bdacd78562dcaad624cd180b0b51baafb03dcd0"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/partition/partition-statement-admission.test.js",
+      "logLine": 1382,
+      "firstAssertion": "not ok 2 - TX1 admission A2: a ceiling refusal and non-replicated inserts on each replica's connection, followed by an UPDATE, a DELETE and an ignored INSERT, leave byte-identical outcome rows on two replicas; an INSERT outcome still carries its own rowid",
+      "firstAssertionLogLine": 1394,
+      "details": [
+        "failureType: 'testCodeFailure'",
+        "error: |-",
+        "a statement retains its own result, never what last inserted on the connection",
+        "+ actual - expected",
+        "... Skipped lines",
+        "",
+        "{",
+        "applies: [",
+        "[",
+        "code: 'ERR_ASSERTION'",
+        "expected:",
+        "actual:",
+        "failureType: 'testCodeFailure'",
+        "error: |-",
+        "every replica refuses alike and holds the same rows and outcome rows",
+        "+ actual - expected",
+        "",
+        "{",
+        "explicit: {",
+        "+     success: false",
+        "-     success: true"
+      ],
+      "locations": [
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/test/partition/partition-statement-admission.test.js:181:1'",
+        "TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/test/partition/partition-statement-admission.test.js:209:10)",
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/test/partition/partition-statement-admission.test.js:341:1'",
+        "TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/test/partition/partition-statement-admission.test.js:385:10)"
+      ],
+      "classification": "application-contract",
+      "testBlobs": {
+        "a7e821154": "ad488c5052dd490479594c28c60e5841c285b0f5",
+        "04391697a": "ad488c5052dd490479594c28c60e5841c285b0f5",
+        "4aa8780cf": "ad488c5052dd490479594c28c60e5841c285b0f5"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/partition/split-backfill-internal-pacing.test.js",
+      "logLine": 1843,
+      "firstAssertion": "not ok 1 - The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried",
+      "firstAssertionLogLine": 1847,
+      "details": [
+        "tapCaught: returnedPromiseRejection"
+      ],
+      "locations": [
+        "routeSplitMirroredWrite (src/partition/partition-split-routing.js:243:11)",
+        "async routeSplitSnapshotBatch (src/partition/partition-split-routing.js:295:7)",
+        "(src/partition/partition-service-split-accessor-base.js:420:5)",
+        "(src/partition/partition-service-split-accessor-base.js:400:9)",
+        "(test/partition/split-backfill-internal-pacing.test.js:125:7)"
+      ],
+      "classification": "partition-release-setup",
+      "testBlobs": {
+        "a7e821154": "1752fe9c741722cf209f94c477bcee6cb7e25298",
+        "04391697a": "1752fe9c741722cf209f94c477bcee6cb7e25298",
+        "4aa8780cf": "1752fe9c741722cf209f94c477bcee6cb7e25298"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/query/distributed-transaction-coordinator.property.test.js",
+      "logLine": 1936,
+      "firstAssertion": "not ok 1 - Property failed after 1 tests { seed: 1652990931, path: \"0:0:0:0:0:0:0\", endOnFailure: true } Counterexample: [\"0aa\",\"p--\",1] Shrunk 6 time(s) Got error: Participant answered without the typed outcome the transaction protocol requires     at participantFailureOf (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/src/query/sql-query-engine-participant-wire.js:193:19)     at beginAnswerOf (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/src/query/sql-query-engine-participant-wire.js:257:11)     at DistributedTransactionCoordinator.beginParticipant (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/src/query/sql-query-engine-instance-initializer.js:205:9)     at async DistributedTransactionCoordinator.enlistParticipantsOwned (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/src/query/distributed/distributed-transaction-participant-set.js:78:7)     at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/test/query/distributed-transaction-coordinator.property.test.js:423:32     at async AsyncProperty.run (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:28)     at async asyncRunIt (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:21)     at async Test.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/test/query/distributed-transaction-coordinator.property.test.js:376:5)  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run",
+      "firstAssertionLogLine": 1965,
+      "details": [
+        "tapCaught: returnedPromiseRejection",
+        "error: 'participant-unreachable'",
+        "error: 'participant-unreachable'",
+        "error: 'participant-unreachable'",
+        "error: 'participant-unreachable'",
+        "error: 'participant-unreachable'",
+        "error: 'participant-unreachable'",
+        "error: 'participant-unreachable'",
+        "error: 'participant-unreachable'",
+        "error: 'participant-unreachable'",
+        "error: 'participant-unreachable'",
+        "error: 'participant-unreachable'",
+        "error: 'participant-unreachable'",
+        "error: 'participant-unreachable'",
+        "error: 'participant-unreachable'",
+        "error: 'participant-unreachable'"
+      ],
+      "locations": [
+        "not ok 1 - Property failed after 1 tests { seed: 1652990931, path: \"0:0:0:0:0:0:0\", endOnFailure: true } Counterexample: [\"0aa\",\"p--\",1] Shrunk 6 time(s) Got error: Participant answered without the typed outcome the transaction protocol requires     at participantFailureOf (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/src/query/sql-query-engine-participant-wire.js:193:19)     at beginAnswerOf (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/src/query/sql-query-engine-participant-wire.js:257:11)     at DistributedTransactionCoordinator.beginParticipant (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/src/query/sql-query-engine-instance-initializer.js:205:9)     at async DistributedTransactionCoordinator.enlistParticipantsOwned (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/src/query/distributed/distributed-transaction-participant-set.js:78:7)     at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/test/query/distributed-transaction-coordinator.property.test.js:423:32     at async AsyncProperty.run (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:28)     at async asyncRunIt (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:21)     at async Test.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/test/query/distributed-transaction-coordinator.property.test.js:376:5)  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run"
+      ],
+      "classification": "query-transaction-contract",
+      "testBlobs": {
+        "a7e821154": "f4c3cb6cb4b7ee66e60a9d2bcce824108d588b02",
+        "04391697a": "f4c3cb6cb4b7ee66e60a9d2bcce824108d588b02",
+        "4aa8780cf": "f4c3cb6cb4b7ee66e60a9d2bcce824108d588b02"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/query/sql-query-engine-execution.test.js",
+      "logLine": 2795,
+      "firstAssertion": "not ok 1 - Transaction recovery state is incomplete or incompatible",
+      "firstAssertionLogLine": 3624,
+      "details": [
+        "tapCaught: returnedPromiseRejection",
+        "error: 'partition unavailable',",
+        "error: 'SQL Parse Error: Expected \"#\", \"--\", \"/*\", \":=\", \"=\", or [ \\\\t\\\\n\\\\r] but \"S\" found.'",
+        "error: 'query_admission_deferred',",
+        "error: 'System cache not available for table: users',"
+      ],
+      "locations": [
+        "(src/query/distributed/distributed-transaction-recovery-validation.js:98:17)",
+        "(src/query/distributed/distributed-transaction-recovery.js:481:15)",
+        "(src/query/sql-query-engine-transaction-recovery-methods.js:53:33)",
+        "(src/query/sql-query-engine-lifecycle-and-callback-dispatch.js:191:10)",
+        "(src/query/sql-query-engine-instance-initializer.js:361:17)"
+      ],
+      "classification": "query-transaction-contract",
+      "testBlobs": {
+        "a7e821154": "f5e2ac7576d8d62527ce4fc4fb8c86412c39556c",
+        "04391697a": "f5e2ac7576d8d62527ce4fc4fb8c86412c39556c",
+        "4aa8780cf": "f5e2ac7576d8d62527ce4fc4fb8c86412c39556c"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/query/transaction-recovery-poison-row-attribution.test.js",
+      "logLine": 3763,
+      "firstAssertion": "not ok 4 - the fatal names the exact failed decision dimension",
+      "firstAssertionLogLine": 3770,
+      "details": [
+        "tapCaught: testFunctionThrow"
+      ],
+      "locations": [
+        "(test/query/transaction-recovery-poison-row-attribution.test.js:107:7)",
+        "test/query/transaction-recovery-poison-row-attribution.test.js:87:1",
+        "(test/query/transaction-recovery-poison-row-attribution.test.js:141:7)",
+        "test/query/transaction-recovery-poison-row-attribution.test.js:126:1",
+        "(src/query/distributed/distributed-transaction-recovery-validation.js:98:17)"
+      ],
+      "classification": "query-transaction-contract",
+      "testBlobs": {
+        "a7e821154": "48d6547c500d8ed5cf20d50f1283857951876a7c",
+        "04391697a": "48d6547c500d8ed5cf20d50f1283857951876a7c",
+        "4aa8780cf": "48d6547c500d8ed5cf20d50f1283857951876a7c"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/query/write-path-internal-pacing.test.js",
+      "logLine": 3918,
+      "firstAssertion": "not ok 7 - the separate submission should commit",
+      "firstAssertionLogLine": 8504,
+      "details": [
+        "error: 'The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried',",
+        "error: 'The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried',",
+        "error: 'The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried',",
+        "error: 'The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried',",
+        "error: 'The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried',",
+        "error: 'The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried',",
+        "error: 'The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried',",
+        "error: 'The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried',",
+        "error: 'The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried',",
+        "error: 'The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried',",
+        "error: 'The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried',",
+        "error: 'The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried',",
+        "error: 'The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried',",
+        "error: 'The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried',",
+        "error: 'The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried',",
+        "error: 'The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried',"
+      ],
+      "locations": [
+        "Test.<anonymous> (test/query/write-path-internal-pacing.test.js:529:7)",
+        "Test.<anonymous> (test/query/write-path-internal-pacing.test.js:530:7)"
+      ],
+      "classification": "partition-release-setup",
+      "testBlobs": {
+        "a7e821154": "858bded5efbd54562b80138325e20b6ad2e6389e",
+        "04391697a": "858bded5efbd54562b80138325e20b6ad2e6389e",
+        "4aa8780cf": "858bded5efbd54562b80138325e20b6ad2e6389e"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/raft/raft-rs-backend/committed-membership-census.test.js",
+      "logLine": 8764,
+      "firstAssertion": "not ok 1 - T7: the committed-membership read has exactly three callers outside src/raft - the bootstrap read, the REPLACE completion witness and a message group's witness read of its own configuration",
+      "firstAssertionLogLine": 8768,
+      "details": [
+        "failureType: 'testCodeFailure'",
+        "error: |-",
+        "Expected values to be strictly deep-equal:",
+        "+ actual - expected",
+        "",
+        "[",
+        "'src/message-group/message-group-consensus-port.js',",
+        "+   'src/node/message-group-membership-recipient.js',",
+        "'src/node/replica-handler-committed-membership-methods.js',",
+        "code: 'ERR_ASSERTION'",
+        "expected:",
+        "actual:",
+        "failureType: 'testCodeFailure'",
+        "error: |-",
+        "Expected values to be strictly deep-equal:",
+        "+ actual - expected",
+        "",
+        "[",
+        "'src/rebalancer/committed-membership-bootstrap-read.js',",
+        "+   'src/rebalancer/replica-operation-message-group-membership-authorization.js'",
+        "]"
+      ],
+      "locations": [
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/test/raft/raft-rs-backend/committed-membership-census.test.js:56:1'",
+        "TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/test/raft/raft-rs-backend/committed-membership-census.test.js:59:10)",
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/test/raft/raft-rs-backend/committed-membership-census.test.js:84:1'",
+        "TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/test/raft/raft-rs-backend/committed-membership-census.test.js:86:10)",
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/test/raft/raft-rs-backend/committed-membership-census.test.js:114:1'"
+      ],
+      "classification": "static-contract",
+      "testBlobs": {
+        "a7e821154": "1e6f738ea112e3d5bb25cee6e45bcf169ead9cc2",
+        "04391697a": "1e6f738ea112e3d5bb25cee6e45bcf169ead9cc2",
+        "4aa8780cf": "1e6f738ea112e3d5bb25cee6e45bcf169ead9cc2"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/raft/raft-rs-backend/reseed-hold-durability.test.js",
+      "logLine": 9037,
+      "firstAssertion": "not ok 1 - D1: failed hold writes are asked again by the group's own deliveries until one lands; one ERROR line",
+      "firstAssertionLogLine": 9041,
+      "details": [
+        "failureType: 'testCodeFailure'",
+        "error: 'SQLITE_BUSY: database is locked'",
+        "code: 'ERR_TEST_FAILURE'",
+        "failureType: 'testCodeFailure'",
+        "error: 'SQLITE_BUSY: database is locked'",
+        "code: 'ERR_TEST_FAILURE'"
+      ],
+      "locations": [
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/test/raft/raft-rs-backend/reseed-hold-durability.test.js:79:1'",
+        "createRuntimeDispatcher (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/src/raft/raft-rs-runtime-owner.js:1948:25)",
+        "createRaftRsOperationPort (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/src/raft/raft-rs-operation-port.js:225:41)",
+        "PartitionNodeCluster.buildReplica (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/test/raft/raft-rs-backend/partition-node-cluster.js:230:20)",
+        "reopenEmptyWithFailingHold (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/test/raft/raft-rs-backend/reseed-hold-durability.test.js:70:11)"
+      ],
+      "classification": "reseed-opening-fixture",
+      "testBlobs": {
+        "a7e821154": "072ffdfac2ce929339f55e5e50bfc238e576f03c",
+        "04391697a": "072ffdfac2ce929339f55e5e50bfc238e576f03c",
+        "4aa8780cf": "072ffdfac2ce929339f55e5e50bfc238e576f03c"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/raft/raft-rs-backend/single-path-partition-cutover.test.js",
+      "logLine": 9099,
+      "firstAssertion": "not ok 1 - seed bootstraps and serves a write on rs-raft by default",
+      "firstAssertionLogLine": 9104,
+      "details": [
+        "failureType: 'testCodeFailure'",
+        "error: |-",
+        "the seed bootstraps through production construction",
+        "",
+        "false !== true",
+        "",
+        "code: 'ERR_ASSERTION'",
+        "name: 'AssertionError'",
+        "expected: true",
+        "code: 'ERR_ASSERTION'",
+        "expected: true",
+        "actual: false",
+        "failureType: 'testCodeFailure'",
+        "error: |-",
+        "every write is acknowledged: [{\"success\":false,\"error\":\"The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried\",\"failureCode\":\"partition_write_cutover_paused\",\"deferRetry\":true,\"retryAfterMs\":100,\"partitionId\":\"one-durable-log\"},{\"success\":false,\"error\":\"The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried\",\"failureCode\":\"partition_write_cutover_paused\",\"deferRetry\":true,\"retryAfterMs\":100,\"partitionId\":\"one-durable-log\"},{\"success\":false,\"error\":\"The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried\",\"failureCode\":\"partition_write_cutover_paused\",\"deferRetry\":true,\"retryAfterMs\":100,\"partitionId\":\"one-durable-log\"}]",
+        "+ actual - expected",
+        "",
+        "[",
+        "+   false,",
+        "+   false,",
+        "+   false"
+      ],
+      "locations": [
+        "{\"level\":50,\"time\":\"2026-10-15T17:24:54.820Z\",\"nodeId\":\"test-node\",\"pid\":1956078,\"subsystem\":\"bootstrap\",\"nodeId\":\"test-node\",\"phase\":\"partitions\",\"duration\":15090,\"error\":\"Seed participant release failed: {\\\"partitionId\\\":\\\"service_timers-p1\\\",\\\"answer\\\":{\\\"outcome\\\":\\\"release_fact_unavailable\\\",\\\"releaseId\\\":null,\\\"partitionId\\\":\\\"service_timers-p1\\\",\\\"phase\\\":\\\"release\\\",\\\"retryAfterMs\\\":100,\\\"missingFact\\\":\\\"current_control_owner_fact\\\",\\\"controlPartitionId\\\":\\\"sql_transactions-p1\\\",\\\"controlNodeId\\\":\\\"550e8400-e29b-41d4-a716-446655449961\\\",\\\"controlOutcome\\\":\\\"release_fact_unavailable\\\"},\\\"seedRelease\\\":{\\\"clockState\\\":\\\"measured\\\",\\\"budgetMs\\\":3000,\\\"elapsedMs\\\":3005,\\\"remainingMs\\\":0,\\\"ordinal\\\":39,\\\"total\\\":45,\\\"completed\\\":38,\\\"attemptCount\\\":1,\\\"firstBlockedDrain\\\":null,\\\"firstJoinedAttempt\\\":null}}\",\"stack\":\"Error: Seed participant release failed: {\\\"partitionId\\\":\\\"service_timers-p1\\\",\\\"answer\\\":{\\\"outcome\\\":\\\"release_fact_unavailable\\\",\\\"releaseId\\\":null,\\\"partitionId\\\":\\\"service_timers-p1\\\",\\\"phase\\\":\\\"release\\\",\\\"retryAfterMs\\\":100,\\\"missingFact\\\":\\\"current_control_owner_fact\\\",\\\"controlPartitionId\\\":\\\"sql_transactions-p1\\\",\\\"controlNodeId\\\":\\\"550e8400-e29b-41d4-a716-446655449961\\\",\\\"controlOutcome\\\":\\\"release_fact_unavailable\\\"},\\\"seedRelease\\\":{\\\"clockState\\\":\\\"measured\\\",\\\"budgetMs\\\":3000,\\\"elapsedMs\\\":3005,\\\"remainingMs\\\":0,\\\"ordinal\\\":39,\\\"total\\\":45,\\\"completed\\\":38,\\\"attemptCount\\\":1,\\\"firstBlockedDrain\\\":null,\\\"firstJoinedAttempt\\\":null}}\\n    at BootstrapService.releaseSeedParticipantCohorts (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/src/bootstrap/bootstrap-service-seed-workflow.js:348:17)\\n    at runNextTicks (node:internal/process/task_queues:64:5)\\n    at listOnTimeout (node:internal/timers:547:9)\\n    at process.processTimers (node:internal/timers:521:7)\\n    at async Object.run (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/src/bootstrap/bootstrap-service-seed-workflow.js:413:13)\\n    at async StartupPipelineRunner.runWorkflow (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/src/bootstrap/pipeline/startup-pipeline-runner.js:169:9)\\n    at async BootstrapService.bootstrap (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/src/bootstrap/bootstrap-service-seed-workflow.js:527:9)\\n    at async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/test/raft/raft-rs-backend/single-path-partition-cutover.test.js:291:25)\\n    at async Test.run (node:internal/test_runner/test:1054:7)\\n    at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)\",\"servicesCreated\":138,\"contextNodeId\":\"550e8400-e29b-41d4-a716-446655449961\",\"msg\":\"Bootstrap failed\"}",
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/test/raft/raft-rs-backend/single-path-partition-cutover.test.js:263:1'",
+        "TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/test/raft/raft-rs-backend/single-path-partition-cutover.test.js:292:14)",
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/test/raft/raft-rs-backend/single-path-partition-cutover.test.js:391:1'",
+        "TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/test/raft/raft-rs-backend/single-path-partition-cutover.test.js:400:14)"
+      ],
+      "classification": "seed-release-integration",
+      "testBlobs": {
+        "a7e821154": "9e98f4053fa09c5fbd69c930276d61afbf977e71",
+        "04391697a": "9e98f4053fa09c5fbd69c930276d61afbf977e71",
+        "4aa8780cf": "9e98f4053fa09c5fbd69c930276d61afbf977e71"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/query/unknown-outcome-redelivery-budget.test.js",
+      "logLine": 9223,
+      "firstAssertion": "not ok 1 - an unknown that outlasts the budget is re-delivered with backoff - a handful of deliveries, not one per retry delay - and ends typed",
+      "firstAssertionLogLine": 9227,
+      "details": [
+        "failureType: 'testCodeFailure'",
+        "error: 'setup: the core trapped the write'",
+        "code: 'ERR_ASSERTION'",
+        "expected: true",
+        "actual: false",
+        "failureType: 'testCodeFailure'",
+        "error: 'setup: the core trapped the write'",
+        "code: 'ERR_ASSERTION'",
+        "expected: true",
+        "actual: false",
+        "failureType: 'testCodeFailure'",
+        "error: 'setup: the core trapped the write'",
+        "code: 'ERR_ASSERTION'",
+        "expected: true",
+        "actual: false"
+      ],
+      "locations": [
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/test/query/unknown-outcome-redelivery-budget.test.js:72:1'",
+        "file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/test/query/unknown-outcome-redelivery-budget.test.js:80:12",
+        "async withSurface (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/test/query/unknown-outcome-surface-fixture.js:283:5)",
+        "async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/test/query/unknown-outcome-redelivery-budget.test.js:75:3)",
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/test/query/unknown-outcome-redelivery-budget.test.js:102:3'"
+      ],
+      "classification": "partition-release-setup",
+      "testBlobs": {
+        "a7e821154": "c584f6a85915b2adb7d91dcd0e9593edbdb00d9e",
+        "04391697a": "c584f6a85915b2adb7d91dcd0e9593edbdb00d9e",
+        "4aa8780cf": "c584f6a85915b2adb7d91dcd0e9593edbdb00d9e"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/query/settled-replay-sql-surface.test.js",
+      "logLine": 9300,
+      "firstAssertion": "not ok 1 - W6: an INSERT whose first answer is lost after it applied, re-sent with its entryId, reaches its client with the row it inserted - never zero rows",
+      "firstAssertionLogLine": 9304,
+      "details": [
+        "failureType: 'testTimeoutFailure'",
+        "error: 'test timed out after 30000ms'",
+        "code: 'ERR_TEST_FAILURE'",
+        "failureType: 'testTimeoutFailure'",
+        "error: 'test timed out after 30000ms'",
+        "code: 'ERR_TEST_FAILURE'",
+        "failureType: 'testTimeoutFailure'",
+        "error: 'test timed out after 30000ms'",
+        "code: 'ERR_TEST_FAILURE'",
+        "failureType: 'testTimeoutFailure'",
+        "error: 'test timed out after 30000ms'",
+        "code: 'ERR_TEST_FAILURE'"
+      ],
+      "locations": [
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/test/query/settled-replay-sql-surface.test.js:181:1'",
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/test/query/settled-replay-sql-surface.test.js:204:1'",
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/test/query/settled-replay-sql-surface.test.js:255:1'",
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18rh-2119949/test/query/settled-replay-sql-surface.test.js:289:1'"
+      ],
+      "classification": "query-surface-timeout",
+      "testBlobs": {
+        "a7e821154": "e0790d1acf58abb96f72b6e9ff51780d0464435b",
+        "04391697a": "e0790d1acf58abb96f72b6e9ff51780d0464435b",
+        "4aa8780cf": "e0790d1acf58abb96f72b6e9ff51780d0464435b"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/address/address-manager-peer-location-authority.test.js",
+      "logLine": 15,
+      "firstAssertion": "not ok 7 - Replica transport handler left registered: the transport cannot prove handler identity, so retirement was refused",
+      "firstAssertionLogLine": 26,
+      "details": [
+        "code: refused_transport_without_handler_identity",
+        "tapCaught: returnedPromiseRejection",
+        "code: refused_transport_without_handler_identity",
+        "tapCaught: returnedPromiseRejection"
+      ],
+      "locations": [
+        "(src/node/replica-transport-handler-identity.js:33:25)",
+        "(src/partition/partition-service-lifecycle-methods.js:76:3)",
+        "async release (src/partition/partition-service-lifecycle-methods.js:206:7)",
+        "(test/address/address-manager-peer-location-authority.test.js:252:5)",
+        "(test/address/address-manager-peer-location-authority.test.js:327:31)"
+      ],
+      "classification": "transport-retirement-contract",
+      "testBlobs": {
+        "a7e821154": "67243c063cb81f3d1cbe0b7641b28ea658d0bdd7",
+        "04391697a": "67243c063cb81f3d1cbe0b7641b28ea658d0bdd7",
+        "4aa8780cf": "67243c063cb81f3d1cbe0b7641b28ea658d0bdd7"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/node/replica-handler-owner-path-bypass.test.js",
+      "logLine": 187,
+      "firstAssertion": "not ok 2 - test unfinished",
+      "firstAssertionLogLine": 199,
+      "details": [],
+      "locations": [
+        "Test.<anonymous> (test/node/replica-handler-owner-path-bypass.test.js:182:11)",
+        "test/node/replica-handler-owner-path-bypass.test.js:169:1",
+        "Test.<anonymous> (test/node/replica-handler-owner-path-bypass.test.js:260:11)",
+        "Test.<anonymous> (test/node/replica-handler-owner-path-bypass.test.js:388:11)",
+        "Test.<anonymous> (test/node/replica-handler-owner-path-bypass.test.js:480:11)"
+      ],
+      "classification": "create-release-fixture",
+      "testBlobs": {
+        "a7e821154": "7e271541e4a4b3ae59eb0a43284d6a1120a14413",
+        "04391697a": "7e271541e4a4b3ae59eb0a43284d6a1120a14413",
+        "4aa8780cf": "7e271541e4a4b3ae59eb0a43284d6a1120a14413"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/node/replica-handler.test.js",
+      "logLine": 488,
+      "firstAssertion": "not ok 3 - test unfinished",
+      "firstAssertionLogLine": 523,
+      "details": [],
+      "locations": [
+        "Test.<anonymous> (test/node/replica-handler.test.js:547:5)",
+        "test/node/replica-handler.test.js:392:1"
+      ],
+      "classification": "create-release-fixture",
+      "testBlobs": {
+        "a7e821154": "4370348d6187602e3cdee04d978d5f3d3ce68dbc",
+        "04391697a": "4370348d6187602e3cdee04d978d5f3d3ce68dbc",
+        "4aa8780cf": "4370348d6187602e3cdee04d978d5f3d3ce68dbc"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/node/replica-transport-handler-identity.test.js",
+      "logLine": 669,
+      "firstAssertion": "not ok 1 - Replica transport handler left registered: the transport cannot prove handler identity, so retirement was refused",
+      "firstAssertionLogLine": 699,
+      "details": [
+        "code: refused_transport_without_handler_identity",
+        "tapCaught: returnedPromiseRejection",
+        "code: refused_transport_without_handler_identity",
+        "tapCaught: returnedPromiseRejection",
+        "code: refused_transport_without_handler_identity",
+        "tapCaught: returnedPromiseRejection"
+      ],
+      "locations": [
+        "(src/node/replica-transport-handler-identity.js:33:25)",
+        "(src/partition/partition-service-lifecycle-methods.js:76:3)",
+        "async release (src/partition/partition-service-lifecycle-methods.js:206:7)",
+        "(test/node/replica-transport-handler-identity.test.js:159:5)",
+        "(src/bootstrap/shared/message-group-transport-handler.js:59:3)"
+      ],
+      "classification": "transport-retirement-contract",
+      "testBlobs": {
+        "a7e821154": "e5d277a3ccc6d7d61c3ca80dfa661cd778e1909e",
+        "04391697a": "e5d277a3ccc6d7d61c3ca80dfa661cd778e1909e",
+        "4aa8780cf": "e5d277a3ccc6d7d61c3ca80dfa661cd778e1909e"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/partition/participant-release-prepare-identity-native.test.js",
+      "logLine": 865,
+      "firstAssertion": "not ok 1 - durable PREPARE replay validates the original transaction epoch before exemption",
+      "firstAssertionLogLine": 869,
+      "details": [
+        "failureType: 'testCodeFailure'",
+        "error: |-",
+        "a different epoch cannot receive the original request PREPARED success",
+        "",
+        "true !== false",
+        "",
+        "code: 'ERR_ASSERTION'",
+        "name: 'AssertionError'",
+        "expected: false",
+        "code: 'ERR_ASSERTION'",
+        "expected: false",
+        "actual: true"
+      ],
+      "locations": [
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/test/partition/participant-release-prepare-identity-native.test.js:9:1'",
+        "TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/test/partition/participant-release-prepare-identity-native.test.js:25:12)"
+      ],
+      "classification": "retained-release-red",
+      "testBlobs": {
+        "a7e821154": "e8f53a90689d4dcef44f5734dde57e5623cd1464",
+        "04391697a": "e8f53a90689d4dcef44f5734dde57e5623cd1464",
+        "4aa8780cf": "e8f53a90689d4dcef44f5734dde57e5623cd1464"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/partition/partition-replication-restart-attempt-handoff.test.js",
+      "logLine": 906,
+      "firstAssertion": "not ok 1 - split: target seed write commits",
+      "firstAssertionLogLine": 1007,
+      "details": [
+        "error: 'The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried',",
+        "error: 'The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried',",
+        "tapCaught: returnedPromiseRejection"
+      ],
+      "locations": [
+        "(test/partition/partition-replication-restart-attempt-handoff.test.js:300:9)",
+        "routeSplitMirroredWrite (src/partition/partition-split-routing.js:243:11)",
+        "async replaySplitEntry (src/partition/partition-split-routing.js:157:3)",
+        "(src/partition/partition-service-split-accessor-base.js:492:5)",
+        "(test/partition/partition-replication-restart-attempt-handoff.test.js:324:9)"
+      ],
+      "classification": "partition-release-setup",
+      "testBlobs": {
+        "a7e821154": "328112dfb5ff4fbd46ad4b0580c709b5bfcd16d6",
+        "04391697a": "328112dfb5ff4fbd46ad4b0580c709b5bfcd16d6",
+        "4aa8780cf": "328112dfb5ff4fbd46ad4b0580c709b5bfcd16d6"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/partition/partition-service-sqlite-metrics.test.js",
+      "logLine": 1251,
+      "firstAssertion": "not ok 6 - should be equal",
+      "firstAssertionLogLine": 1260,
+      "details": [],
+      "locations": [
+        "Test.<anonymous> (test/partition/partition-service-sqlite-metrics.test.js:76:7)",
+        "(test/partition/partition-service-sqlite-metrics.test.js:146:7)",
+        "(test/partition/partition-service-sqlite-metrics.test.js:147:7)"
+      ],
+      "classification": "partition-release-setup",
+      "testBlobs": {
+        "a7e821154": "220f5ccd71ea424a5ff7b060076c52f480fc36d4",
+        "04391697a": "220f5ccd71ea424a5ff7b060076c52f480fc36d4",
+        "4aa8780cf": "220f5ccd71ea424a5ff7b060076c52f480fc36d4"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/partition/partition-service.test.js",
+      "logLine": 1391,
+      "firstAssertion": "not ok 1 - a COMMIT applies only to PREPARED",
+      "firstAssertionLogLine": 1451,
+      "details": [
+        "tapCaught: returnedPromiseRejection",
+        "tapCaught: returnedPromiseRejection",
+        "tapCaught: returnedPromiseRejection",
+        "tapCaught: returnedPromiseRejection",
+        "tapCaught: returnedPromiseRejection",
+        "tapCaught: returnedPromiseRejection",
+        "tapCaught: returnedPromiseRejection",
+        "tapCaught: returnedPromiseRejection"
+      ],
+      "locations": [
+        "Test.<anonymous> (test/partition/partition-service.test.js:415:7)",
+        "Test.<anonymous> (test/partition/partition-service.test.js:418:7)",
+        "Test.<anonymous> (test/partition/partition-service.test.js:425:7)",
+        "Test.<anonymous> (test/partition/partition-service.test.js:428:7)",
+        "Test.<anonymous> (test/partition/partition-service.test.js:845:5)"
+      ],
+      "classification": "application-contract",
+      "testBlobs": {
+        "a7e821154": "52e4b5a368297b0128b489ed94fc95b9df9ab3a2",
+        "04391697a": "52e4b5a368297b0128b489ed94fc95b9df9ab3a2",
+        "4aa8780cf": "52e4b5a368297b0128b489ed94fc95b9df9ab3a2"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/partition/settled-replay-preserves-result.test.js",
+      "logLine": 2476,
+      "firstAssertion": "not ok 1 - W1: an INSERT in flight across a forced runtime replacement commits once, and its retry is answered applied with its row count - never success with zero rows, never a UNIQUE failure",
+      "firstAssertionLogLine": 2480,
+      "details": [
+        "failureType: 'testCodeFailure'",
+        "error: |-",
+        "setup: the lone leader serves a write",
+        "",
+        "false !== true",
+        "",
+        "code: 'ERR_ASSERTION'",
+        "name: 'AssertionError'",
+        "expected: true",
+        "code: 'ERR_ASSERTION'",
+        "expected: true",
+        "actual: false",
+        "failureType: 'testCodeFailure'",
+        "error: |-",
+        "setup",
+        "",
+        "false !== true",
+        "",
+        "code: 'ERR_ASSERTION'",
+        "name: 'AssertionError'",
+        "expected: true"
+      ],
+      "locations": [
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/test/partition/settled-replay-preserves-result.test.js:246:1'",
+        "file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/test/partition/settled-replay-preserves-result.test.js:254:12",
+        "async withLonePartitions (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/test/partition/settled-replay-preserves-result.test.js:190:5)",
+        "async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/test/partition/settled-replay-preserves-result.test.js:250:3)",
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/test/partition/settled-replay-preserves-result.test.js:288:1'"
+      ],
+      "classification": "partition-release-setup",
+      "testBlobs": {
+        "a7e821154": "eb03e7091314584eb310100b5acc2012fea0bd33",
+        "04391697a": "eb03e7091314584eb310100b5acc2012fea0bd33",
+        "4aa8780cf": "eb03e7091314584eb310100b5acc2012fea0bd33"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/partition/partition-transaction-replay-cursor-v4.test.js",
+      "logLine": 2632,
+      "firstAssertion": "not ok 1 - TX1 v4 RC1: a source entry whose statement failed deterministically is never mirrored",
+      "firstAssertionLogLine": 2637,
+      "details": [
+        "failureType: 'testCodeFailure'",
+        "error: |-",
+        "only entries with an APPLIED outcome row are mirrorable (finding F-MIR)",
+        "+ actual - expected",
+        "",
+        "{",
+        "mirrored: [",
+        "+     'dup-a',",
+        "'insert-b'",
+        "code: 'ERR_ASSERTION'",
+        "expected:",
+        "actual:",
+        "failureType: 'testCodeFailure'",
+        "error: |-",
+        "the cursor binds an APPLIED outcome to its own log index: neither first- nor last-occurrence de-duplication by entryId passes both sequences",
+        "+ actual - expected",
+        "",
+        "{",
+        "appliedFirst: {",
+        "mirrored: [",
+        "'replayed-r',"
+      ],
+      "locations": [
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/test/partition/partition-transaction-replay-cursor-v4.test.js:130:1'",
+        "TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/test/partition/partition-transaction-replay-cursor-v4.test.js:134:12)",
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/test/partition/partition-transaction-replay-cursor-v4.test.js:138:1'",
+        "TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/test/partition/partition-transaction-replay-cursor-v4.test.js:153:10)"
+      ],
+      "classification": "historical-fmir",
+      "testBlobs": {
+        "a7e821154": "70f1bb95955f30072985d0b44d811f93d9247535",
+        "04391697a": "70f1bb95955f30072985d0b44d811f93d9247535",
+        "4aa8780cf": "70f1bb95955f30072985d0b44d811f93d9247535"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/query/partition-write-answer-consumers.test.js",
+      "logLine": 2842,
+      "firstAssertion": "not ok 2 - F-aj: the query executor re-delivers an unknown outcome under the write's one entryId until it is settled - its client gets the original result, applied once; a router holding the code re-proposes it only under its entryId, idempotently",
+      "firstAssertionLogLine": 2852,
+      "details": [
+        "failureType: 'testCodeFailure'",
+        "error: |-",
+        "setup: the group serves a write",
+        "",
+        "false !== true",
+        "",
+        "code: 'ERR_ASSERTION'",
+        "name: 'AssertionError'",
+        "expected: true",
+        "code: 'ERR_ASSERTION'",
+        "expected: true",
+        "actual: false"
+      ],
+      "locations": [
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/test/query/partition-write-answer-consumers.test.js:304:1'",
+        "file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/test/query/partition-write-answer-consumers.test.js:319:12",
+        "async withPartitionedLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/test/query/partition-write-answer-consumers.test.js:271:5)",
+        "async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/test/query/partition-write-answer-consumers.test.js:308:3)"
+      ],
+      "classification": "partition-release-setup",
+      "testBlobs": {
+        "a7e821154": "2dff46fda527f87b8a0aed252a9e054dc292e39f",
+        "04391697a": "2dff46fda527f87b8a0aed252a9e054dc292e39f",
+        "4aa8780cf": "2dff46fda527f87b8a0aed252a9e054dc292e39f"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/query/partition-transaction-seam-falsifiers.test.js",
+      "logLine": 2887,
+      "firstAssertion": "not ok 3 - TX1 seam S1: once a transaction is COMMITTING, an exceeded budget never rolls a participant back, and the caller learns the commit point was reached",
+      "firstAssertionLogLine": 2904,
+      "details": [
+        "failureType: 'testCodeFailure'",
+        "error: |-",
+        "the client answer is in doubt (TRANSACTION_OUTCOME_UNKNOWN), never a rollback",
+        "+ actual - expected",
+        "",
+        "{",
+        "+   commitPointReached: false,",
+        "+   rollbackCalls: [",
+        "+     'p1',",
+        "code: 'ERR_ASSERTION'",
+        "expected:",
+        "actual:",
+        "failureType: 'testCodeFailure'",
+        "error: |-",
+        "protocol.js:396-398 sets FAILED, :299-310 re-prepares",
+        "+ actual - expected",
+        "",
+        "{",
+        "reprepares: 0,",
+        "+   rollbackCalls: [",
+        "+     'p1',"
+      ],
+      "locations": [
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/test/query/partition-transaction-seam-falsifiers.test.js:133:1'",
+        "TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/test/query/partition-transaction-seam-falsifiers.test.js:150:10)",
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/test/query/partition-transaction-seam-falsifiers.test.js:156:1'",
+        "TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/test/query/partition-transaction-seam-falsifiers.test.js:172:10)",
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/test/query/partition-transaction-seam-falsifiers.test.js:177:1'"
+      ],
+      "classification": "query-transaction-contract",
+      "testBlobs": {
+        "a7e821154": "e739c06aad32f34ad810cfd7019c8fa5ae5066a3",
+        "04391697a": "e739c06aad32f34ad810cfd7019c8fa5ae5066a3",
+        "4aa8780cf": "e739c06aad32f34ad810cfd7019c8fa5ae5066a3"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/query/sql-query-engine-managed-split.test.js",
+      "logLine": 3276,
+      "firstAssertion": "not ok 4 - Transaction recovery state is incomplete or incompatible",
+      "firstAssertionLogLine": 3413,
+      "details": [
+        "tapCaught: returnedPromiseRejection",
+        "tapCaught: returnedPromiseRejection",
+        "tapCaught: returnedPromiseRejection"
+      ],
+      "locations": [
+        "(src/query/distributed/distributed-transaction-participant-set.js:14:17)",
+        "(src/query/sql-query-engine-transaction-set-methods.js:61:13)",
+        "(src/query/distributed/distributed-transaction-participant-set.js:22:7)",
+        "(src/query/distributed/distributed-transaction-participant-set.js:58:5)",
+        "(src/query/distributed/distributed-transaction-decision-protocol.js:369:23)"
+      ],
+      "classification": "query-transaction-contract",
+      "testBlobs": {
+        "a7e821154": "97b9ef79d87258b6eb817c94ac5d13c06bed52fc",
+        "04391697a": "97b9ef79d87258b6eb817c94ac5d13c06bed52fc",
+        "4aa8780cf": "97b9ef79d87258b6eb817c94ac5d13c06bed52fc"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/raft/raft-rs-backend/evidence-o1-static.test.js",
+      "logLine": 3657,
+      "firstAssertion": "not ok 1 - enumerations: the stamp kinds and bootstrap sources are the two stamp origins plus the record",
+      "firstAssertionLogLine": 3661,
+      "details": [
+        "failureType: 'testCodeFailure'",
+        "error: |-",
+        "READ_PURPOSE: every member is classified exactly once",
+        "+ actual - expected",
+        "",
+        "[",
+        "'BOOTSTRAP',",
+        "-   'LEARNER_ACTION',",
+        "'RETIREMENT',",
+        "code: 'ERR_ASSERTION'",
+        "expected:",
+        "actual:",
+        "failureType: 'testCodeFailure'",
+        "error: |-",
+        "REFUSAL: every member is classified exactly once",
+        "+ actual - expected",
+        "",
+        "[",
+        "-   'CONFIGURATION_GENERATION_UNAVAILABLE',",
+        "'CONF_CHANGE_PENDING',",
+        "'DURABLE_RECORD_MISSING',"
+      ],
+      "locations": [
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/test/raft/raft-rs-backend/evidence-o1-static.test.js:73:1'",
+        "assertClassifies (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/test/raft/raft-rs-backend/evidence-o1-static.test.js:67:10)",
+        "TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/test/raft/raft-rs-backend/evidence-o1-static.test.js:86:3)",
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/test/raft/raft-rs-backend/evidence-o1-static.test.js:99:1'",
+        "TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/test/raft/raft-rs-backend/evidence-o1-static.test.js:101:3)"
+      ],
+      "classification": "static-contract",
+      "testBlobs": {
+        "a7e821154": "c7a53d343873ccc8e99d44bf8f8c3c5d0c04be5f",
+        "04391697a": "c7a53d343873ccc8e99d44bf8f8c3c5d0c04be5f",
+        "4aa8780cf": "c7a53d343873ccc8e99d44bf8f8c3c5d0c04be5f"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/query/write-exactly-once-schedules.test.js",
+      "logLine": 3945,
+      "firstAssertion": "not ok 1 - (c1) two log entries for one entryId, both committed: applied once, the caller answered with the first application's result",
+      "firstAssertionLogLine": 3949,
+      "details": [
+        "failureType: 'testCodeFailure'",
+        "error: |-",
+        "setup: the group serves a write",
+        "",
+        "false !== true",
+        "",
+        "code: 'ERR_ASSERTION'",
+        "name: 'AssertionError'",
+        "expected: true",
+        "code: 'ERR_ASSERTION'",
+        "expected: true",
+        "actual: false",
+        "failureType: 'testCodeFailure'",
+        "error: |-",
+        "setup: the group serves a write",
+        "",
+        "false !== true",
+        "",
+        "code: 'ERR_ASSERTION'",
+        "name: 'AssertionError'",
+        "expected: true"
+      ],
+      "locations": [
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/test/query/write-exactly-once-schedules.test.js:92:1'",
+        "file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/test/query/write-exactly-once-schedules.test.js:98:12",
+        "async withGroupSurface (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/test/query/unknown-outcome-surface-fixture.js:505:5)",
+        "async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/test/query/write-exactly-once-schedules.test.js:95:3)",
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/test/query/write-exactly-once-schedules.test.js:150:1'"
+      ],
+      "classification": "partition-release-setup",
+      "testBlobs": {
+        "a7e821154": "a44032db0f07f0ed86f9d539aa9aa67b37082ea5",
+        "04391697a": "a44032db0f07f0ed86f9d539aa9aa67b37082ea5",
+        "4aa8780cf": "a44032db0f07f0ed86f9d539aa9aa67b37082ea5"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/rebalancer/rebalance-coordinator-owner-path-convergence.test.js",
+      "logLine": 4031,
+      "firstAssertion": "not ok 1 - service-row progress should continue the REPLACE into source removal even when authoritative operation reads miss",
+      "firstAssertionLogLine": 4198,
+      "details": [
+        "error: 'Authoritative ACTIVE storage reservation mismatches operation identity'",
+        "error: 'Authoritative replica operation not confirmed: op-observed-progress-replace-fallback'",
+        "error: 'Authoritative ACTIVE storage reservation mismatches operation identity'",
+        "error: 'authoritative_read_owner_unavailable',",
+        "code: null,",
+        "error: 'Authoritative replica operation not confirmed: op-observed-progress-replace-fallback'"
+      ],
+      "locations": [
+        "(test/rebalancer/rebalance-coordinator-owner-path-convergence.test.js:539:11)",
+        "(test/rebalancer/rebalance-coordinator-owner-path-convergence.test.js:544:11)",
+        "(test/rebalancer/rebalance-coordinator-owner-path-convergence.test.js:998:11)"
+      ],
+      "classification": "operation-identity-contract",
+      "testBlobs": {
+        "a7e821154": "8123f07358bc1f60d3dfafe827116bc524665c4c",
+        "04391697a": "8123f07358bc1f60d3dfafe827116bc524665c4c",
+        "4aa8780cf": "8123f07358bc1f60d3dfafe827116bc524665c4c"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/rebalancer/spread-cure-transition-authorization-row.test.js",
+      "logLine": 4835,
+      "firstAssertion": "not ok 1 - the authorization rides the operation row and rows without it preserve the pre-admission payload",
+      "firstAssertionLogLine": 4839,
+      "details": [
+        "failureType: 'testCodeFailure'",
+        "error: |-",
+        "critical-add: the pre-admission row payload is byte-identical to main's",
+        "+ actual - expected",
+        "",
+        "+ 'ffb7f6610901def6e9ccb6e43055c599f3d918f0d3d4386ade0475c4b2ee99d0'",
+        "- '07cf06efba2b52eddd3c645ff62d6e55b39cdb9d5cef067b695211f7600f4745'",
+        "",
+        "code: 'ERR_ASSERTION'",
+        "code: 'ERR_ASSERTION'",
+        "expected: '07cf06efba2b52eddd3c645ff62d6e55b39cdb9d5cef067b695211f7600f4745'",
+        "actual: 'ffb7f6610901def6e9ccb6e43055c599f3d918f0d3d4386ade0475c4b2ee99d0'"
+      ],
+      "locations": [
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/test/rebalancer/spread-cure-transition-authorization-row.test.js:181:1'",
+        "TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/test/rebalancer/spread-cure-transition-authorization-row.test.js:190:12)"
+      ],
+      "classification": "operation-identity-contract",
+      "testBlobs": {
+        "a7e821154": "ac8b0b35c1c4c01616f667b264f9adeaa35a12b3",
+        "04391697a": "ac8b0b35c1c4c01616f667b264f9adeaa35a12b3",
+        "4aa8780cf": "ac8b0b35c1c4c01616f667b264f9adeaa35a12b3"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/scripts/change-selection-taxonomy.test.js",
+      "logLine": 4898,
+      "firstAssertion": "not ok 1 - EXHAUSTIVE: the four categories partition the candidate universe",
+      "firstAssertionLogLine": 4902,
+      "details": [
+        "failureType: 'testCodeFailure'",
+        "error: |-",
+        "every candidate path must resolve; unresolved paths refuse, not skip",
+        "+ actual - expected",
+        "",
+        "+ [",
+        "+   'solve/quests/replicated-transaction-decision-and-apply/evidence/activation-cycle-round11-retained/source/test/integration/pgwire-command-tag-real-engine.integration.test.js: SAFE TEST SCOPE UNKNOWN: changed test file has no subsystem classification',",
+        "+   'solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-source-round2-independent-bf5ad7fe/diagnostics/navigation/test/cdc/cdc-coverage-lifecycle-owner.test.js: SAFE TEST SCOPE UNKNOWN: changed test file has no subsystem classification',",
+        "+   'solve/quests/seed-control-current-proof-amortization/evidence/native-owner-contract-20261015/independent-review/historical-evidence-copy/participant-release-control-late-follower-loss-witness.test.js: SAFE TEST SCOPE UNKNOWN: changed test file has no subsystem classification',",
+        "code: 'ERR_ASSERTION'",
+        "expected:",
+        "actual:"
+      ],
+      "locations": [
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/test/scripts/change-selection-taxonomy.test.js:39:1'",
+        "TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/test/scripts/change-selection-taxonomy.test.js:44:10)"
+      ],
+      "classification": "static-contract",
+      "testBlobs": {
+        "a7e821154": "07cce010ea9ef612da1e4da361809097357de8f3",
+        "04391697a": "07cce010ea9ef612da1e4da361809097357de8f3",
+        "4aa8780cf": "07cce010ea9ef612da1e4da361809097357de8f3"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/bootstrap/bootstrap-sequence.test.js",
+      "logLine": 5058,
+      "firstAssertion": "not ok 1 - bootstrap should succeed",
+      "firstAssertionLogLine": 5334,
+      "details": [],
+      "locations": [
+        "{\"level\":50,\"time\":\"2026-10-15T17:26:14.684Z\",\"nodeId\":\"test-bootstrap-node\",\"pid\":1445966,\"subsystem\":\"bootstrap\",\"nodeId\":\"test-bootstrap-node\",\"phase\":\"partitions\",\"duration\":212,\"error\":\"System table cache not available\",\"stack\":\"Error: System table cache not available\\n    at assertCritical (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/src/utils/assert.js:20:9)\\n    at BootstrapService.getSystemTableCache (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/src/bootstrap/bootstrap-service-runtime-methods.js:97:14)\\n    at Object.getSystemTableCache (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/src/bootstrap/bootstrap-service-seed-delegates.js:533:37)\\n    at SeedRuntimeBridgeOwner.acquireSqlQueryEngine (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/src/bootstrap/owners/seed-runtime-bridge-owner.js:51:56)\\n    at Object.run (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/src/bootstrap/bootstrap-service-seed-workflow.js:411:41)\\n    at file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/src/bootstrap/pipeline/startup-pipeline-runner.js:169:47\\n    at runFormationOwner (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/src/diagnostics/formation-turn-attribution.js:745:34)\\n    at runBootstrapActivity (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/src/diagnostics/formation-owner-attribution.js:20:10)\\n    at StartupPipelineRunner.runWorkflow (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/src/bootstrap/pipeline/startup-pipeline-runner.js:169:15)\\n    at async BootstrapService.bootstrap (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/src/bootstrap/bootstrap-service-seed-workflow.js:527:9)\",\"servicesCreated\":0,\"contextNodeId\":\"test-node-1792085174471\",\"msg\":\"Bootstrap failed\"}",
+        "Test.<anonymous> (test/bootstrap/bootstrap-sequence.test.js:618:7)",
+        "{\"level\":50,\"time\":\"2026-10-15T17:26:32.033Z\",\"nodeId\":\"test-bootstrap-node\",\"pid\":1445966,\"subsystem\":\"bootstrap\",\"nodeId\":\"test-bootstrap-node\",\"state\":\"starting\",\"phase\":\"partitions\",\"subPhase\":\"PARTITIONS\",\"duration\":1540,\"error\":\"Message group mg-1 failed to establish leadership within 100ms\",\"stack\":\"Error: Message group mg-1 failed to establish leadership within 100ms\\n    at SeedMessageGroupsPhase.waitForMessageGroupLeadership (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/src/bootstrap/phases/seed-message-groups-phase.js:363:19)\\n    at async SeedPartitionsPhase.startDeferredBootstrapReplicaElections (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/src/bootstrap/phases/seed-partitions-phase.js:408:7)\\n    at async SeedPartitionsPhase.phasePartitions (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/src/bootstrap/phases/seed-partitions-phase.js:196:5)\\n    at async Object.task (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/src/bootstrap/bootstrap-service-seed-workflow.js:583:11)\",\"contextNodeId\":\"test-node-1792085190354\",\"msg\":\"Bootstrap phase failed\"}",
+        "{\"level\":50,\"time\":\"2026-10-15T17:26:32.034Z\",\"nodeId\":\"test-bootstrap-node\",\"pid\":1445966,\"subsystem\":\"bootstrap\",\"nodeId\":\"test-bootstrap-node\",\"phase\":\"partitions\",\"duration\":1670,\"error\":\"Message group mg-1 failed to establish leadership within 100ms\",\"stack\":\"Error: Message group mg-1 failed to establish leadership within 100ms\\n    at SeedMessageGroupsPhase.waitForMessageGroupLeadership (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/src/bootstrap/phases/seed-message-groups-phase.js:363:19)\\n    at async SeedPartitionsPhase.startDeferredBootstrapReplicaElections (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/src/bootstrap/phases/seed-partitions-phase.js:408:7)\\n    at async SeedPartitionsPhase.phasePartitions (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/src/bootstrap/phases/seed-partitions-phase.js:196:5)\\n    at async Object.task (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/src/bootstrap/bootstrap-service-seed-workflow.js:583:11)\",\"servicesCreated\":138,\"contextNodeId\":\"test-node-1792085190354\",\"msg\":\"Bootstrap failed\"}"
+      ],
+      "classification": "UNCLASSIFIED_NEW",
+      "testBlobs": {
+        "a7e821154": "e945a70892df63aacb5dae776d9c99d3d760666e",
+        "04391697a": "e945a70892df63aacb5dae776d9c99d3d760666e",
+        "4aa8780cf": "e945a70892df63aacb5dae776d9c99d3d760666e"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/bootstrap/fresh-join-registration-runtime-replacement.integration.test.js",
+      "logLine": 5455,
+      "firstAssertion": "not ok 1 - seed bootstrap should succeed",
+      "firstAssertionLogLine": 5460,
+      "details": [
+        "tapCaught: returnedPromiseRejection"
+      ],
+      "locations": [
+        "{\"level\":50,\"time\":\"2026-10-15T17:27:08.539Z\",\"nodeId\":\"test-node\",\"pid\":1446164,\"subsystem\":\"bootstrap\",\"nodeId\":\"test-node\",\"phase\":\"partitions\",\"duration\":13340,\"error\":\"Seed participant release failed: {\\\"partitionId\\\":\\\"debug_sessions-p1\\\",\\\"answer\\\":{\\\"outcome\\\":\\\"release_fact_unavailable\\\",\\\"releaseId\\\":\\\"2f295968fc785c8322243219a116595b1b2f08178bbca28f79ca2df287cff0b5\\\",\\\"partitionId\\\":\\\"debug_sessions-p1\\\",\\\"phase\\\":\\\"observe_applied_position\\\",\\\"missingFact\\\":\\\"release_deadline\\\",\\\"owner\\\":\\\"550e8400-e29b-41d4-a716-446655440711\\\"},\\\"seedRelease\\\":{\\\"clockState\\\":\\\"measured\\\",\\\"budgetMs\\\":1000,\\\"elapsedMs\\\":1004,\\\"remainingMs\\\":0,\\\"ordinal\\\":12,\\\"total\\\":45,\\\"completed\\\":11,\\\"attemptCount\\\":1,\\\"firstBlockedDrain\\\":null,\\\"firstJoinedAttempt\\\":null}}\",\"stack\":\"Error: Seed participant release failed: {\\\"partitionId\\\":\\\"debug_sessions-p1\\\",\\\"answer\\\":{\\\"outcome\\\":\\\"release_fact_unavailable\\\",\\\"releaseId\\\":\\\"2f295968fc785c8322243219a116595b1b2f08178bbca28f79ca2df287cff0b5\\\",\\\"partitionId\\\":\\\"debug_sessions-p1\\\",\\\"phase\\\":\\\"observe_applied_position\\\",\\\"missingFact\\\":\\\"release_deadline\\\",\\\"owner\\\":\\\"550e8400-e29b-41d4-a716-446655440711\\\"},\\\"seedRelease\\\":{\\\"clockState\\\":\\\"measured\\\",\\\"budgetMs\\\":1000,\\\"elapsedMs\\\":1004,\\\"remainingMs\\\":0,\\\"ordinal\\\":12,\\\"total\\\":45,\\\"completed\\\":11,\\\"attemptCount\\\":1,\\\"firstBlockedDrain\\\":null,\\\"firstJoinedAttempt\\\":null}}\\n    at BootstrapService.releaseSeedParticipantCohorts (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/src/bootstrap/bootstrap-service-seed-workflow.js:348:17)\\n    at runNextTicks (node:internal/process/task_queues:64:5)\\n    at listOnTimeout (node:internal/timers:547:9)\\n    at process.processTimers (node:internal/timers:521:7)\\n    at async Object.run (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/src/bootstrap/bootstrap-service-seed-workflow.js:413:13)\\n    at async StartupPipelineRunner.runWorkflow (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/src/bootstrap/pipeline/startup-pipeline-runner.js:169:9)\\n    at async BootstrapService.bootstrap (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/src/bootstrap/bootstrap-service-seed-workflow.js:527:9)\\n    at async Test.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/test/bootstrap/fresh-join-registration-runtime-replacement.integration.test.js:114:23)\",\"servicesCreated\":138,\"contextNodeId\":\"550e8400-e29b-41d4-a716-446655440711\",\"msg\":\"Bootstrap failed\"}",
+        "Test.<anonymous> (test/bootstrap/fresh-join-registration-runtime-replacement.integration.test.js:115:7)",
+        "Test.<anonymous> (test/bootstrap/fresh-join-registration-runtime-replacement.integration.test.js:137:7)",
+        "trapRegistrationInsert (test/bootstrap/fresh-join-registration-runtime-replacement.integration.test.js:59:34)",
+        "Test.<anonymous> (test/bootstrap/fresh-join-registration-runtime-replacement.integration.test.js:138:18)"
+      ],
+      "classification": "UNCLASSIFIED_NEW",
+      "testBlobs": {
+        "a7e821154": "bb2169a74bd638526c5e9dc798bdf06970bbadea",
+        "04391697a": "bb2169a74bd638526c5e9dc798bdf06970bbadea",
+        "4aa8780cf": "bb2169a74bd638526c5e9dc798bdf06970bbadea"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/bootstrap/fresh-join-via-non-seed-node.integration.test.js",
+      "logLine": 5544,
+      "firstAssertion": "not ok 1 - seed bootstrap should succeed",
+      "firstAssertionLogLine": 5549,
+      "details": [
+        "error: \"Failed to contact seed node: connect ECONNREFUSED (injected)\"",
+        "tapCaught: returnedPromiseRejection"
+      ],
+      "locations": [
+        "{\"level\":50,\"time\":\"2026-10-15T17:27:08.745Z\",\"nodeId\":\"test-node\",\"pid\":1446172,\"subsystem\":\"bootstrap\",\"nodeId\":\"test-node\",\"phase\":\"partitions\",\"duration\":13145,\"error\":\"Seed participant release failed: {\\\"partitionId\\\":\\\"debug_sessions-p1\\\",\\\"answer\\\":{\\\"outcome\\\":\\\"release_fact_unavailable\\\",\\\"releaseId\\\":null,\\\"partitionId\\\":\\\"debug_sessions-p1\\\",\\\"phase\\\":\\\"release\\\",\\\"retryAfterMs\\\":100,\\\"missingFact\\\":\\\"current_control_owner_fact\\\",\\\"controlPartitionId\\\":\\\"sql_transactions-p1\\\",\\\"controlNodeId\\\":\\\"550e8400-e29b-41d4-a716-446655440701\\\",\\\"controlOutcome\\\":\\\"release_fact_unavailable\\\"},\\\"seedRelease\\\":{\\\"clockState\\\":\\\"measured\\\",\\\"budgetMs\\\":1000,\\\"elapsedMs\\\":1000,\\\"remainingMs\\\":0,\\\"ordinal\\\":12,\\\"total\\\":45,\\\"completed\\\":11,\\\"attemptCount\\\":1,\\\"firstBlockedDrain\\\":null,\\\"firstJoinedAttempt\\\":null}}\",\"stack\":\"Error: Seed participant release failed: {\\\"partitionId\\\":\\\"debug_sessions-p1\\\",\\\"answer\\\":{\\\"outcome\\\":\\\"release_fact_unavailable\\\",\\\"releaseId\\\":null,\\\"partitionId\\\":\\\"debug_sessions-p1\\\",\\\"phase\\\":\\\"release\\\",\\\"retryAfterMs\\\":100,\\\"missingFact\\\":\\\"current_control_owner_fact\\\",\\\"controlPartitionId\\\":\\\"sql_transactions-p1\\\",\\\"controlNodeId\\\":\\\"550e8400-e29b-41d4-a716-446655440701\\\",\\\"controlOutcome\\\":\\\"release_fact_unavailable\\\"},\\\"seedRelease\\\":{\\\"clockState\\\":\\\"measured\\\",\\\"budgetMs\\\":1000,\\\"elapsedMs\\\":1000,\\\"remainingMs\\\":0,\\\"ordinal\\\":12,\\\"total\\\":45,\\\"completed\\\":11,\\\"attemptCount\\\":1,\\\"firstBlockedDrain\\\":null,\\\"firstJoinedAttempt\\\":null}}\\n    at BootstrapService.releaseSeedParticipantCohorts (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/src/bootstrap/bootstrap-service-seed-workflow.js:348:17)\\n    at runNextTicks (node:internal/process/task_queues:64:5)\\n    at listOnTimeout (node:internal/timers:547:9)\\n    at process.processTimers (node:internal/timers:521:7)\\n    at async Object.run (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/src/bootstrap/bootstrap-service-seed-workflow.js:413:13)\\n    at async StartupPipelineRunner.runWorkflow (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/src/bootstrap/pipeline/startup-pipeline-runner.js:169:9)\\n    at async BootstrapService.bootstrap (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/src/bootstrap/bootstrap-service-seed-workflow.js:527:9)\\n    at async Test.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/test/bootstrap/fresh-join-via-non-seed-node.integration.test.js:126:23)\",\"servicesCreated\":138,\"contextNodeId\":\"550e8400-e29b-41d4-a716-446655440701\",\"msg\":\"Bootstrap failed\"}",
+        "(test/bootstrap/fresh-join-via-non-seed-node.integration.test.js:127:7)",
+        "{\"level\":50,\"time\":\"2026-10-15T17:27:09.787Z\",\"nodeId\":\"test-node\",\"pid\":1446172,\"subsystem\":\"node-joining\",\"nodeId\":\"test-node\",\"state\":\"connecting\",\"phase\":\"contacting_seed\",\"subPhase\":null,\"duration\":525,\"error\":\"Seed bootstrap not ready (phase: failed)\",\"stack\":\"Error: Seed bootstrap not ready (phase: failed)\\n    at SeedContactFailureOwner.buildRetryableError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/src/bootstrap/phases/seed-contact-failure-owner.js:233:28)\\n    at SeedContactFailureOwner.buildBootstrapNotReadyError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/src/bootstrap/phases/seed-contact-failure-owner.js:290:17)\\n    at SeedContactFailureOwner.throwSurfacedFailure (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/src/bootstrap/phases/seed-contact-failure-owner.js:70:18)\\n    at SeedContactFailureOwner.throwFailure (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/src/bootstrap/phases/seed-contact-failure-owner.js:38:12)\\n    at ContactSeedPhase.phaseContactSeed (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/src/bootstrap/phases/contact-seed-phase.js:145:27)\\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\\n    at async Object.task (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/src/bootstrap/node-joining-admission-readiness.js:809:9)\",\"joinReadiness\":null,\"seedContactFailureKind\":\"bootstrap_not_ready\",\"bootstrapResponseCode\":\"BOOTSTRAP_NOT_READY\",\"bootstrapResponsePhase\":\"failed\",\"bootstrapResponseState\":\"bootstrapping\",\"bootstrapResponseReasons\":[\"BOOTSTRAP_PHASE_INCOMPLETE\",\"BOOTSTRAP_NOT_READY\",\"priority_control_plane_recovery_diagnostics_unavailable\"],\"bootstrapResponseRetryAfterMs\":500,\"seedContact\":{\"phase\":\"contacting_seed\",\"candidateSet\":[\"http://localhost:0\"],\"currentCandidate\":\"http://localhost:0\",\"attempt\":2,\"lastOutcome\":\"retryable_seed_response\",\"remainingBudgetMs\":11476,\"authoritySource\":null},\"contextNodeId\":\"550e8400-e29b-41d4-a716-446655440702\",\"msg\":\"Joining phase failed\"}",
+        "(test/bootstrap/fresh-join-via-non-seed-node.integration.test.js:169:7)",
+        "(test/bootstrap/fresh-join-via-non-seed-node.integration.test.js:170:7)"
+      ],
+      "classification": "UNCLASSIFIED_NEW",
+      "testBlobs": {
+        "a7e821154": "ea56e05bcd8267b9ed01c6ea418afc5d08a1e5d0",
+        "04391697a": "ea56e05bcd8267b9ed01c6ea418afc5d08a1e5d0",
+        "4aa8780cf": "ea56e05bcd8267b9ed01c6ea418afc5d08a1e5d0"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/bootstrap/phase-event-ordering-characterization.test.js",
+      "logLine": 5763,
+      "firstAssertion": "not ok 1 - bootstrap should succeed",
+      "firstAssertionLogLine": 5767,
+      "details": [
+        "tapCaught: returnedPromiseRejection",
+        "tapCaught: returnedPromiseRejection"
+      ],
+      "locations": [
+        "(test/bootstrap/phase-event-ordering-characterization.test.js:140:7)",
+        "(test/bootstrap/phase-event-ordering-characterization.test.js:148:7)",
+        "(test/bootstrap/phase-event-ordering-characterization.test.js:156:19)",
+        "(test/bootstrap/phase-event-ordering-characterization.test.js:212:7)",
+        "(test/bootstrap/phase-event-ordering-characterization.test.js:221:7)"
+      ],
+      "classification": "UNCLASSIFIED_NEW",
+      "testBlobs": {
+        "a7e821154": "2df19e086b0cf697c760491c3af8bf8e0d01cf68",
+        "04391697a": "2df19e086b0cf697c760491c3af8bf8e0d01cf68",
+        "4aa8780cf": "2df19e086b0cf697c760491c3af8bf8e0d01cf68"
+      },
+      "sameTestBytesAcrossRefs": true
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/bootstrap/seed-teardown-pending-cdc-delivery.test.js",
+      "logLine": 6377,
+      "firstAssertion": "not ok 1 - the seed teardown completes when the latency topology stops inside a partition CDC delivery's batch window",
+      "firstAssertionLogLine": 6381,
+      "details": [
+        "failureType: 'testCodeFailure'",
+        "error: |-",
+        "the partition's CDC delivery waits in the batch window",
+        "",
+        "0 !== 1",
+        "",
+        "code: 'ERR_ASSERTION'",
+        "name: 'AssertionError'",
+        "expected: 1",
+        "code: 'ERR_ASSERTION'",
+        "expected: 1",
+        "actual: 0"
+      ],
+      "locations": [
+        "location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/test/bootstrap/seed-teardown-pending-cdc-delivery.test.js:110:1'",
+        "TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t18ra-2119948/test/bootstrap/seed-teardown-pending-cdc-delivery.test.js:156:10)"
+      ],
+      "classification": "UNCLASSIFIED_NEW",
+      "testBlobs": {
+        "a7e821154": "1b9a9b08eca638e6a261ea898db367d1de5b71ee",
+        "04391697a": "1b9a9b08eca638e6a261ea898db367d1de5b71ee",
+        "4aa8780cf": "1b9a9b08eca638e6a261ea898db367d1de5b71ee"
+      },
+      "sameTestBytesAcrossRefs": true
+    }
+  ]
+}

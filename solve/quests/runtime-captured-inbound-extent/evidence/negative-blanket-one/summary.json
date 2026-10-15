@@ -1,0 +1,18 @@
+{
+  "sha": "3b4560b1b0800d3703b6a887632cb2d069dd3144",
+  "host": "lenovo-laptop",
+  "requested": [
+    "test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js"
+  ],
+  "results": [
+    {
+      "file": "test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js",
+      "code": 1,
+      "rawTap": true,
+      "testSha256": "9cb552e83ef5fcdcc1ab0248961b7e2b9f14961542b3c1178fad3a95b8d2c1ff"
+    }
+  ],
+  "unrun": [],
+  "exitCode": 1,
+  "meaning": "Per-file original executions; no retries; no overall release certification"
+}

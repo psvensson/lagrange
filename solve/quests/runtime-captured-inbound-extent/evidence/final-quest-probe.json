@@ -1,0 +1,26 @@
+{
+  "id": "runtime-captured-inbound-extent",
+  "status": "open",
+  "blocked": null,
+  "probe": {
+    "metric": 2,
+    "target": 0,
+    "done": false,
+    "measuring": true,
+    "evidence": "solve/quests/runtime-captured-inbound-extent/evidence/receipt.json",
+    "reason": "measured",
+    "outstanding": [
+      "affected-owner-suites",
+      "static-impact-and-independent-review"
+    ]
+  },
+  "sealMetric": 6,
+  "delta": -4,
+  "attempts": 1,
+  "attemptsSinceAltitudeCheck": 1,
+  "recent": [
+    "2026-10-15T17:29:09.568Z verification reject: Final scope qualification from independent snapshot_contract_audit: HOLD certification of the whole increment. The exact source satisfies the selected finite-ca",
+    "2026-10-15T17:31:34.813Z finding evidence: Same-host F1 comparison completed on locked lenovo-laptop with unchanged oracle bytes fe5776a91c0fc706d14bd4c30e74316eadf1c15bef3bb5db12c657cd54341007. Candidat",
+    "2026-10-15T17:51:01.441Z finding decision: User qualifies earlier finite-capture approval: F1 explicit mid-turn guarantee was not superseded. Freeze source4aa8780cf and both witnesses. Same-host comparis"
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "root": "/mnt/data/peter/projects/.worktrees/runtime-capture-before-ensure-20261015",
+  "sha": "fbcc14d8b22479244642c54a504a96f452d11e7b",
+  "host": "lenovo-laptop",
+  "files": [
+    "test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js"
+  ],
+  "testIdentity": {
+    "test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js": "9cb552e83ef5fcdcc1ab0248961b7e2b9f14961542b3c1178fad3a95b8d2c1ff"
+  },
+  "apiIdentity": {
+    "scripts/lab/probe.js": "493381e074c12987446a27f4feb7a0385f6afea46e97fa41f4c826464f7e8b70",
+    "scripts/run-classified-test-files.js": "cbbfcb9494a76069b33457b87e2cebf1d0e6e7a69c0b2d08181ab89736791aea",
+    "scripts/checks/git-process-environment.js": "c06f8458b6ad8b8725605676ddb7ef269b19bb0bf8bcfc680ce255e92565a078"
+  },
+  "runtimeOwnerSha256": "8c1d03b8846aafd7478b8691d7f771ea9063067b83291bca2538dc7d0ca8dd9f",
+  "retry": "0",
+  "inheritedTapTimeout": null,
+  "command": [
+    "/home/peter/.nvm/versions/node/v22.23.2/bin/node",
+    "/tmp/lagrange-runtime-correction-20261015/run-group-capture.mjs",
+    "/mnt/data/peter/projects/.worktrees/runtime-capture-before-ensure-20261015",
+    "/tmp/lagrange-runtime-correction-20261015/negative-before-ensure",
+    "fbcc14d8b22479244642c54a504a96f452d11e7b",
+    "lenovo-laptop",
+    "test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js"
+  ]
+}

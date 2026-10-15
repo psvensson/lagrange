@@ -1,0 +1,173 @@
+[
+  {
+    "path": "src/raft/raft-rs-runtime-owner.js",
+    "blobs": {
+      "a7e821154": "7fefb96f8988acb81ad2f51912cc32b30aea297f",
+      "04391697a": "7fefb96f8988acb81ad2f51912cc32b30aea297f",
+      "4aa8780cf": "d8f86b81e7c3098da01cf558aa37a85334c7ace9"
+    },
+    "sameAllRefs": false
+  },
+  {
+    "path": "src/partition/partition-participant-transaction-pause.js",
+    "blobs": {
+      "a7e821154": "4daab97d1d635475ea5f1ed100e66540879cea52",
+      "04391697a": "4daab97d1d635475ea5f1ed100e66540879cea52",
+      "4aa8780cf": "4daab97d1d635475ea5f1ed100e66540879cea52"
+    },
+    "sameAllRefs": true
+  },
+  {
+    "path": "src/partition/partition-local-mutation-admission.js",
+    "blobs": {
+      "a7e821154": "bc4d18bb8c3a9ce5a31e205cadc167864533ed6e",
+      "04391697a": "bc4d18bb8c3a9ce5a31e205cadc167864533ed6e",
+      "4aa8780cf": "bc4d18bb8c3a9ce5a31e205cadc167864533ed6e"
+    },
+    "sameAllRefs": true
+  },
+  {
+    "path": "src/partition/partition-write-kernel.js",
+    "blobs": {
+      "a7e821154": "e3e44d7e83f6eca0b35e4cd47b001b4e6b278add",
+      "04391697a": "e3e44d7e83f6eca0b35e4cd47b001b4e6b278add",
+      "4aa8780cf": "e3e44d7e83f6eca0b35e4cd47b001b4e6b278add"
+    },
+    "sameAllRefs": true
+  },
+  {
+    "path": "src/partition/partition-service-lifecycle-methods.js",
+    "blobs": {
+      "a7e821154": "72ac27521112687864f86fc3020c3fd66eb6daae",
+      "04391697a": "72ac27521112687864f86fc3020c3fd66eb6daae",
+      "4aa8780cf": "72ac27521112687864f86fc3020c3fd66eb6daae"
+    },
+    "sameAllRefs": true
+  },
+  {
+    "path": "src/node/replica-transport-handler-identity.js",
+    "blobs": {
+      "a7e821154": "28d363f59fb792974235e00bc6e86a25f0b49e1a",
+      "04391697a": "28d363f59fb792974235e00bc6e86a25f0b49e1a",
+      "4aa8780cf": "28d363f59fb792974235e00bc6e86a25f0b49e1a"
+    },
+    "sameAllRefs": true
+  },
+  {
+    "path": "src/node/message-group-service-handler.js",
+    "blobs": {
+      "a7e821154": "ffae20793125e9b28182ec2e7da8c418d69fb00d",
+      "04391697a": "ffae20793125e9b28182ec2e7da8c418d69fb00d",
+      "4aa8780cf": "ffae20793125e9b28182ec2e7da8c418d69fb00d"
+    },
+    "sameAllRefs": true
+  },
+  {
+    "path": "src/rebalancer/unified-rebalancer-rebalance-loop.js",
+    "blobs": {
+      "a7e821154": "2b36baf20e3e3a4bdb7a80443c071142b992a596",
+      "04391697a": "2b36baf20e3e3a4bdb7a80443c071142b992a596",
+      "4aa8780cf": "2b36baf20e3e3a4bdb7a80443c071142b992a596"
+    },
+    "sameAllRefs": true
+  },
+  {
+    "path": "src/node/replica-handler-participant-release.js",
+    "blobs": {
+      "a7e821154": "f5d911e5bb52159c696262b33131fb64f0bdaa8c",
+      "04391697a": "f5d911e5bb52159c696262b33131fb64f0bdaa8c",
+      "4aa8780cf": "f5d911e5bb52159c696262b33131fb64f0bdaa8c"
+    },
+    "sameAllRefs": true
+  },
+  {
+    "path": "src/node/replica-handler-participant-cutover.js",
+    "blobs": {
+      "a7e821154": "1fdceaa1b2cb251b39fc9891b6c44b28a179c5f5",
+      "04391697a": "1fdceaa1b2cb251b39fc9891b6c44b28a179c5f5",
+      "4aa8780cf": "1fdceaa1b2cb251b39fc9891b6c44b28a179c5f5"
+    },
+    "sameAllRefs": true
+  },
+  {
+    "path": "src/raft/raft-operation-port-constants.js",
+    "blobs": {
+      "a7e821154": "04b1805b46777e06849eb484a16399c7cb074e4c",
+      "04391697a": "04b1805b46777e06849eb484a16399c7cb074e4c",
+      "4aa8780cf": "04b1805b46777e06849eb484a16399c7cb074e4c"
+    },
+    "sameAllRefs": true
+  },
+  {
+    "path": "src/raft/raft-committed-membership-constants.js",
+    "blobs": {
+      "a7e821154": "c0a6c731dbe189a2fafc7e25bff879546796b43f",
+      "04391697a": "c0a6c731dbe189a2fafc7e25bff879546796b43f",
+      "4aa8780cf": "c0a6c731dbe189a2fafc7e25bff879546796b43f"
+    },
+    "sameAllRefs": true
+  },
+  {
+    "path": "src/query/distributed/distributed-transaction-protocol.js",
+    "blobs": {
+      "a7e821154": "b51e8f789217c6d98d6dd534c74dd13490c8c6b9",
+      "04391697a": "b51e8f789217c6d98d6dd534c74dd13490c8c6b9",
+      "4aa8780cf": "b51e8f789217c6d98d6dd534c74dd13490c8c6b9"
+    },
+    "sameAllRefs": true
+  },
+  {
+    "path": "src/query/distributed/distributed-transaction-recovery-validation.js",
+    "blobs": {
+      "a7e821154": "7cfaef101efb05cb741b83eed5b68afe867c8fd4",
+      "04391697a": "7cfaef101efb05cb741b83eed5b68afe867c8fd4",
+      "4aa8780cf": "7cfaef101efb05cb741b83eed5b68afe867c8fd4"
+    },
+    "sameAllRefs": true
+  },
+  {
+    "path": "src/query/distributed/distributed-transaction-participant-set.js",
+    "blobs": {
+      "a7e821154": "bd46074a09efe1c83402fcb213c66416dc939cf5",
+      "04391697a": "bd46074a09efe1c83402fcb213c66416dc939cf5",
+      "4aa8780cf": "bd46074a09efe1c83402fcb213c66416dc939cf5"
+    },
+    "sameAllRefs": true
+  },
+  {
+    "path": "src/bootstrap/owners/seed-runtime-bridge-owner.js",
+    "blobs": {
+      "a7e821154": "778ddd07cca6faec8686ec02faefd43253ee76a1",
+      "04391697a": "778ddd07cca6faec8686ec02faefd43253ee76a1",
+      "4aa8780cf": "778ddd07cca6faec8686ec02faefd43253ee76a1"
+    },
+    "sameAllRefs": true
+  },
+  {
+    "path": "src/bootstrap/bootstrap-service-seed-workflow.js",
+    "blobs": {
+      "a7e821154": "aeaf713a979bbeeabfae8733fdf2a04a17e3ab41",
+      "04391697a": "aeaf713a979bbeeabfae8733fdf2a04a17e3ab41",
+      "4aa8780cf": "aeaf713a979bbeeabfae8733fdf2a04a17e3ab41"
+    },
+    "sameAllRefs": true
+  },
+  {
+    "path": "test/partition/partition-admitted-group-fixture.js",
+    "blobs": {
+      "a7e821154": "06ed81ea17c48cf17d228462096efb2241307e17",
+      "04391697a": "06ed81ea17c48cf17d228462096efb2241307e17",
+      "4aa8780cf": "06ed81ea17c48cf17d228462096efb2241307e17"
+    },
+    "sameAllRefs": true
+  },
+  {
+    "path": "test/query/unknown-outcome-surface-fixture.js",
+    "blobs": {
+      "a7e821154": "c3808b22a4fe44aaf8dfa98c05dcde7266b0ee7d",
+      "04391697a": "c3808b22a4fe44aaf8dfa98c05dcde7266b0ee7d",
+      "4aa8780cf": "c3808b22a4fe44aaf8dfa98c05dcde7266b0ee7d"
+    },
+    "sameAllRefs": true
+  }
+]

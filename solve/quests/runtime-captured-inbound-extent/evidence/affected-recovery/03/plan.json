@@ -1,0 +1,23 @@
+{
+  "sha": "4aa8780cfec6f2718b86b4d1e27ee9711492be59",
+  "host": "tv-dator",
+  "file": "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js",
+  "plan": [
+    {
+      "files": [
+        "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js"
+      ],
+      "jobs": 1,
+      "resourceClass": "exclusive"
+    }
+  ],
+  "costs": [
+    {
+      "file": "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js",
+      "jobs": 1,
+      "ms": 10000,
+      "lane": "exclusive"
+    }
+  ],
+  "results": ".tap/test-results/test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js.tap"
+}

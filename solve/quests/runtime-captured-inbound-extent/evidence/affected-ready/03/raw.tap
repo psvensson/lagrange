@@ -1,0 +1,53 @@
+TAP version 13
+# Subtest: the loop runs the host contract's steps in the contract's order
+ok 1 - the loop runs the host contract's steps in the contract's order
+  ---
+  duration_ms: 75.690172
+  type: 'test'
+  ...
+# Subtest: a cycle names whether it ran, and the drain stops on the core's own nothing-ready state
+ok 2 - a cycle names whether it ran, and the drain stops on the core's own nothing-ready state
+  ---
+  duration_ms: 51.880687
+  type: 'test'
+  ...
+# Subtest: every durable write the loop makes is a write the contract declares
+ok 3 - every durable write the loop makes is a write the contract declares
+  ---
+  duration_ms: 112.042919
+  type: 'test'
+  ...
+# Subtest: the durable commit index is at or past every entry before it is applied
+ok 4 - the durable commit index is at or past every entry before it is applied
+  ---
+  duration_ms: 138.491907
+  type: 'test'
+  ...
+# Subtest: a restart refuses a record whose applied index ran past its commit
+ok 5 - a restart refuses a record whose applied index ran past its commit
+  ---
+  duration_ms: 213.747375
+  type: 'test'
+  ...
+# Subtest: the configuration and its applied index are one write, so a restart re-delivers nothing it already applied
+ok 6 - the configuration and its applied index are one write, so a restart re-delivers nothing it already applied
+  ---
+  duration_ms: 263.7018
+  type: 'test'
+  ...
+# Subtest: a fault inside the apply transaction leaves the pair agreeing
+ok 7 - a fault inside the apply transaction leaves the pair agreeing
+  ---
+  duration_ms: 118.607021
+  type: 'test'
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1006.477858
+# time=1245ms

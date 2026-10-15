@@ -1,0 +1,23 @@
+{
+  "sha": "3b4560b1b0800d3703b6a887632cb2d069dd3144",
+  "host": "lenovo-laptop",
+  "file": "test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js",
+  "plan": [
+    {
+      "files": [
+        "test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ],
+  "costs": [
+    {
+      "file": "test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js",
+      "jobs": 4,
+      "ms": 10000,
+      "lane": "ordinary"
+    }
+  ],
+  "results": ".tap/test-results/test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js.tap"
+}

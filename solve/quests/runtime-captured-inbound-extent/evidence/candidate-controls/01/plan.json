@@ -1,0 +1,23 @@
+{
+  "sha": "4aa8780cfec6f2718b86b4d1e27ee9711492be59",
+  "host": "lenovo-laptop",
+  "file": "test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js",
+  "plan": [
+    {
+      "files": [
+        "test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ],
+  "costs": [
+    {
+      "file": "test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js",
+      "jobs": 4,
+      "ms": 10000,
+      "lane": "ordinary"
+    }
+  ],
+  "results": ".tap/test-results/test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js.tap"
+}

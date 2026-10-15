@@ -1,0 +1,18 @@
+{
+  "sha": "4aa8780cfec6f2718b86b4d1e27ee9711492be59",
+  "host": "lenovo-laptop",
+  "requested": [
+    "test/raft/raft-rs-backend/transfer-leadership-drain-oracle.test.js"
+  ],
+  "results": [
+    {
+      "file": "test/raft/raft-rs-backend/transfer-leadership-drain-oracle.test.js",
+      "code": 1,
+      "rawTap": true,
+      "testSha256": "fe5776a91c0fc706d14bd4c30e74316eadf1c15bef3bb5db12c657cd54341007"
+    }
+  ],
+  "unrun": [],
+  "exitCode": 1,
+  "meaning": "Per-file original executions; no retries; no overall release certification"
+}

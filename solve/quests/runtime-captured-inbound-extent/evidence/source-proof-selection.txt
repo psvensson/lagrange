@@ -1,0 +1,189 @@
+changed:
+  solve/changes/global-owner-debt-inventory/inventory.json
+  solve/quests/runtime-captured-inbound-extent/DESIGN.md
+  solve/quests/runtime-captured-inbound-extent/evidence/COMPANION-WITNESS-PLAN.md
+  solve/quests/runtime-captured-inbound-extent/evidence/COMPARISON-PLAN.md
+  solve/quests/runtime-captured-inbound-extent/evidence/affected-proof-plan.md
+  solve/quests/runtime-captured-inbound-extent/evidence/companion-cognitive.txt
+  solve/quests/runtime-captured-inbound-extent/evidence/companion-cyclomatic.txt
+  solve/quests/runtime-captured-inbound-extent/evidence/companion-first-baseline-event-summary.json
+  solve/quests/runtime-captured-inbound-extent/evidence/companion-first-baseline-independent-review.md
+  solve/quests/runtime-captured-inbound-extent/evidence/companion-first-baseline/discovery.json
+  solve/quests/runtime-captured-inbound-extent/evidence/companion-first-baseline/exit-code.txt
+  solve/quests/runtime-captured-inbound-extent/evidence/companion-first-baseline/plan.json
+  solve/quests/runtime-captured-inbound-extent/evidence/companion-first-baseline/raw.tap
+  solve/quests/runtime-captured-inbound-extent/evidence/companion-first-baseline/run.log.txt
+  solve/quests/runtime-captured-inbound-extent/evidence/companion-prerun-review-round1.md
+  solve/quests/runtime-captured-inbound-extent/evidence/companion-prerun-review-round2.md
+  solve/quests/runtime-captured-inbound-extent/evidence/complexity-global-before.exit
+  solve/quests/runtime-captured-inbound-extent/evidence/complexity-global-before.txt
+  solve/quests/runtime-captured-inbound-extent/evidence/decision-after.exit
+  solve/quests/runtime-captured-inbound-extent/evidence/decision-after.txt
+  solve/quests/runtime-captured-inbound-extent/evidence/decision-before.json
+  solve/quests/runtime-captured-inbound-extent/evidence/decision-before.txt
+  solve/quests/runtime-captured-inbound-extent/evidence/design-review.md
+  solve/quests/runtime-captured-inbound-extent/evidence/fast-static-first.exit
+  solve/quests/runtime-captured-inbound-extent/evidence/fast-static-first.txt
+  solve/quests/runtime-captured-inbound-extent/evidence/fleet.json
+  solve/quests/runtime-captured-inbound-extent/evidence/grammar-after.exit
+  solve/quests/runtime-captured-inbound-extent/evidence/grammar-after.txt
+  solve/quests/runtime-captured-inbound-extent/evidence/grammar-before.txt
+  solve/quests/runtime-captured-inbound-extent/evidence/initial-receipt.json
+  solve/quests/runtime-captured-inbound-extent/evidence/lint-after.exit
+  solve/quests/runtime-captured-inbound-extent/evidence/lint-after.txt
+  solve/quests/runtime-captured-inbound-extent/evidence/lint-before.txt
+  solve/quests/runtime-captured-inbound-extent/evidence/lint-global-before.exit
+  solve/quests/runtime-captured-inbound-extent/evidence/lint-global-before.txt
+  solve/quests/runtime-captured-inbound-extent/evidence/literals-after.exit
+  solve/quests/runtime-captured-inbound-extent/evidence/literals-after.txt
+  solve/quests/runtime-captured-inbound-extent/evidence/literals-before.txt
+  solve/quests/runtime-captured-inbound-extent/evidence/process-cwds.json
+  solve/quests/runtime-captured-inbound-extent/evidence/receipt.json
+  solve/quests/runtime-captured-inbound-extent/evidence/shared-head.txt
+  solve/quests/runtime-captured-inbound-extent/evidence/shared-status.txt
+  solve/quests/runtime-captured-inbound-extent/evidence/size-before.txt
+  solve/quests/runtime-captured-inbound-extent/evidence/source-commit-normal.exit
+  solve/quests/runtime-captured-inbound-extent/evidence/source-commit-normal.txt
+  solve/quests/runtime-captured-inbound-extent/evidence/static-after.exit
+  solve/quests/runtime-captured-inbound-extent/evidence/static-after.txt
+  solve/quests/runtime-captured-inbound-extent/evidence/static-before.txt
+  solve/quests/runtime-captured-inbound-extent/evidence/test-only-commit.txt
+  solve/quests/runtime-captured-inbound-extent/evidence/w07-capture-wake-design-vet.md
+  solve/quests/runtime-captured-inbound-extent/evidence/w07-companion-revised-cognitive.json
+  solve/quests/runtime-captured-inbound-extent/evidence/w07-companion-revised-cyclomatic.json
+  solve/quests/runtime-captured-inbound-extent/evidence/w07-companion-revised-duplication.txt
+  solve/quests/runtime-captured-inbound-extent/evidence/w07-companion-revised-lint.exit
+  solve/quests/runtime-captured-inbound-extent/evidence/w07-companion-revised-lint.txt
+  solve/quests/runtime-captured-inbound-extent/evidence/worktrees.txt
+  solve/quests/runtime-captured-inbound-extent/log.ndjson
+  solve/quests/runtime-captured-inbound-extent/quest.json
+  src/raft/raft-rs-runtime-owner.js
+  test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js
+  test/raft/raft-rs-backend/runtime-captured-inbound-companion-fixture.js
+  test/shards/impact-contracts.json
+  test/shards/impact-graph-seal.json
+  test/shards/primary-classes.json
+  test/shards/resource-classes.json
+  test/shards/subsystem-classes.json
+
+subsystems:
+  bootstrap-membership
+  placement-rebalance
+  query-sql
+  storage-partition
+  storage-raft
+  test-infrastructure
+  transport-messaging
+  wasm-toolchain
+
+selected by:
+  changed-test: 1 test(s)
+  coupled-pair-witness: committed-bootstrap-stamp:committed-stamp-reader: 763 test(s)
+  coupled-pair-witness: message-group-committed-learner-origin:permanent-identity-and-checkpoint: 131 test(s)
+  coupled-pair-witness: partition-session-transaction-store-persistence-admission:session-transaction: 189 test(s)
+  coupled-pair-witness: raft-rs-runtime-application-transaction:application-and-progress-transaction: 631 test(s)
+  coupled-pair-witness: raft-rs-runtime-lifecycle-entry:durable-lifecycle-admission: 782 test(s)
+  coupled-pair-witness: replace-owner-membership-observation:replace-owner: 268 test(s)
+  helper-importer: test/raft/raft-rs-backend/runtime-captured-inbound-companion-fixture.js: 1 test(s)
+  impact-witness: CL-040: 1 test(s)
+  impact-witness: CL-041: 1 test(s)
+  impact-witness: CL-042: 1 test(s)
+  impact-witness: committed-bootstrap-stamp: 5 test(s)
+  impact-witness: message-group-committed-learner-origin: 1 test(s)
+  impact-witness: partition-session-transaction-persistence-admission: 7 test(s)
+  impact-witness: raft-rs-runtime-application-transaction: 25 test(s)
+  impact-witness: raft-rs-runtime-lifecycle-entry: 7 test(s)
+  impact-witness: replace-owner-membership-observation: 10 test(s)
+  observer: directories: solve/changes/global-owner-debt-inventory/inventory.json: 17 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/DESIGN.md: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/COMPANION-WITNESS-PLAN.md: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/COMPARISON-PLAN.md: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/affected-proof-plan.md: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/companion-cognitive.txt: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/companion-cyclomatic.txt: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/companion-first-baseline-event-summary.json: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/companion-first-baseline-independent-review.md: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/companion-first-baseline/discovery.json: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/companion-first-baseline/exit-code.txt: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/companion-first-baseline/plan.json: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/companion-first-baseline/raw.tap: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/companion-first-baseline/run.log.txt: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/companion-prerun-review-round1.md: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/companion-prerun-review-round2.md: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/complexity-global-before.exit: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/complexity-global-before.txt: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/decision-after.exit: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/decision-after.txt: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/decision-before.json: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/decision-before.txt: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/design-review.md: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/fast-static-first.exit: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/fast-static-first.txt: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/fleet.json: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/grammar-after.exit: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/grammar-after.txt: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/grammar-before.txt: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/initial-receipt.json: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/lint-after.exit: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/lint-after.txt: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/lint-before.txt: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/lint-global-before.exit: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/lint-global-before.txt: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/literals-after.exit: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/literals-after.txt: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/literals-before.txt: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/process-cwds.json: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/receipt.json: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/shared-head.txt: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/shared-status.txt: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/size-before.txt: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/source-commit-normal.exit: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/source-commit-normal.txt: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/static-after.exit: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/static-after.txt: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/static-before.txt: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/test-only-commit.txt: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/w07-capture-wake-design-vet.md: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/w07-companion-revised-cognitive.json: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/w07-companion-revised-cyclomatic.json: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/w07-companion-revised-duplication.txt: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/w07-companion-revised-lint.exit: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/w07-companion-revised-lint.txt: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/evidence/worktrees.txt: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/log.ndjson: 53 test(s)
+  observer: directories: solve/quests/runtime-captured-inbound-extent/quest.json: 53 test(s)
+  observer: directories: src/raft/raft-rs-runtime-owner.js: 83 test(s)
+  observer: directories: test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js: 75 test(s)
+  observer: directories: test/raft/raft-rs-backend/runtime-captured-inbound-companion-fixture.js: 75 test(s)
+  observer: directories: test/shards/impact-contracts.json: 59 test(s)
+  observer: directories: test/shards/impact-graph-seal.json: 67 test(s)
+  observer: directories: test/shards/primary-classes.json: 38 test(s)
+  observer: directories: test/shards/resource-classes.json: 68 test(s)
+  observer: directories: test/shards/subsystem-classes.json: 68 test(s)
+  observer: files: solve/changes/global-owner-debt-inventory/inventory.json: 13 test(s)
+  observer: files: src/raft/raft-rs-runtime-owner.js: 108 test(s)
+  observer: files: test/raft/raft-rs-backend/runtime-captured-inbound-companion-fixture.js: 1 test(s)
+  observer: files: test/shards/impact-contracts.json: 14 test(s)
+  observer: files: test/shards/impact-graph-seal.json: 7 test(s)
+  observer: files: test/shards/primary-classes.json: 35 test(s)
+  observer: files: test/shards/resource-classes.json: 5 test(s)
+  observer: files: test/shards/subsystem-classes.json: 6 test(s)
+  safety-spine: 32 test(s)
+  subsystem-widening: bootstrap-membership: 311 test(s)
+  subsystem-widening: placement-rebalance: 268 test(s)
+  subsystem-widening: query-sql: 184 test(s)
+  subsystem-widening: storage-partition: 189 test(s)
+  subsystem-widening: storage-raft: 131 test(s)
+  subsystem-widening: test-infrastructure: 143 test(s)
+  subsystem-widening: transport-messaging: 94 test(s)
+  subsystem-widening: wasm-toolchain: 57 test(s)
+
+observed elsewhere (convergence-probe, the canary's non-gating step):
+  test/integration/message-group-multi-join-formation.integration.test.js
+  test/integration/node-join-convergence-slo.integration.test.js
+
+selection:
+  WIDENED
+
+total:
+  1442 unique test(s)

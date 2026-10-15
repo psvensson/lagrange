@@ -1,0 +1,1058 @@
+lab test: lenovo-laptop: ordinary (1 files) cores=8 mem=15.5GiB speed x2.18
+[lenovo-laptop] placement-shell=1812447
+[lenovo-laptop] placement-head=4aa8780cfec6f2718b86b4d1e27ee9711492be59
+[lenovo-laptop] placement-link=node_modules
+[lenovo-laptop] placement-link=data/examples
+[lenovo-laptop] placement-link=data/partitions
+[lenovo-laptop] placement-link=tools/alloy-6.2.0
+[lenovo-laptop] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[lenovo-laptop] placement-link=tools/tla2tools.jar
+[lenovo-laptop] placement-prepared=import-graph
+[lenovo-laptop] placement-env=factor:2.2 mode:local retry:0 timeout: lanecap:7
+[lenovo-laptop] placement-pid=1812825
+[lenovo-laptop] # test-files planned=1
+[lenovo-laptop] classified lane ordinary: 1 file(s), jobs=4
+[lenovo-laptop] thermal: ok cpu 53C (coretemp/Package id 0) nvme unmeasured
+[lenovo-laptop] not ok test/raft/raft-rs-backend/transfer-leadership-drain-oracle.test.js (155 assertions, 120595ms)
+[lenovo-laptop] # TAP assertions failed; test process exited 1
+[lenovo-laptop] TAP version 13
+[lenovo-laptop] # Subtest: census: the event axis is the binding's own message-type universe, and every type a peer can deliver has a cell or a recorded reason
+[lenovo-laptop] ok 1 - census: the event axis is the binding's own message-type universe, and every type a peer can deliver has a cell or a recorded reason
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 3.502379
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: census: the pairs are generated as movers x readers per predicate, include the challengers' pairs, and each has a construction
+[lenovo-laptop] ok 2 - census: the pairs are generated as movers x readers per predicate, include the challengers' pairs, and each has a construction
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 0.234733
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: census: every cell's event moves an input its decision reads, or the core refuses the envelope's step, or it is a declared control
+[lenovo-laptop] ok 3 - census: every cell's event moves an input its decision reads, or the core refuses the envelope's step, or it is a declared control
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 0.330887
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: census: the decision axis covers D1-D6 in every harness mode
+[lenovo-laptop] ok 4 - census: the decision axis covers D1-D6 in every harness mode
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 0.2674
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D1 with pending MsgHup (local-only) [event-MsgHup-local-D1]
+[lenovo-laptop] ok 5 - event: D1 with pending MsgHup (local-only) [event-MsgHup-local-D1]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 1058.623198
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D3 with pending MsgHup (local-only) [event-MsgHup-local-D3]
+[lenovo-laptop] ok 6 - event: D3 with pending MsgHup (local-only) [event-MsgHup-local-D3]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 948.787798
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D1 with pending MsgBeat (local-only) [event-MsgBeat-local-D1]
+[lenovo-laptop] ok 7 - event: D1 with pending MsgBeat (local-only) [event-MsgBeat-local-D1]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 978.770184
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D3 with pending MsgBeat (local-only) [event-MsgBeat-local-D3]
+[lenovo-laptop] ok 8 - event: D3 with pending MsgBeat (local-only) [event-MsgBeat-local-D3]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 767.154021
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D1 with pending MsgPropose (leader) [event-MsgPropose-leader-D1]
+[lenovo-laptop] ok 9 - event: D1 with pending MsgPropose (leader) [event-MsgPropose-leader-D1]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 909.927856
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D3 with pending MsgPropose (leader with a transfer in progress) [event-MsgPropose-leader with a transfer in progress-D3]
+[lenovo-laptop] ok 10 - event: D3 with pending MsgPropose (leader with a transfer in progress) [event-MsgPropose-leader with a transfer in progress-D3]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 780.342177
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D3 with pending MsgPropose (leader removed from its configuration) [event-MsgPropose-leader removed from its configuration-D3]
+[lenovo-laptop] ok 11 - event: D3 with pending MsgPropose (leader removed from its configuration) [event-MsgPropose-leader removed from its configuration-D3]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 916.440833
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D3 with pending MsgPropose (candidate) [event-MsgPropose-candidate-D3]
+[lenovo-laptop] ok 12 - event: D3 with pending MsgPropose (candidate) [event-MsgPropose-candidate-D3]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 899.232591
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D1 with pending MsgPropose (follower with a leader) [event-MsgPropose-follower with a leader-D1]
+[lenovo-laptop] ok 13 - event: D1 with pending MsgPropose (follower with a leader) [event-MsgPropose-follower with a leader-D1]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 834.910265
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D3 with pending MsgPropose (follower without a leader) [event-MsgPropose-follower without a leader-D3]
+[lenovo-laptop] ok 14 - event: D3 with pending MsgPropose (follower without a leader) [event-MsgPropose-follower without a leader-D3]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 413.54163
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D1 with pending MsgAppend (stale leader, higher term) [event-MsgAppend-stale leader, higher term-D1]
+[lenovo-laptop] ok 15 - event: D1 with pending MsgAppend (stale leader, higher term) [event-MsgAppend-stale leader, higher term-D1]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 819.19723
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D2 with pending MsgAppend (stale leader, higher term) [event-MsgAppend-stale leader, higher term-D2]
+[lenovo-laptop] ok 16 - event: D2 with pending MsgAppend (stale leader, higher term) [event-MsgAppend-stale leader, higher term-D2]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 768.78048
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D1 with pending MsgAppendResponse (sender without progress) [event-MsgAppendResponse-no-progress-D1]
+[lenovo-laptop] ok 17 - event: D1 with pending MsgAppendResponse (sender without progress) [event-MsgAppendResponse-no-progress-D1]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 766.257883
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D3 with pending MsgAppendResponse (sender without progress) [event-MsgAppendResponse-no-progress-D3]
+[lenovo-laptop] ok 18 - event: D3 with pending MsgAppendResponse (sender without progress) [event-MsgAppendResponse-no-progress-D3]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 702.08717
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D2 with pending MsgAppendResponse (sender with progress, unequal progress) [event-MsgAppendResponse-sender with progress, unequal progress-D2]
+[lenovo-laptop] ok 19 - event: D2 with pending MsgAppendResponse (sender with progress, unequal progress) [event-MsgAppendResponse-sender with progress, unequal progress-D2]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 794.380724
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D1 with pending MsgAppendResponse (sender with progress, commits the target's removal) [event-MsgAppendResponse-sender with progress, commits the target's removal-D1]
+[lenovo-laptop] ok 20 - event: D1 with pending MsgAppendResponse (sender with progress, commits the target's removal) [event-MsgAppendResponse-sender with progress, commits the target's removal-D1]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 701.391204
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D3 with pending MsgAppendResponse (sender with progress, commits the leader's own removal) [event-MsgAppendResponse-sender with progress, commits the leader's own removal-D3]
+[lenovo-laptop] ok 21 - event: D3 with pending MsgAppendResponse (sender with progress, commits the leader's own removal) [event-MsgAppendResponse-sender with progress, commits the leader's own removal-D3]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 743.583758
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D4 with pending MsgAppendResponse (sender with progress, commits the leader's own removal) [event-MsgAppendResponse-sender with progress, commits the leader's own removal-D4]
+[lenovo-laptop] ok 22 - event: D4 with pending MsgAppendResponse (sender with progress, commits the leader's own removal) [event-MsgAppendResponse-sender with progress, commits the leader's own removal-D4]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 714.180831
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D5 with pending MsgAppendResponse (sender with progress, commits the leader's own removal) [event-MsgAppendResponse-sender with progress, commits the leader's own removal-D5]
+[lenovo-laptop] ok 23 - event: D5 with pending MsgAppendResponse (sender with progress, commits the leader's own removal) [event-MsgAppendResponse-sender with progress, commits the leader's own removal-D5]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 609.209973
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D1 with pending MsgRequestVote (leader, higher term) [event-MsgRequestVote-leader, higher term-D1]
+[lenovo-laptop] ok 24 - event: D1 with pending MsgRequestVote (leader, higher term) [event-MsgRequestVote-leader, higher term-D1]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 733.031061
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D2 with pending MsgRequestVote (leader, higher term) [event-MsgRequestVote-leader, higher term-D2]
+[lenovo-laptop] ok 25 - event: D2 with pending MsgRequestVote (leader, higher term) [event-MsgRequestVote-leader, higher term-D2]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 805.484088
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D1 with pending MsgRequestVoteResponse (sender without progress) [event-MsgRequestVoteResponse-no-progress-D1]
+[lenovo-laptop] ok 26 - event: D1 with pending MsgRequestVoteResponse (sender without progress) [event-MsgRequestVoteResponse-no-progress-D1]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 754.610585
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D3 with pending MsgRequestVoteResponse (sender without progress) [event-MsgRequestVoteResponse-no-progress-D3]
+[lenovo-laptop] ok 27 - event: D3 with pending MsgRequestVoteResponse (sender without progress) [event-MsgRequestVoteResponse-no-progress-D3]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 654.005453
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D1 with pending MsgRequestVoteResponse (sender with progress, candidate collects the votes) [event-MsgRequestVoteResponse-sender with progress, candidate collects the votes-D1]
+[lenovo-laptop] ok 28 - event: D1 with pending MsgRequestVoteResponse (sender with progress, candidate collects the votes) [event-MsgRequestVoteResponse-sender with progress, candidate collects the votes-D1]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 707.60058
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D1 with pending MsgHeartbeat (stale leader, higher term) [event-MsgHeartbeat-stale leader, higher term-D1]
+[lenovo-laptop] ok 29 - event: D1 with pending MsgHeartbeat (stale leader, higher term) [event-MsgHeartbeat-stale leader, higher term-D1]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 811.787238
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D2 with pending MsgHeartbeat (stale leader, higher term) [event-MsgHeartbeat-stale leader, higher term-D2]
+[lenovo-laptop] ok 30 - event: D2 with pending MsgHeartbeat (stale leader, higher term) [event-MsgHeartbeat-stale leader, higher term-D2]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 698.734826
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D1 with pending MsgHeartbeatResponse (sender without progress) [event-MsgHeartbeatResponse-no-progress-D1]
+[lenovo-laptop] ok 31 - event: D1 with pending MsgHeartbeatResponse (sender without progress) [event-MsgHeartbeatResponse-no-progress-D1]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 655.275102
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D3 with pending MsgHeartbeatResponse (sender without progress) [event-MsgHeartbeatResponse-no-progress-D3]
+[lenovo-laptop] ok 32 - event: D3 with pending MsgHeartbeatResponse (sender without progress) [event-MsgHeartbeatResponse-no-progress-D3]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 659.99617
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D1 with pending MsgHeartbeatResponse (sender with progress, lagging follower) [event-MsgHeartbeatResponse-sender with progress, lagging follower-D1]
+[lenovo-laptop] ok 33 - event: D1 with pending MsgHeartbeatResponse (sender with progress, lagging follower) [event-MsgHeartbeatResponse-sender with progress, lagging follower-D1]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 850.4381
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D1 with pending MsgUnreachable (local-only) [event-MsgUnreachable-local-D1]
+[lenovo-laptop] ok 34 - event: D1 with pending MsgUnreachable (local-only) [event-MsgUnreachable-local-D1]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 790.295662
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D3 with pending MsgUnreachable (local-only) [event-MsgUnreachable-local-D3]
+[lenovo-laptop] ok 35 - event: D3 with pending MsgUnreachable (local-only) [event-MsgUnreachable-local-D3]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 637.598005
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D1 with pending MsgSnapStatus (local-only) [event-MsgSnapStatus-local-D1]
+[lenovo-laptop] ok 36 - event: D1 with pending MsgSnapStatus (local-only) [event-MsgSnapStatus-local-D1]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 743.045405
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D3 with pending MsgSnapStatus (local-only) [event-MsgSnapStatus-local-D3]
+[lenovo-laptop] ok 37 - event: D3 with pending MsgSnapStatus (local-only) [event-MsgSnapStatus-local-D3]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 717.423876
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D1 with pending MsgCheckQuorum (local-only) [event-MsgCheckQuorum-local-D1]
+[lenovo-laptop] ok 38 - event: D1 with pending MsgCheckQuorum (local-only) [event-MsgCheckQuorum-local-D1]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 734.026555
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D3 with pending MsgCheckQuorum (local-only) [event-MsgCheckQuorum-local-D3]
+[lenovo-laptop] ok 39 - event: D3 with pending MsgCheckQuorum (local-only) [event-MsgCheckQuorum-local-D3]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 688.069615
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D1 with pending MsgTransferLeader (leader, a transfer to another voter) [event-MsgTransferLeader-leader, a transfer to another voter-D1]
+[lenovo-laptop] ok 40 - event: D1 with pending MsgTransferLeader (leader, a transfer to another voter) [event-MsgTransferLeader-leader, a transfer to another voter-D1]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 672.402599
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D1:same with pending MsgTransferLeader (leader, a transfer to another voter) [event-MsgTransferLeader-leader, a transfer to another voter-D1:same]
+[lenovo-laptop] ok 41 - event: D1:same with pending MsgTransferLeader (leader, a transfer to another voter) [event-MsgTransferLeader-leader, a transfer to another voter-D1:same]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 685.907434
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D2 with pending MsgTransferLeader (leader, a transfer to another voter) [event-MsgTransferLeader-leader, a transfer to another voter-D2]
+[lenovo-laptop] ok 42 - event: D2 with pending MsgTransferLeader (leader, a transfer to another voter) [event-MsgTransferLeader-leader, a transfer to another voter-D2]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 683.119455
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D3 with pending MsgTransferLeader (leader, a transfer to another voter) [event-MsgTransferLeader-leader, a transfer to another voter-D3]
+[lenovo-laptop] ok 43 - event: D3 with pending MsgTransferLeader (leader, a transfer to another voter) [event-MsgTransferLeader-leader, a transfer to another voter-D3]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 855.689921
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D4 with pending MsgTransferLeader (leader, a transfer to another voter) [event-MsgTransferLeader-leader, a transfer to another voter-D4]
+[lenovo-laptop] ok 44 - event: D4 with pending MsgTransferLeader (leader, a transfer to another voter) [event-MsgTransferLeader-leader, a transfer to another voter-D4]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 657.130154
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D1 with pending MsgTimeoutNow (the transferee, a follower) [event-MsgTimeoutNow-the transferee, a follower-D1]
+[lenovo-laptop] ok 45 - event: D1 with pending MsgTimeoutNow (the transferee, a follower) [event-MsgTimeoutNow-the transferee, a follower-D1]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 620.962615
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D1 with pending MsgRequestPreVote (leader, its own term (crafted: a peer one term behind)) [event-MsgRequestPreVote-leader, its own term (crafted: a peer one term behind)-D1]
+[lenovo-laptop] ok 46 - event: D1 with pending MsgRequestPreVote (leader, its own term (crafted: a peer one term behind)) [event-MsgRequestPreVote-leader, its own term (crafted: a peer one term behind)-D1]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 618.653399
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D1 with pending MsgRequestPreVote (leader, higher term (crafted)) [event-MsgRequestPreVote-leader, higher term (crafted)-D1]
+[lenovo-laptop] ok 47 - event: D1 with pending MsgRequestPreVote (leader, higher term (crafted)) [event-MsgRequestPreVote-leader, higher term (crafted)-D1]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 729.599856
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D1 with pending MsgRequestPreVoteResponse (sender without progress) [event-MsgRequestPreVoteResponse-no-progress-D1]
+[lenovo-laptop] ok 48 - event: D1 with pending MsgRequestPreVoteResponse (sender without progress) [event-MsgRequestPreVoteResponse-no-progress-D1]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 676.474948
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D3 with pending MsgRequestPreVoteResponse (sender without progress) [event-MsgRequestPreVoteResponse-no-progress-D3]
+[lenovo-laptop] ok 49 - event: D3 with pending MsgRequestPreVoteResponse (sender without progress) [event-MsgRequestPreVoteResponse-no-progress-D3]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 646.793511
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: event: D1 with pending MsgRequestPreVoteResponse (sender with progress, higher-term rejection (crafted)) [event-MsgRequestPreVoteResponse-sender with progress, higher-term rejection (crafted)-D1]
+[lenovo-laptop] ok 50 - event: D1 with pending MsgRequestPreVoteResponse (sender with progress, higher-term rejection (crafted)) [event-MsgRequestPreVoteResponse-sender with progress, higher-term rejection (crafted)-D1]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 497.392529
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D1 with pending MsgRequestVote (role, term, leader (higher-term vote request)) [decision-D1-0-sync]
+[lenovo-laptop] ok 51 - decision: D1 with pending MsgRequestVote (role, term, leader (higher-term vote request)) [decision-D1-0-sync]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 629.889248
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D1 with pending MsgAppend (role, term, leader (new leader's append at a stale leader)) [decision-D1-1-sync]
+[lenovo-laptop] ok 52 - decision: D1 with pending MsgAppend (role, term, leader (new leader's append at a stale leader)) [decision-D1-1-sync]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 777.323758
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D1 with pending MsgHeartbeat (role, term, leader (new leader's heartbeat at a stale leader)) [decision-D1-2-sync]
+[lenovo-laptop] ok 53 - decision: D1 with pending MsgHeartbeat (role, term, leader (new leader's heartbeat at a stale leader)) [decision-D1-2-sync]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 813.036806
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D1 with pending MsgAppendResponse (configuration (a removal committed by the acknowledgement)) [decision-D1-4-sync]
+[lenovo-laptop] ok 54 - decision: D1 with pending MsgAppendResponse (configuration (a removal committed by the acknowledgement)) [decision-D1-4-sync]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 619.628985
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D1 with pending MsgTransferLeader (transfer in progress (a forwarded MsgTransferLeader)) [decision-D1-5-sync]
+[lenovo-laptop] ok 55 - decision: D1 with pending MsgTransferLeader (transfer in progress (a forwarded MsgTransferLeader)) [decision-D1-5-sync]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 738.350905
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D1 with pending MsgAppendResponse (own membership at the leader (its removal committed)) [decision-D1-6-sync]
+[lenovo-laptop] ok 56 - decision: D1 with pending MsgAppendResponse (own membership at the leader (its removal committed)) [decision-D1-6-sync]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 731.135558
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D1 with pending MsgAppend (own membership at a follower (its removal committed)) [decision-D1-7-sync]
+[lenovo-laptop] ok 57 - decision: D1 with pending MsgAppend (own membership at a follower (its removal committed)) [decision-D1-7-sync]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 721.158103
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D2 with pending MsgRequestVote (role, term, leader (higher-term vote request)) [decision-D2-0-sync]
+[lenovo-laptop] ok 58 - decision: D2 with pending MsgRequestVote (role, term, leader (higher-term vote request)) [decision-D2-0-sync]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 706.147956
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D2 with pending MsgAppend (role, term, leader (new leader's append at a stale leader)) [decision-D2-1-sync]
+[lenovo-laptop] ok 59 - decision: D2 with pending MsgAppend (role, term, leader (new leader's append at a stale leader)) [decision-D2-1-sync]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 663.847893
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D2 with pending MsgHeartbeat (role, term, leader (new leader's heartbeat at a stale leader)) [decision-D2-2-sync]
+[lenovo-laptop] ok 60 - decision: D2 with pending MsgHeartbeat (role, term, leader (new leader's heartbeat at a stale leader)) [decision-D2-2-sync]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 825.875212
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D2 with pending MsgAppendResponse (progress (unequal acknowledgements)) [decision-D2-3-sync]
+[lenovo-laptop] ok 61 - decision: D2 with pending MsgAppendResponse (progress (unequal acknowledgements)) [decision-D2-3-sync]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 995.196227
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D2 with pending MsgAppendResponse (configuration (a removal committed by the acknowledgement)) [decision-D2-4-sync]
+[lenovo-laptop] ok 62 - decision: D2 with pending MsgAppendResponse (configuration (a removal committed by the acknowledgement)) [decision-D2-4-sync]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 850.908198
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D2 with pending MsgTransferLeader (transfer in progress (a forwarded MsgTransferLeader)) [decision-D2-5-sync]
+[lenovo-laptop] ok 63 - decision: D2 with pending MsgTransferLeader (transfer in progress (a forwarded MsgTransferLeader)) [decision-D2-5-sync]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 826.989001
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D2 with pending MsgAppendResponse (own membership at the leader (its removal committed)) [decision-D2-6-sync]
+[lenovo-laptop] ok 64 - decision: D2 with pending MsgAppendResponse (own membership at the leader (its removal committed)) [decision-D2-6-sync]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 870.759922
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D2 with pending MsgAppend (own membership at a follower (its removal committed)) [decision-D2-7-sync]
+[lenovo-laptop] ok 65 - decision: D2 with pending MsgAppend (own membership at a follower (its removal committed)) [decision-D2-7-sync]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 770.085804
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D3 with pending MsgRequestVote (role, term, leader (higher-term vote request)) [decision-D3-0-sync]
+[lenovo-laptop] ok 66 - decision: D3 with pending MsgRequestVote (role, term, leader (higher-term vote request)) [decision-D3-0-sync]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 890.383416
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D3 with pending MsgAppend (role, term, leader (new leader's append at a stale leader)) [decision-D3-1-sync]
+[lenovo-laptop] ok 67 - decision: D3 with pending MsgAppend (role, term, leader (new leader's append at a stale leader)) [decision-D3-1-sync]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 903.5722
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D3 with pending MsgHeartbeat (role, term, leader (new leader's heartbeat at a stale leader)) [decision-D3-2-sync]
+[lenovo-laptop] ok 68 - decision: D3 with pending MsgHeartbeat (role, term, leader (new leader's heartbeat at a stale leader)) [decision-D3-2-sync]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 940.995927
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D3 with pending MsgTransferLeader (transfer in progress (a forwarded MsgTransferLeader)) [decision-D3-5-sync]
+[lenovo-laptop] ok 69 - decision: D3 with pending MsgTransferLeader (transfer in progress (a forwarded MsgTransferLeader)) [decision-D3-5-sync]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 714.022755
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D3 with pending MsgAppendResponse (own membership at the leader (its removal committed)) [decision-D3-6-sync]
+[lenovo-laptop] ok 70 - decision: D3 with pending MsgAppendResponse (own membership at the leader (its removal committed)) [decision-D3-6-sync]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 834.403624
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D3 with pending MsgAppend (own membership at a follower (its removal committed)) [decision-D3-7-sync]
+[lenovo-laptop] ok 71 - decision: D3 with pending MsgAppend (own membership at a follower (its removal committed)) [decision-D3-7-sync]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 913.502141
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D4 with pending MsgRequestVote (role, term, leader (higher-term vote request)) [decision-D4-0-sync]
+[lenovo-laptop] ok 72 - decision: D4 with pending MsgRequestVote (role, term, leader (higher-term vote request)) [decision-D4-0-sync]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 893.625135
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D4 with pending MsgAppend (role, term, leader (new leader's append at a stale leader)) [decision-D4-1-sync]
+[lenovo-laptop] ok 73 - decision: D4 with pending MsgAppend (role, term, leader (new leader's append at a stale leader)) [decision-D4-1-sync]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 719.859133
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D4 with pending MsgHeartbeat (role, term, leader (new leader's heartbeat at a stale leader)) [decision-D4-2-sync]
+[lenovo-laptop] ok 74 - decision: D4 with pending MsgHeartbeat (role, term, leader (new leader's heartbeat at a stale leader)) [decision-D4-2-sync]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 741.202692
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D4 with pending MsgTransferLeader (transfer in progress (a forwarded MsgTransferLeader)) [decision-D4-5-sync]
+[lenovo-laptop] ok 75 - decision: D4 with pending MsgTransferLeader (transfer in progress (a forwarded MsgTransferLeader)) [decision-D4-5-sync]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 862.700014
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D4 with pending MsgAppendResponse (own membership at the leader (its removal committed)) [decision-D4-6-sync]
+[lenovo-laptop] ok 76 - decision: D4 with pending MsgAppendResponse (own membership at the leader (its removal committed)) [decision-D4-6-sync]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 702.867696
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D4 with pending MsgAppend (own membership at a follower (its removal committed)) [decision-D4-7-sync]
+[lenovo-laptop] ok 77 - decision: D4 with pending MsgAppend (own membership at a follower (its removal committed)) [decision-D4-7-sync]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 762.900376
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D5 with pending MsgAppendResponse (own membership at the leader (its removal committed)) [decision-D5-6-sync]
+[lenovo-laptop] ok 78 - decision: D5 with pending MsgAppendResponse (own membership at the leader (its removal committed)) [decision-D5-6-sync]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 803.628589
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D5 with pending MsgAppend (own membership at a follower (its removal committed)) [decision-D5-7-sync]
+[lenovo-laptop] ok 79 - decision: D5 with pending MsgAppend (own membership at a follower (its removal committed)) [decision-D5-7-sync]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 828.284807
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D6 with pending MsgRequestVote (role, term, leader (higher-term vote request)) [decision-D6-0-sync]
+[lenovo-laptop] ok 80 - decision: D6 with pending MsgRequestVote (role, term, leader (higher-term vote request)) [decision-D6-0-sync]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 802.444392
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D6 with pending MsgAppend (role, term, leader (new leader's append at a stale leader)) [decision-D6-1-sync]
+[lenovo-laptop] ok 81 - decision: D6 with pending MsgAppend (role, term, leader (new leader's append at a stale leader)) [decision-D6-1-sync]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 846.983641
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D6 with pending MsgHeartbeat (role, term, leader (new leader's heartbeat at a stale leader)) [decision-D6-2-sync]
+[lenovo-laptop] ok 82 - decision: D6 with pending MsgHeartbeat (role, term, leader (new leader's heartbeat at a stale leader)) [decision-D6-2-sync]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 837.031504
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D6 with pending MsgAppendResponse (progress (unequal acknowledgements)) [decision-D6-3-sync]
+[lenovo-laptop] ok 83 - decision: D6 with pending MsgAppendResponse (progress (unequal acknowledgements)) [decision-D6-3-sync]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 770.683564
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D6 with pending MsgAppendResponse (configuration (a removal committed by the acknowledgement)) [decision-D6-4-sync]
+[lenovo-laptop] ok 84 - decision: D6 with pending MsgAppendResponse (configuration (a removal committed by the acknowledgement)) [decision-D6-4-sync]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 651.39182
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D6 with pending MsgAppendResponse (own membership at the leader (its removal committed)) [decision-D6-6-sync]
+[lenovo-laptop] ok 85 - decision: D6 with pending MsgAppendResponse (own membership at the leader (its removal committed)) [decision-D6-6-sync]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 742.130815
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D6 with pending MsgAppend (own membership at a follower (its removal committed)) [decision-D6-7-sync]
+[lenovo-laptop] ok 86 - decision: D6 with pending MsgAppend (own membership at a follower (its removal committed)) [decision-D6-7-sync]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 708.257899
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D1 with pending MsgRequestVote (role, term, leader (higher-term vote request)) [decision-D1-0-async]
+[lenovo-laptop] ok 87 - decision: D1 with pending MsgRequestVote (role, term, leader (higher-term vote request)) [decision-D1-0-async]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 757.600699
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D1 with pending MsgAppend (role, term, leader (new leader's append at a stale leader)) [decision-D1-1-async]
+[lenovo-laptop] ok 88 - decision: D1 with pending MsgAppend (role, term, leader (new leader's append at a stale leader)) [decision-D1-1-async]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 1068.148945
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D1 with pending MsgHeartbeat (role, term, leader (new leader's heartbeat at a stale leader)) [decision-D1-2-async]
+[lenovo-laptop] ok 89 - decision: D1 with pending MsgHeartbeat (role, term, leader (new leader's heartbeat at a stale leader)) [decision-D1-2-async]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 1082.358594
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D1 with pending MsgAppendResponse (configuration (a removal committed by the acknowledgement)) [decision-D1-4-async]
+[lenovo-laptop] ok 90 - decision: D1 with pending MsgAppendResponse (configuration (a removal committed by the acknowledgement)) [decision-D1-4-async]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 773.592477
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D1 with pending MsgTransferLeader (transfer in progress (a forwarded MsgTransferLeader)) [decision-D1-5-async]
+[lenovo-laptop] ok 91 - decision: D1 with pending MsgTransferLeader (transfer in progress (a forwarded MsgTransferLeader)) [decision-D1-5-async]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 680.564484
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D1 with pending MsgAppendResponse (own membership at the leader (its removal committed)) [decision-D1-6-async]
+[lenovo-laptop] ok 92 - decision: D1 with pending MsgAppendResponse (own membership at the leader (its removal committed)) [decision-D1-6-async]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 961.617046
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D1 with pending MsgAppend (own membership at a follower (its removal committed)) [decision-D1-7-async]
+[lenovo-laptop] ok 93 - decision: D1 with pending MsgAppend (own membership at a follower (its removal committed)) [decision-D1-7-async]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 856.906582
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D2 with pending MsgRequestVote (role, term, leader (higher-term vote request)) [decision-D2-0-async]
+[lenovo-laptop] ok 94 - decision: D2 with pending MsgRequestVote (role, term, leader (higher-term vote request)) [decision-D2-0-async]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 804.166079
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D2 with pending MsgAppend (role, term, leader (new leader's append at a stale leader)) [decision-D2-1-async]
+[lenovo-laptop] ok 95 - decision: D2 with pending MsgAppend (role, term, leader (new leader's append at a stale leader)) [decision-D2-1-async]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 749.928698
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D2 with pending MsgHeartbeat (role, term, leader (new leader's heartbeat at a stale leader)) [decision-D2-2-async]
+[lenovo-laptop] ok 96 - decision: D2 with pending MsgHeartbeat (role, term, leader (new leader's heartbeat at a stale leader)) [decision-D2-2-async]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 887.416944
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D2 with pending MsgAppendResponse (progress (unequal acknowledgements)) [decision-D2-3-async]
+[lenovo-laptop] ok 97 - decision: D2 with pending MsgAppendResponse (progress (unequal acknowledgements)) [decision-D2-3-async]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 881.639959
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D2 with pending MsgAppendResponse (configuration (a removal committed by the acknowledgement)) [decision-D2-4-async]
+[lenovo-laptop] ok 98 - decision: D2 with pending MsgAppendResponse (configuration (a removal committed by the acknowledgement)) [decision-D2-4-async]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 760.835334
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D2 with pending MsgTransferLeader (transfer in progress (a forwarded MsgTransferLeader)) [decision-D2-5-async]
+[lenovo-laptop] ok 99 - decision: D2 with pending MsgTransferLeader (transfer in progress (a forwarded MsgTransferLeader)) [decision-D2-5-async]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 848.625853
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D2 with pending MsgAppendResponse (own membership at the leader (its removal committed)) [decision-D2-6-async]
+[lenovo-laptop] ok 100 - decision: D2 with pending MsgAppendResponse (own membership at the leader (its removal committed)) [decision-D2-6-async]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 897.543785
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D2 with pending MsgAppend (own membership at a follower (its removal committed)) [decision-D2-7-async]
+[lenovo-laptop] ok 101 - decision: D2 with pending MsgAppend (own membership at a follower (its removal committed)) [decision-D2-7-async]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 716.177113
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D3 with pending MsgRequestVote (role, term, leader (higher-term vote request)) [decision-D3-0-async]
+[lenovo-laptop] ok 102 - decision: D3 with pending MsgRequestVote (role, term, leader (higher-term vote request)) [decision-D3-0-async]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 780.282937
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D3 with pending MsgAppend (role, term, leader (new leader's append at a stale leader)) [decision-D3-1-async]
+[lenovo-laptop] ok 103 - decision: D3 with pending MsgAppend (role, term, leader (new leader's append at a stale leader)) [decision-D3-1-async]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 788.059454
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D3 with pending MsgHeartbeat (role, term, leader (new leader's heartbeat at a stale leader)) [decision-D3-2-async]
+[lenovo-laptop] ok 104 - decision: D3 with pending MsgHeartbeat (role, term, leader (new leader's heartbeat at a stale leader)) [decision-D3-2-async]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 942.821517
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D3 with pending MsgTransferLeader (transfer in progress (a forwarded MsgTransferLeader)) [decision-D3-5-async]
+[lenovo-laptop] ok 105 - decision: D3 with pending MsgTransferLeader (transfer in progress (a forwarded MsgTransferLeader)) [decision-D3-5-async]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 891.299421
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D3 with pending MsgAppendResponse (own membership at the leader (its removal committed)) [decision-D3-6-async]
+[lenovo-laptop] ok 106 - decision: D3 with pending MsgAppendResponse (own membership at the leader (its removal committed)) [decision-D3-6-async]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 666.163749
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D3 with pending MsgAppend (own membership at a follower (its removal committed)) [decision-D3-7-async]
+[lenovo-laptop] ok 107 - decision: D3 with pending MsgAppend (own membership at a follower (its removal committed)) [decision-D3-7-async]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 662.298292
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D1 with pending MsgRequestVote (role, term, leader (higher-term vote request)) [decision-D1-0-per-index]
+[lenovo-laptop] ok 108 - decision: D1 with pending MsgRequestVote (role, term, leader (higher-term vote request)) [decision-D1-0-per-index]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 817.646009
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D1 with pending MsgAppend (role, term, leader (new leader's append at a stale leader)) [decision-D1-1-per-index]
+[lenovo-laptop] ok 109 - decision: D1 with pending MsgAppend (role, term, leader (new leader's append at a stale leader)) [decision-D1-1-per-index]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 874.458069
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D1 with pending MsgHeartbeat (role, term, leader (new leader's heartbeat at a stale leader)) [decision-D1-2-per-index]
+[lenovo-laptop] ok 110 - decision: D1 with pending MsgHeartbeat (role, term, leader (new leader's heartbeat at a stale leader)) [decision-D1-2-per-index]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 838.211114
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D1 with pending MsgAppendResponse (configuration (a removal committed by the acknowledgement)) [decision-D1-4-per-index]
+[lenovo-laptop] ok 111 - decision: D1 with pending MsgAppendResponse (configuration (a removal committed by the acknowledgement)) [decision-D1-4-per-index]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 715.153351
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D1 with pending MsgTransferLeader (transfer in progress (a forwarded MsgTransferLeader)) [decision-D1-5-per-index]
+[lenovo-laptop] ok 112 - decision: D1 with pending MsgTransferLeader (transfer in progress (a forwarded MsgTransferLeader)) [decision-D1-5-per-index]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 987.40832
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D1 with pending MsgAppendResponse (own membership at the leader (its removal committed)) [decision-D1-6-per-index]
+[lenovo-laptop] ok 113 - decision: D1 with pending MsgAppendResponse (own membership at the leader (its removal committed)) [decision-D1-6-per-index]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 929.180604
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D1 with pending MsgAppend (own membership at a follower (its removal committed)) [decision-D1-7-per-index]
+[lenovo-laptop] ok 114 - decision: D1 with pending MsgAppend (own membership at a follower (its removal committed)) [decision-D1-7-per-index]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 882.775945
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D2 with pending MsgRequestVote (role, term, leader (higher-term vote request)) [decision-D2-0-per-index]
+[lenovo-laptop] ok 115 - decision: D2 with pending MsgRequestVote (role, term, leader (higher-term vote request)) [decision-D2-0-per-index]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 764.290953
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D2 with pending MsgAppend (role, term, leader (new leader's append at a stale leader)) [decision-D2-1-per-index]
+[lenovo-laptop] ok 116 - decision: D2 with pending MsgAppend (role, term, leader (new leader's append at a stale leader)) [decision-D2-1-per-index]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 904.491874
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D2 with pending MsgHeartbeat (role, term, leader (new leader's heartbeat at a stale leader)) [decision-D2-2-per-index]
+[lenovo-laptop] ok 117 - decision: D2 with pending MsgHeartbeat (role, term, leader (new leader's heartbeat at a stale leader)) [decision-D2-2-per-index]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 934.63199
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D2 with pending MsgAppendResponse (progress (unequal acknowledgements)) [decision-D2-3-per-index]
+[lenovo-laptop] ok 118 - decision: D2 with pending MsgAppendResponse (progress (unequal acknowledgements)) [decision-D2-3-per-index]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 900.702734
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D2 with pending MsgAppendResponse (configuration (a removal committed by the acknowledgement)) [decision-D2-4-per-index]
+[lenovo-laptop] ok 119 - decision: D2 with pending MsgAppendResponse (configuration (a removal committed by the acknowledgement)) [decision-D2-4-per-index]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 811.524584
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D2 with pending MsgTransferLeader (transfer in progress (a forwarded MsgTransferLeader)) [decision-D2-5-per-index]
+[lenovo-laptop] ok 120 - decision: D2 with pending MsgTransferLeader (transfer in progress (a forwarded MsgTransferLeader)) [decision-D2-5-per-index]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 904.205294
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D2 with pending MsgAppendResponse (own membership at the leader (its removal committed)) [decision-D2-6-per-index]
+[lenovo-laptop] ok 121 - decision: D2 with pending MsgAppendResponse (own membership at the leader (its removal committed)) [decision-D2-6-per-index]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 1001.403161
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D2 with pending MsgAppend (own membership at a follower (its removal committed)) [decision-D2-7-per-index]
+[lenovo-laptop] ok 122 - decision: D2 with pending MsgAppend (own membership at a follower (its removal committed)) [decision-D2-7-per-index]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 754.466349
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D3 with pending MsgRequestVote (role, term, leader (higher-term vote request)) [decision-D3-0-per-index]
+[lenovo-laptop] ok 123 - decision: D3 with pending MsgRequestVote (role, term, leader (higher-term vote request)) [decision-D3-0-per-index]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 972.402939
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D3 with pending MsgAppend (role, term, leader (new leader's append at a stale leader)) [decision-D3-1-per-index]
+[lenovo-laptop] ok 124 - decision: D3 with pending MsgAppend (role, term, leader (new leader's append at a stale leader)) [decision-D3-1-per-index]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 990.730163
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D3 with pending MsgHeartbeat (role, term, leader (new leader's heartbeat at a stale leader)) [decision-D3-2-per-index]
+[lenovo-laptop] ok 125 - decision: D3 with pending MsgHeartbeat (role, term, leader (new leader's heartbeat at a stale leader)) [decision-D3-2-per-index]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 914.458795
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D3 with pending MsgTransferLeader (transfer in progress (a forwarded MsgTransferLeader)) [decision-D3-5-per-index]
+[lenovo-laptop] ok 126 - decision: D3 with pending MsgTransferLeader (transfer in progress (a forwarded MsgTransferLeader)) [decision-D3-5-per-index]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 829.001155
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D3 with pending MsgAppendResponse (own membership at the leader (its removal committed)) [decision-D3-6-per-index]
+[lenovo-laptop] ok 127 - decision: D3 with pending MsgAppendResponse (own membership at the leader (its removal committed)) [decision-D3-6-per-index]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 735.201957
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D3 with pending MsgAppend (own membership at a follower (its removal committed)) [decision-D3-7-per-index]
+[lenovo-laptop] ok 128 - decision: D3 with pending MsgAppend (own membership at a follower (its removal committed)) [decision-D3-7-per-index]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 886.90501
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D1 with pending MsgRequestVote (role, term, leader (higher-term vote request)) [decision-D1-0-no-reentry]
+[lenovo-laptop] ok 129 - decision: D1 with pending MsgRequestVote (role, term, leader (higher-term vote request)) [decision-D1-0-no-reentry]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 734.192905
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D1 with pending MsgAppend (role, term, leader (new leader's append at a stale leader)) [decision-D1-1-no-reentry]
+[lenovo-laptop] ok 130 - decision: D1 with pending MsgAppend (role, term, leader (new leader's append at a stale leader)) [decision-D1-1-no-reentry]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 808.787326
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D1 with pending MsgHeartbeat (role, term, leader (new leader's heartbeat at a stale leader)) [decision-D1-2-no-reentry]
+[lenovo-laptop] ok 131 - decision: D1 with pending MsgHeartbeat (role, term, leader (new leader's heartbeat at a stale leader)) [decision-D1-2-no-reentry]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 910.57159
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D1 with pending MsgAppendResponse (configuration (a removal committed by the acknowledgement)) [decision-D1-4-no-reentry]
+[lenovo-laptop] ok 132 - decision: D1 with pending MsgAppendResponse (configuration (a removal committed by the acknowledgement)) [decision-D1-4-no-reentry]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 832.399086
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D1 with pending MsgTransferLeader (transfer in progress (a forwarded MsgTransferLeader)) [decision-D1-5-no-reentry]
+[lenovo-laptop] ok 133 - decision: D1 with pending MsgTransferLeader (transfer in progress (a forwarded MsgTransferLeader)) [decision-D1-5-no-reentry]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 641.035789
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D1 with pending MsgAppendResponse (own membership at the leader (its removal committed)) [decision-D1-6-no-reentry]
+[lenovo-laptop] ok 134 - decision: D1 with pending MsgAppendResponse (own membership at the leader (its removal committed)) [decision-D1-6-no-reentry]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 784.223008
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: decision: D1 with pending MsgAppend (own membership at a follower (its removal committed)) [decision-D1-7-no-reentry]
+[lenovo-laptop] ok 135 - decision: D1 with pending MsgAppend (own membership at a follower (its removal committed)) [decision-D1-7-no-reentry]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 795.792102
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: pair: D3 with pending MsgTransferLeader then MsgPropose (transfer in progress) [pair-MsgTransferLeader>MsgPropose@transfer in progress]
+[lenovo-laptop] ok 136 - pair: D3 with pending MsgTransferLeader then MsgPropose (transfer in progress) [pair-MsgTransferLeader>MsgPropose@transfer in progress]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 742.767676
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: pair: D1 with pending MsgAppendResponse then MsgAppendResponse (sender has progress) [pair-MsgAppendResponse>MsgAppendResponse@sender has progress]
+[lenovo-laptop] ok 137 - pair: D1 with pending MsgAppendResponse then MsgAppendResponse (sender has progress) [pair-MsgAppendResponse>MsgAppendResponse@sender has progress]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 912.495033
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: pair: D3 with pending MsgAppendResponse then MsgHeartbeatResponse (sender has progress) [pair-MsgAppendResponse>MsgHeartbeatResponse@sender has progress]
+[lenovo-laptop] ok 138 - pair: D3 with pending MsgAppendResponse then MsgHeartbeatResponse (sender has progress) [pair-MsgAppendResponse>MsgHeartbeatResponse@sender has progress]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 746.320103
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: pair: D3 with pending MsgRequestVote then MsgPropose (follower without a leader) [pair-MsgRequestVote>MsgPropose@follower without a leader]
+[lenovo-laptop] ok 139 - pair: D3 with pending MsgRequestVote then MsgPropose (follower without a leader) [pair-MsgRequestVote>MsgPropose@follower without a leader]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 822.030781
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: pair: D1 with pending MsgRequestVote then MsgTransferLeader (follower without a leader) [pair-MsgRequestVote>MsgTransferLeader@follower without a leader]
+[lenovo-laptop] ok 140 - pair: D1 with pending MsgRequestVote then MsgTransferLeader (follower without a leader) [pair-MsgRequestVote>MsgTransferLeader@follower without a leader]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 790.759214
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: pair: D3 with pending MsgTimeoutNow then MsgPropose (candidate) [pair-MsgTimeoutNow>MsgPropose@candidate]
+[lenovo-laptop] ok 141 - pair: D3 with pending MsgTimeoutNow then MsgPropose (candidate) [pair-MsgTimeoutNow>MsgPropose@candidate]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 848.288672
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: pair: D1 with pending MsgTimeoutNow then MsgTransferLeader (candidate) [pair-MsgTimeoutNow>MsgTransferLeader@candidate]
+[lenovo-laptop] ok 142 - pair: D1 with pending MsgTimeoutNow then MsgTransferLeader (candidate) [pair-MsgTimeoutNow>MsgTransferLeader@candidate]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 854.642575
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: pair: D1 with pending MsgRequestVote then MsgAppend (leader identity (announcement)) [pair-MsgRequestVote>MsgAppend@leader identity (announcement)]
+[lenovo-laptop] ok 143 - pair: D1 with pending MsgRequestVote then MsgAppend (leader identity (announcement)) [pair-MsgRequestVote>MsgAppend@leader identity (announcement)]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 1036.241289
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: pair: D1 with pending MsgRequestVote then MsgHeartbeat (leader identity (announcement)) [pair-MsgRequestVote>MsgHeartbeat@leader identity (announcement)]
+[lenovo-laptop] ok 144 - pair: D1 with pending MsgRequestVote then MsgHeartbeat (leader identity (announcement)) [pair-MsgRequestVote>MsgHeartbeat@leader identity (announcement)]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 902.110245
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: pair: D3 with pending MsgTransferLeader then MsgAppendResponse (transferee caught up) [pair-MsgTransferLeader>MsgAppendResponse@transferee caught up]
+[lenovo-laptop] ok 145 - pair: D3 with pending MsgTransferLeader then MsgAppendResponse (transferee caught up) [pair-MsgTransferLeader>MsgAppendResponse@transferee caught up]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 996.197615
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: window: D1 with pending MsgAppendResponse (acknowledgements of an uncommitted configuration entry) [window-D1-uncommitted-conf-entry]
+[lenovo-laptop] ok 146 - window: D1 with pending MsgAppendResponse (acknowledgements of an uncommitted configuration entry) [window-D1-uncommitted-conf-entry]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 780.119522
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: admission: D1 with pending MsgRequestVote (user transaction open; role, term, leader (higher-term vote request)) [admission-closed-D1]
+[lenovo-laptop] ok 147 - admission: D1 with pending MsgRequestVote (user transaction open; role, term, leader (higher-term vote request)) [admission-closed-D1]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 676.681476
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: admission: D2 with pending MsgRequestVote (user transaction open; role, term, leader (higher-term vote request)) [admission-closed-D2]
+[lenovo-laptop] ok 148 - admission: D2 with pending MsgRequestVote (user transaction open; role, term, leader (higher-term vote request)) [admission-closed-D2]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 651.268992
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: admission: D3 with pending MsgRequestVote (user transaction open; role, term, leader (higher-term vote request)) [admission-closed-D3]
+[lenovo-laptop] ok 149 - admission: D3 with pending MsgRequestVote (user transaction open; role, term, leader (higher-term vote request)) [admission-closed-D3]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 691.398853
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: admission: D4 with pending MsgRequestVote (user transaction open; role, term, leader (higher-term vote request)) [admission-closed-D4]
+[lenovo-laptop] ok 150 - admission: D4 with pending MsgRequestVote (user transaction open; role, term, leader (higher-term vote request)) [admission-closed-D4]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 771.418737
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: admission: D5 with pending MsgAppendResponse (user transaction open; own membership at the leader (its removal committed)) [admission-closed-D5]
+[lenovo-laptop] ok 151 - admission: D5 with pending MsgAppendResponse (user transaction open; own membership at the leader (its removal committed)) [admission-closed-D5]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 684.872537
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: admission: D6 with pending MsgRequestVote (user transaction open; role, term, leader (higher-term vote request)) [admission-closed-D6]
+[lenovo-laptop] ok 152 - admission: D6 with pending MsgRequestVote (user transaction open; role, term, leader (higher-term vote request)) [admission-closed-D6]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 756.774094
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: mid-turn: D1 with pending MsgAppendResponse (a higher-term vote request arrives during an awaited send) [mid-turn-D1]
+[lenovo-laptop] not ok 153 - mid-turn: D1 with pending MsgAppendResponse (a higher-term vote request arrives during an awaited send) [mid-turn-D1]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 921.481172
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t5pvy-2126880/test/raft/raft-rs-backend/transfer-leadership-drain-oracle.test.js:246:3'
+[lenovo-laptop]   failureType: 'testCodeFailure'
+[lenovo-laptop]   error: |-
+[lenovo-laptop]     the answer equals the answer after the drain
+[lenovo-laptop]     + actual - expected
+[lenovo-laptop]     
+[lenovo-laptop]       {
+[lenovo-laptop]     +   outcome: 'CORE_OK',
+[lenovo-laptop]     +   reason: 'transfer-requested'
+[lenovo-laptop]     -   outcome: 'CORE_REFUSED',
+[lenovo-laptop]     -   phase: 'leadership-transfer',
+[lenovo-laptop]     -   reason: 'no-known-leader',
+[lenovo-laptop]     -   recoveryRequired: false,
+[lenovo-laptop]     -   retryable: true
+[lenovo-laptop]       }
+[lenovo-laptop]     
+[lenovo-laptop]   code: 'ERR_ASSERTION'
+[lenovo-laptop]   name: 'AssertionError'
+[lenovo-laptop]   expected:
+[lenovo-laptop]     outcome: 'CORE_REFUSED'
+[lenovo-laptop]     reason: 'no-known-leader'
+[lenovo-laptop]     phase: 'leadership-transfer'
+[lenovo-laptop]     retryable: true
+[lenovo-laptop]     recoveryRequired: false
+[lenovo-laptop]   actual:
+[lenovo-laptop]     outcome: 'CORE_OK'
+[lenovo-laptop]     reason: 'transfer-requested'
+[lenovo-laptop]   operator: 'deepStrictEqual'
+[lenovo-laptop]   stack: |-
+[lenovo-laptop]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t5pvy-2126880/test/raft/raft-rs-backend/transfer-leadership-drain-oracle.test.js:252:12)
+[lenovo-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[lenovo-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: mid-turn: D2 with pending MsgAppendResponse (a higher-term vote request arrives during an awaited send) [mid-turn-D2]
+[lenovo-laptop] not ok 154 - mid-turn: D2 with pending MsgAppendResponse (a higher-term vote request arrives during an awaited send) [mid-turn-D2]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 890.692026
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t5pvy-2126880/test/raft/raft-rs-backend/transfer-leadership-drain-oracle.test.js:246:3'
+[lenovo-laptop]   failureType: 'testCodeFailure'
+[lenovo-laptop]   error: |-
+[lenovo-laptop]     the answer equals the answer after the drain
+[lenovo-laptop]     + actual - expected
+[lenovo-laptop]     
+[lenovo-laptop]       {
+[lenovo-laptop]     +   outcome: 'CORE_OK',
+[lenovo-laptop]     +   reason: 'transfer-requested'
+[lenovo-laptop]     -   outcome: 'CORE_REFUSED',
+[lenovo-laptop]     -   phase: 'leadership-transfer',
+[lenovo-laptop]     -   reason: 'not-leader',
+[lenovo-laptop]     -   recoveryRequired: false,
+[lenovo-laptop]     -   retryable: false
+[lenovo-laptop]       }
+[lenovo-laptop]     
+[lenovo-laptop]   code: 'ERR_ASSERTION'
+[lenovo-laptop]   name: 'AssertionError'
+[lenovo-laptop]   expected:
+[lenovo-laptop]     outcome: 'CORE_REFUSED'
+[lenovo-laptop]     reason: 'not-leader'
+[lenovo-laptop]     phase: 'leadership-transfer'
+[lenovo-laptop]     retryable: false
+[lenovo-laptop]     recoveryRequired: false
+[lenovo-laptop]   actual:
+[lenovo-laptop]     outcome: 'CORE_OK'
+[lenovo-laptop]     reason: 'transfer-requested'
+[lenovo-laptop]   operator: 'deepStrictEqual'
+[lenovo-laptop]   stack: |-
+[lenovo-laptop]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t5pvy-2126880/test/raft/raft-rs-backend/transfer-leadership-drain-oracle.test.js:252:12)
+[lenovo-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[lenovo-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: mid-turn: D3 with pending MsgAppendResponse (a higher-term vote request arrives during an awaited send) [mid-turn-D3]
+[lenovo-laptop] not ok 155 - mid-turn: D3 with pending MsgAppendResponse (a higher-term vote request arrives during an awaited send) [mid-turn-D3]
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 777.015098
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t5pvy-2126880/test/raft/raft-rs-backend/transfer-leadership-drain-oracle.test.js:246:3'
+[lenovo-laptop]   failureType: 'testCodeFailure'
+[lenovo-laptop]   error: |-
+[lenovo-laptop]     the answer equals the answer after the drain
+[lenovo-laptop]     + actual - expected
+[lenovo-laptop]     
+[lenovo-laptop]       {
+[lenovo-laptop]     +   outcome: 'CORE_OK',
+[lenovo-laptop]     +   reason: 'drained'
+[lenovo-laptop]     -   outcome: 'CORE_REFUSED',
+[lenovo-laptop]     -   phase: 'propose',
+[lenovo-laptop]     -   reason: 'propose: raft: proposal dropped',
+[lenovo-laptop]     -   recoveryRequired: false,
+[lenovo-laptop]     -   retryable: false
+[lenovo-laptop]       }
+[lenovo-laptop]     
+[lenovo-laptop]   code: 'ERR_ASSERTION'
+[lenovo-laptop]   name: 'AssertionError'
+[lenovo-laptop]   expected:
+[lenovo-laptop]     outcome: 'CORE_REFUSED'
+[lenovo-laptop]     reason: 'propose: raft: proposal dropped'
+[lenovo-laptop]     phase: 'propose'
+[lenovo-laptop]     retryable: false
+[lenovo-laptop]     recoveryRequired: false
+[lenovo-laptop]   actual:
+[lenovo-laptop]     outcome: 'CORE_OK'
+[lenovo-laptop]     reason: 'drained'
+[lenovo-laptop]   operator: 'deepStrictEqual'
+[lenovo-laptop]   stack: |-
+[lenovo-laptop]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4aa8780cfec6-mv9t5pvy-2126880/test/raft/raft-rs-backend/transfer-leadership-drain-oracle.test.js:252:12)
+[lenovo-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[lenovo-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[lenovo-laptop]   ...
+[lenovo-laptop] 1..155
+[lenovo-laptop] # tests 155
+[lenovo-laptop] # suites 0
+[lenovo-laptop] # pass 152
+[lenovo-laptop] # fail 3
+[lenovo-laptop] # cancelled 0
+[lenovo-laptop] # skipped 0
+[lenovo-laptop] # todo 0
+[lenovo-laptop] # duration_ms 120120.840165
+[lenovo-laptop] # time=120595ms
+[lenovo-laptop] # test-files total=1 pass=0 fail=1 assertions=155
+lab test: lenovo-laptop: # test-files total=1 pass=0 fail=1 assertions=155
+lab test: lenovo-laptop: results copied to test-output/reports/test-results-lenovo-laptop.ndjson
+# test-files total=1 pass=0 fail=1 assertions=155

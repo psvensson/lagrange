@@ -1,0 +1,2496 @@
+{
+  "sha": "4aa8780cfec6f2718b86b4d1e27ee9711492be59",
+  "host": "adams-gamla",
+  "plan": [
+    {
+      "files": [
+        "test/message-group/message-group-fresh-learner-promotion.test.js",
+        "test/node/group-retired-tombstone-incarnation.test.js",
+        "test/node/group-retirement-fences.test.js",
+        "test/node/replica-create-admission-owner.test.js",
+        "test/node/replica-handler-release-recovery.test.js",
+        "test/partition/group-retirement-epoch-decode.test.js",
+        "test/partition/learner-promotion-count-check-budget-walk.test.js",
+        "test/partition/participant-release-build-provenance.test.js",
+        "test/partition/participant-release-prepare-identity-native.test.js",
+        "test/partition/partition-cdc-obligation.test.js",
+        "test/partition/partition-participant-transaction-apply.test.js",
+        "test/partition/partition-replication-restart-attempt-handoff.test.js",
+        "test/partition/partition-transaction-replay-cursor-v4.test.js",
+        "test/partition/settled-replay-preserves-result.test.js",
+        "test/partition/workflow-record-interleaving.property.test.js",
+        "test/partition/workflow-record-stale-owner.test.js",
+        "test/query/partition-transaction-seam-falsifiers.test.js",
+        "test/query/transaction-coordinator-participant-protocol.test.js",
+        "test/query/transaction-recovery-ownership.test.js",
+        "test/query/transaction-schema-enforcement.test.js",
+        "test/query/write-exactly-once-schedules.test.js",
+        "test/raft/raft-rs-backend/durable-commit-power-loss.test.js",
+        "test/raft/raft-rs-backend/identity-reuse-reseed-hold.test.js",
+        "test/raft/raft-rs-backend/membership-generation-persistence.test.js",
+        "test/raft/raft-rs-backend/native-election-randomized.test.js",
+        "test/raft/raft-rs-backend/runtime-wait-bound-spent.test.js",
+        "test/raft/snapshot-lifecycle-staging.test.js",
+        "test/rebalancer/coordinator-handoff-step-timeout-wait-bound-spent.test.js",
+        "test/rebalancer/message-group-membership-branch-authorization.test.js",
+        "test/rebalancer/replace-in-flight-blocks-planning.test.js",
+        "test/rebalancer/reservation-file-backed-restart.test.js",
+        "test/transport/message-router-ping-wait-bound-spent.test.js",
+        "test/rebalancer/admission-real-size-estimates.test.js",
+        "test/scripts/selection-golden-corpus.test.js",
+        "test/wasm-service/timer-manager.test.js",
+        "test/rebalancer/replica-operation-repository.test.js",
+        "test/rebalancer/replace-real-group-handoff.test.js",
+        "test/partition/partition-unreadable-durable-record.test.js",
+        "test/rebalancer/duplicate-operation-prevention.property.test.js",
+        "test/scripts/change-proof-subsystem-participant-safety.test.js",
+        "test/raft/raft-rs-backend/bootstrap-committed-membership.test.js",
+        "test/raft/raft-rs-backend/evidence-o1-proposal-ingress.test.js",
+        "test/scripts/change-selection-taxonomy.test.js",
+        "test/raft/raft-rs-backend/operation-port-boundary.test.js",
+        "test/partition/partition-service-role-metadata-publication.test.js",
+        "test/raft/raft-rs-backend/operation-port-throw-containment.test.js",
+        "test/raft/raft-rs-backend/participation-gate.test.js",
+        "test/scripts/dependency-policy-producer-binding.test.js",
+        "test/rebalancer/rebalance-coordinator-owner-path-convergence.test.js",
+        "test/scripts/model-tlc-mode-selection.test.js",
+        "test/node/node-service.test.js",
+        "test/wasm-service/once-binding-compilation.test.js",
+        "test/node/replica-handler.test.js",
+        "test/raft/raft-rs-backend/evidence-o1-admission-liveness.test.js",
+        "test/raft/raft-rs-backend/committed-membership-target-validation.test.js",
+        "test/raft/snapshot-compaction-catchup-integration.test.js",
+        "test/scripts/push-gate-change-proof.test.js",
+        "test/scripts/home-lab-cli-guidelines.test.js",
+        "test/query/partition-write-answer-consumers.test.js",
+        "test/wasm-service/time-binding-compilation.test.js",
+        "test/node/replica-handler-leadership-transfer.test.js",
+        "test/scripts/change-proof-boundary.test.js",
+        "test/rebalancer/epoch-cas-correctness.property.test.js",
+        "test/convergence/dt6-publication-failback-pct-search.test.js",
+        "test/raft/snapshot-multichunk-transfer.test.js",
+        "test/partition/partition-service-transactions-query-routing.test.js",
+        "test/message-group/raft-response-address-validation.test.js",
+        "test/message-group/message-group-service-raft-replication-and-cdc.test.js",
+        "test/control-plane/membership-layer-boundary.guard.test.js",
+        "test/rebalancer/interlock-skip-label-fidelity.test.js",
+        "test/raft/raft-rs-backend/evidence-o1-static.test.js",
+        "test/partition/partition-port-refusal-outcomes.test.js",
+        "test/node/replica-handler-membership-relay.test.js",
+        "test/message-group/error-message-consistency.property.test.js",
+        "test/partition/timeout-cleanup.property.test.js",
+        "test/partition/merge-source-replication.test.js",
+        "test/partition/partition-service.test.js",
+        "test/partition/partition-service-qualified-table-name.test.js",
+        "test/scripts/action-authority.test.js",
+        "test/rebalancer/storage-capacity-accounting-service.test.js",
+        "test/message-group/cdc-handler.test.js",
+        "test/rebalancer/spread-cure-transition-authorization-row.test.js",
+        "test/transport/connection-pool.test.js",
+        "test/partition/partition-service-raft-transition-evidence.test.js",
+        "test/partition/split-cutover-owner-delegation.test.js",
+        "test/raft/raft-rs-backend/transfer-leadership-drain-anchors.test.js",
+        "test/cache/system-table-cache-anti-entropy-sweep.test.js",
+        "test/node/failure-detector.test.js",
+        "test/rebalancer/rebalance-coordinator-topology-guard.test.js",
+        "test/node/node-reintegration-service.test.js",
+        "test/scripts/proof-authority.test.js",
+        "test/node/replica-handler-owner-path-bypass.test.js",
+        "test/raft/raft-rs-backend/operation-port-status-observation.test.js",
+        "test/transport/connection-ttl-lifecycle.property.test.js",
+        "test/rebalancer/storage-capacity-migration.test.js",
+        "test/rebalancer/call-activation-pin-planning.test.js",
+        "test/query/sql-query-engine-provision-partition-quorum.test.js",
+        "test/query/exchange-manager.test.js",
+        "test/query/budget-nested.test.js",
+        "test/query/call-iterator.test.js",
+        "test/node/services-p1-diagnostic-logger.test.js",
+        "test/convergence/dt6-control-plane-migration-network.test.js",
+        "test/partition/managed-merge-workflow.test.js",
+        "test/entrypoint/application-database-runtime-composition.test.js",
+        "test/rebalancer/unified-rebalancer-node-readiness-replica-state.test.js",
+        "test/query/aggregate-function-correctness.property.test.js",
+        "test/rebalancer/pending-move-tracking.property.test.js",
+        "test/scripts/acceptance-proof-manifest-runner.test.js",
+        "test/node/replica-state-machine-registered-activation.test.js",
+        "test/node/state-count-accuracy.property.test.js",
+        "test/live-query/partition-aware-subscription.property.test.js",
+        "test/control-plane/endpoint-writer-census.test.js",
+        "test/address/address-manager-peer-location-authority.test.js",
+        "test/raft/snapshot-recorded-gaps.test.js",
+        "test/cache/system-cache-endpoint-query.property.test.js",
+        "test/wasm-service/wasm-executor-runtime-adapter-parity.test.js",
+        "test/node/message-group-executor-activation-handler-boundary.test.js",
+        "test/raft/leader-activation-scheduler.test.js",
+        "test/partition/range-integrity-validation.property.test.js",
+        "test/scripts/check-current-capabilities.test.js",
+        "test/transport/endpoint-priority-selection.property.test.js",
+        "test/transport/message-router-critical-source-reserve.test.js",
+        "test/node/replica-state-machine-transitions.property.test.js",
+        "test/wasm-service/wasm-meta-models.test.js",
+        "test/node/state-persistence-cdc.property.test.js",
+        "test/wasm-service/dependency-lock-service.test.js",
+        "test/solve/store.test.js",
+        "test/wasm-service/dependency-resolver.test.js",
+        "test/cache/cache-state-filtering.property.test.js",
+        "test/wasm-service/safety-interval.test.js",
+        "test/cache/leader-readiness-gate.property.test.js",
+        "test/wasm-service/wasm-service-constants.test.js",
+        "test/scripts/publish-head-workspace-links.test.js",
+        "test/wasm-service/meta-service-router.test.js",
+        "test/partition/partition-split-policy-precedence.test.js",
+        "test/query/cross-partition-join-pushdown.test.js",
+        "test/scripts/check-doc-audience.test.js",
+        "test/scripts/release-content-digest.test.js",
+        "test/query/sql-parse-cache.test.js",
+        "test/query/dedupe-registry.test.js",
+        "test/rebalancer/critical-spread-terminal-stall-repro.test.js",
+        "test/node/replica-status-state-machine.property.test.js",
+        "test/wasm-service/read-router.test.js",
+        "test/cache/system-table-cache-consistency.property.test.js",
+        "test/cache/partial-hydration-resilience.property.test.js",
+        "test/partition/partition-service-sqlite-metrics.test.js",
+        "test/rebalancer/no-duplicate-add-moves.property.test.js",
+        "test/rebalancer/operation-record-completeness.property.test.js",
+        "test/scripts/dependency-policy-classification.test.js",
+        "test/node/state-machine-cdc-consistency.property.test.js",
+        "test/partition/adjacent-partition-merging.property.test.js",
+        "test/rebalancer/surplus-drain-prefers-non-leader-source.test.js",
+        "test/rebalancer/timeout-triggers-failure.property.test.js",
+        "test/node/registered-partition-removal.property.test.js",
+        "test/partition/partition-service-hlc-monotonicity.test.js",
+        "test/rebalancer/move-planner-spread-vs-count-reconciliation.test.js",
+        "test/query/partition-transparency.property.test.js",
+        "test/partition/pending-request-tracker.test.js",
+        "test/rebalancer/formation-ledger-spread-voter-ready-readiness.test.js",
+        "test/rebalancer/rebalance-coordinator-atomic-transitions.test.js",
+        "test/rebalancer/ledger-quorum-spread-hold-cure-drain-admission.test.js",
+        "test/query/sql-parser-pg.test.js",
+        "test/rebalancer/remove-workflow-step-progression.property.test.js",
+        "test/query/sql-query-engine-managed-split.test.js",
+        "test/scripts/check-partition-class-owner.test.js",
+        "test/query/table-creation-service.test.js",
+        "test/query/sql-query-engine-provisioning-parent-deadline.test.js",
+        "test/rebalancer/unified-rebalancer-triggers-priority-surrogate-gates.test.js",
+        "test/query/query-executor-executeonpartition-leader-resolution.test.js",
+        "test/rebalancer/effective-placement-serial-priority-planner.test.js",
+        "test/config/dynamic-config-service.test.js",
+        "test/query/partition-resolver.test.js",
+        "test/rebalancer/operation-lifecycle-fold.property.test.js",
+        "test/rebalancer/unified-rebalancer-triggers-priority-surrogate-followup.test.js",
+        "test/query/durable-provisioning-job-owner-directed.test.js",
+        "test/query/distributed-write-coordinator.test.js",
+        "test/config/latency-topology-ownership-guardrails.test.js",
+        "test/rebalancer/operation-workflow-active-cache-handoff.test.js",
+        "test/rebalancer/replace-owner-phase-staleness.test.js",
+        "test/rebalancer/rebalancer-own-create-memory-duplicate-replace.test.js",
+        "test/rebalancer/orphaned-operation-reconcile-redrive.test.js",
+        "test/closure/CL-040.repro.test.js",
+        "test/query/sql-query-engine-metrics.test.js",
+        "test/query/service-partition-access-attribution.test.js",
+        "test/query/application-database.test.js",
+        "test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js",
+        "test/node/replica-local-only-row-convergence.test.js",
+        "test/test-helpers/port-allocator.test.js",
+        "test/rebalancer/replica-operations-single-writer.test.js",
+        "test/transport/bulk-registry-bootstrap.test.js",
+        "test/raft/sqlite-log-adapter-committed-write-paths.test.js",
+        "test/rebalancer/concurrent-epoch-proposals.property.test.js",
+        "test/query/distributed-merge-engine.test.js",
+        "test/rebalancer/self-source-removal-dispatches-in-process.test.js",
+        "test/transport/exact-handler-identity-api.test.js",
+        "test/rebalancer/replica-operation-terminal-cas.test.js",
+        "test/node/replica-transport-handler-identity.test.js",
+        "test/rebalancer/replace-dispatch-epoch-gate-scope.test.js",
+        "test/partition/partition-split-routing.test.js",
+        "test/partition/cdc-event-buffer.property.test.js",
+        "test/rebalancer/unified-rebalancer-start-jitter-seam.test.js",
+        "test/partition/partition-retiring-row-peer-retirement.test.js",
+        "test/transport/immediate-ack-ordering.property.test.js",
+        "test/transport/service-response-correlation.property.test.js",
+        "test/closure/CL-042.repro.test.js",
+        "test/query/distributed-write-coordinator.property.test.js",
+        "test/partition/cdc-event-buffer.test.js",
+        "test/cli/core/base-view-model.test.js",
+        "test/scripts/no-external-llm-guards.test.js",
+        "test/node/replica-removal-consensus-exit-decisions.test.js",
+        "test/control-plane/readiness-single-contract-build.test.js",
+        "test/query/partition-callback-dispatcher.test.js",
+        "test/scripts/run-live-repetitions.test.js",
+        "test/raft/sqlite-log-adapter-contract.test.js",
+        "test/query/callback-stage-executor.test.js",
+        "test/query/wasm-call-adapter.test.js",
+        "test/wasm-service/service-definition-validator.property.test.js",
+        "test/raft/sqlite-log-adapter-committed-watermark.test.js",
+        "test/partition/partition-service-row-absence-heal.test.js",
+        "test/scripts/stop-distributed-harness-containers.test.js",
+        "test/rebalancer/terminal-status-constants.test.js",
+        "test/cache/default-cache-sync-table-selection.test.js",
+        "test/raft/replica-voter-readiness.test.js",
+        "test/storage/sqlite-store.property.test.js",
+        "test/storage/sqlite-store.test.js",
+        "test/rebalancer/priority-remove-safety-spread-nonregression.test.js",
+        "test/wasm-service/service-endpoint-builder.property.test.js",
+        "test/query/callback-runtime-driver-registry.test.js",
+        "test/raft/message-group-readiness-delivery-priority.test.js",
+        "test/rebalancer/replica-operation-liveness.test.js",
+        "test/storage/persistent-storage-paths.property.test.js",
+        "test/partition/split-dissolution-durable-proof.test.js",
+        "test/rebalancer/canonical-replica-inventory-cutover-guard.test.js",
+        "test/rebalancer/topology-owner-contracts.test.js",
+        "test/diagnostics/formation-attribution-semantics.test.js",
+        "test/query/result-stream.test.js",
+        "test/scripts/run-formation-seed-budget.test.js",
+        "test/partition/split-ack-constants.test.js",
+        "test/rebalancer/operation-lifecycle.test.js",
+        "test/rebalancer/dispatch-pending-drain-single-partition-authority.test.js",
+        "test/scripts/release-preflight.test.js",
+        "test/partition/partition-descriptor-epoch-contract.test.js",
+        "test/raft/raft-cleanup-verification.test.js",
+        "test/rebalancer/rebalance-coordinator-diagnostics.test.js",
+        "test/scripts/gen-solve-commands-index.test.js",
+        "test/partition/partition-transition-projection.test.js",
+        "test/rebalancer/operation-ledger-quorum-concentration-replace-impotence.test.js",
+        "test/query/provision-target-live-transport-rescue.test.js",
+        "test/scripts/check-guideline-constant-names.test.js",
+        "test/query/callback-module-artifact.test.js",
+        "test/rebalancer/priority-dispatch-deferred-local-progress-outcome-coverage.test.js",
+        "test/scripts/check-owner-traces.test.js",
+        "test/partition/partition-cdc-parameterized-insert-or-ignore.test.js",
+        "test/scripts/analyze-monotone-drain.test.js",
+        "test/raft/raft-id-mapper.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/wasm-service/service-cell-world-abi.test.js"
+      ],
+      "jobs": 1,
+      "resourceClass": "external-toolchain"
+    },
+    {
+      "files": [
+        "test/bootstrap/fresh-join-registration-runtime-replacement.integration.test.js",
+        "test/bootstrap/owners/bootstrap-readiness-probe-async-fallback.test.js",
+        "test/bootstrap/register-service-move-handoff-refused.test.js",
+        "test/bootstrap/seed-release-once-per-cohort.test.js",
+        "test/bootstrap/fresh-join-via-non-seed-node.integration.test.js",
+        "test/bootstrap/bootstrap-sequence.test.js",
+        "test/bootstrap/return-value-completeness.property.test.js",
+        "test/bootstrap/bootstrap-epoch-manager-lifecycle.test.js",
+        "test/bootstrap/move-replica-assignment-token.test.js",
+        "test/bootstrap/runtime-service-rebalancer-owner.test.js",
+        "test/bootstrap/bootstrap-mode.test.js",
+        "test/bootstrap/seed-teardown-pending-cdc-delivery.test.js",
+        "test/bootstrap/bootstrap-request-shut-down-writer-not-ready.test.js",
+        "test/bootstrap/shared/message-router-setup.test.js",
+        "test/bootstrap/node-ready-rebalance-trigger.test.js",
+        "test/bootstrap/seed-infrastructure-runtime-identity.test.js",
+        "test/bootstrap/node-joining-service-message-group-activation.test.js",
+        "test/bootstrap/node-joining-service-mesh-reconciliation.test.js",
+        "test/bootstrap/node-joining-service-canonical-readiness.test.js",
+        "test/bootstrap/phase-event-ordering-characterization.test.js",
+        "test/bootstrap/shared/meta-service-definition-registration.test.js",
+        "test/bootstrap/join-resume-replica-lifecycle-owner.test.js",
+        "test/bootstrap/message-groups-first-bootstrap-order.property.test.js",
+        "test/bootstrap/join-checkpoint-progression-characterization.test.js",
+        "test/bootstrap/cache-hydration-gate.property.test.js",
+        "test/bootstrap/bootstrap-service-ready-signal.test.js",
+        "test/bootstrap/boot-incarnation-owner.test.js",
+        "test/bootstrap/message-group-activation-handler-boundary.test.js",
+        "test/bootstrap/bootstrap-api-rejoin.test.js",
+        "test/bootstrap/restart-cdc-subscription-hardening.test.js",
+        "test/bootstrap/node-joining-retryable-resume-preserves-state.test.js",
+        "test/bootstrap/cdc-propagation-message-group-selection.test.js",
+        "test/bootstrap/seed-infrastructure-phase.test.js",
+        "test/bootstrap/formation-readiness-owner-single-form.test.js",
+        "test/bootstrap/node-joining-service-lifecycle-owner-handoff.test.js",
+        "test/bootstrap/bootstrap-system-table-invariant.property.test.js",
+        "test/bootstrap/bootstrap-api-seed-join-gate-authoritative-refresh.test.js",
+        "test/bootstrap/_min-test.test.js",
+        "test/bootstrap/wasm-meta-table-schemas.test.js",
+        "test/bootstrap/node-joining-cdc-readiness-gate.test.js",
+        "test/bootstrap/join-delegate-bundles.test.js",
+        "test/bootstrap/debug-meta-table-schemas.test.js",
+        "test/bootstrap/lifecycle-message-delegation.property.test.js",
+        "test/bootstrap/latency-topology-table-schemas.test.js",
+        "test/bootstrap/bootstrap-request-admission-precheck.test.js",
+        "test/bootstrap/critical-placement-classification-control.test.js",
+        "test/bootstrap/bootstrap-api-replica-owner-conflict.test.js",
+        "test/bootstrap/lifecycle-handler-address-format.property.test.js",
+        "test/bootstrap/unified-service-lifecycle-cutover-guards.test.js",
+        "test/bootstrap/message-group-assignment-centralization.test.js",
+        "test/bootstrap/cdc-initial-subscription-leader-fallback.test.js",
+        "test/bootstrap/address-takeover-live-ab.test.js",
+        "test/bootstrap/cluster-identity-join-gate.test.js",
+        "test/bootstrap/create-self-hosted-registration.test.js",
+        "test/bootstrap/bootstrap-phase-state-machine-integration.test.js",
+        "test/bootstrap/bootstrap-response-performance.test.js",
+        "test/bootstrap/message-group-single-owner-invariant.test.js",
+        "test/bootstrap/call-cell-invocation-setup.test.js",
+        "test/bootstrap/bootstrap-replica-registration-trace.test.js",
+        "test/bootstrap/node-joining-service-final-sql-runtime-handoff.test.js",
+        "test/bootstrap/cleanup-ownership-order-characterization.test.js",
+        "test/bootstrap/join-cleanup.property.test.js",
+        "test/bootstrap/fresh-join-multi-peer-contact.test.js",
+        "test/bootstrap/bootstrap-topology-snapshot-owner.test.js",
+        "test/bootstrap/bootstrap-failure-cleanup.test.js",
+        "test/bootstrap/join-readiness-evaluator.test.js",
+        "test/bootstrap/join-readiness-warming-node-exclusion.property.test.js",
+        "test/bootstrap/cache-hydration-strictness.test.js",
+        "test/bootstrap/join-session-store.test.js",
+        "test/bootstrap/cluster-mesh-connectivity.property.test.js",
+        "test/bootstrap/node-joining-cdc-catchup-wiring.test.js",
+        "test/bootstrap/traffic-readiness-utils.test.js",
+        "test/bootstrap/join-readiness-warming-node-preservation.property.test.js",
+        "test/bootstrap/phases/wait-for-leadership-phase-retryable-timeout.test.js",
+        "test/bootstrap/bootstrap-topology-snapshot.test.js",
+        "test/bootstrap/schema-operations-table-schema.test.js",
+        "test/bootstrap/owners/bootstrap-readiness-owner.test.js"
+      ],
+      "jobs": 2,
+      "resourceClass": "bootstrap"
+    },
+    {
+      "files": [
+        "test/integration/call-cell-public-outcome-adversarial.integration.test.js",
+        "test/integration/critical-replica-placement-causal-trace.integration.test.js",
+        "test/integration/message-group-fresh-identity-replacement.integration.test.js",
+        "test/integration/message-group-learner-runtime-authorization.integration.test.js",
+        "test/integration/public-application-database-multinode.integration.test.js",
+        "test/integration/seed-migration-cutover-persisted.integration.test.js",
+        "test/node/replica-runtime-cleanup-custody.integration.test.js",
+        "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+        "test/integration/authoritative-discovery-repair-pressure.integration.test.js",
+        "test/integration/ack-delivery.integration.test.js",
+        "test/query/postgres-wire-adapter.integration.test.js",
+        "test/integration/cross-node-replica-placement.integration.test.js",
+        "test/integration/bidirectional-websocket.integration.test.js",
+        "test/integration/leader-routable-system-writes.integration.test.js",
+        "test/integration/critical-partition-learner-safety.integration.test.js",
+        "test/integration/three-node-seed-rebalance.integration.test.js",
+        "test/integration/sql-engine-system-writes-contract.integration.test.js",
+        "test/integration/node-joining-rebalance.integration.test.js",
+        "test/integration/node-join-replica-activation.integration.test.js"
+      ],
+      "jobs": 1,
+      "resourceClass": "exclusive"
+    }
+  ],
+  "costs": [
+    {
+      "file": "test/message-group/message-group-fresh-learner-promotion.test.js",
+      "jobs": 4,
+      "ms": 130,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/node/group-retired-tombstone-incarnation.test.js",
+      "jobs": 4,
+      "ms": 130,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/node/group-retirement-fences.test.js",
+      "jobs": 4,
+      "ms": 130,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/node/replica-create-admission-owner.test.js",
+      "jobs": 4,
+      "ms": 130,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/node/replica-handler-release-recovery.test.js",
+      "jobs": 4,
+      "ms": 130,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/group-retirement-epoch-decode.test.js",
+      "jobs": 4,
+      "ms": 130,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/learner-promotion-count-check-budget-walk.test.js",
+      "jobs": 4,
+      "ms": 130,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/participant-release-build-provenance.test.js",
+      "jobs": 4,
+      "ms": 130,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/participant-release-prepare-identity-native.test.js",
+      "jobs": 4,
+      "ms": 130,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/partition-cdc-obligation.test.js",
+      "jobs": 4,
+      "ms": 130,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/partition-participant-transaction-apply.test.js",
+      "jobs": 4,
+      "ms": 130,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/partition-replication-restart-attempt-handoff.test.js",
+      "jobs": 4,
+      "ms": 130,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/partition-transaction-replay-cursor-v4.test.js",
+      "jobs": 4,
+      "ms": 130,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/settled-replay-preserves-result.test.js",
+      "jobs": 4,
+      "ms": 130,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/workflow-record-interleaving.property.test.js",
+      "jobs": 4,
+      "ms": 130,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/workflow-record-stale-owner.test.js",
+      "jobs": 4,
+      "ms": 130,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/partition-transaction-seam-falsifiers.test.js",
+      "jobs": 4,
+      "ms": 130,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/transaction-coordinator-participant-protocol.test.js",
+      "jobs": 4,
+      "ms": 130,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/transaction-recovery-ownership.test.js",
+      "jobs": 4,
+      "ms": 130,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/transaction-schema-enforcement.test.js",
+      "jobs": 4,
+      "ms": 130,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/write-exactly-once-schedules.test.js",
+      "jobs": 4,
+      "ms": 130,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/durable-commit-power-loss.test.js",
+      "jobs": 4,
+      "ms": 130,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/identity-reuse-reseed-hold.test.js",
+      "jobs": 4,
+      "ms": 130,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/membership-generation-persistence.test.js",
+      "jobs": 4,
+      "ms": 130,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/native-election-randomized.test.js",
+      "jobs": 4,
+      "ms": 130,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-wait-bound-spent.test.js",
+      "jobs": 4,
+      "ms": 130,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/raft/snapshot-lifecycle-staging.test.js",
+      "jobs": 4,
+      "ms": 130,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/coordinator-handoff-step-timeout-wait-bound-spent.test.js",
+      "jobs": 4,
+      "ms": 130,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/message-group-membership-branch-authorization.test.js",
+      "jobs": 4,
+      "ms": 130,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/replace-in-flight-blocks-planning.test.js",
+      "jobs": 4,
+      "ms": 130,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/reservation-file-backed-restart.test.js",
+      "jobs": 4,
+      "ms": 130,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/transport/message-router-ping-wait-bound-spent.test.js",
+      "jobs": 4,
+      "ms": 130,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/admission-real-size-estimates.test.js",
+      "jobs": 4,
+      "ms": 15204,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/scripts/selection-golden-corpus.test.js",
+      "jobs": 4,
+      "ms": 12880,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/wasm-service/timer-manager.test.js",
+      "jobs": 4,
+      "ms": 10131,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/replica-operation-repository.test.js",
+      "jobs": 4,
+      "ms": 8149,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/replace-real-group-handoff.test.js",
+      "jobs": 4,
+      "ms": 6889,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/partition-unreadable-durable-record.test.js",
+      "jobs": 4,
+      "ms": 6429,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/duplicate-operation-prevention.property.test.js",
+      "jobs": 4,
+      "ms": 5317,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/scripts/change-proof-subsystem-participant-safety.test.js",
+      "jobs": 4,
+      "ms": 4383,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/bootstrap-committed-membership.test.js",
+      "jobs": 4,
+      "ms": 4155,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/evidence-o1-proposal-ingress.test.js",
+      "jobs": 4,
+      "ms": 3665,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/scripts/change-selection-taxonomy.test.js",
+      "jobs": 4,
+      "ms": 3477,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/operation-port-boundary.test.js",
+      "jobs": 4,
+      "ms": 3248,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/partition-service-role-metadata-publication.test.js",
+      "jobs": 4,
+      "ms": 2858,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/operation-port-throw-containment.test.js",
+      "jobs": 4,
+      "ms": 2565,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/participation-gate.test.js",
+      "jobs": 4,
+      "ms": 2418,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/scripts/dependency-policy-producer-binding.test.js",
+      "jobs": 4,
+      "ms": 2274,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/rebalance-coordinator-owner-path-convergence.test.js",
+      "jobs": 4,
+      "ms": 2074,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/scripts/model-tlc-mode-selection.test.js",
+      "jobs": 4,
+      "ms": 1844,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/node/node-service.test.js",
+      "jobs": 4,
+      "ms": 1721,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/wasm-service/once-binding-compilation.test.js",
+      "jobs": 4,
+      "ms": 1695,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/node/replica-handler.test.js",
+      "jobs": 4,
+      "ms": 1673,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/evidence-o1-admission-liveness.test.js",
+      "jobs": 4,
+      "ms": 1660,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/committed-membership-target-validation.test.js",
+      "jobs": 4,
+      "ms": 1566,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/raft/snapshot-compaction-catchup-integration.test.js",
+      "jobs": 4,
+      "ms": 1496,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/scripts/push-gate-change-proof.test.js",
+      "jobs": 4,
+      "ms": 1443,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/scripts/home-lab-cli-guidelines.test.js",
+      "jobs": 4,
+      "ms": 1259,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/partition-write-answer-consumers.test.js",
+      "jobs": 4,
+      "ms": 1188,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/wasm-service/time-binding-compilation.test.js",
+      "jobs": 4,
+      "ms": 1020,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/node/replica-handler-leadership-transfer.test.js",
+      "jobs": 4,
+      "ms": 997,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/scripts/change-proof-boundary.test.js",
+      "jobs": 4,
+      "ms": 978,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/epoch-cas-correctness.property.test.js",
+      "jobs": 4,
+      "ms": 955,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/convergence/dt6-publication-failback-pct-search.test.js",
+      "jobs": 4,
+      "ms": 909,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/raft/snapshot-multichunk-transfer.test.js",
+      "jobs": 4,
+      "ms": 871,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/partition-service-transactions-query-routing.test.js",
+      "jobs": 4,
+      "ms": 821,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/message-group/raft-response-address-validation.test.js",
+      "jobs": 4,
+      "ms": 769,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/message-group/message-group-service-raft-replication-and-cdc.test.js",
+      "jobs": 4,
+      "ms": 751,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/control-plane/membership-layer-boundary.guard.test.js",
+      "jobs": 4,
+      "ms": 719,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/interlock-skip-label-fidelity.test.js",
+      "jobs": 4,
+      "ms": 705,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/evidence-o1-static.test.js",
+      "jobs": 4,
+      "ms": 693,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/partition-port-refusal-outcomes.test.js",
+      "jobs": 4,
+      "ms": 655,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/node/replica-handler-membership-relay.test.js",
+      "jobs": 4,
+      "ms": 634,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/message-group/error-message-consistency.property.test.js",
+      "jobs": 4,
+      "ms": 615,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/timeout-cleanup.property.test.js",
+      "jobs": 4,
+      "ms": 608,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/merge-source-replication.test.js",
+      "jobs": 4,
+      "ms": 602,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/partition-service.test.js",
+      "jobs": 4,
+      "ms": 570,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/partition-service-qualified-table-name.test.js",
+      "jobs": 4,
+      "ms": 558,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/scripts/action-authority.test.js",
+      "jobs": 4,
+      "ms": 547,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/storage-capacity-accounting-service.test.js",
+      "jobs": 4,
+      "ms": 538,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/message-group/cdc-handler.test.js",
+      "jobs": 4,
+      "ms": 526,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/spread-cure-transition-authorization-row.test.js",
+      "jobs": 4,
+      "ms": 519,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/transport/connection-pool.test.js",
+      "jobs": 4,
+      "ms": 459,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/partition-service-raft-transition-evidence.test.js",
+      "jobs": 4,
+      "ms": 443,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/split-cutover-owner-delegation.test.js",
+      "jobs": 4,
+      "ms": 439,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/transfer-leadership-drain-anchors.test.js",
+      "jobs": 4,
+      "ms": 425,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/cache/system-table-cache-anti-entropy-sweep.test.js",
+      "jobs": 4,
+      "ms": 409,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/node/failure-detector.test.js",
+      "jobs": 4,
+      "ms": 402,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/rebalance-coordinator-topology-guard.test.js",
+      "jobs": 4,
+      "ms": 394,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/node/node-reintegration-service.test.js",
+      "jobs": 4,
+      "ms": 391,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/scripts/proof-authority.test.js",
+      "jobs": 4,
+      "ms": 385,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/node/replica-handler-owner-path-bypass.test.js",
+      "jobs": 4,
+      "ms": 371,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/operation-port-status-observation.test.js",
+      "jobs": 4,
+      "ms": 347,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/transport/connection-ttl-lifecycle.property.test.js",
+      "jobs": 4,
+      "ms": 330,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/storage-capacity-migration.test.js",
+      "jobs": 4,
+      "ms": 307,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/call-activation-pin-planning.test.js",
+      "jobs": 4,
+      "ms": 301,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/sql-query-engine-provision-partition-quorum.test.js",
+      "jobs": 4,
+      "ms": 288,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/exchange-manager.test.js",
+      "jobs": 4,
+      "ms": 265,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/budget-nested.test.js",
+      "jobs": 4,
+      "ms": 262,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/call-iterator.test.js",
+      "jobs": 4,
+      "ms": 255,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/node/services-p1-diagnostic-logger.test.js",
+      "jobs": 4,
+      "ms": 254,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/convergence/dt6-control-plane-migration-network.test.js",
+      "jobs": 4,
+      "ms": 252,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/managed-merge-workflow.test.js",
+      "jobs": 4,
+      "ms": 245,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/entrypoint/application-database-runtime-composition.test.js",
+      "jobs": 4,
+      "ms": 240,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/unified-rebalancer-node-readiness-replica-state.test.js",
+      "jobs": 4,
+      "ms": 237,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/aggregate-function-correctness.property.test.js",
+      "jobs": 4,
+      "ms": 229,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/pending-move-tracking.property.test.js",
+      "jobs": 4,
+      "ms": 224,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/scripts/acceptance-proof-manifest-runner.test.js",
+      "jobs": 4,
+      "ms": 221,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/node/replica-state-machine-registered-activation.test.js",
+      "jobs": 4,
+      "ms": 214,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/node/state-count-accuracy.property.test.js",
+      "jobs": 4,
+      "ms": 208,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/live-query/partition-aware-subscription.property.test.js",
+      "jobs": 4,
+      "ms": 206,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/control-plane/endpoint-writer-census.test.js",
+      "jobs": 4,
+      "ms": 198,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/address/address-manager-peer-location-authority.test.js",
+      "jobs": 4,
+      "ms": 194,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/raft/snapshot-recorded-gaps.test.js",
+      "jobs": 4,
+      "ms": 191,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/cache/system-cache-endpoint-query.property.test.js",
+      "jobs": 4,
+      "ms": 183,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/wasm-service/wasm-executor-runtime-adapter-parity.test.js",
+      "jobs": 4,
+      "ms": 179,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/node/message-group-executor-activation-handler-boundary.test.js",
+      "jobs": 4,
+      "ms": 175,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/raft/leader-activation-scheduler.test.js",
+      "jobs": 4,
+      "ms": 172,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/range-integrity-validation.property.test.js",
+      "jobs": 4,
+      "ms": 171,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/scripts/check-current-capabilities.test.js",
+      "jobs": 4,
+      "ms": 169,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/transport/endpoint-priority-selection.property.test.js",
+      "jobs": 4,
+      "ms": 167,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/transport/message-router-critical-source-reserve.test.js",
+      "jobs": 4,
+      "ms": 164,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/node/replica-state-machine-transitions.property.test.js",
+      "jobs": 4,
+      "ms": 162,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/wasm-service/wasm-meta-models.test.js",
+      "jobs": 4,
+      "ms": 159,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/node/state-persistence-cdc.property.test.js",
+      "jobs": 4,
+      "ms": 157,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/wasm-service/dependency-lock-service.test.js",
+      "jobs": 4,
+      "ms": 155,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/solve/store.test.js",
+      "jobs": 4,
+      "ms": 153,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/wasm-service/dependency-resolver.test.js",
+      "jobs": 4,
+      "ms": 152,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/cache/cache-state-filtering.property.test.js",
+      "jobs": 4,
+      "ms": 150,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/wasm-service/safety-interval.test.js",
+      "jobs": 4,
+      "ms": 148,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/cache/leader-readiness-gate.property.test.js",
+      "jobs": 4,
+      "ms": 145,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/wasm-service/wasm-service-constants.test.js",
+      "jobs": 4,
+      "ms": 145,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/scripts/publish-head-workspace-links.test.js",
+      "jobs": 4,
+      "ms": 144,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/wasm-service/meta-service-router.test.js",
+      "jobs": 4,
+      "ms": 143,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/partition-split-policy-precedence.test.js",
+      "jobs": 4,
+      "ms": 141,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/cross-partition-join-pushdown.test.js",
+      "jobs": 4,
+      "ms": 139,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/scripts/check-doc-audience.test.js",
+      "jobs": 4,
+      "ms": 138,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/scripts/release-content-digest.test.js",
+      "jobs": 4,
+      "ms": 138,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/sql-parse-cache.test.js",
+      "jobs": 4,
+      "ms": 137,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/dedupe-registry.test.js",
+      "jobs": 4,
+      "ms": 136,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/critical-spread-terminal-stall-repro.test.js",
+      "jobs": 4,
+      "ms": 135,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/node/replica-status-state-machine.property.test.js",
+      "jobs": 4,
+      "ms": 133,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/wasm-service/read-router.test.js",
+      "jobs": 4,
+      "ms": 132,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/cache/system-table-cache-consistency.property.test.js",
+      "jobs": 4,
+      "ms": 130,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/cache/partial-hydration-resilience.property.test.js",
+      "jobs": 4,
+      "ms": 129,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/partition-service-sqlite-metrics.test.js",
+      "jobs": 4,
+      "ms": 128,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/no-duplicate-add-moves.property.test.js",
+      "jobs": 4,
+      "ms": 127,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/operation-record-completeness.property.test.js",
+      "jobs": 4,
+      "ms": 126,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/scripts/dependency-policy-classification.test.js",
+      "jobs": 4,
+      "ms": 125,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/node/state-machine-cdc-consistency.property.test.js",
+      "jobs": 4,
+      "ms": 124,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/adjacent-partition-merging.property.test.js",
+      "jobs": 4,
+      "ms": 123,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/surplus-drain-prefers-non-leader-source.test.js",
+      "jobs": 4,
+      "ms": 121,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/timeout-triggers-failure.property.test.js",
+      "jobs": 4,
+      "ms": 119,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/node/registered-partition-removal.property.test.js",
+      "jobs": 4,
+      "ms": 116,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/partition-service-hlc-monotonicity.test.js",
+      "jobs": 4,
+      "ms": 114,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/move-planner-spread-vs-count-reconciliation.test.js",
+      "jobs": 4,
+      "ms": 113,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/partition-transparency.property.test.js",
+      "jobs": 4,
+      "ms": 110,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/pending-request-tracker.test.js",
+      "jobs": 4,
+      "ms": 108,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/formation-ledger-spread-voter-ready-readiness.test.js",
+      "jobs": 4,
+      "ms": 107,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/rebalance-coordinator-atomic-transitions.test.js",
+      "jobs": 4,
+      "ms": 106,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/ledger-quorum-spread-hold-cure-drain-admission.test.js",
+      "jobs": 4,
+      "ms": 103,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/sql-parser-pg.test.js",
+      "jobs": 4,
+      "ms": 100,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/remove-workflow-step-progression.property.test.js",
+      "jobs": 4,
+      "ms": 97,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/sql-query-engine-managed-split.test.js",
+      "jobs": 4,
+      "ms": 93,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/scripts/check-partition-class-owner.test.js",
+      "jobs": 4,
+      "ms": 91,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/table-creation-service.test.js",
+      "jobs": 4,
+      "ms": 90,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/sql-query-engine-provisioning-parent-deadline.test.js",
+      "jobs": 4,
+      "ms": 88,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/unified-rebalancer-triggers-priority-surrogate-gates.test.js",
+      "jobs": 4,
+      "ms": 83,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/query-executor-executeonpartition-leader-resolution.test.js",
+      "jobs": 4,
+      "ms": 81,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/effective-placement-serial-priority-planner.test.js",
+      "jobs": 4,
+      "ms": 80,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/config/dynamic-config-service.test.js",
+      "jobs": 4,
+      "ms": 76,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/partition-resolver.test.js",
+      "jobs": 4,
+      "ms": 73,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/operation-lifecycle-fold.property.test.js",
+      "jobs": 4,
+      "ms": 73,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/unified-rebalancer-triggers-priority-surrogate-followup.test.js",
+      "jobs": 4,
+      "ms": 72,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/durable-provisioning-job-owner-directed.test.js",
+      "jobs": 4,
+      "ms": 71,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/distributed-write-coordinator.test.js",
+      "jobs": 4,
+      "ms": 70,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/config/latency-topology-ownership-guardrails.test.js",
+      "jobs": 4,
+      "ms": 69,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/operation-workflow-active-cache-handoff.test.js",
+      "jobs": 4,
+      "ms": 68,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/replace-owner-phase-staleness.test.js",
+      "jobs": 4,
+      "ms": 67,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/rebalancer-own-create-memory-duplicate-replace.test.js",
+      "jobs": 4,
+      "ms": 66,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/orphaned-operation-reconcile-redrive.test.js",
+      "jobs": 4,
+      "ms": 64,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/closure/CL-040.repro.test.js",
+      "jobs": 4,
+      "ms": 62,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/sql-query-engine-metrics.test.js",
+      "jobs": 4,
+      "ms": 62,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/service-partition-access-attribution.test.js",
+      "jobs": 4,
+      "ms": 61,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/application-database.test.js",
+      "jobs": 4,
+      "ms": 60,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js",
+      "jobs": 4,
+      "ms": 60,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/node/replica-local-only-row-convergence.test.js",
+      "jobs": 4,
+      "ms": 59,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/test-helpers/port-allocator.test.js",
+      "jobs": 4,
+      "ms": 58,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/replica-operations-single-writer.test.js",
+      "jobs": 4,
+      "ms": 56,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/transport/bulk-registry-bootstrap.test.js",
+      "jobs": 4,
+      "ms": 55,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/raft/sqlite-log-adapter-committed-write-paths.test.js",
+      "jobs": 4,
+      "ms": 53,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/concurrent-epoch-proposals.property.test.js",
+      "jobs": 4,
+      "ms": 52,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/distributed-merge-engine.test.js",
+      "jobs": 4,
+      "ms": 51,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/self-source-removal-dispatches-in-process.test.js",
+      "jobs": 4,
+      "ms": 51,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/transport/exact-handler-identity-api.test.js",
+      "jobs": 4,
+      "ms": 50,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/replica-operation-terminal-cas.test.js",
+      "jobs": 4,
+      "ms": 47,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/node/replica-transport-handler-identity.test.js",
+      "jobs": 4,
+      "ms": 45,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/replace-dispatch-epoch-gate-scope.test.js",
+      "jobs": 4,
+      "ms": 43,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/partition-split-routing.test.js",
+      "jobs": 4,
+      "ms": 42,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/cdc-event-buffer.property.test.js",
+      "jobs": 4,
+      "ms": 41,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/unified-rebalancer-start-jitter-seam.test.js",
+      "jobs": 4,
+      "ms": 40,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/partition-retiring-row-peer-retirement.test.js",
+      "jobs": 4,
+      "ms": 39,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/transport/immediate-ack-ordering.property.test.js",
+      "jobs": 4,
+      "ms": 38,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/transport/service-response-correlation.property.test.js",
+      "jobs": 4,
+      "ms": 37,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/closure/CL-042.repro.test.js",
+      "jobs": 4,
+      "ms": 36,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/distributed-write-coordinator.property.test.js",
+      "jobs": 4,
+      "ms": 35,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/cdc-event-buffer.test.js",
+      "jobs": 4,
+      "ms": 34,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/cli/core/base-view-model.test.js",
+      "jobs": 4,
+      "ms": 33,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/scripts/no-external-llm-guards.test.js",
+      "jobs": 4,
+      "ms": 33,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/node/replica-removal-consensus-exit-decisions.test.js",
+      "jobs": 4,
+      "ms": 32,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/control-plane/readiness-single-contract-build.test.js",
+      "jobs": 4,
+      "ms": 31,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/partition-callback-dispatcher.test.js",
+      "jobs": 4,
+      "ms": 30,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/scripts/run-live-repetitions.test.js",
+      "jobs": 4,
+      "ms": 29,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/raft/sqlite-log-adapter-contract.test.js",
+      "jobs": 4,
+      "ms": 28,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/callback-stage-executor.test.js",
+      "jobs": 4,
+      "ms": 27,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/wasm-call-adapter.test.js",
+      "jobs": 4,
+      "ms": 26,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/wasm-service/service-definition-validator.property.test.js",
+      "jobs": 4,
+      "ms": 26,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/raft/sqlite-log-adapter-committed-watermark.test.js",
+      "jobs": 4,
+      "ms": 25,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/partition-service-row-absence-heal.test.js",
+      "jobs": 4,
+      "ms": 24,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/scripts/stop-distributed-harness-containers.test.js",
+      "jobs": 4,
+      "ms": 24,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/terminal-status-constants.test.js",
+      "jobs": 4,
+      "ms": 23,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/cache/default-cache-sync-table-selection.test.js",
+      "jobs": 4,
+      "ms": 22,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/raft/replica-voter-readiness.test.js",
+      "jobs": 4,
+      "ms": 22,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/storage/sqlite-store.property.test.js",
+      "jobs": 4,
+      "ms": 22,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/storage/sqlite-store.test.js",
+      "jobs": 4,
+      "ms": 21,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/priority-remove-safety-spread-nonregression.test.js",
+      "jobs": 4,
+      "ms": 20,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/wasm-service/service-endpoint-builder.property.test.js",
+      "jobs": 4,
+      "ms": 20,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/callback-runtime-driver-registry.test.js",
+      "jobs": 4,
+      "ms": 19,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/raft/message-group-readiness-delivery-priority.test.js",
+      "jobs": 4,
+      "ms": 19,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/replica-operation-liveness.test.js",
+      "jobs": 4,
+      "ms": 19,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/storage/persistent-storage-paths.property.test.js",
+      "jobs": 4,
+      "ms": 19,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/split-dissolution-durable-proof.test.js",
+      "jobs": 4,
+      "ms": 18,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/canonical-replica-inventory-cutover-guard.test.js",
+      "jobs": 4,
+      "ms": 18,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/topology-owner-contracts.test.js",
+      "jobs": 4,
+      "ms": 18,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/diagnostics/formation-attribution-semantics.test.js",
+      "jobs": 4,
+      "ms": 17,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/result-stream.test.js",
+      "jobs": 4,
+      "ms": 17,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/scripts/run-formation-seed-budget.test.js",
+      "jobs": 4,
+      "ms": 17,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/split-ack-constants.test.js",
+      "jobs": 4,
+      "ms": 16,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/operation-lifecycle.test.js",
+      "jobs": 4,
+      "ms": 16,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/dispatch-pending-drain-single-partition-authority.test.js",
+      "jobs": 4,
+      "ms": 15,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/scripts/release-preflight.test.js",
+      "jobs": 4,
+      "ms": 15,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/partition-descriptor-epoch-contract.test.js",
+      "jobs": 4,
+      "ms": 14,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/raft/raft-cleanup-verification.test.js",
+      "jobs": 4,
+      "ms": 14,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/rebalance-coordinator-diagnostics.test.js",
+      "jobs": 4,
+      "ms": 14,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/scripts/gen-solve-commands-index.test.js",
+      "jobs": 4,
+      "ms": 14,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/partition-transition-projection.test.js",
+      "jobs": 4,
+      "ms": 13,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/operation-ledger-quorum-concentration-replace-impotence.test.js",
+      "jobs": 4,
+      "ms": 12,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/provision-target-live-transport-rescue.test.js",
+      "jobs": 4,
+      "ms": 11,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/scripts/check-guideline-constant-names.test.js",
+      "jobs": 4,
+      "ms": 11,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/callback-module-artifact.test.js",
+      "jobs": 4,
+      "ms": 10,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/priority-dispatch-deferred-local-progress-outcome-coverage.test.js",
+      "jobs": 4,
+      "ms": 10,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/scripts/check-owner-traces.test.js",
+      "jobs": 4,
+      "ms": 10,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/partition-cdc-parameterized-insert-or-ignore.test.js",
+      "jobs": 4,
+      "ms": 9,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/scripts/analyze-monotone-drain.test.js",
+      "jobs": 4,
+      "ms": 9,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/raft/raft-id-mapper.test.js",
+      "jobs": 4,
+      "ms": 8,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/wasm-service/service-cell-world-abi.test.js",
+      "jobs": 1,
+      "ms": 21162,
+      "lane": "external-toolchain"
+    },
+    {
+      "file": "test/bootstrap/fresh-join-registration-runtime-replacement.integration.test.js",
+      "jobs": 2,
+      "ms": 145,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/owners/bootstrap-readiness-probe-async-fallback.test.js",
+      "jobs": 2,
+      "ms": 145,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/register-service-move-handoff-refused.test.js",
+      "jobs": 2,
+      "ms": 145,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/seed-release-once-per-cohort.test.js",
+      "jobs": 2,
+      "ms": 145,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/fresh-join-via-non-seed-node.integration.test.js",
+      "jobs": 2,
+      "ms": 20811,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/bootstrap-sequence.test.js",
+      "jobs": 2,
+      "ms": 14440,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/return-value-completeness.property.test.js",
+      "jobs": 2,
+      "ms": 14088,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/bootstrap-epoch-manager-lifecycle.test.js",
+      "jobs": 2,
+      "ms": 10210,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/move-replica-assignment-token.test.js",
+      "jobs": 2,
+      "ms": 6089,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/runtime-service-rebalancer-owner.test.js",
+      "jobs": 2,
+      "ms": 5430,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/bootstrap-mode.test.js",
+      "jobs": 2,
+      "ms": 556,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/seed-teardown-pending-cdc-delivery.test.js",
+      "jobs": 2,
+      "ms": 544,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/bootstrap-request-shut-down-writer-not-ready.test.js",
+      "jobs": 2,
+      "ms": 474,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/shared/message-router-setup.test.js",
+      "jobs": 2,
+      "ms": 423,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/node-ready-rebalance-trigger.test.js",
+      "jobs": 2,
+      "ms": 395,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/seed-infrastructure-runtime-identity.test.js",
+      "jobs": 2,
+      "ms": 371,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/node-joining-service-message-group-activation.test.js",
+      "jobs": 2,
+      "ms": 338,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/node-joining-service-mesh-reconciliation.test.js",
+      "jobs": 2,
+      "ms": 331,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/node-joining-service-canonical-readiness.test.js",
+      "jobs": 2,
+      "ms": 313,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/phase-event-ordering-characterization.test.js",
+      "jobs": 2,
+      "ms": 277,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/shared/meta-service-definition-registration.test.js",
+      "jobs": 2,
+      "ms": 251,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/join-resume-replica-lifecycle-owner.test.js",
+      "jobs": 2,
+      "ms": 248,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/message-groups-first-bootstrap-order.property.test.js",
+      "jobs": 2,
+      "ms": 239,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/join-checkpoint-progression-characterization.test.js",
+      "jobs": 2,
+      "ms": 236,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/cache-hydration-gate.property.test.js",
+      "jobs": 2,
+      "ms": 231,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/bootstrap-service-ready-signal.test.js",
+      "jobs": 2,
+      "ms": 227,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/boot-incarnation-owner.test.js",
+      "jobs": 2,
+      "ms": 200,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/message-group-activation-handler-boundary.test.js",
+      "jobs": 2,
+      "ms": 189,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/bootstrap-api-rejoin.test.js",
+      "jobs": 2,
+      "ms": 181,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/restart-cdc-subscription-hardening.test.js",
+      "jobs": 2,
+      "ms": 180,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/node-joining-retryable-resume-preserves-state.test.js",
+      "jobs": 2,
+      "ms": 175,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/cdc-propagation-message-group-selection.test.js",
+      "jobs": 2,
+      "ms": 172,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/seed-infrastructure-phase.test.js",
+      "jobs": 2,
+      "ms": 170,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/formation-readiness-owner-single-form.test.js",
+      "jobs": 2,
+      "ms": 169,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/node-joining-service-lifecycle-owner-handoff.test.js",
+      "jobs": 2,
+      "ms": 167,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/bootstrap-system-table-invariant.property.test.js",
+      "jobs": 2,
+      "ms": 165,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/bootstrap-api-seed-join-gate-authoritative-refresh.test.js",
+      "jobs": 2,
+      "ms": 162,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/_min-test.test.js",
+      "jobs": 2,
+      "ms": 159,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/wasm-meta-table-schemas.test.js",
+      "jobs": 2,
+      "ms": 155,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/node-joining-cdc-readiness-gate.test.js",
+      "jobs": 2,
+      "ms": 152,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/join-delegate-bundles.test.js",
+      "jobs": 2,
+      "ms": 145,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/debug-meta-table-schemas.test.js",
+      "jobs": 2,
+      "ms": 142,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/lifecycle-message-delegation.property.test.js",
+      "jobs": 2,
+      "ms": 141,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/latency-topology-table-schemas.test.js",
+      "jobs": 2,
+      "ms": 140,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/bootstrap-request-admission-precheck.test.js",
+      "jobs": 2,
+      "ms": 136,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/critical-placement-classification-control.test.js",
+      "jobs": 2,
+      "ms": 135,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/bootstrap-api-replica-owner-conflict.test.js",
+      "jobs": 2,
+      "ms": 130,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/lifecycle-handler-address-format.property.test.js",
+      "jobs": 2,
+      "ms": 123,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/unified-service-lifecycle-cutover-guards.test.js",
+      "jobs": 2,
+      "ms": 122,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/message-group-assignment-centralization.test.js",
+      "jobs": 2,
+      "ms": 116,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/cdc-initial-subscription-leader-fallback.test.js",
+      "jobs": 2,
+      "ms": 101,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/address-takeover-live-ab.test.js",
+      "jobs": 2,
+      "ms": 90,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/cluster-identity-join-gate.test.js",
+      "jobs": 2,
+      "ms": 82,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/create-self-hosted-registration.test.js",
+      "jobs": 2,
+      "ms": 78,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/bootstrap-phase-state-machine-integration.test.js",
+      "jobs": 2,
+      "ms": 71,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/bootstrap-response-performance.test.js",
+      "jobs": 2,
+      "ms": 67,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/message-group-single-owner-invariant.test.js",
+      "jobs": 2,
+      "ms": 56,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/call-cell-invocation-setup.test.js",
+      "jobs": 2,
+      "ms": 55,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/bootstrap-replica-registration-trace.test.js",
+      "jobs": 2,
+      "ms": 54,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/node-joining-service-final-sql-runtime-handoff.test.js",
+      "jobs": 2,
+      "ms": 49,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/cleanup-ownership-order-characterization.test.js",
+      "jobs": 2,
+      "ms": 42,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/join-cleanup.property.test.js",
+      "jobs": 2,
+      "ms": 35,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/fresh-join-multi-peer-contact.test.js",
+      "jobs": 2,
+      "ms": 33,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/bootstrap-topology-snapshot-owner.test.js",
+      "jobs": 2,
+      "ms": 30,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/bootstrap-failure-cleanup.test.js",
+      "jobs": 2,
+      "ms": 28,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/join-readiness-evaluator.test.js",
+      "jobs": 2,
+      "ms": 21,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/join-readiness-warming-node-exclusion.property.test.js",
+      "jobs": 2,
+      "ms": 20,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/cache-hydration-strictness.test.js",
+      "jobs": 2,
+      "ms": 19,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/join-session-store.test.js",
+      "jobs": 2,
+      "ms": 18,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/cluster-mesh-connectivity.property.test.js",
+      "jobs": 2,
+      "ms": 17,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/node-joining-cdc-catchup-wiring.test.js",
+      "jobs": 2,
+      "ms": 15,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/traffic-readiness-utils.test.js",
+      "jobs": 2,
+      "ms": 14,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/join-readiness-warming-node-preservation.property.test.js",
+      "jobs": 2,
+      "ms": 12,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/phases/wait-for-leadership-phase-retryable-timeout.test.js",
+      "jobs": 2,
+      "ms": 10,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/bootstrap-topology-snapshot.test.js",
+      "jobs": 2,
+      "ms": 8,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/schema-operations-table-schema.test.js",
+      "jobs": 2,
+      "ms": 8,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/owners/bootstrap-readiness-owner.test.js",
+      "jobs": 2,
+      "ms": 7,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/integration/call-cell-public-outcome-adversarial.integration.test.js",
+      "jobs": 1,
+      "ms": 693,
+      "lane": "exclusive"
+    },
+    {
+      "file": "test/integration/critical-replica-placement-causal-trace.integration.test.js",
+      "jobs": 1,
+      "ms": 693,
+      "lane": "exclusive"
+    },
+    {
+      "file": "test/integration/message-group-fresh-identity-replacement.integration.test.js",
+      "jobs": 1,
+      "ms": 693,
+      "lane": "exclusive"
+    },
+    {
+      "file": "test/integration/message-group-learner-runtime-authorization.integration.test.js",
+      "jobs": 1,
+      "ms": 693,
+      "lane": "exclusive"
+    },
+    {
+      "file": "test/integration/public-application-database-multinode.integration.test.js",
+      "jobs": 1,
+      "ms": 693,
+      "lane": "exclusive"
+    },
+    {
+      "file": "test/integration/seed-migration-cutover-persisted.integration.test.js",
+      "jobs": 1,
+      "ms": 693,
+      "lane": "exclusive"
+    },
+    {
+      "file": "test/node/replica-runtime-cleanup-custody.integration.test.js",
+      "jobs": 1,
+      "ms": 693,
+      "lane": "exclusive"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+      "jobs": 1,
+      "ms": 693,
+      "lane": "exclusive"
+    },
+    {
+      "file": "test/integration/authoritative-discovery-repair-pressure.integration.test.js",
+      "jobs": 1,
+      "ms": 12,
+      "lane": "exclusive"
+    },
+    {
+      "file": "test/integration/ack-delivery.integration.test.js",
+      "jobs": 1,
+      "ms": 74,
+      "lane": "exclusive"
+    },
+    {
+      "file": "test/query/postgres-wire-adapter.integration.test.js",
+      "jobs": 1,
+      "ms": 97,
+      "lane": "exclusive"
+    },
+    {
+      "file": "test/integration/cross-node-replica-placement.integration.test.js",
+      "jobs": 1,
+      "ms": 167,
+      "lane": "exclusive"
+    },
+    {
+      "file": "test/integration/bidirectional-websocket.integration.test.js",
+      "jobs": 1,
+      "ms": 262,
+      "lane": "exclusive"
+    },
+    {
+      "file": "test/integration/leader-routable-system-writes.integration.test.js",
+      "jobs": 1,
+      "ms": 693,
+      "lane": "exclusive"
+    },
+    {
+      "file": "test/integration/critical-partition-learner-safety.integration.test.js",
+      "jobs": 1,
+      "ms": 12898,
+      "lane": "exclusive"
+    },
+    {
+      "file": "test/integration/three-node-seed-rebalance.integration.test.js",
+      "jobs": 1,
+      "ms": 14774,
+      "lane": "exclusive"
+    },
+    {
+      "file": "test/integration/sql-engine-system-writes-contract.integration.test.js",
+      "jobs": 1,
+      "ms": 19839,
+      "lane": "exclusive"
+    },
+    {
+      "file": "test/integration/node-joining-rebalance.integration.test.js",
+      "jobs": 1,
+      "ms": 42590,
+      "lane": "exclusive"
+    },
+    {
+      "file": "test/integration/node-join-replica-activation.integration.test.js",
+      "jobs": 1,
+      "ms": 63310,
+      "lane": "exclusive"
+    }
+  ]
+}

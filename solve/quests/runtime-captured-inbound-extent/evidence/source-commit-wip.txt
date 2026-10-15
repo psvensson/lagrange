@@ -1,0 +1,28 @@
+pre-commit: LAGRANGE_SKIP_PRECOMMIT set - skipping staged checks
+[review/runtime-captured-inbound-correction-20261015 4aa8780cf] wip(raft): review finite inbound capture after execution admission
+ 29 files changed, 1574 insertions(+), 26 deletions(-)
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/COMPARISON-PLAN.md
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/affected-proof-plan.md
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/companion-first-baseline-event-summary.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/companion-first-baseline-independent-review.md
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/companion-first-baseline/discovery.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/companion-first-baseline/exit-code.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/companion-first-baseline/plan.json
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/companion-first-baseline/raw.tap
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/companion-first-baseline/run.log.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/companion-prerun-review-round2.md
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/decision-after.exit
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/decision-after.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/fast-static-first.exit
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/fast-static-first.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/grammar-after.exit
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/grammar-after.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/lint-after.exit
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/lint-after.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/literals-after.exit
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/literals-after.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/source-commit-normal.exit
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/source-commit-normal.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/static-after.exit
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/static-after.txt
+ create mode 100644 solve/quests/runtime-captured-inbound-extent/evidence/test-only-commit.txt

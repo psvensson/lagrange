@@ -1,0 +1,34 @@
+{
+  "root": "/mnt/data/peter/projects/.worktrees/runtime-captured-inbound-correction-20261015",
+  "sha": "4aa8780cfec6f2718b86b4d1e27ee9711492be59",
+  "host": "tv-dator",
+  "files": [
+    "test/raft/raft-rs-backend/runtime-trap-and-restore.test.js",
+    "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js",
+    "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js"
+  ],
+  "testIdentity": {
+    "test/raft/raft-rs-backend/runtime-trap-and-restore.test.js": "802bd4c2201c2712daeb6ac191962cb2fc084f7de925968fef2a071dbeb7d7bd",
+    "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js": "e741ad627b50333537913e089dc36213bd6cc847299113a1dfc9c9991c5659ec",
+    "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js": "f5d39f0cc01ae49ff2c8d12771763bda913441878b6d578bc7bed4c245f7917f"
+  },
+  "apiIdentity": {
+    "scripts/lab/probe.js": "493381e074c12987446a27f4feb7a0385f6afea46e97fa41f4c826464f7e8b70",
+    "scripts/run-classified-test-files.js": "cbbfcb9494a76069b33457b87e2cebf1d0e6e7a69c0b2d08181ab89736791aea",
+    "scripts/checks/git-process-environment.js": "c06f8458b6ad8b8725605676ddb7ef269b19bb0bf8bcfc680ce255e92565a078"
+  },
+  "runtimeOwnerSha256": "b47951f39c6a5e7b93670a3a730115b3993976e808ec2e7d76598ade270dbc0f",
+  "retry": "0",
+  "inheritedTapTimeout": null,
+  "command": [
+    "/home/peter/.nvm/versions/node/v22.23.2/bin/node",
+    "/tmp/lagrange-runtime-correction-20261015/run-group-capture.mjs",
+    "/mnt/data/peter/projects/.worktrees/runtime-captured-inbound-correction-20261015",
+    "/tmp/lagrange-runtime-correction-20261015/affected-recovery",
+    "4aa8780cfec6f2718b86b4d1e27ee9711492be59",
+    "tv-dator",
+    "test/raft/raft-rs-backend/runtime-trap-and-restore.test.js",
+    "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js",
+    "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js"
+  ]
+}

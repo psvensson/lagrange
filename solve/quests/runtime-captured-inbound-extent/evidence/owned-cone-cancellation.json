@@ -1,0 +1,20 @@
+{
+  "time": "2026-10-15T17:52:02.751452+00:00",
+  "reason": "User-authorized closeout at frozen ordering-decision boundary; stop only existing owned unfinished broad tails through lab abortOnSignals. No new campaign or retry.",
+  "signal": "SIGINT",
+  "owner": "scripts/lab/probe.js abortOnSignals -> abortTogether -> owned remote shell interrupt",
+  "processes": [
+    {
+      "pid": 2119949,
+      "command": [
+        "node",
+        "/tmp/lagrange-runtime-correction-20261015/run-remaining-group.mjs",
+        "/mnt/data/peter/projects/.worktrees/runtime-captured-inbound-correction-20261015",
+        "/tmp/lagrange-runtime-correction-20261015/remaining-adam-laptop",
+        "/tmp/lagrange-runtime-correction-20261015/remaining-proof-plan.json",
+        "adam-laptop"
+      ],
+      "procStart": "9825682"
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "sha": "4aa8780cfec6f2718b86b4d1e27ee9711492be59",
+  "host": "adams-gamla",
+  "requested": [
+    "test/raft/raft-rs-backend/runtime-turn-integrity.test.js",
+    "test/raft/raft-rs-backend/inbound-drain-owned-timer.test.js",
+    "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js"
+  ],
+  "results": [
+    {
+      "file": "test/raft/raft-rs-backend/runtime-turn-integrity.test.js",
+      "code": 0,
+      "rawTap": true,
+      "testSha256": "398eca66728c0e50c240af08287fe76548692e7566768e534ff3a1011978304b"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/inbound-drain-owned-timer.test.js",
+      "code": 0,
+      "rawTap": true,
+      "testSha256": "82e2704c3562d90cff3ffbc2fd39970078312302ffcb62529cbd14d3afaf7fa3"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js",
+      "code": 0,
+      "rawTap": true,
+      "testSha256": "63bd77c7d3b92c7965ad95285d83b791028c5ffe3fb44d95c6769cbaead88121"
+    }
+  ],
+  "unrun": [],
+  "exitCode": 0,
+  "meaning": "Per-file original executions; no retries; no overall release certification"
+}

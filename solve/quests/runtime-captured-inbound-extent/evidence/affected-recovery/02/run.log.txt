@@ -1,0 +1,20 @@
+lab test: tv-dator: exclusive (1 files) cores=12 mem=15.4GiB speed x1.26
+[tv-dator] placement-shell=548142
+[tv-dator] placement-head=4aa8780cfec6f2718b86b4d1e27ee9711492be59
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.3 mode:local retry:0 timeout: lanecap:11
+[tv-dator] placement-pid=549032
+[tv-dator] # test-files planned=1
+[tv-dator] classified lane exclusive: 1 file(s), jobs=1
+[tv-dator] thermal: ok cpu 64C (coretemp/Package id 0) nvme 41C (nvme/Sensor 1)
+[tv-dator] ok test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js (8 assertions, 2903ms)
+[tv-dator] # test-files total=1 pass=1 fail=0 assertions=8
+lab test: tv-dator: # test-files total=1 pass=1 fail=0 assertions=8
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=1 pass=1 fail=0 assertions=8
