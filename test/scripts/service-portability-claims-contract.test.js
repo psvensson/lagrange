@@ -1,6 +1,11 @@
 import tap from 'tap';
 
 import {
+  evaluateSdkHostConformance,
+  loadSdkHostConformanceInputs,
+} from '../../scripts/checks/sdk-host-conformance-plan.js';
+
+import {
   checkServicePortabilityClaimsContract,
   evaluateServicePortabilityClaimsContract,
   loadServicePortabilityClaimsContract,
@@ -105,3 +110,205 @@ tap.test('OCI implementation drift requires capability-contract update',
     t.match(result.problems[0], /unsupported invocation/iu);
     t.end();
   });
+
+function sdkInputs() {
+  return loadSdkHostConformanceInputs();
+}
+
+tap.test('SDK host fixture plan covers the WIT methods without false parity ' +
+  'certification', (t) => {
+  const result = evaluateSdkHostConformance(sdkInputs());
+  t.equal(result.valid, true, result.problems.join('; '));
+  t.ok(result.plan.length > 0);
+  t.ok(result.plan.every((entry) => entry.status !== 'passed' &&
+    entry.status !== 'certified'));
+  t.ok(result.plan.some((entry) =>
+    entry.provider === 'wasm_component' &&
+    entry.status === 'requires-runtime-evidence'));
+  t.ok(result.plan.some((entry) =>
+    entry.provider === 'oci_container' &&
+    entry.status === 'provider-unavailable'));
+  t.end();
+});
+
+tap.test('SDK host fixtures preserve the combined-world mode boundary',
+  (t) => {
+    const result = evaluateSdkHostConformance(sdkInputs());
+    t.equal(result.valid, true, result.problems.join('; '));
+    const crossMode = result.plan.filter((entry) =>
+      entry.world === 'service-cell' &&
+      ((entry.mode === 'call' && entry.hostImport.startsWith('context.')) ||
+       (entry.mode === 'request' &&
+        entry.hostImport.startsWith('call-context.'))));
+    t.ok(crossMode.length > 0);
+    t.ok(crossMode.every((entry) => entry.expected === 'refused'));
+    t.end();
+  });
+
+tap.test('an extra WIT import cannot silently lack SDK parity cases',
+  (t) => {
+    const inputs = sdkInputs();
+    inputs.inventory.interfaces[0].functions.push({
+      name: 'surprise',
+      signature: 'func() -> bool',
+    });
+    const result = evaluateSdkHostConformance(inputs);
+    t.equal(result.valid, false);
+    t.match(result.problems.join('; '), /missing admitted scenario/u);
+    t.end();
+  });
+
+tap.test('a fixture cannot invent SDK host privileges or unknown methods',
+  (t) => {
+    const inputs = sdkInputs();
+    inputs.fixture.cases[0].function = 'unsupported-table-scan';
+    const result = evaluateSdkHostConformance(inputs);
+    t.equal(result.valid, false);
+    t.match(result.problems.join('; '), /unknown mode\/import/u);
+    t.end();
+  });
+
+tap.test('native SDK parity cannot be claimed by smuggling a passed state',
+  (t) => {
+    const inputs = sdkInputs();
+    inputs.fixture.cases[0].status = 'passed';
+    const result = evaluateSdkHostConformance(inputs);
+    t.equal(result.valid, false);
+    t.match(result.problems.join('; '), /forbidden evidence\/status/u);
+    t.end();
+  });
+
+tap.test('native container activation alone cannot enable OCI Call Cells',
+  (t) => {
+    const inputs = sdkInputs();
+    inputs.portability.runtimes.oci_container.realContainerActivation = true;
+    const result = evaluateSdkHostConformance(inputs);
+    t.equal(result.valid, true, result.problems.join('; '));
+    t.ok(result.plan.filter((entry) =>
+      entry.provider === 'oci_container').every((entry) =>
+      entry.status === 'provider-unavailable'));
+    t.end();
+  });
+
+tap.test('an unreviewed WIT world fails the SDK case inventory closed',
+  (t) => {
+    const inputs = sdkInputs();
+    inputs.inventory.worlds.push({
+      name: 'surprise-world',
+      declaredImports: ['context'],
+      exports: [],
+    });
+    const result = evaluateSdkHostConformance(inputs);
+    t.equal(result.valid, false);
+    t.match(result.problems.join('; '), /unreviewed WIT world/u);
+    t.end();
+  });
+
+tap.test('a wrong-mode accepted fixture is refused before planning',
+  (t) => {
+    const inputs = sdkInputs();
+    inputs.fixture.cases.find((item) =>
+      item.id === 'call-read-denied').expectation = 'accepted';
+    const result = evaluateSdkHostConformance(inputs);
+    t.equal(result.valid, false);
+    t.match(result.problems.join('; '), /wrong mode/u);
+    t.end();
+  });
+
+tap.test('WIT import removal cannot quietly drop an execution world',
+  (t) => {
+    const inputs = sdkInputs();
+    inputs.inventory.worlds.find((world) =>
+      world.name === 'request-cell').declaredImports = [];
+    const result = evaluateSdkHostConformance(inputs);
+    t.equal(result.valid, false);
+    t.match(result.problems.join('; '), /WIT world admission changed/u);
+    t.end();
+  });
+
+tap.test('a deleted cross-mode refusal must be detected',
+  (t) => {
+    const inputs = sdkInputs();
+    inputs.fixture.cases = inputs.fixture.cases.filter((item) =>
+      item.id !== 'call-read-denied');
+    const result = evaluateSdkHostConformance(inputs);
+    t.equal(result.valid, false);
+    t.match(result.problems.join('; '), /missing cross-mode refusal scenario/u);
+    t.end();
+  });
+
+tap.test('duplicate fixture identifiers are not allowed', (t) => {
+  const inputs = sdkInputs();
+  inputs.fixture.cases.push({...inputs.fixture.cases[0]});
+  const result = evaluateSdkHostConformance(inputs);
+  t.equal(result.valid, false);
+  t.match(result.problems.join('; '), /duplicate or malformed case/u);
+  t.end();
+});
+
+tap.test('an extra host interface on a single-mode WIT world is not ignored',
+  (t) => {
+    const inputs = sdkInputs();
+    inputs.inventory.worlds.find((world) =>
+      world.name === 'request-cell').declaredImports.push('call-context');
+    const result = evaluateSdkHostConformance(inputs);
+    t.equal(result.valid, false);
+    t.match(result.problems.join('; '), /WIT world admission changed/u);
+    t.end();
+  });
+
+tap.test('removing a same-mode request binding refusal fails closed',
+  (t) => {
+    const inputs = sdkInputs();
+    inputs.fixture.cases = inputs.fixture.cases.filter((item) =>
+      item.id !== 'request-binding-denied');
+    const result = evaluateSdkHostConformance(inputs);
+    t.equal(result.valid, false);
+    t.match(result.problems.join('; '), /same-mode refusal|missing required denial/u);
+    t.end();
+  });
+
+tap.test('removing call emit budget refusal fails closed', (t) => {
+  const inputs = sdkInputs();
+  inputs.fixture.cases = inputs.fixture.cases.filter((item) =>
+    item.id !== 'call-emit-budget-denied');
+  const result = evaluateSdkHostConformance(inputs);
+  t.equal(result.valid, false);
+  t.match(result.problems.join('; '), /same-mode refusal|missing required denial/u);
+  t.end();
+});
+
+tap.test('undeclared nested target refusal cannot be replaced by budget denial',
+  (t) => {
+    const inputs = sdkInputs();
+    inputs.fixture.cases = inputs.fixture.cases.filter((item) =>
+      item.id !== 'call-nested-undeclared-denied');
+    const result = evaluateSdkHostConformance(inputs);
+    t.equal(result.valid, false);
+    t.match(result.problems.join('; '), /missing required denial scenario/u);
+    t.end();
+  });
+
+tap.test('same-mode refusal coverage is independent of cross-mode denials',
+  (t) => {
+    const inputs = sdkInputs();
+    inputs.fixture.cases = inputs.fixture.cases.filter((item) =>
+      item.id !== 'request-read-policy-denied');
+    const result = evaluateSdkHostConformance(inputs);
+    t.equal(result.valid, false);
+    t.match(result.problems.join('; '), /missing same-mode refusal/u);
+    t.end();
+  });
+
+tap.test('unknown OCI readiness projection remains unavailable', (t) => {
+  const inputs = sdkInputs();
+  inputs.portability.runtimes.oci_container.realContainerActivation = true;
+  inputs.portability.runtimes.oci_container.nativeCallCellInvocation =
+    'reported-ready';
+  const result = evaluateSdkHostConformance(inputs);
+  t.equal(result.valid, true, result.problems.join('; '));
+  t.ok(result.plan.filter((entry) =>
+    entry.provider === 'oci_container').every((entry) =>
+    entry.status === 'provider-unavailable'));
+  t.end();
+});
