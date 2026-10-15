@@ -26,9 +26,15 @@ It emits a provider/world/mode matrix with **no passing states**:
 - `provider-unavailable`: the selected provider is not yet runnable.
 
 The cases describe intended admitted and refused behavior for host imports.
-They do not define the signatures, privileges, error codes, budgets, retry
-policy, or executable component identity. Those remain with the WIT contract
-and established runtime/invocation owners.
+The inventory reports referenced WIT record, variant and enum declarations,
+and rejects unresolvable world `use` references. The fixture preflight covers
+named methods, admitted modes and specified denials; it is **not** a live ABI
+compatibility or runtime certification. Sealed type invariants are checked
+separately by the WIT inventory regression tests.
+
+The fixture cases do not define privileges, error codes, budgets, retry policy
+or executable component identity. Those remain with the WIT contract and
+established runtime/invocation owners.
 
 In particular, the combined service worlds declare both context imports,
 but only capabilities for the currently admitted Binding mode are live.
