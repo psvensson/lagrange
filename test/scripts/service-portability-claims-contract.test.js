@@ -203,3 +203,45 @@ tap.test('an unreviewed WIT world fails the SDK case inventory closed',
     t.match(result.problems.join('; '), /unreviewed WIT world/u);
     t.end();
   });
+
+tap.test('a wrong-mode accepted fixture is refused before planning',
+  (t) => {
+    const inputs = sdkInputs();
+    inputs.fixture.cases.find((item) =>
+      item.id === 'call-read-denied').expectation = 'accepted';
+    const result = evaluateSdkHostConformance(inputs);
+    t.equal(result.valid, false);
+    t.match(result.problems.join('; '), /wrong mode/u);
+    t.end();
+  });
+
+tap.test('WIT import removal cannot quietly drop an execution world',
+  (t) => {
+    const inputs = sdkInputs();
+    inputs.inventory.worlds.find((world) =>
+      world.name === 'request-cell').declaredImports = [];
+    const result = evaluateSdkHostConformance(inputs);
+    t.equal(result.valid, false);
+    t.match(result.problems.join('; '), /WIT world admission changed/u);
+    t.end();
+  });
+
+tap.test('a deleted refusal fixture cannot silently appear covered',
+  (t) => {
+    const inputs = sdkInputs();
+    inputs.fixture.cases = inputs.fixture.cases.filter((item) =>
+      item.id !== 'call-read-denied');
+    const result = evaluateSdkHostConformance(inputs);
+    t.equal(result.valid, false);
+    t.match(result.problems.join('; '), /missing refusal scenario/u);
+    t.end();
+  });
+
+tap.test('duplicate fixture identifiers are not allowed', (t) => {
+  const inputs = sdkInputs();
+  inputs.fixture.cases.push({...inputs.fixture.cases[0]});
+  const result = evaluateSdkHostConformance(inputs);
+  t.equal(result.valid, false);
+  t.match(result.problems.join('; '), /duplicate or malformed case/u);
+  t.end();
+});

@@ -32,6 +32,8 @@ const CASE_FIELDS = new Set([
 const PROVIDERS = Object.freeze(['wasm_component', 'oci_container']);
 const NOT_EXECUTED = 'requires-runtime-evidence';
 const UNAVAILABLE = 'provider-unavailable';
+const IDENTIFIER_PATTERN = /^[a-z][a-z0-9-]*$/u;
+const FIXTURE_PURPOSE = 'declarative-provider-parity-cases-no-runtime-execution';
 
 function loadSdkHostConformanceInputs(root = process.cwd()) {
   const text = (relative) =>
@@ -54,71 +56,102 @@ function providerStatus(provider, portability) {
     NOT_EXECUTED : UNAVAILABLE;
 }
 
-function evaluateSdkHostConformance(inputs) {
-  const problems = [];
-  const {inventory, fixture, portability} = inputs;
-  if (fixture?.schemaVersion !== 1 ||
-      fixture?.witSource !== inventory?.source ||
-      fixture?.purpose !==
-        'declarative-provider-parity-cases-no-runtime-execution' ||
-      !Array.isArray(fixture?.cases)) {
-    return {valid: false, problems: ['invalid fixture header'], plan: []};
-  }
+function validFixtureHeader(fixture, inventory) {
+  return fixture?.schemaVersion === 1 &&
+    fixture?.witSource === inventory?.source &&
+    fixture?.purpose === FIXTURE_PURPOSE &&
+    Array.isArray(fixture?.cases);
+}
 
-  const interfaces = new Map(inventory.interfaces.map(
-    (entry) => [entry.name, entry]));
-  const worldNames = new Set(inventory.worlds.map((world) => world.name));
-  for (const name of worldNames) {
-    if (!WORLD_MODES[name]) {
-      problems.push(`unreviewed WIT world: ${name}`);
+function validateWorlds(inventory, problems) {
+  const present = new Set(inventory.worlds.map((world) => world.name));
+  for (const world of inventory.worlds) {
+    const modes = WORLD_MODES[world.name];
+    if (!modes) {
+      problems.push(`unreviewed WIT world: ${world.name}`);
+      continue;
+    }
+    const required = modes.map((mode) => MODES[mode]);
+    if (world.declaredImports.length !== required.length ||
+        required.some((iface) => !world.declaredImports.includes(iface))) {
+      problems.push(`WIT world admission changed: ${world.name}`);
     }
   }
   for (const name of Object.keys(WORLD_MODES)) {
-    if (!worldNames.has(name)) problems.push(`missing WIT world: ${name}`);
+    if (!present.has(name)) problems.push(`missing WIT world: ${name}`);
   }
+}
 
-  const seenIds = new Set();
-  const cases = [];
-  for (const item of fixture.cases) {
-    if (!item || typeof item !== 'object' || Array.isArray(item) ||
-        Object.keys(item).some((field) => !CASE_FIELDS.has(field)) ||
-        Object.keys(item).length !== CASE_FIELDS.size ||
-        !Object.values(item).every((value) => typeof value === 'string')) {
-      problems.push('invalid case shape, including forbidden evidence/status');
-      continue;
-    }
-    if (!/^[a-z][a-z0-9-]*$/u.test(item.id) ||
-        !/^[a-z][a-z0-9-]*$/u.test(item.scenario) ||
-        seenIds.has(item.id)) {
-      problems.push(`duplicate or malformed case id/scenario: ${item.id}`);
-      continue;
-    }
-    seenIds.add(item.id);
-    if (!MODES[item.mode] || !EXPECTATIONS.has(item.expectation) ||
-        !interfaces.get(item.interface)?.functions.some(
-          (method) => method.name === item.function)) {
-      problems.push(`case has unknown mode/import/expectation: ${item.id}`);
-      continue;
-    }
-    if (item.expectation === 'accepted' &&
-        MODES[item.mode] !== item.interface) {
-      problems.push(`case grants capability in wrong mode: ${item.id}`);
-    }
+function validCaseShape(item) {
+  if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
+  const fields = Object.keys(item);
+  return fields.length === CASE_FIELDS.size &&
+    fields.every((field) => CASE_FIELDS.has(field) &&
+      typeof item[field] === 'string');
+}
 
-    // A combined world imports both interfaces but an admitted Binding
-    // exposes only its mode's live host capabilities.
-    const worlds = inventory.worlds.filter((world) =>
-      WORLD_MODES[world.name]?.includes(item.mode) &&
-      world.declaredImports.includes(item.interface));
-    if (worlds.length === 0) {
-      problems.push(`case cannot execute in any declared world: ${item.id}`);
-    }
-    cases.push({case: item, worlds: worlds.map((world) => world.name)});
+function validCaseIdentity(item, seen) {
+  return IDENTIFIER_PATTERN.test(item.id) &&
+    IDENTIFIER_PATTERN.test(item.scenario) && !seen.has(item.id);
+}
+
+function knownHostMethod(item, interfaces) {
+  return Boolean(MODES[item.mode]) &&
+    EXPECTATIONS.has(item.expectation) &&
+    Boolean(interfaces.get(item.interface)?.functions.some(
+      (method) => method.name === item.function));
+}
+
+function eligibleWorlds(item, worlds) {
+  return worlds.filter((world) =>
+    WORLD_MODES[world.name]?.includes(item.mode) &&
+      world.declaredImports.includes(item.interface)).map(
+    (world) => world.name);
+}
+
+function validateCase(item, context) {
+  const {interfaces, worlds, seen, problems} = context;
+  if (!validCaseShape(item)) {
+    problems.push('invalid case shape, including forbidden evidence/status');
+    return null;
   }
+  if (!validCaseIdentity(item, seen)) {
+    problems.push(`duplicate or malformed case id/scenario: ${item.id}`);
+    return null;
+  }
+  seen.add(item.id);
+  if (!knownHostMethod(item, interfaces)) {
+    problems.push(`case has unknown mode/import/expectation: ${item.id}`);
+    return null;
+  }
+  if (item.expectation === 'accepted' && MODES[item.mode] !== item.interface) {
+    problems.push(`case grants capability in wrong mode: ${item.id}`);
+  }
+  const candidates = eligibleWorlds(item, worlds);
+  if (candidates.length === 0) {
+    problems.push(`case cannot execute in any declared world: ${item.id}`);
+  }
+  return {case: item, worlds: candidates};
+}
 
+function collectCases(inventory, fixture, problems) {
+  const context = {
+    interfaces: new Map(inventory.interfaces.map(
+      (entry) => [entry.name, entry])),
+    worlds: inventory.worlds,
+    seen: new Set(),
+    problems,
+  };
+  return fixture.cases.map((item) => validateCase(item, context))
+    .filter(Boolean);
+}
+
+function validateMethodCoverage(inventory, cases, problems) {
+  const byInterface = new Map(Object.entries(MODES).map(
+    ([mode, iface]) => [iface, mode]));
   for (const iface of inventory.interfaces) {
-    if (!MODES[Object.keys(MODES).find(
-      (mode) => MODES[mode] === iface.name)]) {
+    const mode = byInterface.get(iface.name);
+    if (!mode) {
       problems.push(`unreviewed host interface: ${iface.name}`);
       continue;
     }
@@ -126,9 +159,7 @@ function evaluateSdkHostConformance(inputs) {
       const matching = cases.map((entry) => entry.case).filter((item) =>
         item.interface === iface.name && item.function === method.name);
       if (!matching.some((item) =>
-        item.mode === Object.keys(MODES).find(
-          (mode) => MODES[mode] === iface.name) &&
-        item.expectation === 'accepted')) {
+        item.mode === mode && item.expectation === 'accepted')) {
         problems.push(`missing admitted scenario: ${iface.name}.${method.name}`);
       }
       if (!matching.some((item) => item.expectation === 'refused')) {
@@ -136,18 +167,22 @@ function evaluateSdkHostConformance(inputs) {
       }
     }
   }
+}
 
-  const providerStates = Object.fromEntries(PROVIDERS.map((provider) => [
+function validateProviders(portability, problems) {
+  const states = Object.fromEntries(PROVIDERS.map((provider) => [
     provider, providerStatus(provider, portability),
   ]));
   for (const provider of PROVIDERS) {
-    if (!providerStates[provider]) {
+    if (!states[provider]) {
       problems.push(`missing provider capability state: ${provider}`);
     }
   }
-  if (problems.length > 0) return {valid: false, problems, plan: []};
+  return states;
+}
 
-  const plan = PROVIDERS.flatMap((provider) => cases.flatMap((entry) =>
+function createUnexecutedPlan(cases, states) {
+  return PROVIDERS.flatMap((provider) => cases.flatMap((entry) =>
     entry.worlds.map((world) => ({
       provider,
       world,
@@ -156,9 +191,26 @@ function evaluateSdkHostConformance(inputs) {
       caseId: entry.case.id,
       scenario: entry.case.scenario,
       expected: entry.case.expectation,
-      status: providerStates[provider],
+      status: states[provider],
     }))));
-  return {valid: true, problems, plan};
+}
+
+function evaluateSdkHostConformance(inputs) {
+  const problems = [];
+  const {inventory, fixture, portability} = inputs;
+  if (!validFixtureHeader(fixture, inventory)) {
+    return {valid: false, problems: ['invalid fixture header'], plan: []};
+  }
+  validateWorlds(inventory, problems);
+  const cases = collectCases(inventory, fixture, problems);
+  validateMethodCoverage(inventory, cases, problems);
+  const providerStates = validateProviders(portability, problems);
+  if (problems.length > 0) return {valid: false, problems, plan: []};
+  return {
+    valid: true,
+    problems,
+    plan: createUnexecutedPlan(cases, providerStates),
+  };
 }
 
 export {evaluateSdkHostConformance, loadSdkHostConformanceInputs};
