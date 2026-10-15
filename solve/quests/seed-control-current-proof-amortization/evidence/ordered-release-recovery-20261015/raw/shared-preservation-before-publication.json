@@ -1,0 +1,9 @@
+{
+  "observedAt": "2026-10-15T14:14:47.081201+00:00",
+  "sharedHead": "0996d7576516af24f5f4d3e1e9aee37c775aabae",
+  "sharedBranch": "integrate/rs-raft-2026-09-30",
+  "stagedPaths": 18,
+  "stagedPatchSha256": "0b2ea79142a13f4dcada523f01108fbd8a4809492838e23f7a0246a7159953fc",
+  "sameAsTakeover": true,
+  "noLeaseAssertion": true
+}

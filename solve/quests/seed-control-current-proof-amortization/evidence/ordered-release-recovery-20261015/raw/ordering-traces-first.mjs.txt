@@ -1,0 +1,379 @@
+// Design/ordering evidence ONLY. No Raft implementation, TX1 model or D2 oracle.
+// Explicit event schedules assume ordered-prefix commit and an atomic applier.
+// Native observations separately support only existing Ready/apply primitives.
+import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+const digest = x => createHash('sha256').update(JSON.stringify(x)).digest('hex');
+const copy = x => structuredClone(x);
+const mutant = process.argv.includes('--allow-retire-overtake');
+const outputs = [];
+const events = [];
+let serial = 0;
+const a = (g, nonce, version = 0, valid = true) => {
+  const body = ['APPROVE', 'p', ['1', '1'], String(g), nonce, String(version), valid];
+  return {kind: 'A', g, version, valid, body, id: digest(body)};
+};
+const r = (g, nonce, version = 0, valid = true) => {
+  const child = a(g + 1, nonce, version, valid);
+  const body = ['RETIRE_AND_APPROVE', 'p', ['1', '1'], String(g), child.body];
+  return {kind: 'R', g, child, body, id: digest(body)};
+};
+const t = g => {
+  const body = ['RETIRE', 'p', ['1', '1'], String(g)];
+  return {kind: 'T', g, body, id: digest(body)};
+};
+class Projection {
+  constructor() {
+    this.db = {g: 0, version: 0, mode: 'HELD', results: new Map(), receipt: null,
+      applied: 0, authorityEffects: 0, authorityK: null};
+    this.log = [];
+    this.commit = 0;
+    this.live = new Map();
+    this.fenced = false;
+    this.logEvents = [];
+  }
+  event(name, details = {}) { this.logEvents.push({name, ...details}); }
+  inventory() {
+    const occurrences = [...this.live.values()];
+    const ordinary = occurrences.filter(x => x.cmd.kind === 'A');
+    const futureA = new Set(ordinary.filter(x => !this.db.results.has(x.cmd.id)).map(x => x.cmd.id));
+    const maintenance = occurrences.filter(x => ['R', 'T'].includes(x.cmd.kind));
+    const futureM = new Set(maintenance.filter(x => x.cmd.kind === 'R' &&
+      !this.db.results.has(x.cmd.child.id) && this.db.receipt?.id !== x.cmd.id).map(x => x.cmd.id));
+    return {qA: ordinary.length, qM: maintenance.length,
+      retainedA: this.db.results.size, futureA: futureA.size, futureM: futureM.size,
+      aEntitlements: this.db.results.size + futureA.size};
+  }
+  read(cmd) {
+    if (cmd.kind === 'A' && this.db.results.has(cmd.id)) return copy(this.db.results.get(cmd.id));
+    if (cmd.kind !== 'A' && this.db.receipt?.id === cmd.id) return copy(this.db.receipt);
+    if (cmd.g < this.db.g) return {status: 'HISTORY_RETIRED', disposition: 'UNAVAILABLE'};
+    return {status: 'UNRESOLVED'};
+  }
+  admit(cmd, path = 'local') {
+    assert.equal(digest(cmd.body), cmd.id, 'canonical identity checked');
+    if (cmd.kind === 'R') {
+      assert.equal(cmd.child.g, cmd.g + 1);
+      assert.deepEqual(cmd.body.at(-1), cmd.child.body);
+      assert.equal(digest(cmd.child.body), cmd.child.id);
+    }
+    const result = this.read(cmd);
+    if (result.status !== 'UNRESOLVED') return {status: 'RESULT', result};
+    if (this.fenced) return {status: 'NOT_ADMITTED', reason: 'RECONSTRUCTION'};
+    const exact = [...this.live.values()].find(x => x.cmd.id === cmd.id);
+    if (exact) {
+      assert.deepEqual(exact.cmd.body, cmd.body);
+      exact.waiters = Math.min(2, exact.waiters + 1);
+      this.event('join', {id: cmd.id, path});
+      return {status: 'JOIN', ticket: exact.ticket};
+    }
+    const inv = this.inventory();
+    if (inv.qA > 4 || inv.qM > 1) return {status: 'NOT_ADMITTED', reason: 'OVER_PROFILE'};
+    if (cmd.g !== this.db.g) return {status: 'NOT_ADMITTED', reason: 'GENERATION'};
+    if (cmd.kind === 'A' && (inv.qA >= 4 || inv.aEntitlements >= 8))
+      return {status: 'NOT_ADMITTED', reason: 'A_CAPACITY'};
+    if (cmd.kind !== 'A' && inv.qM && !(mutant && cmd.kind === 'T'))
+      return {status: 'NOT_ADMITTED', reason: 'MAINTENANCE_BUSY'};
+    const ticket = ++serial;
+    this.live.set(ticket, {ticket, cmd: copy(cmd), phase: 'pre-core', index: null, waiters: 1});
+    this.event('admit', {id: cmd.id, kind: cmd.kind, ticket, path, inventory: this.inventory()});
+    return {status: 'ADMITTED', ticket};
+  }
+  append(ticket) {
+    const q = this.live.get(ticket);
+    assert.ok(q && q.phase === 'pre-core');
+    assert.equal(this.fenced, false);
+    q.phase = 'core';
+    q.index = this.log.length + 1; // Actual order event, never submit time.
+    this.log.push({index: q.index, term: 1, ticket, cmd: copy(q.cmd)});
+    this.event('ordered', {ticket, index: q.index});
+    return q.index;
+  }
+  phase(ticket, phase) {
+    const q = this.live.get(ticket);
+    const phases = ['core', 'ready', 'durable'];
+    assert.equal(phases.indexOf(phase), phases.indexOf(q.phase) + 1);
+    q.phase = phase;
+    this.event(phase, {ticket, index: q.index});
+  }
+  timeout(ticket) {
+    const q = this.live.get(ticket);
+    const before = this.inventory();
+    q.waiters = 0;
+    assert.deepEqual(this.inventory(), before);
+    this.event('waiter-timeout-debt-retained', {ticket, inventory: before});
+  }
+  commitThrough(index) {
+    assert.ok(index >= this.commit && index <= this.log.length);
+    for (const e of this.log.filter(x => x.index > this.commit && x.index <= index))
+      assert.equal(this.live.get(e.ticket).phase, 'durable');
+    this.commit = index;
+    this.event('commit-prefix', {index});
+  }
+  applyNext({failTransaction = false} = {}) {
+    const e = this.log[this.db.applied];
+    assert.ok(e && e.index <= this.commit);
+    const before = copy(this.db);
+    const cmd = e.cmd;
+    let disposition;
+    try {
+      if (cmd.kind === 'A') {
+        if (this.db.results.has(cmd.id)) disposition = this.db.results.get(cmd.id).disposition;
+        else if (cmd.g < this.db.g) disposition = 'HISTORY_RETIRED';
+        else {
+          assert.equal(cmd.g, this.db.g);
+          disposition = this.applyChild(cmd, e);
+        }
+      } else if (this.db.receipt?.id === cmd.id) disposition = 'REPLAY';
+      else if (cmd.g < this.db.g) disposition = 'HISTORY_RETIRED';
+      else {
+        assert.equal(cmd.g, this.db.g);
+        this.db.g++;
+        // Policy assumption: no obligation is pinned only by a release-result row.
+        // TX/query history does not exist in this narrow projection and is not deleted.
+        this.db.results.clear();
+        disposition = cmd.kind === 'R' ? this.applyChild(cmd.child, e) : null;
+        this.db.receipt = {status: 'RETIRED', id: cmd.id, fromG: cmd.g,
+          toG: this.db.g, index: e.index, term: e.term,
+          childK: cmd.child?.id ?? null, childDisposition: disposition};
+      }
+      this.db.applied = e.index;
+      if (failTransaction) throw new Error('explicit environmental failure');
+    } catch (error) {
+      this.db = before;
+      if (!failTransaction) throw error;
+      this.event('atomic-rollback', {index: e.index});
+      return {status: 'ENVIRONMENT_FAILURE'};
+    }
+    this.live.delete(e.ticket); // After atomic exchange; all other physical copies remain.
+    this.event('applied', {index: e.index, g: this.db.g, disposition, inventory: this.inventory()});
+    assert.ok(this.inventory().aEntitlements <= 8, 'result exchange within conditional A bound');
+    return {status: 'APPLIED', disposition, index: e.index};
+  }
+  applyChild(cmd, entry) {
+    assert.equal(cmd.g, this.db.g);
+    // Symbolic D2 predicate ONLY; this cannot validate real release provenance/discharge.
+    const ok = cmd.valid && cmd.version === this.db.version && this.db.mode === 'HELD';
+    const disposition = ok ? 'APPROVED' : 'REFUSED';
+    const result = {status: 'RESULT', disposition, id: cmd.id, body: copy(cmd.body),
+      index: entry.index, term: entry.term, winner: ok ? cmd.id : this.db.authorityK};
+    this.db.results.set(cmd.id, result);
+    if (ok) { this.db.version++; this.db.mode = 'OPEN'; this.db.authorityEffects++; this.db.authorityK = cmd.id; }
+    return disposition;
+  }
+  finish(ticket) {
+    this.append(ticket); this.phase(ticket, 'ready'); this.phase(ticket, 'durable');
+    this.commitThrough(this.log.length);
+    while (this.db.applied < this.commit) this.applyNext();
+  }
+  loseLeader() { this.fenced = true; this.event('leader-loss'); }
+  reconcile({discardFrom = null, provenPreCore = []} = {}) {
+    // These inputs represent the REQUIRED authoritative runtime/store interface,
+    // not an interface supplied by current production code or a map-miss guess.
+    if (discardFrom !== null) {
+      assert.ok(discardFrom > this.commit, 'cannot discard committed prefix');
+      for (const e of this.log.filter(x => x.index >= discardFrom)) this.live.delete(e.ticket);
+      this.log = this.log.filter(x => x.index < discardFrom);
+    }
+    for (const ticket of provenPreCore) {
+      assert.equal(this.live.get(ticket)?.phase, 'pre-core');
+      this.live.delete(ticket);
+    }
+    for (const e of this.log.filter(x => x.index > this.db.applied)) assert.ok(this.live.has(e.ticket));
+    this.fenced = false;
+    this.event('authoritative-reconstruction', {discardFrom, provenPreCore, inventory: this.inventory()});
+  }
+  recoveredDuplicate(ticket) {
+    const original = this.live.get(ticket);
+    assert.ok(original.index !== null);
+    const next = ++serial;
+    const index = this.log.length + 1;
+    const duplicate = {...copy(original), ticket: next, index, phase: 'durable'};
+    this.live.set(next, duplicate);
+    this.log.push({index, term: 1, ticket: next, cmd: copy(original.cmd)});
+    this.event('recovered-extra-physical-copy', {index, inventory: this.inventory()});
+    return next;
+  }
+}
+function run(name, work) {
+  const s = new Projection();
+  work(s);
+  outputs.push({name, status: 'PASS'});
+  events.push({name, events: s.logEvents, final: {g: s.db.g, version: s.db.version,
+    applied: s.db.applied, effects: s.db.authorityEffects, inventory: s.inventory()}});
+}
+function fill(s, n = 8) {
+  for (let i = 0; i < n; i++) {
+    const q = s.admit(a(s.db.g, `refusal-${s.db.g}-${i}`, s.db.version, false));
+    assert.equal(q.status, 'ADMITTED'); s.finish(q.ticket);
+  }
+}
+run('saturated-refusals-reserved-compound-result', s => {
+  fill(s);
+  const command = r(0, 'recovery');
+  const q = s.admit(command);
+  assert.equal(q.status, 'ADMITTED');
+  for (let i = 0; i < 32; i++) assert.equal(s.admit(a(0, `competitor${i}`, 0, false)).reason, 'A_CAPACITY');
+  assert.equal(s.inventory().futureM, 1);
+  s.finish(q.ticket);
+  assert.equal(s.read(command.child).disposition, 'APPROVED');
+  assert.equal(s.db.receipt.index, s.read(command.child).index);
+  assert.equal(s.db.authorityEffects, 1);
+});
+run('delayed-before-core-retirement-cannot-overtake', s => {
+  const command = r(0, 'delayed'); const q = s.admit(command);
+  for (let i = 0; i < 32; i++) {
+    const attempt = s.admit(t(0), 'forwarded');
+    assert.equal(attempt.status, 'NOT_ADMITTED', 'routine retirement must not take protected M');
+    assert.equal(attempt.reason, 'MAINTENANCE_BUSY');
+  }
+  s.finish(q.ticket); assert.equal(s.read(command.child).disposition, 'APPROVED');
+});
+run('timeout-ready-delay-then-late-commit', s => {
+  const command = r(0, 'late'); const q = s.admit(command);
+  s.append(q.ticket); s.phase(q.ticket, 'ready'); s.timeout(q.ticket);
+  assert.equal(s.inventory().qM, 1); assert.equal(s.inventory().futureM, 1);
+  s.phase(q.ticket, 'durable'); s.commitThrough(1); s.applyNext();
+  const before = copy(s.db); assert.equal(s.admit(command).status, 'RESULT');
+  assert.deepEqual(s.db, before); assert.equal(s.read(command.child).disposition, 'APPROVED');
+});
+run('local-forwarded-duplicates-and-physical-copies', s => {
+  const command = r(0, 'duplicate'); const q = s.admit(command);
+  assert.equal(s.admit(command, 'forwarded').ticket, q.ticket);
+  assert.equal(s.inventory().qM, 1);
+  s.append(q.ticket); s.phase(q.ticket, 'ready'); s.phase(q.ticket, 'durable');
+  s.recoveredDuplicate(q.ticket);
+  assert.equal(s.inventory().qM, 2); assert.equal(s.inventory().futureM, 1);
+  assert.equal(s.admit(a(0, 'new')).reason, 'OVER_PROFILE');
+  s.commitThrough(2); s.applyNext();
+  assert.equal(s.inventory().qM, 1); assert.equal(s.db.authorityEffects, 1);
+  s.applyNext(); assert.equal(s.inventory().qM, 0); assert.equal(s.db.authorityEffects, 1);
+});
+run('leader-loss-old-generation-suffix-remains-charged', s => {
+  const command = r(0, 'recovery'); const q = s.admit(command);
+  const old = s.admit(a(0, 'old', 0, false));
+  s.append(q.ticket); s.phase(q.ticket, 'ready'); s.phase(q.ticket, 'durable');
+  s.append(old.ticket); s.phase(old.ticket, 'ready'); s.phase(old.ticket, 'durable');
+  s.commitThrough(2); s.applyNext();
+  s.loseLeader(); assert.equal(s.admit(r(1, 'blocked', 1)).reason, 'RECONSTRUCTION');
+  s.reconcile(); assert.equal(s.inventory().qA, 1);
+  assert.equal(s.applyNext().disposition, 'HISTORY_RETIRED');
+  assert.equal(s.inventory().qA, 0); assert.equal(s.db.authorityEffects, 1);
+});
+run('leader-loss-before-order-and-authoritative-discard', s => {
+  const command = r(0, 'before-order'); const q = s.admit(command);
+  s.loseLeader(); s.reconcile(); // Absence of a log occurrence did NOT prove loss.
+  assert.equal(s.inventory().qM, 1); assert.equal(s.admit(r(0, 'other')).reason, 'MAINTENANCE_BUSY');
+  s.loseLeader(); s.reconcile({provenPreCore: [q.ticket]});
+  assert.equal(s.inventory().qM, 0);
+  const retry = s.admit(command); s.finish(retry.ticket);
+  assert.equal(s.read(command.child).disposition, 'APPROVED');
+});
+run('committed-before-apply-leader-loss', s => {
+  const command = r(0, 'committed'); const q = s.admit(command);
+  s.append(q.ticket); s.phase(q.ticket, 'ready'); s.phase(q.ticket, 'durable'); s.commitThrough(1);
+  s.loseLeader(); assert.throws(() => s.reconcile({discardFrom: 1}), /cannot discard committed/);
+  s.reconcile(); assert.equal(s.inventory().futureM, 1); s.applyNext();
+  assert.equal(s.read(command.child).disposition, 'APPROVED');
+});
+run('suffix-discard-releases-only-proven-occurrences', s => {
+  const command = r(0, 'discard'); const q = s.admit(command);
+  s.append(q.ticket); s.phase(q.ticket, 'ready'); s.phase(q.ticket, 'durable');
+  const ordinary = s.admit(a(0, 'also-uncommitted', 0, false));
+  s.append(ordinary.ticket); s.phase(ordinary.ticket, 'ready'); s.phase(ordinary.ticket, 'durable');
+  s.loseLeader(); s.reconcile({discardFrom: 2});
+  assert.equal(s.inventory().qA, 0); assert.equal(s.inventory().qM, 1);
+  s.commitThrough(1); s.applyNext(); assert.equal(s.db.authorityEffects, 1);
+});
+run('legitimate-refusal-lost-reply-later-valid-new-intent', s => {
+  const failed = r(0, 'real-invalid', 0, false); s.finish(s.admit(failed).ticket);
+  assert.equal(s.db.g, 1); assert.equal(s.db.version, 0);
+  const exact = s.read(failed.child); assert.equal(exact.disposition, 'REFUSED');
+  assert.deepEqual(s.admit(failed.child).result, exact);
+  const next = r(1, 'new-intent', 0, true); assert.notEqual(failed.child.id, next.child.id);
+  s.finish(s.admit(next).ticket); assert.equal(s.db.authorityEffects, 1);
+  assert.equal(s.read(failed.child).status, 'HISTORY_RETIRED');
+  assert.equal(s.read(failed).status, 'HISTORY_RETIRED');
+  assert.equal(s.read(next.child).disposition, 'APPROVED');
+});
+run('competing-maintenance-and-no-winner-borrowing', s => {
+  const winner = r(0, 'winner'); const loser = r(0, 'loser');
+  const q = s.admit(winner);
+  assert.equal(s.admit(loser, 'forwarded').reason, 'MAINTENANCE_BUSY');
+  s.finish(q.ticket);
+  assert.deepEqual(s.read(loser), {status: 'HISTORY_RETIRED', disposition: 'UNAVAILABLE'});
+  assert.equal(s.read(winner).childDisposition, 'APPROVED');
+});
+run('atomic-environmental-rollback', s => {
+  fill(s); const command = r(0, 'io-retry'); const q = s.admit(command);
+  s.append(q.ticket); s.phase(q.ticket, 'ready'); s.phase(q.ticket, 'durable'); s.commitThrough(s.log.length);
+  const before = copy(s.db); const inventory = s.inventory();
+  assert.equal(s.applyNext({failTransaction: true}).status, 'ENVIRONMENT_FAILURE');
+  assert.deepEqual(s.db, before); assert.deepEqual(s.inventory(), inventory);
+  s.applyNext(); assert.equal(s.read(command.child).disposition, 'APPROVED');
+});
+run('four-old-pending-entitlements-plus-one-child', s => {
+  fill(s, 4);
+  const command = r(0, 'capacity'); const q = s.admit(command);
+  const pending = Array.from({length: 4}, (_, i) => s.admit(a(0, `pending${i}`, 0, false)));
+  assert.equal(s.inventory().aEntitlements, 8);
+  s.append(q.ticket); s.phase(q.ticket, 'ready'); s.phase(q.ticket, 'durable');
+  s.commitThrough(s.log.length); while (s.db.applied < s.commit) s.applyNext();
+  assert.equal(s.inventory().aEntitlements, 5);
+  for (const p of pending) s.finish(p.ticket);
+  assert.equal(s.inventory().aEntitlements, 1);
+});
+// Original bad rules retained as COUNTEREXAMPLES, never silently made green.
+const oldSchedules = [];
+const saturation = new Projection();
+for (let cycle = 0; cycle < 6; cycle++) {
+  saturation.finish(saturation.admit(t(saturation.db.g)).ticket);
+  fill(saturation);
+  const blocked = saturation.admit(a(saturation.db.g, `starved${cycle}`));
+  assert.equal(blocked.reason, 'A_CAPACITY');
+  oldSchedules.push({cycle, g: saturation.db.g, result: blocked,
+    schedule: 'pure RETIRE -> eight competing refusals fill A -> recovery backpressured', recoveryApproved: false});
+}
+assert.equal(saturation.db.authorityEffects, 0);
+events.push({name: 'retained-unprotected-saturation-counterexample', events: saturation.logEvents});
+const overtake = new Projection();
+for (let cycle = 0; cycle < 6; cycle++) {
+  const request = a(overtake.db.g, `old-split${cycle}`);
+  const q = overtake.admit(request);
+  const maintenance = overtake.admit(t(overtake.db.g)); overtake.finish(maintenance.ticket);
+  overtake.finish(q.ticket);
+  assert.equal(overtake.read(request).status, 'HISTORY_RETIRED');
+}
+assert.equal(overtake.db.authorityEffects, 0);
+events.push({name: 'retained-unprotected-overtake-counterexample', events: overtake.logEvents});
+// Bounded hostile interleavings around six custody/service stages. These exhaust
+// 3^6 specified action strings ONLY; not the transaction/release state space.
+let explored = 0;
+for (let n = 0; n < 3 ** 6; n++) {
+  const s = new Projection(); const command = r(0, `bounded${n}`); const q = s.admit(command);
+  let choices = n;
+  for (let stage = 0; stage < 6; stage++) {
+    const choice = choices % 3; choices = Math.floor(choices / 3);
+    if (choice === 0) assert.equal(s.admit(t(0)).reason, 'MAINTENANCE_BUSY');
+    if (choice === 1) { const c = s.admit(a(0, `noise${stage}`, 0, false));
+      assert.ok(['ADMITTED', 'NOT_ADMITTED'].includes(c.status)); }
+    if (choice === 2) assert.equal(s.admit(command, 'forwarded').status, 'JOIN');
+    if (stage === 0) s.append(q.ticket);
+    if (stage === 1) s.phase(q.ticket, 'ready');
+    if (stage === 2) s.timeout(q.ticket);
+    if (stage === 3) s.phase(q.ticket, 'durable');
+    if (stage === 4) s.commitThrough(1);
+    if (stage === 5) s.applyNext();
+  }
+  assert.equal(s.read(command.child).disposition, 'APPROVED'); explored++;
+}
+// Count-based scheduling lemma; models rule, not actual runtime timing.
+const lanes = ['consensus', 'maintenance', 'hold', 'settlement', 'ordinary'];
+const serviced = [];
+let inbound = 100;
+for (const lane of lanes) { if (lane === 'consensus') { inbound--; inbound += 100; }
+  serviced.push(lane); }
+assert.equal(serviced.indexOf('maintenance'), 1); assert.ok(inbound > 100);
+console.log(JSON.stringify({kind: 'design-ordering-only', mutant, scenarios: outputs,
+  boundedInterleavings: explored, schedulerRule: {serviced, inbound},
+  oldSaturationCounterexample: oldSchedules, events}, null, 2));

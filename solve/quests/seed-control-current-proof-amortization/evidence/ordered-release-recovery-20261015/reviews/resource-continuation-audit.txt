@@ -1,0 +1,605 @@
+ORDERED RELEASE RECOVERY: RESOURCE AND CONTINUATION AUDIT
+2026-10-15; subagent:/root/snapshot_contract_audit
+
+Exact scope and identities
+--------------------------
+Worktree: /mnt/data/peter/projects/.worktrees/ordered-release-recovery-20261015
+Branch: review/ordered-release-recovery-20261015
+HEAD: c425ef42e18236ff1187e1112a971588bb02b496
+DESIGN-DRAFT-1.md SHA256:
+8ed366a7d544b09cb04a7bc2f67cd460e7f0d9d3c14ca53b3e66f8d3b717f889
+Actual AGENTS -> rules -> router read, followed by architecture/runtime and
+authority/recovery owners, the six requested complete category checklists and
+the named owner-interaction registry. npm run commands was consulted.
+
+Read-only source/design audit; no native/lab tests, executable probes, source or
+test changes, dependency changes, snapshot takeover or old evidence rewrites.
+Only this new report was written. At the final pre-report check, src/ and vendor/
+had no diff and only the new packet directory was untracked. No historical
+branch, process or worktree observation is asserted as a current lease.
+
+The proposed durable handoff is a meaningful improvement over merely reserving
+an APPROVE slot. It gives the existing continuation something authoritative to
+rediscover. It does NOT yet prove bounded volatile intake/reconstruction or
+eventual runtime service. Keep implementation HOLD and explicitly close the
+gaps below. This is a source-backed contract audit, not a new native RED result.
+
+Exact source SHA256
+-------------------
+src/node/replica-handler-release-recovery.js
+d3ddafe1710e8d709f9c1a80c5a0cec5940d4b9fd6b2d0cef6cb6771c4cd5b0d
+src/node/replica-handler-participant-cutover.js
+901a2c01d2966f0b000f8225b802cfec4e6f8e68c81d88cac5e19c8ca0920abd
+src/node/replica-handler-membership-relay.js
+3af4d88312712ab17686ffb79a33af94db92ada5dd305c8586de1945b863c52c
+src/node/participant-release-client.js
+74ae62ed71ffc0f1a9da863c7723df7516fc1c47200b5604eb787975231e4c29
+src/partition/partition-service-raft-lifecycle-wiring.js
+81155037f58cb809ff44289b0a052fcc0c36f3100e8f6e8133629abe04a32d87
+src/raft/raft-rs-runtime-owner.js
+a560a052bf9b470a2046009555162b60669c340d86274fca9c74126fc8fbd01b
+src/raft/raft-rs-durable-store.js
+88af05c5bcdf3d8f1209615a2d3f6c6427ab9ebf8951a1f66835402074c75d5f
+src/raft/raft-rs-application-transaction-owner.js
+f12ff39650a0c221212168129f24ff070b563bd3c65cb1498572af7e3642f6aa
+vendor/raft-rs-wasm/src/lib.rs
+c64131af8e32126f06a056e2560dc56aa37dc2d4aa4bfe6f02e9a50f3c431cc7
+
+Consumed surfaces and single ownership
+--------------------------------------
+The result/application owner records the exact retirement receipt, pending
+handoff bytes/reservations, deterministic disposition, release state and applied
+position. Runtime owns new-entry admission, physical occurrence custody,
+ordered execution, reconstruction and whether a replica can create new work.
+Durable store owns the exact retained/replaced suffix. ReplicaHandler's existing
+release continuation owns only discovering and redriving the exact obligation.
+TrackedServiceRegistry and operation-port events are wakes, not permission.
+Query and participant/TX1 owners retain global decision and settlement authority.
+Snapshot/application owners retain image provenance and atomic restore.
+
+Keep distinct: origin; partition; exact K/content digest; history G; release
+version; retirement receipt; pending handoff; physical log occurrence O; actual
+applied boundary; runtime/service incarnation; transactionId/transactionEpoch.
+Clearing a volatile pending map, caller waiter, transport ACK or old occurrence
+cannot clear the durable handoff or choose a transaction decision.
+
+Findings and minimal source traces
+----------------------------------
+RC1. A reserved opportunity is not bounded runtime intake or service.
+runtime-owner.js:961-986 serializes by chaining a Promise tail with no count or
+byte cap. :1945-1982 validates inbound shape then pushes an envelope with no
+count/byte cap. :1691-1742 drains inbound until empty BEFORE executing the
+queued command. sendMessages may await peer delivery (peer-delivery.js:88-127;
+runtime-owner.js:1143-1173), so more inbound can arrive during that drain.
+
+Trace: durable handoff K exists; its command is queued; each awaited inbound
+Ready send permits another admitted envelope; the drain need not become empty.
+K has its reserved entitlement but no service. Independently, many local callers
+can already have retained bytes behind the Promise tail. The draft correctly
+calls its scheduler NEW; its concrete contract must also bound pre-tail intake,
+inbound count AND bytes, per-turn service and the handoff's eventual turn.
+An existing 64 Ready-cycle bound (:1191-1199; group-constants.js:32) is not a
+command/entry-byte cap or fair scheduler. Do not raise it as the repair.
+
+RC2. A leader admission profile does not bound a lagging replica's backlog.
+Existing accepted entries arrive through Append, are stepped by :1709 and
+persisted by durable-store.js:404-413. They are prior history, not a new request
+for local release entitlement. A fast leader can apply, retire history and
+admit subsequent bounded batches while a follower's applied prefix lags. The
+follower can later receive an arbitrary finite number of those batches without
+violating the leader's instantaneous admission profile. On restart or later
+leadership, that replica can hold more pending occurrences than the profile.
+
+Required distinction: bounded receiver VOLATILE intake may defer/not accept
+additional retransmittable envelopes; it must not acknowledge application,
+discard accepted application history, refuse replay on current result pressure,
+or reject a complete committed prefix because its aggregate size exceeds the
+fresh-admission limit. Runtime can hold NEW creation while counting retained
+over-profile debt, yet must permit owned consensus, ordered apply and catch-up
+progress. Resource debt is not proof of corrupt/lost history and must not be
+mapped to holdForReseed, which stops ticks (operation-port.js:331-350).
+
+RC3. Current reconstruction materializes the whole retained log, not a bounded
+window. durable-store.js:207-248 calls SELECT_LOG_ENTRIES.all(groupId); its SQL
+(constants.js:89-94) has no index window/count/byte limit. runtime-owner.js
+:410-430 passes the entire entries array to create_node. wrapper lib.rs:420-426
+collects every entry into a native Vec and appends it into MemStorage; take_ready
+and advance_append similarly materialize full returned vectors (:562-580,
+:633-649). applyEntries recursively consumes the supplied array (:1100-1133).
+readCommittedEntriesIn (:638-650) reads entries AT OR BELOW applied; it is not
+an unresolved-suffix cursor and must not be reused under that false meaning.
+
+Trace: finite retained suffix exceeds proposed release Q after follower lag or
+old leader history; restart reads all bytes before any accounting refusal can
+act. Adding only a post-load quota does not bound reconstruction memory. The
+existing store/runtime/native owners need a bounded range/count/byte inventory
+and supported bounded restoration/replay path. Paging host SQL alone does not
+bound native MemStorage. If the retained image/suffix cannot fit current native
+reconstruction, return a precise capacity/recovery blocker and preserve it.
+The existing application snapshot/native-import dependency is an alternative
+only when that owner can prove a correct accepted image and suffix. It is not
+currently certified; do not invent truncation, a new installer or hidden storage
+path. Total database/storage quota redesign is outside this packet.
+
+RC4. The pending handoff must be checked before OLD release eligibility exits,
+and delivery must not run the old full cutover algorithm as a prerequisite.
+Exact current reconcile exits (release-recovery.js):
+  :194-197 no local leader -> settleNoLeader;
+  :199 D3 already OPEN -> silent return;
+  :200-204 absent write origin -> OPERATOR_REQUIRED, no retry armed here;
+  :205-210 build unmeasured -> OPERATOR_REQUIRED, no retry armed here;
+  :211-212 stopped/shutting down/replaced service -> return;
+  :213-217 full cutover, report, retry unless CUT_OVER.
+settleNoLeader :175-188 rearms only canonical host-held status; ordinary healthy
+followers/candidates are silent/event-driven, unavailable status is reported
+without cadence, and no services discharges volatile debt. Current behavior is
+intentional for the old observation contract, not an existing handoff bug.
+
+runCutoverAttempt additionally gates on deadline/current service/role (:245-260),
+origin or explicit authorization (:261-268), control release (:269-270), fresh
+facts/census/PAUSE/drain (:274-305), reopen (:309-310), query settlement and proof
+(:311-323), and final proof/control/resume (:327-346). Those are not permission
+to suppress delivery of an already committed exact K merely because today's
+prerequisites would refuse K. The future D2 application must consume its exact
+bytes and give its exact approved/refused disposition at its actual prefix.
+Keep lifecycle, correct runtime/origin and supported schema checks; unavailable
+authority retains the obligation with a typed owner consequence, never NONE.
+
+Minimal new-contract trace: handoff committed, current D3 appears OPEN or build
+measurement is unavailable, reconcile takes the existing early return. Without
+handoff-first observation, durable K is never offered although its entitlement
+exists. This is a falsifier of naively reusing current reconcile unchanged, not
+a newly executed native failure of symbols which do not yet exist.
+
+RC5. Ordinary applied progress currently does NOT wake the permanent release
+continuation. Runtime emits APPLIED_PROGRESS (:1293-1299). The partition relay
+(partition-service-raft-lifecycle-wiring.js:139-151) subscribes only MEMBERSHIP_
+CHANGED, LEADER_CHANGE and TERM_CHANGE. TrackedServiceRegistry relays that one
+CONSENSUS_OBSERVED event (membership-relay.js:76-112). Recovery subscribes to the
+registry and consensus relay (:244-254). The temporary applied-position observer
+does subscribe to APPLIED_PROGRESS (participant-release-applied-position-
+observation.js:30-33,244-246), but that request-lifetime observer is not durable
+handoff recovery and cannot be promoted into it.
+
+Trace: no pending recovery timer remains; handoff applies with unchanged
+membership/term/leader; its caller/after-commit notification is lost. No existing
+permanent applied-progress relay reaches reconcile. Add a coalesced wake through
+the existing relay/continuation and an authoritative handoff reread. The wake
+itself grants nothing. Runtime/application completion and reconstruction must
+produce the same level-triggered observation, including lost-notification cases.
+
+RC6. Startup discovery is a new obligation, not a demonstrated current startup
+bug. The handler creates an empty registry before recovery subscriptions
+(class.js:159,204); later set() calls notify subscribers (membership-relay.js
+:44-49). Normal production registration therefore already provides a wake.
+Recovery construction does not enumerate preexisting hosted services, and
+lifecycle initialize() has no pending-handoff scan (lifecycle-methods.js:79-105).
+The NEW contract needs an idempotent reconciliation entry for current hosted
+partitions on registration, runtime reconstruction, and startup completion;
+it must also safely handle a continuation attached to already-hosted services.
+Use the same per-partition queue, not a second scanner/workflow/permit authority.
+Absence of a client retry cannot strand a durable handoff. A true replica removal
+discharges only that runtime's volatile debt, not the stored obligation.
+
+RC7. Four running tasks bounds concurrency, not duration or all release work.
+Recovery MAX_CONCURRENT_ATTEMPTS=4 (:93) applies to dispatch :220-241. A task
+occupies its slot until its Promise settles; shutdown awaits all running tasks
+(:300-308). Full cutover calls settleTransactionReleaseRows with engine/service/
+census/now but WITHOUT the release deadline (cutover.js:119-124). That function
+awaits query authority, local settlement and participant delivery sequentially
+(distributed-transaction-release-settlement.js:93-139,149-219), with no enclosing
+release deadline parameter. Remote release observations carry a 5s/request cap
+and original deadline (participant-release-client.js:36-49,107-121); these do not
+establish a bound for every local QueryEngine wait. Existing inner query bounds
+must remain; this audit does not assert a hung call has been observed natively.
+
+Trace if four underlying awaits do not return: four recovery slots stay busy;
+the fifth handoff never receives a continuation turn and shutdown also waits.
+The new handoff path must not join that unrelated full prerequisite-building
+work before delivering K. Waiting-budget handoff remains an explicit existing
+owner interaction to close. Detaching an expired caller/attempt cannot cancel
+Q/TX settlement or clear consensus/handoff debt. No timeout increase, detached
+duplicate worker, fabricated success or release-owned rollback is justified.
+Fresh/operator requests can enter runParticipantCutover outside the background
+four-slot dispatcher; do not advertise four as a global release concurrency cap.
+
+RC8. Current cutover single-flight is not exact-K coalescing.
+runParticipantCutover uses RUNS[handler][partitionId] and joins a current promise
+if targetBuildDigest matches (:365-387). It does not compare a canonical release
+request K/content. That is the present whole-cutover owner, not an existing exact
+result contract. The handoff extension must keep one partition continuation,
+but distinct incoming intents cannot receive K's exact historical result merely
+because their build matches. Repeated exact K joins its runtime/result custody;
+a competing immutable request is typed pending/backpressured or gets its OWN
+ordered disposition. The result owner supplies that distinction; the volatile
+RUNS map must not decide a winner or forget an unknown request on caller expiry.
+
+RC9. Cadence alone is not a retry storm ceiling, and every scheduler stop must
+have a consequence. enqueue :140-147 coalesces one due timestamp per hosted
+partition but a new event can replace a future due time with now. Therefore
+RECOVERY_RETRY_MS=1000 is the failure cadence, not a hard attempts/second cap
+under continuous events. pending/running/reported have per-partition cardinality;
+MAX_CONCURRENT_ATTEMPTS limits only running background tasks. report :159-172
+suppresses an unchanged signature for 30000ms but changing signatures can log
+more. Pending handoff must join one physical custody/result claim and events
+must coalesce into bounded work, not create a new request or another timer loop.
+
+arm :116-137 reports timer-registration failure and clears its volatile pending
+map; it does not leave a registered-but-dead timer. For the NEW durable handoff
+that failure must remain a visible scheduled-work-unavailable condition whose
+owner recovery/re-registration/startup event rereads the cell; it cannot be
+reported as discharged. shutdown, unhosted and replaced-service exits are
+lifecycle exits only. Unknown/malformed/unreadable cell state stays an explicit
+HOLD. Do not encode it as empty pending and rely on a nonexistent retry.
+
+RC10. Pending-handoff reservation needs a separate physical-accounting rule.
+The draft correctly adds exact K bytes to the fixed cell and preserves the
+retirement receipt after K completes. It must charge those bytes while they
+coexist with outer RETIRE_FOR_APPROVE bytes, K pre-core/native/Ready/suffix
+copies, and its future result. A reserved future occurrence is not an actual
+log occurrence; transfer of that reserved allowance into an admitted physical
+copy must be atomic with respect to the serialized runtime view. Exact pending
+retries cannot claim another entitlement; unexpected duplicates still cost
+physical bytes. Authoritative suffix discard refunds only the discarded
+occurrence and retains the cell's obligation to offer exact K again. A local
+miss or stale reconstructed view cannot override newer live custody.
+Current store.persistReady/appendEntries (:404-443) exposes no typed occurrence
+replacement delta; current application transaction (:51-99) is the correct
+atomic state/result/applied boundary, with afterCommit only a derived wake.
+
+RC11. Retained TX/query obligations and snapshot dependencies remain separate.
+Release sizing cannot reject larger acknowledged DECISION bytes or refuse
+settlement/replay to make its Q fit. Preserve the previous settlement audit:
+local staging is 256 operations/1MiB but does not bound full PREPARE, global
+DECISION or terminal history. Query keeps decision/manifest/discharge custody;
+P keeps prepared rows/terminal replay; release only consumes the outcomes.
+If measured retained settlement cannot fit its supported path, retain it and
+name the exact owner/capacity blocker. Do not borrow or spend the handoff's
+closure opportunity to conceal unbounded TX grammar, and do not block settlement
+on D3 OPEN. Application image/native import remains the existing snapshot
+owner's dependency, not a way to forget backlog without proving its effects.
+
+Smallest bounded source-backed interface extension
+-------------------------------------------------
+These are semantic signatures to review, NOT present exports or production
+authorization. They stay inside the existing runtime/store/result/release
+owners and operation-port boundary. No raw Raft object, new queue service,
+permit service or alternate workflow algorithm is proposed.
+
+I1. Result/application owner: readReleaseContinuation(service identity,
+    application boundary) -> PENDING{origin,G,K,exactBytes,charges,createdAtActual
+    Position}, NONE{origin,G,actualAppliedPosition}, or UNAVAILABLE/UNSUPPORTED.
+    Receipt and current handoff are separate. Reading NONE authorizes no new
+    request until runtime proves predecessor-prefix/custody reconciliation.
+    Read current owned storage, not a CDC projection or stale build/census.
+
+I2. Runtime: claimNewCreation(exact encoded requirement, current incarnation)
+    -> JOIN, admitted ticket, retained result, or NOT_ADMITTED typed reason.
+    Claim count/bytes and result entitlement BEFORE Promise-tail retention.
+    Gate forwarded MsgPropose at the current leader too; Append is replication
+    custody, not new client admission. Public callers cannot self-select the
+    recovery class. A validated pending cell identifies exactly one K eligible
+    for the protected opportunity. Old-origin or unknown inventory stays held.
+
+I3. Runtime/transport: acceptInbound(envelope) -> accepted bounded volatile
+    custody or typed not-accepted/retryable delivery. Bound aggregate count and
+    bytes before retaining/cloning; count message/entry encoding expansion.
+    Rejected volatile Append must remain retransmittable by Raft; no ACK/result
+    may falsely certify application. Already retained/committed bytes are not
+    deleted when intake is full. Give replication/ticks/config/settlement and
+    the eligible handoff bounded service in the same serialized owner.
+
+I4. Runtime/store: readCustodyWindow(expected origin/application frontier,
+    cursor, count/byte budget) -> exact bounded occurrences, next cursor,
+    COMPLETE or typed invalidated/unavailable/oversized obligation.
+    Read actual positions and classify canonical bytes, including duplicates.
+    Store suffix replacement returns an exact committed replacement delta.
+    Reconcile slices in runtime serialization; a changed prefix/generation or
+    newer live transfer invalidates/reconciles a scan rather than clobbering it.
+    The current whole-record reader and native constructor do not implement
+    this. Metadata-only length/count preflight can detect a too-large record
+    before materializing payload, but is not a supported bounded restore by
+    itself. One oversized retained entry needs its existing owner's explicit
+    policy; it must not be silently omitted to satisfy a page size.
+
+I5. Runtime: serviceOwnedWork(bound current generation, bounded count/bytes
+    per slice) advances ordered predecessor apply/inbound/consensus and offers
+    pending K. It must not require complete inbound emptiness as the only
+    chance to run K, nor skip committed prefix entries to run K early. After a
+    bounded accepted batch, the same owner schedules the next slice; clocks
+    and lifecycle fences remain unchanged. Fixed admission priority without
+    this service rule is insufficient. Native Ready batching/restoration is
+    an explicit missing owner capability where current arrays exceed the
+    selected window. No numeric window is justified by this source-only audit.
+
+I6. Existing release continuation: reconcile partition -> validate current
+    hosted lifecycle and runtime availability -> read pending FIRST -> if
+    pending, offer exact K through runtime and observe its existing result;
+    if none AND inventory reconciled, only then evaluate current ordinary
+    build/origin/census/new-release intent. Failure to read/drive never clears
+    durable pending. Actual apply, handoff-state publication, current service
+    registration, reconstruction and startup all enqueue the same owner key.
+    Extend the existing relay to expose coalesced applied-progress wakes; do
+    not turn a request-lifetime observer into a second recovery owner. Preserve
+    per-partition serialization and bounded attempt lifetime under the existing
+    deadline handoff, independently of the durable obligation's longer life.
+
+I7. Over-profile runtime mode: hold NEW creation, preserve counted actual debt,
+    allow ordered replay/required consensus/owned closure and measured TX/query
+    settlement. A later applied/retired/discarded frontier or accepted owner
+    snapshot can permit a fresh inventory and reopen only creation capacity.
+    Do not reuse membership participation, history-loss reseed or D3 permission
+    as a quota bit. Those facts have different owners and consequences.
+
+This is a narrow custody/continuation extension. It does not set a total database
+quota, alter global transaction decisions, redesign snapshot storage or claim
+current source already meets the proposed bounds.
+
+Required native witnesses (not executed; symbols absent are not semantic RED)
+----------------------------------------------------------------------------
+W1. Commit handoff, lose caller/afterCommit notification, make ordinary cutover
+    build/census/OPEN preconditions unsatisfied, and show current owner offers
+    exact K and records its actual D2 disposition. Include process reconstruction,
+    registration after recovery subscription and already-hosted reconciliation.
+W2. Saturate ordinary pre-core/inbound work while K is pending; progress real
+    Raft ticks/replication/configuration/authoritative TX settlement in the SAME
+    trace; verify bounded intake bytes, service turns and no duplicate result.
+W3. Follower lags across more leader batches than release Q, receives/applies
+    actual native history, then changes leader/restarts. New creation stays
+    held until exact inventory is safe; no accepted command/effect/result/handoff
+    disappears. Show replay cursor/native memory envelope or explicit blocker.
+W4. Lose leadership before/after retirement apply; duplicate K; replace its
+    uncommitted suffix; reconstruct. Only discarded occurrence credit is freed;
+    the durable handoff reproposes identical K. Transaction rollback of apply
+    leaves state/result/applied/cell/charges old together; commit leaves new
+    together even when notification is lost.
+W5. Timer registration failure, service replacement/shutdown, malformed/unreadable
+    inventory, transport ACK+noHandler and late replies yield typed outcomes;
+    new current service/owner recovery wakes progress without client retry.
+    Retain first failure and use genuine contract-shaped transport behavior.
+W6. Existing owner snapshot witness: actual native accepted Ready/install plus
+    atomic application/native image and suffix replay preserve the pending cell,
+    receipt, outcomes, obligations and charges at one boundary, while receiver
+    D3 stays CLOSED. Restart or SQLite serialize length is not that proof.
+
+Category-complete review
+------------------------
+Evidence references below are existing source or the precise proposed witness,
+not claims that the new behavior has been implemented or measured.
+
+RECOVERY/REPLAY (5)
+R1 Stale/live: runtime generation fence :395-407 and serialized enqueue :961-986
+   protect current turns. New inventory restore must cover all write seams:
+   durable cell read, pending-key projection, occurrence projection, future
+   result entitlement and live-ticket overlay. RC10/I4 forbid a stale scan from
+   replacing newer custody; W4 is missing. No CDC-derived empty inventory.
+R2 Restart/live: readOpeningRecord/createNodeArguments :410-430 and reconstruct
+   :877-906 restore durable history; new handoff projection must use current
+   origin/runtime incarnation and applied boundary, not empty process maps.
+   RC3/RC6 and W1/W3 expose the missing bounded restore/discovery proof.
+R3 Lost enlistment: release must not rederive Q's participant set. Preserved
+   settlement audit and release-settlement.js:61-81,184-203 require exact retained
+   manifest/decision. Nonempty pending K also cannot become NONE because a
+   lookup failed. Legitimately NONE remains typed after an authoritative read.
+R4 Dedup/rollback: application transaction :51-99 is the only state/result/applied
+   exchange. Exact K replay must not clear/recreate history or receipt. Its
+   rollback rolls back new result/cell/charges with effects; occurrence debt
+   survives. Discard releases only that occurrence, RC10/W4.
+R5 Absence: store read failure is typed by its existing reader; I1 distinguishes
+   NONE/UNAVAILABLE. Source missing retained history routes existing lifecycle
+   HOLD, not fresh bootstrap (:433-437,603-623). RC2 prohibits confusing large
+   backlog with absence; W3/W5 must prove it.
+
+RETRY/REDRIVE (7)
+T1 Retry fires or stops loudly: recovery arm/dispatch :116-137,220-241 registers
+   one timer, reports registration failure and has no false live timer. For
+   the new obligation RC5/RC6/RC9 require applied/reconstruction/startup re-drive
+   and typed scheduler-unavailable debt. W1/W5, not a live map entry, is proof.
+T2 Frozen evidence: pending K bytes/position survive caller deadlines; read
+   unavailability keeps an owned HOLD. Existing outer 30s release budget does
+   not reach every QueryEngine wait (RC7). Require bounded attempt custody;
+   durable unresolved obligation does not expire merely to bound a loop.
+T3 Stops enumerated: reconcile :194-212, settleNoLeader :175-188, enqueue :141,
+   arm :117-137, dispatch :222, shutdown :300-308 and cutover early exits are
+   listed in RC4/RC9. Old silent OPEN/healthy-nonleader exits are legitimate old
+   behavior, but cannot silently discharge new durable pending. Distinguish
+   lifecycle stop, not-local-driver, scheduled retry and owner-required HOLD.
+T4 Mutual suppression: pending K must bypass new-intent drain/build gates, while
+   its ordinary D2 predicates still decide effect. Quota must not gate the
+   replay/settlement needed to free it (I5/I7); full inbound drain must not
+   permanently precede K (RC1). W1-W3 are the paired progress witnesses.
+T5 Storm ceiling: without external wakes, one failed attempt followed by 1s
+   cadence gives at most 1+floor(T/1000ms) starts per partition in duration T,
+   subject to attempt time and four background slots. With arbitrary events
+   this is NOT a bound because enqueue accelerates due time. Cardinality is
+   one pending/running/report per hosted partition and one timer, not a fixed
+   host-count limit. Logs suppress same signature for 30s; changed signatures
+   and direct fresh/operator calls are not covered. New event coalescing,
+   bounded caller intake and fair service need W2; no false measured rate.
+T6 Late-success duplicate safety: K/result must be reread, joined or replayed,
+   not re-created. Current RUNS build-digest join is insufficient (RC8).
+   Application-owned dedup and W4 cover late success after waiter expiry.
+T7 Reset: no new attempt counter is proposed. A transport-delivered or enqueued
+   status cannot reset durable pending or free its charge; only actual result
+   or authoritative occurrence discard moves the appropriate state. Receipt
+   never changes when pending K clears. RC10/W4/W5 preserve the distinctions.
+
+FORMATION/CIRCULARITY (5)
+F1 Self dependencies: release new-intent cutover asks control release, census,
+   query settlement and its own partition application (cutover :110-181,245-346).
+   Delivering stored K requires only its current owned lifecycle/runtime/cell
+   and the ordinary consensus path, not D3 OPEN or completed query discharge.
+   D2 may legitimately refuse. Unavailable restored state remains held (I1/I6).
+F2 Rediscovery: registry/consensus wakes exist; ordinary applied relay and durable
+   startup/reconstruction discovery are missing (RC5/RC6). Extend the same owner
+   queue; never rely only on CDC of the recovering subsystem or client retry.
+F3 Window clients: new release/ordinary work receives typed NOT_ADMITTED under
+   its existing deadline, while previous accepted history and TX settlement
+   retain custody. The full binding protocol is not implemented; W2/W3 need
+   actual admission and participant outcomes in the same trace.
+F4 Arithmetic: 4 concurrent background attempts, 30s nominal release budget,
+   5s per release RPC, 1s failure cadence are source constants, not measured
+   end-to-end recovery latency. RC7 prevents asserting a finite total attempt
+   bound today. Catch-up bytes, native slice cost and tightest caller margin
+   are UNMEASURED; require W2/W3 before any numeric service guarantee.
+F5 No bypass: I1-I7 keep existing result/runtime/store/release/Q/P owners and
+   preserve snapshot dependencies. No raw core driver, direct row-deletion,
+   alternate installer, competing permit service, fake discharge or compensate-
+   PAUSE rollback. If native reconstruction cannot fit, RC3 is explicit HOLD.
+
+CONCURRENCY/SERIALIZATION (5)
+C1 Sync/async: recovery synchronously marks running after constructing task
+   (:230-239), with no timer interleaving before registration; runtime tail
+   claims each turn synchronously (:961-986). Neither is a byte bound. I2
+   requires a synchronous resource claim before retaining async work, with
+   durable application/custody backstop; W2/W4 missing.
+C2 Await races: reconcile checks current service after build (:211-212); old
+   cutover repeatedly validates its own phases. New handoff driver must recheck
+   exact service/runtime generation, K/origin and inventory after awaits and
+   before core transfer, retaining prior claims until proof. I4 scan/frontier
+   freshness cannot be inferred from when a SQL read was submitted.
+C3 Single winner: result-owner cell application and actual log order determine
+   installed handoff; competing dispatches only nudge it. Runtime local and
+   forwarded creation share the same gate (ingress:168-196; runtime:1691-1742).
+   Existing delayed maintenance already in consensus needs deterministic
+   application semantics beyond an ingress check; that design question remains
+   with the principal/result owner, not solved by this resource review.
+C4 Timer reentry: one recovery timer and per-partition running map converge
+   events/retries into dispatch; runtime inbound wake and group turn likewise
+   serialize. RC7/RC9 preserve owed work when timers fail or awaits persist.
+   Shutdown discards volatile wakes only; W5 covers new durable obligation.
+C5 Key honesty: work key partitionId, lifecycle key exact service/incarnation,
+   request key K, occurrence key actual index/term/digest, physical budget key
+   owning runtime/group. targetBuildDigest alone is not request identity (RC8).
+   No independently renewed per-client quota can bound aggregate custody.
+
+TRANSPORT/DELIVERY (5)
+D1 ACK not processed: participant-release-client.js:97-104 requires DELIVERED,
+   noHandler!=true and a typed release result. Peer delivery :74-84 also treats
+   noHandler/defer/error as failure. Preserve these checks. No ACK proves K's
+   durable result or releases its slot; only application owner does.
+D2 Late replies: request deadline only retires waiter. Pending cell/outcome and
+   actual suffix remain authoritative. Existing release client does not own
+   their deletion; I1/I2/RC10 and W4/W5 must prevent a late no-handler/unknown
+   reply from cancelling the only durable re-drive.
+D3 Classification: reuse classifyTransportDeliveryOutcome in release client
+   :117-130; future internal states distinguish NOT_ADMITTED, UNKNOWN custody,
+   PENDING, APPLIED exact result and UNAVAILABLE inventory. Map deferRetry/
+   retryAfterMs through the existing boundary; do not conflate queued with
+   applied or reset a retry on transport acknowledgement.
+D4 No hanging claim: release RPC timeout is bounded by existing deadline,
+   client :36-49,107-121. Peer sendMessages awaits promises and local query
+   settlement lacks an inherited release deadline (RC7). This audit cannot
+   prove every downstream operation settles within that budget; leave exact
+   existing owner handoff unresolved rather than increase timeouts or spawn
+   detached duplicate work. Pending K requires eventual owned service.
+D5 Stub fidelity: no stubs or tests were added/run. Future W5 must use actual
+   router/contract-backed stub with ACK+noHandler, deferred delivery, timeout
+   and late response. test/contract/message-router-contract.test.js is the
+   named contract; missing new methods are setup failure, not semantic RED.
+
+OWNER INTERACTION (10)
+O1 Sole decision: result/application owns receipt/handoff/disposition; runtime
+   owns custody and ordered service; Q/P own settlement. I1-I7 and application
+   transaction :51-99 keep diagnostics, event relays and scheduler from granting
+   release or choosing global COMMIT/ROLLBACK.
+O2 Typed seam: new PENDING/NONE/UNAVAILABLE read, exact requirement claim,
+   occurrence delta and bounded inventory are explicit NEW interfaces. Current
+   raw maps/counters do not implement them. Caller priority or force flags
+   cannot select reserved handoff eligibility (RC10/I2).
+O3 Paired invariants: prevent over-admission while preserving already accepted
+   follower history/settlement and eventual K service. W2/W3 must prove all in
+   one deterministic native trace. A guard that makes capacity green by stopping
+   replay/consensus or discarding backlog is rejected; no paired green exists.
+O4 Stale->fresh: old unavailable inventory/service status cannot remain a veto
+   after actual recovery. New apply/reconstruction/registration wakes rerun I1
+   and I4 under current generation; never grant from the wake payload. RC5/RC6,
+   W1/W5. Current lifecycle identity checks remain, not overridden.
+O5 Backpressure: I2/I3 refuse before new custody; legacy debt remains counted.
+   Keep runtime recovery not-before and existing release cadence; coalescing
+   cannot bypass owner deferral. RC1/RC7/RC9 prevent fixed reserves being
+   mistaken for service/queue bounds. W2 needs actual saturated resources.
+O6 Release event: application advances K/result/cell; exact suffix discard can
+   release one occurrence; restored authority or valid snapshot can reduce
+   replay debt. All nudge the same queue. Ordinary applied wake is missing now
+   (RC5); timers alone do not close that owner interaction.
+O7 Projections: pending/running/reported, RUNS, D3 WeakMap, peer observations,
+   CDC census and emitted progress are views or local state. Only authoritative
+   cell and exact application/suffix facts resolve K or debt. RC4/RC8/RC10.
+O8 Negative fidelity: all traces here are source-derived requirements, not new
+   native REDs. DESIGN-DRAFT-1 hash and source hashes bind this review. Future
+   revert controls must reach the semantic stale/pressure/replay assertion;
+   missing handoff interfaces do not prove the claim.
+O9 No escape hatch: inspected continuation, cutover, request client, runtime,
+   ingress, store and wrapper; there is no existing pending-handoff path or
+   bounded restore to reuse by renaming. I1-I7 extend owners explicitly. No
+   direct raw core access, new queue/permit service, arbitrary history deletion,
+   lower-level census-as-permission or second persistence route is proposed.
+O10 Registry/proof: coupledPairs raft-rs-runtime-application-transaction at
+   test/shards/impact-contracts.json:1540-1614 connects ready-persistence-and-
+   reconstruction to application-and-progress-transaction, including current
+   release continuation and relay. Existing witnesses include operation-port-
+   ready-recovery.test.js, runtime-load-recovery.integration.test.js,
+   test/node/replica-handler-release-recovery.test.js and participant-release-
+   prepared-settlement-native.test.js. W1-W6 and any updated relay/runtime/store
+   endpoints must be registered with the complete future owner change. No test
+   or metadata was edited by this audit.
+
+Preserved dependencies and stop boundary
+----------------------------------------
+SNAPSHOT-DECISION.md remains byte-identical, SHA256
+998be9039a942a8a4d0d03938991130d8e1250dab8b3befbbb3ee660bfa92329.
+Preserved refs, NOT current leases:
+9554f689ef1fd4560e23ed8ca4f386266539f83f
+458076e64b4e36ac1525f93f6daa41bbf3fadc5c
+2384216d16d11dc6d62a682ffef192dc944a7a15
+82b54ef9b7c8d6be9f2d6450cbc5e6713ade00af
+Its one-B application/native provenance, INIT activation distinction, committed
+accounting, query discharge/pins, receiver-local identity/eligibility, native
+accepted Ready and atomic import requirements continue to apply to the NEW
+pending cell/receipt. No snapshot census or implementation was repeated here.
+
+All 37 requested checklist items are addressed above. Principal decisions still
+needed: bounded intake/service/reconstruction mechanism; exact cell/copy charge
+transfer; handoff-first continuation/discovery and wakes; inherited deadline
+handoff; typed over-profile recovery with correct existing owner path. All
+native proof remains future work. Keep TX/query settlement outside release
+budgets and retain the existing snapshot/native-storage blocker honestly.
+
+Production HOLD; successor unsealed/unactivated; shared-control-wave HELD;
+Runner/TAP PARKED; PR122 and bde70cec remain rejected. Stop at independent
+resource/continuation review; no implementation or merge authorization.
+
+Addendum: principal's smaller atomic alternative received during report close
+----------------------------------------------------------------------------
+The principal is considering RETIRE_AND_APPROVE carrying immutable K(G+1),
+with retirement and K's exact ordinary D2 disposition in ONE application
+transaction. This is an alternative under review, not an audited final command
+schema or authorization to implement. Draft1 and its findings remain preserved.
+
+If that alternative establishes NO durable pending K after the atomic commit,
+the draft1-specific pending-handoff read/discovery/wake requirements in RC4-R6
+and I1/I6 do not automatically apply. No new pending-cell continuation, permanent
+applied-progress relay or startup scan should be implemented merely to repair
+an obligation the selected protocol no longer creates. RC4-R6 were conditional
+draft-integration findings, not demonstrated new production bugs. The old
+release path's eligibility and deadline behavior remains separately owned.
+
+The alternative still requires: bounded pre-core/inbound intake and service
+(RC1); preserving over-profile follower history and new-leader custody (RC2);
+an honest bounded reconstruction/native-storage limitation (RC3); exact request
+identity and result matching rather than build-only coalescing (RC8); and
+charge transfer for the outer maintenance command, embedded immutable bytes,
+physical duplicates, exact results and uncertain custody (RC10). There would
+be no future K occurrence to reserve if K is only an embedded deterministic
+sub-action, but every actual physical maintenance occurrence remains charged.
+The result owner must specify that shape; this auditor does not select it.
+Any supported replay/catch-up still preserves TX/query obligations and the same
+snapshot dependencies. Atomic application does not make an unbounded runtime
+Promise tail, inbound queue or whole-log restore bounded.
+
+The principal reports two current-source native observations at c425ef42:
+persistence on lenovo, 4 tests in 1773ms; Ready recovery on adams, 7 tests in 804ms.
+This auditor did not execute or independently inspect those run artifacts;
+they are attributed owner-baseline observations, not proof of either proposed
+retirement protocol, a new memory bound or snapshot/install closure.

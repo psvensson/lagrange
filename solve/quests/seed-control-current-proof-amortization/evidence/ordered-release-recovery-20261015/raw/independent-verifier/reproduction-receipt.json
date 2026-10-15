@@ -1,0 +1,40 @@
+{
+  "source": "/tmp/lagrange-ordered-recovery-20261015.4psvvgot/ordering-traces.mjs",
+  "sourceSha256": "228dc3bcfaf482e6f5775d83015d96596fd2b5e00d81bcd42e85a099b3be8502",
+  "nodeVersion": "v22.23.2",
+  "runs": [
+    {
+      "name": "positive",
+      "command": [
+        "node",
+        "/tmp/lagrange-ordered-recovery-20261015.4psvvgot/ordering-traces.mjs"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "retire-overtake-negative",
+      "command": [
+        "node",
+        "/tmp/lagrange-ordered-recovery-20261015.4psvvgot/ordering-traces.mjs",
+        "--allow-retire-overtake"
+      ],
+      "exit": 1
+    }
+  ],
+  "scenarioCount": 12,
+  "allScenariosPass": true,
+  "boundedInterleavings": 729,
+  "positiveMatchesRootBytes": true,
+  "negativeMatchesRootBytes": true,
+  "schedulerRule": {
+    "serviced": [
+      "owed-tick",
+      "consensus",
+      "maintenance",
+      "hold",
+      "settlement",
+      "ordinary"
+    ],
+    "inbound": 199
+  }
+}

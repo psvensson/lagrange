@@ -1,0 +1,9 @@
+{
+  "priorContractSha256": "3d35778bfeea29c93f230a6b2f4fc2ad7c0aaa1042c45d48ebd983244c65d89c",
+  "finalContractSha256": "f1357f2f68df9da811b32df22eab3e49d9c6870dfd3f0ed8af608d317297f37e",
+  "traceSha256": "77863f5f600cf9764e4f25dc5c9f75abbbae715603069a9f9af34df71dc8e1cf",
+  "scope": "Doc-only distinction: local over-profile custody gates new creation, not deterministic application of accepted history. Active-leader exchange count bound is not a follower apply guard. No new test run.",
+  "filesAdded": [
+    "ORDERED-RECOVERY-CONTRACT-final-reviewed.md"
+  ]
+}

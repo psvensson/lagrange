@@ -1,0 +1,619 @@
+ORDERED RETIREMENT / RECOVERY — INDEPENDENT DESIGN VET
+
+Reviewer: subagent:/root/release_capacity_audit
+Scope: read-only source/design review. This file is the only review artifact
+written. No production/test/historical edits, test executions, lab leases,
+dependency changes, merges, successor activation or sealing were performed.
+
+Baseline/worktree:
+c425ef42e18236ff1187e1112a971588bb02b496
+/mnt/data/peter/projects/.worktrees/ordered-release-recovery-20261015
+
+Read actual AGENTS -> docs/steering/rules.md -> router.md, conditional
+authority-and-recovery/runtime owners, and every applicable full verification
+template. Checked the current baseline and source anchors. Historical leases
+were not used as authority. The source owners are unchanged from the preceding
+reviewed runtime/result packet; the proposed commands/interfaces do not exist.
+
+CONTENT IDENTITIES FOR THIS INITIAL REVIEW
+
+DESIGN-DRAFT-1.md
+8ed366a7d544b09cb04a7bc2f67cd460e7f0d9d3c14ca53b3e66f8d3b717f889
+
+ORDERED-RECOVERY-CONTRACT.md
+01195762f20f5f6bf6a656c4e7ec625b09456e9c6ec1230ed025470f71072354
+
+The numbered contract references below bind that exact version. A later text
+requires a separately identified correction pass; this review does not silently
+follow changes to a filename.
+
+DECISION
+
+Select atomic RETIRE_AND_APPROVE over the split durable pending handoff.
+The existing synchronous application owner can perform retirement, exact child
+disposition, any accepted release transition, receipt replacement and applied
+position in one SQLite transaction at one actual Raft position. No inspected
+owner requires two log positions. This is a smaller source-compatible design
+direction; it removes the pending-K redrive state, future native occurrence
+escrow and the interval in which another retirement could overtake K.
+
+This is ACCEPT for that architectural selection, not production approval.
+The initial exact contract needs the corrections/qualifications N1-N7 below.
+Its logical arithmetic and A-class exchange are conditionally coherent. Current
+native finite custody, intake, reconstruction, physical memory, closure fairness,
+snapshot import, complete settlement and deadline contracts remain HOLD. No
+native RED/green or production defect is newly established by this source vet.
+
+CONSUMED SURFACES — PRESENT VERSUS PROPOSED
+
+S1. src/raft/raft-rs-application-transaction-owner.js:51-99 is the present
+    synchronous transaction owner. At :61-80 it invokes the application with
+    actual entry.index/term/effects and writes applied state in that transaction.
+    Async application is forbidden. Rollback and post-commit effects are distinct.
+    This supports one compound command; RETIRE_AND_APPROVE itself is NEW.
+
+S2. src/partition/partition-coordinator-settlement.js:35-44 reads the fixed
+    typed owner_result_text; :73-103 performs existing-row application plus an
+    exact statement outcome. It is a precedent for extending the existing
+    result owner, not permission to use its settlement grammar for release.
+    src/partition/partition-committed-statement-outcome.js:109-145 owns reads
+    and insertion; :288-307 owns retained replay. No release-result adapter,
+    history frontier or maintenance receipt exists today.
+
+S3. src/partition/partition-participant-transaction-apply.js:397-409 already
+    records multiple per-operation outcomes at the SAME parent entry.index/term.
+    :416-441 binds committed operations, terminal participant state and effects.
+    This demonstrates that child result identities need not imply separate log
+    entries. It does not approve new TX1 semantics or change local staging.
+
+S4. src/raft/raft-rs-runtime-owner.js:956-987 owns the per-group Promise tail;
+    :1650-1688 invokes core proposal; :1727-1743 drains inbound first. Current
+    :1691-1724 drains until empty and may await Ready sends between envelopes.
+    :1945-1982 validates then pushes inbound with no count/byte cap. There is no
+    current M ticket, future-result credit or bounded class-service scheduler.
+    src/raft/raft-rs-ingress.js:168-196 accepts forwarded proposal payloads;
+    a gate only around local propose would miss that path.
+
+S5. runtime-owner:1191-1239 owns Ready extraction/persistence, :1136-1188 its
+    persist/send/apply/advance sequence, :1069-1133 actual committed application.
+    :394-407 fences stale runtime generations. These preserve existing ownership,
+    but they do not identify every proposed request occurrence or future result.
+
+S6. src/raft/raft-rs-durable-store.js:207-248 reads the full durable record;
+    :404-413 persists Ready atomically; :422-443 deletes a conflicting suffix
+    and inserts replacement. No typed discard delta or bounded custody scanner
+    is exposed. runtime-owner:877-906 reconstructs from that record. Host .all()
+    plus native MemStorage is not bounded reconstruction merely because release
+    admission has a numeric profile.
+
+S7. src/node/replica-handler-release-recovery.js:140-148 coalesces pending
+    partition work, :190-218 reconciles, :220-242 runs at most four attempts,
+    :244-254 observes service/consensus wakes. OPEN (:199), missing origin
+    (:200-203) and missing build (:205-209) are current semantic exits. Reading
+    new compound custody/result before those exits is a NEW interaction.
+    Four active attempts is not a duration or byte bound.
+
+S8. src/node/replica-handler-membership-relay.js:36-49 constructs an empty
+    tracked registry and wakes on set. :76-86 relays CONSENSUS_OBSERVED only.
+    src/partition/partition-service-raft-lifecycle-wiring.js:139-151 forwards
+    membership/leader/term, not ordinary APPLIED_PROGRESS. Runtime emits applied
+    progress at :1293-1299. Extending this relay is new work. Absence of a
+    constructor scan is NOT a demonstrated existing startup bug: registration
+    wakes the current empty registry's later services.
+
+S9. src/node/participant-release-client.js:36-68 derives request budget from the
+    existing outer deadline; :97-104 requires delivered, !noHandler and an owner
+    result; :107-140 handles request and one routing redirect. No ACK proves
+    application. The existing release/QueryEngine deadline handoff remains open.
+
+S10. src/partition/proposal-queue.js:96-123 bounds local waiters but :177-223 can
+     release proposed entries; partition-service-cdc-stream-base.js:313-345
+     times out a waiter while the command may still commit. Thus neither is a
+     durable Q bound. Old max-uncommitted/core observations remain as preserved
+     in runtime-custody-audit.txt; this review does not change that conclusion.
+
+PRESERVED DRAFT 1 REFUTATIONS (NOT NATIVE FAILURES)
+
+D1. A fixed cell carrying arbitrary K lacked a selected maintenance identity and
+    losing-candidate result policy. Different RETIRE_FOR_APPROVE commands for G
+    could compete; one cell cannot retain arbitrarily many current-G refusals.
+
+D2. Its pre-core "routine RETIRE" gate was insufficient for already-owned stale
+    retirement occurrences, an ambiguous second compound request, or a replay
+    after another handoff existed. Deterministic pending-K/generation matching
+    at apply and exact clear-CAS were required, not inferred from a local map.
+
+D3. At handoff apply four ordinary A requests could already own Q_A=4. Promising
+    a future K occurrence then exceeded that Q without independent escrow. The
+    four-KiB receipt could not hold a full sixteen-KiB K; nested encoding also
+    needed a whole-proposal limit. This was not harmless bookkeeping.
+
+D4. Allowing competing ordinary APPROVE while handoff pending could change
+    release state, fill other critical history and block required maintenance.
+    Protecting K's result alone did not establish all closure/settlement progress.
+
+D5. Continuous inbound arrival during drainReady awaits could keep drainInbound
+    nonempty forever before the handoff's turn (S4). A reserved slot was not
+    service. No current bounded scheduler supplied the asserted opportunity.
+
+D6. New durable handoff discovery had to precede OPEN/build/census exits (S7).
+    APPLIED_PROGRESS was not relayed to that continuation (S8). These were new
+    obligations, not evidence that current service registration was broken.
+
+D7. A locally timed-out operation or unknown native transfer could not discharge
+    durable handoff debt. Four hanging recovery tasks could consume every current
+    attempt slot (S7/S9). Discarding a native occurrence did not erase a committed
+    handoff; this created a second recovery lifecycle that needed explicit proof.
+
+D8. Trusted size/class fields, wrong parent/child identity, stale live inventory,
+    counter exhaustion, follower backlog and application-image import were not
+    solved by a pending cell. All would have needed additional owner contracts.
+
+Atomic parent application removes D2's inter-entry window, D3's future native-K
+occurrence, and D6/D7's orphan durable handoff. It does not remove native parent
+custody, source transport limits, or snapshot/retention dependencies.
+
+INITIAL ATOMIC CONTRACT FINDINGS — COMPLETE BATCH
+
+N1. Tick service and lane-bound wording need precision (contract :186-201).
+    "consensus inbound/tick" is one lane with no selection rule between its two
+    kinds. If an always-nonempty inbound queue always wins, owed ticks starve.
+    Select one owed tick AND one captured inbound envelope per round, or an
+    explicitly alternating finite policy; then M/H/settlement/ordinary. The
+    operation-count guarantee is conditional on each head operation returning.
+    Other lanes' current custody is not proved bounded by this release profile.
+    S4/S6/S7 supply the relevant current limits. Do not claim normal/TX quotas
+    are implemented merely because a new runtime service rule is selected.
+
+N2. Pre-core process loss is weaker than a durable handoff (contract :19-25,
+    :126-133, :177-184). Minimal trace: reserve M locally -> process dies before
+    native transfer or persistent bytes -> authoritative proof fences all
+    transfers -> no surviving M bytes. The allowed discard endpoint terminates
+    that opportunity; finite later stability cannot make that same lost M apply.
+    If exact bytes survive, redrive them; otherwise report typed discard/unknown
+    and keep any fresh recovery intent distinct. Limit exact-request eventual
+    application to a surviving/re-driven opportunity. Never equate a local map
+    miss with proof of this trace's authoritative discard. S4-S7 show the source
+    boundaries; no new durable enqueue was authorized.
+
+N3. Closure saturation still needs an owned progression (contract :99-110).
+    Full HOLD history while OPEN cannot rely on the current continuation's OPEN
+    early return (S7). A necessary pure RETIRE needs an explicit trigger and
+    wake/re-read action. More strongly, the proposed rules permit the schedule:
+    H result history full -> pure RETIRE frees H -> competing invalid/stale
+    current-G HOLD requests consume H before desired closure gains custody ->
+    repeat. A service lane does not reserve result admission for closure before
+    that race. Either prove the selected producer/gate makes this schedule
+    unreachable, select an equivalent atomic protected HOLD child, or retain an
+    explicit nonstarvable-closure blocker. The A atomic child solves the A race;
+    it must not be claimed as proof for a different H protocol. This is a
+    contract-reachable trace, not a demonstrated native HOLD bug (HOLD absent).
+
+N4. Parent receipt needs an exact selected schema (contract :57-69).
+    Pin the format literal/variant for compound versus pure retirement. The
+    childConflictWinnerOrNull field must retain KNOWN / UNAVAILABLE /
+    NOT_APPLICABLE from the preceding identity contract, or make the receipt
+    contain only an explicitly typed immutable child-result reference. Null
+    must not erase an original distinction and later be filled with today's
+    winner. Detailed result and retained receipt must agree on M/K/position.
+    If lastM still promises child detail but it is unreadable/absent, report the
+    inconsistency; do not treat the missing row as a fresh request.
+
+N5. Typed failure edges are not yet complete (contract :75-88, :156-161).
+    MAINTENANCE_BUSY is selected, but prose "typed profile/retention HOLD" and
+    "protocol violation" are not exact caller outcomes. Select pre-core
+    MALFORMED/identity mismatch/future generation/size/profile/counter results;
+    distinguish deterministic old history from unavailable inventory and an
+    impossible invalid committed command. Enumerate missing or inconsistent
+    receipt/result, wrong partition/origin or childG, and moved origin. A
+    well-formed unsupported retained profile must not be truncated to fit.
+    State which stop re-drives, which waits on a named event, and which requires
+    owner intervention. This is required by the design-note typed-edge section;
+    it is not a request for a new error authority.
+
+N6. State the internal atomic prefix rule (contract :11-15, :80).
+    Parent validates current fromG at the real preceding application prefix.
+    Child history validation sees fromG+1 inside the SAME transaction after the
+    mechanical history transition. Its release-state/membership/query predicate
+    facts are those of the real prefix; retirement changes none of those facts.
+    Otherwise running the ordinary future-G gate against the old prefix would
+    refuse every embedded child. There is no synthetic child log position.
+    Specify whether conflict winner evidence is read before deletion or becomes
+    tagged UNAVAILABLE after legitimate retirement. It cannot be substituted by
+    the current winner. S1/S3 make this composition possible, not automatic.
+
+N7. Selection is conditional, not a current finite-custody mechanism.
+    Interfaces at :226-234 honestly are NEW, but their proof obligations remain
+    substantial: all local/forwarded transfers before claim; exact occurrence
+    association; current-term prefix and stale transfer fencing; live-ticket
+    overlay during suffix scan; replacement delta; no release on timeout/ACK;
+    bounded intake/whole-log restoration; and snapshot boundary. An old leader's
+    delayed forwarded proposal can arrive after a successor's empty local map;
+    a current-term barrier alone does not fence arbitrary pre-core late messages.
+    The sender/runtime generation/transfer classification must establish that
+    no extra creation escapes the same gate. S4-S6/S10 demonstrate why today's
+    APIs do not provide this. Preserve this explicit implementation HOLD even
+    after correcting N1-N6. No local pending Map is an acceptable substitute.
+
+ACCOUNTING CHECK
+
+Prior conditional projection:
+  (128+4+8)*(24576+1024) + (32+2+4+1)*16384 + 20*1024
+  = 4,243,456 bytes.
+Additional independent M future-child entitlement 25,600 and future receipt
+4,096 give 4,273,152 bytes. This arithmetic is correct. One parent native
+occurrence is charged; its child is a logical subrequest, not another proposal.
+
+Under conforming Q_A<=4, with every old-G retained A result eligible for
+retirement, atomic deletion leaves <=4 ordinary pending unique entitlements.
+Adding one child detailed result gives <=5, below C_A=8. Old-G pending copies
+remain charged until actual apply/discard and cannot regain authority. Exact
+physical duplicates consume occurrence Q but share semantic result entitlement.
+
+This is NOT a production bound, physical-byte bound or follower bound. The
+full encoded parent INCLUDING wrapper is limited to 16,384, so its child cannot
+also independently consume that whole limit plus uncharged metadata. Maximum
+encoding proof for result/key/receipt variants remains required. A child whose
+full canonical bytes do not fit must be refused BEFORE custody, never truncated.
+Old receipt storage plus reserved future receipt is correctly counted. A
+snapshot/install must preserve both fixed receipt and detailed outcome at the
+same boundary; SQLite intermediate pages/WAL/native/base64 copies are outside
+this declared logical projection. Ineligible pinned rows invalidate the exchange
+lemma; acknowledged TX/query obligations must survive in their existing owners.
+
+CATEGORY-COMPLETE CHECKLIST
+
+Statuses: DESIGN = selected rule is coherent in principle; GAP = missing exact
+contract or native mechanism; SOURCE = verified existing source behavior only;
+UNPROVEN = required native witness absent. No checklist item below is a test run.
+
+Admission / gating (admission-gating.md)
+A1 GAP — Same facts: classify/reserve and final core gate must use one origin/G,
+   immutable bytes and recovered/live custody view. S4-S6; N5/N7. Apply is the
+   durable backstop, not a stale precheck or a process-map capacity judgment.
+A2 DESIGN/GAP — NOT_ADMITTED vs UNKNOWN vs retained result vs retired-unavailable
+   are distinct; N2/N5 require the full typed termination/retry table. A rejected
+   child cannot mutate L; accepted parent retirement may independently mutate G.
+A3 SOURCE/GAP — Existing request/recovery budgets stay unchanged (S7/S9). No
+   reserved-slot arithmetic proves a request deadline or hung-operation bound.
+A4 GAP — Exact reason/value shapes and propagated owner status require N5. Do
+   not compare an object to a reason string or normalize unavailable into empty.
+A5 DESIGN/GAP — Atomic commit/discard makes capacity observable; applied relay
+   and closure wake are NEW (S8/N3). Measure wake-to-admission without new timers.
+A6 DESIGN/GAP — Re-evaluate after waits/inbound/reconstruction before core; same
+   transaction evaluates child at actual prefix (S1/N6). Never cache an APPROVE.
+A7 DESIGN/GAP — Diagnostic identities must include partition, origin, G, M/K,
+   actual occurrence and current runtime incarnation, not submission guesses;
+   exact blocked owner/phase/reason remains N5's response obligation.
+
+Retry loops (retry-loops.md)
+T1 SOURCE/GAP — Current recovery arms injected timers and reports registration
+   failure (recovery:116-137). New M outcomes need either a named wake/redrive or
+   loud stop; N2/N3/N5 forbid silent loss or reconstructing fresh intent as replay.
+T2 GAP — Unreadable custody/result cannot loop as absent; bounded attempt and
+   owner-intervention paths must be selected. Persistent debt itself never times
+   out merely because a reader/caller budget ends (S7/S9/N5/N7).
+T3 GAP — Every early exit in recovery:194-212/220-242, no-leader:175-187,
+   registration failure and shutdown must preserve/count or explicitly classify
+   M. Exact reason/action table is N5; OPEN is not proof an unknown M finished.
+T4 DESIGN/GAP — Atomic parent eliminates split K waiting on its own retired
+   generation. Remaining mutual suppression: full H/new M, over-profile replay,
+   managed QueryEngine waits and current drain-until-empty (N1/N3/N7).
+T5 GAP — One slot coalesces M semantic work, not all waiting callers/transport
+   envelopes. Bound joins and intake; finite service requires N1. Existing 1s
+   retries can be accelerated by events; no false fixed retry-rate bound.
+T6 DESIGN/UNPROVEN — Late completion replays M/K at original position; duplicates
+   neither advance G twice nor allocate a second semantic result. Requires native
+   lost-response/leader-change/duplicate/suffix schedules (S1-S6).
+T7 DESIGN/UNPROVEN — ACK, queued response, timeout and removed waiter cannot free
+   debt. Only exact apply/discard classification exchanges credits (S9/S10).
+
+Transport / delivery (transport-delivery.md)
+L1 SOURCE/UNPROVEN — Current client requires DELIVERED && !noHandler && result
+   (S9); queued/enqueued ACK is not child disposition. New response adapter needs
+   that actual production combination, including ACK:true/noHandler:true.
+L2 GAP — Late response after client timeout must join retained/unknown custody,
+   not mint new M/K. Cold pre-core loss is N2, not silently synthesized success.
+L3 GAP — Existing transport classifier must carry typed new result without
+   conflating NOT_ADMITTED, UNKNOWN, retired and applied refusal; N5 selects it.
+L4 SOURCE/GAP — Existing request deadline is used; QueryEngine handoff and
+   never-returning host operations are explicitly unresolved. No timeout change
+   or repeated INSPECT loop is proposed (S7/S9).
+L5 UNPROVEN — No mock/test run here. Future seam must use actual route/options,
+   noHandler/redirect behavior, immutable bytes and live owner result; native
+   lower-level cluster delivery alone is not QueryEngine/router certification.
+
+Recovery / replay (recovery-replay.md)
+R1 GAP — A suffix scan must merge/fence against newer live tickets, not replace
+   them with an old snapshot. Runtime generation checks exist (S5), but the new
+   inventory revision/applied-boundary merge protocol is missing (N7).
+R2 SOURCE/GAP — Reconstruction is distinct from live observation (S6); process
+   restart cannot use map emptiness as discard. Pure pre-core volatile loss
+   explicitly limits exact intent preservation (N2).
+R3 DESIGN/UNPROVEN — No replicated staging or new coordinator roster is added.
+   Retention requires TX/query obligations retain complete own bindings; absent
+   enlistment or unavailable participant evidence cannot become CLEAR (N7).
+R4 DESIGN/UNPROVEN — S1 atomic rollback covers G/deletions/result/release/receipt/
+   applied state. Exact M/K replay must be observed before mutation; N4/N6.
+R5 DESIGN/GAP — HISTORY_RETIRED is unknown historical result, never NOT_COMMITTED.
+   Missing retained child detail is inconsistency, not a new command (N4/N5).
+
+Concurrency / serialization (concurrency-serialization.md)
+C1 SOURCE/GAP — Present tail serialization (S4) is not synchronous credit claim.
+   Reserve before async retention, recheck before core, apply atomically (N7).
+C2 DESIGN/GAP — Any awaited inbound/native/send/restore boundary can move role,
+   origin, G or inventory. Final check and core transfer must have no intervening
+   await; a later role change can still discard an owned occurrence (S4/S5/N7).
+C3 DESIGN/UNPROVEN — One M winner must hold across leaders, local+forwarded
+   duplicates and pure+compound maintenance. Current-term prefix PLUS transfer
+   fencing/reconciliation is required; process maps do not prove it (N7).
+C4 SOURCE/GAP — Current recovery/inbound timers coalesce through owned turns.
+   New lane service must tolerate reentrant wakes and give owed ticks service
+   without another independently executing loop (N1).
+C5 DESIGN/GAP — Quotas are per active partition/origin, not per caller or G.
+   Runtime incarnation fences access; M/K/occurrence are different keys. A node-
+   wide four-attempt map is not the same resource as partition custody (S7).
+
+Formation / circularity (formation-circularity.md)
+F1 DESIGN/GAP — R must not require D3 OPEN or child D2 success to retire; it may
+   record real refusal. Source D0/control/census/QueryEngine prerequisites remain
+   owned dependencies for forming new intent, not prerequisites for replaying
+   already-owned bytes (S7/N3).
+F2 GAP — Recovery read-before-OPEN and capacity/APPLIED wake are new; registration
+   already wakes current services (S8). N1 removes drain-empty as a service
+   prerequisite; N3 addresses closure admission after capacity release.
+F3 DESIGN/UNPROVEN — New normal traffic is refused/backpressured before custody;
+   accepted work, replication, authoritative settlement and required closure
+   keep their own progress. Need one pressured trace measuring both safety and
+   progress; no release quota may discard accepted follower log (S6/N7).
+F4 GAP — 4,273,152 is a logical arithmetic envelope, not a time window. No measured
+   maximum encoding, native slice latency, catch-up bound or tightest caller
+   margin exists for this proposal. Conditional eventual operations are named.
+F5 DESIGN — No raw-Raft fallback, new permit/queue authority, fabricated CLEAR,
+   replicated BEGIN, PAUSE-as-rollback or release-owned COMMIT/ROLLBACK is chosen.
+   All missing mechanisms remain with S1-S9 owners.
+
+Harness fidelity (harness-fidelity.md)
+H1 UNPROVEN — No run or new semantic RED. Future missing-symbol failures cannot
+   count. Executable ordering traces will be a design counterexample tool only.
+H2 UNPROVEN — Existing native fixture uses live WASM/runtime/store but not full
+   TX1/release/QueryEngine; preserve that seam limit from native-seams-plan.txt.
+H3 UNPROVEN — No timing shortcut or timeout increase. Future bounded-round test
+   must inject continual ingress while real consensus/ticks and settlement run.
+H4 DESIGN/UNPROVEN — Freeze exact M and complete child bytes; mutate each partition,
+   origin, G, expected release state, nonce and evidence field independently.
+   Neither transactionEpoch nor routing session may be substituted for M/K.
+H5 UNPROVEN — Saturation must be real retained rows plus owned pending copies,
+   with delayed M before core, lost reply, suffix replacement and a live follower
+   backlog. Empty history or one standalone happy apply is vacuous for this task.
+H6 UNPROVEN — Bind future runs to exact source/test hashes, real application rows,
+   actual index/term, admission and outcomes. No model list count certifies native
+   snapshot, leader recovery, finite memory or cross-host behavior.
+
+Owner interaction (owner-interaction.md)
+O1 DESIGN — Runtime owns native custody; application/result owns exact effects and
+   history; release owns intent; TX/query own settlement; snapshot owns image
+   import. The atomic parent does not make one owner answer its neighbor's fact.
+O2 DESIGN/GAP — New classify/reserve/reconcile/apply/service interfaces are clearly
+   proposed (contract:226-234); typed failure schema still N5 and missing custody
+   proof N7. Typed current result adapter precedent is S2.
+O3 UNPROVEN — SAME pressured trace must show no over-admission/duplicate effect
+   AND eventual protected disposition/closure/settlement. Blocking everything
+   to make count green would fail. N3 forbids silently dropping the H half.
+O4 DESIGN/UNPROVEN — Unavailable or stale inventory first holds; a later valid
+   exact inventory must release that hold and admit original intent if still
+   eligible. No stale cache may remain a permanent veto (S5-S7/N7).
+O5 GAP — Occurrence and result credit are separate, M escrow is bounded, but
+   current intake/restore/joins are not. Byte caps, fair turns and follower catch-
+   up require native pressure evidence, not C/Q algebra alone (S4/S6).
+O6 DESIGN/GAP — Atomic result/receipt application and proven suffix replacement
+   release specific resources. Existing events can wake a fresh read; they do
+   not grant authority. New applied/capacity event and H trigger remain N3/S8.
+O7 DESIGN/GAP — pending/running/reported maps, result caches, afterCommit wakes,
+   D3 local serving and diagnostics remain projections. Their invalidation and
+   live-scan overlay must be explicit; none may declare no native debt (N7).
+O8 UNPROVEN — Future controlled negatives must defeat actual effect/progress:
+   skip escrow, drop atomicity, use submit index, permit old-G creation, or drain
+   inbound forever. No test-only canned outcome or changed pass criterion.
+O9 DESIGN — Existing S1-S9 are the selected path. No fallback ledger, raw-core
+   access, broader snapshot scrub, timeout extension or rejected-model repair.
+   Unknown mechanisms remain gaps, not invented present APIs.
+O10 SOURCE/UNPROVEN — test/shards/impact-contracts.json:600-665 and paired owner
+   contract :1541-1613 map application/runtime/result owners; persistence pair
+   and settlement/native controls are existing limited witnesses. A future
+   complete release increment must register the actual coupled impact pair and
+   same-trace proof. Present registry rows do not certify new semantics.
+
+Sweep / timer (sweep-timer.md; applies to the proposed service/wake interaction)
+W1 SOURCE/UNPROVEN — Current recovery clock is injected and timer unref'd
+   (:99,:124-127). Future service tests use that owner, not real-time sleeps.
+W2 DESIGN/GAP — Role/runtime generation is rechecked before core (S5/N7). Neither
+   scheduler nor maintenance may decide a transaction's global rollback.
+W3 GAP — Restart reconstructs durable/image/occurrence facts; clear stale views
+   without losing live tickets. Pre-core lost bytes cannot be recreated from
+   their hash (N2/N7); no fake crash-equivalence claim.
+W4 DESIGN/GAP — No new expiry erases native debt or legitimate long settlement.
+   Existing timer budgets do not prove the unimplemented mechanism's duration.
+W5 GAP — Own managed reads/writes and infinite inbound drains can starve service
+   (S4/S7). Atomic child removes split handoff circularity; N1/N3 remain separate.
+
+DESIGN-NOTE REQUIRED SECTIONS
+
+1. Consumed surfaces: S1-S10 cite actual present functions and explicitly mark
+   proposed commands/credit/read/event/scheduler seams NEW. No extra authority.
+2. Typed failure edges: N2/N4/N5 require exact pre-core, retained/replay, retired,
+   unavailable, protocol-invalid, counter/profile, origin and discard outcomes.
+   All must name the owner and whether retry, fresh read, stop or intervention.
+3. Cached-view audit: runtime tail/status/Ready, proposal waiters, recovery
+   pending/running/reported, result adapter cache, afterCommit notifications and
+   D3 local admission are projections. Store/actual log/result decide facts.
+   Runtime generation invalidates old continuations; origin/G/custody revision
+   invalidate inventory. A stale scan must not overwrite newer live custody.
+4. Identity anchoring: native occurrence=(index,term,payload digest), M=full
+   compound canonical content, K=full child canonical content, releaseVersion,
+   history G, origin, runtime incarnation and transactionEpoch are distinct.
+   Parent+child share one real position. Movement is rechecked; wrong/stale
+   identities cannot adopt new authority. N4-N7 select remaining exact edges.
+
+REQUIRED NEXT WITNESSES, NOT RUNS IN THIS REVIEW
+
+V1 Native saturated HELD A history -> one protected R -> real APPROVE or exact
+   D2 refusal, retaining ordinary/authoritative settlement progress in same trace.
+V2 Lost reply and exact local/forwarded duplicates at every custody stage; count
+   native occurrences separately from semantic results and verify no allocation
+   on exact replay. Corrupt/missing receipt/child gives typed HOLD, not success.
+V3 Pre-core pause, leader/process loss, true suffix discard and cold restart;
+   distinguish preserved exact intent from known-lost pre-core intent. An old
+   forwarding completion cannot create an uncharged successor occurrence.
+V4 Continuous accepted inbound plus owed ticks, HOLD and settlement; offer M
+   bounded service, preserve actual core ordering and observe physical intake.
+V5 One SQLite failure between every logical step of parent apply; all G/result/
+   release/receipt/applied changes roll back, then exact replay produces one result.
+V6 Saturated HOLD while OPEN with adversarial competing refusals; demonstrate
+   the selected owner-trigger/protected-closure rule or retain its explicit gap.
+V7 Application-image/native snapshot import at one exact boundary plus subsequent
+   retained log replay, a lagging follower and receiver-local D3 closed. Existing
+   ordinary process restart is not this proof.
+
+SOURCE HASHES READ/CROSS-CHECKED
+
+a560a052bf9b470a2046009555162b60669c340d86274fca9c74126fc8fbd01b
+  src/raft/raft-rs-runtime-owner.js
+88af05c5bcdf3d8f1209615a2d3f6c6427ab9ebf8951a1f66835402074c75d5f
+  src/raft/raft-rs-durable-store.js
+f12ff39650a0c221212168129f24ff070b563bd3c65cb1498572af7e3642f6aa
+  src/raft/raft-rs-application-transaction-owner.js
+d3ddafe1710e8d709f9c1a80c5a0cec5940d4b9fd6b2d0cef6cb6771c4cd5b0d
+  src/node/replica-handler-release-recovery.js
+f796055b731684bddaa5fa4ab6b6cfd8ddd7721bbb12ebbd22745262f9947d03
+  src/partition/partition-coordinator-settlement.js
+6c9fa9c3163a67d0b2eaca406e34ae2d2542665518829dcfca388f2f64f64739
+  src/partition/partition-committed-statement-outcome.js
+
+Preserve predecessor models/rejections and all historical witnesses. Successor
+unsealed/unactivated; shared-control-wave HELD; Runner/TAP PARKED; PR122 rejected.
+Stop at exact-content independent owner review, not production implementation.
+
+FINAL CONTENT-BOUND CORRECTION PASS
+
+Reviewed final ORDERED-RECOVERY-CONTRACT.md SHA256:
+3d35778bfeea29c93f230a6b2f4fc2ad7c0aaa1042c45d48ebd983244c65d89c
+
+The first intermediate correction was also read in full at SHA256
+252058441e96704f39d5cdba6a3df53072a23bccfe773aa8df42b398e5d21254.
+It introduced an ambiguous assertion that historical result positions must
+equal the current applied boundary. Minimal refutation: R at index 20 followed
+by an ordinary command at 21 leaves correct immutable results at 20, not 21.
+The final version explicitly fixes this. No historical text above was rewritten.
+
+N1 resolved for the selected design: one owed tick AND one captured inbound
+envelope are selected in the consensus part of each finite round. Later arrivals
+cannot extend that batch. Ordinary/TX/query custody bounds remain separate
+unresolved owner interfaces. This is not a claim today's runtime implements it.
+
+N2 resolved as a claim correction: exact R application is conditional on its
+bytes remaining in authoritative custody; proved discard may end the opportunity.
+Cold loss of purely pre-core bytes is not presented as durable handoff survival.
+Fresh intent and replay are distinct. Native proof of discard/fencing remains N7.
+
+N3 explicitly retained as an implementation blocker, not solved: full HOLD
+history while OPEN needs an owned retirement wake and protected closure result
+exchange. The competing-refusal trace remains in the contract. The atomic A
+selection is therefore not falsely promoted to nonstarvable complete closure.
+No compound HOLD command is silently authorized by this packet.
+
+N4 resolved for the selected schema: format partition-release-retirement/2,
+commandKind RETIRE_AND_APPROVE or RETIRE, explicit NA child fields for pure
+retirement, and tagged KNOWN / UNAVAILABLE / NA winner. Parent and child share
+their original actual position; that position is consistent with and no later
+than today's applied prefix. A later watermark never rewrites past outcomes.
+Maximum encoding proof remains explicitly missing, not assumed.
+
+N5 resolved for this design checkpoint: exact new NOT_ADMITTED and HOLD reason
+sets cover malformed identity, exhausted G, unsupported profile, pinned result,
+over-profile reconstruction, whole-command size, unreadable inventory/unresolved
+prefix, invalid committed command and missing/mismatched retained child detail.
+The typed result table is a proposed owner contract, not a present production
+classifier. Runtime's exact discard/transfer proof and all native consequences
+remain N7. RESULT_INCONSISTENT applies to a compound receipt promising a child;
+pure RETIRE's typed NA fields claim no detailed child result.
+
+N6 resolved: validate parent at actual pre-entry G, capture bounded authoritative
+conflict facts, then set G+1 inside the same transaction before child history
+validation. Release/membership/query facts remain those of the real prefix.
+Parent/child share one real Raft position; no fake future prefix exists.
+
+N7 remains explicit and material: no currently implemented finite native request
+custody, all-transfer fencing, exact suffix discard/occurrence interface, bounded
+receiver intake or bounded native restore is claimed. Current-term prefix and
+an empty process map alone cannot certify absence. Implementation stays HOLD.
+
+The 4,273,152-byte logical arithmetic and <=4 ordinary pending A plus one child
+exchange remain unchanged and conditionally coherent. Interpret separately
+charged duplicate copies as distinct native command occurrences; repeated network
+delivery of the SAME index/term/digest is not another semantic result. Transport
+buffer copies/receiver backlog are separately owned physical resources and are
+not bounded by this projection.
+
+The final text also correctly removes a claimed need for new durable-handoff
+startup scanning or an APPLIED_PROGRESS relay merely to repair superseded Draft
+1. Current empty-registry construction plus later registration wakes is preserved.
+New custody/result reads before semantic early exits are still proposed work.
+
+FINAL VERDICT: ACCEPT this exact content as a preserved owner-decision checkpoint
+selecting the smaller atomic retirement/APPROVE mechanism and exposing its
+remaining blockers. Production implementation, successor activation/sealing,
+complete release-protocol acceptance and merge remain HOLD. This is not native
+finite-capacity, liveness, snapshot or cross-host certification.
+
+No further contract defect was found in this bounded correction pass. All
+category statuses above transfer through the listed resolutions; unresolved
+native witnesses, N3 and N7 remain unresolved. No tests or executable traces were
+run or certified by this reviewer. The parent's separate ordering traces require
+their own exact-content independent verifier and remain supplementary evidence.
+
+POST-REVIEW DETERMINISTIC-APPLICATION CLARIFICATION
+
+Reviewed ORDERED-RECOVERY-CONTRACT.md SHA256:
+f1357f2f68df9da811b32df22eab3e49d9c6870dfd3f0ed8af608d317297f37e
+Baseline remains c425ef42e18236ff1187e1112a971588bb02b496.
+
+The principal reviewer identified a substantive ambiguity in the preceding
+application-HOLD wording: "violated exchange/profile invariant" could have
+included replica-local outstanding custody. The earlier final correction pass
+did not make that exclusion explicit enough. This addendum preserves the earlier
+review and binds the corrected interpretation to the new exact document.
+
+Minimal contract counterexample: a leader applies R at i and subsequently admits
+more bounded batches. A lagging follower remains applied at i-1 while receiving
+an accepted suffix containing R and more than Q_A later commands. If its local
+over-profile custody becomes a precondition to apply R, it waits for credits
+that only later entries can release. Ordered apply cannot skip R to reach those
+entries. Alternatively turning that local pressure into a child refusal would
+allow replicas at the same application prefix to record different effects.
+This is a design counterexample, not a new native execution or reported source
+bug. Runtime applyEntries (:1100-1133) processes committed entries in order;
+the durable store's retained suffix (:207-248) is not limited by leader Q_A.
+
+The new text resolves this explicitly at contract :107-124 and :207-221:
+
+* Deterministic application checks the replicated identity/schema/history and
+  retention/pin facts. The local pending/Ready/suffix count is not one of those
+  replicated facts and cannot create a refusal or quota-based application HOLD.
+* Over-profile custody gates NEW creation only. Already accepted prefix replay
+  continues in order, with its excess debt accounted rather than discarded or
+  forced under the active-leader projection.
+* The <=5 A exchange lemma and 4,273,152-byte arithmetic belong only to the
+  conforming active-leader admission projection. They do not bound a follower
+  or become a follower application predicate.
+* Actual unavailable/unwritable storage remains an environmental application
+  failure under S1/S5: rollback this entry's effects and applied advance, retain
+  debt and recover. An admission quota is not an I/O failure and cannot be used
+  as one. No new finite physical-space or catch-up guarantee is claimed.
+
+I find no contrary source-owner requirement and no further defect introduced by
+this narrow correction. ACCEPT this exact hash as the preserved owner-decision
+checkpoint. Production remains HOLD, including N3 protected closure/wake, N7
+native custody/intake/reconstruction, encoding proof, and application snapshot
+recovery. No production or test edits/runs, native results or executable trace
+certification were added by this review.

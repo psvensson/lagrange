@@ -1,0 +1,6 @@
+{
+  "command": "node ordering-traces-first.mjs",
+  "exit": 0,
+  "bytesSha256": "16230e2684d3de733b055a8fd367117e5d6dbd55704b737e1d836753705c079d",
+  "note": "Initial trace version before explicit owed-tick scheduling clarification. Execution outputs unchanged. Subsequent bytes separately identified."
+}

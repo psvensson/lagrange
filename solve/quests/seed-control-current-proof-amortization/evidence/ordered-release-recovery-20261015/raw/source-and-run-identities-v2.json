@@ -1,0 +1,71 @@
+{
+  "sourceHead": "c425ef42e18236ff1187e1112a971588bb02b496",
+  "files": [
+    {
+      "path": "test/raft/raft-rs-backend/persistence-admission.test.js",
+      "sha256": "a9d05c8d8069ecf58e95a0d1eac01d125753a524977d2a1cb282cdc71da35534",
+      "gitBlob": "da0e5242216263f66f79f1e55e35d2a87e5ff091",
+      "bytes": 17171
+    },
+    {
+      "path": "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+      "sha256": "edd3a9d1d5a1c24a4383c0ecd089babedea65715658668c95313966730f2a22f",
+      "gitBlob": "711382a5bde6a3132fa57a187a3422f0f19bc200",
+      "bytes": 17248
+    },
+    {
+      "path": "test/raft/raft-rs-backend/partition-node-cluster.js",
+      "sha256": "dca9b5eaaa23d192909608b8d05a5f3c1b8effe2386d5e6050745e6d393d871c",
+      "gitBlob": "7f82b7574fe36d9eeffd43d5e1890df3b5f438d3",
+      "bytes": 17967
+    },
+    {
+      "path": "src/raft/raft-rs-runtime-owner.js",
+      "sha256": "a560a052bf9b470a2046009555162b60669c340d86274fca9c74126fc8fbd01b",
+      "gitBlob": "7fefb96f8988acb81ad2f51912cc32b30aea297f",
+      "bytes": 80944
+    },
+    {
+      "path": "src/raft/raft-rs-durable-store.js",
+      "sha256": "88af05c5bcdf3d8f1209615a2d3f6c6427ab9ebf8951a1f66835402074c75d5f",
+      "gitBlob": "8095d03fc20c3ff5025606bc8bdac79aa519202c",
+      "bytes": 28139
+    },
+    {
+      "path": "src/raft/raft-rs-application-transaction-owner.js",
+      "sha256": "f12ff39650a0c221212168129f24ff070b563bd3c65cb1498572af7e3642f6aa",
+      "gitBlob": "4481d2f0c9967ed17181620abddf89cb5414dc07",
+      "bytes": 4249
+    },
+    {
+      "path": "src/partition/partition-committed-statement-outcome.js",
+      "sha256": "6c9fa9c3163a67d0b2eaca406e34ae2d2542665518829dcfca388f2f64f64739",
+      "gitBlob": "23209153a3f599e5287b99f4262656b4aa152b92",
+      "bytes": 15120
+    },
+    {
+      "path": "src/node/replica-handler-release-recovery.js",
+      "sha256": "d3ddafe1710e8d709f9c1a80c5a0cec5940d4b9fd6b2d0cef6cb6771c4cd5b0d",
+      "gitBlob": "2adfab4f12de051e50754611365a9ec65faf45a9",
+      "bytes": 12705
+    },
+    {
+      "path": "src/node/replica-handler-participant-cutover.js",
+      "sha256": "901a2c01d2966f0b000f8225b802cfec4e6f8e68c81d88cac5e19c8ca0920abd",
+      "gitBlob": "1fdceaa1b2cb251b39fc9891b6c44b28a179c5f5",
+      "bytes": 19596
+    },
+    {
+      "path": "vendor/raft-rs-wasm/src/lib.rs",
+      "sha256": "c64131af8e32126f06a056e2560dc56aa37dc2d4aa4bfe6f02e9a50f3c431cc7",
+      "gitBlob": "9186ed6b37a11c0ddb9f9ef843cb09cb826ef49a",
+      "bytes": 39173
+    }
+  ],
+  "traceSha256": "228dc3bcfaf482e6f5775d83015d96596fd2b5e00d81bcd42e85a099b3be8502",
+  "traceCommand": "node ordering-traces.mjs",
+  "traceExit": 0,
+  "mutantCommand": "node ordering-traces.mjs --allow-retire-overtake",
+  "mutantExit": 1,
+  "classification": "design ordering only; native files separately run unchanged; no release protocol implemented"
+}

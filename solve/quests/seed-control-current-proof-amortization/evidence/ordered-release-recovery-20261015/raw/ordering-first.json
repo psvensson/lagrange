@@ -1,0 +1,5529 @@
+{
+  "kind": "design-ordering-only",
+  "mutant": false,
+  "scenarios": [
+    {
+      "name": "saturated-refusals-reserved-compound-result",
+      "status": "PASS"
+    },
+    {
+      "name": "delayed-before-core-retirement-cannot-overtake",
+      "status": "PASS"
+    },
+    {
+      "name": "timeout-ready-delay-then-late-commit",
+      "status": "PASS"
+    },
+    {
+      "name": "local-forwarded-duplicates-and-physical-copies",
+      "status": "PASS"
+    },
+    {
+      "name": "leader-loss-old-generation-suffix-remains-charged",
+      "status": "PASS"
+    },
+    {
+      "name": "leader-loss-before-order-and-authoritative-discard",
+      "status": "PASS"
+    },
+    {
+      "name": "committed-before-apply-leader-loss",
+      "status": "PASS"
+    },
+    {
+      "name": "suffix-discard-releases-only-proven-occurrences",
+      "status": "PASS"
+    },
+    {
+      "name": "legitimate-refusal-lost-reply-later-valid-new-intent",
+      "status": "PASS"
+    },
+    {
+      "name": "competing-maintenance-and-no-winner-borrowing",
+      "status": "PASS"
+    },
+    {
+      "name": "atomic-environmental-rollback",
+      "status": "PASS"
+    },
+    {
+      "name": "four-old-pending-entitlements-plus-one-child",
+      "status": "PASS"
+    }
+  ],
+  "boundedInterleavings": 729,
+  "schedulerRule": {
+    "serviced": [
+      "consensus",
+      "maintenance",
+      "hold",
+      "settlement",
+      "ordinary"
+    ],
+    "inbound": 199
+  },
+  "oldSaturationCounterexample": [
+    {
+      "cycle": 0,
+      "g": 1,
+      "result": {
+        "status": "NOT_ADMITTED",
+        "reason": "A_CAPACITY"
+      },
+      "schedule": "pure RETIRE -> eight competing refusals fill A -> recovery backpressured",
+      "recoveryApproved": false
+    },
+    {
+      "cycle": 1,
+      "g": 2,
+      "result": {
+        "status": "NOT_ADMITTED",
+        "reason": "A_CAPACITY"
+      },
+      "schedule": "pure RETIRE -> eight competing refusals fill A -> recovery backpressured",
+      "recoveryApproved": false
+    },
+    {
+      "cycle": 2,
+      "g": 3,
+      "result": {
+        "status": "NOT_ADMITTED",
+        "reason": "A_CAPACITY"
+      },
+      "schedule": "pure RETIRE -> eight competing refusals fill A -> recovery backpressured",
+      "recoveryApproved": false
+    },
+    {
+      "cycle": 3,
+      "g": 4,
+      "result": {
+        "status": "NOT_ADMITTED",
+        "reason": "A_CAPACITY"
+      },
+      "schedule": "pure RETIRE -> eight competing refusals fill A -> recovery backpressured",
+      "recoveryApproved": false
+    },
+    {
+      "cycle": 4,
+      "g": 5,
+      "result": {
+        "status": "NOT_ADMITTED",
+        "reason": "A_CAPACITY"
+      },
+      "schedule": "pure RETIRE -> eight competing refusals fill A -> recovery backpressured",
+      "recoveryApproved": false
+    },
+    {
+      "cycle": 5,
+      "g": 6,
+      "result": {
+        "status": "NOT_ADMITTED",
+        "reason": "A_CAPACITY"
+      },
+      "schedule": "pure RETIRE -> eight competing refusals fill A -> recovery backpressured",
+      "recoveryApproved": false
+    }
+  ],
+  "events": [
+    {
+      "name": "saturated-refusals-reserved-compound-result",
+      "events": [
+        {
+          "name": "admit",
+          "id": "741f6c8e20dc416961d22f7a7d3002098280f4fc2577072b0eec085a6403dafd",
+          "kind": "A",
+          "ticket": 1,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 0,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 1,
+          "index": 1
+        },
+        {
+          "name": "ready",
+          "ticket": 1,
+          "index": 1
+        },
+        {
+          "name": "durable",
+          "ticket": 1,
+          "index": 1
+        },
+        {
+          "name": "commit-prefix",
+          "index": 1
+        },
+        {
+          "name": "applied",
+          "index": 1,
+          "g": 0,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "admit",
+          "id": "b2d8c449d30c0e791f91383745b3eddd63f146b86bb49e4a581e596b6edac1dc",
+          "kind": "A",
+          "ticket": 2,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 2
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 2,
+          "index": 2
+        },
+        {
+          "name": "ready",
+          "ticket": 2,
+          "index": 2
+        },
+        {
+          "name": "durable",
+          "ticket": 2,
+          "index": 2
+        },
+        {
+          "name": "commit-prefix",
+          "index": 2
+        },
+        {
+          "name": "applied",
+          "index": 2,
+          "g": 0,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 2,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 2
+          }
+        },
+        {
+          "name": "admit",
+          "id": "de09c1bdf6da948306f8f5235feb61b50e9e726ba40a8e288c36cc8087a70fc5",
+          "kind": "A",
+          "ticket": 3,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 2,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 3
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 3,
+          "index": 3
+        },
+        {
+          "name": "ready",
+          "ticket": 3,
+          "index": 3
+        },
+        {
+          "name": "durable",
+          "ticket": 3,
+          "index": 3
+        },
+        {
+          "name": "commit-prefix",
+          "index": 3
+        },
+        {
+          "name": "applied",
+          "index": 3,
+          "g": 0,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 3,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 3
+          }
+        },
+        {
+          "name": "admit",
+          "id": "104fb8470dbc3d7470e91b8fd4cc5480058eac67f11584e11d907d25214ae231",
+          "kind": "A",
+          "ticket": 4,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 3,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 4
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 4,
+          "index": 4
+        },
+        {
+          "name": "ready",
+          "ticket": 4,
+          "index": 4
+        },
+        {
+          "name": "durable",
+          "ticket": 4,
+          "index": 4
+        },
+        {
+          "name": "commit-prefix",
+          "index": 4
+        },
+        {
+          "name": "applied",
+          "index": 4,
+          "g": 0,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 4,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 4
+          }
+        },
+        {
+          "name": "admit",
+          "id": "9f8b100db2ab84f4acf2f3edc630c9c6b09e9d15b64bbd8b1eb29cd0d8b16acd",
+          "kind": "A",
+          "ticket": 5,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 4,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 5
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 5,
+          "index": 5
+        },
+        {
+          "name": "ready",
+          "ticket": 5,
+          "index": 5
+        },
+        {
+          "name": "durable",
+          "ticket": 5,
+          "index": 5
+        },
+        {
+          "name": "commit-prefix",
+          "index": 5
+        },
+        {
+          "name": "applied",
+          "index": 5,
+          "g": 0,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 5,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 5
+          }
+        },
+        {
+          "name": "admit",
+          "id": "ac4a22495a9d39a831bfcc9079fdb2fbd83c25e90e4a383c950f2a9c908f57a8",
+          "kind": "A",
+          "ticket": 6,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 5,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 6
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 6,
+          "index": 6
+        },
+        {
+          "name": "ready",
+          "ticket": 6,
+          "index": 6
+        },
+        {
+          "name": "durable",
+          "ticket": 6,
+          "index": 6
+        },
+        {
+          "name": "commit-prefix",
+          "index": 6
+        },
+        {
+          "name": "applied",
+          "index": 6,
+          "g": 0,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 6,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 6
+          }
+        },
+        {
+          "name": "admit",
+          "id": "e08145f97d949824863aeb41ab6a0694391f65fcee7c9c16bc2478c95797f747",
+          "kind": "A",
+          "ticket": 7,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 6,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 7
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 7,
+          "index": 7
+        },
+        {
+          "name": "ready",
+          "ticket": 7,
+          "index": 7
+        },
+        {
+          "name": "durable",
+          "ticket": 7,
+          "index": 7
+        },
+        {
+          "name": "commit-prefix",
+          "index": 7
+        },
+        {
+          "name": "applied",
+          "index": 7,
+          "g": 0,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 7,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 7
+          }
+        },
+        {
+          "name": "admit",
+          "id": "855f6232ce9e1f3d2d7cb45bf017a04d826506a06e02191b08c999768d4fdd6b",
+          "kind": "A",
+          "ticket": 8,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 7,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 8
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 8,
+          "index": 8
+        },
+        {
+          "name": "ready",
+          "ticket": 8,
+          "index": 8
+        },
+        {
+          "name": "durable",
+          "ticket": 8,
+          "index": 8
+        },
+        {
+          "name": "commit-prefix",
+          "index": 8
+        },
+        {
+          "name": "applied",
+          "index": 8,
+          "g": 0,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 8,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 8
+          }
+        },
+        {
+          "name": "admit",
+          "id": "78cc34ed5f2a1b18a323c54b4fde2c3c0306f8c9371690cb4518768bd8608c62",
+          "kind": "R",
+          "ticket": 9,
+          "path": "local",
+          "inventory": {
+            "qA": 0,
+            "qM": 1,
+            "retainedA": 8,
+            "futureA": 0,
+            "futureM": 1,
+            "aEntitlements": 8
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 9,
+          "index": 9
+        },
+        {
+          "name": "ready",
+          "ticket": 9,
+          "index": 9
+        },
+        {
+          "name": "durable",
+          "ticket": 9,
+          "index": 9
+        },
+        {
+          "name": "commit-prefix",
+          "index": 9
+        },
+        {
+          "name": "applied",
+          "index": 9,
+          "g": 1,
+          "disposition": "APPROVED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        }
+      ],
+      "final": {
+        "g": 1,
+        "version": 1,
+        "applied": 9,
+        "effects": 1,
+        "inventory": {
+          "qA": 0,
+          "qM": 0,
+          "retainedA": 1,
+          "futureA": 0,
+          "futureM": 0,
+          "aEntitlements": 1
+        }
+      }
+    },
+    {
+      "name": "delayed-before-core-retirement-cannot-overtake",
+      "events": [
+        {
+          "name": "admit",
+          "id": "a6a02804d1beb068545fb7f15867a6ba94c17a9d401931dd087272ff943bcc75",
+          "kind": "R",
+          "ticket": 10,
+          "path": "local",
+          "inventory": {
+            "qA": 0,
+            "qM": 1,
+            "retainedA": 0,
+            "futureA": 0,
+            "futureM": 1,
+            "aEntitlements": 0
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 10,
+          "index": 1
+        },
+        {
+          "name": "ready",
+          "ticket": 10,
+          "index": 1
+        },
+        {
+          "name": "durable",
+          "ticket": 10,
+          "index": 1
+        },
+        {
+          "name": "commit-prefix",
+          "index": 1
+        },
+        {
+          "name": "applied",
+          "index": 1,
+          "g": 1,
+          "disposition": "APPROVED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        }
+      ],
+      "final": {
+        "g": 1,
+        "version": 1,
+        "applied": 1,
+        "effects": 1,
+        "inventory": {
+          "qA": 0,
+          "qM": 0,
+          "retainedA": 1,
+          "futureA": 0,
+          "futureM": 0,
+          "aEntitlements": 1
+        }
+      }
+    },
+    {
+      "name": "timeout-ready-delay-then-late-commit",
+      "events": [
+        {
+          "name": "admit",
+          "id": "db8e37b98028ed933c4a1f83d795132d66cb1302e960a7bee505e655fe053021",
+          "kind": "R",
+          "ticket": 11,
+          "path": "local",
+          "inventory": {
+            "qA": 0,
+            "qM": 1,
+            "retainedA": 0,
+            "futureA": 0,
+            "futureM": 1,
+            "aEntitlements": 0
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 11,
+          "index": 1
+        },
+        {
+          "name": "ready",
+          "ticket": 11,
+          "index": 1
+        },
+        {
+          "name": "waiter-timeout-debt-retained",
+          "ticket": 11,
+          "inventory": {
+            "qA": 0,
+            "qM": 1,
+            "retainedA": 0,
+            "futureA": 0,
+            "futureM": 1,
+            "aEntitlements": 0
+          }
+        },
+        {
+          "name": "durable",
+          "ticket": 11,
+          "index": 1
+        },
+        {
+          "name": "commit-prefix",
+          "index": 1
+        },
+        {
+          "name": "applied",
+          "index": 1,
+          "g": 1,
+          "disposition": "APPROVED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        }
+      ],
+      "final": {
+        "g": 1,
+        "version": 1,
+        "applied": 1,
+        "effects": 1,
+        "inventory": {
+          "qA": 0,
+          "qM": 0,
+          "retainedA": 1,
+          "futureA": 0,
+          "futureM": 0,
+          "aEntitlements": 1
+        }
+      }
+    },
+    {
+      "name": "local-forwarded-duplicates-and-physical-copies",
+      "events": [
+        {
+          "name": "admit",
+          "id": "a3f169bcb0f5847f5580b0b1c585e81351fc9119f6a7b9b30aa8932f8ceb0a3b",
+          "kind": "R",
+          "ticket": 12,
+          "path": "local",
+          "inventory": {
+            "qA": 0,
+            "qM": 1,
+            "retainedA": 0,
+            "futureA": 0,
+            "futureM": 1,
+            "aEntitlements": 0
+          }
+        },
+        {
+          "name": "join",
+          "id": "a3f169bcb0f5847f5580b0b1c585e81351fc9119f6a7b9b30aa8932f8ceb0a3b",
+          "path": "forwarded"
+        },
+        {
+          "name": "ordered",
+          "ticket": 12,
+          "index": 1
+        },
+        {
+          "name": "ready",
+          "ticket": 12,
+          "index": 1
+        },
+        {
+          "name": "durable",
+          "ticket": 12,
+          "index": 1
+        },
+        {
+          "name": "recovered-extra-physical-copy",
+          "index": 2,
+          "inventory": {
+            "qA": 0,
+            "qM": 2,
+            "retainedA": 0,
+            "futureA": 0,
+            "futureM": 1,
+            "aEntitlements": 0
+          }
+        },
+        {
+          "name": "commit-prefix",
+          "index": 2
+        },
+        {
+          "name": "applied",
+          "index": 1,
+          "g": 1,
+          "disposition": "APPROVED",
+          "inventory": {
+            "qA": 0,
+            "qM": 1,
+            "retainedA": 1,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "applied",
+          "index": 2,
+          "g": 1,
+          "disposition": "REPLAY",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        }
+      ],
+      "final": {
+        "g": 1,
+        "version": 1,
+        "applied": 2,
+        "effects": 1,
+        "inventory": {
+          "qA": 0,
+          "qM": 0,
+          "retainedA": 1,
+          "futureA": 0,
+          "futureM": 0,
+          "aEntitlements": 1
+        }
+      }
+    },
+    {
+      "name": "leader-loss-old-generation-suffix-remains-charged",
+      "events": [
+        {
+          "name": "admit",
+          "id": "78cc34ed5f2a1b18a323c54b4fde2c3c0306f8c9371690cb4518768bd8608c62",
+          "kind": "R",
+          "ticket": 14,
+          "path": "local",
+          "inventory": {
+            "qA": 0,
+            "qM": 1,
+            "retainedA": 0,
+            "futureA": 0,
+            "futureM": 1,
+            "aEntitlements": 0
+          }
+        },
+        {
+          "name": "admit",
+          "id": "f761dd2e2d8dedd0d71c335a2fd612b05f67092b3ba79891153a1545242ca3de",
+          "kind": "A",
+          "ticket": 15,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 1,
+            "retainedA": 0,
+            "futureA": 1,
+            "futureM": 1,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 14,
+          "index": 1
+        },
+        {
+          "name": "ready",
+          "ticket": 14,
+          "index": 1
+        },
+        {
+          "name": "durable",
+          "ticket": 14,
+          "index": 1
+        },
+        {
+          "name": "ordered",
+          "ticket": 15,
+          "index": 2
+        },
+        {
+          "name": "ready",
+          "ticket": 15,
+          "index": 2
+        },
+        {
+          "name": "durable",
+          "ticket": 15,
+          "index": 2
+        },
+        {
+          "name": "commit-prefix",
+          "index": 2
+        },
+        {
+          "name": "applied",
+          "index": 1,
+          "g": 1,
+          "disposition": "APPROVED",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 2
+          }
+        },
+        {
+          "name": "leader-loss"
+        },
+        {
+          "name": "authoritative-reconstruction",
+          "discardFrom": null,
+          "provenPreCore": [],
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 2
+          }
+        },
+        {
+          "name": "applied",
+          "index": 2,
+          "g": 1,
+          "disposition": "HISTORY_RETIRED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        }
+      ],
+      "final": {
+        "g": 1,
+        "version": 1,
+        "applied": 2,
+        "effects": 1,
+        "inventory": {
+          "qA": 0,
+          "qM": 0,
+          "retainedA": 1,
+          "futureA": 0,
+          "futureM": 0,
+          "aEntitlements": 1
+        }
+      }
+    },
+    {
+      "name": "leader-loss-before-order-and-authoritative-discard",
+      "events": [
+        {
+          "name": "admit",
+          "id": "2a009c96ff5330e57bb1808e410bfcaf532e93e03b2111c96d4b8040bbdfca5e",
+          "kind": "R",
+          "ticket": 16,
+          "path": "local",
+          "inventory": {
+            "qA": 0,
+            "qM": 1,
+            "retainedA": 0,
+            "futureA": 0,
+            "futureM": 1,
+            "aEntitlements": 0
+          }
+        },
+        {
+          "name": "leader-loss"
+        },
+        {
+          "name": "authoritative-reconstruction",
+          "discardFrom": null,
+          "provenPreCore": [],
+          "inventory": {
+            "qA": 0,
+            "qM": 1,
+            "retainedA": 0,
+            "futureA": 0,
+            "futureM": 1,
+            "aEntitlements": 0
+          }
+        },
+        {
+          "name": "leader-loss"
+        },
+        {
+          "name": "authoritative-reconstruction",
+          "discardFrom": null,
+          "provenPreCore": [
+            16
+          ],
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 0,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 0
+          }
+        },
+        {
+          "name": "admit",
+          "id": "2a009c96ff5330e57bb1808e410bfcaf532e93e03b2111c96d4b8040bbdfca5e",
+          "kind": "R",
+          "ticket": 17,
+          "path": "local",
+          "inventory": {
+            "qA": 0,
+            "qM": 1,
+            "retainedA": 0,
+            "futureA": 0,
+            "futureM": 1,
+            "aEntitlements": 0
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 17,
+          "index": 1
+        },
+        {
+          "name": "ready",
+          "ticket": 17,
+          "index": 1
+        },
+        {
+          "name": "durable",
+          "ticket": 17,
+          "index": 1
+        },
+        {
+          "name": "commit-prefix",
+          "index": 1
+        },
+        {
+          "name": "applied",
+          "index": 1,
+          "g": 1,
+          "disposition": "APPROVED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        }
+      ],
+      "final": {
+        "g": 1,
+        "version": 1,
+        "applied": 1,
+        "effects": 1,
+        "inventory": {
+          "qA": 0,
+          "qM": 0,
+          "retainedA": 1,
+          "futureA": 0,
+          "futureM": 0,
+          "aEntitlements": 1
+        }
+      }
+    },
+    {
+      "name": "committed-before-apply-leader-loss",
+      "events": [
+        {
+          "name": "admit",
+          "id": "cfa01e6cb7f8b561320acdbcd1d573149797eadfc2ac40f4bcf8eda4c5a5d6b0",
+          "kind": "R",
+          "ticket": 18,
+          "path": "local",
+          "inventory": {
+            "qA": 0,
+            "qM": 1,
+            "retainedA": 0,
+            "futureA": 0,
+            "futureM": 1,
+            "aEntitlements": 0
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 18,
+          "index": 1
+        },
+        {
+          "name": "ready",
+          "ticket": 18,
+          "index": 1
+        },
+        {
+          "name": "durable",
+          "ticket": 18,
+          "index": 1
+        },
+        {
+          "name": "commit-prefix",
+          "index": 1
+        },
+        {
+          "name": "leader-loss"
+        },
+        {
+          "name": "authoritative-reconstruction",
+          "discardFrom": null,
+          "provenPreCore": [],
+          "inventory": {
+            "qA": 0,
+            "qM": 1,
+            "retainedA": 0,
+            "futureA": 0,
+            "futureM": 1,
+            "aEntitlements": 0
+          }
+        },
+        {
+          "name": "applied",
+          "index": 1,
+          "g": 1,
+          "disposition": "APPROVED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        }
+      ],
+      "final": {
+        "g": 1,
+        "version": 1,
+        "applied": 1,
+        "effects": 1,
+        "inventory": {
+          "qA": 0,
+          "qM": 0,
+          "retainedA": 1,
+          "futureA": 0,
+          "futureM": 0,
+          "aEntitlements": 1
+        }
+      }
+    },
+    {
+      "name": "suffix-discard-releases-only-proven-occurrences",
+      "events": [
+        {
+          "name": "admit",
+          "id": "6e5aaa993b585087019423b894e79495f0f6a37539dd14e26aca408507be7733",
+          "kind": "R",
+          "ticket": 19,
+          "path": "local",
+          "inventory": {
+            "qA": 0,
+            "qM": 1,
+            "retainedA": 0,
+            "futureA": 0,
+            "futureM": 1,
+            "aEntitlements": 0
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 19,
+          "index": 1
+        },
+        {
+          "name": "ready",
+          "ticket": 19,
+          "index": 1
+        },
+        {
+          "name": "durable",
+          "ticket": 19,
+          "index": 1
+        },
+        {
+          "name": "admit",
+          "id": "f0f308e287fad582a9b059aa4826dc1dee537728cf448b1d1f5d85a8dd3c8c8d",
+          "kind": "A",
+          "ticket": 20,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 1,
+            "retainedA": 0,
+            "futureA": 1,
+            "futureM": 1,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 20,
+          "index": 2
+        },
+        {
+          "name": "ready",
+          "ticket": 20,
+          "index": 2
+        },
+        {
+          "name": "durable",
+          "ticket": 20,
+          "index": 2
+        },
+        {
+          "name": "leader-loss"
+        },
+        {
+          "name": "authoritative-reconstruction",
+          "discardFrom": 2,
+          "provenPreCore": [],
+          "inventory": {
+            "qA": 0,
+            "qM": 1,
+            "retainedA": 0,
+            "futureA": 0,
+            "futureM": 1,
+            "aEntitlements": 0
+          }
+        },
+        {
+          "name": "commit-prefix",
+          "index": 1
+        },
+        {
+          "name": "applied",
+          "index": 1,
+          "g": 1,
+          "disposition": "APPROVED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        }
+      ],
+      "final": {
+        "g": 1,
+        "version": 1,
+        "applied": 1,
+        "effects": 1,
+        "inventory": {
+          "qA": 0,
+          "qM": 0,
+          "retainedA": 1,
+          "futureA": 0,
+          "futureM": 0,
+          "aEntitlements": 1
+        }
+      }
+    },
+    {
+      "name": "legitimate-refusal-lost-reply-later-valid-new-intent",
+      "events": [
+        {
+          "name": "admit",
+          "id": "eb93c601ef0b9b808500c64da8e67b241784a768b729ab5bc7530ead9c316194",
+          "kind": "R",
+          "ticket": 21,
+          "path": "local",
+          "inventory": {
+            "qA": 0,
+            "qM": 1,
+            "retainedA": 0,
+            "futureA": 0,
+            "futureM": 1,
+            "aEntitlements": 0
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 21,
+          "index": 1
+        },
+        {
+          "name": "ready",
+          "ticket": 21,
+          "index": 1
+        },
+        {
+          "name": "durable",
+          "ticket": 21,
+          "index": 1
+        },
+        {
+          "name": "commit-prefix",
+          "index": 1
+        },
+        {
+          "name": "applied",
+          "index": 1,
+          "g": 1,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "admit",
+          "id": "99c7b2f4dc3a7da5864e88c8002a3cd6bafb8c081e093b0ab2c01a049372798e",
+          "kind": "R",
+          "ticket": 22,
+          "path": "local",
+          "inventory": {
+            "qA": 0,
+            "qM": 1,
+            "retainedA": 1,
+            "futureA": 0,
+            "futureM": 1,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 22,
+          "index": 2
+        },
+        {
+          "name": "ready",
+          "ticket": 22,
+          "index": 2
+        },
+        {
+          "name": "durable",
+          "ticket": 22,
+          "index": 2
+        },
+        {
+          "name": "commit-prefix",
+          "index": 2
+        },
+        {
+          "name": "applied",
+          "index": 2,
+          "g": 2,
+          "disposition": "APPROVED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        }
+      ],
+      "final": {
+        "g": 2,
+        "version": 1,
+        "applied": 2,
+        "effects": 1,
+        "inventory": {
+          "qA": 0,
+          "qM": 0,
+          "retainedA": 1,
+          "futureA": 0,
+          "futureM": 0,
+          "aEntitlements": 1
+        }
+      }
+    },
+    {
+      "name": "competing-maintenance-and-no-winner-borrowing",
+      "events": [
+        {
+          "name": "admit",
+          "id": "072d1071d0dc66c71c175c738f3c198ca088ac1b2477ae590ea60d43d93e5e2b",
+          "kind": "R",
+          "ticket": 23,
+          "path": "local",
+          "inventory": {
+            "qA": 0,
+            "qM": 1,
+            "retainedA": 0,
+            "futureA": 0,
+            "futureM": 1,
+            "aEntitlements": 0
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 23,
+          "index": 1
+        },
+        {
+          "name": "ready",
+          "ticket": 23,
+          "index": 1
+        },
+        {
+          "name": "durable",
+          "ticket": 23,
+          "index": 1
+        },
+        {
+          "name": "commit-prefix",
+          "index": 1
+        },
+        {
+          "name": "applied",
+          "index": 1,
+          "g": 1,
+          "disposition": "APPROVED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        }
+      ],
+      "final": {
+        "g": 1,
+        "version": 1,
+        "applied": 1,
+        "effects": 1,
+        "inventory": {
+          "qA": 0,
+          "qM": 0,
+          "retainedA": 1,
+          "futureA": 0,
+          "futureM": 0,
+          "aEntitlements": 1
+        }
+      }
+    },
+    {
+      "name": "atomic-environmental-rollback",
+      "events": [
+        {
+          "name": "admit",
+          "id": "741f6c8e20dc416961d22f7a7d3002098280f4fc2577072b0eec085a6403dafd",
+          "kind": "A",
+          "ticket": 24,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 0,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 24,
+          "index": 1
+        },
+        {
+          "name": "ready",
+          "ticket": 24,
+          "index": 1
+        },
+        {
+          "name": "durable",
+          "ticket": 24,
+          "index": 1
+        },
+        {
+          "name": "commit-prefix",
+          "index": 1
+        },
+        {
+          "name": "applied",
+          "index": 1,
+          "g": 0,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "admit",
+          "id": "b2d8c449d30c0e791f91383745b3eddd63f146b86bb49e4a581e596b6edac1dc",
+          "kind": "A",
+          "ticket": 25,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 2
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 25,
+          "index": 2
+        },
+        {
+          "name": "ready",
+          "ticket": 25,
+          "index": 2
+        },
+        {
+          "name": "durable",
+          "ticket": 25,
+          "index": 2
+        },
+        {
+          "name": "commit-prefix",
+          "index": 2
+        },
+        {
+          "name": "applied",
+          "index": 2,
+          "g": 0,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 2,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 2
+          }
+        },
+        {
+          "name": "admit",
+          "id": "de09c1bdf6da948306f8f5235feb61b50e9e726ba40a8e288c36cc8087a70fc5",
+          "kind": "A",
+          "ticket": 26,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 2,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 3
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 26,
+          "index": 3
+        },
+        {
+          "name": "ready",
+          "ticket": 26,
+          "index": 3
+        },
+        {
+          "name": "durable",
+          "ticket": 26,
+          "index": 3
+        },
+        {
+          "name": "commit-prefix",
+          "index": 3
+        },
+        {
+          "name": "applied",
+          "index": 3,
+          "g": 0,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 3,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 3
+          }
+        },
+        {
+          "name": "admit",
+          "id": "104fb8470dbc3d7470e91b8fd4cc5480058eac67f11584e11d907d25214ae231",
+          "kind": "A",
+          "ticket": 27,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 3,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 4
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 27,
+          "index": 4
+        },
+        {
+          "name": "ready",
+          "ticket": 27,
+          "index": 4
+        },
+        {
+          "name": "durable",
+          "ticket": 27,
+          "index": 4
+        },
+        {
+          "name": "commit-prefix",
+          "index": 4
+        },
+        {
+          "name": "applied",
+          "index": 4,
+          "g": 0,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 4,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 4
+          }
+        },
+        {
+          "name": "admit",
+          "id": "9f8b100db2ab84f4acf2f3edc630c9c6b09e9d15b64bbd8b1eb29cd0d8b16acd",
+          "kind": "A",
+          "ticket": 28,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 4,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 5
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 28,
+          "index": 5
+        },
+        {
+          "name": "ready",
+          "ticket": 28,
+          "index": 5
+        },
+        {
+          "name": "durable",
+          "ticket": 28,
+          "index": 5
+        },
+        {
+          "name": "commit-prefix",
+          "index": 5
+        },
+        {
+          "name": "applied",
+          "index": 5,
+          "g": 0,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 5,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 5
+          }
+        },
+        {
+          "name": "admit",
+          "id": "ac4a22495a9d39a831bfcc9079fdb2fbd83c25e90e4a383c950f2a9c908f57a8",
+          "kind": "A",
+          "ticket": 29,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 5,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 6
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 29,
+          "index": 6
+        },
+        {
+          "name": "ready",
+          "ticket": 29,
+          "index": 6
+        },
+        {
+          "name": "durable",
+          "ticket": 29,
+          "index": 6
+        },
+        {
+          "name": "commit-prefix",
+          "index": 6
+        },
+        {
+          "name": "applied",
+          "index": 6,
+          "g": 0,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 6,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 6
+          }
+        },
+        {
+          "name": "admit",
+          "id": "e08145f97d949824863aeb41ab6a0694391f65fcee7c9c16bc2478c95797f747",
+          "kind": "A",
+          "ticket": 30,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 6,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 7
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 30,
+          "index": 7
+        },
+        {
+          "name": "ready",
+          "ticket": 30,
+          "index": 7
+        },
+        {
+          "name": "durable",
+          "ticket": 30,
+          "index": 7
+        },
+        {
+          "name": "commit-prefix",
+          "index": 7
+        },
+        {
+          "name": "applied",
+          "index": 7,
+          "g": 0,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 7,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 7
+          }
+        },
+        {
+          "name": "admit",
+          "id": "855f6232ce9e1f3d2d7cb45bf017a04d826506a06e02191b08c999768d4fdd6b",
+          "kind": "A",
+          "ticket": 31,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 7,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 8
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 31,
+          "index": 8
+        },
+        {
+          "name": "ready",
+          "ticket": 31,
+          "index": 8
+        },
+        {
+          "name": "durable",
+          "ticket": 31,
+          "index": 8
+        },
+        {
+          "name": "commit-prefix",
+          "index": 8
+        },
+        {
+          "name": "applied",
+          "index": 8,
+          "g": 0,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 8,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 8
+          }
+        },
+        {
+          "name": "admit",
+          "id": "08197a657c45b1c29af6fe51f14eaabad0b2d6deb8bd3808ee4645bfb4161b94",
+          "kind": "R",
+          "ticket": 32,
+          "path": "local",
+          "inventory": {
+            "qA": 0,
+            "qM": 1,
+            "retainedA": 8,
+            "futureA": 0,
+            "futureM": 1,
+            "aEntitlements": 8
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 32,
+          "index": 9
+        },
+        {
+          "name": "ready",
+          "ticket": 32,
+          "index": 9
+        },
+        {
+          "name": "durable",
+          "ticket": 32,
+          "index": 9
+        },
+        {
+          "name": "commit-prefix",
+          "index": 9
+        },
+        {
+          "name": "atomic-rollback",
+          "index": 9
+        },
+        {
+          "name": "applied",
+          "index": 9,
+          "g": 1,
+          "disposition": "APPROVED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        }
+      ],
+      "final": {
+        "g": 1,
+        "version": 1,
+        "applied": 9,
+        "effects": 1,
+        "inventory": {
+          "qA": 0,
+          "qM": 0,
+          "retainedA": 1,
+          "futureA": 0,
+          "futureM": 0,
+          "aEntitlements": 1
+        }
+      }
+    },
+    {
+      "name": "four-old-pending-entitlements-plus-one-child",
+      "events": [
+        {
+          "name": "admit",
+          "id": "741f6c8e20dc416961d22f7a7d3002098280f4fc2577072b0eec085a6403dafd",
+          "kind": "A",
+          "ticket": 33,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 0,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 33,
+          "index": 1
+        },
+        {
+          "name": "ready",
+          "ticket": 33,
+          "index": 1
+        },
+        {
+          "name": "durable",
+          "ticket": 33,
+          "index": 1
+        },
+        {
+          "name": "commit-prefix",
+          "index": 1
+        },
+        {
+          "name": "applied",
+          "index": 1,
+          "g": 0,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "admit",
+          "id": "b2d8c449d30c0e791f91383745b3eddd63f146b86bb49e4a581e596b6edac1dc",
+          "kind": "A",
+          "ticket": 34,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 2
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 34,
+          "index": 2
+        },
+        {
+          "name": "ready",
+          "ticket": 34,
+          "index": 2
+        },
+        {
+          "name": "durable",
+          "ticket": 34,
+          "index": 2
+        },
+        {
+          "name": "commit-prefix",
+          "index": 2
+        },
+        {
+          "name": "applied",
+          "index": 2,
+          "g": 0,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 2,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 2
+          }
+        },
+        {
+          "name": "admit",
+          "id": "de09c1bdf6da948306f8f5235feb61b50e9e726ba40a8e288c36cc8087a70fc5",
+          "kind": "A",
+          "ticket": 35,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 2,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 3
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 35,
+          "index": 3
+        },
+        {
+          "name": "ready",
+          "ticket": 35,
+          "index": 3
+        },
+        {
+          "name": "durable",
+          "ticket": 35,
+          "index": 3
+        },
+        {
+          "name": "commit-prefix",
+          "index": 3
+        },
+        {
+          "name": "applied",
+          "index": 3,
+          "g": 0,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 3,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 3
+          }
+        },
+        {
+          "name": "admit",
+          "id": "104fb8470dbc3d7470e91b8fd4cc5480058eac67f11584e11d907d25214ae231",
+          "kind": "A",
+          "ticket": 36,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 3,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 4
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 36,
+          "index": 4
+        },
+        {
+          "name": "ready",
+          "ticket": 36,
+          "index": 4
+        },
+        {
+          "name": "durable",
+          "ticket": 36,
+          "index": 4
+        },
+        {
+          "name": "commit-prefix",
+          "index": 4
+        },
+        {
+          "name": "applied",
+          "index": 4,
+          "g": 0,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 4,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 4
+          }
+        },
+        {
+          "name": "admit",
+          "id": "57b497f807c6bef0c702f6f078dfdf14cd01f14d28943fa66ee934c70dbe1623",
+          "kind": "R",
+          "ticket": 37,
+          "path": "local",
+          "inventory": {
+            "qA": 0,
+            "qM": 1,
+            "retainedA": 4,
+            "futureA": 0,
+            "futureM": 1,
+            "aEntitlements": 4
+          }
+        },
+        {
+          "name": "admit",
+          "id": "20d724e4e3183810da130b0216d6e7e6241dc40aabd323fd33a5f770ba4bed42",
+          "kind": "A",
+          "ticket": 38,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 1,
+            "retainedA": 4,
+            "futureA": 1,
+            "futureM": 1,
+            "aEntitlements": 5
+          }
+        },
+        {
+          "name": "admit",
+          "id": "737e701cbd4d00b4a96d0a6e02da3a4cfc0c6668de26567a335a9b1dc0961b34",
+          "kind": "A",
+          "ticket": 39,
+          "path": "local",
+          "inventory": {
+            "qA": 2,
+            "qM": 1,
+            "retainedA": 4,
+            "futureA": 2,
+            "futureM": 1,
+            "aEntitlements": 6
+          }
+        },
+        {
+          "name": "admit",
+          "id": "879d523d4569fa8fc17011bd5ba25c89018a5984fd234add4faa66ec386ac1e4",
+          "kind": "A",
+          "ticket": 40,
+          "path": "local",
+          "inventory": {
+            "qA": 3,
+            "qM": 1,
+            "retainedA": 4,
+            "futureA": 3,
+            "futureM": 1,
+            "aEntitlements": 7
+          }
+        },
+        {
+          "name": "admit",
+          "id": "5b57598b410e71492db034aabe1bbdb02797069212b7c90e8f0433ba250b6e47",
+          "kind": "A",
+          "ticket": 41,
+          "path": "local",
+          "inventory": {
+            "qA": 4,
+            "qM": 1,
+            "retainedA": 4,
+            "futureA": 4,
+            "futureM": 1,
+            "aEntitlements": 8
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 37,
+          "index": 5
+        },
+        {
+          "name": "ready",
+          "ticket": 37,
+          "index": 5
+        },
+        {
+          "name": "durable",
+          "ticket": 37,
+          "index": 5
+        },
+        {
+          "name": "commit-prefix",
+          "index": 5
+        },
+        {
+          "name": "applied",
+          "index": 5,
+          "g": 1,
+          "disposition": "APPROVED",
+          "inventory": {
+            "qA": 4,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 4,
+            "futureM": 0,
+            "aEntitlements": 5
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 38,
+          "index": 6
+        },
+        {
+          "name": "ready",
+          "ticket": 38,
+          "index": 6
+        },
+        {
+          "name": "durable",
+          "ticket": 38,
+          "index": 6
+        },
+        {
+          "name": "commit-prefix",
+          "index": 6
+        },
+        {
+          "name": "applied",
+          "index": 6,
+          "g": 1,
+          "disposition": "HISTORY_RETIRED",
+          "inventory": {
+            "qA": 3,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 3,
+            "futureM": 0,
+            "aEntitlements": 4
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 39,
+          "index": 7
+        },
+        {
+          "name": "ready",
+          "ticket": 39,
+          "index": 7
+        },
+        {
+          "name": "durable",
+          "ticket": 39,
+          "index": 7
+        },
+        {
+          "name": "commit-prefix",
+          "index": 7
+        },
+        {
+          "name": "applied",
+          "index": 7,
+          "g": 1,
+          "disposition": "HISTORY_RETIRED",
+          "inventory": {
+            "qA": 2,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 2,
+            "futureM": 0,
+            "aEntitlements": 3
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 40,
+          "index": 8
+        },
+        {
+          "name": "ready",
+          "ticket": 40,
+          "index": 8
+        },
+        {
+          "name": "durable",
+          "ticket": 40,
+          "index": 8
+        },
+        {
+          "name": "commit-prefix",
+          "index": 8
+        },
+        {
+          "name": "applied",
+          "index": 8,
+          "g": 1,
+          "disposition": "HISTORY_RETIRED",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 2
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 41,
+          "index": 9
+        },
+        {
+          "name": "ready",
+          "ticket": 41,
+          "index": 9
+        },
+        {
+          "name": "durable",
+          "ticket": 41,
+          "index": 9
+        },
+        {
+          "name": "commit-prefix",
+          "index": 9
+        },
+        {
+          "name": "applied",
+          "index": 9,
+          "g": 1,
+          "disposition": "HISTORY_RETIRED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        }
+      ],
+      "final": {
+        "g": 1,
+        "version": 1,
+        "applied": 9,
+        "effects": 1,
+        "inventory": {
+          "qA": 0,
+          "qM": 0,
+          "retainedA": 1,
+          "futureA": 0,
+          "futureM": 0,
+          "aEntitlements": 1
+        }
+      }
+    },
+    {
+      "name": "retained-unprotected-saturation-counterexample",
+      "events": [
+        {
+          "name": "admit",
+          "id": "e803d4adcc3e9811d8daef828d9d0b7aa02649a2844451729b50f8fd703cc5a6",
+          "kind": "T",
+          "ticket": 42,
+          "path": "local",
+          "inventory": {
+            "qA": 0,
+            "qM": 1,
+            "retainedA": 0,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 0
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 42,
+          "index": 1
+        },
+        {
+          "name": "ready",
+          "ticket": 42,
+          "index": 1
+        },
+        {
+          "name": "durable",
+          "ticket": 42,
+          "index": 1
+        },
+        {
+          "name": "commit-prefix",
+          "index": 1
+        },
+        {
+          "name": "applied",
+          "index": 1,
+          "g": 1,
+          "disposition": null,
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 0,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 0
+          }
+        },
+        {
+          "name": "admit",
+          "id": "9189dba436f2ed91dc7da0d50436797b462b49ed0485b88875151fba5a5cb496",
+          "kind": "A",
+          "ticket": 43,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 0,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 43,
+          "index": 2
+        },
+        {
+          "name": "ready",
+          "ticket": 43,
+          "index": 2
+        },
+        {
+          "name": "durable",
+          "ticket": 43,
+          "index": 2
+        },
+        {
+          "name": "commit-prefix",
+          "index": 2
+        },
+        {
+          "name": "applied",
+          "index": 2,
+          "g": 1,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "admit",
+          "id": "4614d5c9483503434494db5babf9e31acff4dd936ab780b6769bd894ee088de9",
+          "kind": "A",
+          "ticket": 44,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 2
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 44,
+          "index": 3
+        },
+        {
+          "name": "ready",
+          "ticket": 44,
+          "index": 3
+        },
+        {
+          "name": "durable",
+          "ticket": 44,
+          "index": 3
+        },
+        {
+          "name": "commit-prefix",
+          "index": 3
+        },
+        {
+          "name": "applied",
+          "index": 3,
+          "g": 1,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 2,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 2
+          }
+        },
+        {
+          "name": "admit",
+          "id": "4ac816e9445f402911c5277f088bbd2f6fd990053b938ced4cc0d916a5c0c888",
+          "kind": "A",
+          "ticket": 45,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 2,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 3
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 45,
+          "index": 4
+        },
+        {
+          "name": "ready",
+          "ticket": 45,
+          "index": 4
+        },
+        {
+          "name": "durable",
+          "ticket": 45,
+          "index": 4
+        },
+        {
+          "name": "commit-prefix",
+          "index": 4
+        },
+        {
+          "name": "applied",
+          "index": 4,
+          "g": 1,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 3,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 3
+          }
+        },
+        {
+          "name": "admit",
+          "id": "ea17889514f23a9bdb5844110600cda5a5b75aac3d24571dc8a12534247aa102",
+          "kind": "A",
+          "ticket": 46,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 3,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 4
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 46,
+          "index": 5
+        },
+        {
+          "name": "ready",
+          "ticket": 46,
+          "index": 5
+        },
+        {
+          "name": "durable",
+          "ticket": 46,
+          "index": 5
+        },
+        {
+          "name": "commit-prefix",
+          "index": 5
+        },
+        {
+          "name": "applied",
+          "index": 5,
+          "g": 1,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 4,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 4
+          }
+        },
+        {
+          "name": "admit",
+          "id": "5d724de74cc1ea0ac0a066a33b6e819d451ac5407a7be6cddcf8712289e06e58",
+          "kind": "A",
+          "ticket": 47,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 4,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 5
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 47,
+          "index": 6
+        },
+        {
+          "name": "ready",
+          "ticket": 47,
+          "index": 6
+        },
+        {
+          "name": "durable",
+          "ticket": 47,
+          "index": 6
+        },
+        {
+          "name": "commit-prefix",
+          "index": 6
+        },
+        {
+          "name": "applied",
+          "index": 6,
+          "g": 1,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 5,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 5
+          }
+        },
+        {
+          "name": "admit",
+          "id": "7a4b429b40941f0831e28853df90922c2392b6c11caf2ebce40200879e3198b5",
+          "kind": "A",
+          "ticket": 48,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 5,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 6
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 48,
+          "index": 7
+        },
+        {
+          "name": "ready",
+          "ticket": 48,
+          "index": 7
+        },
+        {
+          "name": "durable",
+          "ticket": 48,
+          "index": 7
+        },
+        {
+          "name": "commit-prefix",
+          "index": 7
+        },
+        {
+          "name": "applied",
+          "index": 7,
+          "g": 1,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 6,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 6
+          }
+        },
+        {
+          "name": "admit",
+          "id": "80862036aca7590986a36fef74fe7656fc4cb8f57f052b484e8f160d2bd39b03",
+          "kind": "A",
+          "ticket": 49,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 6,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 7
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 49,
+          "index": 8
+        },
+        {
+          "name": "ready",
+          "ticket": 49,
+          "index": 8
+        },
+        {
+          "name": "durable",
+          "ticket": 49,
+          "index": 8
+        },
+        {
+          "name": "commit-prefix",
+          "index": 8
+        },
+        {
+          "name": "applied",
+          "index": 8,
+          "g": 1,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 7,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 7
+          }
+        },
+        {
+          "name": "admit",
+          "id": "30ce5e42e311bfebc465592ceddbf4d3e279266ebb237e9ddfec92f126425fdc",
+          "kind": "A",
+          "ticket": 50,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 7,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 8
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 50,
+          "index": 9
+        },
+        {
+          "name": "ready",
+          "ticket": 50,
+          "index": 9
+        },
+        {
+          "name": "durable",
+          "ticket": 50,
+          "index": 9
+        },
+        {
+          "name": "commit-prefix",
+          "index": 9
+        },
+        {
+          "name": "applied",
+          "index": 9,
+          "g": 1,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 8,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 8
+          }
+        },
+        {
+          "name": "admit",
+          "id": "f10bed57f11651b55180a035fbc42cbdb960ec8a7060bb8a175e10950a2693f5",
+          "kind": "T",
+          "ticket": 51,
+          "path": "local",
+          "inventory": {
+            "qA": 0,
+            "qM": 1,
+            "retainedA": 8,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 8
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 51,
+          "index": 10
+        },
+        {
+          "name": "ready",
+          "ticket": 51,
+          "index": 10
+        },
+        {
+          "name": "durable",
+          "ticket": 51,
+          "index": 10
+        },
+        {
+          "name": "commit-prefix",
+          "index": 10
+        },
+        {
+          "name": "applied",
+          "index": 10,
+          "g": 2,
+          "disposition": null,
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 0,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 0
+          }
+        },
+        {
+          "name": "admit",
+          "id": "ff935bf9244ef4625af53b3366a15d8a540848c1f3495f98e6949f3fef0683b9",
+          "kind": "A",
+          "ticket": 52,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 0,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 52,
+          "index": 11
+        },
+        {
+          "name": "ready",
+          "ticket": 52,
+          "index": 11
+        },
+        {
+          "name": "durable",
+          "ticket": 52,
+          "index": 11
+        },
+        {
+          "name": "commit-prefix",
+          "index": 11
+        },
+        {
+          "name": "applied",
+          "index": 11,
+          "g": 2,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "admit",
+          "id": "68c050512ef78c25871151ad8e906a10eee2f87d77101695ab0e65fa627597d8",
+          "kind": "A",
+          "ticket": 53,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 2
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 53,
+          "index": 12
+        },
+        {
+          "name": "ready",
+          "ticket": 53,
+          "index": 12
+        },
+        {
+          "name": "durable",
+          "ticket": 53,
+          "index": 12
+        },
+        {
+          "name": "commit-prefix",
+          "index": 12
+        },
+        {
+          "name": "applied",
+          "index": 12,
+          "g": 2,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 2,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 2
+          }
+        },
+        {
+          "name": "admit",
+          "id": "4fb984fb1d154f95a19a68cad1d500cd0f7ccefaa2dcbbb14604ce51a79774f1",
+          "kind": "A",
+          "ticket": 54,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 2,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 3
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 54,
+          "index": 13
+        },
+        {
+          "name": "ready",
+          "ticket": 54,
+          "index": 13
+        },
+        {
+          "name": "durable",
+          "ticket": 54,
+          "index": 13
+        },
+        {
+          "name": "commit-prefix",
+          "index": 13
+        },
+        {
+          "name": "applied",
+          "index": 13,
+          "g": 2,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 3,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 3
+          }
+        },
+        {
+          "name": "admit",
+          "id": "f8563dbaecd682d22402e68804469a5b69b752e63b303faddda0aecb43c8a4e3",
+          "kind": "A",
+          "ticket": 55,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 3,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 4
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 55,
+          "index": 14
+        },
+        {
+          "name": "ready",
+          "ticket": 55,
+          "index": 14
+        },
+        {
+          "name": "durable",
+          "ticket": 55,
+          "index": 14
+        },
+        {
+          "name": "commit-prefix",
+          "index": 14
+        },
+        {
+          "name": "applied",
+          "index": 14,
+          "g": 2,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 4,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 4
+          }
+        },
+        {
+          "name": "admit",
+          "id": "0313923bf39f8ee92c38102a3cb0cc5144d4a47e4fe240ce21cc02bcc97ed86a",
+          "kind": "A",
+          "ticket": 56,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 4,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 5
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 56,
+          "index": 15
+        },
+        {
+          "name": "ready",
+          "ticket": 56,
+          "index": 15
+        },
+        {
+          "name": "durable",
+          "ticket": 56,
+          "index": 15
+        },
+        {
+          "name": "commit-prefix",
+          "index": 15
+        },
+        {
+          "name": "applied",
+          "index": 15,
+          "g": 2,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 5,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 5
+          }
+        },
+        {
+          "name": "admit",
+          "id": "0acf83e227afa96fefb1835a7eff4299f2e9b0929e2ecfd993b46e7bdab28dbb",
+          "kind": "A",
+          "ticket": 57,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 5,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 6
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 57,
+          "index": 16
+        },
+        {
+          "name": "ready",
+          "ticket": 57,
+          "index": 16
+        },
+        {
+          "name": "durable",
+          "ticket": 57,
+          "index": 16
+        },
+        {
+          "name": "commit-prefix",
+          "index": 16
+        },
+        {
+          "name": "applied",
+          "index": 16,
+          "g": 2,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 6,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 6
+          }
+        },
+        {
+          "name": "admit",
+          "id": "0774fe2237ddcf0cc028d6f0ed34e04008a3bb52d35298bd17756b6bc8ddd3dd",
+          "kind": "A",
+          "ticket": 58,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 6,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 7
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 58,
+          "index": 17
+        },
+        {
+          "name": "ready",
+          "ticket": 58,
+          "index": 17
+        },
+        {
+          "name": "durable",
+          "ticket": 58,
+          "index": 17
+        },
+        {
+          "name": "commit-prefix",
+          "index": 17
+        },
+        {
+          "name": "applied",
+          "index": 17,
+          "g": 2,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 7,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 7
+          }
+        },
+        {
+          "name": "admit",
+          "id": "b4ba1d79b3f265d15f54c95dc64f0dbd101d34e8f43ca423c97899cb09775dc6",
+          "kind": "A",
+          "ticket": 59,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 7,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 8
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 59,
+          "index": 18
+        },
+        {
+          "name": "ready",
+          "ticket": 59,
+          "index": 18
+        },
+        {
+          "name": "durable",
+          "ticket": 59,
+          "index": 18
+        },
+        {
+          "name": "commit-prefix",
+          "index": 18
+        },
+        {
+          "name": "applied",
+          "index": 18,
+          "g": 2,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 8,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 8
+          }
+        },
+        {
+          "name": "admit",
+          "id": "5b7ac961e3d72a909f239456b6cf20511b4160d453e1e5ef7fef23b9cb316cf5",
+          "kind": "T",
+          "ticket": 60,
+          "path": "local",
+          "inventory": {
+            "qA": 0,
+            "qM": 1,
+            "retainedA": 8,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 8
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 60,
+          "index": 19
+        },
+        {
+          "name": "ready",
+          "ticket": 60,
+          "index": 19
+        },
+        {
+          "name": "durable",
+          "ticket": 60,
+          "index": 19
+        },
+        {
+          "name": "commit-prefix",
+          "index": 19
+        },
+        {
+          "name": "applied",
+          "index": 19,
+          "g": 3,
+          "disposition": null,
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 0,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 0
+          }
+        },
+        {
+          "name": "admit",
+          "id": "e1e75eeceeabe9915e906c52134bb94f9d9f7e86ac88d459a739c7bc0e10b629",
+          "kind": "A",
+          "ticket": 61,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 0,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 61,
+          "index": 20
+        },
+        {
+          "name": "ready",
+          "ticket": 61,
+          "index": 20
+        },
+        {
+          "name": "durable",
+          "ticket": 61,
+          "index": 20
+        },
+        {
+          "name": "commit-prefix",
+          "index": 20
+        },
+        {
+          "name": "applied",
+          "index": 20,
+          "g": 3,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "admit",
+          "id": "2cff5dcbbb80efd5b880c448c7f3d96a34c67e2c0cad520530a264b6aad1a4f7",
+          "kind": "A",
+          "ticket": 62,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 2
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 62,
+          "index": 21
+        },
+        {
+          "name": "ready",
+          "ticket": 62,
+          "index": 21
+        },
+        {
+          "name": "durable",
+          "ticket": 62,
+          "index": 21
+        },
+        {
+          "name": "commit-prefix",
+          "index": 21
+        },
+        {
+          "name": "applied",
+          "index": 21,
+          "g": 3,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 2,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 2
+          }
+        },
+        {
+          "name": "admit",
+          "id": "83fa741b336b26f1ed49b444d762b7bb38e2c486211ca889d9a43af8665145d6",
+          "kind": "A",
+          "ticket": 63,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 2,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 3
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 63,
+          "index": 22
+        },
+        {
+          "name": "ready",
+          "ticket": 63,
+          "index": 22
+        },
+        {
+          "name": "durable",
+          "ticket": 63,
+          "index": 22
+        },
+        {
+          "name": "commit-prefix",
+          "index": 22
+        },
+        {
+          "name": "applied",
+          "index": 22,
+          "g": 3,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 3,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 3
+          }
+        },
+        {
+          "name": "admit",
+          "id": "b2721b8778f6ccd0dc063686cff6429a84575ee4eab9d00b3d75c1c397002be6",
+          "kind": "A",
+          "ticket": 64,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 3,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 4
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 64,
+          "index": 23
+        },
+        {
+          "name": "ready",
+          "ticket": 64,
+          "index": 23
+        },
+        {
+          "name": "durable",
+          "ticket": 64,
+          "index": 23
+        },
+        {
+          "name": "commit-prefix",
+          "index": 23
+        },
+        {
+          "name": "applied",
+          "index": 23,
+          "g": 3,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 4,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 4
+          }
+        },
+        {
+          "name": "admit",
+          "id": "f4410c1e1212d4a719e53c381098890d82b99a61c0e0a1004f07f586ee5395f2",
+          "kind": "A",
+          "ticket": 65,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 4,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 5
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 65,
+          "index": 24
+        },
+        {
+          "name": "ready",
+          "ticket": 65,
+          "index": 24
+        },
+        {
+          "name": "durable",
+          "ticket": 65,
+          "index": 24
+        },
+        {
+          "name": "commit-prefix",
+          "index": 24
+        },
+        {
+          "name": "applied",
+          "index": 24,
+          "g": 3,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 5,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 5
+          }
+        },
+        {
+          "name": "admit",
+          "id": "e2d897bec499661af9849d6568655cb9185e1e670d1958d5fb02fba504da5b37",
+          "kind": "A",
+          "ticket": 66,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 5,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 6
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 66,
+          "index": 25
+        },
+        {
+          "name": "ready",
+          "ticket": 66,
+          "index": 25
+        },
+        {
+          "name": "durable",
+          "ticket": 66,
+          "index": 25
+        },
+        {
+          "name": "commit-prefix",
+          "index": 25
+        },
+        {
+          "name": "applied",
+          "index": 25,
+          "g": 3,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 6,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 6
+          }
+        },
+        {
+          "name": "admit",
+          "id": "c628e298eefd06834c5896b153da8fc07be52d888a7b088f667fb6482728376b",
+          "kind": "A",
+          "ticket": 67,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 6,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 7
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 67,
+          "index": 26
+        },
+        {
+          "name": "ready",
+          "ticket": 67,
+          "index": 26
+        },
+        {
+          "name": "durable",
+          "ticket": 67,
+          "index": 26
+        },
+        {
+          "name": "commit-prefix",
+          "index": 26
+        },
+        {
+          "name": "applied",
+          "index": 26,
+          "g": 3,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 7,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 7
+          }
+        },
+        {
+          "name": "admit",
+          "id": "6a83df8f9b04119ee0ace1fad6d72b6160131aa5984c7efc3fce80fbd0f9eb18",
+          "kind": "A",
+          "ticket": 68,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 7,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 8
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 68,
+          "index": 27
+        },
+        {
+          "name": "ready",
+          "ticket": 68,
+          "index": 27
+        },
+        {
+          "name": "durable",
+          "ticket": 68,
+          "index": 27
+        },
+        {
+          "name": "commit-prefix",
+          "index": 27
+        },
+        {
+          "name": "applied",
+          "index": 27,
+          "g": 3,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 8,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 8
+          }
+        },
+        {
+          "name": "admit",
+          "id": "32702f9b7e127e0927f24c431b80dc228d4aeaedbfa6c1793204758ddba3c2dd",
+          "kind": "T",
+          "ticket": 69,
+          "path": "local",
+          "inventory": {
+            "qA": 0,
+            "qM": 1,
+            "retainedA": 8,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 8
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 69,
+          "index": 28
+        },
+        {
+          "name": "ready",
+          "ticket": 69,
+          "index": 28
+        },
+        {
+          "name": "durable",
+          "ticket": 69,
+          "index": 28
+        },
+        {
+          "name": "commit-prefix",
+          "index": 28
+        },
+        {
+          "name": "applied",
+          "index": 28,
+          "g": 4,
+          "disposition": null,
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 0,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 0
+          }
+        },
+        {
+          "name": "admit",
+          "id": "668e21ab6d7fb0cf5ac640b38fbc0b752ba10fdaf28a9c09095aa57ddb3f79fa",
+          "kind": "A",
+          "ticket": 70,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 0,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 70,
+          "index": 29
+        },
+        {
+          "name": "ready",
+          "ticket": 70,
+          "index": 29
+        },
+        {
+          "name": "durable",
+          "ticket": 70,
+          "index": 29
+        },
+        {
+          "name": "commit-prefix",
+          "index": 29
+        },
+        {
+          "name": "applied",
+          "index": 29,
+          "g": 4,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "admit",
+          "id": "076707fa765c6d44a9893cce1e0d193846add8d694f4c1fbb23e694070a7ac99",
+          "kind": "A",
+          "ticket": 71,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 2
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 71,
+          "index": 30
+        },
+        {
+          "name": "ready",
+          "ticket": 71,
+          "index": 30
+        },
+        {
+          "name": "durable",
+          "ticket": 71,
+          "index": 30
+        },
+        {
+          "name": "commit-prefix",
+          "index": 30
+        },
+        {
+          "name": "applied",
+          "index": 30,
+          "g": 4,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 2,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 2
+          }
+        },
+        {
+          "name": "admit",
+          "id": "d59f4985a34ed39d1cab18d2c3c62338a8da3800d44b3ec7613b262f2ddfd548",
+          "kind": "A",
+          "ticket": 72,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 2,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 3
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 72,
+          "index": 31
+        },
+        {
+          "name": "ready",
+          "ticket": 72,
+          "index": 31
+        },
+        {
+          "name": "durable",
+          "ticket": 72,
+          "index": 31
+        },
+        {
+          "name": "commit-prefix",
+          "index": 31
+        },
+        {
+          "name": "applied",
+          "index": 31,
+          "g": 4,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 3,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 3
+          }
+        },
+        {
+          "name": "admit",
+          "id": "5c96dbaffccba7aad8041e5295406f5fd2c95f4abdf4d2901a7171cfaa4349f8",
+          "kind": "A",
+          "ticket": 73,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 3,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 4
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 73,
+          "index": 32
+        },
+        {
+          "name": "ready",
+          "ticket": 73,
+          "index": 32
+        },
+        {
+          "name": "durable",
+          "ticket": 73,
+          "index": 32
+        },
+        {
+          "name": "commit-prefix",
+          "index": 32
+        },
+        {
+          "name": "applied",
+          "index": 32,
+          "g": 4,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 4,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 4
+          }
+        },
+        {
+          "name": "admit",
+          "id": "03a1dc7365938ef8390a7d21263103bbe05d23efdd5848e8a6cdf75cdcfeb1cc",
+          "kind": "A",
+          "ticket": 74,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 4,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 5
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 74,
+          "index": 33
+        },
+        {
+          "name": "ready",
+          "ticket": 74,
+          "index": 33
+        },
+        {
+          "name": "durable",
+          "ticket": 74,
+          "index": 33
+        },
+        {
+          "name": "commit-prefix",
+          "index": 33
+        },
+        {
+          "name": "applied",
+          "index": 33,
+          "g": 4,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 5,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 5
+          }
+        },
+        {
+          "name": "admit",
+          "id": "095c869dc29129389fa684d6701219758ac85e2f8a865410576a506485229237",
+          "kind": "A",
+          "ticket": 75,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 5,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 6
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 75,
+          "index": 34
+        },
+        {
+          "name": "ready",
+          "ticket": 75,
+          "index": 34
+        },
+        {
+          "name": "durable",
+          "ticket": 75,
+          "index": 34
+        },
+        {
+          "name": "commit-prefix",
+          "index": 34
+        },
+        {
+          "name": "applied",
+          "index": 34,
+          "g": 4,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 6,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 6
+          }
+        },
+        {
+          "name": "admit",
+          "id": "72cc9f11399f000f74b380028d6fc1a44abad3691fb4639156efa7c2c3c284b2",
+          "kind": "A",
+          "ticket": 76,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 6,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 7
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 76,
+          "index": 35
+        },
+        {
+          "name": "ready",
+          "ticket": 76,
+          "index": 35
+        },
+        {
+          "name": "durable",
+          "ticket": 76,
+          "index": 35
+        },
+        {
+          "name": "commit-prefix",
+          "index": 35
+        },
+        {
+          "name": "applied",
+          "index": 35,
+          "g": 4,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 7,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 7
+          }
+        },
+        {
+          "name": "admit",
+          "id": "3f5bbeac45e7253993c864b7a25f64c2443052ef4fbfb6fd72be7ac0fabae4fd",
+          "kind": "A",
+          "ticket": 77,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 7,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 8
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 77,
+          "index": 36
+        },
+        {
+          "name": "ready",
+          "ticket": 77,
+          "index": 36
+        },
+        {
+          "name": "durable",
+          "ticket": 77,
+          "index": 36
+        },
+        {
+          "name": "commit-prefix",
+          "index": 36
+        },
+        {
+          "name": "applied",
+          "index": 36,
+          "g": 4,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 8,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 8
+          }
+        },
+        {
+          "name": "admit",
+          "id": "b244216786426f548c9291f425ffef4bc6b3a50e7887039dfa6ecf7a347fe735",
+          "kind": "T",
+          "ticket": 78,
+          "path": "local",
+          "inventory": {
+            "qA": 0,
+            "qM": 1,
+            "retainedA": 8,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 8
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 78,
+          "index": 37
+        },
+        {
+          "name": "ready",
+          "ticket": 78,
+          "index": 37
+        },
+        {
+          "name": "durable",
+          "ticket": 78,
+          "index": 37
+        },
+        {
+          "name": "commit-prefix",
+          "index": 37
+        },
+        {
+          "name": "applied",
+          "index": 37,
+          "g": 5,
+          "disposition": null,
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 0,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 0
+          }
+        },
+        {
+          "name": "admit",
+          "id": "7982bc5640850e5472b4a5353d7512aaba959ef66eff0b25b915dd8646a4597b",
+          "kind": "A",
+          "ticket": 79,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 0,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 79,
+          "index": 38
+        },
+        {
+          "name": "ready",
+          "ticket": 79,
+          "index": 38
+        },
+        {
+          "name": "durable",
+          "ticket": 79,
+          "index": 38
+        },
+        {
+          "name": "commit-prefix",
+          "index": 38
+        },
+        {
+          "name": "applied",
+          "index": 38,
+          "g": 5,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "admit",
+          "id": "c0c02a99778ba23013e92f7acfa6df7cd09db9b94d14b30586265af6778df5ae",
+          "kind": "A",
+          "ticket": 80,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 2
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 80,
+          "index": 39
+        },
+        {
+          "name": "ready",
+          "ticket": 80,
+          "index": 39
+        },
+        {
+          "name": "durable",
+          "ticket": 80,
+          "index": 39
+        },
+        {
+          "name": "commit-prefix",
+          "index": 39
+        },
+        {
+          "name": "applied",
+          "index": 39,
+          "g": 5,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 2,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 2
+          }
+        },
+        {
+          "name": "admit",
+          "id": "58b0c284360f58bfce74b2b1ac16064e2d20f970eb26587edc8c2dd0d163f68f",
+          "kind": "A",
+          "ticket": 81,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 2,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 3
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 81,
+          "index": 40
+        },
+        {
+          "name": "ready",
+          "ticket": 81,
+          "index": 40
+        },
+        {
+          "name": "durable",
+          "ticket": 81,
+          "index": 40
+        },
+        {
+          "name": "commit-prefix",
+          "index": 40
+        },
+        {
+          "name": "applied",
+          "index": 40,
+          "g": 5,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 3,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 3
+          }
+        },
+        {
+          "name": "admit",
+          "id": "5c6027459dc436d3471360376a7a415b31795690dc1517c5159ce2b982e1be57",
+          "kind": "A",
+          "ticket": 82,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 3,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 4
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 82,
+          "index": 41
+        },
+        {
+          "name": "ready",
+          "ticket": 82,
+          "index": 41
+        },
+        {
+          "name": "durable",
+          "ticket": 82,
+          "index": 41
+        },
+        {
+          "name": "commit-prefix",
+          "index": 41
+        },
+        {
+          "name": "applied",
+          "index": 41,
+          "g": 5,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 4,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 4
+          }
+        },
+        {
+          "name": "admit",
+          "id": "07c06e16c6d69dea9cfd1986d1210dab98c0e9bd3721c27c40812ca1421b2070",
+          "kind": "A",
+          "ticket": 83,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 4,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 5
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 83,
+          "index": 42
+        },
+        {
+          "name": "ready",
+          "ticket": 83,
+          "index": 42
+        },
+        {
+          "name": "durable",
+          "ticket": 83,
+          "index": 42
+        },
+        {
+          "name": "commit-prefix",
+          "index": 42
+        },
+        {
+          "name": "applied",
+          "index": 42,
+          "g": 5,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 5,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 5
+          }
+        },
+        {
+          "name": "admit",
+          "id": "9035aca74075fbd4243d4e77bc4f337fc11285db44677aa207bbc365d86e2ab7",
+          "kind": "A",
+          "ticket": 84,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 5,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 6
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 84,
+          "index": 43
+        },
+        {
+          "name": "ready",
+          "ticket": 84,
+          "index": 43
+        },
+        {
+          "name": "durable",
+          "ticket": 84,
+          "index": 43
+        },
+        {
+          "name": "commit-prefix",
+          "index": 43
+        },
+        {
+          "name": "applied",
+          "index": 43,
+          "g": 5,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 6,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 6
+          }
+        },
+        {
+          "name": "admit",
+          "id": "d7332868709d8ff5e6cffe63307a020bf414a5c54fe9de3be479637c9e873a17",
+          "kind": "A",
+          "ticket": 85,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 6,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 7
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 85,
+          "index": 44
+        },
+        {
+          "name": "ready",
+          "ticket": 85,
+          "index": 44
+        },
+        {
+          "name": "durable",
+          "ticket": 85,
+          "index": 44
+        },
+        {
+          "name": "commit-prefix",
+          "index": 44
+        },
+        {
+          "name": "applied",
+          "index": 44,
+          "g": 5,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 7,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 7
+          }
+        },
+        {
+          "name": "admit",
+          "id": "98010da03e4bd6189ede66fe93d6f0e205d3f659ad47cce67ee7523818b1ae5e",
+          "kind": "A",
+          "ticket": 86,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 7,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 8
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 86,
+          "index": 45
+        },
+        {
+          "name": "ready",
+          "ticket": 86,
+          "index": 45
+        },
+        {
+          "name": "durable",
+          "ticket": 86,
+          "index": 45
+        },
+        {
+          "name": "commit-prefix",
+          "index": 45
+        },
+        {
+          "name": "applied",
+          "index": 45,
+          "g": 5,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 8,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 8
+          }
+        },
+        {
+          "name": "admit",
+          "id": "ede2d43c4348195997a35b21316155944a73c92235b6a0be5091d9e4b05a0672",
+          "kind": "T",
+          "ticket": 87,
+          "path": "local",
+          "inventory": {
+            "qA": 0,
+            "qM": 1,
+            "retainedA": 8,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 8
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 87,
+          "index": 46
+        },
+        {
+          "name": "ready",
+          "ticket": 87,
+          "index": 46
+        },
+        {
+          "name": "durable",
+          "ticket": 87,
+          "index": 46
+        },
+        {
+          "name": "commit-prefix",
+          "index": 46
+        },
+        {
+          "name": "applied",
+          "index": 46,
+          "g": 6,
+          "disposition": null,
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 0,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 0
+          }
+        },
+        {
+          "name": "admit",
+          "id": "1993eee989886a794b52788acd0b114dcf3578d29389be02f9ba4e67710f41c3",
+          "kind": "A",
+          "ticket": 88,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 0,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 88,
+          "index": 47
+        },
+        {
+          "name": "ready",
+          "ticket": 88,
+          "index": 47
+        },
+        {
+          "name": "durable",
+          "ticket": 88,
+          "index": 47
+        },
+        {
+          "name": "commit-prefix",
+          "index": 47
+        },
+        {
+          "name": "applied",
+          "index": 47,
+          "g": 6,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "admit",
+          "id": "895840d9b2dbd77d5d93fdd5f0ee03d791b8fa596df603471076d7968ac8964d",
+          "kind": "A",
+          "ticket": 89,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 2
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 89,
+          "index": 48
+        },
+        {
+          "name": "ready",
+          "ticket": 89,
+          "index": 48
+        },
+        {
+          "name": "durable",
+          "ticket": 89,
+          "index": 48
+        },
+        {
+          "name": "commit-prefix",
+          "index": 48
+        },
+        {
+          "name": "applied",
+          "index": 48,
+          "g": 6,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 2,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 2
+          }
+        },
+        {
+          "name": "admit",
+          "id": "eaa778b648157c8f50df0efb1de14b8a4cf3e8d1832e03802b7c00ce7b254c91",
+          "kind": "A",
+          "ticket": 90,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 2,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 3
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 90,
+          "index": 49
+        },
+        {
+          "name": "ready",
+          "ticket": 90,
+          "index": 49
+        },
+        {
+          "name": "durable",
+          "ticket": 90,
+          "index": 49
+        },
+        {
+          "name": "commit-prefix",
+          "index": 49
+        },
+        {
+          "name": "applied",
+          "index": 49,
+          "g": 6,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 3,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 3
+          }
+        },
+        {
+          "name": "admit",
+          "id": "cc9e90c5a8f8071f76ff953fe1dc1e9e5e7c0096973b2b404785f7c190c467fc",
+          "kind": "A",
+          "ticket": 91,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 3,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 4
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 91,
+          "index": 50
+        },
+        {
+          "name": "ready",
+          "ticket": 91,
+          "index": 50
+        },
+        {
+          "name": "durable",
+          "ticket": 91,
+          "index": 50
+        },
+        {
+          "name": "commit-prefix",
+          "index": 50
+        },
+        {
+          "name": "applied",
+          "index": 50,
+          "g": 6,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 4,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 4
+          }
+        },
+        {
+          "name": "admit",
+          "id": "cd5b6f263b82b7c036125604895b4da4bfc3778e63132ebd1923192e54f2e814",
+          "kind": "A",
+          "ticket": 92,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 4,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 5
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 92,
+          "index": 51
+        },
+        {
+          "name": "ready",
+          "ticket": 92,
+          "index": 51
+        },
+        {
+          "name": "durable",
+          "ticket": 92,
+          "index": 51
+        },
+        {
+          "name": "commit-prefix",
+          "index": 51
+        },
+        {
+          "name": "applied",
+          "index": 51,
+          "g": 6,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 5,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 5
+          }
+        },
+        {
+          "name": "admit",
+          "id": "3204a12873b6ca7970cd671a23c1a633445d497eba7860d1b7ae94c887e4fbfc",
+          "kind": "A",
+          "ticket": 93,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 5,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 6
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 93,
+          "index": 52
+        },
+        {
+          "name": "ready",
+          "ticket": 93,
+          "index": 52
+        },
+        {
+          "name": "durable",
+          "ticket": 93,
+          "index": 52
+        },
+        {
+          "name": "commit-prefix",
+          "index": 52
+        },
+        {
+          "name": "applied",
+          "index": 52,
+          "g": 6,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 6,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 6
+          }
+        },
+        {
+          "name": "admit",
+          "id": "a42913a7b9080c74570f50103cd98605fa107a9301ff993fd9ba327f64e016c7",
+          "kind": "A",
+          "ticket": 94,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 6,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 7
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 94,
+          "index": 53
+        },
+        {
+          "name": "ready",
+          "ticket": 94,
+          "index": 53
+        },
+        {
+          "name": "durable",
+          "ticket": 94,
+          "index": 53
+        },
+        {
+          "name": "commit-prefix",
+          "index": 53
+        },
+        {
+          "name": "applied",
+          "index": 53,
+          "g": 6,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 7,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 7
+          }
+        },
+        {
+          "name": "admit",
+          "id": "28006a348e31bc1f1080e49aa184163f6f43254b8f91a81fdce9fd9216c9a921",
+          "kind": "A",
+          "ticket": 95,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 7,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 8
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 95,
+          "index": 54
+        },
+        {
+          "name": "ready",
+          "ticket": 95,
+          "index": 54
+        },
+        {
+          "name": "durable",
+          "ticket": 95,
+          "index": 54
+        },
+        {
+          "name": "commit-prefix",
+          "index": 54
+        },
+        {
+          "name": "applied",
+          "index": 54,
+          "g": 6,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 8,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 8
+          }
+        }
+      ]
+    },
+    {
+      "name": "retained-unprotected-overtake-counterexample",
+      "events": [
+        {
+          "name": "admit",
+          "id": "24cce5564d3a7a5a3f848ff82560a74c453284e8ad16633f502788f8422ce2aa",
+          "kind": "A",
+          "ticket": 96,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 0,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "admit",
+          "id": "e803d4adcc3e9811d8daef828d9d0b7aa02649a2844451729b50f8fd703cc5a6",
+          "kind": "T",
+          "ticket": 97,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 1,
+            "retainedA": 0,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 97,
+          "index": 1
+        },
+        {
+          "name": "ready",
+          "ticket": 97,
+          "index": 1
+        },
+        {
+          "name": "durable",
+          "ticket": 97,
+          "index": 1
+        },
+        {
+          "name": "commit-prefix",
+          "index": 1
+        },
+        {
+          "name": "applied",
+          "index": 1,
+          "g": 1,
+          "disposition": null,
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 0,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 96,
+          "index": 2
+        },
+        {
+          "name": "ready",
+          "ticket": 96,
+          "index": 2
+        },
+        {
+          "name": "durable",
+          "ticket": 96,
+          "index": 2
+        },
+        {
+          "name": "commit-prefix",
+          "index": 2
+        },
+        {
+          "name": "applied",
+          "index": 2,
+          "g": 1,
+          "disposition": "HISTORY_RETIRED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 0,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 0
+          }
+        },
+        {
+          "name": "admit",
+          "id": "a13c55f0e392029c23a81a3ab9d6c1d0448f733cf220e6c0dfb1114fefb72ccf",
+          "kind": "A",
+          "ticket": 98,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 0,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "admit",
+          "id": "f10bed57f11651b55180a035fbc42cbdb960ec8a7060bb8a175e10950a2693f5",
+          "kind": "T",
+          "ticket": 99,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 1,
+            "retainedA": 0,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 99,
+          "index": 3
+        },
+        {
+          "name": "ready",
+          "ticket": 99,
+          "index": 3
+        },
+        {
+          "name": "durable",
+          "ticket": 99,
+          "index": 3
+        },
+        {
+          "name": "commit-prefix",
+          "index": 3
+        },
+        {
+          "name": "applied",
+          "index": 3,
+          "g": 2,
+          "disposition": null,
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 0,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 98,
+          "index": 4
+        },
+        {
+          "name": "ready",
+          "ticket": 98,
+          "index": 4
+        },
+        {
+          "name": "durable",
+          "ticket": 98,
+          "index": 4
+        },
+        {
+          "name": "commit-prefix",
+          "index": 4
+        },
+        {
+          "name": "applied",
+          "index": 4,
+          "g": 2,
+          "disposition": "HISTORY_RETIRED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 0,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 0
+          }
+        },
+        {
+          "name": "admit",
+          "id": "a2c7335ff7fa46ad3bc963e155d92e78fbca0479913215aa2b20813d86f005ab",
+          "kind": "A",
+          "ticket": 100,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 0,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "admit",
+          "id": "5b7ac961e3d72a909f239456b6cf20511b4160d453e1e5ef7fef23b9cb316cf5",
+          "kind": "T",
+          "ticket": 101,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 1,
+            "retainedA": 0,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 101,
+          "index": 5
+        },
+        {
+          "name": "ready",
+          "ticket": 101,
+          "index": 5
+        },
+        {
+          "name": "durable",
+          "ticket": 101,
+          "index": 5
+        },
+        {
+          "name": "commit-prefix",
+          "index": 5
+        },
+        {
+          "name": "applied",
+          "index": 5,
+          "g": 3,
+          "disposition": null,
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 0,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 100,
+          "index": 6
+        },
+        {
+          "name": "ready",
+          "ticket": 100,
+          "index": 6
+        },
+        {
+          "name": "durable",
+          "ticket": 100,
+          "index": 6
+        },
+        {
+          "name": "commit-prefix",
+          "index": 6
+        },
+        {
+          "name": "applied",
+          "index": 6,
+          "g": 3,
+          "disposition": "HISTORY_RETIRED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 0,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 0
+          }
+        },
+        {
+          "name": "admit",
+          "id": "e6a8d5a82757cd9de98cc7026957ea5a4d4036f6cdfdb1ffbf7e97f043029b11",
+          "kind": "A",
+          "ticket": 102,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 0,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "admit",
+          "id": "32702f9b7e127e0927f24c431b80dc228d4aeaedbfa6c1793204758ddba3c2dd",
+          "kind": "T",
+          "ticket": 103,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 1,
+            "retainedA": 0,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 103,
+          "index": 7
+        },
+        {
+          "name": "ready",
+          "ticket": 103,
+          "index": 7
+        },
+        {
+          "name": "durable",
+          "ticket": 103,
+          "index": 7
+        },
+        {
+          "name": "commit-prefix",
+          "index": 7
+        },
+        {
+          "name": "applied",
+          "index": 7,
+          "g": 4,
+          "disposition": null,
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 0,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 102,
+          "index": 8
+        },
+        {
+          "name": "ready",
+          "ticket": 102,
+          "index": 8
+        },
+        {
+          "name": "durable",
+          "ticket": 102,
+          "index": 8
+        },
+        {
+          "name": "commit-prefix",
+          "index": 8
+        },
+        {
+          "name": "applied",
+          "index": 8,
+          "g": 4,
+          "disposition": "HISTORY_RETIRED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 0,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 0
+          }
+        },
+        {
+          "name": "admit",
+          "id": "ed6d2d4ef733e379f8edbe5f61762de7bd977c011ca89363437b3a251d72cd84",
+          "kind": "A",
+          "ticket": 104,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 0,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "admit",
+          "id": "b244216786426f548c9291f425ffef4bc6b3a50e7887039dfa6ecf7a347fe735",
+          "kind": "T",
+          "ticket": 105,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 1,
+            "retainedA": 0,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 105,
+          "index": 9
+        },
+        {
+          "name": "ready",
+          "ticket": 105,
+          "index": 9
+        },
+        {
+          "name": "durable",
+          "ticket": 105,
+          "index": 9
+        },
+        {
+          "name": "commit-prefix",
+          "index": 9
+        },
+        {
+          "name": "applied",
+          "index": 9,
+          "g": 5,
+          "disposition": null,
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 0,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 104,
+          "index": 10
+        },
+        {
+          "name": "ready",
+          "ticket": 104,
+          "index": 10
+        },
+        {
+          "name": "durable",
+          "ticket": 104,
+          "index": 10
+        },
+        {
+          "name": "commit-prefix",
+          "index": 10
+        },
+        {
+          "name": "applied",
+          "index": 10,
+          "g": 5,
+          "disposition": "HISTORY_RETIRED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 0,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 0
+          }
+        },
+        {
+          "name": "admit",
+          "id": "85da2adb31765a262327df844d09ec7c65a04537b96abfcf34b7698e107fcb08",
+          "kind": "A",
+          "ticket": 106,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 0,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "admit",
+          "id": "ede2d43c4348195997a35b21316155944a73c92235b6a0be5091d9e4b05a0672",
+          "kind": "T",
+          "ticket": 107,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 1,
+            "retainedA": 0,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 107,
+          "index": 11
+        },
+        {
+          "name": "ready",
+          "ticket": 107,
+          "index": 11
+        },
+        {
+          "name": "durable",
+          "ticket": 107,
+          "index": 11
+        },
+        {
+          "name": "commit-prefix",
+          "index": 11
+        },
+        {
+          "name": "applied",
+          "index": 11,
+          "g": 6,
+          "disposition": null,
+          "inventory": {
+            "qA": 1,
+            "qM": 0,
+            "retainedA": 0,
+            "futureA": 1,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 106,
+          "index": 12
+        },
+        {
+          "name": "ready",
+          "ticket": 106,
+          "index": 12
+        },
+        {
+          "name": "durable",
+          "ticket": 106,
+          "index": 12
+        },
+        {
+          "name": "commit-prefix",
+          "index": 12
+        },
+        {
+          "name": "applied",
+          "index": 12,
+          "g": 6,
+          "disposition": "HISTORY_RETIRED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 0,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 0
+          }
+        }
+      ]
+    }
+  ]
+}

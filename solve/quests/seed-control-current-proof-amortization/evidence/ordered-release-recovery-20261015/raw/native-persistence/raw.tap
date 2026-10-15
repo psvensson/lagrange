@@ -1,0 +1,35 @@
+TAP version 13
+# Subtest: W3 the rs-raft store refuses every durable write inside a transaction it did not open (RaftRsDurableStore persistence admission)
+ok 1 - W3 the rs-raft store refuses every durable write inside a transaction it did not open (RaftRsDurableStore persistence admission)
+  ---
+  duration_ms: 47.464896
+  type: 'test'
+  ...
+# Subtest: W4 a lone leader defers a proposal while a user transaction holds its connection, stays usable, and commits it after (runtime owner admission)
+ok 2 - W4 a lone leader defers a proposal while a user transaction holds its connection, stays usable, and commits it after (runtime owner admission)
+  ---
+  duration_ms: 184.008
+  type: 'test'
+  ...
+# Subtest: W5 a three-replica leader persists no Ready while a user transaction holds its connection and converges after the session ends
+ok 3 - W5 a three-replica leader persists no Ready while a user transaction holds its connection and converges after the session ends
+  ---
+  duration_ms: 516.592685
+  type: 'test'
+  ...
+# Subtest: W7 a Ready taken before a user transaction opened finishes its durable writes only after the session ends, without a runtime reconstruction (runtime owner admission across an asynchronous send)
+ok 4 - W7 a Ready taken before a user transaction opened finishes its durable writes only after the session ends, without a runtime reconstruction (runtime owner admission across an asynchronous send)
+  ---
+  duration_ms: 545.105225
+  type: 'test'
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 4
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1301.229373
+# time=1773ms

@@ -1,0 +1,280 @@
+{
+  "commit": "c425ef42e18236ff1187e1112a971588bb02b496",
+  "files": [
+    {
+      "path": "/tmp/lagrange-ordered-recovery-20261015.4psvvgot/dependency-link.json",
+      "bytes": 478,
+      "sha256": "22aefc1b75761ec8cd9dfa0a31e58d6d20b99e914df19e1fbcff906050fce406"
+    },
+    {
+      "path": "/tmp/lagrange-ordered-recovery-20261015.4psvvgot/native-persistence/discovery.json",
+      "bytes": 10759,
+      "sha256": "714e0260d665913279e0eaf455629f4a413cb817c01c909f509f2aec993a2ea5"
+    },
+    {
+      "path": "/tmp/lagrange-ordered-recovery-20261015.4psvvgot/native-persistence/exit-code.txt",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "/tmp/lagrange-ordered-recovery-20261015.4psvvgot/native-persistence/plan.json",
+      "bytes": 580,
+      "sha256": "21aabb12624118064d03fda857cf512cfbfe91725cdac4cec0e354bbf63cad84"
+    },
+    {
+      "path": "/tmp/lagrange-ordered-recovery-20261015.4psvvgot/native-persistence/raw.tap",
+      "bytes": 1600,
+      "sha256": "83c71558d2d5d91a399a408a99d16a40235519143d64bc0b4ba3c02c6dff22dc"
+    },
+    {
+      "path": "/tmp/lagrange-ordered-recovery-20261015.4psvvgot/native-persistence/run.log",
+      "bytes": 1211,
+      "sha256": "4ef90a43ba5d17cc73e135eccd5817351998312d5854ab5659dbd92fa7ea2487"
+    },
+    {
+      "path": "/tmp/lagrange-ordered-recovery-20261015.4psvvgot/native-persistence-controller.log",
+      "bytes": 162,
+      "sha256": "0986ee381bc0d7460af9070e3ae4133408682f4096aa1a7840e25b7b94e4e219"
+    },
+    {
+      "path": "/tmp/lagrange-ordered-recovery-20261015.4psvvgot/native-ready/discovery.json",
+      "bytes": 10780,
+      "sha256": "190f885cfbc3fa255c17f91cda0eada8c19c9c7609950e7ba1248b87023f30ee"
+    },
+    {
+      "path": "/tmp/lagrange-ordered-recovery-20261015.4psvvgot/native-ready/exit-code.txt",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "/tmp/lagrange-ordered-recovery-20261015.4psvvgot/native-ready/plan.json",
+      "bytes": 610,
+      "sha256": "cdfbd85ac710862202f98906425478f66a8e3dcebbff36f504bf7f7dccc64d3c"
+    },
+    {
+      "path": "/tmp/lagrange-ordered-recovery-20261015.4psvvgot/native-ready/raw.tap",
+      "bytes": 2792,
+      "sha256": "69b66407a1850d85ab3c5b027f52e1c5474b036ed5e55b08aaa9cebc02d22c87"
+    },
+    {
+      "path": "/tmp/lagrange-ordered-recovery-20261015.4psvvgot/native-ready/run.log",
+      "bytes": 971,
+      "sha256": "393ce21b9b567de2e7cf7c7bf558238dbf2e965c1ee1f9c94b27f10560a67ada"
+    },
+    {
+      "path": "/tmp/lagrange-ordered-recovery-20261015.4psvvgot/native-ready-controller.log",
+      "bytes": 168,
+      "sha256": "8b7e1c9befcede26bf781092705af250ad3e61cbf674165eac47d7c7bf63f0ce"
+    },
+    {
+      "path": "/tmp/lagrange-ordered-recovery-20261015.4psvvgot/ordering-final.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "/tmp/lagrange-ordered-recovery-20261015.4psvvgot/ordering-final.json",
+      "bytes": 126791,
+      "sha256": "f8d3e81c44ca0068660ccadff9b77e3c064d2a18bcbd80572afeca4fb23208cb"
+    },
+    {
+      "path": "/tmp/lagrange-ordered-recovery-20261015.4psvvgot/ordering-final.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/tmp/lagrange-ordered-recovery-20261015.4psvvgot/ordering-first-receipt.json",
+      "bytes": 304,
+      "sha256": "d297ac354bf98015848ce992ee8018ab8cd4e2f4d539e6b76c8de93c52eb86ff"
+    },
+    {
+      "path": "/tmp/lagrange-ordered-recovery-20261015.4psvvgot/ordering-first.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "/tmp/lagrange-ordered-recovery-20261015.4psvvgot/ordering-first.json",
+      "bytes": 123641,
+      "sha256": "aed165b7df649eb5f1a0cfc1fea0aa9acb94250595c118958b1087df5025848e"
+    },
+    {
+      "path": "/tmp/lagrange-ordered-recovery-20261015.4psvvgot/ordering-first.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/tmp/lagrange-ordered-recovery-20261015.4psvvgot/ordering-mutant.exit",
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "path": "/tmp/lagrange-ordered-recovery-20261015.4psvvgot/ordering-mutant.json",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/tmp/lagrange-ordered-recovery-20261015.4psvvgot/ordering-mutant.stderr",
+      "bytes": 881,
+      "sha256": "72b658a9960cc79564037e46b9a3b5a451c7ae8c5e4100a1ff8f605f55e43914"
+    },
+    {
+      "path": "/tmp/lagrange-ordered-recovery-20261015.4psvvgot/ordering-traces-first.mjs",
+      "bytes": 19449,
+      "sha256": "16230e2684d3de733b055a8fd367117e5d6dbd55704b737e1d836753705c079d"
+    },
+    {
+      "path": "/tmp/lagrange-ordered-recovery-20261015.4psvvgot/ordering-traces-v2.mjs",
+      "bytes": 19477,
+      "sha256": "228dc3bcfaf482e6f5775d83015d96596fd2b5e00d81bcd42e85a099b3be8502"
+    },
+    {
+      "path": "/tmp/lagrange-ordered-recovery-20261015.4psvvgot/ordering-traces.mjs",
+      "bytes": 21082,
+      "sha256": "77863f5f600cf9764e4f25dc5c9f75abbbae715603069a9f9af34df71dc8e1cf"
+    },
+    {
+      "path": "/tmp/lagrange-ordered-recovery-20261015.4psvvgot/ordering-v2-mutant.exit",
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "path": "/tmp/lagrange-ordered-recovery-20261015.4psvvgot/ordering-v2-mutant.json",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/tmp/lagrange-ordered-recovery-20261015.4psvvgot/ordering-v2-mutant.stderr",
+      "bytes": 881,
+      "sha256": "1f5b74182590bd885cd950f1dbf0676d61fe20acf0a21f60040ad941eeb5f531"
+    },
+    {
+      "path": "/tmp/lagrange-ordered-recovery-20261015.4psvvgot/ordering-v2.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "/tmp/lagrange-ordered-recovery-20261015.4psvvgot/ordering-v2.json",
+      "bytes": 123660,
+      "sha256": "f17830a4f6e66536bfe0a8df6e448640e2d31fc20c39a48d5295e9162a7a4a76"
+    },
+    {
+      "path": "/tmp/lagrange-ordered-recovery-20261015.4psvvgot/ordering-v2.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/tmp/lagrange-ordering-verifier-20261015-zaw8537d/ORDERED-RECOVERY-CONTRACT-reviewed.md",
+      "bytes": 23939,
+      "sha256": "3d35778bfeea29c93f230a6b2f4fc2ad7c0aaa1042c45d48ebd983244c65d89c"
+    },
+    {
+      "path": "/tmp/lagrange-ordering-verifier-20261015-zaw8537d/independent-boundary-probes.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "/tmp/lagrange-ordering-verifier-20261015-zaw8537d/independent-boundary-probes.json",
+      "bytes": 5841,
+      "sha256": "df4dbf221778b00a4105b601519626dd1c6551e23238692241805cc22882c2e4"
+    },
+    {
+      "path": "/tmp/lagrange-ordering-verifier-20261015-zaw8537d/independent-boundary-probes.mjs",
+      "bytes": 12622,
+      "sha256": "e639e7eca7d8b0b3c4be773cc0fadcd3bfdb2aa6ba848a159bd0938c31904847"
+    },
+    {
+      "path": "/tmp/lagrange-ordering-verifier-20261015-zaw8537d/independent-boundary-probes.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/tmp/lagrange-ordering-verifier-20261015-zaw8537d/native-source-identity.json",
+      "bytes": 695,
+      "sha256": "16226384dade2a317c213846a188638464e06559c4502cdca45f430bc1c7e08f"
+    },
+    {
+      "path": "/tmp/lagrange-ordering-verifier-20261015-zaw8537d/ordering-traces-reviewed-v2.mjs",
+      "bytes": 19477,
+      "sha256": "228dc3bcfaf482e6f5775d83015d96596fd2b5e00d81bcd42e85a099b3be8502"
+    },
+    {
+      "path": "/tmp/lagrange-ordering-verifier-20261015-zaw8537d/ordering-traces-reviewed-v3.mjs",
+      "bytes": 21082,
+      "sha256": "77863f5f600cf9764e4f25dc5c9f75abbbae715603069a9f9af34df71dc8e1cf"
+    },
+    {
+      "path": "/tmp/lagrange-ordering-verifier-20261015-zaw8537d/positive.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "/tmp/lagrange-ordering-verifier-20261015-zaw8537d/positive.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/tmp/lagrange-ordering-verifier-20261015-zaw8537d/positive.stdout",
+      "bytes": 123660,
+      "sha256": "f17830a4f6e66536bfe0a8df6e448640e2d31fc20c39a48d5295e9162a7a4a76"
+    },
+    {
+      "path": "/tmp/lagrange-ordering-verifier-20261015-zaw8537d/reproduction-receipt.json",
+      "bytes": 959,
+      "sha256": "a20b94f410e4387426c67b692e0776e6b65292a4f798ec51680b9ea6b9c6744e"
+    },
+    {
+      "path": "/tmp/lagrange-ordering-verifier-20261015-zaw8537d/retire-overtake-negative.exit",
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "path": "/tmp/lagrange-ordering-verifier-20261015-zaw8537d/retire-overtake-negative.stderr",
+      "bytes": 881,
+      "sha256": "1f5b74182590bd885cd950f1dbf0676d61fe20acf0a21f60040ad941eeb5f531"
+    },
+    {
+      "path": "/tmp/lagrange-ordering-verifier-20261015-zaw8537d/retire-overtake-negative.stdout",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/tmp/lagrange-ordering-verifier-20261015-zaw8537d/v2-artifact-hashes.json",
+      "bytes": 1311,
+      "sha256": "ccc29efdade2077f44d6ded6eff5aef6acc012e6f2056c0e723f977bac8c2621"
+    },
+    {
+      "path": "/tmp/lagrange-ordering-verifier-20261015-zaw8537d/v3-positive.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "/tmp/lagrange-ordering-verifier-20261015-zaw8537d/v3-positive.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/tmp/lagrange-ordering-verifier-20261015-zaw8537d/v3-positive.stdout",
+      "bytes": 126791,
+      "sha256": "f8d3e81c44ca0068660ccadff9b77e3c064d2a18bcbd80572afeca4fb23208cb"
+    },
+    {
+      "path": "/tmp/lagrange-ordering-verifier-20261015-zaw8537d/v3-reproduction-receipt.json",
+      "bytes": 792,
+      "sha256": "7ed2b008eb77c23d5065ce9bd81b9ca644be59d08bc674ad84ea2722cd4b4e47"
+    },
+    {
+      "path": "/tmp/lagrange-ordering-verifier-20261015-zaw8537d/v3-retire-overtake-negative.exit",
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "path": "/tmp/lagrange-ordering-verifier-20261015-zaw8537d/v3-retire-overtake-negative.stderr",
+      "bytes": 881,
+      "sha256": "72b658a9960cc79564037e46b9a3b5a451c7ae8c5e4100a1ff8f605f55e43914"
+    },
+    {
+      "path": "/tmp/lagrange-ordering-verifier-20261015-zaw8537d/v3-retire-overtake-negative.stdout",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ]
+}

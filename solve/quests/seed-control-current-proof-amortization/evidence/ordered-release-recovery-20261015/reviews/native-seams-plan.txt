@@ -1,0 +1,380 @@
+Independent native seams plan — ordered release recovery
+Reviewer: subagent:/root/native_witness_verifier
+Date: 2026-10-15
+
+VERDICT AND SCOPE
+
+APPROVE selection of the two unchanged whole files below for one normal locked
+execution each, subject to the parent's current lab authorization and exact-source
+checks. This is a source/fixture review and run recommendation, not a test result
+or approval of the proposed release protocol. No tests, lab lease, production
+change, new hook, Git mutation, or process intervention was performed here.
+Implementation remains HOLD. No recorder or native TX1 ROLLBACK repetition is
+recommended. No successor activation, sealing, or merge authority follows.
+
+Read actual AGENTS.md -> docs/steering/rules.md -> docs/steering/router.md, the
+authority-and-recovery contract, all six requested verification templates, and
+the draft. The draft is a proposed new durable handoff, not existing behavior.
+
+IDENTITY
+
+Worktree: /mnt/data/peter/projects/.worktrees/ordered-release-recovery-20261015
+Branch: review/ordered-release-recovery-20261015
+HEAD: c425ef42e18236ff1187e1112a971588bb02b496
+Observed status: only the new ordered-release-recovery-20261015 evidence subtree
+was untracked; no tracked source modifications. This inventory is not a lease
+over the shared checkout, lab machines, another agent, or later worktree state.
+
+Draft reviewed SHA256:
+8ed366a7d544b09cb04a7bc2f67cd460e7f0d9d3c14ca53b3e66f8d3b717f889
+  DESIGN-DRAFT-1.md
+
+RECOMMENDED EXACT WHOLE FILES (both primary=unit, resource=ordinary,
+subsystem=storage-raft in the current test/shards classification)
+
+1. test/raft/raft-rs-backend/persistence-admission.test.js
+   SHA256 a9d05c8d8069ecf58e95a0d1eac01d125753a524977d2a1cb282cdc71da35534
+   Four declared top-level tests: W3, W4, W5, W7.
+   Principal observation: W7, lines 305-411. The RF3 production operation port
+   takes a real Ready, suspends in an asynchronous send, then encounters a
+   deliberately opened foreign SQLite transaction. The test discharges the
+   send, proves the Ready remains pending while persistence is unavailable,
+   closes the transaction, and requires completion/convergence without runtime
+   generation replacement. It reads durable commit/applied/log data on an
+   independent read-only SQLite connection (lines 64-96, 385-408).
+   W3, lines 123-165, is a direct-store primitive with handcrafted Ready; W4,
+   lines 167-233, and W5, lines 235-303, use the real runtime to discriminate
+   pre-core deferral from later successful work.
+
+2. test/raft/raft-rs-backend/operation-port-ready-recovery.test.js
+   SHA256 edd3a9d1d5a1c24a4383c0ecd089babedea65715658668c95313966730f2a22f
+   Seven declared top-level tests.
+   Principal observations: lines 172-250 (SQL effects/applied progress rollback,
+   followed by actual native group reconstruction and one replay), and 272-335
+   (a Ready suspended in delivery cannot enter a replacement runtime generation).
+   Lines 110-170 keep a peer delivery failure separate from group/runtime
+   failure. Lines 337-402 preserve logical identity through storage failure and
+   an actual native trap; 406-432 observes exactly one native free on close.
+   The first atomic Ready test at 58-103 and async membership rejection at
+   252-270 are direct SQLite/application-owner primitives, not native RF3
+   snapshots or full application integration. The application rollback test
+   itself has two parts: real SQLite SQL-effect rollback (handcrafted entry),
+   then RF1 native callback failure/reconstruction. Do not relabel that split
+   as one RF3 SQL transaction test.
+
+Why two: these test the distinct custody cut before/after take_ready and the
+application rollback/reconstruction cut through the current runtime. They do
+not establish all proposed release invariants. Exact whole-file execution is
+preferable to a selected passing subtest. Keep first failure output and stop
+that lane; do not retry until green. Independent locked groups may run on
+separate machines/processes. They are single-host fixtures, not a cross-host
+cluster. No timings, test bytes, or dependencies should be changed to prepare
+the observation. The parent owns the normal lab controller/commands and must
+record source/dependency identity, raw TAP, exit code, placement and first result.
+
+LIVE BINDING AND CURRENT OWNERS
+
+PartitionNodeCluster is not a fake core. Its requestFor/buildReplica path at
+test/raft/raft-rs-backend/partition-node-cluster.js:148-238 supplies the production
+operation-port request vocabulary and creates createRaftRsOperationPort. Each
+replica owns a real SQLite file, WAL, and explicitly verified FULL synchronization
+(214-222). The runtime imports the private binding owner; that owner verifies
+the vendored WASM/glue digests and instantiates the actual raft-rs binding at
+src/raft/raft-rs-binding-owner.js:43-97. This is actual raft-rs compiled to WASM,
+driven in a controlled same-process cluster, not OS-network certification.
+
+The fixture deliberately owns delivery queues and ticks (partition-node-cluster
+296-357); its application callback decodes the command and publishes an array
+observation only via effects.afterCommit (180-194). It does not instantiate
+PartitionService's TX1/release owner. The pass cannot be promoted to release
+success, durable request-outcome correctness, or real router deadline proof.
+
+The current runtime owner owns turn serialization, native entry and Ready
+custody: src/raft/raft-rs-runtime-owner.js:956-987 (synchronous queue ownership
+and asynchronous tail), 1191-1239 (pre-take admission, persist, finish), and
+1136-1188 (post-send admission, committed apply, advance). The durable store
+owns write admission and atomic Ready storage: raft-rs-durable-store.js:358-394,
+404-443. The application transaction owner owns one committed entry's SQLite
+effects and applied-state atomicity: raft-rs-application-transaction-owner.js:
+51-99. Runtime applyEntries preserves actual entry index/term and returns on
+failure before recordAppliedEntry: runtime-owner:1069-1133. These are suitable
+existing seams for a future complete change; they do not yet own the draft's
+new retirement/request entitlement policy.
+
+The draft's release invariant must remain with the release contract. The result
+owner may persist exact request/retirement/handoff facts in the same application
+transaction; it must not infer consensus discard from a local waiter. Runtime
+custody owns whether bytes entered native consensus and what durable suffix or
+Ready carries them; the release continuation supplies exact immutable intent
+and re-drive, not a competing authority verdict. The selected witnesses show
+the existing lower-level ownership separation, not implementation of those new
+cross-owner interfaces.
+
+SOURCE MAPPING FOR THE OTHER REQUESTED CUTS (not additional recommended runs)
+
+* Local and forwarded proposals: runtime-owner:1727-1743 drains delivered
+  inbound before the local command; 1691-1724 steps each admitted envelope and
+  drains Ready before continuing. A forwarded MsgPropose enters at step, a local
+  proposal at performCommand:1650-1688. A future admission change placed only
+  around local propose would miss the forwarded path. Existing real-core
+  runtime-turn-integrity.test.js:196-288 compares pending vs processed-first
+  refusals/local proposals and checks a refused envelope does not strand a
+  later forwarded proposal. It does not count duplicate physical occurrences
+  or prove request-id deduplication. Not selected to keep this packet to two.
+
+* Suffix replacement: raft-rs-durable-store.js:422-443 deletes from the first
+  incoming index and inserts the replacement inside persistReady's transaction
+  (404-413). The runtime updates persistedLastIndex from the actual Ready at
+  1232-1233. local-log-guard-refusals.test.js:253-271 checks the index helper with
+  handcrafted entries/snapshot. That assertion is not an end-to-end native
+  conflicting suffix schedule and proves no proposed credit reclamation. Both
+  selected files leave that release accounting proof open.
+
+* Restart: runtime-owner:877-906 reconstructs an existing failed group from its
+  durable record and drains unapplied committed work before resumption. The
+  selected application failure witness engages this in-process path. It does
+  not kill/restart a process with a pending release handoff. Fixture.restart at
+  partition-node-cluster.js:465-475 can reopen the same file, but neither
+  selected file exercises it. No cold restart release-debt claim is justified.
+
+* Historical low-level files: durable-ready-loop.test.js and
+  restart-from-durable-record.test.js use DeterministicRaftRsCluster, which
+  imports raw-raft-rs-test-core and raw-raft-rs-test-ready (lines 17-23). Its core
+  is real WASM (raw-raft-rs-test-core:68-82), not fake. Its Ready/restore driver
+  is test-owned historical code: raw-raft-rs-test-ready:1-65 and
+  raw-raft-rs-test-core:128. In particular that Ready driver sends before its
+  own persistence call at 52-53; the current runtime persists at 1222 before
+  finishReady sends at 1143. Therefore a green historical loop test cannot
+  verify the live runtime ordering. The restart test's crash/reopen occurs
+  inside the fixture, not an actual process death. These files are not selected.
+
+ALL FINDINGS / LIMITS FROM THIS ROUND
+
+F1 — No production release proof exists in these witnesses. New RETIRE_FOR_APPROVE,
+exact K handoff persistence, request/occurrence credit conservation, closure
+capacity, duplicate conflict results and retirement uncertainty are absent
+from their inputs and assertions. Passing 4+7 tests would be existing-mechanism
+evidence only. Draft/design approval cannot follow from their greens.
+
+F2 — Preserve the TX1 distinction. The persistence fixture deliberately holds
+BEGIN across awaits. Current staging explicitly does not: partition-participant-
+transaction-staging.js:1-22,106-120 and impact-contracts.json:688-713 describe
+synchronous validation with rollback and no transaction across requests. W7
+is a host/storage admission fault schedule, not evidence that native TX1 local
+BEGIN grants or withholds release authorization.
+
+F3 — Do not substitute a historical low-level host driver for the live runtime,
+or call real WASM a fake core. The exact divergence and binding are listed
+above. Also do not call same-process reconstruction a process restart.
+
+F4 — No selected witness combines suffix replacement, duplicate local and
+forwarded admission, a restart, and one exact release request. That remains a
+future complete native witness obligation; model traces may describe the
+intended contract but cannot certify that composition or bytes.
+
+F5 — Fair service under pressure is new work. enqueue's Promise tail serializes
+turns but provides no bounded handoff service class; the selected tests have
+finite controlled predecessors. A pending handoff queue flag is not a progress
+proof. The future model must separately represent capacity admission and
+scheduler service, pre-existing consensus occurrences, finite predecessor
+work, repeated suffix discard, and closure/settlement competition.
+
+F6 — Snapshot/application provenance and pending request retirement are unproven.
+The handcrafted snapshot transaction rollback test is not a legal application
+snapshot carrying handoff, receipt and uncommitted custody. The future design
+needs the snapshot boundary and recovery owner decision before implementation.
+
+F7 — The selected transport schedules explicitly return/throw or are released
+by the test. They do not establish bounded completion of a transport Promise
+that never resolves, release outer-deadline propagation, late client response
+handling, or messageRouter registration/delivery semantics. The current peer
+delivery implementation awaits its transport Promise (peer-delivery:109-127).
+
+No production defect is newly established by this read-only round. F1-F7 are
+proof limits and design obligations, not reported native failures.
+
+CATEGORY-COMPLETE CHECKLIST (evidence is source only until a retained run exists)
+
+Harness fidelity
+H1 Right RED mechanism: operation-port-ready-recovery:183-202 injects an actual
+SQL trigger failure; 225-237 requires HOST_FAILURE/application, unchanged durable
+watermark, then replay. persistence-admission:190-229 asserts the typed runtime
+deferral. No new RED, revert run, or missing-symbol result is claimed here.
+H2 Stub honesty: real core/runtime/store binding described above. Controlled
+sendFor and applyFor at partition-node-cluster:163-194 are host seams; no live
+TX1 application or router is supplied. F2/F7 bound the claim.
+H3 Time fidelity: fixture PARTITION_TIMING at 43-48 and manual ticks make elections
+controlled; not production election latency. W7:359-366 waits five actual
+production 10ms persistence poll intervals and changes no 120000ms bound
+(runtime-owner-constants:224-227). It does not test timeout expiry.
+H4 Field fidelity: real runtime constructs native entries/envelopes; fixture
+requestFor:148-194 uses canonical request keys and genesis stamp. Direct store
+Ready fields at persistence-admission:44-55 and operation test:60-77 are limited
+primitive inputs; no new handoff fields or release binding are represented.
+H5 Nonvacuity: W7 requires sendsInFlight>0, unsettled completion during foreign
+transaction, durable progress, convergence and unchanged generation (:389-409).
+Application test requires callback failure and before/after watermark plus one
+post-commit array effect (:225-245). Generation test requires actual suspended
+send, real trap, and unchanged native entry count on stale completion (:295-329).
+H6 Live observable: actual production operation-port path is bound by the exact
+file/fixture hashes below. Lab run, raw TAP and artifact identities are pending;
+unit primary classification stays unit. No runtime release closure is claimed.
+
+Recovery / replay
+R1 Stale vs live: runtime-owner:920-935 reconstructs only recovery-required or
+replacement paths; 394-407 rejects stale generations. Selected test:272-335
+engages old Ready vs new runtime. New release-handoff recovery writes are absent.
+R2 Restart discriminator: runtime health/group health/pendingRuntimeResume drive
+ensureExecution:920-935; reconstructGroup:877-906 preserves durable replay.
+No cold-process restart or live merge of release cells is witnessed (F4).
+R3 Lost enlistment: unengaged. These are Raft command/host tests, not coordinator
+registries. The future release change must not alter TX1 settlement/enlistment;
+these files cannot prove that (fixture's application is :180-194).
+R4 Replay idempotence: application transaction :61-99 atomically ties effects,
+watermark and afterRollback/afterCommit behavior; selected native test:225-245
+observes one replay after failure. No exact request K dedup/credit test exists.
+R5 Absence: runtime-owner:603-623 refuses absent/incompatible replacement state
+instead of bootstrapping. New pending-handoff unreadability/absence semantics
+remain a design and witness gap, not settled by an empty process map.
+
+Concurrency / serialization
+C1 Sync gate/backstop: enqueue:961-986 sets the tail before running synchronous
+work; store persistenceAdmission/admitWrite:358-374 is the write backstop.
+No new release reservation gate or forwarded-occurrence backstop exists here.
+C2 Await freshness: finishReady:1147,1171 rechecks persistence after sends;
+invokeCoreAt:394-407 validates generation. W7 and generation test exercise these
+cuts. Future credit admission must re-evaluate actual applied prefix, not borrow
+this as proof of its unimplemented predicate.
+C3 Single winner: actual Raft log and SQLite atomic apply supply ordered effects;
+selected witnesses do not test multiple release continuations/RETIRE candidates
+or durable request CAS. Exact winner/outcome rules remain an explicit gap.
+C4 Timers: inbound and runtime resumption enter the existing group queue
+(runtime-owner:695-715,1757-1793); W7 lets only owned admission polling finish
+the held Ready. No new handoff scheduler/fairness or timer interleaving proved.
+C5 Lock scope: enqueue is per runtime group, not global request identity, result
+capacity, multi-partition or multi-host mutex. F5 bars that broader claim.
+
+Transport / delivery
+T1 ACK: peer-delivery:74-85 checks noHandler/deferRetry/acknowledged:false/error.
+operation test:110-170 checks no-handler failure and surviving runtime, but uses
+acknowledged:false with noHandler, not the ACK:true/noHandler:true combination.
+Enqueue/CORE_OK is not application processing or release approval.
+T2 Late replies: generation test:272-335 releases an old transport completion
+after core replacement and checks no native re-entry. Late SERVICE_RESPONSE
+after client waiter retirement and handoff re-drive are unengaged.
+T3 Shape/classification: existing runtime hostFailure:154-162 emits string
+reason, phase, retryable and recoveryRequired; test:190-206 checks exact shape.
+No new response shape/classifier claim or generic router classification proof.
+T4 Bounded undeliverable: immediate resolution/throw/noHandler cases at operation
+test:110-170 are covered by source. Never-resolving send boundedness is unproved
+(F7); no new deadline is authorized.
+T5 Stub: PartitionNodeCluster queues consensus envelopes, not a contract-suite
+messageRouter stub. This is honest for native Ready ownership; it cannot certify
+application router registration/ACK handling/options/deadline forwarding.
+
+Owner interaction
+O1 Single question owner: runtime decides native entry/Ready custody; store
+decides foreign-transaction persistence admission; application transaction owner
+decides its atomic effect/watermark unit. Fixture arrays/status/diagnostics do
+not issue a release verdict. See owner map and F1.
+O2 Typed boundary: RAFT_OPERATION_PORT_REQUEST supplies frozen committed records
+with actual index/term/effects; runtime hostFailure and store code are distinct
+types (fixture:148-194, runtime:154-162, store:368-374). New K/credit/custody
+communications still require explicit owner adjudication.
+O3 Paired invariant: W7's same witness requires no persistence while unavailable
+and successful progress afterward without runtime replacement (:305-411).
+Application test couples failure watermark rollback and replay (:225-245).
+No historical revert control run is authorized; no release paired proof exists.
+O4 Stale then fresh: native application failure->reconstruction/replay and
+foreign-transaction hold->fresh admission are exercised. An old generation's
+completion cannot touch new core (:272-335). New release epoch replay absent.
+O5 Pressure: actual gate/refusal path retained and bounded existing poll used.
+Repeated duplicate requests/capacity exhaustion/normal flooding vs recovery
+fairness are not exercised (F4/F5). Serialization alone cannot close this item.
+O6 Wake/release: W7's observable is actual db.inTransaction becoming false;
+existing whenPersistenceAdmitted polling then resumes the same Ready. This
+existing storage mechanism is not proof of the future event-driven handoff
+release path. Application reconstruction is explicitly tick-driven in its test.
+O7 Projection authority: independent SQLite reads are measurement; native status
+is an observation. afterCommit array and coreEntryCount are test observations
+(fixture:180-194,250-253); none decides admission. New diagnostic views must stay
+non-authoritative; selected tests do not audit the new result owner.
+O8 Controlled negative: injected real SQL/callback failures are explicit host
+fault schedules with semantic assertions, not changed pass criteria. No source
+mutation A/B, claimed red-on-revert or historical failure relabeling here.
+O9 No escape: selected tests exercise production ports; direct-store primitives
+are named separately, not used to fake authoritative request results. Historical
+raw host driver is excluded. No bypass/new hook or alternate recovery loop is
+introduced. Future design interfaces are still unimplemented.
+O10 Registry: impact-contracts.json:688-713 and coupled pair :1677-1712 register
+the persistence file; runtime-application-transaction contract/pair :641,1591
+registers operation-port-ready-recovery. Both primary=unit/resource=ordinary.
+No registry/source semantic changes proposed in this observation packet. Future
+new release semantics need complete registered paired witnesses in their Quest.
+
+Admission / gating
+A1 Precheck matches enforcement: persistenceAdmitted delegates to the store's
+own persistenceAdmission (persistence-admission.js:25-28; store:358-374).
+Runtime checks before core/take_ready and after sends (:1731,1210,1147,1171).
+This proves no proposed release/credit precheck yet (F1).
+A2 Transient classification: W4:190-206 checks HOST_FAILURE/retryable:true/
+recoveryRequired:false for foreign transaction; application failure requires
+reconstruction instead (runtime:1093-1096). All new K outcomes remain unspecified
+by these tests; no stale/refused request may be relabeled approved.
+A3 Existing budget: PERSISTENCE_ADMISSION_WAIT is 10ms poll /120000ms bound
+(constants:224-227); no increase. W7 observes an interior hold, not expiry.
+No new scheduler or external release deadline proof follows.
+A4 Reason fidelity: W3 extracts store Error.code and requires the actual owner
+code (:107-160); W4 checks runtime string reason/phase (:190-206). No object-to-
+string normalization shortcut or new response shape is introduced.
+A5 Hold release: W7 releases the actual foreign SQLite transaction at :368 and
+requires finished Ready/convergence. It measures no latency against a release
+request budget and exercises neither committed HOLD nor local admission OPEN.
+A6 Freshness: runtime uses store current inTransaction before each decisive
+write/continuation, not a cached row. New durable handoff/admission version
+freshness is absent; source ordering map above identifies where it must fit.
+A7 Message honesty: tests assert concrete phase/reason/group health and actual
+SQLite state. No new blocking message is added. Handoff/request/partition IDs
+in future refusals need their own witness; these tests contain no such payload.
+
+CONTENT BINDING / SUPPORTING HASHES
+
+Selected fixture (relevant seam sections read):
+dca9b5eaaa23d192909608b8d05a5f3c1b8effe2386d5e6050745e6d393d871c
+  test/raft/raft-rs-backend/partition-node-cluster.js
+
+Source anchors reviewed in relevant sections (not a whole-file correctness audit):
+a560a052bf9b470a2046009555162b60669c340d86274fca9c74126fc8fbd01b
+  src/raft/raft-rs-runtime-owner.js
+88af05c5bcdf3d8f1209615a2d3f6c6427ab9ebf8951a1f66835402074c75d5f
+  src/raft/raft-rs-durable-store.js
+f12ff39650a0c221212168129f24ff070b563bd3c65cb1498572af7e3642f6aa
+  src/raft/raft-rs-application-transaction-owner.js
+55c3d7b5bb1eeb2a35f9fb6c11e6b54506ef00e18374f5a52cd4e9d11b83e931
+  src/raft/raft-rs-persistence-admission.js
+a2e87da5ee50b52875a5c77139ae5491ad7f7b3ddd1e4a849d77bce63edbde6b
+  src/raft/raft-rs-binding-owner.js
+4b7a5809804cdb3f8088c1d1422cb6c5df45064db8650d07642f03a7653e63d7
+  vendor/raft-rs-wasm/artifact-digest.json
+
+Screened alternative identities (only the described sections/seams reviewed):
+398eca66728c0e50c240af08287fe76548692e7566768e534ff3a1011978304b
+  test/raft/raft-rs-backend/runtime-turn-integrity.test.js
+e90174335f51252bcf72f2f70f27e7ffd19b81385feaf1e5dc571582d3dbe345
+  test/raft/raft-rs-backend/durable-ready-loop.test.js
+341fba9afd557b4389380637925209352ed51d4b9095be32fafb9948dd5f798a
+  test/raft/raft-rs-backend/raw-raft-rs-test-core.js
+24135f72941fbeedc88fb2e23bdc73fa4e3c9f952d07eed239c1c71f32b94312
+  test/raft/raft-rs-backend/raw-raft-rs-test-ready.js
+ef77b1e124a530327a4d613aea8ad712ca4e9880ea8f22795d75e3146b09f768
+  test/raft/raft-rs-backend/deterministic-raft-rs-cluster.js
+
+NEXT REVIEW BOUNDARY
+
+The parent's executable ordering traces have not been supplied/reviewed in this
+round. Vet those separately against actual application order, immutable identity,
+all custody states, atomic rollback, duplicates, authoritative suffix discard,
+restart reconstruction, reserved capacity, and fair scheduler assumptions.
+Passing traces remain supplementary. Preserve accepted rejection of bde70cec,
+prior evidence, successor unsealed/unactivated, shared wave HELD, Runner/TAP
+PARKED, and PR122 rejected.

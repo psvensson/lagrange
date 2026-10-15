@@ -1,0 +1,235 @@
+{
+  "kind": "independent-verifier-probes-only",
+  "originalSourceSha256": "228dc3bcfaf482e6f5775d83015d96596fd2b5e00d81bcd42e85a099b3be8502",
+  "checks": [
+    {
+      "name": "behavior-field-not-bound-to-canonical-bytes",
+      "kind": "MODEL_FIDELITY_COUNTEREXAMPLE",
+      "canonicalChildValid": false,
+      "appliedChildValid": true,
+      "result": {
+        "status": "RESULT",
+        "disposition": "APPROVED",
+        "id": "4d6a760cebebf6f7c015a7f155de53757197970a44b69ef120ccbfa48730de9f",
+        "body": [
+          "APPROVE",
+          "p",
+          [
+            "1",
+            "1"
+          ],
+          "1",
+          "verifier-derived-field-conflict",
+          "0",
+          false
+        ],
+        "index": 1,
+        "term": 1,
+        "winner": "4d6a760cebebf6f7c015a7f155de53757197970a44b69ef120ccbfa48730de9f"
+      },
+      "events": [
+        {
+          "name": "admit",
+          "id": "ac7add7f7bc2344e90e09e1dd4aedd06c9fa522a89243b495e9070bc722b9674",
+          "kind": "R",
+          "ticket": 1,
+          "path": "local",
+          "inventory": {
+            "qA": 0,
+            "qM": 1,
+            "retainedA": 0,
+            "futureA": 0,
+            "futureM": 1,
+            "aEntitlements": 0
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 1,
+          "index": 1
+        },
+        {
+          "name": "ready",
+          "ticket": 1,
+          "index": 1
+        },
+        {
+          "name": "durable",
+          "ticket": 1,
+          "index": 1
+        },
+        {
+          "name": "commit-prefix",
+          "index": 1
+        },
+        {
+          "name": "applied",
+          "index": 1,
+          "g": 1,
+          "disposition": "APPROVED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "competing-authority-changes-actual-prefix",
+      "kind": "ADDITIONAL_SYMBOLIC_CONTROL",
+      "childResult": {
+        "status": "RESULT",
+        "disposition": "REFUSED",
+        "id": "54811f9a4f6360e6ce2ffa2afb7e5ba0afe20b62a8e25d0cf2b4b8df0f554206",
+        "body": [
+          "APPROVE",
+          "p",
+          [
+            "1",
+            "1"
+          ],
+          "1",
+          "verifier-earlier-admission",
+          "0",
+          true
+        ],
+        "index": 2,
+        "term": 1,
+        "winner": "9f2d33e6ab5bfcd697ecf07d2610c121ce13f42b614ea55b24672efaefebcedd"
+      },
+      "receipt": {
+        "status": "RETIRED",
+        "id": "c9eab6b231a91da567c0d3c3dee54e83291e3830b973f9d5ee6df91cc5d5d332",
+        "fromG": 0,
+        "toG": 1,
+        "index": 2,
+        "term": 1,
+        "childK": "54811f9a4f6360e6ce2ffa2afb7e5ba0afe20b62a8e25d0cf2b4b8df0f554206",
+        "childDisposition": "REFUSED"
+      },
+      "finalVersion": 1,
+      "effects": 1,
+      "events": [
+        {
+          "name": "admit",
+          "id": "c9eab6b231a91da567c0d3c3dee54e83291e3830b973f9d5ee6df91cc5d5d332",
+          "kind": "R",
+          "ticket": 2,
+          "path": "local",
+          "inventory": {
+            "qA": 0,
+            "qM": 1,
+            "retainedA": 0,
+            "futureA": 0,
+            "futureM": 1,
+            "aEntitlements": 0
+          }
+        },
+        {
+          "name": "admit",
+          "id": "9f2d33e6ab5bfcd697ecf07d2610c121ce13f42b614ea55b24672efaefebcedd",
+          "kind": "A",
+          "ticket": 3,
+          "path": "local",
+          "inventory": {
+            "qA": 1,
+            "qM": 1,
+            "retainedA": 0,
+            "futureA": 1,
+            "futureM": 1,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 3,
+          "index": 1
+        },
+        {
+          "name": "ready",
+          "ticket": 3,
+          "index": 1
+        },
+        {
+          "name": "durable",
+          "ticket": 3,
+          "index": 1
+        },
+        {
+          "name": "commit-prefix",
+          "index": 1
+        },
+        {
+          "name": "applied",
+          "index": 1,
+          "g": 0,
+          "disposition": "APPROVED",
+          "inventory": {
+            "qA": 0,
+            "qM": 1,
+            "retainedA": 1,
+            "futureA": 0,
+            "futureM": 1,
+            "aEntitlements": 1
+          }
+        },
+        {
+          "name": "ordered",
+          "ticket": 2,
+          "index": 2
+        },
+        {
+          "name": "ready",
+          "ticket": 2,
+          "index": 2
+        },
+        {
+          "name": "durable",
+          "ticket": 2,
+          "index": 2
+        },
+        {
+          "name": "commit-prefix",
+          "index": 2
+        },
+        {
+          "name": "applied",
+          "index": 2,
+          "g": 1,
+          "disposition": "REFUSED",
+          "inventory": {
+            "qA": 0,
+            "qM": 0,
+            "retainedA": 1,
+            "futureA": 0,
+            "futureM": 0,
+            "aEntitlements": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "missing-current-child-is-not-checked",
+      "kind": "EXCLUDED_IMAGE_EDGE_COUNTEREXAMPLE",
+      "injection": "delete current child result after atomic application; not reachable through conforming model transitions",
+      "expectedContract": "HOLD(RESULT_INCONSISTENT)",
+      "actual": {
+        "status": "RESULT",
+        "result": {
+          "status": "RETIRED",
+          "id": "cc1941f21cc904b3d64d247c6627950362829e427dd13a6f1f0fb6d99e0b01ce",
+          "fromG": 0,
+          "toG": 1,
+          "index": 1,
+          "term": 1,
+          "childK": "ab84167af589063c1a69a17f4c19a7518623737ba6408c0a59bdc0de0fc3323f",
+          "childDisposition": "APPROVED"
+        }
+      }
+    }
+  ]
+}
