@@ -1,6 +1,11 @@
 import tap from 'tap';
 
 import {
+  evaluateSdkHostConformance,
+  loadSdkHostConformanceInputs,
+} from '../../scripts/checks/sdk-host-conformance-plan.js';
+
+import {
   checkServicePortabilityClaimsContract,
   evaluateServicePortabilityClaimsContract,
   loadServicePortabilityClaimsContract,
@@ -105,11 +110,6 @@ tap.test('OCI implementation drift requires capability-contract update',
     t.match(result.problems[0], /unsupported invocation/iu);
     t.end();
   });
-
-import {
-  evaluateSdkHostConformance,
-  loadSdkHostConformanceInputs,
-} from '../../scripts/checks/sdk-host-conformance-plan.js';
 
 function sdkInputs() {
   return loadSdkHostConformanceInputs();

@@ -51,5 +51,5 @@ independently reviewed receipts can close the portability acceptance ladder.
 
 See [Native OCI Call Cells](../../architecture/native-oci-call-cells.md),
 [Execution semantics](../execution-semantics.md), and the
-[developer adoption direction](../developer-adoption-direction.md) for
+[programming model](../native-programming-model.md) for
 the operating context.
