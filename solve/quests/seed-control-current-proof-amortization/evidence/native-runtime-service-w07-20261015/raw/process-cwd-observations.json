@@ -1,0 +1,85 @@
+{
+  "observationsNotLeases": true,
+  "processes": [
+    {
+      "pid": 4316,
+      "cwd": "/mnt/data/peter/projects/lagrange"
+    },
+    {
+      "pid": 10072,
+      "cwd": "/mnt/data/peter/projects/lagrange"
+    },
+    {
+      "pid": 1193659,
+      "cwd": "/mnt/data/peter/projects/lagrange"
+    },
+    {
+      "pid": 1193717,
+      "cwd": "/mnt/data/peter/projects/lagrange"
+    },
+    {
+      "pid": 1193794,
+      "cwd": "/mnt/data/peter/projects/lagrange"
+    },
+    {
+      "pid": 1193927,
+      "cwd": "/mnt/data/peter/projects/lagrange"
+    },
+    {
+      "pid": 1193928,
+      "cwd": "/mnt/data/peter/projects/lagrange"
+    },
+    {
+      "pid": 1193994,
+      "cwd": "/mnt/data/peter/projects/lagrange"
+    },
+    {
+      "pid": 1203909,
+      "cwd": "/mnt/data/peter/projects/lagrange"
+    },
+    {
+      "pid": 1372482,
+      "cwd": "/mnt/data/peter/projects/lagrange"
+    },
+    {
+      "pid": 1372483,
+      "cwd": "/mnt/data/peter/projects/lagrange"
+    },
+    {
+      "pid": 1372585,
+      "cwd": "/mnt/data/peter/projects/lagrange"
+    },
+    {
+      "pid": 1519945,
+      "cwd": "/mnt/data/peter/projects/lagrange"
+    },
+    {
+      "pid": 1519946,
+      "cwd": "/mnt/data/peter/projects/lagrange"
+    },
+    {
+      "pid": 1520064,
+      "cwd": "/mnt/data/peter/projects/lagrange"
+    },
+    {
+      "pid": 1655112,
+      "cwd": "/mnt/data/peter/projects/lagrange"
+    },
+    {
+      "pid": 1655113,
+      "cwd": "/mnt/data/peter/projects/lagrange"
+    },
+    {
+      "pid": 1655141,
+      "cwd": "/mnt/data/peter/projects/lagrange"
+    },
+    {
+      "pid": 1966159,
+      "cwd": "/mnt/data/peter/projects/lagrange"
+    },
+    {
+      "pid": 1966160,
+      "cwd": "/mnt/data/peter/projects/lagrange"
+    }
+  ]
+}

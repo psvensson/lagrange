@@ -1,0 +1,13 @@
+{
+  "base": "ec6a14832e843080e1079c19efe3c0d2fce1bab8",
+  "node": "v22.23.2",
+  "worktree": "/mnt/data/peter/projects/.worktrees/native-runtime-service-w07-20261015",
+  "dependencies": {
+    "link": "/tmp/opencode/release-linearization-rev2-correction/node_modules",
+    "lockSha256": "8fb1a612db45cac0a61e281b41fd60da315f916b7aeb52046bcbe3e7b8d61ecd"
+  },
+  "noNativeTestsExecutedYet": true,
+  "firstPreflight": "lab help before dependency link failed missing yaml; no native execution",
+  "retryFailedOnce": "0",
+  "testFile": "test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js"
+}

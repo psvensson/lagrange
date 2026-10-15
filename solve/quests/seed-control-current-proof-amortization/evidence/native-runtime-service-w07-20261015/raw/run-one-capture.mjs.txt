@@ -1,0 +1,32 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import {pathToFileURL} from 'node:url';
+const [root,evidence,sha,host,file]=process.argv.slice(2);
+fs.mkdirSync(evidence,{recursive:false});
+const {labTestCommit,runLabTest,labTestDeps}=await import(pathToFileURL(path.join(root,'scripts/lab/probe.js')));
+const {planClassifiedTestFiles,estimateFileCosts,lastResultsRoots}=await import(pathToFileURL(path.join(root,'scripts/run-classified-test-files.js')));
+const commit=labTestCommit({root,sha});
+const ledger=path.join(root,`test-output/reports/test-results-${host}.ndjson`);
+const previous=fs.existsSync(ledger)?fs.readFileSync(ledger):null;
+try {
+ const plan=planClassifiedTestFiles(commit.gitRoot,[file],lastResultsRoots(root));
+ const costs=estimateFileCosts(plan,lastResultsRoots(root));
+ const deps=labTestDeps({root});
+ const discovery=await deps.discover(sha);
+ fs.writeFileSync(path.join(evidence,'discovery.json'),JSON.stringify(discovery,null,2)+'\n');
+ // Existing executor's results path can relay the complete raw TAP, including
+ // successful diagnostics, before it removes its throwaway remote checkout.
+ const results=`.tap/test-results/${file}.tap`;
+ fs.writeFileSync(path.join(evidence,'plan.json'),JSON.stringify({sha,host,file,plan,costs,results},null,2)+'\n');
+ const code=await runLabTest({plan,costs,commit,on:host,root,results,
+  write:line=>fs.appendFileSync(path.join(evidence,'run.log'),line+'\n')},
+  {...deps,discover:async()=>discovery});
+ fs.writeFileSync(path.join(evidence,'exit-code.txt'),String(code)+'\n');
+ if(fs.existsSync(ledger))fs.copyFileSync(ledger,path.join(evidence,'raw.tap'));
+ console.log(JSON.stringify({sha,host,file,exit:code,rawTap:fs.existsSync(path.join(evidence,'raw.tap'))}));
+ process.exitCode=code;
+}finally{
+ commit.release();
+ if(previous!==null)fs.writeFileSync(ledger,previous);
+ else if(fs.existsSync(ledger))fs.rmSync(ledger);
+}
