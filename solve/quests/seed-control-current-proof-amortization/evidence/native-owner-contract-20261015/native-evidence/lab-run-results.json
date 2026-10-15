@@ -1,0 +1,35 @@
+[
+  {
+    "status": "fulfilled",
+    "value": {
+      "host": "tv-dator",
+      "sha": "f22c8b32280514dde68519dd8232498e6d306099",
+      "files": [
+        "test/partition/participant-release-first-prepare-native.test.js"
+      ],
+      "exit": 1
+    }
+  },
+  {
+    "status": "fulfilled",
+    "value": {
+      "host": "lenovo-laptop",
+      "sha": "f22c8b32280514dde68519dd8232498e6d306099",
+      "files": [
+        "test/partition/participant-release-prepared-settlement-native.test.js"
+      ],
+      "exit": 1
+    }
+  },
+  {
+    "status": "fulfilled",
+    "value": {
+      "host": "adam-laptop",
+      "sha": "f22c8b32280514dde68519dd8232498e6d306099",
+      "files": [
+        "test/partition/participant-release-retention-native.test.js"
+      ],
+      "exit": 0
+    }
+  }
+]

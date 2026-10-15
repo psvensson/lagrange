@@ -1,0 +1,27 @@
+Payload layout
+
+OWNER-CONTRACT.md: source mapping, accepted semantics, F1-F8 disposition,
+retention proposal, unresolved decisions and complete proposed implementation.
+NATIVE-EVIDENCE.md: exact test checkpoints, first results, measured traces,
+fixture limits, ownership/custody, static baseline comparison and stop state.
+COMPARATIVE-PRECEDENTS.md: primary-source external design hints and limits.
+native-evidence/: fresh raw evidence, derived diagnostics, execution index,
+independent reviews and test/dependency/source identity manifests.
+independent-review/: 61 exact files from the prior 64-entry verified bundle.
+preservation-selection.json: selected files and explicit local-only exclusions.
+review-bundle-verification.json: complete original manifest verification.
+test-sources/test/partition/: exact seven new/changed test and fixture files
+  from 897ccebeb4cda14bb98bfb21102ebbc5bb181f52. They require the repository
+  and native dependencies at that checkpoint. Do not execute these copies
+  in place under the evidence tree; relative imports target their real paths.
+
+payload-manifest.sha256 covers every payload file except itself. Run
+sha256sum -c payload-manifest.sha256 from the extracted payload root.
+
+The downloadable archive freezes this payload. Publication receipts and
+PUBLICATION.md, added to git afterward, are outside this payload manifest
+and archive so the artifact does not attempt to contain its own final hash.
+The final non-main commit binds those receipts, payload bytes and test sources.
+
+No production implementation approval, Quest activation/sealing, main merge,
+cross-host certification or full-suite green is conveyed by this payload.

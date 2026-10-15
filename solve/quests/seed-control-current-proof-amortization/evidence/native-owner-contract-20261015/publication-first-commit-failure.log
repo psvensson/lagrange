@@ -1,0 +1,358 @@
+Source oversized-file ratchet: 25/27 over 800 lines.
+Test oversized-file ratchet: 21/21 over 1500 lines.
+
+Largest oversized files (25 max):
+2820 test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js (threshold 1500)
+2232 test/distributed/harness/__tests__/cluster-load-readiness-stability-quiescence-test-cases.js (threshold 1500)
+2082 test/diagnostics/topology-convergence-graph.test.js (threshold 1500)
+2063 src/raft/raft-rs-runtime-owner.js (threshold 800)
+1884 test/distributed/harness/cluster-class-lifecycle-base.js (threshold 1500)
+1879 test/rebalancer/replace-replica-workflow-tail-more-test-cases.js (threshold 1500)
+1873 test/distributed/harness/assertions-convergence-wait.js (threshold 1500)
+1864 test/bootstrap/node-joining-service.test.js (threshold 1500)
+1770 test/distributed/harness/failure-bundle-diagnostics-artifact-builder.js (threshold 1500)
+1764 test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js (threshold 1500)
+1740 test/rebalancer/rebalance-coordinator-outcome-routing.test.js (threshold 1500)
+1714 test/admin/admin-control-snapshot-publication-convergence-membership-observation-test-cases.js (threshold 1500)
+1689 test/distributed/harness/post-rebalance-closure-contract.js (threshold 1500)
+1647 test/distributed/harness/__tests__/cluster-active-wait-startup-progress-witness-test-cases.js (threshold 1500)
+1633 test/rebalancer/priority-recovery-snapshot-handoff-timeout-reentry-test-cases.js (threshold 1500)
+1624 test/distributed/harness/cluster-class-control-snapshot-recovery.js (threshold 1500)
+1597 test/distributed/harness/cluster-class-quiescence.js (threshold 1500)
+1595 test/distributed/harness/report-writer.js (threshold 1500)
+1588 test/logging/logs-table-service.test.js (threshold 1500)
+1568 test/admin/admin-control-snapshot-deferred-refresh-membership-observation-test-cases.js (threshold 1500)
+1555 test/distributed/harness/__tests__/report-writer.test.js (threshold 1500)
+1513 test/distributed/harness/__tests__/run.test.js (threshold 1500)
+1264 src/rebalancer/operation-workflow-dispatch-response-reconcile.js (threshold 800)
+1068 src/control-plane/control-plane-readiness-priority-recovery-planning.js (threshold 800)
+1068 src/rebalancer/move-planner-move-calculation-methods.js (threshold 800)
+Scanned 8 JavaScript files
+Found 0 hot-path diagnostics violations
+Matched 31 inherited hot-path diagnostics baseline violations
+
+/mnt/data/peter/projects/.worktrees/release-fencing-native-contract-20261015/solve/quests/seed-control-current-proof-amortization/evidence/native-owner-contract-20261015/independent-review/adversarial-model-review-bound-holds.mjs
+  16:31  error  Statement inside of curly braces should be on next line                                                        brace-style
+  16:32  error  Unexpected space(s) after '{'                                                                                  block-spacing
+  16:96  error  Unexpected space(s) before '}'                                                                                 block-spacing
+  16:97  error  Closing curly brace should be on the same line as opening curly brace or on the line after the previous block  brace-style
+  17:15  error  Expected parentheses around arrow function argument                                                            arrow-parens
+  20:1   error  This line has a length of 115. Maximum allowed is 100                                                          max-len
+
+/mnt/data/peter/projects/.worktrees/release-fencing-native-contract-20261015/solve/quests/seed-control-current-proof-amortization/evidence/native-owner-contract-20261015/independent-review/adversarial-model-review.mjs
+  16:31  error  Statement inside of curly braces should be on next line                                                        brace-style
+  16:32  error  Unexpected space(s) after '{'                                                                                  block-spacing
+  16:96  error  Unexpected space(s) before '}'                                                                                 block-spacing
+  16:97  error  Closing curly brace should be on the same line as opening curly brace or on the line after the previous block  brace-style
+  17:15  error  Expected parentheses around arrow function argument                                                            arrow-parens
+  20:1   error  This line has a length of 115. Maximum allowed is 100                                                          max-len
+
+/mnt/data/peter/projects/.worktrees/release-fencing-native-contract-20261015/solve/quests/seed-control-current-proof-amortization/evidence/native-owner-contract-20261015/independent-review/exact-replay-review.mjs
+   6:22   error  A space is required after ','                                                                                  comma-spacing
+   6:32   error  A space is required after ','                                                                                  comma-spacing
+   6:88   error  A space is required after ','                                                                                  comma-spacing
+   8:15   error  Expected parentheses around arrow function argument                                                            arrow-parens
+   8:20   error  Statement inside of curly braces should be on next line                                                        brace-style
+   8:43   error  Missing whitespace after semicolon                                                                             semi-spacing
+   8:56   error  Missing whitespace after semicolon                                                                             semi-spacing
+   8:66   error  Closing curly brace should be on the same line as opening curly brace or on the line after the previous block  brace-style
+   9:27   error  Missing space before value for key 'type'                                                                      key-spacing
+   9:45   error  A space is required after ','                                                                                  comma-spacing
+   9:52   error  Missing space before value for key 'epoch'                                                                     key-spacing
+   9:53   error  A space is required after ','                                                                                  comma-spacing
+   9:66   error  Missing space before value for key 'disposition'                                                               key-spacing
+   9:76   error  A space is required after ','                                                                                  comma-spacing
+   9:86   error  Missing space before value for key 'identity'                                                                  key-spacing
+   9:98   error  A space is required after ','                                                                                  comma-spacing
+   9:106  error  Missing space before value for key 'census'                                                                    key-spacing
+  13:13   error  Missing space before value for key 'type'                                                                      key-spacing
+  13:27   error  A space is required after ','                                                                                  comma-spacing
+  13:34   error  Missing space before value for key 'epoch'                                                                     key-spacing
+  13:35   error  A space is required after ','                                                                                  comma-spacing
+  13:47   error  Missing space before value for key 'supersedes'                                                                key-spacing
+  13:48   error  A space is required after ','                                                                                  comma-spacing
+  13:56   error  Missing space before value for key 'census'                                                                    key-spacing
+  14:15   error  A space is required after ','                                                                                  comma-spacing
+  16:32   error  A space is required after ','                                                                                  comma-spacing
+  17:33   error  A space is required after ','                                                                                  comma-spacing
+  18:46   error  A space is required after ','                                                                                  comma-spacing
+  19:46   error  A space is required after ','                                                                                  comma-spacing
+  20:23   error  Missing space before value for key 'meaning'                                                                   key-spacing
+  20:79   error  A space is required after ','                                                                                  comma-spacing
+  20:83   error  Missing space before value for key 'id'                                                                        key-spacing
+  21:1    error  This line has a length of 117. Maximum allowed is 100                                                          max-len
+  21:1    error  Expected indentation of 2 spaces but found 0                                                                   indent
+  21:15   error  Missing space before value for key 'winnerRequest'                                                             key-spacing
+  21:29   error  A space is required after ','                                                                                  comma-spacing
+  21:43   error  Missing space before value for key 'loserRequest'                                                              key-spacing
+  21:56   error  A space is required after ','                                                                                  comma-spacing
+  21:62   error  A space is required after ','                                                                                  comma-spacing
+  21:69   error  A space is required after ','                                                                                  comma-spacing
+  21:74   error  Missing space before value for key 'log'                                                                       key-spacing
+  21:79   error  A space is required after ','                                                                                  comma-spacing
+  21:86   error  Missing space before value for key 'trace'                                                                     key-spacing
+  21:93   error  A space is required after ','                                                                                  comma-spacing
+  21:105  error  Missing space before value for key 'violations'                                                                key-spacing
+  22:1    error  Expected indentation of 2 spaces but found 0                                                                   indent
+  22:15   error  Missing space before value for key 'r1Annotations'                                                             key-spacing
+  22:40   error  A space is required after ','                                                                                  comma-spacing
+  22:55   error  Missing space before value for key 'r2Annotations'                                                             key-spacing
+  23:1    error  Expected indentation of 2 spaces but found 0                                                                   indent
+  23:7    error  Missing space before value for key 'limit'                                                                     key-spacing
+  24:24   error  A space is required after ','                                                                                  comma-spacing
+  24:46   error  A space is required after ','                                                                                  comma-spacing
+  24:51   error  A space is required after ','                                                                                  comma-spacing
+  25:1    error  This line has a length of 140. Maximum allowed is 100                                                          max-len
+  25:32   error  Missing space before value for key 'id'                                                                        key-spacing
+  25:41   error  A space is required after ','                                                                                  comma-spacing
+  25:54   error  Missing space before value for key 'firstWinner'                                                               key-spacing
+  25:66   error  A space is required after ','                                                                                  comma-spacing
+  25:80   error  Missing space before value for key 'replayWinner'                                                              key-spacing
+  25:93   error  A space is required after ','                                                                                  comma-spacing
+  25:105  error  Missing space before value for key 'violations'                                                                key-spacing
+  25:122  error  Expected parentheses around arrow function argument                                                            arrow-parens
+
+/mnt/data/peter/projects/.worktrees/release-fencing-native-contract-20261015/solve/quests/seed-control-current-proof-amortization/evidence/native-owner-contract-20261015/independent-review/run-focused-lab.mjs
+   8:1    error  Expected indentation of 2 spaces but found 0                                                                   indent
+   9:1    error  Expected indentation of 2 spaces but found 0                                                                   indent
+  10:1    error  Expected indentation of 2 spaces but found 0                                                                   indent
+  11:1    error  Expected indentation of 2 spaces but found 0                                                                   indent
+  11:70   error  Missing trailing comma                                                                                         comma-dangle
+  13:41   error  Missing space before value for key 'sha'                                                                       key-spacing
+  15:1    error  Expected indentation of 2 spaces but found 1                                                                   indent
+  16:1    error  Expected indentation of 2 spaces but found 1                                                                   indent
+  17:1    error  Expected indentation of 2 spaces but found 1                                                                   indent
+  17:77   error  Missing space before value for key 'sha'                                                                       key-spacing
+  17:87   error  A space is required after ','                                                                                  comma-spacing
+  17:93   error  A space is required after ','                                                                                  comma-spacing
+  17:98   error  A space is required after ','                                                                                  comma-spacing
+  17:104  error  A space is required after ','                                                                                  comma-spacing
+  17:111  error  Missing space before value for key 'scope'                                                                     key-spacing
+  17:193  error  A space is required after ','                                                                                  comma-spacing
+  17:198  error  A space is required after ','                                                                                  comma-spacing
+  18:1    error  Expected indentation of 2 spaces but found 1                                                                   indent
+  18:43   error  A space is required after ','                                                                                  comma-spacing
+  18:49   error  A space is required after ','                                                                                  comma-spacing
+  18:56   error  A space is required after ','                                                                                  comma-spacing
+  18:63   error  Missing space before value for key 'split'                                                                     key-spacing
+  18:67   error  A space is required after ','                                                                                  comma-spacing
+  19:11   error  Statement inside of curly braces should be on next line                                                        brace-style
+  19:29   error  Closing curly brace should be on the same line as opening curly brace or on the line after the previous block  brace-style
+
+/mnt/data/peter/projects/.worktrees/release-fencing-native-contract-20261015/solve/quests/seed-control-current-proof-amortization/evidence/native-owner-contract-20261015/independent-review/run-predecessor-lab.mjs
+   4:12   error  A space is required after ','                                                                                  comma-spacing
+   5:21   error  A space is required after ','                                                                                  comma-spacing
+   5:32   error  A space is required after ','                                                                                  comma-spacing
+   5:89   error  A space is required after ','                                                                                  comma-spacing
+   6:31   error  A space is required after ','                                                                                  comma-spacing
+   6:49   error  A space is required after ','                                                                                  comma-spacing
+   6:111  error  A space is required after ','                                                                                  comma-spacing
+   8:33   error  A space is required after ','                                                                                  comma-spacing
+   8:38   error  Missing space before value for key 'sha'                                                                       key-spacing
+  10:1    error  Expected indentation of 2 spaces but found 1                                                                   indent
+  10:51   error  A space is required after ','                                                                                  comma-spacing
+  10:57   error  A space is required after ','                                                                                  comma-spacing
+  11:1    error  Expected indentation of 2 spaces but found 1                                                                   indent
+  11:36   error  A space is required after ','                                                                                  comma-spacing
+  12:1    error  Expected indentation of 2 spaces but found 1                                                                   indent
+  12:37   error  A space is required after ','                                                                                  comma-spacing
+  12:66   error  A space is required after ','                                                                                  comma-spacing
+  12:87   error  Missing space before value for key 'sha'                                                                       key-spacing
+  12:97   error  A space is required after ','                                                                                  comma-spacing
+  12:103  error  A space is required after ','                                                                                  comma-spacing
+  12:108  error  A space is required after ','                                                                                  comma-spacing
+  12:114  error  A space is required after ','                                                                                  comma-spacing
+  12:118  error  Missing space before value for key 'on'                                                                        key-spacing
+  12:131  error  A space is required after ','                                                                                  comma-spacing
+  12:139  error  Missing space before value for key 'reason'                                                                    key-spacing
+  12:207  error  A space is required after ','                                                                                  comma-spacing
+  12:212  error  A space is required after ','                                                                                  comma-spacing
+  13:1    error  Expected indentation of 2 spaces but found 1                                                                   indent
+  13:41   error  A space is required after ','                                                                                  comma-spacing
+  13:47   error  A space is required after ','                                                                                  comma-spacing
+  13:54   error  A space is required after ','                                                                                  comma-spacing
+  13:58   error  Missing space before value for key 'on'                                                                        key-spacing
+  13:71   error  A space is required after ','                                                                                  comma-spacing
+  13:77   error  A space is required after ','                                                                                  comma-spacing
+  14:2    error  Expected space(s) before "finally"                                                                             keyword-spacing
+  14:2    error  Expected space(s) after "finally"                                                                              keyword-spacing
+  14:9    error  Statement inside of curly braces should be on next line                                                        brace-style
+  14:27   error  Closing curly brace should be on the same line as opening curly brace or on the line after the previous block  brace-style
+
+/mnt/data/peter/projects/.worktrees/release-fencing-native-contract-20261015/solve/quests/seed-control-current-proof-amortization/evidence/native-owner-contract-20261015/native-evidence/run-native-lab.mjs
+   8:1    error  Expected indentation of 2 spaces but found 1                                                                   indent
+   8:8    error  Missing space before value for key 'host'                                                                      key-spacing
+   8:26   error  Missing space before value for key 'files'                                                                     key-spacing
+   9:1    error  Expected indentation of 2 spaces but found 1                                                                   indent
+   9:8    error  Missing space before value for key 'host'                                                                      key-spacing
+   9:31   error  Missing space before value for key 'files'                                                                     key-spacing
+  10:1    error  Expected indentation of 2 spaces but found 1                                                                   indent
+  10:8    error  Missing space before value for key 'host'                                                                      key-spacing
+  10:29   error  Missing space before value for key 'files'                                                                     key-spacing
+  10:93   error  Missing trailing comma                                                                                         comma-dangle
+  16:85   error  A space is required after ','                                                                                  comma-spacing
+  16:90   error  A space is required after ','                                                                                  comma-spacing
+  17:27   error  Expected parentheses around arrow function argument                                                            arrow-parens
+  18:1    error  Expected indentation of 2 spaces but found 1                                                                   indent
+  18:36   error  A space is required after ','                                                                                  comma-spacing
+  19:1    error  Expected indentation of 2 spaces but found 1                                                                   indent
+  19:53   error  A space is required after ','                                                                                  comma-spacing
+  19:63   error  A space is required after ','                                                                                  comma-spacing
+  20:1    error  Expected indentation of 2 spaces but found 1                                                                   indent
+  20:38   error  A space is required after ','                                                                                  comma-spacing
+  21:1    error  Expected indentation of 2 spaces but found 1                                                                   indent
+  21:88   error  A space is required after ','                                                                                  comma-spacing
+  21:95   error  A space is required after ','                                                                                  comma-spacing
+  21:100  error  A space is required after ','                                                                                  comma-spacing
+  21:107  error  A space is required after ','                                                                                  comma-spacing
+  21:112  error  A space is required after ','                                                                                  comma-spacing
+  22:1    error  Expected indentation of 2 spaces but found 1                                                                   indent
+  22:16   error  A space is required after ','                                                                                  comma-spacing
+  22:23   error  A space is required after ','                                                                                  comma-spacing
+  22:28   error  A space is required after ','                                                                                  comma-spacing
+  24:61   error  Expected parentheses around arrow function argument                                                            arrow-parens
+  25:1    error  Expected indentation of 2 spaces but found 1                                                                   indent
+  26:1    error  Expected indentation of 2 spaces but found 1                                                                   indent
+  26:14   error  Expected parentheses around arrow function argument                                                            arrow-parens
+  26:41   error  A space is required after ','                                                                                  comma-spacing
+  27:1    error  Expected indentation of 2 spaces but found 1                                                                   indent
+  28:1    error  This line has a length of 103. Maximum allowed is 100                                                          max-len
+  28:1    error  Expected indentation of 4 spaces but found 2                                                                   indent
+  28:37   error  Missing space before value for key 'plan'                                                                      key-spacing
+  28:45   error  A space is required after ','                                                                                  comma-spacing
+  28:52   error  Missing space before value for key 'costs'                                                                     key-spacing
+  28:61   error  A space is required after ','                                                                                  comma-spacing
+  28:69   error  Missing space before value for key 'commit'                                                                    key-spacing
+  28:79   error  A space is required after ','                                                                                  comma-spacing
+  28:83   error  Missing space before value for key 'on'                                                                        key-spacing
+  28:91   error  A space is required after ','                                                                                  comma-spacing
+  28:96   error  A space is required after ','                                                                                  comma-spacing
+  29:1    error  Expected indentation of 6 spaces but found 3                                                                   indent
+  29:12   error  A space is required after ','                                                                                  comma-spacing
+  29:22   error  Missing space before value for key 'discover'                                                                  key-spacing
+  29:27   error  Missing space before function parentheses                                                                      space-before-function-paren
+  30:1    error  Expected indentation of 4 spaces but found 2                                                                   indent
+  30:38   error  A space is required after ','                                                                                  comma-spacing
+  30:62   error  A space is required after ','                                                                                  comma-spacing
+  31:1    error  Expected indentation of 4 spaces but found 2                                                                   indent
+  31:30   error  A space is required after ','                                                                                  comma-spacing
+  32:1    error  Expected indentation of 4 spaces but found 2                                                                   indent
+  32:3    error  Expected space(s) after "if"                                                                                   keyword-spacing
+  32:50   error  A space is required after ','                                                                                  comma-spacing
+  32:69   error  A space is required after ','                                                                                  comma-spacing
+  33:1    error  Expected indentation of 4 spaces but found 2                                                                   indent
+  33:16   error  Missing space before value for key 'host'                                                                      key-spacing
+  33:24   error  A space is required after ','                                                                                  comma-spacing
+  33:28   error  A space is required after ','                                                                                  comma-spacing
+  33:35   error  Missing space before value for key 'files'                                                                     key-spacing
+  33:44   error  A space is required after ','                                                                                  comma-spacing
+  33:50   error  Missing space before value for key 'exit'                                                                      key-spacing
+  34:1    error  Expected indentation of 2 spaces but found 1                                                                   indent
+  34:12   error  Statement inside of curly braces should be on next line                                                        brace-style
+  34:13   error  Unexpected space(s) after '{'                                                                                  block-spacing
+  34:35   error  Unexpected space(s) before '}'                                                                                 block-spacing
+  34:36   error  Closing curly brace should be on the same line as opening curly brace or on the line after the previous block  brace-style
+  36:36   error  A space is required after ','                                                                                  comma-spacing
+  36:60   error  A space is required after ','                                                                                  comma-spacing
+  36:83   error  A space is required after ','                                                                                  comma-spacing
+  36:88   error  A space is required after ','                                                                                  comma-spacing
+  38:31   error  Expected parentheses around arrow function argument                                                            arrow-parens
+
+/mnt/data/peter/projects/.worktrees/release-fencing-native-contract-20261015/solve/quests/seed-control-current-proof-amortization/evidence/native-owner-contract-20261015/native-evidence/run-one-capture.mjs
+   4:12   error  A space is required after ','                        comma-spacing
+   4:21   error  A space is required after ','                        comma-spacing
+   4:25   error  A space is required after ','                        comma-spacing
+   4:30   error  A space is required after ','                        comma-spacing
+   5:22   error  A space is required after ','                        comma-spacing
+   5:34   error  Missing space before value for key 'recursive'       key-spacing
+   6:21   error  A space is required after ','                        comma-spacing
+   6:32   error  A space is required after ','                        comma-spacing
+   6:87   error  A space is required after ','                        comma-spacing
+   7:31   error  A space is required after ','                        comma-spacing
+   7:49   error  A space is required after ','                        comma-spacing
+   7:109  error  A space is required after ','                        comma-spacing
+   8:33   error  A space is required after ','                        comma-spacing
+   9:28   error  A space is required after ','                        comma-spacing
+  12:1    error  Expected indentation of 2 spaces but found 1         indent
+  12:51   error  A space is required after ','                        comma-spacing
+  12:58   error  A space is required after ','                        comma-spacing
+  13:1    error  Expected indentation of 2 spaces but found 1         indent
+  13:36   error  A space is required after ','                        comma-spacing
+  14:1    error  Expected indentation of 2 spaces but found 1         indent
+  15:1    error  Expected indentation of 2 spaces but found 1         indent
+  16:1    error  Expected indentation of 2 spaces but found 1         indent
+  16:37   error  A space is required after ','                        comma-spacing
+  16:55   error  A space is required after ','                        comma-spacing
+  16:80   error  A space is required after ','                        comma-spacing
+  16:85   error  A space is required after ','                        comma-spacing
+  17:1    error  Expected indentation of 2 spaces but found 1         indent
+  18:1    error  Expected indentation of 2 spaces but found 1         indent
+  19:1    error  Expected indentation of 2 spaces but found 1         indent
+  20:1    error  Expected indentation of 2 spaces but found 1         indent
+  20:37   error  A space is required after ','                        comma-spacing
+  20:50   error  A space is required after ','                        comma-spacing
+  20:70   error  A space is required after ','                        comma-spacing
+  20:75   error  A space is required after ','                        comma-spacing
+  20:80   error  A space is required after ','                        comma-spacing
+  20:85   error  A space is required after ','                        comma-spacing
+  20:91   error  A space is required after ','                        comma-spacing
+  20:100  error  A space is required after ','                        comma-spacing
+  20:105  error  A space is required after ','                        comma-spacing
+  21:1    error  Expected indentation of 2 spaces but found 1         indent
+  21:35   error  A space is required after ','                        comma-spacing
+  21:41   error  A space is required after ','                        comma-spacing
+  21:48   error  A space is required after ','                        comma-spacing
+  21:52   error  Missing space before value for key 'on'              key-spacing
+  21:56   error  A space is required after ','                        comma-spacing
+  21:61   error  A space is required after ','                        comma-spacing
+  22:1    error  Expected indentation of 4 spaces but found 2         indent
+  22:9    error  Missing space before value for key 'write'           key-spacing
+  22:9    error  Expected parentheses around arrow function argument  arrow-parens
+  22:51   error  A space is required after ','                        comma-spacing
+  22:62   error  A space is required after ','                        comma-spacing
+  23:11   error  A space is required after ','                        comma-spacing
+  23:21   error  Missing space before value for key 'discover'        key-spacing
+  23:26   error  Missing space before function parentheses            space-before-function-paren
+  24:1    error  Expected indentation of 2 spaces but found 1         indent
+  24:37   error  A space is required after ','                        comma-spacing
+  24:54   error  A space is required after ','                        comma-spacing
+  25:1    error  Expected indentation of 2 spaces but found 1         indent
+  25:2    error  Expected space(s) after "if"                         keyword-spacing
+  25:49   error  A space is required after ','                        comma-spacing
+  25:68   error  A space is required after ','                        comma-spacing
+  26:1    error  Expected indentation of 2 spaces but found 1         indent
+  26:33   error  A space is required after ','                        comma-spacing
+  26:38   error  A space is required after ','                        comma-spacing
+  26:43   error  A space is required after ','                        comma-spacing
+  26:49   error  Missing space before value for key 'exit'            key-spacing
+  26:53   error  A space is required after ','                        comma-spacing
+  26:61   error  Missing space before value for key 'rawTap'          key-spacing
+  26:93   error  A space is required after ','                        comma-spacing
+  27:1    error  Expected indentation of 2 spaces but found 1         indent
+  28:2    error  Expected space(s) before "finally"                   keyword-spacing
+  28:2    error  Expected space(s) after "finally"                    keyword-spacing
+  29:1    error  Expected indentation of 2 spaces but found 1         indent
+  30:1    error  Expected indentation of 2 spaces but found 1         indent
+  30:2    error  Expected space(s) after "if"                         keyword-spacing
+  30:44   error  A space is required after ','                        comma-spacing
+  31:1    error  Expected indentation of 2 spaces but found 1         indent
+  31:7    error  Expected space(s) after "if"                         keyword-spacing
+
+✖ 293 problems (293 errors, 0 warnings)
+  288 errors and 0 warnings potentially fixable with the `--fix` option.
+
+pre-commit: FAIL - eslint (staged files)
+Scanned 0 JavaScript files
+Found 0 new literal-guideline violations
+Matched 0 inherited literal-guideline baseline violations
+Scanned 0 JavaScript files
+Found 0 decision-boundary guideline violations
+Matched 0 inherited decision-boundary baseline violations
+Scanned 0 JavaScript files
+Found 0 ambient-intrinsic call violations
+Matched 0 inherited ambient-intrinsic baseline violations
+Scanned 0 JavaScript files
+Found 0 silent catch violations
+Matched 0 inherited silent-catch baseline violations
+pre-commit: 1 staged check(s) failed - fix and re-commit
+pre-commit: (bypass for WIP: LAGRANGE_SKIP_PRECOMMIT=1 git commit)

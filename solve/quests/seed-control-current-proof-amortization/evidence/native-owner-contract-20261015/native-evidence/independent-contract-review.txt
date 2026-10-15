@@ -1,0 +1,303 @@
+Independent source-to-contract vet — 2026-10-15
+Verifier: subagent:/root/native_witness_verifier
+
+VERDICT: HOLD FOR IMPLEMENTATION; SUITABLE AS AN EXPLICIT OWNER-DECISION PACKET
+
+The accepted user decisions are coherently separated from the unimplemented
+protocol details. D0–D4 are preserved, BEGIN remains volatile leader-local,
+first PREPARE is new admission, rejected release requests do not consume or
+revoke authority, transaction settlement remains query/TX1-owned, and exact
+request results are distinguished from current authority and local serving.
+The source map is substantially faithful. The contract does not justify
+sealing/activation, production implementation, merging this inherited rejected
+source, or treating selected native/model greens as closure.
+
+Before using it as an implementation contract, resolve the listed HOLD gates
+and the source/communication qualifications below. No production repair is
+requested or authorized by this review. It is appropriate to preserve this
+review alongside the decision packet rather than erase its open questions.
+
+IDENTITY
+
+Tree: /mnt/data/peter/projects/.worktrees/release-fencing-native-contract-20261015
+Production baseline: bde70cec74b8eb8e8db17d0d50a432102947d6d4.
+Test checkpoint observed during this review: f22c8b32280514dde68519dd8232498e6d306099.
+Reviewed uncommitted document:
+solve/quests/seed-control-current-proof-amortization/evidence/native-owner-contract-20261015/OWNER-CONTRACT.md
+SHA256 a876659a3813d86482208cbe4cb0366551457be548cde54796c698a612818638.
+This hash includes corrected source-function names and the first-time stale
+request/retired-winner distinction. Later edits require a content addendum.
+
+Read the appended contract context and full retry checklist; retained the
+admission, recovery/replay, harness, owner-interaction, concurrency and transport
+checklists from the earlier dossier. Source checks were read-only. No tests,
+source edits, git mutations, process interventions or other worktree writes.
+This separate response file is the only write for this contract review.
+
+ALL FINDINGS
+
+C1 — MEDIUM source-map qualification; implementation-blocking if misunderstood.
+Contract:45 says to preserve precedence and validate exact identity/content
+against the durable record. That desired validation is not fully present on
+all current PREPARE paths. request.prepareParticipant:390–408 returns an
+existing PREPARED row; store.readParticipantTransactionRow:172–173 keys only
+transactionId+participantId. bytes.identityRefusalOf:87–96 type-checks epoch
+and commitMode and checks participant derivation; it does not compare those
+fields to the row. apply.prepareOverRow:258–276 verifies carried operation/
+validation digest against the row, not every immutable identity field.
+
+Minimal source-level schedule: PREPARED(t,epoch7); another PREPARE request
+with the same transactionId+participantId but epoch8 reaches the durable-row
+fast path and receives PREPARED. No runtime execution was performed, and the
+legitimate coordinator reachability/trust assumptions must be decided by the
+transaction owner. This is not a demonstrated native regression. Explicitly
+distinguish preserving the durable outcome's precedence from adding/checking
+the new admission binding, and from any broader TX1 identity tightening. Do
+not silently claim full identity validation is unchanged or absorb unrelated
+transaction semantics into the release repair. sessionId is routing context
+in sql-query-engine-participant-wire.js:7–12; do not elevate it to a new
+transaction authority without its owner decision.
+
+C2 — HIGH communication-map gap; blocks a complete implementation contract.
+Contract:43–44 and157–158 require binding preservation through reroute/retry,
+but the map currently ends at the partition/session/proposal owners. The
+existing communication owners must be named as part of this same interaction:
+- query-executor-partition-request-builders.js:createDefaultPartitionRequestBuilder
+  (:78–115) constructs requests from selected executionOptions, including
+  entryId and expectedPartitionVersion but no release binding.
+- query-executor-partition-delivery.js:executeOnPartition creates the existing
+  unknown-outcome redelivery owner (:42–57) and calls buildRequest again at
+  initial delivery (:366) and redirect (:452). A preserved entryId alone
+  cannot preserve an additional authorization binding.
+- sql-query-engine-participant-wire.js:participantTransactionRequestOf
+  (:104–112) copies fixed identity/decision fields; participantEntryIdOf
+  (:122–132) supplies deterministic IDs. It does not currently transport a
+  release binding or sealed operation bytes from a lost leader's local session.
+- partition-write-kernel.js:buildPartitionWriteEntry (:243–258) and
+  partition-service-write-metrics-base.js:applyWrite (:621–680) own ordinary
+  entry construction, pending/result replay and the call into write admission.
+
+Map the initial binding capture point, its exact carried representation and
+all relevant forwarding/rebuild sites; mark absent transport behavior as new.
+Unknown-outcome custody must retain the same immutable request/binding, or
+return typed unavailability, not silently fetch current authorization. The
+direct native request fixtures cannot certify these communication hops.
+
+C3 — HIGH retention/result conflict, now explicitly resolved as a design gate.
+The original draft unconditionally required the original winner identity,
+while allowing old authority history retirement. Counterexample: A advances
+L0→L1; after L2, A's history is retired; previously unseen B(expectedL0) first
+arrives. Expected-version monotonicity can refuse B safely but cannot recover
+A's erased identity. Current document:47,128–133 correctly distinguishes this
+from replay of a previously recorded loser: newly observed stale requests
+must retain typed unavailable historical attribution, never today's winner.
+The result shape remains an owner decision. No infinite winner-history
+retention is justified merely to populate diagnostics.
+
+C4 — MEDIUM capacity specification precision; finite bound is not yet proved.
+Contract:103–120 is a proposed accounting shape, not a derived bound. Q is
+expressly unproved, which is honest. Define R as maximum encoded bytes PER
+pinned binding if using P*R; the present 'count/bytes' wording could instead
+mean a total byte budget. State whether Q includes reserved closure/recovery
+requests or add their finite contributions separately. Count input/result
+maximum lengths and retained ownership records, not only operation payloads.
+The 256-operation/1MiB stage limit at transaction-constants.js:137–140 does not
+bound identities, request outcomes, decisions, or snapshot overhead.
+
+Minimal capacity schedule still requiring proof: normal history fills its
+budget; several already-submitted requests remain unapplied; leader changes;
+closure and settlement arrive. They need reserved outcome space even if the
+normal requests later lose their CAS and still need stable refusal results.
+Local pending-map size cannot prove the global outstanding bound. The document
+correctly does not claim a total database cap; native terminal TX1 history
+remains separately unbounded. The ordinary-history budget must not silently
+authorize release to retire transaction-owner rows.
+
+C5 — MEDIUM result/retry vocabulary choice not yet pinned.
+Contract:112–118 needs an explicit distinction between preproposal retryable
+backpressure (no accepted command/application outcome yet) and a committed
+deterministic capacity refusal (immutable exact outcome). Otherwise 'exact
+replay returns the same result' and 'retryable admission' can be interpreted
+as contradictory. Current write kernel already distinguishes unproposed
+refusals from handed-to-consensus UNKNOWN (write-kernel.js:92–112,135–147;
+raft-write-commit.js:441–457). Preserve those knowledge states and existing
+retry ownership; do not introduce a new result authority or retry driver.
+
+C6 — HIGH known protocol gates, correctly explicit; still not implementation-ready.
+Contract:62–83 leaves HOLD closed→closed behavior, initial legacy/default state,
+and canonical D0 proof binding undecided. A valid expected APPROVED→HELD CAS
+without transaction-drain precondition is a coherent candidate: closure must
+be possible while work exists. Yet the exact command authorization, history
+capacity reserve and fail-closed recovery behavior still need a typed decision.
+APPROVE's D2-verifiable prefix/membership/origin/schema facts must be separated
+from D0 remote/query evidence and D3 live build/lifetime observations. A local
+service reading cannot become a deterministic replicated predicate. Existing
+releaseCensusDefect/isReleaseDrained (release-contract.js:116–191) contains
+local and cross-owner facts; it cannot simply be called unchanged from D2.
+
+C7 — HIGH known snapshot gate, source-verified and correctly explicit.
+prepareRaftRsCheckpointCopy at snapshot-checkpoint-store.js:262–275 invokes
+scrubRaftRsCopy:302–318, which drops all non-SQLite tables except
+raft_rs_peer_identity. It does not preserve participant/outcome/release
+application state. Snapshot-generation pins/sweep in snapshot-retention.js
+are a separate concern. Contract:48,134–137,165–166 correctly requires owner
+closure of application-image provenance/format and atomic state recovery;
+SQLite serialize byte count is not proof. This blocks restart/learner-transfer
+completeness, not just a future performance optimization.
+
+C8 — LOW source-anchor defects resolved before this hash.
+runCutover, applyPrepare and applyDecision were not the actual functions. They
+are now runCutoverAttempt (cutover.js:245), applyParticipantPrepare
+(transaction-apply.js:293), and applyParticipantDecision (:530). Other named
+function anchors were verified to exist; the outcome adapter precedent is real
+(coordinator-settlement.js:35–44,73–99), without deciding its schema suitability.
+
+F1–F8 AUDIT
+
+F1: RESOLVED SEMANTIC DIRECTION, implementation absent. Contract:43 preserves
+WeakMap BEGIN/session (session.js:28,51–66), adds an explicitly new binding,
+and keeps first durable PREPARE at the existing command/apply boundary.
+F2: RESOLVED SEMANTIC DIRECTION. Contract:42,56–75 separates successful state
+transitions from request refusals; no second spent-epoch authority exists.
+Native release command/outcome proof remains unavailable.
+F3: REQUIRED INVARIANT, NOT NATIVE PROOF. Contract:43–44,76–79 forbids silently
+adopting later authorization. C1/C2 and the absent committed HOLD schedule
+must be closed before claiming byte-preservation through real reroute.
+F4: REQUIRED RESULT SEMANTICS, storage/shape pending. Contract:47,52–55 and
+C3 distinguish exact historical outcome from current authority, protect
+winner attribution and forbid new annotations on replay. Existing generic
+statement entry-key lookup is not enough without canonical content binding.
+F5: POSITION DIRECTION SOUND, HOLD PROTOCOL OPEN. Native port/runtime supplies
+the actual index/term; contract:56–83 explicitly rejects submission-index
+authority. C6 remains a real owner decision, not a passed native test.
+F6: FALSE FOUR-ROW CLAIM REMOVED. Contract:89–137 distinguishes one native
+nonterminal obligation from sequential history. C3–C5/C7 remain proof gates;
+the finite accounting formula alone is not a capacity guarantee.
+F7: NATIVE TERMINAL OWNER PRESERVED. Apply DECISION_OVER_STATE at:478–499
+retains first terminal outcome. Current native controls cover exact request
+replay/opposite refusal, not every applied-log/crash replay path.
+F8: NATIVE IDENTITY/LOCAL-ELIGIBILITY OWNER PRESERVED. releaseIdentityValid
+and recipient generation/status fences remain necessary. Contract:25,60–75
+does not copy the model's foreign-identity gate. No new native wrong-identity,
+membership-change or divergent-D3/D2 witness has been executed in this packet.
+
+CATEGORY CHECKLIST DISPOSITION
+
+Admission/gating (items1–7): source map and rules52–79 identify the intended
+enforcer and actual-prefix input; existing first-PREPARE mismatch is explicit.
+No new classifier/budget/reason code is implemented. C5 requires typed
+transient versus committed refusal. C6 requires proof of the observable HOLD
+release event and freshness checks. New result diagnostics must bind the actual
+request/blocked partition, never inferred current authority (C3). No measured
+release latency or capacity behavior is claimed.
+
+Recovery/replay (items1–5): contract45,52–55 retains authoritative durable
+outcomes before fresh admission; no live-state reconstruction/registry overwrite
+was introduced. Restart-versus-live discrimination, lost enlistment recovery,
+duplicate applied-command replay and snapshot restoration remain C7/explicit
+native gaps. Retirement produces historical-unavailable, never absence proof
+(contract122–137); C3 covers missing historical winner evidence.
+
+Harness fidelity (items1–6): the prior independent-fixture-review.txt, including
+its style-only content addendum, covers actual fixture byte hashes and all
+setup/vacuity constraints. Contract43–48 correctly narrows local PAUSE and
+request replay claims. Three same-node native replicas and one RF1 control
+service do not supply cross-host or QueryEngine routing proof; no runtime
+result is asserted by this independent contract review.
+
+Owner interaction (items1–10): D0 request preparation, D1 committed position,
+D2 release/transaction application, D3 local serving and D4 result observation
+are separated at contract19–32. This defines no five-way competing authority.
+Global decisions remain query-owned (46); local PAUSE is not rollback (84–85).
+C1/C2 require the exact identity and communication interaction to be named,
+not hidden in adapters or callers. Paired exclusion/settlement controls are
+appropriate but cannot prove stale→fresh reauthorization or capacity/wake
+liveness. Pressure/reserved closure, canonical event-driven retry, and exact
+result authority remain C3–C6. No fixed/reverted treatment is claimed.
+Existing impact contracts must cover the whole later unit (150–172), not
+independent green fragments; generated registration checks are root's scope.
+
+Concurrency/serialization (items1–5): existing synchronous session/reservation
+gate (session.js:127–128; request.js:306–308) justifies at most one nonterminal
+participant, not one unresolved release request. Expected-state CAS at D2 is
+the proposed single winner; no async diagnostic snapshot may replace it.
+Requests submitted before leadership change, their credit custody, timer
+reentrancy and closure under pressure remain C4/C6. No new mutex/claim/retry
+implementation was introduced, so none is certified by this document.
+
+Transport/delivery (items1–5): contract21–26 correctly separates commitment,
+application outcome and observation; ACK cannot establish success. C2 names
+the missing existing request/rebuild/unknown-redelivery owners. Current TX1
+participantAnswerSnapshotOf explicitly rejects noHandler (wire.js:142–155).
+No new release answer schema/classification, late-response custody or
+undeliverable behavior is implemented. The narrow native loopback fixture
+must not be treated as the full message-router contract.
+
+Retry/re-drive (all7 items):
+1. Retry-must-fire: no new retry registration exists. The proposed credit
+   scheme must use the existing owner queue, naming the event that frees
+   credits/wakes admission; the contract cannot yet prove this path.
+2. Frozen bound: no new loop/row evidence bound is selected; finite Q and
+   credit custody are explicitly open at119–120. Unreadable state cannot
+   renew a deadline or be interpreted as no outstanding obligation.
+3. Loud stop: C5 requires distinct typed not-admitted, unknown, committed
+   refusal and historical-unavailable outcomes; exact code shapes remain open.
+4. Mutual suppression: closure/settlement cannot wait for normal history
+   capacity while normal history waits for closure/settlement (112–118).
+   Reserved credits require an actual custody/progression proof, not priority.
+5. Storm ceiling: finite request count/bytes is not yet a bound on attempts or
+   log volume. The eventual existing retry owner's cadence/budget/concurrency
+   must bound work; no new loop or counter may be added just to make it green.
+6. Duplicate effects: exact replay must be no-op/retained result (52–55,113),
+   with conflicting contents excluded and unavailable winner handled by C3.
+7. Reset semantics: transport success must not renew authority, request identity,
+   credit lifetime or retry budget. C2/C5 require canonical forwarding and
+   result classification; no such new reset behavior is approved here.
+
+READY FOR OWNER DECISION
+
+The five-layer direction and accepted semantics are ready to carry forward.
+The owner must now select one explicit canonical binding/result schema,
+initial/HOLD transition table, D0 proof contract, communication custody rule,
+finite credit/retirement policy and application snapshot/recovery contract.
+Those decisions belong to one complete partition release/HOLD→new work→durable
+outcome interaction through the existing owners. C1 must be scoped as either
+an explicit new binding/identity guarantee or a separately recorded TX1 issue,
+not silently repaired as a downstream symptom.
+
+Native local-PAUSE and retention evidence can inform that decision. They cannot
+replace it, prove the missing committed command, or activate the successor.
+Successor unsealed/unactivated; shared-control-wave HELD; runner/TAP PARKED;
+PR122 rejected. No rejected-model greenification or historical rewrite.
+
+CONTENT-BOUND CONTRACT ADDENDUM — REVIEWED QUALIFICATIONS
+
+Re-read the full updated OWNER-CONTRACT.md:
+SHA256 498617b9fd4a9dbef353319530362bd4ab7cce036969492afc23c4ebf2b9e269.
+
+C1 is now expressly qualified in the replay map and separate source-gap
+paragraph: complete identity validation is a change where missing, the native
+wrong-epoch request witness has a limited trust-boundary claim, and no unrelated
+TX1 repair is authorized. C2 now maps the actual query request builder,
+participant-wire builder and partition delivery owner, names the new immutable
+field, and leaves capture/forwarding/unknown-custody decisions open. The new
+participantTransactionRequestOf path was corrected to its real wire module.
+C3's retired-winner attribution distinction remains intact. C4 now defines R
+as per-binding maximum bytes and includes critical reserved work within Q or
+an additional explicit budget. C5 now distinguishes preproposal backpressure
+observation from committed immutable capacity refusal. C6/C7 stay explicit
+HOLD gates; F1–F8 classifications and single-owner boundaries remain coherent.
+
+Further concrete C4 proof obligation: HELD(v) fills H/B with current-version
+refusal outcomes; those cannot retire until version advancement; closed→closed
+HOLD refuses; APPROVE(v→v+1) then cannot be admitted if treated as ordinary
+history admission. The system remains safely closed but cannot recover even
+after transaction drain. The finite critical reserve must cover the authorized
+recovery/version-advancing transition too, or the owner must establish a bounded
+anti-replay retirement rule within HELD. Protecting closure alone is insufficient.
+This is a counterexample to an incomplete reservation policy, not a claim
+that current production has this unimplemented release-state machine.
+
+APPROVE this document for preservation as the explicit, source-mapped HOLD
+decision packet. HOLD remains the verdict for implementing/sealing its
+unclosed protocol. Runtime classification is still pending; no tests executed.

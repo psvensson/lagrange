@@ -1,0 +1,1 @@
+{"file":"test/partition/participant-release-prepared-settlement-native.test.js","attempt":1,"ok":false,"assertions":1,"durationMs":17067,"retriedOnce":false,"firstFailureLine":"not ok 1 - durable PREPARE replay and recorded coordinator ROLLBACK settle while admission is closed"}

@@ -1,0 +1,11 @@
+REPRODUCED invalid-next-epoch-is-reusable; builtinViolations=0
+REPRODUCED T5-CLOSED-cell-disagrees-with-current-epoch-derivation; builtinViolations=0
+REPRODUCED stale-PREPARE-silently-adopts-current-epoch; builtinViolations=0
+REPRODUCED D4-losing-request-returns-requested-approval; builtinViolations=0
+REPRODUCED D4-census-refusal-reported-as-approval; builtinViolations=0
+REPRODUCED T6-accepts-HOLD-with-no-census; builtinViolations=0
+REPRODUCED submit-index-is-not-committed-position-census-check; builtinViolations=0
+REPRODUCED all-old-rows-pinned-exceeds-retention-bound; builtinViolations=0
+REPRODUCED model-overwrites-terminal-transaction-decision; builtinViolations=0
+REPRODUCED D3-does-not-compare-command-identity; builtinViolations=0
+REPRODUCED row-budget-does-not-bound-outcomes-or-annotations; builtinViolations=0

@@ -1,0 +1,1333 @@
+{
+  "meaning": "Reproduced counterexamples, not a passing specification",
+  "findings": [
+    {
+      "id": "invalid-next-epoch-is-reusable",
+      "observed": {
+        "afterInvalid": {
+          "L": 0,
+          "W": 0,
+          "gate": "CLOSED",
+          "rows": [],
+          "txn": [],
+          "annotations": [
+            {
+              "kind": "REFUSED_APPLY",
+              "epoch": 1,
+              "reason": "identity_invalid"
+            }
+          ],
+          "effects": [],
+          "appliedEntryCount": 1
+        },
+        "afterValid": {
+          "L": 1,
+          "W": 0,
+          "gate": "OPEN",
+          "rows": [
+            {
+              "epoch": 1,
+              "type": "DECISION",
+              "disposition": "APPROVED",
+              "entryId": "e2"
+            }
+          ],
+          "txn": [],
+          "annotations": [
+            {
+              "kind": "REFUSED_APPLY",
+              "epoch": 1,
+              "reason": "identity_invalid"
+            }
+          ],
+          "effects": [],
+          "appliedEntryCount": 2
+        }
+      },
+      "trace": [
+        {
+          "t": "T5",
+          "r": "r1",
+          "E": 1,
+          "out": "REFUSED_APPLY"
+        },
+        {
+          "t": "T5",
+          "r": "r2",
+          "E": 1,
+          "out": "REFUSED_APPLY"
+        },
+        {
+          "t": "T1",
+          "r": "r1",
+          "E": 1,
+          "out": "APPROVED"
+        },
+        {
+          "t": "T1",
+          "r": "r2",
+          "E": 1,
+          "out": "APPROVED"
+        }
+      ],
+      "state": {
+        "L": 1,
+        "W": 0,
+        "gate": "OPEN",
+        "rows": [
+          {
+            "epoch": 1,
+            "type": "DECISION",
+            "disposition": "APPROVED",
+            "entryId": "e2"
+          }
+        ],
+        "txn": [],
+        "annotations": [
+          {
+            "kind": "REFUSED_APPLY",
+            "epoch": 1,
+            "reason": "identity_invalid"
+          }
+        ],
+        "effects": [],
+        "appliedEntryCount": 2
+      },
+      "builtinViolations": [],
+      "limit": "Abstract-model result only; no native execution."
+    },
+    {
+      "id": "T5-CLOSED-cell-disagrees-with-current-epoch-derivation",
+      "observed": {
+        "L": 1,
+        "W": 0,
+        "gate": "OPEN",
+        "rows": [
+          {
+            "epoch": 1,
+            "type": "DECISION",
+            "disposition": "APPROVED",
+            "entryId": "e1"
+          }
+        ],
+        "txn": [],
+        "annotations": [
+          {
+            "kind": "REFUSED_APPLY",
+            "epoch": 2,
+            "reason": "identity_invalid"
+          }
+        ],
+        "effects": [],
+        "appliedEntryCount": 2
+      },
+      "trace": [
+        {
+          "t": "T1",
+          "r": "r1",
+          "E": 1,
+          "out": "APPROVED"
+        },
+        {
+          "t": "T1",
+          "r": "r2",
+          "E": 1,
+          "out": "APPROVED"
+        },
+        {
+          "t": "T5",
+          "r": "r1",
+          "E": 2,
+          "out": "REFUSED_APPLY"
+        },
+        {
+          "t": "T5",
+          "r": "r2",
+          "E": 2,
+          "out": "REFUSED_APPLY"
+        }
+      ],
+      "state": {
+        "L": 1,
+        "W": 0,
+        "gate": "OPEN",
+        "rows": [
+          {
+            "epoch": 1,
+            "type": "DECISION",
+            "disposition": "APPROVED",
+            "entryId": "e1"
+          }
+        ],
+        "txn": [],
+        "annotations": [
+          {
+            "kind": "REFUSED_APPLY",
+            "epoch": 2,
+            "reason": "identity_invalid"
+          }
+        ],
+        "effects": [],
+        "appliedEntryCount": 2
+      },
+      "builtinViolations": [],
+      "limit": "Abstract-model result only; no native execution."
+    },
+    {
+      "id": "stale-PREPARE-silently-adopts-current-epoch",
+      "observed": {
+        "stagedEpoch": 3,
+        "stagedAt": 4,
+        "preparedIndex": 4,
+        "decided": null
+      },
+      "trace": [
+        {
+          "t": "T1",
+          "r": "r1",
+          "E": 1,
+          "out": "APPROVED"
+        },
+        {
+          "t": "T1",
+          "r": "r2",
+          "E": 1,
+          "out": "APPROVED"
+        },
+        {
+          "t": "T6",
+          "r": "r1",
+          "E": 2,
+          "out": "HOLD"
+        },
+        {
+          "t": "T6",
+          "r": "r2",
+          "E": 2,
+          "out": "HOLD"
+        },
+        {
+          "t": "T1",
+          "r": "r1",
+          "E": 3,
+          "out": "APPROVED"
+        },
+        {
+          "t": "T1",
+          "r": "r2",
+          "E": 3,
+          "out": "APPROVED"
+        },
+        {
+          "t": "T7",
+          "r": "r1",
+          "out": "PREPARE_APPLIED",
+          "txn": "old-unstaged"
+        },
+        {
+          "t": "T7",
+          "r": "r2",
+          "out": "PREPARE_APPLIED",
+          "txn": "old-unstaged"
+        }
+      ],
+      "state": {
+        "L": 3,
+        "W": 0,
+        "gate": "OPEN",
+        "rows": [
+          {
+            "epoch": 1,
+            "type": "DECISION",
+            "disposition": "APPROVED",
+            "entryId": "e1"
+          },
+          {
+            "epoch": 2,
+            "type": "HOLD",
+            "entryId": "e2"
+          },
+          {
+            "epoch": 3,
+            "type": "DECISION",
+            "disposition": "APPROVED",
+            "entryId": "e3"
+          }
+        ],
+        "txn": [
+          [
+            "old-unstaged",
+            {
+              "stagedEpoch": 3,
+              "stagedAt": 4,
+              "preparedIndex": 4,
+              "decided": null
+            }
+          ]
+        ],
+        "annotations": [],
+        "effects": [],
+        "appliedEntryCount": 4
+      },
+      "builtinViolations": [],
+      "limit": "Abstract-model result only; no native execution."
+    },
+    {
+      "id": "D4-losing-request-returns-requested-approval",
+      "observed": {
+        "loser": "e2",
+        "answer": {
+          "requestId": "e2",
+          "prefix": 2,
+          "bytes": "{\"type\":\"RELEASE_DECISION\",\"epoch\":1,\"disposition\":\"APPROVED\",\"identity\":{\"partitionId\":\"p1\",\"protocolVersion\":\"v1\",\"targetBuildDigest\":\"build-a\",\"configurationKey\":\"cfg-1\",\"membershipGenerationIndex\":3},\"census\":{\"stateDigest\":\"{\\\"l\\\":1,\\\"top\\\":\\\"{\\\\\\\"type\\\\\\\":\\\\\\\"RELEASE_DECISION\\\\\\\",\\\\\\\"epoch\\\\\\\":1,\\\\\\\"disposition\\\\\\\":\\\\\\\"APPROVED\\\\\\\",\\\\\\\"identity\\\\\\\":{\\\\\\\"partitionId\\\\\\\":\\\\\\\"p1\\\\\\\",\\\\\\\"protocolVersion\\\\\\\":\\\\\\\"v1\\\\\\\",\\\\\\\"targetBuildDigest\\\\\\\":\\\\\\\"build-a\\\\\\\",\\\\\\\"configurationKey\\\\\\\":\\\\\\\"cfg-1\\\\\\\",\\\\\\\"membershipGenerationIndex\\\\\\\":3},\\\\\\\"census\\\\\\\":{\\\\\\\"stateDigest\\\\\\\":\\\\\\\"{\\\\\\\\\\\\\\\"l\\\\\\\\\\\\\\\":0,\\\\\\\\\\\\\\\"top\\\\\\\\\\\\\\\":null,\\\\\\\\\\\\\\\"obligations\\\\\\\\\\\\\\\":\\\\\\\\\\\\\\\"[]\\\\\\\\\\\\\\\"}\\\\\\\"}}\\\",\\\"obligations\\\":\\\"[]\\\"}\"}}",
+          "class": "COMMITTED",
+          "epoch": 1,
+          "disposition": "APPROVED",
+          "applied": true
+        }
+      },
+      "trace": [
+        {
+          "t": "T1",
+          "r": "r1",
+          "E": 1,
+          "out": "APPROVED"
+        },
+        {
+          "t": "T1",
+          "r": "r2",
+          "E": 1,
+          "out": "APPROVED"
+        },
+        {
+          "t": "T3",
+          "r": "r1",
+          "E": 1,
+          "out": "EPOCH_CONFLICT"
+        },
+        {
+          "t": "T3",
+          "r": "r2",
+          "E": 1,
+          "out": "EPOCH_CONFLICT"
+        }
+      ],
+      "state": {
+        "L": 1,
+        "W": 0,
+        "gate": "OPEN",
+        "rows": [
+          {
+            "epoch": 1,
+            "type": "DECISION",
+            "disposition": "APPROVED",
+            "entryId": "e1"
+          }
+        ],
+        "txn": [],
+        "annotations": [
+          {
+            "kind": "EPOCH_CONFLICT",
+            "epoch": 1,
+            "reason": "epoch-spent",
+            "winner": {
+              "epoch": 1,
+              "kind": "DECISION",
+              "disposition": "APPROVED"
+            }
+          }
+        ],
+        "effects": [],
+        "appliedEntryCount": 2
+      },
+      "builtinViolations": [],
+      "limit": "Abstract-model result only; no native execution."
+    },
+    {
+      "id": "D4-census-refusal-reported-as-approval",
+      "observed": {
+        "requestId": "e3",
+        "prefix": 3,
+        "bytes": "{\"type\":\"RELEASE_DECISION\",\"epoch\":3,\"disposition\":\"APPROVED\",\"identity\":{\"partitionId\":\"p1\",\"protocolVersion\":\"v1\",\"targetBuildDigest\":\"build-a\",\"configurationKey\":\"cfg-1\",\"membershipGenerationIndex\":3},\"census\":{\"stateDigest\":\"{\\\"l\\\":1,\\\"top\\\":\\\"{\\\\\\\"type\\\\\\\":\\\\\\\"RELEASE_DECISION\\\\\\\",\\\\\\\"epoch\\\\\\\":1,\\\\\\\"disposition\\\\\\\":\\\\\\\"APPROVED\\\\\\\",\\\\\\\"identity\\\\\\\":{\\\\\\\"partitionId\\\\\\\":\\\\\\\"p1\\\\\\\",\\\\\\\"protocolVersion\\\\\\\":\\\\\\\"v1\\\\\\\",\\\\\\\"targetBuildDigest\\\\\\\":\\\\\\\"build-a\\\\\\\",\\\\\\\"configurationKey\\\\\\\":\\\\\\\"cfg-1\\\\\\\",\\\\\\\"membershipGenerationIndex\\\\\\\":3},\\\\\\\"census\\\\\\\":{\\\\\\\"stateDigest\\\\\\\":\\\\\\\"{\\\\\\\\\\\\\\\"l\\\\\\\\\\\\\\\":0,\\\\\\\\\\\\\\\"top\\\\\\\\\\\\\\\":null,\\\\\\\\\\\\\\\"obligations\\\\\\\\\\\\\\\":\\\\\\\\\\\\\\\"[]\\\\\\\\\\\\\\\"}\\\\\\\"}}\\\",\\\"obligations\\\":\\\"[]\\\"}\"}}",
+        "class": "COMMITTED",
+        "epoch": 3,
+        "disposition": "APPROVED",
+        "applied": true
+      },
+      "trace": [
+        {
+          "t": "T1",
+          "r": "r1",
+          "E": 1,
+          "out": "APPROVED"
+        },
+        {
+          "t": "T1",
+          "r": "r2",
+          "E": 1,
+          "out": "APPROVED"
+        },
+        {
+          "t": "T6",
+          "r": "r1",
+          "E": 2,
+          "out": "HOLD"
+        },
+        {
+          "t": "T6",
+          "r": "r2",
+          "E": 2,
+          "out": "HOLD"
+        },
+        {
+          "t": "T1",
+          "r": "r1",
+          "E": 3,
+          "out": "CENSUS_STALE"
+        },
+        {
+          "t": "T1",
+          "r": "r2",
+          "E": 3,
+          "out": "CENSUS_STALE"
+        }
+      ],
+      "state": {
+        "L": 2,
+        "W": 0,
+        "gate": "CLOSED",
+        "rows": [
+          {
+            "epoch": 1,
+            "type": "DECISION",
+            "disposition": "APPROVED",
+            "entryId": "e1"
+          },
+          {
+            "epoch": 2,
+            "type": "HOLD",
+            "entryId": "e2"
+          }
+        ],
+        "txn": [],
+        "annotations": [
+          {
+            "kind": "REFUSED_APPLY",
+            "epoch": 3,
+            "reason": "census_stale"
+          }
+        ],
+        "effects": [],
+        "appliedEntryCount": 3
+      },
+      "builtinViolations": [],
+      "limit": "Abstract-model result only; no native execution."
+    },
+    {
+      "id": "T6-accepts-HOLD-with-no-census",
+      "observed": {
+        "type": "RELEASE_HOLD",
+        "epoch": 2,
+        "supersedes": 1
+      },
+      "trace": [
+        {
+          "t": "T1",
+          "r": "r1",
+          "E": 1,
+          "out": "APPROVED"
+        },
+        {
+          "t": "T1",
+          "r": "r2",
+          "E": 1,
+          "out": "APPROVED"
+        },
+        {
+          "t": "T6",
+          "r": "r1",
+          "E": 2,
+          "out": "HOLD"
+        },
+        {
+          "t": "T6",
+          "r": "r2",
+          "E": 2,
+          "out": "HOLD"
+        }
+      ],
+      "state": {
+        "L": 2,
+        "W": 0,
+        "gate": "CLOSED",
+        "rows": [
+          {
+            "epoch": 1,
+            "type": "DECISION",
+            "disposition": "APPROVED",
+            "entryId": "e1"
+          },
+          {
+            "epoch": 2,
+            "type": "HOLD",
+            "entryId": "e2"
+          }
+        ],
+        "txn": [],
+        "annotations": [],
+        "effects": [],
+        "appliedEntryCount": 2
+      },
+      "builtinViolations": [],
+      "limit": "Abstract-model result only; no native execution."
+    },
+    {
+      "id": "submit-index-is-not-committed-position-census-check",
+      "observed": {
+        "pendingIndex": 2,
+        "actualLogPosition": 3,
+        "censusMatchesActualPreState": false,
+        "accepted": "APPROVED"
+      },
+      "trace": [
+        {
+          "t": "T1",
+          "r": "r1",
+          "E": 1,
+          "out": "APPROVED"
+        },
+        {
+          "t": "T1",
+          "r": "r2",
+          "E": 1,
+          "out": "APPROVED"
+        },
+        {
+          "t": "T7",
+          "r": "r1",
+          "out": "STAGED",
+          "txn": "intervening-work"
+        },
+        {
+          "t": "T7",
+          "r": "r2",
+          "out": "STAGED",
+          "txn": "intervening-work"
+        },
+        {
+          "t": "T1",
+          "r": "r1",
+          "E": 2,
+          "out": "APPROVED"
+        },
+        {
+          "t": "T1",
+          "r": "r2",
+          "E": 2,
+          "out": "APPROVED"
+        }
+      ],
+      "state": {
+        "L": 2,
+        "W": 0,
+        "gate": "OPEN",
+        "rows": [
+          {
+            "epoch": 1,
+            "type": "DECISION",
+            "disposition": "APPROVED",
+            "entryId": "e1"
+          },
+          {
+            "epoch": 2,
+            "type": "DECISION",
+            "disposition": "APPROVED",
+            "entryId": "e2"
+          }
+        ],
+        "txn": [
+          [
+            "intervening-work",
+            {
+              "stagedEpoch": 1,
+              "stagedAt": 2,
+              "preparedIndex": null,
+              "decided": null
+            }
+          ]
+        ],
+        "annotations": [],
+        "effects": [],
+        "appliedEntryCount": 3
+      },
+      "builtinViolations": [],
+      "limit": "Abstract-model result only; no native execution."
+    },
+    {
+      "id": "all-old-rows-pinned-exceeds-retention-bound",
+      "observed": {
+        "bound": 4,
+        "retained": 5
+      },
+      "trace": [
+        {
+          "t": "T1",
+          "r": "r1",
+          "E": 1,
+          "out": "APPROVED"
+        },
+        {
+          "t": "T1",
+          "r": "r2",
+          "E": 1,
+          "out": "APPROVED"
+        },
+        {
+          "t": "T7",
+          "r": "r1",
+          "out": "STAGED",
+          "txn": "unresolved-1"
+        },
+        {
+          "t": "T7",
+          "r": "r2",
+          "out": "STAGED",
+          "txn": "unresolved-1"
+        },
+        {
+          "t": "T1",
+          "r": "r1",
+          "E": 2,
+          "out": "APPROVED"
+        },
+        {
+          "t": "T1",
+          "r": "r2",
+          "E": 2,
+          "out": "APPROVED"
+        },
+        {
+          "t": "T7",
+          "r": "r1",
+          "out": "STAGED",
+          "txn": "unresolved-2"
+        },
+        {
+          "t": "T7",
+          "r": "r2",
+          "out": "STAGED",
+          "txn": "unresolved-2"
+        },
+        {
+          "t": "T1",
+          "r": "r1",
+          "E": 3,
+          "out": "APPROVED"
+        },
+        {
+          "t": "T1",
+          "r": "r2",
+          "E": 3,
+          "out": "APPROVED"
+        },
+        {
+          "t": "T7",
+          "r": "r1",
+          "out": "STAGED",
+          "txn": "unresolved-3"
+        },
+        {
+          "t": "T7",
+          "r": "r2",
+          "out": "STAGED",
+          "txn": "unresolved-3"
+        },
+        {
+          "t": "T1",
+          "r": "r1",
+          "E": 4,
+          "out": "APPROVED"
+        },
+        {
+          "t": "T1",
+          "r": "r2",
+          "E": 4,
+          "out": "APPROVED"
+        },
+        {
+          "t": "T7",
+          "r": "r1",
+          "out": "STAGED",
+          "txn": "unresolved-4"
+        },
+        {
+          "t": "T7",
+          "r": "r2",
+          "out": "STAGED",
+          "txn": "unresolved-4"
+        },
+        {
+          "t": "T6",
+          "r": "r1",
+          "E": 5,
+          "out": "HOLD"
+        },
+        {
+          "t": "T6",
+          "r": "r2",
+          "E": 5,
+          "out": "HOLD"
+        }
+      ],
+      "state": {
+        "L": 5,
+        "W": 0,
+        "gate": "CLOSED",
+        "rows": [
+          {
+            "epoch": 1,
+            "type": "DECISION",
+            "disposition": "APPROVED",
+            "entryId": "e1"
+          },
+          {
+            "epoch": 2,
+            "type": "DECISION",
+            "disposition": "APPROVED",
+            "entryId": "e3"
+          },
+          {
+            "epoch": 3,
+            "type": "DECISION",
+            "disposition": "APPROVED",
+            "entryId": "e5"
+          },
+          {
+            "epoch": 4,
+            "type": "DECISION",
+            "disposition": "APPROVED",
+            "entryId": "e7"
+          },
+          {
+            "epoch": 5,
+            "type": "HOLD",
+            "entryId": "e9"
+          }
+        ],
+        "txn": [
+          [
+            "unresolved-1",
+            {
+              "stagedEpoch": 1,
+              "stagedAt": 2,
+              "preparedIndex": null,
+              "decided": null
+            }
+          ],
+          [
+            "unresolved-2",
+            {
+              "stagedEpoch": 2,
+              "stagedAt": 4,
+              "preparedIndex": null,
+              "decided": null
+            }
+          ],
+          [
+            "unresolved-3",
+            {
+              "stagedEpoch": 3,
+              "stagedAt": 6,
+              "preparedIndex": null,
+              "decided": null
+            }
+          ],
+          [
+            "unresolved-4",
+            {
+              "stagedEpoch": 4,
+              "stagedAt": 8,
+              "preparedIndex": null,
+              "decided": null
+            }
+          ]
+        ],
+        "annotations": [],
+        "effects": [],
+        "appliedEntryCount": 9
+      },
+      "builtinViolations": [],
+      "limit": "Reachable in the model. Native TX1 admits one nonterminal participant per partition and D0 requires drain; this is not evidence that four pinned epochs are native-reachable. A claimed exclusion needs an explicit refinement invariant."
+    },
+    {
+      "id": "model-overwrites-terminal-transaction-decision",
+      "observed": {
+        "stagedEpoch": 1,
+        "stagedAt": 2,
+        "preparedIndex": 3,
+        "decided": {
+          "outcome": "ROLLBACK",
+          "index": 5
+        }
+      },
+      "trace": [
+        {
+          "t": "T1",
+          "r": "r1",
+          "E": 1,
+          "out": "APPROVED"
+        },
+        {
+          "t": "T1",
+          "r": "r2",
+          "E": 1,
+          "out": "APPROVED"
+        },
+        {
+          "t": "T7",
+          "r": "r1",
+          "out": "STAGED",
+          "txn": "t"
+        },
+        {
+          "t": "T7",
+          "r": "r2",
+          "out": "STAGED",
+          "txn": "t"
+        },
+        {
+          "t": "T7",
+          "r": "r1",
+          "out": "PREPARE_SETTLED",
+          "txn": "t"
+        },
+        {
+          "t": "T7",
+          "r": "r2",
+          "out": "PREPARE_SETTLED",
+          "txn": "t"
+        },
+        {
+          "t": "T7",
+          "r": "r1",
+          "out": "DECISION_COMMIT",
+          "txn": "t"
+        },
+        {
+          "t": "T7",
+          "r": "r2",
+          "out": "DECISION_COMMIT",
+          "txn": "t"
+        },
+        {
+          "t": "T7",
+          "r": "r1",
+          "out": "DECISION_ROLLBACK",
+          "txn": "t"
+        },
+        {
+          "t": "T7",
+          "r": "r2",
+          "out": "DECISION_ROLLBACK",
+          "txn": "t"
+        }
+      ],
+      "state": {
+        "L": 1,
+        "W": 0,
+        "gate": "OPEN",
+        "rows": [
+          {
+            "epoch": 1,
+            "type": "DECISION",
+            "disposition": "APPROVED",
+            "entryId": "e1"
+          }
+        ],
+        "txn": [
+          [
+            "t",
+            {
+              "stagedEpoch": 1,
+              "stagedAt": 2,
+              "preparedIndex": 3,
+              "decided": {
+                "outcome": "ROLLBACK",
+                "index": 5
+              }
+            }
+          ]
+        ],
+        "annotations": [],
+        "effects": [],
+        "appliedEntryCount": 5
+      },
+      "builtinViolations": [],
+      "limit": "Model fidelity gap: native transaction owner validates decision digest/binding and refuses conflicting terminal decisions. This does not demonstrate a native defect."
+    },
+    {
+      "id": "D3-does-not-compare-command-identity",
+      "observed": {
+        "L": 1,
+        "W": 0,
+        "gate": "OPEN",
+        "rows": [
+          {
+            "epoch": 1,
+            "type": "DECISION",
+            "disposition": "APPROVED",
+            "entryId": "e1"
+          }
+        ],
+        "txn": [],
+        "annotations": [],
+        "effects": [],
+        "appliedEntryCount": 1
+      },
+      "trace": [
+        {
+          "t": "T1",
+          "r": "r1",
+          "E": 1,
+          "out": "APPROVED"
+        },
+        {
+          "t": "T1",
+          "r": "r2",
+          "E": 1,
+          "out": "APPROVED"
+        }
+      ],
+      "state": {
+        "L": 1,
+        "W": 0,
+        "gate": "OPEN",
+        "rows": [
+          {
+            "epoch": 1,
+            "type": "DECISION",
+            "disposition": "APPROVED",
+            "entryId": "e1"
+          }
+        ],
+        "txn": [],
+        "annotations": [],
+        "effects": [],
+        "appliedEntryCount": 1
+      },
+      "builtinViolations": [],
+      "limit": "Model fidelity gap under fixed membership: structurally valid foreign identity is accepted. Native identity/releaseId validation is outside this model."
+    },
+    {
+      "id": "row-budget-does-not-bound-outcomes-or-annotations",
+      "observed": {
+        "initial": {
+          "L": 1,
+          "W": 0,
+          "gate": "OPEN",
+          "rows": [
+            {
+              "epoch": 1,
+              "type": "DECISION",
+              "disposition": "APPROVED",
+              "entryId": "e1"
+            }
+          ],
+          "txn": [],
+          "annotations": [
+            {
+              "kind": "EPOCH_CONFLICT",
+              "epoch": 1,
+              "reason": "epoch-spent",
+              "winner": {
+                "epoch": 1,
+                "kind": "DECISION",
+                "disposition": "APPROVED"
+              }
+            },
+            {
+              "kind": "EPOCH_CONFLICT",
+              "epoch": 1,
+              "reason": "epoch-spent",
+              "winner": {
+                "epoch": 1,
+                "kind": "DECISION",
+                "disposition": "APPROVED"
+              }
+            },
+            {
+              "kind": "EPOCH_CONFLICT",
+              "epoch": 1,
+              "reason": "epoch-spent",
+              "winner": {
+                "epoch": 1,
+                "kind": "DECISION",
+                "disposition": "APPROVED"
+              }
+            },
+            {
+              "kind": "EPOCH_CONFLICT",
+              "epoch": 1,
+              "reason": "epoch-spent",
+              "winner": {
+                "epoch": 1,
+                "kind": "DECISION",
+                "disposition": "APPROVED"
+              }
+            },
+            {
+              "kind": "EPOCH_CONFLICT",
+              "epoch": 1,
+              "reason": "epoch-spent",
+              "winner": {
+                "epoch": 1,
+                "kind": "DECISION",
+                "disposition": "APPROVED"
+              }
+            },
+            {
+              "kind": "EPOCH_CONFLICT",
+              "epoch": 1,
+              "reason": "epoch-spent",
+              "winner": {
+                "epoch": 1,
+                "kind": "DECISION",
+                "disposition": "APPROVED"
+              }
+            },
+            {
+              "kind": "EPOCH_CONFLICT",
+              "epoch": 1,
+              "reason": "epoch-spent",
+              "winner": {
+                "epoch": 1,
+                "kind": "DECISION",
+                "disposition": "APPROVED"
+              }
+            },
+            {
+              "kind": "EPOCH_CONFLICT",
+              "epoch": 1,
+              "reason": "epoch-spent",
+              "winner": {
+                "epoch": 1,
+                "kind": "DECISION",
+                "disposition": "APPROVED"
+              }
+            }
+          ],
+          "effects": [],
+          "appliedEntryCount": 1
+        },
+        "final": {
+          "L": 1,
+          "W": 0,
+          "gate": "OPEN",
+          "rows": [
+            {
+              "epoch": 1,
+              "type": "DECISION",
+              "disposition": "APPROVED",
+              "entryId": "e1"
+            }
+          ],
+          "txn": [],
+          "annotations": [
+            {
+              "kind": "EPOCH_CONFLICT",
+              "epoch": 1,
+              "reason": "epoch-spent",
+              "winner": {
+                "epoch": 1,
+                "kind": "DECISION",
+                "disposition": "APPROVED"
+              }
+            },
+            {
+              "kind": "EPOCH_CONFLICT",
+              "epoch": 1,
+              "reason": "epoch-spent",
+              "winner": {
+                "epoch": 1,
+                "kind": "DECISION",
+                "disposition": "APPROVED"
+              }
+            },
+            {
+              "kind": "EPOCH_CONFLICT",
+              "epoch": 1,
+              "reason": "epoch-spent",
+              "winner": {
+                "epoch": 1,
+                "kind": "DECISION",
+                "disposition": "APPROVED"
+              }
+            },
+            {
+              "kind": "EPOCH_CONFLICT",
+              "epoch": 1,
+              "reason": "epoch-spent",
+              "winner": {
+                "epoch": 1,
+                "kind": "DECISION",
+                "disposition": "APPROVED"
+              }
+            },
+            {
+              "kind": "EPOCH_CONFLICT",
+              "epoch": 1,
+              "reason": "epoch-spent",
+              "winner": {
+                "epoch": 1,
+                "kind": "DECISION",
+                "disposition": "APPROVED"
+              }
+            },
+            {
+              "kind": "EPOCH_CONFLICT",
+              "epoch": 1,
+              "reason": "epoch-spent",
+              "winner": {
+                "epoch": 1,
+                "kind": "DECISION",
+                "disposition": "APPROVED"
+              }
+            },
+            {
+              "kind": "EPOCH_CONFLICT",
+              "epoch": 1,
+              "reason": "epoch-spent",
+              "winner": {
+                "epoch": 1,
+                "kind": "DECISION",
+                "disposition": "APPROVED"
+              }
+            },
+            {
+              "kind": "EPOCH_CONFLICT",
+              "epoch": 1,
+              "reason": "epoch-spent",
+              "winner": {
+                "epoch": 1,
+                "kind": "DECISION",
+                "disposition": "APPROVED"
+              }
+            }
+          ],
+          "effects": [],
+          "appliedEntryCount": 9
+        }
+      },
+      "trace": [
+        {
+          "t": "T1",
+          "r": "r1",
+          "E": 1,
+          "out": "APPROVED"
+        },
+        {
+          "t": "T1",
+          "r": "r2",
+          "E": 1,
+          "out": "APPROVED"
+        },
+        {
+          "t": "T3",
+          "r": "r1",
+          "E": 1,
+          "out": "EPOCH_CONFLICT"
+        },
+        {
+          "t": "T3",
+          "r": "r2",
+          "E": 1,
+          "out": "EPOCH_CONFLICT"
+        },
+        {
+          "t": "T3",
+          "r": "r1",
+          "E": 1,
+          "out": "EPOCH_CONFLICT"
+        },
+        {
+          "t": "T3",
+          "r": "r2",
+          "E": 1,
+          "out": "EPOCH_CONFLICT"
+        },
+        {
+          "t": "T3",
+          "r": "r1",
+          "E": 1,
+          "out": "EPOCH_CONFLICT"
+        },
+        {
+          "t": "T3",
+          "r": "r2",
+          "E": 1,
+          "out": "EPOCH_CONFLICT"
+        },
+        {
+          "t": "T3",
+          "r": "r1",
+          "E": 1,
+          "out": "EPOCH_CONFLICT"
+        },
+        {
+          "t": "T3",
+          "r": "r2",
+          "E": 1,
+          "out": "EPOCH_CONFLICT"
+        },
+        {
+          "t": "T3",
+          "r": "r1",
+          "E": 1,
+          "out": "EPOCH_CONFLICT"
+        },
+        {
+          "t": "T3",
+          "r": "r2",
+          "E": 1,
+          "out": "EPOCH_CONFLICT"
+        },
+        {
+          "t": "T3",
+          "r": "r1",
+          "E": 1,
+          "out": "EPOCH_CONFLICT"
+        },
+        {
+          "t": "T3",
+          "r": "r2",
+          "E": 1,
+          "out": "EPOCH_CONFLICT"
+        },
+        {
+          "t": "T3",
+          "r": "r1",
+          "E": 1,
+          "out": "EPOCH_CONFLICT"
+        },
+        {
+          "t": "T3",
+          "r": "r2",
+          "E": 1,
+          "out": "EPOCH_CONFLICT"
+        },
+        {
+          "t": "T3",
+          "r": "r1",
+          "E": 1,
+          "out": "EPOCH_CONFLICT"
+        },
+        {
+          "t": "T3",
+          "r": "r2",
+          "E": 1,
+          "out": "EPOCH_CONFLICT"
+        }
+      ],
+      "state": {
+        "L": 1,
+        "W": 0,
+        "gate": "OPEN",
+        "rows": [
+          {
+            "epoch": 1,
+            "type": "DECISION",
+            "disposition": "APPROVED",
+            "entryId": "e1"
+          }
+        ],
+        "txn": [],
+        "annotations": [
+          {
+            "kind": "EPOCH_CONFLICT",
+            "epoch": 1,
+            "reason": "epoch-spent",
+            "winner": {
+              "epoch": 1,
+              "kind": "DECISION",
+              "disposition": "APPROVED"
+            }
+          },
+          {
+            "kind": "EPOCH_CONFLICT",
+            "epoch": 1,
+            "reason": "epoch-spent",
+            "winner": {
+              "epoch": 1,
+              "kind": "DECISION",
+              "disposition": "APPROVED"
+            }
+          },
+          {
+            "kind": "EPOCH_CONFLICT",
+            "epoch": 1,
+            "reason": "epoch-spent",
+            "winner": {
+              "epoch": 1,
+              "kind": "DECISION",
+              "disposition": "APPROVED"
+            }
+          },
+          {
+            "kind": "EPOCH_CONFLICT",
+            "epoch": 1,
+            "reason": "epoch-spent",
+            "winner": {
+              "epoch": 1,
+              "kind": "DECISION",
+              "disposition": "APPROVED"
+            }
+          },
+          {
+            "kind": "EPOCH_CONFLICT",
+            "epoch": 1,
+            "reason": "epoch-spent",
+            "winner": {
+              "epoch": 1,
+              "kind": "DECISION",
+              "disposition": "APPROVED"
+            }
+          },
+          {
+            "kind": "EPOCH_CONFLICT",
+            "epoch": 1,
+            "reason": "epoch-spent",
+            "winner": {
+              "epoch": 1,
+              "kind": "DECISION",
+              "disposition": "APPROVED"
+            }
+          },
+          {
+            "kind": "EPOCH_CONFLICT",
+            "epoch": 1,
+            "reason": "epoch-spent",
+            "winner": {
+              "epoch": 1,
+              "kind": "DECISION",
+              "disposition": "APPROVED"
+            }
+          },
+          {
+            "kind": "EPOCH_CONFLICT",
+            "epoch": 1,
+            "reason": "epoch-spent",
+            "winner": {
+              "epoch": 1,
+              "kind": "DECISION",
+              "disposition": "APPROVED"
+            }
+          }
+        ],
+        "effects": [],
+        "appliedEntryCount": 9
+      },
+      "builtinViolations": [],
+      "limit": "Model collections grow; annotations are described as replicated state. Proof-only log/trace collections are not counted as production storage. No native byte/retention budget is specified."
+    }
+  ]
+}

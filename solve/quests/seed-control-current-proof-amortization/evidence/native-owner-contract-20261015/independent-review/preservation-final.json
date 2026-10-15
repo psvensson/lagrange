@@ -1,0 +1,13 @@
+{
+  "checkedAt": "2026-10-15T09:12:29.285944+00:00",
+  "reviewHead": "bde70cec74b8eb8e8db17d0d50a432102947d6d4",
+  "reviewTrackedAndUntrackedStatus": "",
+  "sharedHead": "0996d7576516af24f5f4d3e1e9aee37c775aabae",
+  "sharedBranch": "integrate/rs-raft-2026-09-30",
+  "sharedStatusBytesUnchanged": true,
+  "sharedStagedPatchBytesUnchanged": true,
+  "stagedPatchSha256": "0b2ea79142a13f4dcada523f01108fbd8a4809492838e23f7a0246a7159953fc",
+  "successorQuestDirectoryExists": false,
+  "sourceChangesMade": false,
+  "statusComparison": "porcelain=v2 --branch, same format as before; after.txt is also retained in v1 form"
+}

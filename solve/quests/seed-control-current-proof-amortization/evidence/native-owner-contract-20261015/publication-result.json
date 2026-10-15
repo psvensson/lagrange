@@ -1,0 +1,19 @@
+{
+  "id": "seed-control-current-proof-amortization",
+  "uploaded": {
+    "sha256": "550f0e0a7fbb5ded309206d60474567bd428ddfde808c99f0b8b4a2691783bf1",
+    "bytes": 229948,
+    "asset": "seed-control-current-proof-amortization--LAGRANGE_NATIVE_RELEASE_FENCING_OWNER_PACKET_20261015T104241Z.tar.gz",
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/seed-control-current-proof-amortization--LAGRANGE_NATIVE_RELEASE_FENCING_OWNER_PACKET_20261015T104241Z.tar.gz"
+  },
+  "entry": {
+    "ts": "2026-10-15T10:43:06.039Z",
+    "type": "finding",
+    "kind": "evidence",
+    "text": "Accepted REJECT for bde70cec74b8eb8e8db17d0d50a432102947d6d4 preserved with all executable counterexamples and historical native witnesses. Native owner packet: N1 first PREPARE after local PAUSE and N4 epoch replay are semantic REDs; N2 settlement controls reached but later reauthorization is fixture-blocked; N3 reachable retention PASS, disclosed successful capture repeat. Source-mapped single-owner contract and primary-source comparisons included. Independent verifier approves non-main evidence preservation only; implementation HOLD. No production change, successor seal/activation, main merge or publication. Shared 18 staged paths unchanged. Payload manifest and exact test/fixture hashes included.",
+    "evidence": "sha256:550f0e0a7fbb5ded309206d60474567bd428ddfde808c99f0b8b4a2691783bf1",
+    "asset": "seed-control-current-proof-amortization--LAGRANGE_NATIVE_RELEASE_FENCING_OWNER_PACKET_20261015T104241Z.tar.gz",
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/seed-control-current-proof-amortization--LAGRANGE_NATIVE_RELEASE_FENCING_OWNER_PACKET_20261015T104241Z.tar.gz",
+    "bytes": 229948
+  }
+}

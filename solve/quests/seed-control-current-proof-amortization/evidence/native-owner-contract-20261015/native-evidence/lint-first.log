@@ -1,0 +1,119 @@
+
+> lagrange-server@0.2.6 lint
+> eslint src/ test/ --ignore-pattern 'test/.gitkeep'
+
+
+/mnt/data/peter/projects/.worktrees/release-fencing-native-contract-20261015/test/partition/participant-release-tx1-decision-fixture.js
+  24:7  error  Strings must use singlequote  quotes
+  31:7  error  Strings must use singlequote  quotes
+  32:7  error  Strings must use singlequote  quotes
+
+/mnt/data/peter/projects/.worktrees/release-fencing-native-contract-20261015/test/partition/participant-release-tx1-native-fixture.js
+  77:7  error  'owners' is never reassigned. Use 'const' instead  prefer-const
+
+/mnt/data/peter/projects/.worktrees/release-fencing-native-contract-20261015/test/query/distributed-transaction-coordinator.test.js
+  537:1  error  Expected indentation of 8 spaces but found 6  indent
+
+/mnt/data/peter/projects/.worktrees/release-fencing-native-contract-20261015/test/query/transaction-participant-set-authority.test.js
+  226:1  error  This line has a length of 103. Maximum allowed is 100  max-len
+
+/mnt/data/peter/projects/.worktrees/release-fencing-native-contract-20261015/test/query/transaction-recovery-ownership.test.js
+  233:1  error  This line has a length of 101. Maximum allowed is 100  max-len
+  249:1  error  This line has a length of 101. Maximum allowed is 100  max-len
+  264:1  error  This line has a length of 101. Maximum allowed is 100  max-len
+
+/mnt/data/peter/projects/.worktrees/release-fencing-native-contract-20261015/test/raft/raft-rs-backend/opening-history-native-fixture.js
+  25:1    error  This line has a length of 111. Maximum allowed is 100                                                          max-len
+  25:44   error  Statement inside of curly braces should be on next line                                                        brace-style
+  25:45   error  Unexpected space(s) after '{'                                                                                  block-spacing
+  25:110  error  Unexpected space(s) before '}'                                                                                 block-spacing
+  25:111  error  Closing curly brace should be on the same line as opening curly brace or on the line after the previous block  brace-style
+  26:31   error  Statement inside of curly braces should be on next line                                                        brace-style
+  26:32   error  Unexpected space(s) after '{'                                                                                  block-spacing
+  26:101  error  Unexpected space(s) before '}'                                                                                 block-spacing
+  26:102  error  Closing curly brace should be on the same line as opening curly brace or on the line after the previous block  brace-style
+  27:37   error  Statement inside of curly braces should be on next line                                                        brace-style
+  27:38   error  Unexpected space(s) after '{'                                                                                  block-spacing
+  27:128  error  Unexpected space(s) before '}'                                                                                 block-spacing
+  27:129  error  Closing curly brace should be on the same line as opening curly brace or on the line after the previous block  brace-style
+
+/mnt/data/peter/projects/.worktrees/release-fencing-native-contract-20261015/test/raft/raft-rs-backend/operation-port-throw-containment.test.js
+  143:60  error  Statement inside of curly braces should be on next line                                                        brace-style
+  143:61  error  Unexpected space(s) after '{'                                                                                  block-spacing
+  143:87  error  Unexpected space(s) before '}'                                                                                 block-spacing
+  143:88  error  Closing curly brace should be on the same line as opening curly brace or on the line after the previous block  brace-style
+
+/mnt/data/peter/projects/.worktrees/release-fencing-native-contract-20261015/test/raft/raft-rs-backend/runtime-load-recovery-child.js
+   32:13  error  Statement inside of curly braces should be on next line                                                        brace-style
+   32:14  error  Unexpected space(s) after '{'                                                                                  block-spacing
+   32:32  error  Unexpected space(s) before '}'                                                                                 block-spacing
+   32:33  error  Closing curly brace should be on the same line as opening curly brace or on the line after the previous block  brace-style
+   37:3   error  'cluster' is never reassigned. Use 'const' instead                                                             prefer-const
+   73:1   error  This line has a length of 112. Maximum allowed is 100                                                          max-len
+   82:17  error  'WebAssembly' is not defined                                                                                   no-undef
+   96:12  error  Statement inside of curly braces should be on next line                                                        brace-style
+   96:13  error  Unexpected space(s) after '{'                                                                                  block-spacing
+   96:38  error  Unexpected space(s) before '}'                                                                                 block-spacing
+   96:39  error  Closing curly brace should be on the same line as opening curly brace or on the line after the previous block  brace-style
+  107:14  error  Statement inside of curly braces should be on next line                                                        brace-style
+  107:15  error  Unexpected space(s) after '{'                                                                                  block-spacing
+  107:82  error  Unexpected space(s) before '}'                                                                                 block-spacing
+  107:83  error  Closing curly brace should be on the same line as opening curly brace or on the line after the previous block  brace-style
+  120:1   error  This line has a length of 103. Maximum allowed is 100                                                          max-len
+  146:1   error  This line has a length of 109. Maximum allowed is 100                                                          max-len
+
+/mnt/data/peter/projects/.worktrees/release-fencing-native-contract-20261015/test/raft/raft-rs-backend/runtime-opening-history.integration.test.js
+   72:30  error  Expected { after 'if' condition                                                                                curly
+   76:35  error  Expected { after 'if' condition                                                                                curly
+   95:27  error  Statement inside of curly braces should be on next line                                                        brace-style
+   95:28  error  Unexpected space(s) after '{'                                                                                  block-spacing
+   95:76  error  Unexpected space(s) before '}'                                                                                 block-spacing
+   95:77  error  Closing curly brace should be on the same line as opening curly brace or on the line after the previous block  brace-style
+   98:15  error  Statement inside of curly braces should be on next line                                                        brace-style
+   98:16  error  Unexpected space(s) after '{'                                                                                  block-spacing
+   98:41  error  Unexpected space(s) before '}'                                                                                 block-spacing
+   98:42  error  Closing curly brace should be on the same line as opening curly brace or on the line after the previous block  brace-style
+  117:15  error  Statement inside of curly braces should be on next line                                                        brace-style
+  117:16  error  Unexpected space(s) after '{'                                                                                  block-spacing
+  117:47  error  Unexpected space(s) before '}'                                                                                 block-spacing
+  117:48  error  Closing curly brace does not appear on the same line as the subsequent block                                   brace-style
+  117:48  error  Closing curly brace should be on the same line as opening curly brace or on the line after the previous block  brace-style
+  139:44  error  Statement inside of curly braces should be on next line                                                        brace-style
+  139:45  error  Unexpected space(s) after '{'                                                                                  block-spacing
+  139:68  error  Unexpected space(s) before '}'                                                                                 block-spacing
+  139:69  error  Closing curly brace should be on the same line as opening curly brace or on the line after the previous block  brace-style
+  153:28  error  Expected { after 'if' condition                                                                                curly
+  176:1   error  This line has a length of 122. Maximum allowed is 100                                                          max-len
+  186:15  error  Statement inside of curly braces should be on next line                                                        brace-style
+  186:16  error  Unexpected space(s) after '{'                                                                                  block-spacing
+  186:72  error  Unexpected space(s) before '}'                                                                                 block-spacing
+  186:73  error  Closing curly brace should be on the same line as opening curly brace or on the line after the previous block  brace-style
+  231:20  error  Strings must use singlequote                                                                                   quotes
+  246:16  error  Strings must use singlequote                                                                                   quotes
+
+/mnt/data/peter/projects/.worktrees/release-fencing-native-contract-20261015/test/raft/raft-rs-backend/runtime-replacement-review-child.js
+   34:7   error  Statement inside of curly braces should be on next line                                                        brace-style
+   34:8   error  Unexpected space(s) after '{'                                                                                  block-spacing
+   34:97  error  Unexpected space(s) before '}'                                                                                 block-spacing
+   34:98  error  Closing curly brace does not appear on the same line as the subsequent block                                   brace-style
+   34:98  error  Closing curly brace should be on the same line as opening curly brace or on the line after the previous block  brace-style
+   35:11  error  Statement inside of curly braces should be on next line                                                        brace-style
+   35:12  error  Unexpected space(s) after '{'                                                                                  block-spacing
+   35:24  error  Unexpected space(s) before '}'                                                                                 block-spacing
+   35:25  error  Closing curly brace should be on the same line as opening curly brace or on the line after the previous block  brace-style
+   41:3   error  'cluster' is never reassigned. Use 'const' instead                                                             prefer-const
+   44:35  error  Expected { after 'if' condition                                                                                curly
+   76:17  error  'WebAssembly' is not defined                                                                                   no-undef
+   97:1   error  This line has a length of 103. Maximum allowed is 100                                                          max-len
+  119:1   error  This line has a length of 110. Maximum allowed is 100                                                          max-len
+  173:19  error  'WebAssembly' is not defined                                                                                   no-undef
+
+/mnt/data/peter/projects/.worktrees/release-fencing-native-contract-20261015/test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js
+  50:15  error  Statement inside of curly braces should be on next line                                                        brace-style
+  50:16  error  Unexpected space(s) after '{'                                                                                  block-spacing
+  50:70  error  Unexpected space(s) before '}'                                                                                 block-spacing
+  50:71  error  Closing curly brace should be on the same line as opening curly brace or on the line after the previous block  brace-style
+
+✖ 89 problems (89 errors, 0 warnings)
+  72 errors and 0 warnings potentially fixable with the `--fix` option.
+

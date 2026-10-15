@@ -1,0 +1,134 @@
+Independent review of the participant-release transition correction
+Reviewed 2026-10-15; verdict: REJECT the corrected specification as written.
+
+The separation of preparation (D0), Raft commitment (D1), deterministic application (D2), local serving eligibility (D3), and caller observation (D4) is the right boundary to retain. It does not make this transition table coherent or establish a refinement to TX1. The blockers below concern the proposed specification/model. They are not claims that unimplemented release commands have already corrupted production.
+
+1. Exact identity, custody and ownership
+
+Reviewed commit: bde70cec74b8eb8e8db17d0d50a432102947d6d4
+Remote: origin/review/release-linearization-rev2-correction-20261015
+Parent: 3db821fa7c12bbf05f1d878b9da6af5147417b64
+Own detached worktree: /mnt/data/peter/projects/.worktrees/release-linearization-independent-bde70cec-20261015
+Evidence directory: /tmp/lagrange-independent-review-20261015.pnO75i
+
+The remote candidate and parent were checked directly with git ls-remote. Live remote main was 52399faabb412a291a3a4dfb0feadb4bcad12cec. Local main (33885263f5214524065d6336a172905d7e81ada4) and cached origin/main (46cefa725cd2c398dc612fd81db9777fa0ac5b6c) are separate, stale observations. Nothing was rebased, merged or pushed.
+
+The shared integration checkout remained on integrate/rs-raft-2026-09-30 at 0996d7576516af24f5f4d3e1e9aee37c775aabae, with all 18 staged paths preserved. Its before/after porcelain-v2 status and binary staged patch are byte-identical. Its staged patch SHA256 is 0b2ea79142a13f4dcada523f01108fbd8a4809492838e23f7a0246a7159953fc. The review worktree's tracked/untracked status is clean. Only an ignored dependency symlink and test output were created there. No dependency installation occurred.
+
+The author worktree /tmp/opencode/release-linearization-rev2-correction remains at the candidate. /tmp/opencode/quest-control-pause-census is on local continue/rs-raft-control-pause-census-20261014 at the design parent 3db821f..., whereas that remote branch/PR122 source remains 9233c9e0edc830fabd7e0f64a7ff1eebfe0ddada. The separate rs-raft integration candidate is 10c2f0610f2924b8e7773497b03ac95fa4f42e58. Do not merge the review lineage wholesale: it inherits rejected PR122 runtime source.
+
+Process/worktree inspection found this Codex process tree and two existing shell sessions in the shared checkout, and no separate active Lagrange test/agent process at the observation points. An unrelated Actions runner was also visible. That is a process snapshot, not an exclusive lease; no other agent, checkout, branch or process was taken over or removed. Existing worktrees, including stale/prunable registrations, were preserved. No harnessd dependency or subagent was used.
+
+Successor participant-release-committed-disposition has no activated Quest directory in this lineage; both drafts remain evidence only. PR122 remains an open draft on GitHub but is REJECTED in the engineering Quest log. The shared-wave design remote is design/rs-raft-seed-control-wave-20261014 at d9c23b383bd096cd5ad1488fd04edbf52b806f50; it remains HELD by the user's current instruction. Runner/TAP remains PARKED.
+
+The actual semantic owners at the pinned commit are:
+- D0 release coordination and recipient validation: src/node/replica-handler-participant-cutover.js and replica-handler-participant-release.js; identity/census validation: src/partition/partition-participant-release-contract.js. Local release admission: partition-participant-transaction-pause.js.
+- TX1 staging/request/bytes: partition-participant-transaction-session.js, partition-participant-transaction-request.js, partition-participant-transaction-bytes.js; durable participant state and application: partition-participant-transaction-store.js and partition-participant-transaction-apply.js.
+- The coordinator's immutable global decision and settlement remain query-owned, including src/query/distributed/distributed-transaction-settlement.js. Release neither invents nor rolls back those decisions.
+- Proposal admission remains partition-committed-command-admission.js. Existing participant commands require TRANSACTION_OWNER and pinned command bytes; attaching a command to the operation port is not itself authorization.
+- Consensus position and ordering remain raft-rs-operation-port.js and raft-rs-runtime-owner.js. The port supplies the actual committed entry index/term (operation-port:113-122).
+- Atomic D2 application remains raft-rs-application-transaction-owner.js with raft-rs-durable-store.js, and partition-service-entry-apply-base.js. Application effects/outcomes and applied position commit together; host failure rolls back the application transaction and holds recovery. Local release D3 is not a new deterministic application input. The separate Raft membership/bootstrap admission gate must not be confused with release D3.
+
+Loaded the supplied handover in full, then actual AGENTS.md -> docs/steering/rules.md -> router.md, relevant runtime/authority contracts, verification templates, cutover risk history, the TX1 owner decisions, relevant source/impact contracts, both release designs/drafts, the whole 833-line model and 529-line runner, and reproduced evidence. The relevant source-versus-parent comparison is empty across src, test/partition, test/test-helpers, vendor, package.json and package-lock.json.
+
+2. Evidence and its limits
+
+Official reproduction, in the isolated worktree:
+node scripts/checks/participant-release-committed-disposition-transition-model.js --evidence-dir /tmp/lagrange-independent-review-20261015.pnO75i/model-evidence
+
+Exit 0. All seven scenarios in both modes meet the runner's selected expectations: 14 scenario/mode results, 50 claim evaluations. All three generated JSON files are byte-identical to committed evidence:
+- summary.json: f8dfc6beb12b5520c9004ad12b8a336483ee27892efb34c716f2b1cc7676df6c
+- rev2-counterevidence.json: 793d84725426cd2061df98c10a844e52fbd2b29459d117dbb8f61167ac2ae4f1
+- rev3-correction-evidence.json: 816a9c5211adb74f2508cb5b6f7449688c9a2273da2444556e1841b2d6592ca2
+
+Independent supplemental probes import the unmodified pinned model:
+node /tmp/lagrange-independent-review-20261015.pnO75i/adversarial-model-review-bound-holds.mjs /mnt/data/peter/projects/.worktrees/release-linearization-independent-bde70cec-20261015 /tmp/lagrange-independent-review-20261015.pnO75i/adversarial-traces-bound-holds.json
+node /tmp/lagrange-independent-review-20261015.pnO75i/exact-replay-review.mjs /mnt/data/peter/projects/.worktrees/release-linearization-independent-bde70cec-20261015 /tmp/lagrange-independent-review-20261015.pnO75i/exact-replay-trace.json
+
+Both exit 0 means the asserted counterexamples reproduced, not approval. The first contains 11 schedules; none triggers the built-in invariant checks. The second demonstrates refused-request replay divergence and does trigger A-deterministic-effects. Initial probe bytes/output are retained separately; the bound-holds variant supplies a fresh census on every HOLD except the intentional missing-census probe.
+
+The model has a shared already-committed array, two applying replicas, seven fixed schedules, no exhaustive exploration, no real elections/quorum selection, no transport/SQL/snapshot transfer, no crash-atomic storage, and no physical failure domains. Per-scenario committed-entry bounds are A2/B5/C5 or 7/D5/E8/F1/G8. Membership evolution, D0 trusted authorization and most local lifecycle checks are outside it. JSON serialization serves as its abstract digest. Its fullSignature excludes retained-watermark and appliedEntries state. It cannot certify native safety or startup budgets.
+
+The present invariant set does not assert that invalid epochs remain spent, all commands preserve their epoch binding, per-request D4 results equal D2 outcomes, retention always fits, or retained request outcomes replay identically. Scenario E's duplicate-PREPARE assertion checks the later COMMIT, not unchanged PREPARE position/effects (runner:315-338). submit always mints a new entryId, so exact native redelivery is not represented by the proposal API. GENERATION_ORIGIN's real semantics are not modeled.
+
+Lab verification used the existing lab planner/executor and machine-wide locks, with agent codex:independent-bde70cec-review. Fleet discovery verified matching dependency graphs/current installations on four distinct available hosts; carinas-windows was unreachable. main-linux has the controller's boot ID and was not counted as another machine. The planner placed this short four-file batch on adams-gamla, three concurrent jobs, keeping the controller reserved.
+
+Candidate: 4 files, 3 pass / 1 fail; 58 assertions, 56 pass / 2 fail:
+- participant-release-native-application-order.test.js: 1 pass (real RF3 loopback).
+- partition-participant-transaction-apply.test.js: 27 pass.
+- partition-participant-transaction-staging.test.js: 19 pass.
+- partition-transaction-replay-cursor-v4.test.js: 9 pass, RC1/RC2 fail.
+
+A subsequent run of that failing file at parent 3db821f... on the same adams-gamla host reproduced RC1/RC2 with the same signatures (9 pass / 2 fail). These are inherited F-MIR reds: failed/reserved and duplicate log occurrences are mirrored. They are not caused by this source-free correction and remain outstanding; no repair or waiver was made. The staging/apply fixtures use controllable operation ports; the replay-cursor cases use a real lone-leader restart. This is not a multi-host distributed certification campaign.
+
+Dependency lock SHA256: 8fb1a612db45cac0a61e281b41fd60da315f916b7aeb52046bcbe3e7b8d61ecd. Node v22.23.2. The native binding owner verified tracked WASM b285c5eca45ddb6c44301abc0e35c561cd74b24f3e1670b8c49882820aa9e5ad and glue 4506be46562d06379c4a1adfb0791bb220096ba780f8cc07eccee6e779e1ab81; native loads verify those artifacts. Fleet, exact placement heads, thermal/parallelism decisions, full logs and per-file ledgers are retained.
+
+3. Findings with minimal traces
+
+F1 — BLOCKER: the proposed settlement classification assumes an owner/state that TX1 does not have.
+Addendum:142-150,175-180 requires a replicated staging row before a pre-HOLD PREPARE can be settlement. Model:624-641 implements a committed BEGIN creating that row. Actual BEGIN at request.js:291-319 opens a local WeakMap session; ACTIVE/PREPARING are not durable participant rows. First replicated PREPARE carries operations, validation, immutable digest and a stable participant prepare entryId (bytes.js:261-271), but no release admissionEpoch. A follower stages nothing and learns the transaction from PREPARE.
+Minimal owner trace: leader local BEGIN(t) + staged SQL -> sealed/pending PREPARE(t) -> committed HOLD -> first PREPARE applies on a follower with no local or replicated staging row. The proposed table cannot call this unchanged existing settlement: it either refuses work that the old owner could prepare, or requires a new replicated BEGIN protocol. Previously durable PREPARED/terminal decisions are a different case and must remain settleable. Which first PREPARE may cross a fence requires the explicit transaction/release owner decision; a local staging boolean cannot settle it deterministically.
+Additional mismatch: revision 2:54 names a ".withReleaseColumns DDL precedent", but no such symbol exists in src. The store currently owns participant rows and the write-generation singleton, not an existing per-release-epoch ledger. The schema/retention/outcome extension must be specified honestly under that owner.
+
+F2 — BLOCKER: T5's spent-epoch and D3 rules contradict its own definitions.
+Addendum:119-128 defines spent(E) iff E <= L, then says invalid identity leaves L unchanged, creates no row, yet consumes E.
+Minimal model trace: invalid DECISION(E1) -> L=0, no row -> valid DECISION(E1, fresh census) -> APPROVED, L=1. E1 was reused.
+Second trace: APPROVED1 -> invalid DECISION2 -> gate remains OPEN from row1, although T5's D3 cell says CLOSED.
+The latter is not a recommendation to let invalid traffic revoke legitimate authority. Preserve a single epoch/current-disposition authority and explicitly resolve the contradiction. A separate invalid-epoch authority would not be the smallest correction.
+
+F3 — BLOCKER: stale first PREPARE silently adopts a new authorization.
+Addendum T7's general immutable binding rule conflicts with case (d), which permits unstaged PREPARE whenever current admission is open. Model:654-677 never checks PREPARE.admissionEpoch.
+Minimal trace: APPROVED1 -> HOLD2 -> APPROVED3 -> PREPARE(t, admissionEpoch=1, no staged row) -> PREPARED with stagedEpoch=3. Built-in D-no-silent-adoption remains green because its check is only on writes.
+This is distinct from settling a previously durable PREPARED row. The first-PREPARE decision must use the chosen immutable binding and deterministic prior state without reclassifying existing durable decisions.
+
+F4 — BLOCKER: D4 reports command intent as the decided result; refused request replay is not immutable.
+Model:737-764 reads disposition from entry.cmd.disposition rather than the applied result. "COMMITTED" can correctly describe D1 while the reported APPROVED value is still wrong.
+Minimal trace: request a APPROVED(E1) wins -> distinct request b APPROVED(E1) is EPOCH_CONFLICT -> d4Read(b) returns COMMITTED, disposition APPROVED, applied=true.
+Also: APPROVED1 -> HOLD2 -> DECISION3 carrying the pre-HOLD census -> D2 census_stale refusal -> D4 reports APPROVED.
+Exact refused-request trace: a wins E1; b loses E1, annotated winner E1; HOLD2; reapply the exact b entry -> another durable annotation naming winner E2/HOLD. One replica now has extra durable state for the same prefix; A-deterministic-effects fires. The model's reapply API is a replay abstraction, not proof that native applies a log index twice.
+annotateConflict (312-314) names current authority, without the winning request's entryId/bytes. Distinguish the immutable outcome for the queried request, the retained winner at its contested epoch, and current serving authority. Unknown/retired history must remain typed unavailable, never invented. Successful rows alone cannot provide retry outcomes for refused commands.
+
+F5 — BLOCKER to the claimed authorization proof: T6 is not implemented, and the census oracle can check the wrong prefix.
+Addendum:129 and corrected draft require HOLD's census binding. Model:459-514 accepts HOLD without any census; the official runner constructs such HOLDs.
+Minimal trace: APPROVED1 -> HOLD(E2,S1,no census) -> HOLD row2 is accepted.
+Separately, submit assigns index = log.length+1 before commitment (178-190), and commit never updates it. The census check reconstructs state from entry.index-1, not the actual applying replica's pre-state (402).
+Minimal trace: APPROVED1; submit DECISION2 with census(prefix1), reserving index2; commit/apply BEGIN(t) as actual log2; commit the pending decision at actual log3, still index2 -> it accepts the stale census despite the changed obligation set. The check and its invariant share the same incorrect prefix calculation.
+These are model fidelity defects, not a claim that raft-rs assigns positions this way. Native supplies the committed position. Corrected D0/census inputs still need an explicit mapping to committed membership/configuration/origin/schema/transaction state; the current local census cannot simply be consulted in D2.
+
+F6 — BLOCKER to the unconditional resource claim: retention lacks a capacity case when obligations pin all old rows.
+Addendum:232-250 promises bound 4, never retire current/unresolved rows, and unlimited decisions/HOLDs. Model:321-337 leaves overflow when nothing can retire.
+Minimal model trace: for e=1..4, APPROVED(e) then BEGIN(t_e,e); HOLD5 -> all four old rows pinned, current row5 protected, retained rows=5. Built-in checks stay green; fixed scenario G has no unresolved obligations.
+This is NOT a demonstrated native schedule: native TX1 admits one nonterminal participant per partition, and release D0 requires drain. Prove and encode the actual maximum pinned population and reserved closure capacity, or specify bounded pressure at the existing owner. Do not invent a new queue or evict obligations. Independently, APPROVED1 plus eight conflicting requests leaves one release row and eight durable annotations; the claimed row bound does not bound annotations/request outcomes by count or bytes. Proof-only trace/log arrays are not counted as production leaks.
+
+F7 — MODEL FIDELITY: modeled transaction settlement is weaker than the native owner.
+APPROVED1 -> BEGIN(t) -> PREPARE(t) -> COMMIT(t) -> ROLLBACK(t) overwrites the terminal model decision (680-688). Native apply.js:478-509 retains the first terminal decision, validates digest/binding, refuses conflicting decisions and rejects absent COMMIT. The query settlement owner likewise follows the recorded winner. "Existing applier rules unchanged" is not demonstrated by this model.
+Do not repair native transaction behavior to match this abstraction. Its obligations/census/replay oracle needs a faithful abstraction of the existing terminal rules.
+
+F8 — MODEL FIDELITY: D3 never compares the command's identity with current identity.
+A structurally nonempty foreign partition identity is accepted in a release decision and D3 opens. applyGate checks identityValid(CURRENT_IDENTITY), not equality with the row's binding. The real release contract verifies releaseId hashing and partition/configuration/build/member facts (release-contract.js:56-69,122-191). Membership changes being out of scope does not validate wrong static identity. Reestablishing a restarted local incarnation is also not modeled; no recovery-liveness conclusion follows.
+
+4. History that constrains the correction
+
+The independent engineering REJECT was recorded at fa50cdf3f63f849884cf9b805442e0ed8d6e5505, followed by v1 3f86af04000a605ebbcb3e5c65e9a5880f20ca32, rev2 3db821f..., then this correction. The three historical witness blobs were read from Git and retained unchanged in this evidence directory:
+- 1994870bb5dbc21c8d74a5bdf856ef4ca1856be8, partial-open witness blob f6becd9588fe4e388339701923040d5826ea8751.
+- e15166a62b581481782b6875514b8beb441acd58, late-follower-loss witness blob 21e587f3e212fdbc33802560ea1cfa7a60c609fc.
+- 6a9a522d90fd7bf4e62c7325ba5efbdb2e59046e, duplicate-RESUME witness blob a4df389dc6063c75335ed2e966648a5b7b0415b0.
+
+All 12 entries in the retained historical manifest match their hashes. Eight raw logs are absent from the committed candidate because they are ignored; they were located under /tmp/opencode/quest-control-pause-census/solve/quests/seed-control-current-proof-amortization/evidence/glm-pr122-review and copied read-only into the new evidence directory. No committed trace or historical log was overwritten.
+
+The partial-open candidate RED/old GREEN tests an after-PAUSE loss. The later old-source RED demonstrates that a second INSPECT merely moves the race: loss after INSPECT still leaves survivors OPEN and an ordinary write committed/applied on the leader. Immediate follower absence is not proof of replication loss. Eight recovery drain refusals in the fixture lacking a query engine are not proof of permanent production deadlock. The duplicate-RESUME GREEN explicitly asserts a wrong answer after direct local state injection; it does not establish new unauthorized admission. These qualifications are retained.
+
+Therefore the next correction must establish committed ordering and exact outcome ownership. Restoring INSPECT or adding compensating PAUSE cannot roll back committed effects. No separate release authority, timer, retry scheduler, second decision ledger or shared-wave mechanism is justified by this review.
+
+5. Smallest justified next native RED-first packet — conditional, not started
+
+The immediate next action is one bounded owner decision on a corrected contract, not production implementation. It must settle (a) TX1's first durable PREPARE versus local staging/in-flight exact retry, (b) coherent invalid-epoch allocation and immutable per-request results, and (c) a resource bound derived from reachable pinned obligations. Recommend retaining local TX1 staging and its existing durable PREPARE/DECISION boundary unless its owner explicitly approves changing the transaction protocol. A replicated BEGIN is not a small release fix. Keep invalid-request refusals separate from current serving authority; resolve the contradictory "spent without L" wording rather than append another authority.
+
+After that contract is independently accepted, the smallest implementation unit is one partition's release-decision/HOLD -> ordinary write/first PREPARE -> exact outcome vertical slice through existing owners:
+- Start with a test-only real raft-rs RF3 fixture using existing ReplicaHandler release and transaction request surfaces. The first RED should observe a survivor accepting work without an attributable committed release result at the late-loss boundary, not fail because a new symbol is undefined.
+- Add the discriminating schedule for local BEGIN/staging -> delayed first PREPARE -> closure/release boundary, with two positive controls: already durable PREPARED plus authoritative DECISION settles while HELD; newly admitted work under the current epoch succeeds. Add a delayed ordinary write across HOLD/re-release and a follower whose local D3 differs.
+- Implement the smallest complete owned mechanism: canonical immutable release/HOLD bytes and admission through the existing release/admission owners; one store-owned epoch/disposition/request-result representation; same-transaction apply of authorization result, protected effect/outcome and applied position; D3-derived new admission; immutable binding captured/sealed at the owner-selected first-PREPARE boundary. Preserve exact unknown retries and native transaction terminal rules. Include the accepted capacity/retirement rule from the outset.
+- On identical witness bytes, retain RED on the source predecessor and GREEN on the implementation on the same locked host, plus native restart/readback and exact replay/conflicting request checks. Update the existing release/TX1/application/operation-port impact contracts through their producers and obtain independent source review. No test expectation should be silently weakened; map successor post-commit semantics to preserved historical witnesses explicitly.
+- Parallelize independent native witness groups on ready locked lab hosts. Use a separate physical RF3 formation on distinct verified machines for subsequent loss/recovery composition once these fixtures exercise a real protocol; multiple loopback runs do not supply that proof. Retain original 1000/5000 ms startup requirements for later closure, without broadening this first packet into startup optimization.
+
+The owner must separately select explicit supersession of the old sealed Quest's incompatible constraints and authorize successor activation only after accepted design and a measured valid RED probe. This review does neither. No solve.js start/note/land, production edit, merge, publication or remote message was performed. The stop boundary is the completed independent review.

@@ -1,0 +1,15 @@
+{
+  "cwd": "/mnt/data/peter/projects/.worktrees/release-fencing-native-contract-20261015",
+  "argv": [
+    "node",
+    "scripts/solve.js",
+    "evidence",
+    "add",
+    "/home/peter/Downloads/LAGRANGE_NATIVE_RELEASE_FENCING_OWNER_PACKET_20261015T104241Z.tar.gz",
+    "--id",
+    "seed-control-current-proof-amortization",
+    "--text",
+    "Accepted REJECT for bde70cec74b8eb8e8db17d0d50a432102947d6d4 preserved with all executable counterexamples and historical native witnesses. Native owner packet: N1 first PREPARE after local PAUSE and N4 epoch replay are semantic REDs; N2 settlement controls reached but later reauthorization is fixture-blocked; N3 reachable retention PASS, disclosed successful capture repeat. Source-mapped single-owner contract and primary-source comparisons included. Independent verifier approves non-main evidence preservation only; implementation HOLD. No production change, successor seal/activation, main merge or publication. Shared 18 staged paths unchanged. Payload manifest and exact test/fixture hashes included.",
+    "--json"
+  ]
+}

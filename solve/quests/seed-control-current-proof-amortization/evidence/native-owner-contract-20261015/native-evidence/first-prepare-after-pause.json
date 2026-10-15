@@ -1,0 +1,323 @@
+{
+  "before": [
+    {
+      "replicaId": "release-tx1-native-r1",
+      "applied": "4",
+      "committed": "4",
+      "last": "4",
+      "snapshotBytes": 0,
+      "admission": {
+        "state": "open",
+        "raisedAtMs": 1792058679670,
+        "generation": 1,
+        "releaseId": "d76f3c10ac8a27e7532430961e2c7efbaa035cc5264502d34db7e88279268182",
+        "proof": {
+          "term": 1,
+          "leaderId": "release-tx1-native-r1",
+          "configurationKey": "[[\"6689386236816618592\",\"8049257117226124689\",\"8262039434435389828\"],[],[],[],false]",
+          "membershipGenerationIndex": 3,
+          "runtimeGeneration": 1,
+          "lifecycleIncarnation": "e9942372-bf86-40eb-9bd2-8df7f83e20f1"
+        }
+      },
+      "staged": false,
+      "participant": null,
+      "participantCount": 0,
+      "participantJsonBytes": 2,
+      "preparedCount": 0,
+      "outcomeCount": 0,
+      "data": []
+    },
+    {
+      "replicaId": "release-tx1-native-r2",
+      "applied": "4",
+      "committed": "4",
+      "last": "4",
+      "snapshotBytes": 0,
+      "admission": {
+        "state": "open",
+        "raisedAtMs": 1792058680919,
+        "generation": 3,
+        "releaseId": "d76f3c10ac8a27e7532430961e2c7efbaa035cc5264502d34db7e88279268182",
+        "proof": {
+          "term": 1,
+          "leaderId": "release-tx1-native-r1",
+          "configurationKey": "[[\"6689386236816618592\",\"8049257117226124689\",\"8262039434435389828\"],[],[],[],false]",
+          "membershipGenerationIndex": 3,
+          "runtimeGeneration": 1,
+          "lifecycleIncarnation": "58878991-369a-42ed-860b-a29bac5178a9"
+        }
+      },
+      "staged": false,
+      "participant": null,
+      "participantCount": 0,
+      "participantJsonBytes": 2,
+      "preparedCount": 0,
+      "outcomeCount": 0,
+      "data": []
+    },
+    {
+      "replicaId": "release-tx1-native-r3",
+      "applied": "4",
+      "committed": "4",
+      "last": "4",
+      "snapshotBytes": 0,
+      "admission": {
+        "state": "open",
+        "raisedAtMs": 1792058680919,
+        "generation": 4,
+        "releaseId": "d76f3c10ac8a27e7532430961e2c7efbaa035cc5264502d34db7e88279268182",
+        "proof": {
+          "term": 1,
+          "leaderId": "release-tx1-native-r1",
+          "configurationKey": "[[\"6689386236816618592\",\"8049257117226124689\",\"8262039434435389828\"],[],[],[],false]",
+          "membershipGenerationIndex": 3,
+          "runtimeGeneration": 1,
+          "lifecycleIncarnation": "3f566ffd-67ca-4f2e-b38a-0ef470ed1025"
+        }
+      },
+      "staged": false,
+      "participant": null,
+      "participantCount": 0,
+      "participantJsonBytes": 2,
+      "preparedCount": 0,
+      "outcomeCount": 0,
+      "data": []
+    }
+  ],
+  "staged": [
+    {
+      "replicaId": "release-tx1-native-r1",
+      "applied": "4",
+      "committed": "4",
+      "last": "4",
+      "snapshotBytes": 0,
+      "admission": {
+        "state": "open",
+        "raisedAtMs": 1792058679670,
+        "generation": 1,
+        "releaseId": "d76f3c10ac8a27e7532430961e2c7efbaa035cc5264502d34db7e88279268182",
+        "proof": {
+          "term": 1,
+          "leaderId": "release-tx1-native-r1",
+          "configurationKey": "[[\"6689386236816618592\",\"8049257117226124689\",\"8262039434435389828\"],[],[],[],false]",
+          "membershipGenerationIndex": 3,
+          "runtimeGeneration": 1,
+          "lifecycleIncarnation": "e9942372-bf86-40eb-9bd2-8df7f83e20f1"
+        }
+      },
+      "staged": true,
+      "participant": null,
+      "participantCount": 0,
+      "participantJsonBytes": 2,
+      "preparedCount": 0,
+      "outcomeCount": 0,
+      "data": []
+    },
+    {
+      "replicaId": "release-tx1-native-r2",
+      "applied": "4",
+      "committed": "4",
+      "last": "4",
+      "snapshotBytes": 0,
+      "admission": {
+        "state": "open",
+        "raisedAtMs": 1792058680919,
+        "generation": 3,
+        "releaseId": "d76f3c10ac8a27e7532430961e2c7efbaa035cc5264502d34db7e88279268182",
+        "proof": {
+          "term": 1,
+          "leaderId": "release-tx1-native-r1",
+          "configurationKey": "[[\"6689386236816618592\",\"8049257117226124689\",\"8262039434435389828\"],[],[],[],false]",
+          "membershipGenerationIndex": 3,
+          "runtimeGeneration": 1,
+          "lifecycleIncarnation": "58878991-369a-42ed-860b-a29bac5178a9"
+        }
+      },
+      "staged": false,
+      "participant": null,
+      "participantCount": 0,
+      "participantJsonBytes": 2,
+      "preparedCount": 0,
+      "outcomeCount": 0,
+      "data": []
+    },
+    {
+      "replicaId": "release-tx1-native-r3",
+      "applied": "4",
+      "committed": "4",
+      "last": "4",
+      "snapshotBytes": 0,
+      "admission": {
+        "state": "open",
+        "raisedAtMs": 1792058680919,
+        "generation": 4,
+        "releaseId": "d76f3c10ac8a27e7532430961e2c7efbaa035cc5264502d34db7e88279268182",
+        "proof": {
+          "term": 1,
+          "leaderId": "release-tx1-native-r1",
+          "configurationKey": "[[\"6689386236816618592\",\"8049257117226124689\",\"8262039434435389828\"],[],[],[],false]",
+          "membershipGenerationIndex": 3,
+          "runtimeGeneration": 1,
+          "lifecycleIncarnation": "3f566ffd-67ca-4f2e-b38a-0ef470ed1025"
+        }
+      },
+      "staged": false,
+      "participant": null,
+      "participantCount": 0,
+      "participantJsonBytes": 2,
+      "preparedCount": 0,
+      "outcomeCount": 0,
+      "data": []
+    }
+  ],
+  "ordinary": {
+    "success": false,
+    "error": "The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried",
+    "failureCode": "partition_write_cutover_paused",
+    "deferRetry": true,
+    "retryAfterMs": 100,
+    "partitionId": "release-tx1-native"
+  },
+  "answer": {
+    "acknowledged": true,
+    "success": true,
+    "operation": "PREPARE",
+    "partitionId": "release-tx1-native",
+    "transactionId": "0000000000000000000000000000000a",
+    "participantId": "0000000000000000000000000000000a:release-tx1-native",
+    "durable": true,
+    "state": "PREPARED",
+    "outcome": "UNKNOWN",
+    "preparedDigest": "032895394c05ce499b3559b60509642e16b8d427bf1797cb3a3c1d83a6810bbd",
+    "prepareIndex": 5,
+    "prepareTerm": 1,
+    "decisionIndex": null,
+    "decisionTerm": null,
+    "refusalCause": null,
+    "acceptingNodeId": "release-tx1-node",
+    "acknowledgedAtMs": 1792058680963
+  },
+  "after": [
+    {
+      "replicaId": "release-tx1-native-r1",
+      "applied": "5",
+      "committed": "5",
+      "last": "5",
+      "snapshotBytes": 0,
+      "admission": {
+        "state": "closed",
+        "raisedAtMs": 1792058680951,
+        "generation": 6,
+        "releaseId": null
+      },
+      "staged": false,
+      "participant": {
+        "transactionId": "0000000000000000000000000000000a",
+        "participantId": "0000000000000000000000000000000a:release-tx1-native",
+        "sessionId": "tx1-v3-session",
+        "commitMode": "TWO_PHASE_COMMIT",
+        "transactionEpoch": 7,
+        "state": "PREPARED",
+        "operationsText": "[{\"entryId\":\"ef8f1d07-2bef-4959-bafc-c344661ef83b\",\"sql\":\"INSERT INTO release_tx1_rows (id, value) VALUES (?, ?)\",\"params\":[\"a\",\"a\"]}]",
+        "validationText": "[[\"partition\",\"release-tx1-native\",\"f4351bdd62b8b1a90ecd1bf49b03ed57322578b132066d3a8e4be9af92f424ed\",4]]",
+        "preparedDigest": "032895394c05ce499b3559b60509642e16b8d427bf1797cb3a3c1d83a6810bbd",
+        "prepareEntryId": "0000000000000000000000000000000a:release-tx1-native:prepare",
+        "prepareIndex": 5,
+        "prepareTerm": 1,
+        "decision": null,
+        "decisionDigest": null,
+        "decisionEntryId": null,
+        "decisionIndex": null,
+        "decisionTerm": null,
+        "refusalCause": null,
+        "refusalDetail": null
+      },
+      "participantCount": 1,
+      "participantJsonBytes": 882,
+      "preparedCount": 1,
+      "outcomeCount": 0,
+      "data": []
+    },
+    {
+      "replicaId": "release-tx1-native-r2",
+      "applied": "5",
+      "committed": "5",
+      "last": "5",
+      "snapshotBytes": 0,
+      "admission": {
+        "state": "closed",
+        "raisedAtMs": 1792058680952,
+        "generation": 7,
+        "releaseId": null
+      },
+      "staged": false,
+      "participant": {
+        "transactionId": "0000000000000000000000000000000a",
+        "participantId": "0000000000000000000000000000000a:release-tx1-native",
+        "sessionId": "tx1-v3-session",
+        "commitMode": "TWO_PHASE_COMMIT",
+        "transactionEpoch": 7,
+        "state": "PREPARED",
+        "operationsText": "[{\"entryId\":\"ef8f1d07-2bef-4959-bafc-c344661ef83b\",\"sql\":\"INSERT INTO release_tx1_rows (id, value) VALUES (?, ?)\",\"params\":[\"a\",\"a\"]}]",
+        "validationText": "[[\"partition\",\"release-tx1-native\",\"f4351bdd62b8b1a90ecd1bf49b03ed57322578b132066d3a8e4be9af92f424ed\",4]]",
+        "preparedDigest": "032895394c05ce499b3559b60509642e16b8d427bf1797cb3a3c1d83a6810bbd",
+        "prepareEntryId": "0000000000000000000000000000000a:release-tx1-native:prepare",
+        "prepareIndex": 5,
+        "prepareTerm": 1,
+        "decision": null,
+        "decisionDigest": null,
+        "decisionEntryId": null,
+        "decisionIndex": null,
+        "decisionTerm": null,
+        "refusalCause": null,
+        "refusalDetail": null
+      },
+      "participantCount": 1,
+      "participantJsonBytes": 882,
+      "preparedCount": 1,
+      "outcomeCount": 0,
+      "data": []
+    },
+    {
+      "replicaId": "release-tx1-native-r3",
+      "applied": "5",
+      "committed": "5",
+      "last": "5",
+      "snapshotBytes": 0,
+      "admission": {
+        "state": "closed",
+        "raisedAtMs": 1792058680953,
+        "generation": 8,
+        "releaseId": null
+      },
+      "staged": false,
+      "participant": {
+        "transactionId": "0000000000000000000000000000000a",
+        "participantId": "0000000000000000000000000000000a:release-tx1-native",
+        "sessionId": "tx1-v3-session",
+        "commitMode": "TWO_PHASE_COMMIT",
+        "transactionEpoch": 7,
+        "state": "PREPARED",
+        "operationsText": "[{\"entryId\":\"ef8f1d07-2bef-4959-bafc-c344661ef83b\",\"sql\":\"INSERT INTO release_tx1_rows (id, value) VALUES (?, ?)\",\"params\":[\"a\",\"a\"]}]",
+        "validationText": "[[\"partition\",\"release-tx1-native\",\"f4351bdd62b8b1a90ecd1bf49b03ed57322578b132066d3a8e4be9af92f424ed\",4]]",
+        "preparedDigest": "032895394c05ce499b3559b60509642e16b8d427bf1797cb3a3c1d83a6810bbd",
+        "prepareEntryId": "0000000000000000000000000000000a:release-tx1-native:prepare",
+        "prepareIndex": 5,
+        "prepareTerm": 1,
+        "decision": null,
+        "decisionDigest": null,
+        "decisionEntryId": null,
+        "decisionIndex": null,
+        "decisionTerm": null,
+        "refusalCause": null,
+        "refusalDetail": null
+      },
+      "participantCount": 1,
+      "participantJsonBytes": 882,
+      "preparedCount": 1,
+      "outcomeCount": 0,
+      "data": []
+    }
+  ]
+}

@@ -1,0 +1,469 @@
+{
+  "bounds": "fixed finite schedules; per-scenario step and apply-event counts reported; no exhaustive or unbounded exploration claimed",
+  "results": [
+    {
+      "scenario": "A-restart-d3-determinism",
+      "reviewSection": "A: committed application versus local eligibility",
+      "mode": "rev3-corrected",
+      "committedEntries": 2,
+      "applyEvents": 2,
+      "ok": true,
+      "missing": [],
+      "expectedCounterexamples": [],
+      "counterexamples": [],
+      "claims": [
+        {
+          "id": "committed-effect-identical-despite-d3",
+          "ok": true,
+          "observed": {
+            "gates": {
+              "r1": "OPEN",
+              "r2": "CLOSED",
+              "r2Reason": "IDENTITY_STALE"
+            },
+            "w1": {
+              "entryId": "e2",
+              "txn": "w1",
+              "executed": true,
+              "admissionEpoch": 1
+            }
+          }
+        },
+        {
+          "id": "d3-may-differ-across-replicas",
+          "ok": true,
+          "observed": {
+            "r1": "OPEN",
+            "r2": "CLOSED",
+            "r2Reason": "IDENTITY_STALE"
+          }
+        }
+      ],
+      "d4Answers": [],
+      "epochReads": []
+    },
+    {
+      "scenario": "B-stale-attempt-vs-newer-hold",
+      "reviewSection": "B: authorization consumes exact expected state",
+      "mode": "rev3-corrected",
+      "committedEntries": 5,
+      "applyEvents": 5,
+      "ok": true,
+      "missing": [],
+      "expectedCounterexamples": [],
+      "counterexamples": [],
+      "claims": [
+        {
+          "id": "stale-decision-did-not-reopen",
+          "ok": true,
+          "observed": {
+            "approvedRows": [
+              1
+            ]
+          }
+        },
+        {
+          "id": "hold-still-current",
+          "ok": true,
+          "observed": {
+            "top": {
+              "type": "HOLD",
+              "epoch": 2,
+              "supersedes": 1,
+              "bytes": "{\"type\":\"RELEASE_HOLD\",\"epoch\":2,\"supersedes\":1}",
+              "entryId": "e2"
+            }
+          }
+        }
+      ],
+      "d4Answers": [],
+      "epochReads": []
+    },
+    {
+      "scenario": "C-monotonicity-and-replay",
+      "reviewSection": "C: monotonicity, replay and conflicting epochs",
+      "mode": "rev3-corrected",
+      "committedEntries": 7,
+      "applyEvents": 7,
+      "ok": true,
+      "missing": [],
+      "expectedCounterexamples": [],
+      "counterexamples": [],
+      "claims": [
+        {
+          "id": "replay-does-not-restore-authority",
+          "ok": true,
+          "observed": {
+            "gate": "CLOSED",
+            "top": "HOLD"
+          }
+        },
+        {
+          "id": "invalid-lower-epoch-command-does-not-move-L",
+          "ok": true,
+          "observed": {
+            "lAfterInvalid": 3
+          }
+        },
+        {
+          "id": "stale-command-does-not-replace-disposition",
+          "ok": true,
+          "observed": {
+            "epoch2Disposition": "APPROVED"
+          }
+        },
+        {
+          "id": "conflict-annotations-name-winner",
+          "ok": true,
+          "observed": {
+            "annotations": [
+              {
+                "kind": "EPOCH_CONFLICT",
+                "epoch": 1,
+                "reason": "epoch-spent",
+                "winner": {
+                  "epoch": 3,
+                  "kind": "HOLD",
+                  "disposition": null
+                }
+              },
+              {
+                "kind": "EPOCH_CONFLICT",
+                "epoch": 2,
+                "reason": "epoch-spent",
+                "winner": {
+                  "epoch": 3,
+                  "kind": "HOLD",
+                  "disposition": null
+                }
+              },
+              {
+                "kind": "EPOCH_CONFLICT",
+                "epoch": 2,
+                "reason": "epoch-spent",
+                "winner": {
+                  "epoch": 3,
+                  "kind": "HOLD",
+                  "disposition": null
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "legitimate-reauthorization-after-still-possible",
+          "ok": true,
+          "observed": {
+            "releasedAfterHold": {
+              "type": "DECISION",
+              "epoch": 4,
+              "disposition": "APPROVED",
+              "bytes": "{\"type\":\"RELEASE_DECISION\",\"epoch\":4,\"disposition\":\"APPROVED\",\"identity\":{\"partitionId\":\"p1\",\"protocolVersion\":\"v1\",\"targetBuildDigest\":\"build-a\",\"configurationKey\":\"cfg-1\",\"membershipGenerationIndex\":3},\"census\":{\"stateDigest\":\"{\\\"l\\\":3,\\\"top\\\":\\\"{\\\\\\\"type\\\\\\\":\\\\\\\"RELEASE_HOLD\\\\\\\",\\\\\\\"epoch\\\\\\\":3,\\\\\\\"supersedes\\\\\\\":2}\\\",\\\"obligations\\\":\\\"[]\\\"}\"}}",
+              "entryId": "e7",
+              "censusBound": true
+            }
+          }
+        }
+      ],
+      "d4Answers": [],
+      "epochReads": []
+    },
+    {
+      "scenario": "D-work-crossing-hold-and-reauthorization",
+      "reviewSection": "D: work crossing HOLD and later reauthorization",
+      "mode": "rev3-corrected",
+      "committedEntries": 5,
+      "applyEvents": 5,
+      "ok": true,
+      "missing": [],
+      "expectedCounterexamples": [],
+      "counterexamples": [],
+      "claims": [
+        {
+          "id": "old-work-never-adopt-newer-epoch",
+          "ok": true,
+          "observed": {
+            "oldEffect": {
+              "entryId": "e4",
+              "txn": "old-work",
+              "executed": false,
+              "reason": "STALE_ADMISSION",
+              "bound": 1,
+              "currentEpoch": 3
+            }
+          }
+        },
+        {
+          "id": "legitimate-new-epoch-work-executed",
+          "ok": true,
+          "observed": {
+            "newEffect": {
+              "entryId": "e5",
+              "txn": "new-work",
+              "executed": true,
+              "admissionEpoch": 3
+            }
+          }
+        },
+        {
+          "id": "exact-replay-of-settled-result-is-no-effect",
+          "ok": true,
+          "observed": {
+            "oldWorkEffectCount": 1
+          }
+        }
+      ],
+      "d4Answers": [],
+      "epochReads": []
+    },
+    {
+      "scenario": "E-prepare-versus-settlement",
+      "reviewSection": "E: PREPARE versus settlement",
+      "mode": "rev3-corrected",
+      "committedEntries": 8,
+      "applyEvents": 8,
+      "ok": true,
+      "missing": [],
+      "expectedCounterexamples": [],
+      "counterexamples": [],
+      "claims": [
+        {
+          "id": "settling-prepare-applies-while-held",
+          "ok": true,
+          "observed": {
+            "t1": {
+              "stagedEpoch": 1,
+              "stagedAt": 2,
+              "preparedIndex": 5,
+              "decided": {
+                "outcome": "COMMIT",
+                "index": 8
+              }
+            }
+          }
+        },
+        {
+          "id": "duplicate-prepare-no-new-effect",
+          "ok": true,
+          "observed": {
+            "t1": {
+              "outcome": "COMMIT",
+              "index": 8
+            }
+          }
+        },
+        {
+          "id": "fresh-prepare-after-hold-is-no-settlement",
+          "ok": true,
+          "observed": {
+            "annotation": {
+              "kind": "PREPARE_ADMISSIBILITY_REFUSED",
+              "txn": "t2"
+            }
+          }
+        },
+        {
+          "id": "authoritative-decision-applies",
+          "ok": true,
+          "observed": {
+            "t1": {
+              "outcome": "COMMIT",
+              "index": 8
+            }
+          }
+        }
+      ],
+      "d4Answers": [],
+      "epochReads": []
+    },
+    {
+      "scenario": "F-outcome-uncertainty",
+      "reviewSection": "F: outcome uncertainty",
+      "mode": "rev3-corrected",
+      "committedEntries": 1,
+      "applyEvents": 1,
+      "ok": true,
+      "missing": [],
+      "expectedCounterexamples": [],
+      "counterexamples": [],
+      "claims": [
+        {
+          "id": "intermediate-answer-nonterminal",
+          "ok": true,
+          "observed": {
+            "answer": {
+              "requestId": "e1",
+              "prefix": 0,
+              "class": "PENDING",
+              "terminal": false
+            }
+          }
+        },
+        {
+          "id": "F2-row-absence-not-proof",
+          "ok": true,
+          "observed": {
+            "read": {
+              "epoch": 1,
+              "typed": "PENDING"
+            }
+          }
+        },
+        {
+          "id": "answer-bound-to-identity-bytes-prefix",
+          "ok": true,
+          "observed": {
+            "answer": {
+              "requestId": "e1",
+              "prefix": 1,
+              "bytes": "{\"type\":\"RELEASE_DECISION\",\"epoch\":1,\"disposition\":\"APPROVED\",\"identity\":{\"partitionId\":\"p1\",\"protocolVersion\":\"v1\",\"targetBuildDigest\":\"build-a\",\"configurationKey\":\"cfg-1\",\"membershipGenerationIndex\":3},\"census\":{\"stateDigest\":\"{\\\"l\\\":0,\\\"top\\\":null,\\\"obligations\\\":\\\"[]\\\"}\"}}",
+              "class": "COMMITTED",
+              "epoch": 1,
+              "disposition": "APPROVED",
+              "applied": true
+            }
+          }
+        },
+        {
+          "id": "classification-monotone",
+          "ok": true,
+          "observed": {
+            "transition": [
+              "PENDING",
+              "COMMITTED"
+            ]
+          }
+        }
+      ],
+      "d4Answers": [
+        {
+          "requestId": "e1",
+          "prefix": 0,
+          "class": "PENDING",
+          "terminal": false
+        },
+        {
+          "requestId": "e1",
+          "prefix": 1,
+          "bytes": "{\"type\":\"RELEASE_DECISION\",\"epoch\":1,\"disposition\":\"APPROVED\",\"identity\":{\"partitionId\":\"p1\",\"protocolVersion\":\"v1\",\"targetBuildDigest\":\"build-a\",\"configurationKey\":\"cfg-1\",\"membershipGenerationIndex\":3},\"census\":{\"stateDigest\":\"{\\\"l\\\":0,\\\"top\\\":null,\\\"obligations\\\":\\\"[]\\\"}\"}}",
+          "class": "COMMITTED",
+          "epoch": 1,
+          "disposition": "APPROVED",
+          "applied": true
+        }
+      ],
+      "epochReads": [
+        {
+          "epoch": 1,
+          "typed": "PENDING"
+        }
+      ]
+    },
+    {
+      "scenario": "G-retention-policy",
+      "reviewSection": "G: retention",
+      "mode": "rev3-corrected",
+      "committedEntries": 8,
+      "applyEvents": 8,
+      "ok": true,
+      "missing": [],
+      "expectedCounterexamples": [],
+      "counterexamples": [],
+      "claims": [
+        {
+          "id": "G-retention-policy-ran",
+          "ok": true,
+          "observed": {
+            "retentions": [
+              {
+                "replica": "r1",
+                "retired": 1
+              },
+              {
+                "replica": "r2",
+                "retired": 1
+              },
+              {
+                "replica": "read",
+                "retired": 1
+              },
+              {
+                "replica": "read",
+                "retired": 1
+              },
+              {
+                "replica": "read",
+                "retired": 1
+              },
+              {
+                "replica": "r1",
+                "retired": 1
+              },
+              {
+                "replica": "r2",
+                "retired": 1
+              }
+            ]
+          }
+        },
+        {
+          "id": "retired-answer-typed-not-fabricated",
+          "ok": true,
+          "observed": {
+            "read": {
+              "epoch": 1,
+              "typed": "RETIRED",
+              "knowable": "history-retired-below-watermark"
+            }
+          }
+        },
+        {
+          "id": "watermark-denies-but-does-not-invent",
+          "ok": true,
+          "observed": {
+            "stale": {
+              "entryId": "e6",
+              "txn": "retired-epoch-work",
+              "executed": false,
+              "reason": "STALE_ADMISSION",
+              "bound": 1,
+              "currentEpoch": 5
+            }
+          }
+        },
+        {
+          "id": "fencing-possible-at-capacity",
+          "ok": true,
+          "observed": {
+            "holdRow": {
+              "type": "HOLD",
+              "epoch": 6,
+              "supersedes": 5,
+              "bytes": "{\"type\":\"RELEASE_HOLD\",\"epoch\":6,\"supersedes\":5}",
+              "entryId": "e8"
+            }
+          }
+        },
+        {
+          "id": "retired-answer-not-never-committed",
+          "ok": true,
+          "observed": {
+            "read": {
+              "epoch": 1,
+              "typed": "RETIRED",
+              "knowable": "history-retired-below-watermark"
+            }
+          }
+        }
+      ],
+      "d4Answers": [],
+      "epochReads": [
+        {
+          "epoch": 1,
+          "typed": "RETIRED",
+          "knowable": "history-retired-below-watermark"
+        }
+      ]
+    }
+  ]
+}

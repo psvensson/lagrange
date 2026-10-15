@@ -1,0 +1,62 @@
+[
+  {
+    "path": "test/model/participant-release-disposition/model.js",
+    "sha256": "7f509f3802e4b8de4f0883f0de85c7a6b2657f9afb4b929412ed167a07615d8c",
+    "unchanged": true
+  },
+  {
+    "path": "scripts/checks/participant-release-committed-disposition-transition-model.js",
+    "sha256": "8487381d086d0b5b93f9e8329cb64f59aad004247c1df42316e140fce5c396cd",
+    "unchanged": true
+  },
+  {
+    "path": "package-lock.json",
+    "sha256": "8fb1a612db45cac0a61e281b41fd60da315f916b7aeb52046bcbe3e7b8d61ecd",
+    "unchanged": true
+  },
+  {
+    "path": "AGENTS.md",
+    "sha256": "cd7a732087a504ab418ea482973b451c657ea39486695ed487e4de09fe0ebcb7",
+    "unchanged": true
+  },
+  {
+    "path": "docs/steering/rules.md",
+    "sha256": "e4183d409853f18cf2a3563a5aef295386084706e5593897c536c69c3298ed51",
+    "unchanged": true
+  },
+  {
+    "path": "docs/steering/router.md",
+    "sha256": "58ff909b679551a717302e5132ff5598b3a1fab6286dc386cd5f1a76bda474f6",
+    "unchanged": true
+  },
+  {
+    "path": "solve/quests/seed-control-current-proof-amortization/evidence/transition-model-20261015/rev3-correction-evidence.json",
+    "sha256": "816a9c5211adb74f2508cb5b6f7449688c9a2273da2444556e1841b2d6592ca2",
+    "unchanged": true
+  },
+  {
+    "path": "solve/quests/seed-control-current-proof-amortization/evidence/transition-model-20261015/summary.json",
+    "sha256": "f8dfc6beb12b5520c9004ad12b8a336483ee27892efb34c716f2b1cc7676df6c",
+    "unchanged": true
+  },
+  {
+    "path": "solve/quests/seed-control-current-proof-amortization/evidence/transition-model-20261015/runner-output.txt",
+    "sha256": "e60a50d1b8d013e4b4886af00ee6b9e5254a7fac5910c5e5a550342ed7e2bf2a",
+    "unchanged": true
+  },
+  {
+    "path": "solve/quests/seed-control-current-proof-amortization/evidence/transition-model-20261015/EVIDENCE.md",
+    "sha256": "1451f12cfc88421bfce86e68ad79564d8ea8658963b8d47933878c49cee19bb3",
+    "unchanged": true
+  },
+  {
+    "path": "solve/quests/seed-control-current-proof-amortization/evidence/transition-model-20261015/rev2-counterevidence.json",
+    "sha256": "793d84725426cd2061df98c10a844e52fbd2b29459d117dbb8f61167ac2ae4f1",
+    "unchanged": true
+  },
+  {
+    "path": "/home/peter/Downloads/LAGRANGE_CODEX_HANDOVER_2026-10-15.md",
+    "sha256": "06a10985014aefdd7a6ab716e64bb89619bc966077a13b57cacda415b70303dc",
+    "unchanged": true
+  }
+]

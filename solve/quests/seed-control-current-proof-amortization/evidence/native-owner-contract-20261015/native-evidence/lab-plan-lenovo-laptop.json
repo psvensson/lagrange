@@ -1,0 +1,24 @@
+{
+  "sha": "f22c8b32280514dde68519dd8232498e6d306099",
+  "host": "lenovo-laptop",
+  "files": [
+    "test/partition/participant-release-prepared-settlement-native.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/partition/participant-release-prepared-settlement-native.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ],
+  "costs": [
+    {
+      "file": "test/partition/participant-release-prepared-settlement-native.test.js",
+      "jobs": 4,
+      "ms": 10000,
+      "lane": "ordinary"
+    }
+  ]
+}

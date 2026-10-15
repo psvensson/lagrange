@@ -1,0 +1,16 @@
+{
+  "archive": "/home/peter/Downloads/LAGRANGE_NATIVE_RELEASE_FENCING_OWNER_PACKET_20261015T104241Z.tar.gz",
+  "sha256": "550f0e0a7fbb5ded309206d60474567bd428ddfde808c99f0b8b4a2691783bf1",
+  "bytes": 229948,
+  "payloadFiles": 133,
+  "payloadManifestSha256": "6ff0509cd9b0ad645d1b77e5f595ca98324e29095a9e7dfe58169feedcc87f7b",
+  "reviewSha256": "5efcd50785cc4fcd7ae638003bd76bd1106cfe87e8667a9e9c468b85a503e63f",
+  "reviewedDocuments": {
+    "OWNER-CONTRACT.md": "573e57f1b8f00a6c685a1fec152b09731286c2b3753459c0acd809fc2b5fed27",
+    "NATIVE-EVIDENCE.md": "85539e910690e21dff3e8f60c62ac17cafa50d4fbc1d63e8035ee37f6d6dc279",
+    "COMPARATIVE-PRECEDENTS.md": "113e6fa0152bd107f893f02b52f0bd6f02c0bab882880a2565381d65f1efeb70"
+  },
+  "testsHead": "897ccebeb4cda14bb98bfb21102ebbc5bb181f52",
+  "productionBase": "bde70cec74b8eb8e8db17d0d50a432102947d6d4",
+  "archiveVerified": true
+}

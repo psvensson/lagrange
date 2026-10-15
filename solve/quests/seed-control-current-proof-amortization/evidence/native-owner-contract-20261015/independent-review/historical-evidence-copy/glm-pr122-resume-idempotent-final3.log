@@ -1,0 +1,3146 @@
+TAP version 13
+# Initializing partition service {
+#   partitionId: 'sql_transactions-p1',
+#   tableId: 'sql_transactions',
+#   replicaId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   replicaCount: 1,
+#   dbPath: '/tmp/resume-idempotent-open-witness-jIhRDp/sql_transactions-p1-r1.db'
+# }
+# Created table { tableName: 'sql_transactions', partitionId: 'sql_transactions-p1' }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Raft leadership transition evidence {
+#   partitionId: 'sql_transactions-p1',
+#   replicaId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   peerCohort: [ 'sql_transactions-p1-r1' ],
+#   eventType: 'role_transition',
+#   role: 'leader',
+#   trigger: 'quorum_elected',
+#   term: 1
+# }
+# Became leader {
+#   term: 1,
+#   replicaId: 'sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1',
+#   rebalancerActive: true
+# }
+# Raft leadership transition evidence {
+#   partitionId: 'sql_transactions-p1',
+#   replicaId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   peerCohort: [ 'sql_transactions-p1-r1' ],
+#   eventType: 'leader_observation',
+#   role: 'leader',
+#   trigger: 'leader_change',
+#   term: 1,
+#   previousLeader: 'sql_transactions-p1-r1',
+#   newLeader: 'sql_transactions-p1-r1',
+#   demoted: false
+# }
+# Leader changed {
+#   newLeader: 'sql_transactions-p1-r1',
+#   previousLeader: 'sql_transactions-p1-r1',
+#   term: 1,
+#   partitionId: 'sql_transactions-p1'
+# }
+# Single replica - becoming leader immediately {
+#   replicaId: 'sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Partition size updated {
+#   partitionId: 'sql_transactions-p1',
+#   sizeBytes: 110592,
+#   sizeMB: '0.11'
+# }
+# Partition service initialized {
+#   partitionId: 'sql_transactions-p1',
+#   replicaId: 'sql_transactions-p1-r1',
+#   sizeBytes: 110592
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Initializing partition service {
+#   partitionId: 'sql_transactions-p1',
+#   tableId: 'sql_transactions',
+#   replicaId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   replicaCount: 2,
+#   dbPath: '/tmp/resume-idempotent-open-witness-jIhRDp/sql_transactions-p1-r2.db'
+# }
+# Created table { tableName: 'sql_transactions', partitionId: 'sql_transactions-p1' }
+# Deferring election start {
+#   replicaId: 'sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Stopped consensus scheduling for deferred election {
+#   replicaId: 'sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Joining peer with fully qualified address {
+#   peerId: 'sql_transactions-p1-r1',
+#   peerAddress: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   replicaId: 'sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1',
+#   addressFormat: 'unified'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Raft peer admission {
+#   groupId: 'sql_transactions-p1',
+#   partitionId: 'sql_transactions-p1',
+#   replicaId: 'sql_transactions-p1-r2',
+#   peerAddress: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   admission: {
+#     replicaIdentity: 'sql_transactions-p1-r1',
+#     outcome: 'NOT_LEADER',
+#     portOutcome: undefined,
+#     reason: undefined
+#   }
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Partition size updated {
+#   partitionId: 'sql_transactions-p1',
+#   sizeBytes: 110592,
+#   sizeMB: '0.11'
+# }
+# Partition service initialized {
+#   partitionId: 'sql_transactions-p1',
+#   replicaId: 'sql_transactions-p1-r2',
+#   sizeBytes: 110592
+# }
+# Starting Raft election timer {
+#   replicaId: 'sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1',
+#   peerCount: 1
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Raft peer admission {
+#   groupId: 'sql_transactions-p1',
+#   partitionId: 'sql_transactions-p1',
+#   replicaId: 'sql_transactions-p1-r1',
+#   peerAddress: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   admission: {
+#     replicaIdentity: 'sql_transactions-p1-r2',
+#     outcome: 'QUEUED',
+#     portOutcome: undefined,
+#     reason: undefined
+#   }
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Raft peer admission {
+#   groupId: 'sql_transactions-p1',
+#   partitionId: 'sql_transactions-p1',
+#   replicaId: 'sql_transactions-p1-r1',
+#   peerAddress: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   admission: {
+#     replicaIdentity: 'sql_transactions-p1-r2',
+#     outcome: 'PROPOSED',
+#     portOutcome: 'CORE_OK',
+#     reason: 'drained'
+#   }
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Raft leadership transition evidence {
+#   partitionId: 'sql_transactions-p1',
+#   replicaId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   peerCohort: [ 'sql_transactions-p1-r1', 'sql_transactions-p1-r2' ],
+#   eventType: 'leader_observation',
+#   role: 'follower',
+#   trigger: 'leader_change',
+#   term: 1,
+#   previousLeader: null,
+#   newLeader: 'sql_transactions-p1-r1',
+#   demoted: false
+# }
+# Leader changed {
+#   newLeader: 'sql_transactions-p1-r1',
+#   previousLeader: null,
+#   term: 1,
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Initializing partition service {
+#   partitionId: 'sql_transactions-p1',
+#   tableId: 'sql_transactions',
+#   replicaId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   replicaCount: 3,
+#   dbPath: '/tmp/resume-idempotent-open-witness-jIhRDp/sql_transactions-p1-r3.db'
+# }
+# Created table { tableName: 'sql_transactions', partitionId: 'sql_transactions-p1' }
+# Deferring election start {
+#   replicaId: 'sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Stopped consensus scheduling for deferred election {
+#   replicaId: 'sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Joining peer with fully qualified address {
+#   peerId: 'sql_transactions-p1-r1',
+#   peerAddress: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   replicaId: 'sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1',
+#   addressFormat: 'unified'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Raft peer admission {
+#   groupId: 'sql_transactions-p1',
+#   partitionId: 'sql_transactions-p1',
+#   replicaId: 'sql_transactions-p1-r3',
+#   peerAddress: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   admission: {
+#     replicaIdentity: 'sql_transactions-p1-r1',
+#     outcome: 'NOT_LEADER',
+#     portOutcome: undefined,
+#     reason: undefined
+#   }
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Joining peer with fully qualified address {
+#   peerId: 'sql_transactions-p1-r2',
+#   peerAddress: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   replicaId: 'sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1',
+#   addressFormat: 'unified'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Raft peer admission {
+#   groupId: 'sql_transactions-p1',
+#   partitionId: 'sql_transactions-p1',
+#   replicaId: 'sql_transactions-p1-r3',
+#   peerAddress: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   admission: {
+#     replicaIdentity: 'sql_transactions-p1-r2',
+#     outcome: 'NOT_LEADER',
+#     portOutcome: undefined,
+#     reason: undefined
+#   }
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Partition size updated {
+#   partitionId: 'sql_transactions-p1',
+#   sizeBytes: 110592,
+#   sizeMB: '0.11'
+# }
+# Partition service initialized {
+#   partitionId: 'sql_transactions-p1',
+#   replicaId: 'sql_transactions-p1-r3',
+#   sizeBytes: 110592
+# }
+# Starting Raft election timer {
+#   replicaId: 'sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1',
+#   peerCount: 2
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Raft peer admission {
+#   groupId: 'sql_transactions-p1',
+#   partitionId: 'sql_transactions-p1',
+#   replicaId: 'sql_transactions-p1-r1',
+#   peerAddress: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   admission: {
+#     replicaIdentity: 'sql_transactions-p1-r3',
+#     outcome: 'QUEUED',
+#     portOutcome: undefined,
+#     reason: undefined
+#   }
+# }
+# Raft peer admission {
+#   groupId: 'sql_transactions-p1',
+#   partitionId: 'sql_transactions-p1',
+#   replicaId: 'sql_transactions-p1-r1',
+#   peerAddress: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   admission: {
+#     replicaIdentity: 'sql_transactions-p1-r3',
+#     outcome: 'PROPOSED',
+#     portOutcome: 'CORE_OK',
+#     reason: 'drained'
+#   }
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Raft peer admission {
+#   groupId: 'sql_transactions-p1',
+#   partitionId: 'sql_transactions-p1',
+#   replicaId: 'sql_transactions-p1-r1',
+#   peerAddress: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   admission: {
+#     replicaIdentity: 'sql_transactions-p1-r3',
+#     outcome: 'IN_FLIGHT',
+#     portOutcome: undefined,
+#     reason: undefined
+#   }
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Raft peer admission {
+#   groupId: 'sql_transactions-p1',
+#   partitionId: 'sql_transactions-p1',
+#   replicaId: 'sql_transactions-p1-r2',
+#   peerAddress: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   admission: {
+#     replicaIdentity: 'sql_transactions-p1-r3',
+#     outcome: 'NOT_LEADER',
+#     portOutcome: undefined,
+#     reason: undefined
+#   }
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Raft leadership transition evidence {
+#   partitionId: 'sql_transactions-p1',
+#   replicaId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   peerCohort: [
+#     'sql_transactions-p1-r1',
+#     'sql_transactions-p1-r2',
+#     'sql_transactions-p1-r3'
+#   ],
+#   eventType: 'leader_observation',
+#   role: 'follower',
+#   trigger: 'leader_change',
+#   term: 1,
+#   previousLeader: null,
+#   newLeader: 'sql_transactions-p1-r1',
+#   demoted: false
+# }
+# Leader changed {
+#   newLeader: 'sql_transactions-p1-r1',
+#   previousLeader: null,
+#   term: 1,
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Registered ReplicaHandler with message router {
+#   address: 'sql-resume-idempotent-open-witness/service/replica-handler',
+#   nodeId: 'sql-resume-idempotent-open-witness'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Participant release recovery {
+#   partitionId: 'sql_transactions-p1',
+#   outcome: 'release_operator_required',
+#   missingFact: 'explicit_pre_origin_release_request',
+#   reason: null,
+#   blockedGroupId: null,
+#   blockedReplicaId: null,
+#   recoveryPhase: null,
+#   statusOutcome: null,
+#   failure: null
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Applying committed entry {
+#   partitionId: 'sql_transactions-p1',
+#   commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+# }
+# Partition write generation origin recorded { partitionId: 'sql_transactions-p1', originIndex: 4, originTerm: 1 }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Applying committed entry {
+#   partitionId: 'sql_transactions-p1',
+#   commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+# }
+# Partition write generation origin recorded { partitionId: 'sql_transactions-p1', originIndex: 4, originTerm: 1 }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Applying committed entry {
+#   partitionId: 'sql_transactions-p1',
+#   commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+# }
+# Partition write generation origin recorded { partitionId: 'sql_transactions-p1', originIndex: 4, originTerm: 1 }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r2',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r2',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r3',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3',
+#   partitionId: 'sql_transactions-p1'
+# }
+# Built peer address from cache {
+#   peerId: 'sql_transactions-p1-r1',
+#   nodeId: 'sql-resume-idempotent-open-witness',
+#   address: 'sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1',
+#   partitionId: 'sql_transactions-p1'
+# }
+# RESUME_IDEMPOTENT_ENVELOPE {"candidateSource":"9233c9e0e candidate; test head 1994870bb","setup":{"outcome":"cut_over","releaseId":"3bd30729de0ee8e10625421c2d61ba97794fce2d6e7f22f2949d6fea1b8ce9f9","recipientAdmission":{"state":"open","releaseId":"3bd30729de0ee8e10625421c2d61ba97794fce2d6e7f22f2949d6fea1b8ce9f9"},"replayedPayload":{"action":"resume","replicaId":"sql_transactions-p1-r2","releaseId":"3bd30729de0ee8e10625421c2d61ba97794fce2d6e7f22f2949d6fea1b8ce9f9","attemptTerm":1,"censusEntries":3}},"recipientFactsBeforeMutation":{"outcome":"observed","queryCensus":{"state":"clear","schemaVersion":2,"semanticVersion":"tx1-query-set-v1","rowGenerationDigest":"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945","enforcement":{"state":"enforced","schemaVersion":2,"schemaDigest":"8200c95c4ecdf0b6e3311ee67c0952b4bdb561b3f8b77dc2ae12bb5f2947093c","enforcerDigest":"bdde8533813a78d55860924b1ae04693667080208044d4ee7593e1c5d6858d16","missingColumns":[]},"legacyTransactionIds":[],"recoverableTransactionIds":[]}},"recipientFactsAfterMutation":{"outcome":"observed","queryCensus":{"state":"held","schemaVersion":2,"semanticVersion":"tx1-query-set-v1","rowGenerationDigest":"1b33b065e67e796b72e8ddfa991ccb22c3eb86a34a444f9fc8e87ec0b5ce0784","enforcement":{"state":"enforced","schemaVersion":2,"schemaDigest":"8200c95c4ecdf0b6e3311ee67c0952b4bdb561b3f8b77dc2ae12bb5f2947093c","enforcerDigest":"bdde8533813a78d55860924b1ae04693667080208044d4ee7593e1c5d6858d16","missingColumns":[]},"legacyTransactionIds":[],"recoverableTransactionIds":["0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b"]},"freshCensusDefect":"release_census_refused","raftStatus":{"outcome":"CORE_OK","groupId":"sql_transactions-p1","replicaIdentity":"sql_transactions-p1-r2","peerId":"7691077697885072888","term":1,"commitIndex":4,"confChangePending":false,"appliedIndex":4,"lastIndex":4,"configurationKey":"[[\\"2734552253535212872\\",\\"6600243378791833037\\",\\"7691077697885072888\\"],[],[],[],false]","membershipGenerationIndex":3,"lifecycleIncarnation":"3387a3af-873a-4807-be1b-55d7033dbe70","role":"follower","leaderId":"sql_transactions-p1-r1","leaderAddress":"sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1","leaderAddressStatus":"resolved","peerCount":2,"peers":[{"peerId":"6600243378791833037","replicaIdentity":"sql_transactions-p1-r3","address":"sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3","addressStatus":"resolved","learner":false,"delivery":{"outcome":"none-observed"}},{"peerId":"2734552253535212872","replicaIdentity":"sql_transactions-p1-r1","address":"sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1","addressStatus":"resolved","learner":false,"delivery":{"outcome":"delivered","consecutiveFailures":0}}],"followerProgress":{},"inboundStepRefusals":[],"confState":{"voters":["6600243378791833037","7691077697885072888","2734552253535212872"],"learners":[],"votersOutgoing":[],"learnersNext":[],"autoLeave":false},"gateOpen":true,"bootstrapIndex":0,"admissionIndex":0,"identityRecorded":true,"runtimeHealth":"healthy","groupHealth":"usable","runtimeGeneration":1}},"replay":{"answer":{"acknowledged":true,"releaseResult":{"outcome":"resumed","releaseId":"3bd30729de0ee8e10625421c2d61ba97794fce2d6e7f22f2949d6fea1b8ce9f9","partitionId":"sql_transactions-p1","phase":"resume"}},"recipientAdmissionAfter":{"state":"open","raisedAtMs":1792043148401,"generation":2,"releaseId":"3bd30729de0ee8e10625421c2d61ba97794fce2d6e7f22f2949d6fea1b8ce9f9","proof":{"term":1,"leaderId":"sql_transactions-p1-r1","configurationKey":"[[\\"2734552253535212872\\",\\"6600243378791833037\\",\\"7691077697885072888\\"],[],[],[],false]","membershipGenerationIndex":3,"runtimeGeneration":1,"lifecycleIncarnation":"3387a3af-873a-4807-be1b-55d7033dbe70"}},"leaderAdmission":"open","allAdmissions":{"sql_transactions-p1-r1":"open","sql_transactions-p1-r2":"open","sql_transactions-p1-r3":"open"},"raftStatusAfter":{"outcome":"CORE_OK","groupId":"sql_transactions-p1","replicaIdentity":"sql_transactions-p1-r2","peerId":"7691077697885072888","term":1,"commitIndex":4,"confChangePending":false,"appliedIndex":4,"lastIndex":4,"configurationKey":"[[\\"2734552253535212872\\",\\"6600243378791833037\\",\\"7691077697885072888\\"],[],[],[],false]","membershipGenerationIndex":3,"lifecycleIncarnation":"3387a3af-873a-4807-be1b-55d7033dbe70","role":"follower","leaderId":"sql_transactions-p1-r1","leaderAddress":"sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1","leaderAddressStatus":"resolved","peerCount":2,"peers":[{"peerId":"6600243378791833037","replicaIdentity":"sql_transactions-p1-r3","address":"sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r3","addressStatus":"resolved","learner":false,"delivery":{"outcome":"none-observed"}},{"peerId":"2734552253535212872","replicaIdentity":"sql_transactions-p1-r1","address":"sql-resume-idempotent-open-witness/partition/sql_transactions-p1-r1","addressStatus":"resolved","learner":false,"delivery":{"outcome":"delivered","consecutiveFailures":0}}],"followerProgress":{},"inboundStepRefusals":[],"confState":{"voters":["6600243378791833037","7691077697885072888","2734552253535212872"],"learners":[],"votersOutgoing":[],"learnersNext":[],"autoLeave":false},"gateOpen":true,"bootstrapIndex":0,"admissionIndex":0,"identityRecorded":true,"runtimeHealth":"healthy","groupHealth":"usable","runtimeGeneration":1}}}
+# Unregistered ReplicaHandler from message router {
+#   address: 'sql-resume-idempotent-open-witness/service/replica-handler',
+#   nodeId: 'sql-resume-idempotent-open-witness'
+# }
+# Shutting down partition service {
+#   partitionId: 'sql_transactions-p1',
+#   replicaId: 'sql_transactions-p1-r1'
+# }
+# Shutting down partition service {
+#   partitionId: 'sql_transactions-p1',
+#   replicaId: 'sql_transactions-p1-r2'
+# }
+# Shutting down partition service {
+#   partitionId: 'sql_transactions-p1',
+#   replicaId: 'sql_transactions-p1-r3'
+# }
+# Subtest: a duplicate RESUME while already OPEN reports RESUMED over changed fresh facts
+ok 1 - a duplicate RESUME while already OPEN reports RESUMED over changed fresh facts
+  ---
+  duration_ms: 932.421771
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1601.897385

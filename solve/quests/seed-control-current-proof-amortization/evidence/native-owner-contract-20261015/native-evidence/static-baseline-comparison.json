@@ -1,0 +1,16 @@
+{
+  "baseSha": "bde70cec74b8eb8e8db17d0d50a432102947d6d4",
+  "lintExit": 1,
+  "baselineLintExit": 1,
+  "lintOutputEqualAfterRootNormalization": true,
+  "lintProblems": 85,
+  "initialLintProblems": 89,
+  "introducedStyleProblemsFixed": 4,
+  "scopedLintExit": 0,
+  "complexityExit": 1,
+  "baselineComplexityExit": 1,
+  "complexityReportsEqual": true,
+  "violations": 1788,
+  "ratchet": 1755,
+  "noBaselinesRaised": true
+}

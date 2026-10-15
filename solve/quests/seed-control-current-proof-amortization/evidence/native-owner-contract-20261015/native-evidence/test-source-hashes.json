@@ -1,0 +1,40 @@
+{
+  "head": "897ccebeb4cda14bb98bfb21102ebbc5bb181f52",
+  "files": [
+    {
+      "path": "test/partition/participant-release-first-prepare-native.test.js",
+      "sha256": "6fe3f535054f635173ef99c568913dba1c9e69e7bd1f1cabc2ade82a93c73f29",
+      "bytes": 2049
+    },
+    {
+      "path": "test/partition/participant-release-prepare-identity-native.test.js",
+      "sha256": "945bf200c42327627db0c86aaeb9faa7361a32c77da01b0c70d57799b6aab984",
+      "bytes": 1419
+    },
+    {
+      "path": "test/partition/participant-release-prepared-settlement-native.test.js",
+      "sha256": "c931bbd94708fe42cbbf75c3eea646c802b1c9d66667e413139d3af49ff2be4f",
+      "bytes": 3858
+    },
+    {
+      "path": "test/partition/participant-release-retention-native.test.js",
+      "sha256": "579bc2a414393dff5b50485962a6987863526848ca84e693cc988348a6a19f4e",
+      "bytes": 2906
+    },
+    {
+      "path": "test/partition/participant-release-tx1-decision-fixture.js",
+      "sha256": "33402161e1f0bf99965419f73313afa1176277ab4be526605f16396423ed55df",
+      "bytes": 4257
+    },
+    {
+      "path": "test/partition/participant-release-tx1-native-fixture.js",
+      "sha256": "c3ef8625e7e599e221f161c5c1e12cb0394e80c3963334062acdd302a750d69f",
+      "bytes": 6193
+    },
+    {
+      "path": "test/partition/partition-release-fixture.js",
+      "sha256": "f9f1e3ce930a4bbae33845bdffc4a1e54f676d4f90c76e8579c3943278d49672",
+      "bytes": 6536
+    }
+  ]
+}

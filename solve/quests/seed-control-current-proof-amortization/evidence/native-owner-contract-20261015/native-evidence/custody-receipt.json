@@ -1,0 +1,22 @@
+{
+  "observedAt": "2026-10-15T10:22:08.660178+00:00",
+  "reviewTree": "/mnt/data/peter/projects/.worktrees/release-fencing-native-contract-20261015",
+  "reviewBranch": "review/release-fencing-native-owner-contract-20261015",
+  "testHead": "897ccebeb4cda14bb98bfb21102ebbc5bb181f52",
+  "sharedTree": "/mnt/data/peter/projects/lagrange",
+  "sharedBranch": "integrate/rs-raft-2026-09-30",
+  "sharedHead": "0996d7576516af24f5f4d3e1e9aee37c775aabae",
+  "sharedStagedPathCount": 18,
+  "sharedStagedPatchSha256": "0b2ea79142a13f4dcada523f01108fbd8a4809492838e23f7a0246a7159953fc",
+  "sharedStagedPatchUnchanged": true,
+  "sharedStatusUnchanged": true,
+  "productionDiffPaths": [],
+  "reviewArchiveSha256": "7f682a6d08672a5dc70bd243bdf76806970dd32f4cc179b8e145e3157c9cfe72",
+  "remoteRefs": [
+    "52399faabb412a291a3a4dfb0feadb4bcad12cec\trefs/heads/main",
+    "bde70cec74b8eb8e8db17d0d50a432102947d6d4\trefs/heads/review/release-linearization-rev2-correction-20261015"
+  ],
+  "processInventorySha256": "8e492957544d21c744ba214b0f298bc51ec2670a7259abae959e50da0a0cc4fe",
+  "processInventoryScope": "Full process commands retained locally only; no processes interrupted. These observations are not leases.",
+  "sharedCustodyScope": "Full staged patches stay local; byte equality and hashes published only."
+}

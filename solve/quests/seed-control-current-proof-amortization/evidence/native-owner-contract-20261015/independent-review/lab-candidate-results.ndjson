@@ -1,0 +1,4 @@
+{"file":"test/partition/participant-release-native-application-order.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":5627,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-participant-transaction-apply.test.js","attempt":1,"ok":true,"assertions":27,"durationMs":6427,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-participant-transaction-staging.test.js","attempt":1,"ok":true,"assertions":19,"durationMs":8084,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-transaction-replay-cursor-v4.test.js","attempt":1,"ok":false,"assertions":11,"durationMs":4420,"retriedOnce":false,"firstFailureLine":"not ok 1 - TX1 v4 RC1: a source entry whose statement failed deterministically is never mirrored"}

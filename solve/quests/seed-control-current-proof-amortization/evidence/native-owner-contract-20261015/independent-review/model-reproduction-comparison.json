@@ -1,0 +1,23 @@
+[
+  {
+    "file": "summary.json",
+    "committedSha256": "f8dfc6beb12b5520c9004ad12b8a336483ee27892efb34c716f2b1cc7676df6c",
+    "reproducedSha256": "f8dfc6beb12b5520c9004ad12b8a336483ee27892efb34c716f2b1cc7676df6c",
+    "byteIdentical": true,
+    "jsonIdentical": true
+  },
+  {
+    "file": "rev2-counterevidence.json",
+    "committedSha256": "793d84725426cd2061df98c10a844e52fbd2b29459d117dbb8f61167ac2ae4f1",
+    "reproducedSha256": "793d84725426cd2061df98c10a844e52fbd2b29459d117dbb8f61167ac2ae4f1",
+    "byteIdentical": true,
+    "jsonIdentical": true
+  },
+  {
+    "file": "rev3-correction-evidence.json",
+    "committedSha256": "816a9c5211adb74f2508cb5b6f7449688c9a2273da2444556e1841b2d6592ca2",
+    "reproducedSha256": "816a9c5211adb74f2508cb5b6f7449688c9a2273da2444556e1841b2d6592ca2",
+    "byteIdentical": true,
+    "jsonIdentical": true
+  }
+]

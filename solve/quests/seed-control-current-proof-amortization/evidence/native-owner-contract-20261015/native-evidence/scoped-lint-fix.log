@@ -1,0 +1,6 @@
+
+/mnt/data/peter/projects/.worktrees/release-fencing-native-contract-20261015/test/partition/participant-release-tx1-native-fixture.js
+  77:7  error  'owners' is never reassigned. Use 'const' instead  prefer-const
+
+✖ 1 problem (1 error, 0 warnings)
+

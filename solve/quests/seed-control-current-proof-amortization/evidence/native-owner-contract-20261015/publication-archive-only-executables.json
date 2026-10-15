@@ -1,0 +1,48 @@
+{
+  "archiveSha256": "550f0e0a7fbb5ded309206d60474567bd428ddfde808c99f0b8b4a2691783bf1",
+  "reason": "Immutable historical/evidence execution bytes belong in the verified downloadable evidence archive. Staged ESLint rejected their formatting; no historical bytes rewritten and no hook bypassed. These seven files are omitted from the Git mirror only. The payload manifest is checked against the extracted archive, which remains complete.",
+  "files": [
+    {
+      "payloadPath": "independent-review/adversarial-model-review-bound-holds.mjs",
+      "archiveMember": "native-owner-contract-20261015/independent-review/adversarial-model-review-bound-holds.mjs",
+      "sha256": "071f725ed9df7e259fe485768d23ba95117bade4cdcf129bb0a4183bbd8c6aef",
+      "bytes": 6853
+    },
+    {
+      "payloadPath": "independent-review/adversarial-model-review.mjs",
+      "archiveMember": "native-owner-contract-20261015/independent-review/adversarial-model-review.mjs",
+      "sha256": "dd0f4bac75080da538924a78bce02a1291941581336e5ce88ca9e82b4506df9b",
+      "bytes": 6784
+    },
+    {
+      "payloadPath": "independent-review/exact-replay-review.mjs",
+      "archiveMember": "native-owner-contract-20261015/independent-review/exact-replay-review.mjs",
+      "sha256": "1aba7de101cf368a73ba11a1df856b326ac24139d7e8800e9ff942f664c26bc3",
+      "bytes": 1840
+    },
+    {
+      "payloadPath": "independent-review/run-focused-lab.mjs",
+      "archiveMember": "native-owner-contract-20261015/independent-review/run-focused-lab.mjs",
+      "sha256": "2fe21a327565f3c5f39ea037ccdf48fd5656f7d408dce413fd54e6b0db04232b",
+      "bytes": 1284
+    },
+    {
+      "payloadPath": "independent-review/run-predecessor-lab.mjs",
+      "archiveMember": "native-owner-contract-20261015/independent-review/run-predecessor-lab.mjs",
+      "sha256": "49ace71b05d4d2e2ea7084fe5511ec3d495c88ed9ede513b835962c730192759",
+      "bytes": 1073
+    },
+    {
+      "payloadPath": "native-evidence/run-native-lab.mjs",
+      "archiveMember": "native-owner-contract-20261015/native-evidence/run-native-lab.mjs",
+      "sha256": "00aed12b7c9031d0a3e56da0f8cea25f2f5e173f8cd2f1f423734b7fbbea2398",
+      "bytes": 2373
+    },
+    {
+      "payloadPath": "native-evidence/run-one-capture.mjs",
+      "archiveMember": "native-owner-contract-20261015/native-evidence/run-one-capture.mjs",
+      "sha256": "5bd1c2d8c028ec557c500effe0c0dfc350eae004468c51ff67b2cfc07ee5fa84",
+      "bytes": 1901
+    }
+  ]
+}

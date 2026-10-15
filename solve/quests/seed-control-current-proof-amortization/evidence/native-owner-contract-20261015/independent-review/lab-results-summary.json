@@ -1,0 +1,45 @@
+{
+  "candidate": {
+    "exitCode": 1,
+    "sha": "bde70cec74b8eb8e8db17d0d50a432102947d6d4",
+    "host": "adams-gamla",
+    "bootId": "d7288037-0a8a-4144-a3c4-80101d565062",
+    "log": "lab-focused.log",
+    "summary": [
+      "# test-files total=4 pass=3 fail=1 assertions=58"
+    ],
+    "fileResults": [
+      "[adams-gamla] ok test/partition/participant-release-native-application-order.test.js (1 assertions, 5627ms)",
+      "[adams-gamla] ok test/partition/partition-participant-transaction-apply.test.js (27 assertions, 6427ms)",
+      "[adams-gamla] ok test/partition/partition-participant-transaction-staging.test.js (19 assertions, 8084ms)",
+      "[adams-gamla] not ok test/partition/partition-transaction-replay-cursor-v4.test.js (11 assertions, 4420ms)"
+    ],
+    "failedTests": [
+      "[adams-gamla] not ok 1 - TX1 v4 RC1: a source entry whose statement failed deterministically is never mirrored",
+      "[adams-gamla] not ok 2 - TX1 v4 RC2: a write refused by the reservation and the transaction commands are never mirrored; a write committed twice under one entryId is mirrored once, at the index whose outcome row records it, whichever occurrence that is"
+    ],
+    "failedAssertions": 2,
+    "passedAssertions": 56
+  },
+  "predecessor": {
+    "exitCode": 1,
+    "sha": "3db821fa7c12bbf05f1d878b9da6af5147417b64",
+    "host": "adams-gamla",
+    "bootId": "d7288037-0a8a-4144-a3c4-80101d565062",
+    "log": "lab-predecessor.log",
+    "summary": [
+      "# test-files total=1 pass=0 fail=1 assertions=11"
+    ],
+    "fileResults": [
+      "[adams-gamla] not ok test/partition/partition-transaction-replay-cursor-v4.test.js (11 assertions, 4060ms)"
+    ],
+    "failedTests": [
+      "[adams-gamla] not ok 1 - TX1 v4 RC1: a source entry whose statement failed deterministically is never mirrored",
+      "[adams-gamla] not ok 2 - TX1 v4 RC2: a write refused by the reservation and the transaction commands are never mirrored; a write committed twice under one entryId is mirrored once, at the index whose outcome row records it, whichever occurrence that is"
+    ],
+    "failedAssertions": 2,
+    "passedAssertions": 9
+  },
+  "classification": "RC1 and RC2 fail with the same assertion signature on the same physical host for parent and candidate; src, owner fixtures, vendor artifacts and package manifests have no diff across this correction. Inherited F-MIR, not evidence of a model-change production regression.",
+  "proofLimit": "Owner tests only. Staging/apply use controllable operation ports; native release is RF3 loopback; replay cursor uses a real lone-leader restart for RC1/RC2. Not physical multi-host certification or implementation of release decisions."
+}

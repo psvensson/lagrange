@@ -1,0 +1,20 @@
+# branch.oid 0996d7576516af24f5f4d3e1e9aee37c775aabae
+# branch.head integrate/rs-raft-2026-09-30
+1 A. N... 000000 100644 100644 0000000000000000000000000000000000000000 7e6ca0c49316e03d99a4da20a49ecbe2968db18a lagrange-handoff-20260930T162452Z.txt
+1 M. N... 100644 100644 100644 f540aa691315d55c1195f31b162edd455725bab9 c5518748527d29abade67d871f93826cf2efdd36 solve/changes/global-owner-debt-inventory/inventory.json
+1 M. N... 100644 100644 100644 dff3ecbe14343c15936bd6b457880be14e340a4e 61dc433ee6eaddde88d648db40916ee899924c24 src/diagnostics/formation-turn-attribution.js
+1 M. N... 100644 100644 100644 81a70983c62c6fb499a4fa71faadd938bdf6c728 b90d04a2233388947ca4ac7fce3c093837bab702 src/diagnostics/raft-formation-attribution.js
+1 M. N... 100644 100644 100644 1bf1d4f31066feec0b0779c43cccd6fec4e0e95b 73cccb601902699389027e00418bd47ddd870d24 src/node/replica-state-machine-serialization.js
+1 M. N... 100644 100644 100644 a81406c5d29cbd9c8c080db39ba8ab0c5d179321 cbd6aa9aa0586fa97f3ea79431a4b942059a4b62 src/node/replica-transport-handler-identity.js
+1 M. N... 100644 100644 100644 ca6079d9d157b24829104dc08d1d7181f3cc93d6 0e498df6e16f90ab75881ef63015c5e64434d86f src/raft/liferaft-timing-api.js
+1 M. N... 100644 100644 100644 07d2c60fee80b9999ef3fcf22a109202f8bb8ae1 ab0d817ab4f5c84d5c226e993c28cf425a2e86ae src/raft/liferaft.js
+1 M. N... 100644 100644 100644 19a93e317c0da12e05ee86cfb4905c7d0252a0dd c6829d37db5ea0ffee3a6eadf2266fa67acb57f3 src/raft/raft-replica-base-runtime-helpers.js
+1 M. N... 100644 100644 100644 579adeab1e84fea549978ff506b286c946be537e ce73d71420e73d4ff78b7ac3dc83751a0501879b src/rebalancer/operation-workflow-owner-handoff-state.js
+1 M. N... 100644 100644 100644 c088cb7bf2db49f2bc13e3f95b860df8a40b6d3e 7ee27a2bbbe7429adee9ab88b0f0a0eef69803c5 src/rebalancer/operation-workflow-recovery-reconcile.js
+1 M. N... 100644 100644 100644 0344767abad415b59bf267981651d52ba4be2abe afef957ebcd29c67b46849e11694ad64e8750964 src/rebalancer/operation-workflow-replace-owner-recovery.js
+1 M. N... 100644 100644 100644 b90592da80d610972893dd6515d6de89e033a884 0a5afc4d5d3ed758790c3ebacb583c3fc64bb20e test/admin/admin-control-snapshot-publication-convergence-membership-observation-test-cases.js
+1 M. N... 100644 100644 100644 930bd4bbefc28f9c7da7db1abe21436b950940bd a17e383fa93c64c21369da6ba3a7407db307f368 test/admin/admin-control-snapshot-tail-test-cases.js
+1 M. N... 100644 100644 100644 959665277981ee1c1779c2ee7420f52282f01344 929461040711904108d4be686eb6f2a76059c7aa test/integration/replica-handler-metadata-propagation.integration.test.js
+1 M. N... 100644 100644 100644 107f5ccb234c183e883b29ee70b2a42024ad415c 45cd8e8b1e6d477e4125d063f985be0ba468ab1b test/shards/impact-graph-seal.json
+1 M. N... 100644 100644 100644 b3142e877b64494d2f6e4c2c12d22451cea42b13 9004c0effd00aa29a23493f41cb24b69cda5b848 test/shards/subsystem-classes.json
+1 M. N... 100644 100644 100644 5bedcdfcb1f90989e4086b17cf0c66293a0d878e b5db8f483d2a65bb44d7fbb2172792ba22284ff1 test/simulation/formation-sim-raft-cohort.js

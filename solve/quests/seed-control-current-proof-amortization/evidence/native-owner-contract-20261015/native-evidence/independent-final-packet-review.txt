@@ -1,0 +1,402 @@
+Independent final evidence-preservation review — 2026-10-15
+Reviewer: subagent:/root/native_witness_verifier
+
+VERDICT: APPROVE the reviewed packet for non-main evidence preservation only.
+IMPLEMENTATION: HOLD. This is not acceptance of the rejected specification, an
+implementation contract, a successor seal/activation, or approval to merge this
+branch. No tests were executed by this verifier. No repository source, packet
+content, Git state, process, or lab reservation was changed by this verifier.
+
+Review root:
+  /mnt/data/peter/projects/.worktrees/release-fencing-native-contract-20261015
+Packet:
+  solve/quests/seed-control-current-proof-amortization/evidence/native-owner-contract-20261015
+Observed HEAD:
+  897ccebeb4cda14bb98bfb21102ebbc5bb181f52
+Production baseline:
+  bde70cec74b8eb8e8db17d0d50a432102947d6d4
+Earlier native-test checkpoint:
+  f22c8b32280514dde68519dd8232498e6d306099
+
+Content-bound document SHA256:
+  OWNER-CONTRACT.md
+    3c382996a03dac063f809623b1e56aecfdb49e0b0c9e1f5b3291001ac9289c1c
+  NATIVE-EVIDENCE.md
+    85539e910690e21dff3e8f60c62ac17cafa50d4fbc1d63e8035ee37f6d6dc279
+  COMPARATIVE-PRECEDENTS.md
+    113e6fa0152bd107f893f02b52f0bd6f02c0bab882880a2565381d65f1efeb70
+
+The complete review dossier/checklists, earlier independent-fixture-review.txt
+and independent-contract-review.txt, including their content-bound addenda,
+remain part of this review. I re-read the full final documents, raw/parsed lab
+results, execution controllers and source anchors described below. The actual
+AGENTS -> rules -> router load order was followed during the earlier review;
+the category-complete verification-request.md was re-read for this final pass.
+All source paths below are relative to the observed review worktree, and all
+native-evidence paths are relative to the packet.
+
+1. Preservation and source identity
+
+No remaining blocking finding for preservation was found.
+
+Read-only Git comparison confirms no production src/, vendor, package.json or
+package-lock.json differences from bde70cec... to 897ccebe.... The introduced
+files are tests/fixtures and generated classification/inventory metadata. The
+branch inherits the rejected production candidate and is not mergeable as a
+production correction merely because this evidence is useful.
+
+I independently read the supplied original tar without extracting or modifying
+it. Its SHA256 is
+7f682a6d08672a5dc70bd243bdf76806970dd32f4cc179b8e145e3157c9cfe72.
+All 64 manifest entries match; the standalone Downloads report equals the
+archive's REVIEW.txt. All 61 preservation-selection.json copies match those
+original manifest hashes. The three local-only custody exclusions are explicit;
+the packet does not falsely represent them as copied. All seven test-sources/
+copies match test-source-hashes.json, the worktree bytes and 897ccebe.... The
+six files predating the epoch witness also match f22c8b3....
+
+The shared-checkout/process assertions in NATIVE-EVIDENCE:30-37 are explicitly
+timestamped custody observations, not current leases. I reviewed their receipt;
+I did not intervene in or independently repeat a process inventory. This review
+does not certify events after that receipt. Publication receipts still being
+assembled by the parent are outside the three document hashes above and must
+bind the final preservation commit/artifact separately.
+
+I independently compared retained static logs: lint-final.log equals
+lint-baseline.log after replacing only their two worktree roots; the complexity
+logs are byte-identical. Their 85 lint errors and 1,788/1,755 complexity failure
+remain baseline failures, not waived greens. Scoped checks/audit/commit logs
+are retained. RC1/RC2 remain historical inherited F-MIR evidence; this review
+does not rerun or newly certify those failures.
+
+2. Native evidence classification
+
+I decoded the escaped t.diagnostic JSON directly from the original TAP/stdout
+and compared it to every saved derived JSON object. All four match exactly.
+The preserved plans, placement-head output, exit files and ledgers support
+the classifications below. These are independent readings of the parent's
+executions, not executions performed by this verifier.
+
+N1: SEMANTIC RED on unchanged production.
+  test/partition/participant-release-first-prepare-native.test.js:30 reaches
+  the named refusal assertion. At applied/committed position 4, staging is
+  leader-local and no participant row exists. Production PAUSE closes all
+  three local admissions; ordinary INSERT returns
+  partition_write_cutover_paused. First PREPARE succeeds and produces the
+  PREPARED row at index 5/term 1 on all three, with closed admission and no
+  application rows. The raw failure is expected false / actual true, not
+  import, setup, timeout, or a missing-symbol failure.
+  Source correspondence: partition-participant-transaction-request.js:291,
+  :347, :367, :390; partition-service-raft-write-commit.js:441.
+  This proves a first-PREPARE/local-PAUSE admission mismatch under the chosen
+  contract. It does not witness an already-sealed proposal delayed across a
+  committed HOLD or a later release version. NATIVE-EVIDENCE:99-104 correctly
+  retains that gap.
+
+N2: SAVED SETTLEMENT CONTROLS REACHED; COMPLETE FILE FAILS.
+  test/partition/participant-release-prepared-settlement-native.test.js:16-55
+  reaches the second-BEGIN refusal, durable PREPARE replay, actual committed
+  coordinator ROLLBACK, RF3 terminal rows at index 6, still-closed admission,
+  exact decision replay, opposite-COMMIT refusal, terminal PREPARE response,
+  unchanged participant rows and ordinary-write refusal.
+  Its raw trace is emitted after these assertions. Failure occurs later at
+  line 57, through partition-release-fixture.js:137, after finishCoordinator
+  returns: release_fact_unavailable / current_control_owner_fact /
+  query_transaction_drain_pending.
+  Source: replica-handler-participant-cutover.js:104-134 requires a QueryEngine
+  for settleQueryRelease; distributed-transaction-release-settlement.js:206-212
+  returns null without its recovery-read/delivery methods; the census owner
+  at distributed-transaction-release-census.js:29-61 treats any retained row
+  as HELD and never treats terminal status alone as discharge proof.
+  The composition fixture lacks that QueryEngine seam. This is not a full
+  green, not a new reauthorization semantic RED, and not proof of a permanent
+  production drain failure. NATIVE-EVIDENCE:117-128 classifies it correctly.
+  Recorded COMMIT settlement, duplicate committed application, crash recovery,
+  and reauthorization preserving a terminal result remain unwitnessed here.
+
+N3: PASS; SECOND ALREADY-GREEN CAPTURE RUN IS EXPLICIT.
+  The first adam-laptop ledger is attempt 1, ok:true, retriedOnce:false, exit 0.
+  The second capture is the same host, file and f22c8b3... bytes, also exit 0;
+  original success and its ledger remain preserved. Execution records retain
+  their actual differing runner environment factors, not a false claim of
+  identical whole-environment bytes. No failed file was rerun to obtain green.
+  The second raw TAP shows six sequential real coordinator-driven ROLLBACKs,
+  then a seventh real coordinator intent and PREPARED obligation. Another
+  BEGIN refuses. All replicas end at applied/committed index 17 with seven
+  participant rows, one PREPARED, and 7,304 encoded JSON bytes.
+  The observed index sequence 6,8,10,12,14,16,17 is consistent with no new
+  proposal for the terminal request replays; retained rows also remain exact.
+  These request fast paths do not prove duplicate committed-command replay.
+  139,264 bytes is a serialized SQLite image; snapshotBytes is zero. This is
+  neither a certified application snapshot nor a capacity/retirement bound.
+  Source/test: participant-release-retention-native.test.js:17-49;
+  transaction-request.js:306-308 and :390-408; transaction apply/store owners.
+  NATIVE-EVIDENCE:130-148 makes the required distinctions.
+
+N4: SEMANTIC RED AT THE REAL PARTICIPANT INPUT BOUNDARY.
+  participant-release-prepare-identity-native.test.js:25 reaches its named
+  epoch-mismatch assertion. Epoch 7 is durably PREPARED at index 5, PAUSE
+  closes admission, then the same transaction/participant IDs with epoch 8
+  receive success plus the epoch-7 digest/index. Rows remain epoch 7 and
+  positions remain 5. prepareParticipant:390-408 keys the fast path by IDs
+  without matching incoming epoch; prepareOverRow checks digest, not every
+  identity field. The test does not claim legitimate coordinator emission
+  of this request. Full replay identity and valid commit-mode transitions
+  require TX1 owner judgment; sessionId remains routing context. Correctly
+  restricted in OWNER-CONTRACT:169-179 / NATIVE-EVIDENCE:150-159.
+
+Raw artifact SHA256:
+  native-evidence/lab-tv-dator.log
+    a06d6e16e4d8c106769dd4343120c708dfa9b4ca9832c000787097ca22c64187
+  native-evidence/lab-lenovo-laptop.log
+    272accc99f2047c81b3ca178dc52d8ce5cdfb2b0ab3edb190ab810fe0ed4ae3c
+  native-evidence/lab-adam-laptop.log
+    748319e4841bdce1ab459c2872c6f8d3fc208ef8584c2836a86463cad41862da
+  native-evidence/identity-first/raw.tap
+    f824ad8a7ac0b203562db7b9a21471da8e33c064eac3a9ff1a55ed11d6506946
+  native-evidence/retention-capture/raw.tap
+    24672dab0a247649102b15e82d3ad8454b12efbec8001e6d33e69509b93ccf25
+
+3. Whole-interaction ownership and F1-F8
+
+OWNER-CONTRACT:19-56 now maps both semantic and communication ownership.
+The query builders and delivery/redirect owner, ordinary write entry builder,
+write-result/admission owner, local TX1 session/bytes/request owners, committed
+application transaction, release contract, local serving owner and durable
+result owner are connected explicitly. Stable entryId alone is not falsely
+treated as the new immutable binding. D3 local freshness is not promoted into
+D2 deterministic evidence, nor is a release driver allowed to choose a global
+transaction outcome.
+
+The statement-outcome mechanism is an examined extension candidate, not a
+mandate to put release results in an unrelated table. The concrete typed
+adapter/schema remains an owner decision. This is the correct review posture.
+
+F1: Local BEGIN/staging and first durable PREPARE semantics chosen; N1 gives
+    native evidence. Binding/schema changes remain absent. No replicated BEGIN.
+F2: State version advances only on accepted transitions; refused requests have
+    separate outcomes. Exact native release command/result proof remains absent.
+F3: Capture-once immutable authorization must survive sealing/retry/redirect.
+    Capture point and old-sealed-bytes/new-version native schedule remain open.
+F4: Submitted intent cannot be a D4 result. Exact loser outcome/winner remains
+    immutable while retained. An unseen stale request after winner retirement
+    requires explicitly unavailable historical attribution; its current winner
+    cannot be substituted. Native release-result seam is still absent.
+F5: HOLD preconditions/closed-to-closed/initial-state/D0 proof choices remain
+    HOLD; application uses actual committed position rather than submission
+    index. No fresh native committed-HOLD race is represented as tested.
+F6: Native one-active restriction excludes concurrent BEGIN-pinned model rows,
+    but N3 demonstrates sequential terminal accumulation. Q, count/byte budgets,
+    critical credits, retirement and snapshot recovery are unresolved.
+F7: Native first-terminal owner is preserved; N2 exercises ROLLBACK then opposite
+    COMMIT refusal. It does not claim the original COMMIT-then-ROLLBACK schedule
+    or recorded COMMIT-under-HOLD is freshly witnessed.
+F8: Existing release identity/cohort/generation checks remain owner-controlled;
+    rejected model state is not a substitute. No new native churn/foreign-build
+    certification is claimed.
+
+All original findings have either a binding semantic decision or an explicit
+missing implementation/witness/owner decision; none is silently marked closed.
+No residual claim treats the fourteen selected model results as an oracle.
+
+4. Retention and implementation gates
+
+The formula at OWNER-CONTRACT:111-118 is a proposal for incremental release
+authority, not a proven native bound or total database-size cap. R is explicitly
+per pinned binding; Q includes critical requests or needs an additional finite
+critical budget. Existing terminal TX1 rows remain separately unbounded. Count,
+encoded bytes, replay watermark and diagnostic ownership are separated.
+
+The packet correctly exposes two capacity obligations:
+  - Committed refusal still needs exact durable outcome capacity; an ingress
+    retryable refusal is only a fresh admission observation.
+  - HELD(v) can fill current-version history with pinned refusals. If APPROVE
+    also needs ordinary history capacity and HOLD cannot advance a closed
+    state, draining alone cannot reopen. Recovery credits or proven retirement
+    semantics must break this cycle without bypassing state checks.
+These are unresolved finite-admission/recovery proofs, not solved by priority.
+
+Snapshot source at snapshot-checkpoint-store.js:262-318 scrubs application
+tables from the rs-raft checkpoint. Checkpoint-generation retention is not
+transaction/result retirement. Preserving new release state, outcomes, pins and
+anti-replay metadata through a supported atomic application snapshot is a
+prerequisite, not a later cosmetic extension.
+
+Consequently OWNER-CONTRACT:185-211 is suitable for the required owner decision:
+one complete partition release/HOLD -> ordinary write/first PREPARE -> durable
+outcome/replay path, including communication, capacity and recovery. It is not
+implementation-ready until the explicitly listed choices close. Isolated
+focused greens or a stronger rejected-model checker cannot satisfy this gate.
+
+5. Category-complete final disposition
+
+These numbered entries update, rather than erase, the full prior reviews.
+An unproven implementation property below is an implementation HOLD, not a
+reason to suppress faithful negative evidence.
+
+Admission/gating:
+ A1 precheck/enforcement: N1 demonstrates the actual mismatch; new D2 enforcement
+    remains proposed (contract:50-51).
+ A2 transient/terminal: native pause has typed deferRetry/retryAfterMs; capacity
+    observation versus exact committed refusal is explicitly separate (:120-129).
+ A3 budgets: existing fixture 10s release/30s test limits preserved; lab thermal
+    waits are existing owner behavior, no timeout modification.
+ A4 reason shape: raw N1 pause object and N2 missing-fact object preserved.
+ A5 release path: N2 reauthorization is blocked by the exact QueryEngine gap;
+    capacity reopening is explicitly unresolved (:130-137).
+ A6 freshness: actual local recipient generations and actual Raft positions
+    observed; D0/D2 canonical freshness contract remains open (:64-83).
+ A7 honesty: partition, transaction, result and admission views remain separate
+    in raw diagnostics; no ACK-only success claim.
+
+Recovery/replay:
+ R1 live/stale: no recovery mutation added; capture-once binding must not be
+    replaced by newer authority (contract:50,52).
+ R2 restart/live: no crash/restart result claimed; application snapshot blocker
+    remains explicit (:151-154).
+ R3 lost enlistment: real coordinator manifests/intent used, including N3's
+    pinned transaction; no invented empty registry certifies settlement.
+ R4 idempotence: N2/N3 prove existing request replay/terminal retention only;
+    actual duplicate committed application and crash recovery remain gaps.
+ R5 absence: retained versus unavailable versus never-committed distinguished
+    at :139-150; missing drain facts remain unavailable in N2.
+
+Harness fidelity:
+ H1 correct RED: N1 line 30 and N4 line 25 named semantic assertions reached;
+    N2 line 57 fixture limit is not miscounted as those semantic REDs.
+ H2 binding seam: real native RF3 and production PAUSE/settlement; no synthetic
+    durable participant rows or mocked authoritative success.
+ H3 timing: expiry/setup failures would not count; actual named outcomes occurred
+    before budget failures. Original runner environment is retained.
+ H4 fields: real canonical transaction/decision owners supply durable bytes;
+    pinned coordinatorIntent now exists before N3 PREPARE.
+ H5 nonvacuity: actual rows, indices, closed admission, one-active refusal and
+    ordinary-write controls distinguish the relevant states.
+ H6 live scope: one process/one NODE_ID/loopback and RF1 coordinator stated;
+    separate lab hosts do not constitute a physical cross-host RF3 cluster.
+
+Owner interaction:
+ O1 single decision: release/application decides authorization, TX1 decides
+    participant obligation, query decides global outcome; D3/D4 remain distinct.
+ O2 typed boundary: new command/binding/result shapes explicitly new and pending,
+    not a second diagnostic authority (contract:49-56).
+ O3 paired invariants: N2 observes closed new-write admission with successful
+    authoritative settlement in one run; N1 exposes first-PREPARE exclusion gap.
+ O4 stale/fresh: committed HOLD/new authorization and reroute schedule unproved.
+ O5 pressure/backoff: Q/critical capacity proof open; no local bypass introduced.
+ O6 wake/release: N2 exact missing seam and HELD full-history deadlock named.
+ O7 projections: raw diagnostic views are observations, not result authorities.
+ O8 treatment: unchanged production verified; new contract REDs are not regressions
+    attributed to this docs/test branch.
+ O9 escape hatches: no restored INSPECT atomicity or compensating-PAUSE rollback;
+    no test-invented discharge or production hook.
+ O10 registry/proof: metadata/audits retained; complete product interaction
+    contracts/registered pairs still must change with eventual implementation.
+
+Concurrency/serialization:
+ C1 gate/backstop: native single-active local session/PREPARED restrictions
+    observed; no finite release-proposal bound inferred from them.
+ C2 TOCTOU: actual application position required, D0 supplied evidence awaits
+    a canonical validation contract; no async check is claimed atomic.
+ C3 single winner: exact expected-state D2/result transaction proposed, native
+    winner/conflict release race absent.
+ C4 timers: no timers added or raised; expiry/late-response matrices not supplied.
+ C5 lock scope: lab controller uses the existing machine-lock owner; this is
+    execution exclusion, not a production transaction/capacity proof.
+
+Transport/delivery:
+ T1 ACK/processed: durable rows and applied positions, not transport ACK, are
+    asserted in N1-N4.
+ T2 late replies: unknown-outcome/sealed-byte delayed reply remains an explicit gap.
+ T3 outcomes: actual typed refusal preserved; proposed result/capacity consumers
+    require end-to-end review before implementation.
+ T4 bounded failures: existing delivery/test budgets retained; no new missing-
+    handler/no-connection proof claimed.
+ T5 fixture: forwarding loopback routes preserve production responses but do not
+    certify full QueryEngine/messageRouter reroute behavior.
+
+Retry/re-drive:
+ L1 firing: no new retry owner/loop; existing behavior not newly certified.
+ L2 bounds: proposed finite Q/credits have no established native proof.
+ L3 stops: N2 typed unavailable boundary and terminal conflicts remain loud;
+    new result shapes still require owner decision.
+ L4 mutual suppression: HELD full-history reauthorization cycle explicitly open.
+ L5 storms: finite credits/canonical custody across leader changes are required;
+    no invented numerical ceiling presented as measured.
+ L6 duplicate effects: observed request replay safe under exact tested identity;
+    N4 exposes the mismatched-epoch fast path; release replay remains unbuilt.
+ L7 reset: transport ACK cannot reset new outcome/retry semantics; no such new
+    counter mechanism is introduced or approved by this packet.
+
+6. Comparative research
+
+All six locally retained research inputs independently match the published
+URL/size/SHA inventory. I checked the official etcd/FoundationDB documentation
+and inspected pinned Raft/LogCabin source; no external code was executed.
+
+COMPARATIVE-PRECEDENTS:10-23 correctly distinguishes etcd's compare outcome,
+chosen transaction branch and store revision. A failed comparison can execute
+a mutating failure branch. This supports the proposed distinction between
+release-state version and durable result/log changes, not a Lagrange guarantee.
+Source: https://etcd.io/docs/v3.6/learning/api/#transaction
+
+Lines 27-52 correctly describe command-response retention/frontiers and expired
+session behavior. Pinned LogCabin StateMachine.cc:427-440 serializes the response
+map/frontier and :505-519 restores them; :300-341 handles retained/below-frontier
+duplicates. This is historical code, and its dedup sessions are not TX1 staging.
+The document explicitly avoids importing a new session owner or pretending
+request numbers validate same-ID/different-content commands.
+Source: https://github.com/logcabin/logcabin/blob/ee6c55ae9744b82b451becd9707d26c7c1b6bbfb/Server/StateMachine.cc
+Source: https://github.com/ongardie/dissertation/blob/0c10ea1b53d73bf6d163bdde8e4141a1cbd8f36a/clients/clients.tex
+
+Lines 56-70 correctly restrict the FoundationDB no-longer-in-flight guarantee
+to commit_unknown_result, distinguish timeout/cancellation and preserve identity
+outside retry. The inference explicitly does not transfer that guarantee to
+Lagrange, whose old uncertain bytes must retain their original binding.
+Source: https://apple.github.io/foundationdb/developer-guide.html#transactions-with-unknown-results
+Source: https://apple.github.io/foundationdb/developer-guide.html#non-retryable-errors
+
+Lines 74-86 correctly cite etcd's read/delete maintenance mode and documented
+NoSpace ambiguity, then frame reserved recovery capacity as a Lagrange proof
+obligation. The precedent does not establish finite Lagrange credits.
+Source: https://etcd.io/docs/v3.6/op-guide/maintenance/#space-quota
+
+No unsupported cross-project equivalence or external-runtime certification was
+found. The proposed witnesses sharpen questions for existing owners; they do
+not close D0 binding, immutable request capture, result schema, finite credits,
+or application snapshot provenance.
+
+Final disposition
+
+The three reviewed documents and their cited native evidence are honest enough
+to preserve and present for the required owner decision. The minor ambiguous
+"neither failed test" wording was corrected to "no failed file was retried"
+before the NATIVE-EVIDENCE hash above. No additional preservation blocker
+remains.
+
+Implementation remains HOLD on the explicit semantic, communication, capacity,
+snapshot/recovery and native-proof gates. N1 and N4 are useful semantic REDs;
+N2 is useful positive-prefix evidence in an exit-1 file; N3 is a bounded native
+reachability measurement with a disclosed second successful capture. None is
+a complete corrected protocol. Successor unsealed/unactivated, shared-control
+wave HELD, Runner/TAP PARKED, PR #122 rejected.
+
+Content-bound ownership addendum — 2026-10-15
+
+Reviewed the final ownership paragraph at OWNER-CONTRACT.md:28-34. It now
+names the existing release contract as owner of the release-fencing invariant
+across admission/TX1, while retaining the named subsystem decisions and explicit
+communication contracts. This removes an abstract interaction as the nominal
+problem owner; it neither creates an additional authority nor transfers global
+transaction decision ownership to release. It agrees with the adjacent source
+map and the user's single-ownership requirement.
+
+New OWNER-CONTRACT.md SHA256:
+  573e57f1b8f00a6c685a1fec152b09731286c2b3753459c0acd809fc2b5fed27
+Substituting only that paragraph back to the previously reviewed wording
+reconstructs the prior 3c382996... hash exactly. The other two reviewed document
+hashes remain unchanged. This addendum supersedes only the owner-document hash
+above; all findings and qualifications stand.
+
+APPROVE non-main evidence preservation only. Implementation remains HOLD.
+
