@@ -1,0 +1,135 @@
+{
+  "schemaVersion": 1,
+  "witSource": "wit/world.wit",
+  "purpose": "declarative-provider-parity-cases-no-runtime-execution",
+  "cases": [
+    {
+      "id": "request-read-authorized",
+      "mode": "request",
+      "interface": "context",
+      "function": "read",
+      "scenario": "declared-table-access",
+      "expectation": "accepted"
+    },
+    {
+      "id": "call-read-denied",
+      "mode": "call",
+      "interface": "context",
+      "function": "read",
+      "scenario": "request-capability-in-call-mode",
+      "expectation": "refused"
+    },
+    {
+      "id": "request-write-authorized",
+      "mode": "request",
+      "interface": "context",
+      "function": "write",
+      "scenario": "declared-table-mutation",
+      "expectation": "accepted"
+    },
+    {
+      "id": "call-write-denied",
+      "mode": "call",
+      "interface": "context",
+      "function": "write",
+      "scenario": "request-capability-in-call-mode",
+      "expectation": "refused"
+    },
+    {
+      "id": "request-probe-authorized",
+      "mode": "request",
+      "interface": "context",
+      "function": "capability",
+      "scenario": "declared-capability-probe",
+      "expectation": "accepted"
+    },
+    {
+      "id": "call-probe-denied",
+      "mode": "call",
+      "interface": "context",
+      "function": "capability",
+      "scenario": "request-capability-in-call-mode",
+      "expectation": "refused"
+    },
+    {
+      "id": "request-binding-authorized",
+      "mode": "request",
+      "interface": "context",
+      "function": "call-binding",
+      "scenario": "declared-outbound-operation",
+      "expectation": "accepted"
+    },
+    {
+      "id": "request-binding-denied",
+      "mode": "request",
+      "interface": "context",
+      "function": "call-binding",
+      "scenario": "missing-outbound-authorization",
+      "expectation": "refused"
+    },
+    {
+      "id": "call-binding-denied",
+      "mode": "call",
+      "interface": "context",
+      "function": "call-binding",
+      "scenario": "request-bridge-in-call-mode",
+      "expectation": "refused"
+    },
+    {
+      "id": "call-emit-within-budget",
+      "mode": "call",
+      "interface": "call-context",
+      "function": "emit",
+      "scenario": "admitted-shard-partial",
+      "expectation": "accepted"
+    },
+    {
+      "id": "call-emit-budget-denied",
+      "mode": "call",
+      "interface": "call-context",
+      "function": "emit",
+      "scenario": "emit-budget-exhausted",
+      "expectation": "refused"
+    },
+    {
+      "id": "request-emit-denied",
+      "mode": "request",
+      "interface": "call-context",
+      "function": "emit",
+      "scenario": "call-capability-in-request-mode",
+      "expectation": "refused"
+    },
+    {
+      "id": "call-nested-authorized-target",
+      "mode": "call",
+      "interface": "call-context",
+      "function": "call-bounded",
+      "scenario": "declared-nested-target-future-proof",
+      "expectation": "accepted"
+    },
+    {
+      "id": "call-nested-undeclared-denied",
+      "mode": "call",
+      "interface": "call-context",
+      "function": "call-bounded",
+      "scenario": "undeclared-nested-target",
+      "expectation": "refused"
+    },
+    {
+      "id": "call-nested-budget-denied",
+      "mode": "call",
+      "interface": "call-context",
+      "function": "call-bounded",
+      "scenario": "nested-call-budget-exhausted",
+      "expectation": "refused"
+    },
+    {
+      "id": "request-nested-denied",
+      "mode": "request",
+      "interface": "call-context",
+      "function": "call-bounded",
+      "scenario": "call-capability-in-request-mode",
+      "expectation": "refused"
+    }
+  ]
+}

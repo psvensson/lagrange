@@ -105,3 +105,101 @@ tap.test('OCI implementation drift requires capability-contract update',
     t.match(result.problems[0], /unsupported invocation/iu);
     t.end();
   });
+
+import {
+  evaluateSdkHostConformance,
+  loadSdkHostConformanceInputs,
+} from '../../scripts/checks/sdk-host-conformance-plan.js';
+
+function sdkInputs() {
+  return loadSdkHostConformanceInputs();
+}
+
+tap.test('SDK host fixture plan covers the WIT methods without false parity ' +
+  'certification', (t) => {
+  const result = evaluateSdkHostConformance(sdkInputs());
+  t.equal(result.valid, true, result.problems.join('; '));
+  t.ok(result.plan.length > 0);
+  t.ok(result.plan.every((entry) => entry.status !== 'passed' &&
+    entry.status !== 'certified'));
+  t.ok(result.plan.some((entry) =>
+    entry.provider === 'wasm_component' &&
+    entry.status === 'requires-runtime-evidence'));
+  t.ok(result.plan.some((entry) =>
+    entry.provider === 'oci_container' &&
+    entry.status === 'provider-unavailable'));
+  t.end();
+});
+
+tap.test('SDK host fixtures preserve the combined-world mode boundary',
+  (t) => {
+    const result = evaluateSdkHostConformance(sdkInputs());
+    t.equal(result.valid, true, result.problems.join('; '));
+    const crossMode = result.plan.filter((entry) =>
+      entry.world === 'service-cell' &&
+      ((entry.mode === 'call' && entry.hostImport.startsWith('context.')) ||
+       (entry.mode === 'request' &&
+        entry.hostImport.startsWith('call-context.'))));
+    t.ok(crossMode.length > 0);
+    t.ok(crossMode.every((entry) => entry.expected === 'refused'));
+    t.end();
+  });
+
+tap.test('an extra WIT import cannot silently lack SDK parity cases',
+  (t) => {
+    const inputs = sdkInputs();
+    inputs.inventory.interfaces[0].functions.push({
+      name: 'surprise',
+      signature: 'func() -> bool',
+    });
+    const result = evaluateSdkHostConformance(inputs);
+    t.equal(result.valid, false);
+    t.match(result.problems.join('; '), /missing admitted scenario/u);
+    t.end();
+  });
+
+tap.test('a fixture cannot invent SDK host privileges or unknown methods',
+  (t) => {
+    const inputs = sdkInputs();
+    inputs.fixture.cases[0].function = 'unsupported-table-scan';
+    const result = evaluateSdkHostConformance(inputs);
+    t.equal(result.valid, false);
+    t.match(result.problems.join('; '), /unknown mode\/import/u);
+    t.end();
+  });
+
+tap.test('native SDK parity cannot be claimed by smuggling a passed state',
+  (t) => {
+    const inputs = sdkInputs();
+    inputs.fixture.cases[0].status = 'passed';
+    const result = evaluateSdkHostConformance(inputs);
+    t.equal(result.valid, false);
+    t.match(result.problems.join('; '), /forbidden evidence\/status/u);
+    t.end();
+  });
+
+tap.test('native container activation alone is not host-capability proof',
+  (t) => {
+    const inputs = sdkInputs();
+    inputs.portability.runtimes.oci_container.realContainerActivation = true;
+    const result = evaluateSdkHostConformance(inputs);
+    t.equal(result.valid, true, result.problems.join('; '));
+    t.ok(result.plan.filter((entry) =>
+      entry.provider === 'oci_container').every((entry) =>
+      entry.status === 'requires-runtime-evidence'));
+    t.end();
+  });
+
+tap.test('an unreviewed WIT world fails the SDK case inventory closed',
+  (t) => {
+    const inputs = sdkInputs();
+    inputs.inventory.worlds.push({
+      name: 'surprise-world',
+      declaredImports: ['context'],
+      exports: [],
+    });
+    const result = evaluateSdkHostConformance(inputs);
+    t.equal(result.valid, false);
+    t.match(result.problems.join('; '), /unreviewed WIT world/u);
+    t.end();
+  });
