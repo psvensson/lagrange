@@ -1749,7 +1749,7 @@ function perform(group, command) {
     const expectedGeneration = runtimeGeneration;
     // Capture only after reconstruction admits execution. Later arrivals keep
     // their place in the group queue and their existing owned inbound wake.
-    const inboundExtent = group.inbound.length;
+    const inboundExtent = Math.min(1, group.inbound.length);
     return drainInbound(group, expectedGeneration, inboundExtent,
       () => performCommand(group, command, expectedGeneration));
   });
