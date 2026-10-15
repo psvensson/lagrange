@@ -226,14 +226,14 @@ tap.test('WIT import removal cannot quietly drop an execution world',
     t.end();
   });
 
-tap.test('a deleted refusal fixture cannot silently appear covered',
+tap.test('a deleted cross-mode refusal must be detected',
   (t) => {
     const inputs = sdkInputs();
     inputs.fixture.cases = inputs.fixture.cases.filter((item) =>
       item.id !== 'call-read-denied');
     const result = evaluateSdkHostConformance(inputs);
     t.equal(result.valid, false);
-    t.match(result.problems.join('; '), /missing refusal scenario/u);
+    t.match(result.problems.join('; '), /missing cross-mode refusal scenario/u);
     t.end();
   });
 
