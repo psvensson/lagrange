@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 146,
     "solver-tooling": 7,
-    "storage-partition": 184,
+    "storage-partition": 185,
     "storage-raft": 129,
     "test-infrastructure": 143,
     "transactions": 16,
     "transport-messaging": 95,
     "wasm-toolchain": 57
   },
-  "censusSize": 2373,
-  "digest": "fnv1a32-d889615e",
+  "censusSize": 2374,
+  "digest": "fnv1a32-e6e05e9d",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-85b34c07",
+  "observationDigest": "fnv1a32-bb3c57c1",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1265,6 +1265,7 @@
     "test/partition/participant-envelope-admission.test.js": "storage-partition",
     "test/partition/participant-release-applied-position.test.js": "storage-partition",
     "test/partition/participant-release-build-provenance.test.js": "storage-partition",
+    "test/partition/participant-release-control-partial-open-falsifier.test.js": "storage-partition",
     "test/partition/participant-release-control-three-member.test.js": "storage-partition",
     "test/partition/participant-release-native-application-order.test.js": "storage-partition",
     "test/partition/participant-release-protocol.test.js": "storage-partition",
@@ -8793,6 +8794,24 @@
       ],
       "directories": [
         "src"
+      ]
+    },
+    "test/partition/participant-release-control-partial-open-falsifier.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/bootstrap/system-table-workflow-schema-definitions.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-store.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/partition/participant-release-control-three-member.test.js": {
