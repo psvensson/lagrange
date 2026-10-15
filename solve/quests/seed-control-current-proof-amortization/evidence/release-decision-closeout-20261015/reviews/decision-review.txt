@@ -1,0 +1,251 @@
+Independent decision/capacity review by subagent:/root/release_capacity_audit
+2026-10-15. Read-only production inspection; no tests, lab leases or production edits.
+
+Reviewed source baseline: 108282c80318fbc9e7094f2e7a99ba37430374fd
+Reviewed DECISIONS.md SHA256:
+511b971b6d49aadb13202daad412282f87c35e47d78b33d206b37b16527ad21e
+Reviewed SNAPSHOT-DECISION.md SHA256:
+3c8fecaa191d25607acba8be1e6d8dc2011c64f4e1344a2b2dce465ea2dc0576
+
+Verdict: ACCEPT as an evidence-preservation and owner-decision packet with the
+explicit HOLDs and findings below. HOLD as an implementation contract. No source,
+protocol activation, successor sealing or merge approval is given. This review
+does not independently certify the native test execution or snapshot worktree
+process/lease inventory; those evidence claims retain their named reviewers.
+
+The packet correctly selects the existing committed-result owner, preserves
+local TX1 staging, gives first durable PREPARE its new-admission role, separates
+transaction epoch/release version/request identity, and names missing contracts
+instead of asserting current features. Its finite-capacity blockers are real.
+
+Corrections identified in the first draft and already present in reviewed bytes:
+- A 256 UTF-8-byte identifier can occupy 1536 JSON bytes; the participant token
+  allowance was 1 KiB. It is now 2 KiB. The release-only logical envelope is
+  5,388,288 bytes, including 40 maximum future-result reservations.
+- INIT now initializes request-history generation to zero. Future generations
+  are refused at admission; a future generation in committed bytes is explicitly
+  a missing protocol-containment contract, not an invented applied refusal.
+- INIT bootstrap composition is explicitly new/unproved.
+- Snapshot content includes query discharge records/pins and excludes sender
+  core/Ready-held and uncommitted credits. Receiver suffix accounting is rebuilt.
+
+Remaining findings, category-complete batch:
+
+F1. Admission/counter exhaustion: bounded counters need a closure-safe edge.
+DECISIONS A bounds integers to a native range yet permits every APPROVE to
+increment version. Minimal schedule: HELD(max-1) -> APPROVED(max) -> HOLD needs
+max+1. Select an APPROVE precondition reserving the next HOLD increment, with
+VERSION_EXHAUSTED leaving authority unchanged; or explicitly retain this as an
+unresolved typed edge. History-generation exhaustion also must not wrap or
+silently permit old requests. This does not invalidate the architectural owner
+allocation, but is a required finite-state boundary before implementation.
+
+F2. Transport/recovery classification of future history: an incoming generation
+above this replica's applied frontier can be legitimate applied-state lag after
+another replica supplied the original observation. It needs retry under existing
+budget with the SAME bytes, not terminal invalidation followed by recapture.
+A future generation in an actually committed command cannot be produced by the
+proposed trusted current-generation admission plus ordered retirement contract;
+fail-closed PROTOCOL_INVALID_COMMITTED_COMMAND is therefore a coherent proposed
+containment rule. It requires a protocol/operator stop and an explicit negative
+witness, not an automatic retry-to-green or synthetic outcome.
+
+F3. Encoding precision: HOLD reasonCode is described as an enum but values are
+not selected. originalConflictWinnerOrUnavailable has no canonical tuple yet.
+Select these bounded encodings or name their encoding explicitly among the
+unresolved A/B prerequisites. The total byte cap is not a substitute for deciding
+semantic schema. The discharge-record encoding is already explicitly blocked.
+
+F4. D3 identity binding: state explicitly that the measured build and other
+local proofs must match THIS applied APPROVE's targetBuildDigest/approved_inputs.
+Merely measuring some current build is insufficient. The chosen authorizationId
+already commits the inputs; this clarification preserves that one authority.
+
+F5. Query custody after restart: the selected capture point is sound, but the
+document must say how the original binding remains recoverable under the existing
+query recovery owner, or that loss routes to typed UNKNOWN/owned transaction
+failure or decision handling. Coordinator restart cannot recapture current
+authority for uncertain PREPARE bytes. No new recovery driver is required.
+
+Source evidence used for capacity/result conclusions:
+- src/partition/proposal-queue-constants.js:12-17: 1000 live waiter limit.
+- src/partition/proposal-queue.js:96-107,202-223: enqueue and release/delete.
+- src/partition/partition-service-cdc-stream-base.js:324-336: a proposal may
+  still commit after its answer deadline; :419-424 keys replay by entryId only.
+- src/raft/raft-rs-runtime-owner.js:956-983: serialized group turns;
+  :1650-1688: primitive proposal invocation/Ready drain without result credits.
+- src/raft/raft-rs-operation-port.js:369-374: encode then propose operation.
+- src/raft/raft-rs-proposal-codec.js:34-48: JSON encoding has no size ceiling.
+- src/raft/raft-rs-durable-store.js:404-443: durable Ready and suffix replacement.
+- src/partition/partition-committed-statement-outcome.js:109-145: existing result
+  read/write, including Number conversion; no content comparison here.
+- src/partition/partition-committed-statement-outcome-constants.js:17-21:
+  compaction is deferred, not an implemented finite result-retention policy.
+- src/partition/partition-coordinator-settlement.js:35-44,73-99: typed owner
+  result adapter and deterministic committed apply are the existing precedent.
+- src/raft/raft-rs-application-transaction-owner.js:51-99: effect/result/applied
+  transaction and afterCommit/afterRollback boundary.
+- src/partition/partition-participant-transaction-bytes.js:140-175 and
+  src/query/distributed/distributed-transaction-participant-manifest.js:5-18:
+  complete decision participant sets have no count/byte bound in these readers.
+- src/partition/partition-participant-transaction-constants.js:133-140:
+  256 operations/1 MiB bounds staged operations, not the complete decision.
+- src/raft/snapshot-checkpoint-store.js:262-275,302-318,469-488:
+  native checkpoint scrub and peer-only validation cannot preserve new authority.
+- src/raft/snapshot-catchup.js:197-220: current source creation path;
+  src/partition/partition-snapshot-cadence.js:54-73: cadence remains unsupported.
+- src/partition/partition-participant-transaction-pause.js:190-243:
+  receiver-local CLOSED state and runtime/lifecycle proof remain locally owned.
+
+Verification-template disposition (all applicable items):
+
+Admission/gating 1-7:
+1. SAME owner state required for capacity precheck/enforcement; missing suffix
+   accounting is explicit blocker B1, not a pass on ProposalQueue.
+2. Final request refusal vs preproposal transient is explicit. F2 supplies the
+   missing future-generation lag classification; F1 supplies exhaustion.
+3. DECISIONS Cache audit retains existing budgets/no timeout increase. Exact new
+   operation wiring and latency are not measured; implementation remains HOLD.
+4. New statuses are proposed symbols, not implemented response classifiers.
+   Future unit must wire them through partition-write-kernel.js:460-481 and
+   existing delivery classification; no present conformance claim is made.
+5. Credit release/retirement is the named wake, but implementation is missing.
+6. D2 uses actual prefix; cached/transient inputs are excluded. Membership and
+   provenance producers are explicitly blocked. D3 proof needs F4 clarification.
+7. Exact request/result/current state/local eligibility are separated. Response
+   schema must retain actual observed frontier when explaining F2's refusal.
+
+Retry 1-7:
+1-3. No new runnable retry loop exists; proposed wake/budget/typed-stop wiring is
+   part of the future unit, not certified by this document. F2 names a required
+   nonterminal wake and the distinct protocol/operator stop.
+4. Critical refusal saturation -> blocked APPROVE is explicitly demonstrated;
+   B2 retains retirement self-capacity as a blocker, avoiding false liveness.
+5. Existing cadence is retained; no new storm ceiling is claimed before runtime
+   accounting/continuation integration exists.
+6. Exact result replay and original binding are selected; retirement semantics
+   remain blocked, and F5 closes a recovery-custody ambiguity.
+7. Transport success never supplies application result or resets authority.
+
+Transport/delivery 1-5:
+1. D0 transcript and transport success do not authorize D2 or installation.
+2. Unknown outcome keeps original bytes; timeout cannot release credit.
+3. Typed new outcomes still require existing classifier integration; F2 matters.
+4. Existing request budgets remain binding; no unbounded new transport wait is
+   selected. Runtime/result containment and observation operation are new.
+5. This document introduces no router stub; native fixture fidelity is outside
+   this read-only decision review and remains with its separate verifier.
+
+Concurrency/serialization 1-5:
+1. Existing enqueue() is the synchronous turn seam; durable suffix/result
+   accounting is expressly missing, so single-flight Maps are not a proof.
+2. Capture before awaits retains immutable bytes; D2 performs actual-prefix CAS.
+   The future runtime reservation transaction still needs a complete witness.
+3. Release application owns one winner; result owner preserves exact losers.
+4. Existing continuations must re-enter those owners; no timer gains authority.
+5. Capacity scope is per partition's actual suffix/results, not per caller Map.
+
+Recovery/replay 1-5:
+1. Sender volatile credits/sessions/D3 are excluded; receiver reconstructs its
+   own suffix and local eligibility. No stale projection replaces live state.
+2. INIT fresh/retained activation and snapshot fresh/restart/wipe/read-unavailable
+   cases are separated, with missing native proof explicitly listed.
+3. Query discharge binds frozen manifest/epoch/decision/participants; empty or
+   legacy content is not silently terminal. Its exact encoding remains blocked.
+4. Exact stored outcome precedence and no duplicate annotations are selected;
+   history retirement and credit recovery remain explicit implementation gates.
+5. HISTORY_RETIRED/RESULT_UNAVAILABLE never mean NOT_COMMITTED; F5 extends this
+   honest uncertainty rule to lost coordinator-side admission binding.
+
+Formation/circularity 1-5:
+1. Empty control initialization cannot depend on OPEN QueryEngine/CONFIG reads.
+   Its composition is correctly labelled missing rather than present.
+2. Closure/settlement/reauthorization capacity cannot depend on normal history
+   admission. B2 names the remaining retirement self-dependency.
+3. Existing budgets govern callers; new typed waits are not silently terminal.
+4. No end-to-end formation/recovery latency is claimed; native evidence needed.
+5. No direct SQL/census/installer bypass is selected to break the dependency.
+
+Owner-interaction 1-10:
+1-2. Release semantics, runtime ordering, query decision/discharge, result custody
+   and local serving have distinct named owners and proposed typed seams.
+3. Complete unit pairs admission fencing with already-durable settlement and
+   later reauthorization; separate component greens are explicitly insufficient.
+4. Stale old bytes remain old after new evidence; new work needs new identity.
+5. Saturation/leadership/retirement/settlement pressure are acceptance-matrix bars.
+6. Canonical owner re-entry/wakes are selected but unimplemented, not certified.
+7. D0/caches/Maps/diagnostics are explicitly denied equivalent authority.
+8. No treatment or model-green claim is made; prior native REDs stay preserved.
+9. No new force flag, INSPECT atomicity claim, rollback-by-PAUSE, raw installer
+   or independent outcome path is proposed.
+10. Existing runtime/application, operation-port, TX1/query and snapshot paired
+    interactions must change with the complete future unit. Snapshot correction
+    correctly names snapshot-receiver-lifecycle-staging as current fresh path.
+
+Design-note sections:
+Consumed surfaces: cited above; new APIs/commands/state are explicitly marked.
+Typed failures: mostly explicit; F1/F2/F3 identify remaining precision gaps.
+Cached views: correctly disposable; F4/F5 strengthen exact authority/custody.
+Identity anchors: content addressing, origin, exact state, actual positions,
+transaction epoch, target generation and separate retirement generation selected.
+No existing local Map or metadata-only image is represented as durable proof.
+
+No new general model, production implementation, full lab campaign or existing
+counterexample repair is justified by this review. Resolve the content-specific
+findings and keep the explicitly named runtime, discharge, capacity and snapshot
+contracts on HOLD for owner decision.
+
+Bounded correction review appended 2026-10-15:
+
+Final reviewed DECISIONS.md SHA256:
+62de8c65beb30bdc51bd34c41c7087208f7d3ec1018094bf2b19217177ce6ad4
+Final reviewed SNAPSHOT-DECISION.md SHA256:
+998be9039a942a8a4d0d03938991130d8e1250dab8b3befbbb3ee660bfa92329
+
+This pass reviewed F1-F5 corrections and introduced contradictions only; it did
+not repeat the source census or run tests. Both hashes were rechecked unchanged
+after reading the corrections.
+
+F1 RESOLVED for this proposal: exact decimal TEXT counters have an explicit
+18446744073709551615 maximum. APPROVE requires current version <= maximum-2,
+so any reachable newly APPROVED state retains room for HOLD. VERSION_EXHAUSTED
+and HISTORY_GENERATION_EXHAUSTED are explicit, no wrap/migration is implied,
+and no indefinite-progress claim is made beyond exhaustion. Finite resource
+progress before exhaustion still depends on the separately declared B blockers.
+
+F2 RESOLVED for this proposal: HISTORY_GENERATION_AHEAD is a preproposal lag
+observation retried with the original bytes under existing budgets. A committed
+future generation is a protocol/operator containment HOLD under the proposed
+trusted admission contract, not a synthetic durable refusal or retry-to-green.
+The new runtime/result admission and negative witness remain explicitly absent.
+
+F3 RESOLVED for this proposal: the six HOLD reasons are enumerated; winner is a
+bounded KNOWN tuple, UNAVAILABLE or NOT_APPLICABLE; APPROVE predicate reasons
+are enumerated. KNOWN refers to the retained transition consuming the expected
+state, not today's authority. Its actual adapter/lookup remains new work.
+
+F4 RESOLVED: D3 must match measured build to THIS applied APPROVE's target digest
+and inputs. This strengthens the existing local eligibility owner without
+letting local observations alter deterministic committed effects.
+
+F5 RESOLVED for the selected contract: original binding recovery belongs to the
+existing request/query/transaction owners; no recoverable token means typed
+ADMISSION_BINDING_UNAVAILABLE and UNKNOWN or the existing TX1 recovery/decision
+path. The document explicitly requires new custody fields and disclaims their
+current presence. This is not authorization for a competing durable-intent
+ledger or recovery driver.
+
+Additional bounded checks: the 2 KiB token allowance covers the documented
+worst-case escaped identifier and fixed fields. Arithmetic including 40 future
+result reservations is 5,388,288 logical bytes. Physical database/log/snapshot
+bounds and finite Q remain expressly unproved. The INIT marker/protocol version
+now travel with snapshot boundary B; a post-INIT missing marker/state cannot
+become fresh initialization. No correction introduced a new approval authority
+or an implementation-complete claim.
+
+Final verdict: ACCEPT these exact hashes for preservation and content-bound
+owner decision. HOLD production implementation, successor activation/sealing
+and merge. Runtime suffix custody, retirement self-capacity, query settlement
+encoding/discharge, exact-prefix provenance, activation and supported native
+application-image recovery remain the explicit blockers. F1-F5 are closed as
+document corrections, not as executed protocol proofs.

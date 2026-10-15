@@ -1,0 +1,45 @@
+{
+  "releaseElapsedMs": 82.79424300000028,
+  "outcome": "cut_over",
+  "deliveryCount": 2,
+  "proofCount": 4,
+  "authorityStatus": "ROLLED_BACK",
+  "deliveries": [
+    [
+      "ROLLBACK",
+      "ROLLED_BACK",
+      6
+    ],
+    [
+      "ROLLBACK",
+      "ROLLED_BACK",
+      6
+    ]
+  ],
+  "replicas": [
+    {
+      "id": "release-tx1-native-r1",
+      "applied": "6",
+      "committed": "6",
+      "transactionState": "ROLLED_BACK",
+      "admission": "open",
+      "data": []
+    },
+    {
+      "id": "release-tx1-native-r2",
+      "applied": "6",
+      "committed": "6",
+      "transactionState": "ROLLED_BACK",
+      "admission": "open",
+      "data": []
+    },
+    {
+      "id": "release-tx1-native-r3",
+      "applied": "6",
+      "committed": "6",
+      "transactionState": "ROLLED_BACK",
+      "admission": "open",
+      "data": []
+    }
+  ]
+}

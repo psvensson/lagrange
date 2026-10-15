@@ -1,0 +1,269 @@
+Independent review: completed native rollback-to-reauthorization control
+Reviewer: subagent:/root/native_witness_verifier
+Date: 2026-10-15
+Test commit: 8a4986dd82e4f26436945dc139727024d9b70b41
+Parent commit: 108282c80318fbc9e7094f2e7a99ba37430374fd
+Worktree: /mnt/data/peter/projects/.worktrees/release-fencing-decision-closeout-20261015
+
+VERDICT
+
+ACCEPT the bounded whole-file PASS and APPROVE preservation of the reviewed
+NATIVE-RESULT.md, raw/decoded evidence and generated inventory delta. This is
+the completed ROLLBACK/terminal replay/later local reauthorization control at
+the exact test commit above. It is not COMMIT proof, a future committed HOLD
+implementation, release-specification acceptance, successor activation/sealing,
+or wholesale merge authority. Production/design implementation remains HOLD.
+
+No material unsupported native-result claim or preservation blocker was found.
+The source review's two pre-run findings were already corrected before this
+run. All six previously reviewed checkpoint files are byte-identical to their
+approved versions in native-test-review.txt; only the normal generated owner
+inventory was additionally committed. No production source changed.
+
+I inspected the artifacts, source identities and commit delta without executing
+tests, acquiring a lab lease, touching processes, editing source/docs, or
+mutating Git. This report is the only file written during this result review.
+The earlier category-complete source report remains the source verdict; this
+report supplies the measured evidence and its limits.
+
+RUN IDENTITY, LOCKING, AND FIRST-RUN CLASSIFICATION
+
+native/plan.json names exactly one file, this full SHA and lenovo-laptop.
+native/run.log:2-3 records placement shell 1795205 and exact placement HEAD;
+:12 records test process 1795588. Lines 13-20 show one planned/classified file,
+thermal admission at CPU 48C, one successful file, and zero failed files.
+exit-code.txt contains 0. Discovery's lenovo record reports Node v22.23.2,
+8 cores, current dependencies and matching lock graph
+0b49533effbed7e3577dd212628a99e56c630068f76a9dc148cfc8dc96b28bf0.
+
+The preserved controller calls labTestCommit, labTestDeps and runLabTest once;
+it does not retry a failed run. It creates a new evidence directory with
+recursive:false and preserves/restores the previous local result ledger.
+scripts/lab/probe.js:1854-1857 takes the machine-wide and checkout locks before
+placement; :1872-1875 creates the detached worktree and verifies its HEAD;
+:1884-1888 links existing ignored dependencies; :1930-1940 retains locks while
+running and relays the result before cleanup. run.log's placement-head and
+placement-pid lines are downstream of that mandatory lock acquisition. The
+discovery observation that a lock was free is not being treated as a lease.
+
+run.log:11 records the existing placement factor 2.2 and blank retry/timeout
+overrides. No shared dependency installation command appears in this execution
+path; this is linked use of the dependency graph verified by discovery, not an
+installation change. No controller timeout or retry override was added.
+
+The evidence dossier records one execution of the completed fixture at this
+SHA, with no failed-then-green rerun. I accept 'first execution' in NATIVE-RESULT
+as this first recorded full invocation of the completed fixture. It must not
+be interpreted as the first-ever execution of historical N2: the older fixture
+and its whole-file failure remain separate evidence at the parent/old packet.
+
+RAW TAP AND INDEPENDENT DECODING
+
+native/raw.tap:3 is ok 1 for the intended whole Node test case. Line 5 reports
+5834.906588 ms for that subtest; lines 13-20 report 1..1, tests 1, pass 1, fail 0,
+cancelled 0, skipped 0, todo 0. Line 22 reports classified time 7551 ms. The
+runner's '1 assertions' is one Node test case, not a count of JavaScript assert
+calls; NATIVE-RESULT correctly calls it one test case.
+
+I independently decoded raw TAP diagnostics at lines 8-12 by removing only one
+layer of TAP escaping for backslashes/hash markers, then parsing JSON. The
+three saved JSON diagnostics (prepared-settlement-while-closed,
+later-local-reauthorization, reauthorized-participant-rows) exactly equal their
+raw decoded objects. I reconstructed summary.json independently from those
+objects and obtained exact equality. The initial-release and pause-answers
+diagnostics were also decoded directly, not inferred from the summary.
+
+Every file in packet/native is byte-identical to the corresponding original in
+/tmp/lagrange-release-closeout-20261015.0x0xyh24/native-reauthorization. The
+run-one-capture.mjs.txt preservation copy is byte-identical to its original
+controller. Raw TAP was neither rewritten nor replaced by parsed output.
+
+OBSERVED OWNER PATH AND RESULTS
+
+1. All three native application replicas have PREPARED rows at prepareIndex 5,
+   prepareTerm 1, with applied/committed position 5 in raw.tap:10 before the
+   PAUSE. The existing local session/staging path was used by the test; no
+   replicated BEGIN was added.
+2. raw.tap:9 contains actual PAUSE answers for r1/r2/r3 with paused:true.
+   Exact PREPARE replay in :10 retains the original prepare index/digest and
+   rows. No fabricated OPEN/CLEAR state or authoritative success was supplied.
+3. The real native coordinator settlement answer in :10 reports committed:true,
+   coordinator logIndex 6, term 1, and recorded ROLLBACK. The participant
+   prepared digest is
+   1b34831bb0e8c790db7498af17415fae7aab6cf9bca306ad5ddbdcb34f324c8d.
+   The recorded decision digest is
+   c655e247a75c521364e6e486190c2a6aef8d070e4e99eac05e2127afe27305b5;
+   independently hashing the actual decisionText reproduces that digest.
+4. All three application replicas settle ROLLED_BACK at decisionIndex 6,
+   decisionTerm 1 while admission is closed and user data is empty (:10).
+   The ordinary write is refused with partition_write_cutover_paused; opposite
+   COMMIT is refused with participant_transaction_decision_conflict. DECISION
+   replay and terminal PREPARE retain the terminal outcome.
+5. The later diagnostic (:11) contains a real QueryEngine recovery answer:
+   state available, coordinator status ROLLED_BACK, the same decision digest,
+   epoch 7, FROZEN manifest containing one participant, and an empty actual
+   progress-table result. This is not a synthetic empty participant manifest.
+6. Two TRANSACTION/ROLLBACK deliveries reach the actual application leader
+   through the real QueryExecutor transport path. Both carry the same
+   transaction/participant/session/epoch, prepared digest and recorded decision
+   bytes, and return success:true, replayed:true, ROLLED_BACK at index 6. The
+   earlier direct test sends do not traverse this recorder, and the existing
+   seed bridge disables the independent transaction recovery sweep. Thus the
+   observations bind to real release discharge, not a copied direct-send result.
+7. Four actual control release messages carry the current queryDrainProof:
+   enable -> observed, resume -> resumed, then enable -> observed, resume ->
+   resumed. Their proof records name the exact transaction and recorded
+   decision digest, the actual control release/term/leader and matching HELD
+   census schema/semantic/row-generation fields. The raw control facts show
+   applied/committed/last position 7. The test validates the production proof
+   contract for each payload.
+8. Later application release returns cut_over in 82.794243 ms (:11). All three
+   application replicas have admission open and applied/committed/last
+   position 6 (:12). Their terminal participant objects equal their own
+   pre-reauthorization terminal objects exactly; user data remains empty.
+   Final HELD census and coordinator-row count one are checked by the final
+   assertions in the exact passing test (:94-95), rather than directly printed
+   as a separate final count in raw TAP. The control message observations also
+   retain the recoverable transaction in HELD state. This is a non-deletion
+   control, not a production retention bound.
+
+The existing release owner therefore demonstrably accepts actual QueryEngine
+discharge of retained terminal coordinator history for this scenario. It does
+not acquire global transaction outcome authority: the delivery follows the
+coordinator's already-recorded ROLLBACK and leaves terminal application rows
+unchanged. The real SeedRuntimeBridgeOwner, SQLQueryEngine, gateway, CDC,
+QueryExecutor, coordinator settlement and participant owners were composed;
+the fixture only supplies routing metadata and observes communication.
+
+SPECIFIC LIMITS THAT MUST TRAVEL WITH THE PASS
+
+- This is local PAUSE followed by existing local reauthorization. Initial and
+  later application releaseId are identical in the raw diagnostic. No new
+  committed HOLD command, release-state version/epoch, or delayed sealed
+  first-PREPARE admission binding is implemented or witnessed here.
+- All four captured queryDrainProof values are identical. 'Invocation-bound'
+  refers to the current owner's release/term/leader/schema/row-generation
+  proof shape; this run does not prove a unique per-request nonce, immutable
+  release-result ledger, new epoch authority, or future replay fencing.
+- ROLLBACK with empty user data is not successful COMMIT/exactly-once user-data
+  application. The later COMMIT control still needs the actual coordinator
+  decision persistence path, real PREPARE evidence and native dependencies.
+- Native RF3 application plus two RF1 system partitions are colocated in one
+  process on lenovo-laptop. No physical multi-host, crash, failover, late/ACK-only
+  reply, full startup/readiness, normal client transaction, pressure, snapshot
+  restore, retirement or capacity proof follows.
+- The healthy 82.794 ms release is within the existing 10s release budget, but
+  does not test the known nested delivery budget gap under failure. Production
+  settlement still does not pass its outer deadline into ordinary QueryEngine
+  participant delivery. The 30s nested budget concern remains unclosed.
+- No whole-corpus or main certification was run. Existing N1/N4 semantic REDs,
+  inherited RC1/RC2 F-MIR failures and other integration obligations remain
+  separately classified at their original bytes.
+
+DOCUMENT AND COMMITTED INVENTORY REVIEW
+
+NATIVE-RESULT.md at the hash below is supported within these limits. Its
+duration/identity/count/owner-path claims match raw evidence; it correctly
+separates the healthy latency from nested-budget failure schedules and explicitly
+distinguishes ROLLBACK from COMMIT and single-host integration from broader
+certification. The explicit PAUSE/proof-shape qualifications above prevent
+reading this result as evidence for the proposed committed HOLD protocol.
+Static-check and normal-hook executions are attributed to the parent; I did
+not rerun them. I directly checked their committed material scope.
+
+Commit 8a4986 has parent 108282c and exactly seven changed paths: the three test
+sources, two generated test metadata files, impact-contracts.json, and
+solve/changes/global-owner-debt-inventory/inventory.json. The inventory delta
+changes graph/input/provenance hashes, module count 5422 -> 5423, edge count
+27882 -> 27899, and five importIn counts by one. Clone-group/duplicated-line
+counts, complexity limits, owner scores, unresolved count 36, lint exclusions,
+and baseline thresholds are not raised. The graph sourceDigest matches the
+committed impact graph seal. This is generated analysis data, not a production
+behavior change or a waiver of inherited debt.
+
+I re-read the old N2 test from commit 108282c and verified its retained SHA256
+c931bbd94708fe42cbbf75c3eea646c802b1c9d66667e413139d3af49ff2be4f.
+I also independently rehashed the accepted archive
+LAGRANGE_NATIVE_RELEASE_FENCING_OWNER_PACKET_20261015T104241Z.tar.gz:
+550f0e0a7fbb5ded309206d60474567bd428ddfde808c99f0b8b4a2691783bf1.
+Its payload manifest SHA256 is
+6ff0509cd9b0ad645d1b77e5f595ca98324e29095a9e7dfe58169feedcc87f7b;
+all 133 listed payload files matched. Historical evidence has not been
+rewritten to manufacture the new whole-file PASS.
+
+EXACT REVIEWED SHA256 IDENTITIES
+
+92e96cc4ebf64962794eb56aac9d6841d1eaa15774c46b8162da77a67c8be217  NATIVE-RESULT.md
+4ff265d327f30758cc52d1fc32be0f8b8a0c77f770feccc10e9aaf6a1730488e  native/raw.tap
+0401bfd7e00b6fc2e20ec8bde52fdee2c43b448c29673323cbdc1bcf45e4f7cf  native/run.log
+acd7971b0245bef4b2f51dad8408fa95b5c4157f65f0a32f7ac7228af0cd5849  native/plan.json
+6fc52ee54842a0cf1ca463cbfd7f86fcf7464d95131be61f9c894445fde85792  native/discovery.json
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  native/exit-code.txt
+d0e614c91a80f3f9e67be17b68d9eee756f4f1879babafa99123545f835272d2  native/prepared-settlement-while-closed.json
+8a1c3357bfd88260539b2d6dc1b319c55a3fdd18868597e63c7287ed2182b7d2  native/later-local-reauthorization.json
+475e793263fdb7a2b1bf81c560099ccc7cc909db44132ab25cf89ea2c329a65f  native/reauthorized-participant-rows.json
+bc9460c1ccb71ab74006cd8081a6e9da1f4def3e573b27187c93e453f669cf72  native/summary.json
+5bd1c2d8c028ec557c500effe0c0dfc350eae004468c51ff67b2cfc07ee5fa84  run-one-capture.mjs.txt
+4523c8a43ab3f6e75e4d2993ed14e44717a4003825bbb699a3f923578be4109a  test/partition/participant-release-query-engine-fixture.js
+99d05469b9df1240d3c566c81cf4989e3fdb49fe35c9e34e7272b78f3846ebaa  test/partition/participant-release-prepared-settlement-native.test.js
+12c914b98ce063bfa023c14314c173907a16ed6a744ddc71902462af209bec13  test/partition/participant-release-tx1-native-fixture.js
+39dfbbf495f3a7bcb8bc6763c941fc989e2977a8db8811139bdf85ea53c5891f  test/shards/impact-contracts.json
+a367fdecd747773e29c332f21ac37918df4a1d622e05339e8a493e2c75e93539  test/shards/impact-graph-seal.json
+69427d6e49ff4c0c0728ac3aaaaa2d8ecbf4e3050f2eb5b676194e48cbbdb1f4  test/shards/subsystem-classes.json
+5a3426f50bcdc8b9c9c98454d68ca28340a8aa7c8fae0526e85a53405cfda471  solve/changes/global-owner-debt-inventory/inventory.json
+2c9f947f70abcb45a5ab5f47f0d76eecc2d8dd8f95239116ea04ff95b26f8e2f  reviews/native-test-review.txt
+
+Successor remains unsealed/unactivated. Shared-control-wave remains HELD.
+Runner/TAP remains PARKED. PR #122 and the bde70cec corrected model/specification
+remain rejected. This review grants no production implementation or main merge
+authority.
+
+FINAL CONTENT-BOUND ADDENDUM — 2026-10-15
+
+The final NATIVE-RESULT.md adds the precise qualification independently
+observed above: initial/later application releaseId are identical, and all four
+control messages carry the same current proof value. The bounded whole-file
+PASS does not prove a unique release-request/epoch binding or delayed bytes
+across a new committed authorization. I approve the final document below for
+evidence preservation; it supersedes only the earlier document hash in this
+report. The reviewed test and native artifact hashes above remain unchanged.
+
+140a5a04bbaaf6b869ba48c46c34892510d5ddb0336bf6aa16538fe2141f711b  NATIVE-RESULT.md
+3260e8988f8bd3a30522828cb26dd82d9446a4bb16125190dcab366ae4660cb3  README.md
+be593ae0dac373bd7ff588d2f9f9ad59a94433a93d33940acd82345a3eca5f07  verification-summary.json
+7e1b5d788c4d47e90809e049248686a331c6e61ef09e83d459ae7e6874cc7f26  custody/pre-publication.json
+a471720eb9d081c80d46daec2961ae825d40eeab1b44f41b0f6836ee504a7186  custody/accepted-archive-verification.json
+
+README.md accurately indexes this bounded result, the accepted archive, the
+complete future implementation unit and the outstanding owner decisions. It
+does not claim the proposed 5,388,288-byte release-only envelope is an adopted
+production bound. Its exclusions cover COMMIT, committed HOLD, delayed sealed
+bytes and native snapshot recovery. The named final DECISIONS.md and
+SNAPSHOT-DECISION.md hashes agree with the other reviewers' content-bound
+reports; this index check does not replace their semantic reviews.
+
+verification-summary.json explicitly identifies itself as reported tool
+results rather than raw console. Its static-check statements remain attributed
+to the parent, not independently rerun by this verifier. It explicitly excludes
+a fresh full lint/complexity census and earlier native campaigns.
+
+I independently compared the recorded local custody files and current shared
+checkout observations. Shared HEAD is 0996d7576516af24f5f4d3e1e9aee37c775aabae
+on integrate/rs-raft-2026-09-30 with 18 staged paths. The current staged binary
+diff hash is 0b2ea79142a13f4dcada523f01108fbd8a4809492838e23f7a0246a7159953fc;
+the current porcelain-v2 --branch status hash is
+6e430441df2c919b047a772e02ff6578ba9841a6459350394708abd7edb7a271.
+Both match the retained before bytes and custody receipt. The earlier status
+format discrepancy is explicitly recorded. Process/worktree inventory hashes
+match retained local files; these snapshots remain observations, not leases.
+The parent's no-intervention statement is not independently proven by a pair
+of snapshots alone. The accepted-archive receipt agrees with my independent
+133-entry archive verification described above.
+
+No new preservation blocker is present in these final documents. Approval is
+limited to non-main evidence preservation of the reviewed bytes. The upcoming
+payload manifest, upload/download verification, publication receipt and final
+Git identity still require their ordinary mechanical checks; this review does
+not claim those future actions have already happened. Production implementation
+and wholesale/main merge remain HOLD. No further edits to this review are
+pending from this verifier.

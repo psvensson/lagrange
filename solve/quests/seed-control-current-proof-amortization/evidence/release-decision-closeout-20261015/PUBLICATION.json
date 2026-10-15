@@ -1,0 +1,46 @@
+{
+  "kind": "non-main-evidence-preservation",
+  "sourceBaseline": "108282c80318fbc9e7094f2e7a99ba37430374fd",
+  "testCommit": "8a4986dd82e4f26436945dc139727024d9b70b41",
+  "branch": "review/release-fencing-decision-closeout-20261015",
+  "finalGitIdentity": "The enclosing Git commit; never substitute this evidence commit for the test execution SHA.",
+  "uploaded": {
+    "sha256": "77878eaf13aa45c92b749d376e4f160daf473b1765c1cf2bbfb313ff6b879ae7",
+    "bytes": 81992,
+    "asset": "seed-control-current-proof-amortization--LAGRANGE_RELEASE_DECISION_CLOSEOUT_20261015T121442Z.tar.gz",
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/seed-control-current-proof-amortization--LAGRANGE_RELEASE_DECISION_CLOSEOUT_20261015T121442Z.tar.gz"
+  },
+  "evidenceFinding": {
+    "ts": "2026-10-15T12:15:01.513Z",
+    "type": "finding",
+    "kind": "evidence",
+    "text": "Test-only QueryEngine ROLLBACK settlement-to-local-reauthorization control PASS at 8a4986dd82e4f26436945dc139727024d9b70b41; exact command/result/capacity/snapshot decision closeout for content-bound owner review. Production implementation HOLD; no successor activation/seal or merge. Accepted 108282c packet and rejected predecessor evidence preserved.",
+    "evidence": "sha256:77878eaf13aa45c92b749d376e4f160daf473b1765c1cf2bbfb313ff6b879ae7",
+    "asset": "seed-control-current-proof-amortization--LAGRANGE_RELEASE_DECISION_CLOSEOUT_20261015T121442Z.tar.gz",
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/seed-control-current-proof-amortization--LAGRANGE_RELEASE_DECISION_CLOSEOUT_20261015T121442Z.tar.gz",
+    "bytes": 81992
+  },
+  "payloadManifestSha256": "9bfa8ef57d196cb4b8be82e9ba5b8f4642b37cede2d7ce8c86aee06211da2123",
+  "payloadFiles": 27,
+  "archiveMembers": 28,
+  "verification": {
+    "localArchiveAndAllManifestEntries": true,
+    "canonicalEvidenceUploadDownloadAndHash": true,
+    "gitMirrorPayloadBeforeCommit": true,
+    "questLogAppendOnlyOneEvidenceFinding": true
+  },
+  "testCommitChangedPaths": [
+    "M\tsolve/changes/global-owner-debt-inventory/inventory.json",
+    "M\ttest/partition/participant-release-prepared-settlement-native.test.js",
+    "A\ttest/partition/participant-release-query-engine-fixture.js",
+    "M\ttest/partition/participant-release-tx1-native-fixture.js",
+    "M\ttest/shards/impact-contracts.json",
+    "M\ttest/shards/impact-graph-seal.json",
+    "M\ttest/shards/subsystem-classes.json"
+  ],
+  "archiveExclusions": [
+    "PUBLICATION.json is created after verified upload and is available only in Git.",
+    "Full foreign staged patch and process command lines remain local; only hashes/scoped custody findings are included."
+  ],
+  "boundary": "Production implementation HOLD. No successor activation/sealing, main publication or merge. Evidence branch inherits rejected predecessor source and must not be merged wholesale."
+}

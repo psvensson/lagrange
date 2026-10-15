@@ -1,0 +1,269 @@
+Snapshot / cross-owner closeout review
+Reviewer: subagent:/root/snapshot_contract_audit
+Date: 2026-10-15
+Source baseline: 108282c80318fbc9e7094f2e7a99ba37430374fd
+Scope: read-only source, preserved snapshot work, and exact authored decisions.
+No production edits, tests, lab locks, dependency changes or foreign-worktree edits.
+This newly created review is the only file written by this reviewer.
+
+Reviewed document identities
+SNAPSHOT-DECISION.md SHA256 f3b432cc04ca72d1282ec99120d2ec1998ca97226136009ac617adfdad7d65c3
+DECISIONS.md SHA256 5063b2247a74aa51c53774a376f99195921ac60e75421be888bcffb4979f9bca
+Paths are relative to solve/quests/seed-control-current-proof-amortization/evidence/release-decision-closeout-20261015.
+
+Verdict
+The selected snapshot ownership and explicit implementation HOLD faithfully
+preserve the prior source audit. The two documents are not an implemented or
+fully closed protocol contract. Preserve this review and its findings with the
+checkpoint. Correct S1 and clarify S2-S4 before representing the authored pair
+as the final exact decision packet. This is a bounded documentation closeout,
+not a rejection of the accepted evidence packet or authorization for source.
+
+Findings
+
+S1 - Incorrect registered interaction name.
+SNAPSHOT-DECISION.md:121 names an existing snapshot-checkpoint-install pair.
+No such key exists in test/shards/impact-contracts.json. The actual pair is
+snapshot-receiver-lifecycle-staging (baseline around2039; current worktree
+around2041), with validated installation and lifecycle preparation endpoints.
+Its witnesses are snapshot-lifecycle-staging, learner-runtime-authorization,
+and operation-port-boundary. Use that exact name; the future application-image
+and Ready/import extension remains new registry work.
+
+S2 - Snapshot B must not import sender-local pending credits.
+SNAPSHOT-DECISION.md:52-57 says B includes outstanding-accounting recovery;
+DECISIONS.md:253-259 separately includes core-held, Ready-held and durable
+unapplied suffix commands in required outstanding credit. A source core's
+uncommitted pending commands are not replicated application state at B.
+Clarify that B contains only application-committed accounting/frontiers and
+that outstanding custody is reconstructed by the receiver/runtime from the
+actual accepted native state and retained suffix, under the still-missing
+credit contract. Never copy sender pending maps/credits into authority or
+infer zero outstanding merely because the application image lacks them.
+Evidence: raft-rs-application-transaction-owner.js:51-85 establishes the
+committed application boundary; raft-rs-durable-store.js:404-413 stores native
+Ready separately; runtime-owner.js:1191-1239 processes actual Ready.
+This is an explicit existing B blocker, not grounds for inventing a new ledger.
+
+S3 - INIT bootstrap wording overclaims a current executable path.
+DECISIONS.md:92 says the initial control partition can initialize through its
+current fresh-storage/operator path. INIT is a proposed new command; current
+partition-service-entry-apply-base.js:582-599 refuses unknown command types.
+Restate this as a required reachable bootstrap path, pending the already named
+activation/local-open matrix, rather than currently supported behavior.
+Snapshot manifests must preserve the committed activation marker/protocol
+version at B. A pre-INIT image may recover only with the necessary retained
+activation suffix; a post-INIT missing row/marker is unavailable/corrupt state,
+never fresh initialization. Do not add a live QueryEngine/CONFIG dependency
+to intact local restart or accepted-image recovery.
+
+S4 - Name the new query discharge/provenance state in the image and retention
+dependency explicitly.
+DECISIONS.md:140-152 correctly labels durable discharge as new. Current query
+release settlement sends normal participant decisions, records PROGRESS, and
+returns invocation-only evidence (distributed-transaction-release-settlement
+.js:149-203,222-239); the existing fixed command vocabulary is FREEZE/DECIDE/
+PROGRESS (distributed-transaction-settlement.js:16,32-46). It does not already
+persist the proposed participant-terminal receipt record. The proposal needs
+one query-owned schema/encoding/commit-and-readback path, exact coverage of the
+current coordinator manifest/row set, and retention/retirement rules. A digest
+alone is neither that record nor proof all current obligations are covered.
+Explicitly include these records and the application-contract provenance /
+activation records in snapshot B. They cannot disappear while referenced by
+release authority or unresolved obligations. Their bytes and pins are outside
+the stated release-only 5,387,264-byte envelope until the query owner bounds
+them. The current text acknowledges missing encoding and settlement bounds;
+retain those blockers, and do not describe A/C as closed implementation specs.
+
+No further disguised-existing-contract finding was identified in the reviewed
+scope. applicationContractDigest is explicitly missing an owner-fed producer;
+the token observation, custody fields, durable release state, fixed commands,
+result adapter and retirement mechanism are explicitly new. D0's transcript
+digest is correctly excluded as independent freshness/permission proof.
+
+Fresh ownership and custody observations from this audit
+
+1. /mnt/data/peter/projects/lagrange/.claude/worktrees/codex-raft-rs-partition-snapshot-catchup-ownership-draft
+   HEAD 9554f689ef1fd4560e23ed8ca4f386266539f83f
+   branch handoff/rs-raft-salvage-20261008-snapshot-catchup-ownership-wip
+   git status --short: empty.
+2. /mnt/data/peter/projects/lagrange/.claude/worktrees/codex-snapshot-content-format-quest-draft
+   HEAD 458076e64b4e36ac1525f93f6daa41bbf3fadc5c
+   branch handoff/rs-raft-salvage-20261008-snapshot-content-format-wip
+   git status --short: empty.
+3. /mnt/data/peter/projects/lagrange/.claude/worktrees/codex-snapshot-dependency-b-local-open-quest
+   HEAD 2384216d16d11dc6d62a682ffef192dc944a7a15
+   branch handoff/rs-raft-salvage-20261008-snapshot-dependency-b-wip
+   git status --short: empty.
+4. /mnt/data/peter/projects/lagrange/.claude/worktrees/codex-snapshot-owner-application-preservation-diagnostic
+   HEAD 82b54ef9b7c8d6be9f2d6450cbc5e6713ade00af
+   branch codex/snapshot-owner-application-preservation-diagnostic-20261008
+   untracked test/raft/raft-rs-backend/partition-native-checkpoint-application-preservation.test.js preserved.
+
+These are current read-only ref/status observations, not ownership leases.
+No active snapshot implementation agent was established. Routing remains with
+the existing owners and preserved work, not this review lane.
+
+Source findings preserved faithfully
+
+- snapshot-checkpoint-store.js:262-275,302-318 creates a peer-only native image
+  and zero HLC; validator469-495 rejects additional application tables.
+- snapshot-catchup.js:210-215 omits raftRsGroupId at its sole production creator
+  call. Its current receiver346-367 shuts down before the old installer.
+- snapshot-install.js:555-576 and receiver-admission.js:19-25 require fresh
+  CREATE/learner authority, not intact receiver-native snapshot acceptance.
+- runtime-owner.js:1191-1239 and durable-store.js:404-413 provide no coupled
+  application-image import at the Ready boundary inspected.
+- participant-transaction-pause.js:190-232 keeps D3 local and initially CLOSED.
+- snapshot-retention.js:31-35,218-253 keeps two newest plus pins; two is not a
+  total image count/byte bound. partition-snapshot-cadence.js:54-73 remains
+  COMMITTED_LOG_UNSUPPORTED.
+- Content predecessor458076e6 log2026-10-08T01:59:51.108Z explicitly STOPs on
+  sqlite_schema-minus-denylist being insufficient replicated provenance.
+- 9554f689 planning/2026-10-08-independent-predecessors-owner-judgment.md keeps
+  content and local-open predecessors separate from one coupled live exchange.
+
+Category-complete verification disposition
+Every item below is covered by source/design evidence, not a claim of new
+runtime test success. Missing proof remains HOLD.
+
+Recovery-replay
+1. Stale/live: snapshot-decision71-78 and native target-generation binding
+   forbid stale import; actual same-service rebuild witness still required.
+2. Restart discrimination: snapshot-decision80-83 preserves fresh/intact/wipe/
+   unavailable distinctions; S3 adds activation-marker semantics.
+3. Lost enlistment: snapshot-decision52-57,102-105 preserves PREPARED and exact
+   participant state; store.js:140-173 is authority, empty scrubbed rows are not.
+4. Replay/CAS: decisions98-110,227-245 preserves immutable results and retired
+   replies; snapshot-decision112-115 requires suffix/duplicate/crash witness.
+5. Absence proves nothing: decisions237-245 and snapshot-decision80-98 retain
+   unavailable/retired/wipe distinctions. No read failure becomes clear history.
+
+Owner-interaction
+1. Single question owner: snapshot-decision5-6,24-28 selects existing coupled
+   runtime/application/install owners; release does not install independently.
+2. Typed boundary: snapshot-decision85-98 explicitly labels proposed missing
+   states; S1 corrects exact registry identity.
+3. Paired invariants: snapshot-decision102-117 requires application preservation
+   and receiver election/local eligibility in one native witness; unmeasured.
+4. Stale then fresh: snapshot-decision93-98 permits owner re-entry; final native
+   refusal-to-progress schedule remains required by preserved R6/R7.
+5. Pressure/backoff: decisions247-310 names credit/saturation/settlement gaps;
+   snapshot-decisionretention row rejects two-generation total-bound claims.
+6. Wake/release: staged-vs-native distinction keeps native runtime/transfer
+   continuation sole owner; no new retry authority or claimed latency proof.
+7. Projection authority: decisionsD0/D2/D3 and cache audit keep digests/caches/
+   local proof out of replicated authority; S2 applies same rule to credits.
+8. Negative fidelity: snapshot-decision108-109,119-123 rejects fabricated Ready,
+   empty images and direct old-installer calls as proof.
+9. No escape hatch: snapshot-decisioncurrent-install row preserves CREATE
+   authority; no scrub removal or local row deletion is proposed.
+10. Registry/proof: S1 corrects name; actual new application/Ready/import
+    endpoints/witness must ride with the future reviewed unit.
+
+Admission-gating
+1. Precheck/enforcer: snapshot-decision71-78 requires native acceptance and
+   target binding at actual import; descriptor validation alone is not grant.
+2. Transient/terminal: proposed typed table distinguishes staging/native
+   refusal/environment failure; existing reason consumers need future proof.
+3. Budget: decisionscache audit keeps existing budgets; no raised timeout.
+   Coupled transfer budget and end-to-end margin remain unmeasured.
+4. Reason shape: proposed states expressly not existing symbols; future canonical
+   producer/consumer shape is required, no source implementation claimed.
+5. Hold release: snapshot-decision93-98 names owner/re-entry; local D3 may open
+   only after replay and fresh owner validation112-113.
+6. Freshness: actual committed prefix and current target generation required;
+   source cache identity cannot replace owner-fed immutable provenance.
+7. Message honesty: proposed binding failure must name exact group/target/B;
+   no current error implementation or measured diagnostic is claimed.
+
+Formation-circularity
+1. Self-dependencies: decisions90-94 and snapshot-decision80-83 prohibit live
+   control/QueryEngine prerequisite for intact restart; S3 removes overclaim.
+2. Re-drive starvation: native/durable continuation must not depend on the
+   service eligibility it restores; staged bytes remain no grant.
+3. Window clients: decisionscapture/custody section keeps old bytes and typed
+   refusal; application import has no alternate ordinary-write lane.
+4. Window arithmetic: not measured; complete activation/recovery matrix remains
+   a required witness, not an assumed budget fit.
+5. No bypass: no direct application restore, timeout rollback, second installer,
+   missing-row success or source-local permission copy is authorized.
+
+Concurrency-serialization
+1. Gate/backstop: decisions253-259 honestly marks missing finite native custody;
+   current follower single-flight cannot prove global/restore accounting.
+2. Await TOCTOU: snapshot binding includes exact target generation; actual
+   pre-import and crash schedule remain future obligations.
+3. Single winner: native accepted Ready and durable exact completion binding
+   determine install/replay; transport COMPLETE is not independent winner.
+4. Timer reentrancy: continuation remains existing runtime/transfer owner;
+   bounded expiry/stale-attempt proof remains required by preserved draft.
+5. Lock key: snapshot-retention.js9-12 assumes one process/root, current
+   catchup259-266 keys follower; future group/target/generation custody needs
+   reviewed exact keys. No new mutex is pretended to solve the interaction.
+
+Harness-fidelity
+1. Right RED: no tests run or missing-symbol failures counted in this audit.
+2. Binding seam: required witness uses real MsgSnapshot/Ready/import and actual
+   query/transaction owners; mocked success expressly excluded.
+3. Time: no compressed timing or new measurements; no duration claim.
+4. Fields: future witness must include actual identity/configuration/B,
+   discharge and release/outcome/retirement state, including S3/S4 additions.
+5. Vacuity: nonempty schema/data/outcome/PREPARED and retained refusal state
+   required at B; empty-image proof excluded.
+6. Live binding: serialized-byte count, process restart or direct fresh-CREATE
+   installer cannot certify native source-to-target recovery.
+
+Implementation boundary remains unchanged: production HOLD; successor
+unsealed/unactivated; shared-control-wave HELD; Runner/TAP PARKED; PR122 and
+bde70cec predecessor rejected. Content preservation is not source approval.
+
+Content-bound follow-up, 2026-10-15
+
+Re-read after root's corrective documentation changes:
+SNAPSHOT-DECISION.md SHA256 3c8fecaa191d25607acba8be1e6d8dc2011c64f4e1344a2b2dce465ea2dc0576
+DECISIONS.md SHA256 511b971b6d49aadb13202daad412282f87c35e47d78b33d206b37b16527ad21e
+
+S1 resolved: exact snapshot-receiver-lifecycle-staging registry key used.
+S2 resolved: B carries committed accounting; sender core/Ready-held and
+uncommitted credits are excluded; receiver runtime reconstructs suffix/custody.
+S3 wording resolved: INIT composition is explicitly new, absent and unproved.
+Remaining S3 detail for the implementation gate: name the activation marker /
+protocol version in snapshot B, retain the necessary INIT suffix when restoring
+a pre-INIT image, and refuse a post-INIT image missing release state/marker as
+unavailable/corrupt rather than fresh. DECISIONS already records the activation
+and retained-log matrix as a blocker; no production approval depends on omission.
+S4 snapshot accounting resolved: query-owned discharge records, schema /
+provenance and pinning are explicit. Their exact producer/encoding/coverage /
+retirement contract remains a clearly stated query-owner dependency, not an
+implemented persistent proof. The release-only envelope still excludes these
+other owners' bytes and makes no total SQLite/log/snapshot bound claim.
+
+Verdict on these exact bytes: APPROVE evidence/design-dependency preservation,
+with implementation HOLD and the above retained gate obligations. The selected
+single-owner snapshot route faithfully preserves the source audit. This is not
+approval of a production protocol, old snapshot branch adoption, a native
+recovery proof, a Quest seal, a merge, or capacity closure. The category-complete
+audit above remains applicable; no new runtime execution was represented.
+
+Final bounded snapshot closure, 2026-10-15
+
+Read SNAPSHOT-DECISION.md in full after the activation clarification:
+SHA256 998be9039a942a8a4d0d03938991130d8e1250dab8b3befbbb3ee660bfa92329
+The corresponding activation/snapshot paragraphs in DECISIONS.md were also
+read at SHA256 62de8c65beb30bdc51bd34c41c7087208f7d3ec1018094bf2b19217177ce6ad4.
+This last check does not independently approve other capacity refinements in
+that main-document revision; they belong to the principal/adversarial review.
+
+S3's remaining snapshot detail is now resolved explicitly: B includes INIT
+activation marker/protocol version; pre-INIT image recovery needs the retained
+INIT suffix before new admission; missing post-INIT state/marker is unavailable
+or corrupt and cannot authorize fresh INIT. S1-S4 documentation corrections
+are therefore closed within this review's scope.
+
+APPROVE preservation of this exact snapshot decision with implementation HOLD.
+It faithfully preserves single ownership, explicit provenance/native-import /
+query-discharge/accounting dependencies, receiver-local D3 separation, and the
+required native witness. No production or recovery-proof approval is granted.
+The earlier source audit and category-complete dispositions remain unchanged;
+no tests, new source implementation, native executions or wider audit occurred.
