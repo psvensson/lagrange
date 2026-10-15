@@ -1,0 +1,4342 @@
+{
+  "scope": "design projection; assumed service, reconstruction and symbolic predicates",
+  "scenarios": 14,
+  "results": [
+    {
+      "name": "saturated-HOLD-OPEN-atomic-closure",
+      "status": "PASS",
+      "events": [
+        {
+          "name": "admit",
+          "ticket": 1,
+          "id": "9e51ae9245a57616fb0d430d3aeb2cdb0414688a45f69d8ee298a6c00afce712",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 1,
+              "retained": 0,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 1,
+          "index": 1
+        },
+        {
+          "name": "ready",
+          "ticket": 1
+        },
+        {
+          "name": "durable",
+          "ticket": 1
+        },
+        {
+          "name": "commit",
+          "index": 1
+        },
+        {
+          "name": "apply",
+          "index": 1,
+          "result": {
+            "id": "9e51ae9245a57616fb0d430d3aeb2cdb0414688a45f69d8ee298a6c00afce712",
+            "kind": "HOLD",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": "initial",
+            "index": 1,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 2,
+          "id": "8cddc07e83997be2fde2ca6b58ccb020ca0c2f0112846b9fb57d314e7f69ec48",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 1,
+              "retained": 1,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 2,
+          "index": 2
+        },
+        {
+          "name": "ready",
+          "ticket": 2
+        },
+        {
+          "name": "durable",
+          "ticket": 2
+        },
+        {
+          "name": "commit",
+          "index": 2
+        },
+        {
+          "name": "apply",
+          "index": 2,
+          "result": {
+            "id": "8cddc07e83997be2fde2ca6b58ccb020ca0c2f0112846b9fb57d314e7f69ec48",
+            "kind": "HOLD",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": "initial",
+            "index": 2,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 2,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 3,
+          "id": "7e5aaf73b405db74a6469424da12833213f55e5b8cb91a03d90e1f984987deb9",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 1,
+              "retained": 2,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 3,
+          "index": 3
+        },
+        {
+          "name": "ready",
+          "ticket": 3
+        },
+        {
+          "name": "durable",
+          "ticket": 3
+        },
+        {
+          "name": "commit",
+          "index": 3
+        },
+        {
+          "name": "apply",
+          "index": 3,
+          "result": {
+            "id": "7e5aaf73b405db74a6469424da12833213f55e5b8cb91a03d90e1f984987deb9",
+            "kind": "HOLD",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": "initial",
+            "index": 3,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 3,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 4,
+          "id": "36bb1ce79bc3fdaf04fb4965aec533c90ee2016aa5e155d13ae83a481a632d1f",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 1,
+              "retained": 3,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 4,
+          "index": 4
+        },
+        {
+          "name": "ready",
+          "ticket": 4
+        },
+        {
+          "name": "durable",
+          "ticket": 4
+        },
+        {
+          "name": "commit",
+          "index": 4
+        },
+        {
+          "name": "apply",
+          "index": 4,
+          "result": {
+            "id": "36bb1ce79bc3fdaf04fb4965aec533c90ee2016aa5e155d13ae83a481a632d1f",
+            "kind": "HOLD",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": "initial",
+            "index": 4,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 4,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 5,
+          "id": "ba7457f6b7ddabe2a64f5351483662a9d6b7e203f726cff50cadbb0c574dfd26",
+          "path": "local",
+          "inventory": {
+            "M": 1,
+            "HOLD": {
+              "q": 0,
+              "retained": 4,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 5,
+          "index": 5
+        },
+        {
+          "name": "ready",
+          "ticket": 5
+        },
+        {
+          "name": "durable",
+          "ticket": 5
+        },
+        {
+          "name": "commit",
+          "index": 5
+        },
+        {
+          "name": "apply",
+          "index": 5,
+          "result": {
+            "id": "ba7457f6b7ddabe2a64f5351483662a9d6b7e203f726cff50cadbb0c574dfd26",
+            "kind": "RETIRE_AND_HOLD",
+            "fromG": 0,
+            "toG": 1,
+            "child": "c339e93ed337c6c9e733d6a5fe138f231fbae92904d19e14a8c06b2534df0649",
+            "disposition": "HELD",
+            "index": 5,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "split-protocol-counterexample-preserved",
+      "status": "PASS",
+      "events": [
+        {
+          "name": "admit",
+          "ticket": 1,
+          "id": "9e51ae9245a57616fb0d430d3aeb2cdb0414688a45f69d8ee298a6c00afce712",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 1,
+              "retained": 0,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 1,
+          "index": 1
+        },
+        {
+          "name": "ready",
+          "ticket": 1
+        },
+        {
+          "name": "durable",
+          "ticket": 1
+        },
+        {
+          "name": "commit",
+          "index": 1
+        },
+        {
+          "name": "apply",
+          "index": 1,
+          "result": {
+            "id": "9e51ae9245a57616fb0d430d3aeb2cdb0414688a45f69d8ee298a6c00afce712",
+            "kind": "HOLD",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": "initial",
+            "index": 1,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 2,
+          "id": "8cddc07e83997be2fde2ca6b58ccb020ca0c2f0112846b9fb57d314e7f69ec48",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 1,
+              "retained": 1,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 2,
+          "index": 2
+        },
+        {
+          "name": "ready",
+          "ticket": 2
+        },
+        {
+          "name": "durable",
+          "ticket": 2
+        },
+        {
+          "name": "commit",
+          "index": 2
+        },
+        {
+          "name": "apply",
+          "index": 2,
+          "result": {
+            "id": "8cddc07e83997be2fde2ca6b58ccb020ca0c2f0112846b9fb57d314e7f69ec48",
+            "kind": "HOLD",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": "initial",
+            "index": 2,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 2,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 3,
+          "id": "7e5aaf73b405db74a6469424da12833213f55e5b8cb91a03d90e1f984987deb9",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 1,
+              "retained": 2,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 3,
+          "index": 3
+        },
+        {
+          "name": "ready",
+          "ticket": 3
+        },
+        {
+          "name": "durable",
+          "ticket": 3
+        },
+        {
+          "name": "commit",
+          "index": 3
+        },
+        {
+          "name": "apply",
+          "index": 3,
+          "result": {
+            "id": "7e5aaf73b405db74a6469424da12833213f55e5b8cb91a03d90e1f984987deb9",
+            "kind": "HOLD",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": "initial",
+            "index": 3,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 3,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 4,
+          "id": "36bb1ce79bc3fdaf04fb4965aec533c90ee2016aa5e155d13ae83a481a632d1f",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 1,
+              "retained": 3,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 4,
+          "index": 4
+        },
+        {
+          "name": "ready",
+          "ticket": 4
+        },
+        {
+          "name": "durable",
+          "ticket": 4
+        },
+        {
+          "name": "commit",
+          "index": 4
+        },
+        {
+          "name": "apply",
+          "index": 4,
+          "result": {
+            "id": "36bb1ce79bc3fdaf04fb4965aec533c90ee2016aa5e155d13ae83a481a632d1f",
+            "kind": "HOLD",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": "initial",
+            "index": 4,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 4,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 5,
+          "id": "1884aee54182a7a5a21ff4d5196249f033ed202d679a8f8493dfc71150afceb7",
+          "path": "local",
+          "inventory": {
+            "M": 1,
+            "HOLD": {
+              "q": 0,
+              "retained": 4,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 5,
+          "index": 5
+        },
+        {
+          "name": "ready",
+          "ticket": 5
+        },
+        {
+          "name": "durable",
+          "ticket": 5
+        },
+        {
+          "name": "commit",
+          "index": 5
+        },
+        {
+          "name": "apply",
+          "index": 5,
+          "result": {
+            "id": "1884aee54182a7a5a21ff4d5196249f033ed202d679a8f8493dfc71150afceb7",
+            "kind": "RETIRE",
+            "fromG": 0,
+            "toG": 1,
+            "child": null,
+            "disposition": "NA",
+            "index": 5,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 6,
+          "id": "f13446361c6b41a42f5e6a9e56a24ea3624ffb6296059c8857ef57edce79d301",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 1,
+              "retained": 0,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 6,
+          "index": 6
+        },
+        {
+          "name": "ready",
+          "ticket": 6
+        },
+        {
+          "name": "durable",
+          "ticket": 6
+        },
+        {
+          "name": "commit",
+          "index": 6
+        },
+        {
+          "name": "apply",
+          "index": 6,
+          "result": {
+            "id": "f13446361c6b41a42f5e6a9e56a24ea3624ffb6296059c8857ef57edce79d301",
+            "kind": "HOLD",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": "initial",
+            "index": 6,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 7,
+          "id": "125d243bb960aad744bc1c2d570a892528a8b14942f525ea3bf6325708b706c5",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 1,
+              "retained": 1,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 7,
+          "index": 7
+        },
+        {
+          "name": "ready",
+          "ticket": 7
+        },
+        {
+          "name": "durable",
+          "ticket": 7
+        },
+        {
+          "name": "commit",
+          "index": 7
+        },
+        {
+          "name": "apply",
+          "index": 7,
+          "result": {
+            "id": "125d243bb960aad744bc1c2d570a892528a8b14942f525ea3bf6325708b706c5",
+            "kind": "HOLD",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": "initial",
+            "index": 7,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 2,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 8,
+          "id": "78ef5cb93854ee0fdb5fed2a300e4c990ae5380635499e7c8cf3dee1866cf2fa",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 1,
+              "retained": 2,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 8,
+          "index": 8
+        },
+        {
+          "name": "ready",
+          "ticket": 8
+        },
+        {
+          "name": "durable",
+          "ticket": 8
+        },
+        {
+          "name": "commit",
+          "index": 8
+        },
+        {
+          "name": "apply",
+          "index": 8,
+          "result": {
+            "id": "78ef5cb93854ee0fdb5fed2a300e4c990ae5380635499e7c8cf3dee1866cf2fa",
+            "kind": "HOLD",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": "initial",
+            "index": 8,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 3,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 9,
+          "id": "d2bfa48428c9102365c7faf72dc23bcbe4f32da03adbbbe798c57eedc544a9a2",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 1,
+              "retained": 3,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 9,
+          "index": 9
+        },
+        {
+          "name": "ready",
+          "ticket": 9
+        },
+        {
+          "name": "durable",
+          "ticket": 9
+        },
+        {
+          "name": "commit",
+          "index": 9
+        },
+        {
+          "name": "apply",
+          "index": 9,
+          "result": {
+            "id": "d2bfa48428c9102365c7faf72dc23bcbe4f32da03adbbbe798c57eedc544a9a2",
+            "kind": "HOLD",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": "initial",
+            "index": 9,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 4,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 10,
+          "id": "7addc9d86cb88b5985429d0f1f4e558bfdb78bde89d1d3eb995095042b677004",
+          "path": "local",
+          "inventory": {
+            "M": 1,
+            "HOLD": {
+              "q": 0,
+              "retained": 4,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 10,
+          "index": 10
+        },
+        {
+          "name": "ready",
+          "ticket": 10
+        },
+        {
+          "name": "durable",
+          "ticket": 10
+        },
+        {
+          "name": "commit",
+          "index": 10
+        },
+        {
+          "name": "apply",
+          "index": 10,
+          "result": {
+            "id": "7addc9d86cb88b5985429d0f1f4e558bfdb78bde89d1d3eb995095042b677004",
+            "kind": "RETIRE",
+            "fromG": 1,
+            "toG": 2,
+            "child": null,
+            "disposition": "NA",
+            "index": 10,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 11,
+          "id": "383bc459f6e31a2fb3f6701d5c282bfe7d2337e2e84c5f9b06355a9346468cdc",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 1,
+              "retained": 0,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 11,
+          "index": 11
+        },
+        {
+          "name": "ready",
+          "ticket": 11
+        },
+        {
+          "name": "durable",
+          "ticket": 11
+        },
+        {
+          "name": "commit",
+          "index": 11
+        },
+        {
+          "name": "apply",
+          "index": 11,
+          "result": {
+            "id": "383bc459f6e31a2fb3f6701d5c282bfe7d2337e2e84c5f9b06355a9346468cdc",
+            "kind": "HOLD",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": "initial",
+            "index": 11,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 12,
+          "id": "56527b274c218f23f5272a80d56475377e239ad9f2b3ac9ceb693d66227bfd3d",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 1,
+              "retained": 1,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 12,
+          "index": 12
+        },
+        {
+          "name": "ready",
+          "ticket": 12
+        },
+        {
+          "name": "durable",
+          "ticket": 12
+        },
+        {
+          "name": "commit",
+          "index": 12
+        },
+        {
+          "name": "apply",
+          "index": 12,
+          "result": {
+            "id": "56527b274c218f23f5272a80d56475377e239ad9f2b3ac9ceb693d66227bfd3d",
+            "kind": "HOLD",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": "initial",
+            "index": 12,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 2,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 13,
+          "id": "a1401265dabdbda41504a61080ed8905aca6ad8966eddef0947772cae2d682c1",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 1,
+              "retained": 2,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 13,
+          "index": 13
+        },
+        {
+          "name": "ready",
+          "ticket": 13
+        },
+        {
+          "name": "durable",
+          "ticket": 13
+        },
+        {
+          "name": "commit",
+          "index": 13
+        },
+        {
+          "name": "apply",
+          "index": 13,
+          "result": {
+            "id": "a1401265dabdbda41504a61080ed8905aca6ad8966eddef0947772cae2d682c1",
+            "kind": "HOLD",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": "initial",
+            "index": 13,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 3,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 14,
+          "id": "0d65695e64b6730f6eb36aaa910201cb1844810b54bc908c586a5915961cdbe9",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 1,
+              "retained": 3,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 14,
+          "index": 14
+        },
+        {
+          "name": "ready",
+          "ticket": 14
+        },
+        {
+          "name": "durable",
+          "ticket": 14
+        },
+        {
+          "name": "commit",
+          "index": 14
+        },
+        {
+          "name": "apply",
+          "index": 14,
+          "result": {
+            "id": "0d65695e64b6730f6eb36aaa910201cb1844810b54bc908c586a5915961cdbe9",
+            "kind": "HOLD",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": "initial",
+            "index": 14,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 4,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 15,
+          "id": "e908a058089f286c8491a023d840b7a74edf3fd6d11f1fc3a0843ee65b01d452",
+          "path": "local",
+          "inventory": {
+            "M": 1,
+            "HOLD": {
+              "q": 0,
+              "retained": 4,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 15,
+          "index": 15
+        },
+        {
+          "name": "ready",
+          "ticket": 15
+        },
+        {
+          "name": "durable",
+          "ticket": 15
+        },
+        {
+          "name": "commit",
+          "index": 15
+        },
+        {
+          "name": "apply",
+          "index": 15,
+          "result": {
+            "id": "e908a058089f286c8491a023d840b7a74edf3fd6d11f1fc3a0843ee65b01d452",
+            "kind": "RETIRE",
+            "fromG": 2,
+            "toG": 3,
+            "child": null,
+            "disposition": "NA",
+            "index": 15,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 16,
+          "id": "52d36e8844c01d19d751f5363ebe915cd8ac2071f5e0f3662ac28682ea07995e",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 1,
+              "retained": 0,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 16,
+          "index": 16
+        },
+        {
+          "name": "ready",
+          "ticket": 16
+        },
+        {
+          "name": "durable",
+          "ticket": 16
+        },
+        {
+          "name": "commit",
+          "index": 16
+        },
+        {
+          "name": "apply",
+          "index": 16,
+          "result": {
+            "id": "52d36e8844c01d19d751f5363ebe915cd8ac2071f5e0f3662ac28682ea07995e",
+            "kind": "HOLD",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": "initial",
+            "index": 16,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 17,
+          "id": "1d6f155fe229dfdcca025f443b274505a512053441a72bbb32935c84cad6ee48",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 1,
+              "retained": 1,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 17,
+          "index": 17
+        },
+        {
+          "name": "ready",
+          "ticket": 17
+        },
+        {
+          "name": "durable",
+          "ticket": 17
+        },
+        {
+          "name": "commit",
+          "index": 17
+        },
+        {
+          "name": "apply",
+          "index": 17,
+          "result": {
+            "id": "1d6f155fe229dfdcca025f443b274505a512053441a72bbb32935c84cad6ee48",
+            "kind": "HOLD",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": "initial",
+            "index": 17,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 2,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 18,
+          "id": "b58bc37f50ea722b3a05f0693e81e6862229a9a838269c26e8dd06041753a192",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 1,
+              "retained": 2,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 18,
+          "index": 18
+        },
+        {
+          "name": "ready",
+          "ticket": 18
+        },
+        {
+          "name": "durable",
+          "ticket": 18
+        },
+        {
+          "name": "commit",
+          "index": 18
+        },
+        {
+          "name": "apply",
+          "index": 18,
+          "result": {
+            "id": "b58bc37f50ea722b3a05f0693e81e6862229a9a838269c26e8dd06041753a192",
+            "kind": "HOLD",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": "initial",
+            "index": 18,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 3,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 19,
+          "id": "94dc56a2698d8f7ca92e14d2f5ee6ab828124d65d753cbb848c2ce3917c74173",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 1,
+              "retained": 3,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 19,
+          "index": 19
+        },
+        {
+          "name": "ready",
+          "ticket": 19
+        },
+        {
+          "name": "durable",
+          "ticket": 19
+        },
+        {
+          "name": "commit",
+          "index": 19
+        },
+        {
+          "name": "apply",
+          "index": 19,
+          "result": {
+            "id": "94dc56a2698d8f7ca92e14d2f5ee6ab828124d65d753cbb848c2ce3917c74173",
+            "kind": "HOLD",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": "initial",
+            "index": 19,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 4,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 20,
+          "id": "dcfc7204894ce3fbc7c1b964db41c5ec5b26d54835de883437463e8a552860a8",
+          "path": "local",
+          "inventory": {
+            "M": 1,
+            "HOLD": {
+              "q": 0,
+              "retained": 4,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 20,
+          "index": 20
+        },
+        {
+          "name": "ready",
+          "ticket": 20
+        },
+        {
+          "name": "durable",
+          "ticket": 20
+        },
+        {
+          "name": "commit",
+          "index": 20
+        },
+        {
+          "name": "apply",
+          "index": 20,
+          "result": {
+            "id": "dcfc7204894ce3fbc7c1b964db41c5ec5b26d54835de883437463e8a552860a8",
+            "kind": "RETIRE",
+            "fromG": 3,
+            "toG": 4,
+            "child": null,
+            "disposition": "NA",
+            "index": 20,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 21,
+          "id": "c1600d444563b2bcc20d886c95467bfc456168a07b62c63b1e02186825aa743f",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 1,
+              "retained": 0,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 21,
+          "index": 21
+        },
+        {
+          "name": "ready",
+          "ticket": 21
+        },
+        {
+          "name": "durable",
+          "ticket": 21
+        },
+        {
+          "name": "commit",
+          "index": 21
+        },
+        {
+          "name": "apply",
+          "index": 21,
+          "result": {
+            "id": "c1600d444563b2bcc20d886c95467bfc456168a07b62c63b1e02186825aa743f",
+            "kind": "HOLD",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": "initial",
+            "index": 21,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 22,
+          "id": "a13db9c3bed4dd12926db441e098d29a8ad19bee16316cb033ea1ef199efb2ad",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 1,
+              "retained": 1,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 22,
+          "index": 22
+        },
+        {
+          "name": "ready",
+          "ticket": 22
+        },
+        {
+          "name": "durable",
+          "ticket": 22
+        },
+        {
+          "name": "commit",
+          "index": 22
+        },
+        {
+          "name": "apply",
+          "index": 22,
+          "result": {
+            "id": "a13db9c3bed4dd12926db441e098d29a8ad19bee16316cb033ea1ef199efb2ad",
+            "kind": "HOLD",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": "initial",
+            "index": 22,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 2,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 23,
+          "id": "1397e5df99b06bd367358090406ff61fbdd03df3ef1300d458eca05a2a561dc7",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 1,
+              "retained": 2,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 23,
+          "index": 23
+        },
+        {
+          "name": "ready",
+          "ticket": 23
+        },
+        {
+          "name": "durable",
+          "ticket": 23
+        },
+        {
+          "name": "commit",
+          "index": 23
+        },
+        {
+          "name": "apply",
+          "index": 23,
+          "result": {
+            "id": "1397e5df99b06bd367358090406ff61fbdd03df3ef1300d458eca05a2a561dc7",
+            "kind": "HOLD",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": "initial",
+            "index": 23,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 3,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 24,
+          "id": "8ac5f37018a403a50efbd20db0b93acbf4e3417ee46b1361b35bee491183195c",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 1,
+              "retained": 3,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 24,
+          "index": 24
+        },
+        {
+          "name": "ready",
+          "ticket": 24
+        },
+        {
+          "name": "durable",
+          "ticket": 24
+        },
+        {
+          "name": "commit",
+          "index": 24
+        },
+        {
+          "name": "apply",
+          "index": 24,
+          "result": {
+            "id": "8ac5f37018a403a50efbd20db0b93acbf4e3417ee46b1361b35bee491183195c",
+            "kind": "HOLD",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": "initial",
+            "index": 24,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 4,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 25,
+          "id": "96b5e321b9ccb5dcfdf823d7fe791db8c73397e44b797af80592f37e5bea79a0",
+          "path": "local",
+          "inventory": {
+            "M": 1,
+            "HOLD": {
+              "q": 0,
+              "retained": 4,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 25,
+          "index": 25
+        },
+        {
+          "name": "ready",
+          "ticket": 25
+        },
+        {
+          "name": "durable",
+          "ticket": 25
+        },
+        {
+          "name": "commit",
+          "index": 25
+        },
+        {
+          "name": "apply",
+          "index": 25,
+          "result": {
+            "id": "96b5e321b9ccb5dcfdf823d7fe791db8c73397e44b797af80592f37e5bea79a0",
+            "kind": "RETIRE",
+            "fromG": 4,
+            "toG": 5,
+            "child": null,
+            "disposition": "NA",
+            "index": 25,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 26,
+          "id": "fa497f5072c4f0e5b19eabff488eedea4db0991e9ccb9fb58cdfe33e2aab4fa4",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 1,
+              "retained": 0,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 26,
+          "index": 26
+        },
+        {
+          "name": "ready",
+          "ticket": 26
+        },
+        {
+          "name": "durable",
+          "ticket": 26
+        },
+        {
+          "name": "commit",
+          "index": 26
+        },
+        {
+          "name": "apply",
+          "index": 26,
+          "result": {
+            "id": "fa497f5072c4f0e5b19eabff488eedea4db0991e9ccb9fb58cdfe33e2aab4fa4",
+            "kind": "HOLD",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": "initial",
+            "index": 26,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 27,
+          "id": "84e93186b1f8901d08f13d8a8767993ae82a9ccf2091a1829a162fa6cd47b831",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 1,
+              "retained": 1,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 27,
+          "index": 27
+        },
+        {
+          "name": "ready",
+          "ticket": 27
+        },
+        {
+          "name": "durable",
+          "ticket": 27
+        },
+        {
+          "name": "commit",
+          "index": 27
+        },
+        {
+          "name": "apply",
+          "index": 27,
+          "result": {
+            "id": "84e93186b1f8901d08f13d8a8767993ae82a9ccf2091a1829a162fa6cd47b831",
+            "kind": "HOLD",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": "initial",
+            "index": 27,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 2,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 28,
+          "id": "66b26a6c84f92442570a273170e103458c20f49b48119995611089c9c0e8d7cb",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 1,
+              "retained": 2,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 28,
+          "index": 28
+        },
+        {
+          "name": "ready",
+          "ticket": 28
+        },
+        {
+          "name": "durable",
+          "ticket": 28
+        },
+        {
+          "name": "commit",
+          "index": 28
+        },
+        {
+          "name": "apply",
+          "index": 28,
+          "result": {
+            "id": "66b26a6c84f92442570a273170e103458c20f49b48119995611089c9c0e8d7cb",
+            "kind": "HOLD",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": "initial",
+            "index": 28,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 3,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 29,
+          "id": "2b05647ff10bc969b45620f748e30541c855826977087bff2620b29e3f3782fb",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 1,
+              "retained": 3,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 29,
+          "index": 29
+        },
+        {
+          "name": "ready",
+          "ticket": 29
+        },
+        {
+          "name": "durable",
+          "ticket": 29
+        },
+        {
+          "name": "commit",
+          "index": 29
+        },
+        {
+          "name": "apply",
+          "index": 29,
+          "result": {
+            "id": "2b05647ff10bc969b45620f748e30541c855826977087bff2620b29e3f3782fb",
+            "kind": "HOLD",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": "initial",
+            "index": 29,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 4,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 30,
+          "id": "dc1cc82664fbe0aec5338571b60ea0d6b8fad00eb37069cfcd36beb90cffc10e",
+          "path": "local",
+          "inventory": {
+            "M": 1,
+            "HOLD": {
+              "q": 0,
+              "retained": 4,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 30,
+          "index": 30
+        },
+        {
+          "name": "ready",
+          "ticket": 30
+        },
+        {
+          "name": "durable",
+          "ticket": 30
+        },
+        {
+          "name": "commit",
+          "index": 30
+        },
+        {
+          "name": "apply",
+          "index": 30,
+          "result": {
+            "id": "dc1cc82664fbe0aec5338571b60ea0d6b8fad00eb37069cfcd36beb90cffc10e",
+            "kind": "RETIRE",
+            "fromG": 5,
+            "toG": 6,
+            "child": null,
+            "disposition": "NA",
+            "index": 30,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "closure-before-opening-custody-cannot-be-stolen",
+      "status": "PASS",
+      "events": [
+        {
+          "name": "admit",
+          "ticket": 1,
+          "id": "491baba9a2b721ea1d2468cada57d2b25c93d01cb5331e3d75ed6438243d7ae6",
+          "path": "local",
+          "inventory": {
+            "M": 1,
+            "HOLD": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 1,
+          "index": 1
+        },
+        {
+          "name": "ready",
+          "ticket": 1
+        },
+        {
+          "name": "durable",
+          "ticket": 1
+        },
+        {
+          "name": "commit",
+          "index": 1
+        },
+        {
+          "name": "apply",
+          "index": 1,
+          "result": {
+            "id": "491baba9a2b721ea1d2468cada57d2b25c93d01cb5331e3d75ed6438243d7ae6",
+            "kind": "RETIRE_AND_HOLD",
+            "fromG": 0,
+            "toG": 1,
+            "child": "99ddcc3490f19ab41c55b2ba61d60d81623eae42c9721b1b2c53ac41639898e8",
+            "disposition": "HELD",
+            "index": 1,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "closure-after-unknown-opening-waits-and-recaptures-new-intent",
+      "status": "PASS",
+      "events": [
+        {
+          "name": "admit",
+          "ticket": 1,
+          "id": "41da335bc37d125f1d44254e0f6c808d6e1e1c2a6edcdd5d56465e0d8bef0cc0",
+          "path": "local",
+          "inventory": {
+            "M": 1,
+            "HOLD": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "timeout",
+          "ticket": 1
+        },
+        {
+          "name": "order",
+          "ticket": 1,
+          "index": 1
+        },
+        {
+          "name": "ready",
+          "ticket": 1
+        },
+        {
+          "name": "durable",
+          "ticket": 1
+        },
+        {
+          "name": "commit",
+          "index": 1
+        },
+        {
+          "name": "apply",
+          "index": 1,
+          "result": {
+            "id": "41da335bc37d125f1d44254e0f6c808d6e1e1c2a6edcdd5d56465e0d8bef0cc0",
+            "kind": "RETIRE_AND_APPROVE",
+            "fromG": 0,
+            "toG": 1,
+            "child": "9028d0c306e1826bbc659f909f3acb6e9ab9077b3ce044df1347c5a815b2bc13",
+            "disposition": "APPROVED",
+            "index": 1,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 2,
+          "id": "a3309be9f1e6fdaef33b895e7561d841d9af31208b2c83220106bf7b40c9756c",
+          "path": "local",
+          "inventory": {
+            "M": 1,
+            "HOLD": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 2,
+          "index": 2
+        },
+        {
+          "name": "ready",
+          "ticket": 2
+        },
+        {
+          "name": "durable",
+          "ticket": 2
+        },
+        {
+          "name": "commit",
+          "index": 2
+        },
+        {
+          "name": "apply",
+          "index": 2,
+          "result": {
+            "id": "a3309be9f1e6fdaef33b895e7561d841d9af31208b2c83220106bf7b40c9756c",
+            "kind": "RETIRE_AND_HOLD",
+            "fromG": 1,
+            "toG": 2,
+            "child": "11366b02fde671cb6c33b7e4bfe95de29b96bccbbb3ba4ad1328b80745792a03",
+            "disposition": "HELD",
+            "index": 2,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "genuine-state-change-refuses-selected-HOLD",
+      "status": "PASS",
+      "events": [
+        {
+          "name": "admit",
+          "ticket": 1,
+          "id": "0025aae850041c370335b9b99021267bb4a7e114eff0d2e27ad1bf616cab5126",
+          "path": "local",
+          "inventory": {
+            "M": 1,
+            "HOLD": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 2,
+          "id": "142cbc7bc35256488a8a2b3bd628ad14fe58eee44757308e390a7c6367add505",
+          "path": "local",
+          "inventory": {
+            "M": 1,
+            "HOLD": {
+              "q": 1,
+              "retained": 0,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 2,
+          "index": 1
+        },
+        {
+          "name": "ready",
+          "ticket": 2
+        },
+        {
+          "name": "durable",
+          "ticket": 2
+        },
+        {
+          "name": "commit",
+          "index": 1
+        },
+        {
+          "name": "apply",
+          "index": 1,
+          "result": {
+            "id": "142cbc7bc35256488a8a2b3bd628ad14fe58eee44757308e390a7c6367add505",
+            "kind": "HOLD",
+            "disposition": "HELD",
+            "winner": "initial",
+            "index": 1,
+            "term": 1
+          },
+          "inventory": {
+            "M": 1,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 1,
+          "index": 2
+        },
+        {
+          "name": "ready",
+          "ticket": 1
+        },
+        {
+          "name": "durable",
+          "ticket": 1
+        },
+        {
+          "name": "commit",
+          "index": 2
+        },
+        {
+          "name": "apply",
+          "index": 2,
+          "result": {
+            "id": "0025aae850041c370335b9b99021267bb4a7e114eff0d2e27ad1bf616cab5126",
+            "kind": "RETIRE_AND_HOLD",
+            "fromG": 0,
+            "toG": 1,
+            "child": "93bb76fdf6dc6c35e6242dd63b20380decb77f696e20bf8906ca67c1e9964695",
+            "disposition": "EXPECTED_STATE_CONFLICT",
+            "index": 2,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "already-HELD-is-own-result-without-version-transition",
+      "status": "PASS",
+      "events": [
+        {
+          "name": "admit",
+          "ticket": 1,
+          "id": "f397b9d99eea6e8b5036a1afc17e7433459946b331f83e61d2226aaa2417c664",
+          "path": "local",
+          "inventory": {
+            "M": 1,
+            "HOLD": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 1,
+          "index": 1
+        },
+        {
+          "name": "ready",
+          "ticket": 1
+        },
+        {
+          "name": "durable",
+          "ticket": 1
+        },
+        {
+          "name": "commit",
+          "index": 1
+        },
+        {
+          "name": "apply",
+          "index": 1,
+          "result": {
+            "id": "f397b9d99eea6e8b5036a1afc17e7433459946b331f83e61d2226aaa2417c664",
+            "kind": "RETIRE_AND_HOLD",
+            "fromG": 0,
+            "toG": 1,
+            "child": "529843b70d396ac0067254308b1f081fa84f40ef88c4046dd97af8a6c01058ed",
+            "disposition": "ALREADY_HELD",
+            "index": 1,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "timeout-late-commit-and-leader-reconciliation",
+      "status": "PASS",
+      "events": [
+        {
+          "name": "admit",
+          "ticket": 1,
+          "id": "88e606a48ee8ce676a803431a17bd257def63c8ef3c38a7d09a54fa5bebdb926",
+          "path": "local",
+          "inventory": {
+            "M": 1,
+            "HOLD": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 1,
+          "index": 1
+        },
+        {
+          "name": "ready",
+          "ticket": 1
+        },
+        {
+          "name": "timeout",
+          "ticket": 1
+        },
+        {
+          "name": "demotion"
+        },
+        {
+          "name": "assumed-reconciliation",
+          "provenDiscard": [],
+          "inventory": {
+            "M": 1,
+            "HOLD": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "durable",
+          "ticket": 1
+        },
+        {
+          "name": "commit",
+          "index": 1
+        },
+        {
+          "name": "apply",
+          "index": 1,
+          "result": {
+            "id": "88e606a48ee8ce676a803431a17bd257def63c8ef3c38a7d09a54fa5bebdb926",
+            "kind": "RETIRE_AND_HOLD",
+            "fromG": 0,
+            "toG": 1,
+            "child": "a012195454475413ff582b063db0a20045feb5ea127a86dffa32ebe57ff6cca0",
+            "disposition": "HELD",
+            "index": 1,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "exact-local-forwarded-join-lost-response-replay",
+      "status": "PASS",
+      "events": [
+        {
+          "name": "admit",
+          "ticket": 1,
+          "id": "9bea2ef4686aa5599155d0c0cc382350c372909d7e2ca64be13672dcbb264d72",
+          "path": "local",
+          "inventory": {
+            "M": 1,
+            "HOLD": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "join",
+          "path": "forwarded",
+          "id": "9bea2ef4686aa5599155d0c0cc382350c372909d7e2ca64be13672dcbb264d72"
+        },
+        {
+          "name": "order",
+          "ticket": 1,
+          "index": 1
+        },
+        {
+          "name": "ready",
+          "ticket": 1
+        },
+        {
+          "name": "durable",
+          "ticket": 1
+        },
+        {
+          "name": "commit",
+          "index": 1
+        },
+        {
+          "name": "apply",
+          "index": 1,
+          "result": {
+            "id": "9bea2ef4686aa5599155d0c0cc382350c372909d7e2ca64be13672dcbb264d72",
+            "kind": "RETIRE_AND_HOLD",
+            "fromG": 0,
+            "toG": 1,
+            "child": "8270526f5cb408fad33919fa162da8402020539201ab721bf964832506ce4611",
+            "disposition": "HELD",
+            "index": 1,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "proven-discard-only-releases-the-proven-request",
+      "status": "PASS",
+      "events": [
+        {
+          "name": "admit",
+          "ticket": 1,
+          "id": "eb64abc3c9de6506f985cbb52f699a968a1d66a94016645229e773b4c96979a3",
+          "path": "local",
+          "inventory": {
+            "M": 1,
+            "HOLD": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "demotion"
+        },
+        {
+          "name": "assumed-reconciliation",
+          "provenDiscard": [],
+          "inventory": {
+            "M": 1,
+            "HOLD": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "demotion"
+        },
+        {
+          "name": "assumed-reconciliation",
+          "provenDiscard": [
+            1
+          ],
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 2,
+          "id": "eb64abc3c9de6506f985cbb52f699a968a1d66a94016645229e773b4c96979a3",
+          "path": "local",
+          "inventory": {
+            "M": 1,
+            "HOLD": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 2,
+          "index": 1
+        },
+        {
+          "name": "ready",
+          "ticket": 2
+        },
+        {
+          "name": "durable",
+          "ticket": 2
+        },
+        {
+          "name": "commit",
+          "index": 1
+        },
+        {
+          "name": "apply",
+          "index": 1,
+          "result": {
+            "id": "eb64abc3c9de6506f985cbb52f699a968a1d66a94016645229e773b4c96979a3",
+            "kind": "RETIRE_AND_HOLD",
+            "fromG": 0,
+            "toG": 1,
+            "child": "a672a9bb820ab3f0b8f5aebaa8b52d1c8135ad01c2979531925d2ec91a6aecb5",
+            "disposition": "HELD",
+            "index": 1,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "atomic-write-failure-keeps-all-debt",
+      "status": "PASS",
+      "events": [
+        {
+          "name": "admit",
+          "ticket": 1,
+          "id": "9e51ae9245a57616fb0d430d3aeb2cdb0414688a45f69d8ee298a6c00afce712",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 1,
+              "retained": 0,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 1,
+          "index": 1
+        },
+        {
+          "name": "ready",
+          "ticket": 1
+        },
+        {
+          "name": "durable",
+          "ticket": 1
+        },
+        {
+          "name": "commit",
+          "index": 1
+        },
+        {
+          "name": "apply",
+          "index": 1,
+          "result": {
+            "id": "9e51ae9245a57616fb0d430d3aeb2cdb0414688a45f69d8ee298a6c00afce712",
+            "kind": "HOLD",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": "initial",
+            "index": 1,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 2,
+          "id": "8cddc07e83997be2fde2ca6b58ccb020ca0c2f0112846b9fb57d314e7f69ec48",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 1,
+              "retained": 1,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 2,
+          "index": 2
+        },
+        {
+          "name": "ready",
+          "ticket": 2
+        },
+        {
+          "name": "durable",
+          "ticket": 2
+        },
+        {
+          "name": "commit",
+          "index": 2
+        },
+        {
+          "name": "apply",
+          "index": 2,
+          "result": {
+            "id": "8cddc07e83997be2fde2ca6b58ccb020ca0c2f0112846b9fb57d314e7f69ec48",
+            "kind": "HOLD",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": "initial",
+            "index": 2,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 2,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 3,
+          "id": "7e5aaf73b405db74a6469424da12833213f55e5b8cb91a03d90e1f984987deb9",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 1,
+              "retained": 2,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 3,
+          "index": 3
+        },
+        {
+          "name": "ready",
+          "ticket": 3
+        },
+        {
+          "name": "durable",
+          "ticket": 3
+        },
+        {
+          "name": "commit",
+          "index": 3
+        },
+        {
+          "name": "apply",
+          "index": 3,
+          "result": {
+            "id": "7e5aaf73b405db74a6469424da12833213f55e5b8cb91a03d90e1f984987deb9",
+            "kind": "HOLD",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": "initial",
+            "index": 3,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 3,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 4,
+          "id": "36bb1ce79bc3fdaf04fb4965aec533c90ee2016aa5e155d13ae83a481a632d1f",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 1,
+              "retained": 3,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 4,
+          "index": 4
+        },
+        {
+          "name": "ready",
+          "ticket": 4
+        },
+        {
+          "name": "durable",
+          "ticket": 4
+        },
+        {
+          "name": "commit",
+          "index": 4
+        },
+        {
+          "name": "apply",
+          "index": 4,
+          "result": {
+            "id": "36bb1ce79bc3fdaf04fb4965aec533c90ee2016aa5e155d13ae83a481a632d1f",
+            "kind": "HOLD",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": "initial",
+            "index": 4,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 4,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 5,
+          "id": "9daef37a1943444c0230947f771f81afd30623764fec57cf3d1b54320fc07277",
+          "path": "local",
+          "inventory": {
+            "M": 1,
+            "HOLD": {
+              "q": 0,
+              "retained": 4,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 5,
+          "index": 5
+        },
+        {
+          "name": "ready",
+          "ticket": 5
+        },
+        {
+          "name": "durable",
+          "ticket": 5
+        },
+        {
+          "name": "commit",
+          "index": 5
+        }
+      ]
+    },
+    {
+      "name": "legitimate-refusal-then-valid-new-request",
+      "status": "PASS",
+      "events": [
+        {
+          "name": "admit",
+          "ticket": 1,
+          "id": "bc52fb4ca15edcb726928ccba14d16f2edca9155200540e128cd75046e9d43aa",
+          "path": "local",
+          "inventory": {
+            "M": 1,
+            "HOLD": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 1,
+          "index": 1
+        },
+        {
+          "name": "ready",
+          "ticket": 1
+        },
+        {
+          "name": "durable",
+          "ticket": 1
+        },
+        {
+          "name": "commit",
+          "index": 1
+        },
+        {
+          "name": "apply",
+          "index": 1,
+          "result": {
+            "id": "bc52fb4ca15edcb726928ccba14d16f2edca9155200540e128cd75046e9d43aa",
+            "kind": "RETIRE_AND_HOLD",
+            "fromG": 0,
+            "toG": 1,
+            "child": "4e208f94464cd82b62c8aaeab9a0f2f67650a6b74a4c9dcfcf98cfa010434324",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "index": 1,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 2,
+          "id": "e39b24509a4f5ee6e8edb3593df991b4c04310e2e5d5ceab242d9f63ab3744a3",
+          "path": "local",
+          "inventory": {
+            "M": 1,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 2,
+          "index": 2
+        },
+        {
+          "name": "ready",
+          "ticket": 2
+        },
+        {
+          "name": "durable",
+          "ticket": 2
+        },
+        {
+          "name": "commit",
+          "index": 2
+        },
+        {
+          "name": "apply",
+          "index": 2,
+          "result": {
+            "id": "e39b24509a4f5ee6e8edb3593df991b4c04310e2e5d5ceab242d9f63ab3744a3",
+            "kind": "RETIRE_AND_HOLD",
+            "fromG": 1,
+            "toG": 2,
+            "child": "574365fd8d82d6583f9f784525fe52212d240ce3eaf8a5ed11ee49f46a246268",
+            "disposition": "HELD",
+            "index": 2,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "both-pressure-directions-and-external-settlement-position",
+      "status": "PASS",
+      "events": [
+        {
+          "name": "admit",
+          "ticket": 1,
+          "id": "9e51ae9245a57616fb0d430d3aeb2cdb0414688a45f69d8ee298a6c00afce712",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 1,
+              "retained": 0,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 1,
+          "index": 1
+        },
+        {
+          "name": "ready",
+          "ticket": 1
+        },
+        {
+          "name": "durable",
+          "ticket": 1
+        },
+        {
+          "name": "commit",
+          "index": 1
+        },
+        {
+          "name": "apply",
+          "index": 1,
+          "result": {
+            "id": "9e51ae9245a57616fb0d430d3aeb2cdb0414688a45f69d8ee298a6c00afce712",
+            "kind": "HOLD",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": "initial",
+            "index": 1,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 2,
+          "id": "8cddc07e83997be2fde2ca6b58ccb020ca0c2f0112846b9fb57d314e7f69ec48",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 1,
+              "retained": 1,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 2,
+          "index": 2
+        },
+        {
+          "name": "ready",
+          "ticket": 2
+        },
+        {
+          "name": "durable",
+          "ticket": 2
+        },
+        {
+          "name": "commit",
+          "index": 2
+        },
+        {
+          "name": "apply",
+          "index": 2,
+          "result": {
+            "id": "8cddc07e83997be2fde2ca6b58ccb020ca0c2f0112846b9fb57d314e7f69ec48",
+            "kind": "HOLD",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": "initial",
+            "index": 2,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 2,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 3,
+          "id": "7e5aaf73b405db74a6469424da12833213f55e5b8cb91a03d90e1f984987deb9",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 1,
+              "retained": 2,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 3,
+          "index": 3
+        },
+        {
+          "name": "ready",
+          "ticket": 3
+        },
+        {
+          "name": "durable",
+          "ticket": 3
+        },
+        {
+          "name": "commit",
+          "index": 3
+        },
+        {
+          "name": "apply",
+          "index": 3,
+          "result": {
+            "id": "7e5aaf73b405db74a6469424da12833213f55e5b8cb91a03d90e1f984987deb9",
+            "kind": "HOLD",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": "initial",
+            "index": 3,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 3,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 4,
+          "id": "36bb1ce79bc3fdaf04fb4965aec533c90ee2016aa5e155d13ae83a481a632d1f",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 1,
+              "retained": 3,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 4,
+          "index": 4
+        },
+        {
+          "name": "ready",
+          "ticket": 4
+        },
+        {
+          "name": "durable",
+          "ticket": 4
+        },
+        {
+          "name": "commit",
+          "index": 4
+        },
+        {
+          "name": "apply",
+          "index": 4,
+          "result": {
+            "id": "36bb1ce79bc3fdaf04fb4965aec533c90ee2016aa5e155d13ae83a481a632d1f",
+            "kind": "HOLD",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": "initial",
+            "index": 4,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 4,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 5,
+          "id": "ba7457f6b7ddabe2a64f5351483662a9d6b7e203f726cff50cadbb0c574dfd26",
+          "path": "local",
+          "inventory": {
+            "M": 1,
+            "HOLD": {
+              "q": 0,
+              "retained": 4,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 5,
+          "index": 5
+        },
+        {
+          "name": "ready",
+          "ticket": 5
+        },
+        {
+          "name": "durable",
+          "ticket": 5
+        },
+        {
+          "name": "commit",
+          "index": 5
+        },
+        {
+          "name": "apply",
+          "index": 5,
+          "result": {
+            "id": "ba7457f6b7ddabe2a64f5351483662a9d6b7e203f726cff50cadbb0c574dfd26",
+            "kind": "RETIRE_AND_HOLD",
+            "fromG": 0,
+            "toG": 1,
+            "child": "c339e93ed337c6c9e733d6a5fe138f231fbae92904d19e14a8c06b2534df0649",
+            "disposition": "HELD",
+            "index": 5,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "EXTERNAL_TX_OWNER_SETTLEMENT_ASSUMED",
+          "releaseHeld": true
+        },
+        {
+          "name": "admit",
+          "ticket": 6,
+          "id": "5bd8eadb4d0008415267d25bed1f85394e0b79665a558c1cd2d0eb5f7d1e06b2",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 1,
+              "retained": 0,
+              "future": 1
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 6,
+          "index": 6
+        },
+        {
+          "name": "ready",
+          "ticket": 6
+        },
+        {
+          "name": "durable",
+          "ticket": 6
+        },
+        {
+          "name": "commit",
+          "index": 6
+        },
+        {
+          "name": "apply",
+          "index": 6,
+          "result": {
+            "id": "5bd8eadb4d0008415267d25bed1f85394e0b79665a558c1cd2d0eb5f7d1e06b2",
+            "kind": "APPROVE",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": null,
+            "index": 6,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 7,
+          "id": "ab8354a2a8d7e5931546e46357e3891356e7dd626fbe979a7da9fab69a926aca",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 1,
+              "retained": 1,
+              "future": 1
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 7,
+          "index": 7
+        },
+        {
+          "name": "ready",
+          "ticket": 7
+        },
+        {
+          "name": "durable",
+          "ticket": 7
+        },
+        {
+          "name": "commit",
+          "index": 7
+        },
+        {
+          "name": "apply",
+          "index": 7,
+          "result": {
+            "id": "ab8354a2a8d7e5931546e46357e3891356e7dd626fbe979a7da9fab69a926aca",
+            "kind": "APPROVE",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": null,
+            "index": 7,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 2,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 8,
+          "id": "0952943bc41817e3ca772f676b3888f905e00943ec095250b5ccff6f4f5ea272",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 1,
+              "retained": 2,
+              "future": 1
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 8,
+          "index": 8
+        },
+        {
+          "name": "ready",
+          "ticket": 8
+        },
+        {
+          "name": "durable",
+          "ticket": 8
+        },
+        {
+          "name": "commit",
+          "index": 8
+        },
+        {
+          "name": "apply",
+          "index": 8,
+          "result": {
+            "id": "0952943bc41817e3ca772f676b3888f905e00943ec095250b5ccff6f4f5ea272",
+            "kind": "APPROVE",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": null,
+            "index": 8,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 3,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 9,
+          "id": "63d273dbe83d6c0250a1ad8d42e96389e90fd4036c9588c301ad03de6371a24f",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 1,
+              "retained": 3,
+              "future": 1
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 9,
+          "index": 9
+        },
+        {
+          "name": "ready",
+          "ticket": 9
+        },
+        {
+          "name": "durable",
+          "ticket": 9
+        },
+        {
+          "name": "commit",
+          "index": 9
+        },
+        {
+          "name": "apply",
+          "index": 9,
+          "result": {
+            "id": "63d273dbe83d6c0250a1ad8d42e96389e90fd4036c9588c301ad03de6371a24f",
+            "kind": "APPROVE",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": null,
+            "index": 9,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 4,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 10,
+          "id": "4e6b4980459791adc9e3192122fa0f9421c3aed0670ebcfe86517626fc878b6d",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 1,
+              "retained": 4,
+              "future": 1
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 10,
+          "index": 10
+        },
+        {
+          "name": "ready",
+          "ticket": 10
+        },
+        {
+          "name": "durable",
+          "ticket": 10
+        },
+        {
+          "name": "commit",
+          "index": 10
+        },
+        {
+          "name": "apply",
+          "index": 10,
+          "result": {
+            "id": "4e6b4980459791adc9e3192122fa0f9421c3aed0670ebcfe86517626fc878b6d",
+            "kind": "APPROVE",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": null,
+            "index": 10,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 5,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 11,
+          "id": "98cfddbf7d7dd8d9e013f388e06ec7dfe8951fad5717be3cb5f7a7b6d6a2328f",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 1,
+              "retained": 5,
+              "future": 1
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 11,
+          "index": 11
+        },
+        {
+          "name": "ready",
+          "ticket": 11
+        },
+        {
+          "name": "durable",
+          "ticket": 11
+        },
+        {
+          "name": "commit",
+          "index": 11
+        },
+        {
+          "name": "apply",
+          "index": 11,
+          "result": {
+            "id": "98cfddbf7d7dd8d9e013f388e06ec7dfe8951fad5717be3cb5f7a7b6d6a2328f",
+            "kind": "APPROVE",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": null,
+            "index": 11,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 6,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 12,
+          "id": "da452664ce75e6f24d07a92a0fc3b0cad5246446e58a2ecc480ce7b9d45ec501",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 1,
+              "retained": 6,
+              "future": 1
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 12,
+          "index": 12
+        },
+        {
+          "name": "ready",
+          "ticket": 12
+        },
+        {
+          "name": "durable",
+          "ticket": 12
+        },
+        {
+          "name": "commit",
+          "index": 12
+        },
+        {
+          "name": "apply",
+          "index": 12,
+          "result": {
+            "id": "da452664ce75e6f24d07a92a0fc3b0cad5246446e58a2ecc480ce7b9d45ec501",
+            "kind": "APPROVE",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": null,
+            "index": 12,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 7,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 13,
+          "id": "0715afd7181cac070fe1116107373f778da802776af51a9db43c56b51ecc4c52",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 1,
+              "retained": 7,
+              "future": 1
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 13,
+          "index": 13
+        },
+        {
+          "name": "ready",
+          "ticket": 13
+        },
+        {
+          "name": "durable",
+          "ticket": 13
+        },
+        {
+          "name": "commit",
+          "index": 13
+        },
+        {
+          "name": "apply",
+          "index": 13,
+          "result": {
+            "id": "0715afd7181cac070fe1116107373f778da802776af51a9db43c56b51ecc4c52",
+            "kind": "APPROVE",
+            "disposition": "AUTHORIZATION_REFUSED",
+            "winner": null,
+            "index": 13,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 8,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 14,
+          "id": "b0f17e4b06ea29e7e8bee8b7afcfa7529bea7ead0abdef67ab532280ec7ad250",
+          "path": "local",
+          "inventory": {
+            "M": 1,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 8,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 14,
+          "index": 14
+        },
+        {
+          "name": "ready",
+          "ticket": 14
+        },
+        {
+          "name": "durable",
+          "ticket": 14
+        },
+        {
+          "name": "commit",
+          "index": 14
+        },
+        {
+          "name": "apply",
+          "index": 14,
+          "result": {
+            "id": "b0f17e4b06ea29e7e8bee8b7afcfa7529bea7ead0abdef67ab532280ec7ad250",
+            "kind": "RETIRE_AND_APPROVE",
+            "fromG": 1,
+            "toG": 2,
+            "child": "f66dca41104390f8094f57f149e7deeb86a8d16595caed166df9018d85d937a6",
+            "disposition": "APPROVED",
+            "index": 14,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "pinned-obligation-is-explicit-progress-limit",
+      "status": "PASS",
+      "events": []
+    },
+    {
+      "name": "pending-H-entitlements-survive-retirement-exchange",
+      "status": "PASS",
+      "events": [
+        {
+          "name": "admit",
+          "ticket": 1,
+          "id": "ae80d2adb002ade3ab3f79d813754b1676142173603a3d838c744d40ef56da5c",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 1,
+              "retained": 0,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 2,
+          "id": "9328a493b2ed47e9c83e9dd0e2b34d17873885b874692cbd57b9809f8b6e432d",
+          "path": "local",
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 2,
+              "retained": 0,
+              "future": 2
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "admit",
+          "ticket": 3,
+          "id": "c7c6f5f5da0b1b3b3881ffffb5467d162bc8105565fae2421a5893f345647538",
+          "path": "local",
+          "inventory": {
+            "M": 1,
+            "HOLD": {
+              "q": 2,
+              "retained": 0,
+              "future": 2
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 3,
+          "index": 1
+        },
+        {
+          "name": "ready",
+          "ticket": 3
+        },
+        {
+          "name": "durable",
+          "ticket": 3
+        },
+        {
+          "name": "commit",
+          "index": 1
+        },
+        {
+          "name": "apply",
+          "index": 1,
+          "result": {
+            "id": "c7c6f5f5da0b1b3b3881ffffb5467d162bc8105565fae2421a5893f345647538",
+            "kind": "RETIRE_AND_HOLD",
+            "fromG": 0,
+            "toG": 1,
+            "child": "3cf08313e6e755477963b4929727b8f5a5a477c6ee5c21e078f22f3aba4efd32",
+            "disposition": "HELD",
+            "index": 1,
+            "term": 1
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 2,
+              "retained": 1,
+              "future": 2
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 1,
+          "index": 2
+        },
+        {
+          "name": "ready",
+          "ticket": 1
+        },
+        {
+          "name": "durable",
+          "ticket": 1
+        },
+        {
+          "name": "commit",
+          "index": 2
+        },
+        {
+          "name": "apply",
+          "index": 2,
+          "result": {
+            "status": "HISTORY_RETIRED",
+            "disposition": "UNAVAILABLE"
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 1,
+              "retained": 1,
+              "future": 1
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        },
+        {
+          "name": "order",
+          "ticket": 2,
+          "index": 3
+        },
+        {
+          "name": "ready",
+          "ticket": 2
+        },
+        {
+          "name": "durable",
+          "ticket": 2
+        },
+        {
+          "name": "commit",
+          "index": 3
+        },
+        {
+          "name": "apply",
+          "index": 3,
+          "result": {
+            "status": "HISTORY_RETIRED",
+            "disposition": "UNAVAILABLE"
+          },
+          "inventory": {
+            "M": 0,
+            "HOLD": {
+              "q": 0,
+              "retained": 1,
+              "future": 0
+            },
+            "APPROVE": {
+              "q": 0,
+              "retained": 0,
+              "future": 0
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

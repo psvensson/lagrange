@@ -1,0 +1,20 @@
+[
+  {
+    "variant": "positive",
+    "exitCode": 0,
+    "stdoutBytes": 102192,
+    "stderrBytes": 0
+  },
+  {
+    "variant": "split-exchange",
+    "exitCode": 1,
+    "stdoutBytes": 0,
+    "stderrBytes": 1368
+  },
+  {
+    "variant": "timeout-frees-custody",
+    "exitCode": 1,
+    "stdoutBytes": 0,
+    "stderrBytes": 1289
+  }
+]

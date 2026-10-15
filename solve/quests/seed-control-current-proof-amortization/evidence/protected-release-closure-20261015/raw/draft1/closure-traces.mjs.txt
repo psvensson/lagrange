@@ -1,0 +1,253 @@
+// Design ordering projection ONLY: explicit schedules, not native runtime/TX1.
+// Authoritative reconstruction evidence and eventual stage service are INPUTS.
+import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+const copy = x => structuredClone(x);
+const key = x => createHash('sha256').update(JSON.stringify(x)).digest('hex');
+const split = process.argv.includes('--split-exchange');
+const timeoutFrees = process.argv.includes('--timeout-frees-custody');
+const out = [];
+const child = (kind, g, expected, nonce, valid = true) =>
+  [kind, 'p', ['1', '1'], String(g), nonce, copy(expected), valid];
+const compound = (kind, state, nonce, valid = true) =>
+  ['RETIRE_AND_' + kind, 'p', ['1', '1'], String(state.g),
+    child(kind, state.g + 1, state.release, nonce, valid)];
+const retirement = state => ['RETIRE', 'p', ['1', '1'], String(state.g), null];
+const isM = c => c[0].startsWith('RETIRE');
+// Small integer arithmetic, symbolic authorization boolean, synthetic hashes:
+// not the production u64 codec, canonical command or D2 predicate implementation.
+function validate(c) {
+  assert.ok(['HOLD', 'APPROVE', 'RETIRE', 'RETIRE_AND_HOLD', 'RETIRE_AND_APPROVE'].includes(c[0]));
+  assert.equal(c[1], 'p'); assert.deepEqual(c[2], ['1', '1']);
+  assert.match(c[3], /^(0|[1-9][0-9]*)$/);
+  if (isM(c) && c[4]) {
+    validate(c[4]); assert.equal(c[0], 'RETIRE_AND_' + c[4][0]);
+    assert.equal(Number(c[4][3]), Number(c[3]) + 1);
+  }
+}
+class Projection {
+  constructor(mode = 'APPROVED') {
+    this.s = {g: 0, release: ['0', mode, mode === 'APPROVED' ? 'initial' : null, '0', '0'],
+      rows: new Map(), receipt: null, applied: 0, effects: 0};
+    this.live = new Map(); this.serial = 0; this.log = []; this.commit = 0;
+    this.fenced = false; this.events = []; this.pinned = false;
+  }
+  event(name, data = {}) { this.events.push({name, ...copy(data)}); }
+  inventory() {
+    const live = [...this.live.values()];
+    const result = {M: live.filter(x => isM(x.c)).length};
+    for (const kind of ['HOLD', 'APPROVE']) {
+      const pending = live.filter(x => x.c[0] === kind);
+      result[kind] = {q: pending.length, retained: [...this.s.rows.values()].filter(x => x.kind === kind).length,
+        future: new Set(pending.filter(x => !this.s.rows.has(key(x.c))).map(x => key(x.c))).size};
+    }
+    return result;
+  }
+  read(c) {
+    if (isM(c) && this.s.receipt?.id === key(c)) return copy(this.s.receipt);
+    if (!isM(c) && this.s.rows.has(key(c))) return copy(this.s.rows.get(key(c)));
+    return Number(c[3]) < this.s.g ? {status: 'HISTORY_RETIRED', disposition: 'UNAVAILABLE'} : null;
+  }
+  admit(c, path = 'local') {
+    validate(c);
+    const result = this.read(c); if (result) return {status: 'RESULT', result};
+    if (this.fenced) return {status: 'NOT_ADMITTED', reason: 'RECONSTRUCTION'};
+    const same = [...this.live.values()].find(x => key(x.c) === key(c));
+    if (same) { this.event('join', {path, id: key(c)}); return {status: 'JOIN', ticket: same.ticket}; }
+    if (Number(c[3]) !== this.s.g) return {status: 'NOT_ADMITTED', reason: 'GENERATION'};
+    const i = this.inventory();
+    if (isM(c) && (i.M || this.pinned)) return {status: 'NOT_ADMITTED', reason: i.M ? 'MAINTENANCE_BUSY' : 'RETIREMENT_PINNED'};
+    if (!isM(c)) {
+      const {q, retained, future} = i[c[0]], cap = c[0] === 'HOLD' ? 4 : 8, maxQ = c[0] === 'HOLD' ? 2 : 4;
+      if (q >= maxQ || retained + future >= cap) return {status: 'NOT_ADMITTED', reason: 'CAPACITY'};
+    }
+    const ticket = ++this.serial;
+    this.live.set(ticket, {ticket, c: copy(c), phase: 'pre-core', index: null, waiter: true});
+    this.event('admit', {ticket, id: key(c), path, inventory: this.inventory()});
+    return {status: 'ADMITTED', ticket};
+  }
+  order(ticket) {
+    assert.equal(this.fenced, false); const q = this.live.get(ticket); assert.equal(q.phase, 'pre-core');
+    q.phase = 'core'; q.index = this.log.length + 1;
+    this.log.push({ticket, c: copy(q.c), index: q.index, term: 1});
+    this.event('order', {ticket, index: q.index});
+  }
+  stage(ticket, phase) {
+    const q = this.live.get(ticket), stages = ['core', 'ready', 'durable'];
+    assert.equal(stages.indexOf(phase), stages.indexOf(q.phase) + 1); q.phase = phase;
+    this.event(phase, {ticket});
+  }
+  commitThrough(index) {
+    for (const e of this.log.filter(e => e.index > this.commit && e.index <= index))
+      assert.equal(this.live.get(e.ticket).phase, 'durable');
+    this.commit = index; this.event('commit', {index});
+  }
+  decide(c, e) {
+    const k = key(c); if (this.s.rows.has(k)) return this.s.rows.get(k);
+    if (Number(c[3]) < this.s.g) return {status: 'HISTORY_RETIRED', disposition: 'UNAVAILABLE'};
+    assert.equal(Number(c[3]), this.s.g);
+    let disposition = 'EXPECTED_STATE_CONFLICT'; const winner = this.s.release[2];
+    if (JSON.stringify(c[5]) === JSON.stringify(this.s.release)) {
+      if (!c[6]) disposition = 'AUTHORIZATION_REFUSED';
+      else if (c[0] === 'HOLD') disposition = this.s.release[1] === 'HELD' ? 'ALREADY_HELD' : 'HELD';
+      else disposition = this.s.release[1] === 'HELD' ? 'APPROVED' : 'EXPECTED_STATE_CONFLICT';
+    }
+    if (['HELD', 'APPROVED'].includes(disposition)) {
+      this.s.release = [String(Number(this.s.release[0]) + 1), disposition,
+        disposition === 'APPROVED' ? k : null, String(e.index), String(e.term)]; this.s.effects++;
+    }
+    const result = {id: k, kind: c[0], disposition, winner, index: e.index, term: e.term};
+    this.s.rows.set(k, result); return result;
+  }
+  apply({fail = false} = {}) {
+    const e = this.log[this.s.applied]; assert.ok(e && e.index <= this.commit);
+    const before = copy(this.s); let result;
+    try {
+      result = this.read(e.c);
+      if (!result && isM(e.c)) {
+        assert.equal(Number(e.c[3]), this.s.g); assert.equal(this.pinned, false);
+        this.s.rows.clear(); this.s.g++;
+        if (split && e.c[0] === 'RETIRE_AND_HOLD') {
+          // Mutant exposes RETIRE -> allocate ordinary H interval to competitors.
+          for (let n = 0; n < 4; n++) this.s.rows.set('competitor' + n, {kind: 'HOLD'});
+          result = {disposition: 'NO_HOLD_RESULT_CAPACITY'};
+        } else result = e.c[4] ? this.decide(e.c[4], e) : {disposition: 'NA'};
+        this.s.receipt = {id: key(e.c), kind: e.c[0], fromG: Number(e.c[3]), toG: this.s.g,
+          child: e.c[4] ? key(e.c[4]) : null, disposition: result.disposition, index: e.index, term: e.term};
+        result = this.s.receipt;
+      } else if (!result) result = this.decide(e.c, e);
+      if (fail) throw new Error('ATOMIC_STORAGE_FAILURE');
+      this.s.applied = e.index;
+    } catch (error) { this.s = before; throw error; }
+    this.live.delete(e.ticket); this.event('apply', {index: e.index, result, inventory: this.inventory()});
+    return copy(result);
+  }
+  complete(ticket) {
+    this.order(ticket); this.stage(ticket, 'ready'); this.stage(ticket, 'durable');
+    this.commitThrough(this.log.length); return this.apply();
+  }
+  timeout(ticket) {
+    const q = this.live.get(ticket); q.waiter = false;
+    if (timeoutFrees) this.live.delete(ticket);
+    this.event('timeout', {ticket});
+  }
+  loseLeader() { this.fenced = true; this.event('demotion'); }
+  reconcile({provenDiscard = []} = {}) {
+    // Assumed runtime/store proof, NOT discovered by this projection.
+    for (const ticket of provenDiscard) {
+      const q = this.live.get(ticket); assert.ok(q); assert.equal(q.index, null);
+      this.live.delete(ticket);
+    }
+    this.fenced = false; this.event('assumed-reconciliation', {provenDiscard, inventory: this.inventory()});
+  }
+}
+function run(name, fn) { const p = new Projection(); fn(p); out.push({name, status: 'PASS', events: p.events}); }
+function admitted(p, c, path) { const x = p.admit(c, path); assert.equal(x.status, 'ADMITTED'); return x.ticket; }
+function saturate(p, kind = 'HOLD') {
+  for (let n = 0; n < (kind === 'HOLD' ? 4 : 8); n++) {
+    const c = child(kind, p.s.g, p.s.release, 'refusal' + n, false);
+    assert.equal(p.complete(admitted(p, c)).disposition, 'AUTHORIZATION_REFUSED');
+  }
+}
+run('saturated-HOLD-OPEN-atomic-closure', p => {
+  saturate(p); const c = compound('HOLD', p.s, 'close');
+  assert.equal(p.admit(child('HOLD', 0, p.s.release, 'ordinary')).status, 'NOT_ADMITTED');
+  const t = admitted(p, c); assert.equal(p.admit(retirement(p.s)).status, 'NOT_ADMITTED');
+  const result = p.complete(t); assert.equal(result.disposition, 'HELD');
+  assert.equal(p.s.release[1], 'HELD'); assert.equal(p.inventory().HOLD.retained, 1);
+  assert.equal(p.s.rows.get(key(c[4])).index, result.index);
+});
+run('split-protocol-counterexample-preserved', p => {
+  for (let cycle = 0; cycle < 3; cycle++) {
+    saturate(p); p.complete(admitted(p, retirement(p.s))); saturate(p);
+    assert.equal(p.admit(child('HOLD', p.s.g, p.s.release, 'needed' + cycle)).status, 'NOT_ADMITTED');
+    // Next cycle starts with full H; retire only so the counterexample can repeat.
+    p.complete(admitted(p, retirement(p.s)));
+  }
+  assert.equal(p.s.release[1], 'APPROVED'); assert.equal(p.s.effects, 0);
+});
+run('closure-before-opening-custody-cannot-be-stolen', p => {
+  const c = compound('HOLD', p.s, 'first'), t = admitted(p, c);
+  assert.equal(p.admit(compound('APPROVE', p.s, 'second')).reason, 'MAINTENANCE_BUSY');
+  p.complete(t); assert.equal(p.s.release[1], 'HELD');
+});
+run('closure-after-unknown-opening-waits-and-recaptures-new-intent', p => {
+  p.s.release = ['0', 'HELD', null, '0', '0'];
+  const a = compound('APPROVE', p.s, 'open'), t = admitted(p, a);
+  const h = compound('HOLD', p.s, 'stale-close');
+  assert.equal(p.admit(h).reason, 'MAINTENANCE_BUSY'); p.timeout(t);
+  assert.equal(p.inventory().M, 1, 'timeout retains maintenance custody');
+  p.complete(t); assert.equal(p.admit(h).result.status, 'HISTORY_RETIRED');
+  const fresh = compound('HOLD', p.s, 'new-close'); assert.notEqual(key(h), key(fresh));
+  assert.equal(p.complete(admitted(p, fresh)).disposition, 'HELD');
+});
+run('genuine-state-change-refuses-selected-HOLD', p => {
+  const h = compound('HOLD', p.s, 'selected'), t = admitted(p, h);
+  p.complete(admitted(p, child('HOLD', 0, p.s.release, 'earlier')));
+  const state = copy(p.s.release); assert.equal(p.complete(t).disposition, 'EXPECTED_STATE_CONFLICT');
+  assert.deepEqual(p.s.release, state); assert.equal(p.s.g, 1);
+});
+run('already-HELD-is-own-result-without-version-transition', p => {
+  p.s.release = ['3', 'HELD', null, '7', '1']; const before = copy(p.s.release);
+  assert.equal(p.complete(admitted(p, compound('HOLD', p.s, 'already'))).disposition, 'ALREADY_HELD');
+  assert.deepEqual(p.s.release, before); assert.equal(p.s.effects, 0);
+});
+run('timeout-late-commit-and-leader-reconciliation', p => {
+  const c = compound('HOLD', p.s, 'late'), t = admitted(p, c);
+  p.order(t); p.stage(t, 'ready'); p.timeout(t); p.loseLeader();
+  assert.equal(p.inventory().M, 1, 'timeout retains maintenance custody');
+  assert.equal(p.admit(compound('HOLD', p.s, 'new')).reason, 'RECONSTRUCTION');
+  p.reconcile(); assert.equal(p.admit(retirement(p.s)).reason, 'MAINTENANCE_BUSY');
+  p.stage(t, 'durable'); p.commitThrough(1); assert.equal(p.apply().disposition, 'HELD');
+});
+run('exact-local-forwarded-join-lost-response-replay', p => {
+  const c = compound('HOLD', p.s, 'same'), t = admitted(p, c);
+  assert.equal(p.admit(copy(c), 'forwarded').ticket, t); assert.equal(p.inventory().M, 1);
+  const result = p.complete(t), before = copy(p.s);
+  assert.deepEqual(p.admit(c).result, result); assert.deepEqual(p.s, before);
+});
+run('proven-discard-only-releases-the-proven-request', p => {
+  const c = compound('HOLD', p.s, 'discard'), t = admitted(p, c); p.loseLeader();
+  p.reconcile(); assert.equal(p.inventory().M, 1);
+  p.loseLeader(); p.reconcile({provenDiscard: [t]}); assert.equal(p.inventory().M, 0);
+  assert.equal(p.complete(admitted(p, c)).disposition, 'HELD');
+});
+run('atomic-write-failure-keeps-all-debt', p => {
+  saturate(p); const t = admitted(p, compound('HOLD', p.s, 'io'));
+  p.order(t); p.stage(t, 'ready'); p.stage(t, 'durable'); p.commitThrough(p.log.length);
+  const before = copy(p.s); assert.throws(() => p.apply({fail: true}), /ATOMIC_STORAGE_FAILURE/);
+  assert.deepEqual(p.s, before); assert.equal(p.inventory().M, 1);
+});
+run('legitimate-refusal-then-valid-new-request', p => {
+  const bad = compound('HOLD', p.s, 'invalid', false);
+  assert.equal(p.complete(admitted(p, bad)).disposition, 'AUTHORIZATION_REFUSED');
+  assert.equal(p.s.release[1], 'APPROVED');
+  const good = compound('HOLD', p.s, 'valid');
+  assert.equal(p.complete(admitted(p, good)).disposition, 'HELD');
+  assert.equal(p.read(bad).disposition, 'UNAVAILABLE');
+});
+run('both-pressure-directions-and-external-settlement-position', p => {
+  saturate(p); assert.equal(p.complete(admitted(p, compound('HOLD', p.s, 'close'))).disposition, 'HELD');
+  // No invented TX object. An external owner disposition is a schedule premise.
+  const releaseBefore = copy(p.s.release);
+  p.event('EXTERNAL_TX_OWNER_SETTLEMENT_ASSUMED', {releaseHeld: true});
+  assert.deepEqual(p.s.release, releaseBefore);
+  saturate(p, 'APPROVE'); assert.equal(p.complete(admitted(p, compound('APPROVE', p.s, 'reopen'))).disposition, 'APPROVED');
+  assert.equal(p.s.effects, 2);
+});
+run('pinned-obligation-is-explicit-progress-limit', p => {
+  p.pinned = true; const before = copy(p.s);
+  assert.equal(p.admit(compound('HOLD', p.s, 'pin')).reason, 'RETIREMENT_PINNED');
+  assert.deepEqual(p.s, before);
+});
+run('pending-H-entitlements-survive-retirement-exchange', p => {
+  const expected = copy(p.s.release);
+  const h1 = admitted(p, child('HOLD', 0, expected, 'pending1', false));
+  const h2 = admitted(p, child('HOLD', 0, expected, 'pending2', false));
+  p.complete(admitted(p, compound('HOLD', p.s, 'carried')));
+  assert.equal(p.inventory().HOLD.future + p.inventory().HOLD.retained, 3);
+  assert.equal(p.complete(h1).status, 'HISTORY_RETIRED');
+  assert.equal(p.complete(h2).status, 'HISTORY_RETIRED'); assert.equal(p.s.effects, 1);
+});
+console.log(JSON.stringify({scope: 'design projection; assumed service, reconstruction and symbolic predicates',
+  scenarios: out.length, results: out}, null, 2));

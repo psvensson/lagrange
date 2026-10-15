@@ -1,0 +1,10 @@
+{
+  "node": "v22.23.2",
+  "lockSha256": "8fb1a612db45cac0a61e281b41fd60da315f916b7aeb52046bcbe3e7b8d61ecd",
+  "dependencyTree": "/tmp/opencode/release-linearization-rev2-correction/node_modules",
+  "localLink": "/tmp/opencode/release-linearization-rev2-correction/node_modules",
+  "sharedInstallModified": false,
+  "labJobsStarted": 0,
+  "nativeTestsRun": 0,
+  "reason": "Only design trace inputs changed; unchanged native controls intentionally not repeated"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "seed-control-current-proof-amortization",
+  "uploaded": {
+    "sha256": "0c0a3974b53c6030bef042dedf35ad4d88194fad4a0788efb789be5c1c476286",
+    "bytes": 123180,
+    "asset": "seed-control-current-proof-amortization--LAGRANGE_PROTECTED_RELEASE_CLOSURE_20261015T150842Z.tar.gz",
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/seed-control-current-proof-amortization--LAGRANGE_PROTECTED_RELEASE_CLOSURE_20261015T150842Z.tar.gz"
+  },
+  "entry": {
+    "ts": "2026-10-15T15:09:03.458Z",
+    "type": "finding",
+    "kind": "evidence",
+    "text": "Protected closure design checkpoint at base 0c981c7: RETIRE_AND_HOLD shares the accepted single M slot and atomic result exchange with RETIRE_AND_APPROVE. Exact contract 58acf8cf and trace fbdc32f2 independently reviewed; 14 new design scenarios pass and split-exchange/timeout-custody mutations fail as intended. Six proposed owner interfaces and twelve native witness pairs remain an implementation plan, not native proof. All earlier evidence preserved; production, merge and successor sealing/activation HOLD; shared-control-wave HELD; Runner/TAP PARKED; PR122 rejected.",
+    "evidence": "sha256:0c0a3974b53c6030bef042dedf35ad4d88194fad4a0788efb789be5c1c476286",
+    "asset": "seed-control-current-proof-amortization--LAGRANGE_PROTECTED_RELEASE_CLOSURE_20261015T150842Z.tar.gz",
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/seed-control-current-proof-amortization--LAGRANGE_PROTECTED_RELEASE_CLOSURE_20261015T150842Z.tar.gz",
+    "bytes": 123180
+  }
+}

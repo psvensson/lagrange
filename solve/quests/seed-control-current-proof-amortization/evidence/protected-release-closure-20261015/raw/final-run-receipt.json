@@ -1,0 +1,32 @@
+{
+  "sha256": "fbdc32f2b3b0c7d8dc7e7022116ba384b6ecbb43d6ce04f7b2d8b586b997d561",
+  "node": "v22.23.2",
+  "runs": [
+    {
+      "name": "positive",
+      "command": [
+        "node",
+        "/tmp/lagrange-protected-closure-20261015.0pendpk6/closure-traces.mjs"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "split-negative",
+      "command": [
+        "node",
+        "/tmp/lagrange-protected-closure-20261015.0pendpk6/closure-traces.mjs",
+        "--split-exchange"
+      ],
+      "exit": 1
+    },
+    {
+      "name": "timeout-negative",
+      "command": [
+        "node",
+        "/tmp/lagrange-protected-closure-20261015.0pendpk6/closure-traces.mjs",
+        "--timeout-frees-custody"
+      ],
+      "exit": 1
+    }
+  ]
+}

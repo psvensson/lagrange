@@ -1,0 +1,46 @@
+{
+  "utc": "2026-10-15T14:59:17.726021+00:00",
+  "cwd": "/mnt/data/peter/projects/.worktrees/protected-release-closure-20261015",
+  "scriptSource": "/tmp/lagrange-protected-closure-20261015.0pendpk6/closure-traces.mjs",
+  "scriptSha256": "fbdc32f2b3b0c7d8dc7e7022116ba384b6ecbb43d6ce04f7b2d8b586b997d561",
+  "head": {
+    "command": [
+      "git",
+      "rev-parse",
+      "HEAD"
+    ],
+    "exitCode": 0,
+    "stdout": "0c981c7b18eabd11b021d8ddbaccd506a5e1a666\n",
+    "stderr": ""
+  },
+  "branch": {
+    "command": [
+      "git",
+      "symbolic-ref",
+      "--short",
+      "HEAD"
+    ],
+    "exitCode": 0,
+    "stdout": "review/protected-release-closure-20261015\n",
+    "stderr": ""
+  },
+  "status": {
+    "command": [
+      "git",
+      "status",
+      "--short"
+    ],
+    "exitCode": 0,
+    "stdout": "?? solve/quests/seed-control-current-proof-amortization/evidence/protected-release-closure-20261015/\n",
+    "stderr": ""
+  },
+  "node": {
+    "command": [
+      "node",
+      "--version"
+    ],
+    "exitCode": 0,
+    "stdout": "v22.23.2\n",
+    "stderr": ""
+  }
+}
