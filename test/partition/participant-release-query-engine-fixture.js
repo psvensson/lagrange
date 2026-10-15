@@ -16,6 +16,7 @@ import {QUERY_OPERATION} from '../../src/query/query-constants.js';
 import {PARTICIPANT_RELEASE_TYPE} from
   '../../src/partition/partition-participant-transaction-cutover-constants.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
+import {observeParticipantReleaseDelivery} from './participant-release-delivery-recorder.js';
 
 function routeNativeServices(cache, services) {
   for (const service of services) {
@@ -63,6 +64,7 @@ async function attachQueryRelease({group, owners}) {
   const deliver = transport.deliver;
   const deliveries = [];
   const proofs = [];
+  const observationErrors = [];
   let engine = null;
   const dispose = async () => {
     transport.deliver = deliver;
@@ -73,6 +75,7 @@ async function attachQueryRelease({group, owners}) {
     } finally {
       await progress.shutdown();
     }
+    assert.deepEqual(observationErrors, [], 'query release observer must not lose evidence');
   };
   try {
     await progress.initialize();
@@ -91,16 +94,14 @@ async function attachQueryRelease({group, owners}) {
     const routing = engine.queryExecutor.getPartitionRoutingSnapshot(group.services[0].partitionId);
     assert.equal(routing.canonicalLeaderObservationState, 'available', JSON.stringify(routing));
     assert.ok(routing.routableServiceCount > 0, JSON.stringify(routing));
-    transport.deliver = async (address, payload) => {
-      const answer = await deliver.call(transport, address, payload);
+    transport.deliver = observeParticipantReleaseDelivery(deliver, ([address, payload], answer) => {
       if (payload.type === QUERY_OPERATION.TRANSACTION) {
         deliveries.push(structuredClone({address, payload, answer}));
       }
       if (payload.type === PARTICIPANT_RELEASE_TYPE && payload.queryDrainProof) {
         proofs.push(structuredClone({address, payload, answer}));
       }
-      return answer;
-    };
+    }, observationErrors);
     return {engine, progress, deliveries, proofs, routing, dispose};
   } catch (error) {
     try {

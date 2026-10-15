@@ -6,6 +6,7 @@ import path from 'node:path';
 import {formAdmittedGroup} from './partition-admitted-group-fixture.js';
 import {attachPartitionReleaseOwners} from './partition-release-fixture.js';
 import {createLoopbackTransport} from './partition-service-test-support.js';
+import {observeParticipantReleaseDelivery} from './participant-release-delivery-recorder.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
@@ -61,14 +62,14 @@ async function nativeFixture(t, attachQueryRelease = null) {
     logging: {level: 'fatal'}, raft: TIMING});
   LoggingService.getInstance().initialize({level: 'fatal'});
   const transport = createLoopbackTransport();
-  const deliver = transport.deliver.bind(transport);
+  const deliver = transport.deliver;
   const resumeRequests = new Map();
-  transport.deliver = async (address, payload) => {
+  const observationErrors = [];
+  transport.deliver = observeParticipantReleaseDelivery(deliver, ([address, payload]) => {
     if (payload.type === PARTICIPANT_RELEASE_TYPE && payload.action === ACTION.RESUME) {
       resumeRequests.set(payload.replicaId, {address, payload: structuredClone(payload)});
     }
-    return deliver(address, payload);
-  };
+  }, observationErrors);
   const group = await formAdmittedGroup({partitionId: PARTITION_ID, members: MEMBERS,
     tempPrefix: 'release-tx1-native-', budgetMs: BUDGET_MS, transport,
     serviceOptions: {tableName: 'release_tx1_rows', tableId: 'release_tx1_rows',
@@ -87,6 +88,7 @@ async function nativeFixture(t, attachQueryRelease = null) {
         await group.dispose();
         ConfigurationManager.resetInstance();
         LoggingService.resetInstance();
+        assert.deepEqual(observationErrors, [], 'release observer must not lose evidence');
       }
     }
   });
@@ -107,7 +109,7 @@ async function nativeFixture(t, attachQueryRelease = null) {
     for (const service of group.services) {
       const captured = resumeRequests.get(service.replicaId);
       assert.ok(captured, 'production release supplied this current target');
-      const answer = await deliver(captured.address,
+      const answer = await deliver.call(transport, captured.address,
         {...captured.payload, action: ACTION.PAUSE});
       answers.push(answer);
       assert.equal(answer[RESULT]?.paused, true, JSON.stringify(answer));

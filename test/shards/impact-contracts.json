@@ -659,7 +659,8 @@
         "test/partition/participant-release-protocol.test.js",
         "test/bootstrap/seed-participant-release-failure-projection.test.js",
         "test/partition/participant-release-native-application-order.test.js",
-        "test/partition/participant-release-prepared-settlement-native.test.js"
+        "test/partition/participant-release-prepared-settlement-native.test.js",
+        "test/partition/participant-release-delivery-recorder.test.js"
       ]
     },
     "partition-raft-operation-port": {
@@ -1608,7 +1609,8 @@
         "test/partition/participant-release-protocol.test.js",
         "test/bootstrap/seed-participant-release-failure-projection.test.js",
         "test/partition/participant-release-native-application-order.test.js",
-        "test/partition/participant-release-prepared-settlement-native.test.js"
+        "test/partition/participant-release-prepared-settlement-native.test.js",
+        "test/partition/participant-release-delivery-recorder.test.js"
       ]
     },
     "partition-raft-operation-port": {
