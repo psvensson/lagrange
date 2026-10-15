@@ -1742,6 +1742,7 @@ function perform(group, command) {
       readStatusUndrained(group) : hostFailure(
         RUNTIME_PHASE.READY_PERSISTENCE, RUNTIME_REASON.USER_TRANSACTION_OPEN);
   }
+  const inboundExtent = group.inbound.length;
   return thenMaybe(ensureExecution(group), (ready) => {
     if (ready.outcome !== CORE_OK) {
       return ready;
@@ -1749,7 +1750,6 @@ function perform(group, command) {
     const expectedGeneration = runtimeGeneration;
     // Capture only after reconstruction admits execution. Later arrivals keep
     // their place in the group queue and their existing owned inbound wake.
-    const inboundExtent = group.inbound.length;
     return drainInbound(group, expectedGeneration, inboundExtent,
       () => performCommand(group, command, expectedGeneration));
   });
