@@ -93,18 +93,69 @@ class PortabilityFixtureTests(unittest.TestCase):
         self.assertEqual(cursor.calls, [])
         self.assertEqual(connection.commits, 0)
 
-    def test_schema_reset_requires_exact_database_confirmation(self):
-        with patch.dict(os.environ, {
+    def test_schema_reset_requires_exact_endpoint_confirmation(self):
+        target = {
+            "PGHOST": "127.0.0.1",
+            "PGPORT": "5432",
             "PGDATABASE": "client_portability_fixture",
-            "PORTABILITY_RESET_CONFIRM": "reset:production",
-        }):
-            with self.assertRaisesRegex(ValueError, "disposable PGDATABASE"):
+        }
+        with patch.dict(os.environ, {
+            **target, "PORTABILITY_RESET_CONFIRM": "reset:client_portability_fixture",
+        }, clear=True):
+            with self.assertRaisesRegex(ValueError, "exact PGHOST"):
                 require_scratch_database()
         with patch.dict(os.environ, {
+            **target, "PORTABILITY_RESET_CONFIRM":
+                "reset:127.0.0.1:5432/client_portability_fixture",
+        }, clear=True):
+            self.assertEqual(require_scratch_database(), {
+                "host": "127.0.0.1", "port": 5432,
+                "dbname": "client_portability_fixture",
+            })
+
+    def test_changing_host_or_port_invalidates_destructive_confirmation(self):
+        target = {
+            "PGHOST": "127.0.0.1", "PGPORT": "5432",
             "PGDATABASE": "client_portability_fixture",
-            "PORTABILITY_RESET_CONFIRM": "reset:client_portability_fixture",
-        }):
-            require_scratch_database()
+            "PORTABILITY_RESET_CONFIRM":
+                "reset:127.0.0.1:5432/client_portability_fixture",
+        }
+        for changed in ({"PGHOST": "production.database.example.com"},
+                        {"PGPORT": "6432"},
+                        {"PGDATABASE": "another_database"}):
+            with self.subTest(changed=changed):
+                with patch.dict(os.environ, {**target, **changed}, clear=True):
+                    with self.assertRaisesRegex(ValueError, "exact PGHOST"):
+                        require_scratch_database()
+
+    def test_alternate_libpq_destinations_fail_closed(self):
+        target = {
+            "PGHOST": "127.0.0.1", "PGPORT": "5432",
+            "PGDATABASE": "client_portability_fixture",
+            "PORTABILITY_RESET_CONFIRM":
+                "reset:127.0.0.1:5432/client_portability_fixture",
+        }
+        for name in ("PGHOSTADDR", "PGSERVICE", "PGSERVICEFILE"):
+            with self.subTest(name=name):
+                with patch.dict(os.environ, {**target, name: "override"},
+                                clear=True):
+                    with self.assertRaisesRegex(ValueError,
+                                                 "alternate libpq destination"):
+                        require_scratch_database()
+
+    def test_multi_host_or_socket_destination_is_refused(self):
+        target = {
+            "PGPORT": "5432", "PGDATABASE": "client_portability_fixture",
+        }
+        for host in ("a.example,b.example", "/var/run/postgresql", " "):
+            with self.subTest(host=host):
+                with patch.dict(os.environ, {
+                    **target, "PGHOST": host,
+                    "PORTABILITY_RESET_CONFIRM":
+                        f"reset:{host}:5432/client_portability_fixture",
+                }, clear=True):
+                    with self.assertRaisesRegex(ValueError, "one explicit"):
+                        require_scratch_database()
 
 
 if __name__ == "__main__":

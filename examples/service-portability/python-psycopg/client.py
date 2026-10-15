@@ -63,29 +63,43 @@ def execute_portable_rankings(connection, minimum_score=70):
 
 
 def require_scratch_database():
-    """Require explicit permission before resetting the fixture table."""
+    """Bind destructive consent to one explicit libpq endpoint and database."""
+    host = os.getenv("PGHOST", "")
+    port = os.getenv("PGPORT", "")
     database = os.getenv("PGDATABASE", "")
     confirmation = os.getenv("PORTABILITY_RESET_CONFIRM", "")
-    if not database or confirmation != f"reset:{database}":
+    # libpq may connect through hostaddr or a service file even when PGHOST
+    # looks harmless; reject alternate routing rather than silently trusting it.
+    if any(os.getenv(name) for name in ("PGHOSTADDR", "PGSERVICE", "PGSERVICEFILE")):
+        raise ValueError("alternate libpq destination settings are not supported")
+    if (not host or host != host.strip() or
+            any(character in host for character in (",", "/", " ", "\\"))
+            or not port.isdecimal() or not 1 <= int(port) <= 65535
+            or not database or database != database.strip()):
+        raise ValueError("require one explicit PGHOST, PGPORT and PGDATABASE")
+    expected = f"reset:{host}:{port}/{database}"
+    if confirmation != expected:
         raise ValueError(
-            "choose a disposable PGDATABASE and set "
-            "PORTABILITY_RESET_CONFIRM=reset:<exact PGDATABASE>"
+            "choose a disposable endpoint and set PORTABILITY_RESET_CONFIRM "
+            "to reset:<exact PGHOST>:<exact PGPORT>/<exact PGDATABASE>"
         )
+    return {"host": host, "port": int(port), "dbname": database}
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--minimum-score", type=int, default=70)
     options = parser.parse_args(argv)
-    require_scratch_database()
+    target = require_scratch_database()
     try:
         import psycopg  # Lazy import keeps offline tests dependency-free.
     except ImportError as exc:
         raise RuntimeError(
             "install the pinned driver: pip install -r requirements.txt"
         ) from exc
-    # Name the confirmed database explicitly; libpq reads other PG* settings.
-    connection = psycopg.connect(dbname=os.environ["PGDATABASE"])
+    # Use the exact destination that was confirmed, not a second environment
+    # lookup or a libpq service profile selected after confirmation.
+    connection = psycopg.connect(**target)
     try:
         output = execute_portable_rankings(connection, options.minimum_score)
     finally:

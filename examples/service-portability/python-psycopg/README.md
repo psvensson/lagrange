@@ -29,12 +29,13 @@ export PGUSER=YOUR_TEST_USER
 export PGPASSWORD=YOUR_TEST_PASSWORD
 export PGHOST=YOUR_POSTGRES_HOST
 export PGPORT=5432
-export PORTABILITY_RESET_CONFIRM=reset:client_portability_fixture
+export PORTABILITY_RESET_CONFIRM="reset:${PGHOST}:${PGPORT}/${PGDATABASE}"
 python examples/service-portability/python-psycopg/client.py > /tmp/psycopg-postgres.json
 
 # Change only standard PostgreSQL connection/security environment settings.
 export PGHOST=YOUR_LAGRANGE_HOST
 export PGPORT=YOUR_LAGRANGE_PG_PORT
+export PORTABILITY_RESET_CONFIRM="reset:${PGHOST}:${PGPORT}/${PGDATABASE}"
 export PGSSLMODE=verify-full
 export PGSSLROOTCERT=/path/to/trusted/lagrange-ca.pem
 python examples/service-portability/python-psycopg/client.py > /tmp/psycopg-lagrange.json
@@ -42,7 +43,7 @@ python examples/service-portability/python-psycopg/client.py > /tmp/psycopg-lagr
 cmp /tmp/psycopg-postgres.json /tmp/psycopg-lagrange.json
 ~~~
 
-For a trusted local PostgreSQL baseline you may need `PGSSLMODE=disable` during only that stage. For Lagrange use verified TLS and a certificate matching `PGHOST`. The script reads standard libpq `PG*` settings and explicitly uses the confirmed `PGDATABASE`; it prints canonical ranking JSON without including credentials.
+For a trusted local PostgreSQL baseline you may need `PGSSLMODE=disable` during only that stage. For Lagrange use verified TLS and a certificate matching `PGHOST`. The script requires one explicit `PGHOST`, `PGPORT` and `PGDATABASE`, confirms their **exact combination** before any SQL, rejects `PGHOSTADDR` and libpq service-file routing, and passes the confirmed target directly to Psycopg. The confirmation must be renewed when changing endpoints. It prints canonical ranking JSON without credentials. This is an intent guard, **not proof that a database contains no important data**.
 
 A fixed-data local oracle catches simple wrong answers. The independent comparison is the actual PostgreSQL run. Record exact driver/Python versions, endpoints, observed errors, TLS mode, and output before making any compatibility claim.
 
