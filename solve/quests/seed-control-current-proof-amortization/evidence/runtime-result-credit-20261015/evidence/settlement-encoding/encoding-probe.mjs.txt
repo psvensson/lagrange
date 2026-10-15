@@ -1,0 +1,92 @@
+// Pure existing-export encoding checks; no database, cluster or authoritative effect.
+import fs from 'node:fs';
+import path from 'node:path';
+import {createHash} from 'node:crypto';
+import {pathToFileURL} from 'node:url';
+import {execFileSync} from 'node:child_process';
+
+const root = '/mnt/data/peter/projects/.worktrees/runtime-result-credit-contract-20261015';
+const files = [
+  'src/partition/partition-participant-transaction-bytes.js',
+  'src/partition/partition-participant-transaction-constants.js',
+  'src/partition/partition-transaction-execution-envelope.js',
+  'src/query/distributed/distributed-transaction-participant-manifest.js',
+];
+const bytesOwner = await import(pathToFileURL(path.join(root, files[0])));
+const {PARTICIPANT_TRANSACTION_REPLAY_BOUND} =
+  await import(pathToFileURL(path.join(root, files[1])));
+const {participantSetTextOf, readParticipantSet} =
+  await import(pathToFileURL(path.join(root, files[3])));
+const {buildDecisionRecord, canonicalDecisionRecord, participantIdOf,
+  decisionBindingRefusalOf, operationsOf, buildPrepareCommand,
+  isPinnedParticipantCommand, identityRefusalOf, validationTextOf} = bytesOwner;
+const size = (value) => Buffer.byteLength(typeof value === 'string' ? value :
+  JSON.stringify(value), 'utf8');
+const transactionId = 'a'.repeat(32);
+const digest = 'b'.repeat(64);
+const measurements = [];
+for (const count of [0, 1, 64, 257, 1024, 4096]) {
+  const ids = Array.from({length: count}, (_, index) => 'p' + String(index).padStart(6, '0'));
+  const manifest = participantSetTextOf(transactionId, ids);
+  const decision = buildDecisionRecord(transactionId, 'COMMIT',
+    ids.map((id) => [participantIdOf(transactionId, id), digest]));
+  measurements.push({kind: 'participant-count', count,
+    manifestBytes: size(manifest), manifestAccepted: readParticipantSet(transactionId, manifest) !== null,
+    decisionBytes: size(decision.decisionText), decisionAccepted:
+      canonicalDecisionRecord(decision) !== null});
+}
+for (const partitionBytes of [256, 16384, 65536]) {
+  const partitionId = 'p'.repeat(partitionBytes);
+  const participantId = participantIdOf(transactionId, partitionId);
+  const identity = {transactionId, participantId, sessionId: 's', commitMode: 'TWO_PHASE_COMMIT',
+    transactionEpoch: 7};
+  const manifest = participantSetTextOf(transactionId, [partitionId]);
+  const decision = buildDecisionRecord(transactionId, 'COMMIT', [[participantId, digest]]);
+  measurements.push({kind: 'partition-identity-bytes', partitionBytes,
+    identityRefusal: identityRefusalOf(identity, partitionId),
+    manifestBytes: size(manifest), manifestAccepted: readParticipantSet(transactionId, manifest) !== null,
+    decisionBytes: size(decision.decisionText), decisionAccepted: canonicalDecisionRecord(decision) !== null});
+}
+const longPreparedDigest = 'b'.repeat(65536);
+const longRecord = buildDecisionRecord(transactionId, 'COMMIT',
+  [[participantIdOf(transactionId, 'p'), longPreparedDigest]]);
+measurements.push({kind: 'noncanonical-sha-shape-but-reader-valid', digestBytes: 65536,
+  decisionBytes: size(longRecord.decisionText),
+  bindingRefusal: decisionBindingRefusalOf({...longRecord, participantId: participantIdOf(transactionId, 'p'),
+    preparedDigest: longPreparedDigest})});
+const identity = {transactionId, participantId: participantIdOf(transactionId, 'p'),
+  sessionId: 's', commitMode: 'TWO_PHASE_COMMIT', transactionEpoch: 7};
+const stamp = {timestamp: '1:0:probe', proposedBy: 'probe', proposedAt: 1,
+  executionEnvelope: {sqliteVersion: 'probe', sqliteSourceId: 'probe',
+    compileOptionsDigest: digest, classifierListVersion: 'probe'}};
+for (const [label, operations] of [
+  ['257-operations', Array.from({length: 257}, (_, i) =>
+    ({entryId: 'e' + i, sql: 'INSERT INTO t VALUES (?)', params: [i]}))],
+  ['operations-text-over-one-mib', [{entryId: 'e', sql: 'INSERT INTO t VALUES (?)',
+    params: ['x'.repeat(1048576)]}]],
+]) {
+  const operationsText = JSON.stringify(operations);
+  const command = buildPrepareCommand(identity, {operationsText,
+    validationText: validationTextOf(0, 'p', 1)}, stamp);
+  measurements.push({kind: 'parser-versus-session-bound', label, count: operations.length,
+    operationsBytes: size(operationsText), parserAccepted: operationsOf(operationsText) !== null,
+    pinnedCommandAccepted: isPinnedParticipantCommand(command),
+    exceedsLocalStagingBound: operations.length > PARTICIPANT_TRANSACTION_REPLAY_BOUND.MAX_OPERATIONS ||
+      size(operationsText) > PARTICIPANT_TRANSACTION_REPLAY_BOUND.MAX_BYTES});
+}
+const maxEscapedPartitionId = '\0'.repeat(250) + '000000';
+const ids = Array.from({length: 64}, (_, i) => '\0'.repeat(250) + String(i).padStart(6, '0'));
+const manifest = participantSetTextOf(transactionId, ids);
+const decision = buildDecisionRecord(transactionId, 'COMMIT',
+  ids.map((id) => [participantIdOf(transactionId, id), digest]));
+measurements.push({kind: 'conditional-encoding-sample-not-adopted-policy',
+  participants: 64, rawPartitionIdBytes: size(maxEscapedPartitionId),
+  manifestBytes: size(manifest), decisionBytes: size(decision.decisionText),
+  manifestAccepted: readParticipantSet(transactionId, manifest) !== null,
+  decisionAccepted: canonicalDecisionRecord(decision) !== null,
+  decisionAsJsonStringBytes: size(JSON.stringify(decision.decisionText))});
+console.log(JSON.stringify({scope: 'pure existing parsers/encoders only; no native/public-path reachability claim',
+  node: process.version, sourceHead: execFileSync('git', ['rev-parse', 'HEAD'], {cwd: root, encoding: 'utf8'}).trim(),
+  sources: files.map((file) => ({file, sha256: createHash('sha256').update(fs.readFileSync(path.join(root, file))).digest('hex')})),
+  localStagingBound: PARTICIPANT_TRANSACTION_REPLAY_BOUND, measurements}, null, 2));
+

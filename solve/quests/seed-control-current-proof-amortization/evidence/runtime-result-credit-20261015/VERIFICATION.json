@@ -1,0 +1,42 @@
+{
+  "sourceScope": "four test/fixture JS files only; five registration/generated metadata files plus hook-generated inventory",
+  "scopedEslint": {
+    "exit": 0,
+    "targets": 4
+  },
+  "scopedComplexity": {
+    "exit": 0,
+    "violations": 0,
+    "targets": 4
+  },
+  "complexityFirstInvocation": {
+    "exit": 1,
+    "classification": "operator invocation error, not semantic RED",
+    "reason": "--base is not supported by check-complexity.js; interpreted as missing file",
+    "correction": "existing script positional file arguments; no code or baseline changes"
+  },
+  "auditShards": {
+    "exit": 0
+  },
+  "auditImpactContracts": {
+    "exit": 0
+  },
+  "wholeRepositoryLintComplexity": "No separate broad lint/census rerun; normal commit hook ran its own inventory refresh and recorded inherited complexity/duplication excess. No broad green claimed.",
+  "RC1_RC2": "Inherited F-MIR failures preserved; no new run or waiver",
+  "forwardingFirst": "3 tests passed; original narrower witness bytes preserved",
+  "forwardingNegative": "callable two-argument helper mutation; 1 argument-count failure and 3 passes; no missing-symbol failure",
+  "forwardingFinal": "4 tests passed once after witness extension; preflight thermal hold observed; no test retry",
+  "noProductionChanges": true,
+  "testCheckpoint": "f02153dbd406ef55010d596fe15579890bc97e5c",
+  "hookInventoryRefresh": "Normal pre-commit refreshed import graph and global inventory. It recorded existing complexity/duplication ratchet excess; no threshold, score, clone-count or production code changes.",
+  "nativeWholeFile": {
+    "sha": "f02153dbd406ef55010d596fe15579890bc97e5c",
+    "host": "lenovo-laptop",
+    "exit": 0,
+    "passFiles": 1,
+    "failFiles": 0,
+    "classifiedMs": 5015,
+    "executions": 1,
+    "protocol": "existing local-PAUSE ROLLBACK only; no committed release epoch or transport-deadline proof"
+  }
+}

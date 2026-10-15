@@ -1,0 +1,191 @@
+INDEPENDENT RECORDER SOURCE REVIEW — ROUND 2 — 2026-10-15
+Verifier: subagent:/root/native_witness_verifier
+Worktree: /mnt/data/peter/projects/.worktrees/runtime-result-credit-contract-20261015
+Baseline HEAD: fb3c09d4a90952ee57bb2de09aa1e0b6cf1f2e9c
+Branch: review/runtime-result-credit-contract-20261015
+
+VERDICT: APPROVE EXACT TEST-ONLY SOURCE CHECKPOINT
+
+The three required round-1 witness/evidence items are now satisfied. The exact
+source and metadata below may proceed to the ordinary non-main test checkpoint
+and the separately required single whole-file locked native ROLLBACK run.
+This is not a native PASS, protocol acceptance or production/merge approval.
+
+No tests were executed by this verifier. I read the final test, unchanged helper
+and fixture diffs, metadata diff, complete negative/final raw TAP, commands,
+exit codes, source manifests, control helper and final execution console.
+Round 1 remains immutable, SHA256
+4a067c7ff016c8a8c57edbf5c76d76f69bb9b402344b2570cd28725039609735.
+Only this separate round-2 report is written by the verifier in this round.
+
+EXACT REVIEWED SOURCE SHA256
+
+H = test/partition/participant-release-delivery-recorder.js
+b9ebf98e232f7155b85ce27645ac7135d79f49d6b4683e5c1563a72674ec58d5
+W = test/partition/participant-release-delivery-recorder.test.js
+9f2ce0d127e94f8e1374832b9ccb34788a58f04d6276890f0cb834110d532342
+Q = test/partition/participant-release-query-engine-fixture.js
+0637b058fdbf4ff6f8c6c05082513373e74d3cc3c12b7a24ac69bfa1430f3032
+N = test/partition/participant-release-tx1-native-fixture.js
+6213d96961c4d65092a56bd472779a5e77140844c8dcdfd52f90506398b92d0d
+T = unchanged test/partition/participant-release-prepared-settlement-native.test.js
+99d05469b9df1240d3c566c81cf4989e3fdb49fe35c9e34e7272b78f3846ebaa
+
+8451c83f8bef30feb8b26312b0e45ee2f181927de3373a5d0d962e8629788137  test/shards/impact-contracts.json
+2117540863e1cdfe585a35f3731b6d0c224b3e997ce9ad7352c8d521e9425dfe  test/shards/primary-classes.json
+b5cce1ecb3b7fab4ad57121d50196173c8d7ab6ee2ec564effc3ba729567dc9e  test/shards/resource-classes.json
+79a084ca1f775397e8d8acf19022f3fb99c8c6701c45364e78924569ef9dfe2c  test/shards/impact-graph-seal.json
+0c1527041082b23929ad855117e662278ee7acc07b3d22a9be2591d1ffeb8b58  test/shards/subsystem-classes.json
+
+All four final source hashes match forwarding-final/source-hashes.json.
+H/Q/N/T are byte-identical to the reviewed round-1 files. The registry now has
+only the two intended witness additions, to the existing runtime/application
+contract and coupled pair; the unrelated section-sign escapes are removed.
+Classification adds one unit/ordinary/storage-partition witness, census 2378.
+No src/ or architecture source diff is present. No baseline/threshold is raised.
+
+RESOLUTION OF ROUND-1 FINDINGS
+
+1. W:12 obtains an unresolved Promise. W:24-28 checks actual receiver, all four
+   argument identities/count and original Promise identity before settlement.
+   W:29-30 yields one microtask and requires zero observations while pending.
+   W:31-39 resolves the actual Promise, checks the same answer identity, both
+   nested observers, all argument references, and absence of observer errors.
+   This is completion ordering, without timer compression or a new wait budget.
+
+2. W:42-55 returns the same Promise and exact non-success object with
+   noHandler:true and success:false, and checks the observer retains that object
+   unchanged. Its `ack` property is a test value, not the canonical MessageRouter
+   `acknowledged` field. This satisfies the agreed arbitrary non-success-value
+   transparency control; it is not a router contract or ACK-processing test.
+   H contains no success classifier and cannot promote this value to settlement.
+
+3. The retained callable mutant replaces only the variadic wrapper with
+   function(address,payload) and const args=[address,payload]. It preserves the
+   export, invocation and Promise behavior, so the negative reaches W:26 and
+   fails because actual argument count is 2 versus expected 4. The negative
+   does not fail at import/setup, a missing symbol, timeout, or Promise identity.
+   It isolates the historical argument-loss mechanism; it is not a byte-exact
+   restoration of every historical forced-receiver/async-wrapper behavior.
+   The final positive restores H exactly and runs the same W bytes successfully.
+
+ARTIFACT IDENTITIES AND EXECUTION CLASSIFICATION
+
+Root: /tmp/lagrange-runtime-credit-20261015.kgxjqtzz
+
+Negative: forwarding-old-shape/
+4c2e2d0acd225801f83e577f9b977743ba2c5bb186ebbb13bcfe76083ff5cfe7  mutated-helper.js.txt
+90ebc18da0e5ac23a63cf8a7cf0ef1efff0ae1c7c10eb027a56e3d7211d8ffd7  raw.tap
+610ae0383dd02b6fbb4fb981ec99aa360df549e66780af5b80aa2cdc53e70214  console.log
+c61223e1a567b576547d0ecd98bc202f4b2975f6e74e315539ae121bd20f4a61  source-hashes.json
+4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865  exit-code.txt
+
+Restored final: forwarding-final/
+2d3e6f0a7f73b8b1dd6ce748d0a1683eba0771612acbf78468a7514aa28fad5b  raw.tap
+5147acf0004740d3696a6fffb13d3244c45fa2b5780bdf1b8c3532d24dbb2f27  console.log
+dd2ca2a30772e7e564ce36fba93d4dcfc539272b5037069c341e88939c0a1c61  source-hashes.json
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  exit-code.txt
+
+Both command.txt files hash
+8008c02032542eafe495d798c3984ecdc3fa7fcdf3985b5a3dcd3ed43b221188
+and name npm run test:file -- test/partition/participant-release-delivery-recorder.test.js.
+Both raw.tap.stderr files are empty (SHA256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855).
+
+Negative TAP: 4 tests, 3 passes, 1 expected behavioral failure, exit 1;
+Node duration 6.152729 ms, classified duration 117 ms. Failure names W:26,
+ERR_ASSERTION, actual 2, expected 4. Expected-negative evidence stays separate.
+Final TAP: 4 tests, 4 passes, zero failures/skips/cancellations, exit 0;
+Node duration 6.287331 ms, classified duration 119 ms. Final console shows the
+ordinary runner waited at its preflight thermal gate (90C -> 60C) before one
+file execution. That preflight wait is neither a failed execution nor a retry.
+The original forwarding-first PASS3 remains historical evidence of earlier W
+bytes; it is not relabeled as the final four-test run. Parent-reported scoped
+ESLint/complexity checks were not re-executed by this verifier.
+
+ALL CATEGORY ITEMS RECHECKED
+
+The source evidence below supplements the full round-1 item mapping. Existing
+unengaged categories remain unclaimed rather than being inferred from PASS4.
+
+Harness fidelity (6):
+H1 PASS named argument-loss failure in negative raw.tap at W:26; callable H.
+H2 PASS W:16-19 controlled Promise function only; no router/native success mock.
+H3 PASS W:12,29-31 manual completion, no timers; N:29-32/T:17 budgets unchanged.
+H4 PASS W:24-28,34-38 receiver and exact args/value; W:69-78 exact error identity.
+H5 PASS unresolved precondition and nonempty args/records W:6-39; non-success
+   W:42-55; real clone failure plus subsequent fresh success W:81-103.
+H6 SEPARATE: new whole-file native evidence remains pending at the next exact
+   committed checkpoint. PASS4 does not establish production owner behavior.
+
+Transport delivery (5):
+D1 PASS bounded transparency W:42-55/H:14; no ACK classification introduced.
+D2 UNENGAGED late router response policy; H:7-13 only observes completion.
+D3 PASS no new outcome shape H:14; rejection/sync throw preserved W:57-78.
+D4 PASS no added timer/deadline; exact options forwarded W:24-27,34-36.
+D5 PASS stub only forwarding; actual loopback and canonical router unchanged.
+
+Owner interaction (10):
+O1 PASS H owns diagnostic invocation, original deliver owns outcome H:6,14.
+O2 PASS exact receiver/args/value cross once H:5-14, W:24-39.
+O3 PASS paired invocation/observation invariants W:5-39,81-103; negative W:26.
+O4 PASS clone defect then valid delivery W:93-102; rejection adds no veto state.
+O5 PASS no amplification H:6; explicit counts W:24,76,100, no retries.
+O6 PASS completion callback H:7-13; actual later release remains T:74-95.
+O7 PASS diagnostic arrays/map remain projections Q:97-104,N:68-72; actual
+   PAUSE and discharge checks N:112-118/T:83-95 are unchanged.
+O8 PASS exact negative/positive artifacts and source hashes above; failures
+   distinguished from positive certification, full historical wrapper not claimed.
+O9 PASS no local fallback, row deletion, force, extra retry or production hook.
+O10 PASS existing contract + coupled pair include W; primary/resource/subsystem
+   classifications and metadata hashes above match this scoped addition.
+
+Concurrency/serialization (5):
+C1 PASS no gate/lock, original return H:14; manually pending witness W:12-39.
+C2 PASS receiver/args passed synchronously H:6; post-completion diagnostic only.
+C3 UNENGAGED durable claims; one invocation/nested count W:24.
+C4 PASS no timers/reentrancy source added; W:29 is one microtask observation.
+C5 UNENGAGED mutex/total-order claim; no transport-wide serialization asserted.
+
+Recovery/replay (5):
+R1 PASS no durable/recovered state written, only Q:65-67/N:66-67 arrays/map.
+R2 PASS restoration/drained teardown Q:69-78/N:80-94; no restart-policy change.
+R3 PASS no fabricated empty manifest; actual T:63-69 recovery checks unchanged.
+R4 PASS no redelivery in H; actual transaction replay controls T:32-55 unchanged.
+R5 PASS rejection/missing observation not settlement; W:57-78,Q:78,N:91,T:83-95.
+
+Admission/budgets (7):
+A1 UNENGAGED new precheck; T:43,56-58,80 admission controls unchanged.
+A2 PASS no new refusal/retry taxonomy, H:6,14 and W:57-78 preserve outcomes.
+A3 PASS opaque third/further args W:24-27,34-36; no existing budget raised.
+A4 PASS exact object identity, no reason/ACK normalization W:42-55,57-78.
+A5 DEFERRED production outer-deadline handoff/failure proof, explicitly outside
+   this repair. Native healthy-loopback execution cannot close that gap.
+A6 UNENGAGED new gate/cached authority; current owner reads and routing unchanged.
+A7 PASS observer-error labels Q:78/N:91 are distinct from transport outcomes.
+
+Retry loops (7):
+Y1 UNENGAGED retry registration H:5-14.
+Y2 UNENGAGED loop/stop budget H:5-14.
+Y3 UNENGAGED retry exits; original rejection/sync throw preserved W:57-78.
+Y4 PASS no suppression or second queue in H/Q/N observers.
+Y5 PASS one invocation counts W:24,76,100; no cadence or amplification.
+Y6 PASS no observer replay; unchanged T:32-55 checks transaction replay.
+Y7 UNENGAGED counters/resets; W:42-55 result remains non-success unchanged.
+
+Formation circularity (5):
+F1 UNENGAGED subsystem reads/writes in H.
+F2 UNENGAGED CDC-dependent re-drive; Q construction unchanged.
+F3 UNENGAGED formation policy; setup still precedes initial release N:95-98.
+F4 UNENGAGED window arithmetic; no new time/margin claim.
+F5 PASS no consistency bypass, original deliver invoked once H:6; actual PAUSE
+   and native owner assertions unchanged N:112-118/T:38-95.
+
+STOP / LIMITS
+
+No unresolved recorder source blocker remains for this exact test checkpoint.
+Future hook-generated metadata changes require their normal scope/provenance
+check and cannot retroactively change these source hashes. Historical native
+evidence remains unchanged. Successor stays unsealed/unactivated; production
+protocol, production deadline handoff, broad integration certification and main
+merge remain HOLD. The expected next measurement is the complete native ROLLBACK
+file on the authorized locked executor, not a claim derived from forwarding PASS4.

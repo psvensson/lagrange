@@ -1,0 +1,190 @@
+INDEPENDENT RECORDER SOURCE REVIEW — ROUND 1 — 2026-10-15
+Verifier: subagent:/root/native_witness_verifier
+Baseline HEAD: fb3c09d4a90952ee57bb2de09aa1e0b6cf1f2e9c
+Worktree: /mnt/data/peter/projects/.worktrees/runtime-result-credit-contract-20261015
+
+Scope: read-only source/artifact review, with this report as the only new write.
+No test execution, lab lease, source edit, Git mutation or process intervention.
+The full steering/templates and design review in recorder-review.txt remain
+applicable; all 50 checklist items are discharged or qualified below.
+
+VERDICT
+
+REVISE the promised witness/evidence before final checkpoint approval. The
+forwarding helper and BOTH fixture integrations are sound for their documented
+existing async/native-Promise seam. No production behavior defect or need for
+production repair was found in this narrow change. The three remaining proof
+items below were already required by the design review, not a new review bar.
+
+1. W:12 uses an already-fulfilled Promise and W:23-28 only checks observations
+   after awaiting it. Use a manually settled Promise and assert zero observer
+   records while pending, then settle it and retain all identity/count checks.
+2. W currently tests only success-shaped values. Add an exact unchanged
+   ACK+noHandler or another non-success result (no recorder-derived settlement).
+3. Preserve a callable old-shape behavioral negative, with exact control bytes
+   and assertion. A missing exported helper/import is not RED. Prefer receiver/
+   options checks before Promise-identity failure so the original defect is
+   observed directly. No such control artifact was supplied at this round.
+
+REVIEWED SOURCE SHA256
+
+H = test/partition/participant-release-delivery-recorder.js
+b9ebf98e232f7155b85ce27645ac7135d79f49d6b4683e5c1563a72674ec58d5
+W = test/partition/participant-release-delivery-recorder.test.js
+81a52744a252484ad9d4abab87aa5eb58b2ec1904be371196436b583b5ad0c3c
+Q = test/partition/participant-release-query-engine-fixture.js
+0637b058fdbf4ff6f8c6c05082513373e74d3cc3c12b7a24ac69bfa1430f3032
+N = test/partition/participant-release-tx1-native-fixture.js
+6213d96961c4d65092a56bd472779a5e77140844c8dcdfd52f90506398b92d0d
+T = unchanged test/partition/participant-release-prepared-settlement-native.test.js
+99d05469b9df1240d3c566c81cf4989e3fdb49fe35c9e34e7272b78f3846ebaa
+
+FIRST FORWARDING ARTIFACTS
+
+Directory: /tmp/lagrange-runtime-credit-20261015.kgxjqtzz/forwarding-first
+raw.tap SHA256 ff46ac8ecfbb3ea07762f7be93004b73853ae376d5b130e3243704e8b02ee08c
+Read complete raw.tap, command.txt, exit-code.txt and source-hashes.json.
+Recorded command: npm run test:file -- test/partition/participant-release-delivery-recorder.test.js
+Recorded exit: 0. TAP has three named passes, zero failures/skips/cancellations;
+Node duration 5.474272 ms, classified duration 1821 ms. Its H/W source hashes
+exactly match the two reviewed files. This verifier did not execute that run.
+Scoped ESLint exit 0 is reported by the parent, not independently re-executed.
+No native run of this modified fixture is claimed by this review.
+
+SOURCE FINDINGS
+
+H:5-6 uses an ordinary function, rest arguments and Reflect.apply(deliver,
+this,args) once. H:14 returns the original value; synchronous throws escape
+directly before observation registration. H:7-13 attaches an observation only
+to actual fulfillment and handles rejection without manufacturing a response.
+Observer exceptions are retained separately at H:10-11. The documented scope
+at H:1 is correct: arbitrary thenable/intrinsic transparency is not promised.
+Observers are synchronous fixture callbacks and the error sinks are owned
+mutable arrays; no asynchronous callback or hostile sink guarantee is claimed.
+
+Q:97-104 and N:68-72 both use H; neither drops options or binds a foreign
+receiver. N:112's explicit call(transport,...) is the direct fixture PAUSE
+invocation on the original method, not a forced receiver inside a wrapper.
+The native loopback owner ignores this/options today, so its later healthy
+test remains unable to certify production deadline/cancellation enforcement.
+
+Q:69-78 restores prior transport/engine and drains engine/progress before
+asserting query-observer errors. N:80-94 drains existing release owners, then
+query cleanup, then group cleanup before asserting its observer errors. A
+cleanup failure may prevent a later observer-error assertion, but then the
+test is already failed: it cannot turn missing evidence into PASS. Existing
+finally precedence can mask another cleanup error; this review does not claim
+an exhaustive aggregate-error cleanup contract.
+
+N's RESUME clone moved from before invocation to after fulfillment. N:98 awaits
+the initial release before N:107-118 consumes the captured tuple, so the stated
+fixture dependency is preserved. A fulfilled refusal can still be observed;
+the recorder does not promote fulfillment to approval. T's original admission,
+real QueryEngine discharge, terminal-row and exact replay assertions are byte-
+unchanged. Completion-time clones remain diagnostics, not sealed request bytes.
+
+CATEGORY-COMPLETE CONTENT REVIEW
+
+Harness fidelity (6):
+H1 PENDING required old-shape behavioral negative; baseline Q:94-103/N:63-71
+   in recorder-review.txt bind the actual defect. Current W imports real H.
+H2 PASS bounded seam: W:16-19 controlled function returns native Promise; it
+   is explicitly forwarding evidence, not an authoritative router/handler stub.
+H3 PASS no timers/compressed budgets; N:29-32 and T:17 unchanged.
+H4 PASS W:26-33 strict receiver/argument-count/every-reference/value checks.
+H5 PARTIAL W:23-34 nested/nonvacuous identity checks pass; pending-before-settle
+   and non-success controls remain the two witness gaps above.
+H6 DEFERRED native measurement: H/W TAP does not replace unchanged T:63-95;
+   exact new checkpoint whole-file execution remains necessary.
+
+Transport delivery (5):
+D1 SOURCE PASS H:14 returns original outcome without ACK classification;
+   non-success witness still pending. T:83-92 requires real result/proof.
+D2 PASS bounded observer-only H:7-13; no waiter retirement/re-drive mutation.
+   Actual late MessageRouter behavior remains unengaged and unclaimed.
+D3 PASS W:49-58 exact rejected/synchronously-thrown Error identity; H:14 adds
+   no response shape, retryAfter, defer flag or classification.
+D4 PASS no new wait/deadline H:5-14, rejection callback empty. Existing transport
+   owns missing-handler/bounds; options reach it by exact reference W:29-31.
+D5 PASS W's function is not a router simulation. Native still uses existing
+   partition-service-test-support.js:86-103; no production transport replaced.
+
+Owner interaction (10):
+O1 PASS H owns observation only, deliver owns outcome; Q:97-104/N:68-72 supply
+   diagnostic callbacks. Query/TX1 release decisions remain T:38-95.
+O2 PASS typed crossing untouched H:5-6,14; options opaque, response unchanged.
+O3 PARTIAL W:61-82 pairs clone failure with preserved success and later recovery;
+   old-shape paired negative still pending, as required before approval.
+O4 PASS W:73-82 clone-failure then fresh success through the same wrapper.
+   Rejection W:37-58 cannot poison state because H retains no delivery verdict.
+O5 PASS H one invocation; W:26,56,80 explicit call counts, no retries/gates.
+O6 PASS H observes actual Promise completion, no polls. T:74 retains actual
+   release owner call; no observer event can release admission.
+O7 PASS Q deliveries/proofs and N resumeRequests are projections. N:115,118
+   and T:83-95 still require owner replies/admission/durable evidence.
+O8 PENDING old-shape negative; first positive TAP/source hash recorded above.
+O9 PASS full four-file read found no force/fallback/raw owner mutation, retry
+   loop or production hook. T and all production source remain unchanged.
+O10 PASS registration now adds W to BOTH existing runtime/application contract
+   and coupled pair. Primary/resource/subsystem registration is unit/ordinary/
+   storage-partition. See exact metadata hashes below; no new owner introduced.
+
+Concurrency/serialization (5):
+C1 PASS H creates no gate/lock; returns original Promise synchronously.
+C2 PASS H:5-6 captures receiver/args before async observation, no check-then-act.
+C3 PASS W:26 nested original-call count one; no claim CAS/durable state changed.
+C4 PASS H has no timer/retry; pending ordering witness remains H5 gap.
+C5 PASS no mutex or total delivery-order claim; observations follow completion.
+
+Recovery/replay (5):
+R1 PASS only fixture arrays/map added/used Q:65-67,N:66-67; no durable row write.
+R2 PASS owner teardown/source restoration Q:69-78,N:80-94; no restart policy.
+R3 PASS T:63-69 actual recovery/nonempty retained obligation unchanged.
+R4 PASS H never re-delivers; original T:32-55 replay controls unchanged.
+R5 PASS error/missing record not settlement: H:13,Q:78,N:91 and T:83-95.
+
+Admission/budgets (7):
+A1 UNENGAGED new precheck; existing T:43,56-58,80 controls unchanged.
+A2 PASS no new refusal taxonomy; H:6,14 and W:49-58 preserve producer outcome.
+A3 PASS no raised deadline, all options forwarded; N:29/T:17 unchanged.
+A4 PASS exact value/reason identity H:14,W:25,50,55; no normalization.
+A5 DEFERRED outer-deadline failure proof, not this recorder repair. Existing
+   NATIVE-RESULT.md:9-13 remains explicit about the nested budget gap.
+A6 UNENGAGED new gate/cache authority; Q routing and T actual reads unchanged.
+A7 PASS Q:78/N:91 label observer evidence failure, not transport/participant
+   refusal; original payload/answer remain diagnostics Q:99,102.
+
+Retry loops (7):
+Y1 UNENGAGED registration H:5-14 has no retry.
+Y2 UNENGAGED loop/stop budget; exact args forwarded H:6.
+Y3 UNENGAGED retry exits; original error/result preserved W:37-58.
+Y4 PASS no suppression owner/queue in H or either observer callback.
+Y5 PASS one-call accounting W:26,56,80; no cadence or amplification.
+Y6 PASS H no redelivery; T retains transaction-owned replay assertions.
+Y7 UNENGAGED retry counters/reset; no ACK-derived success in H.
+
+Formation circularity (5):
+F1 UNENGAGED no subsystem read/write in H, only observer callback.
+F2 UNENGAGED no CDC-dependent re-drive; Q actual CDC construction unchanged.
+F3 UNENGAGED formation policy; native setup still precedes release N:95-98.
+F4 UNENGAGED new window/margin; no budget changes.
+F5 PASS no bypass; H calls original once and N:112-118 still asks actual PAUSE.
+
+METADATA READ DURING THIS ROUND
+
+de273cbe3e03502cf41a6a152f28326d75c4097beecb1496ea7d3bf5f6203071  test/shards/impact-contracts.json
+2117540863e1cdfe585a35f3731b6d0c224b3e997ce9ad7352c8d521e9425dfe  test/shards/primary-classes.json
+b5cce1ecb3b7fab4ad57121d50196173c8d7ab6ee2ec564effc3ba729567dc9e  test/shards/resource-classes.json
+2413ba7c145ee31ceb29369ab060a0a8329f3fc58c0f22692d3d3745535ade18  test/shards/impact-graph-seal.json
+0c1527041082b23929ad855117e662278ee7acc07b3d22a9be2591d1ffeb8b58  test/shards/subsystem-classes.json
+
+Registry includes three semantically equivalent section-sign Unicode escapes
+alongside the two intended witness additions; no owner/contract meaning changes.
+Generated classification adds one unit/ordinary/storage-partition test, census
+2377 -> 2378. No production src/ or architecture diff was present. Metadata
+may need its ordinary regeneration after the required witness edits; do not
+reuse these hashes as an approval of later bytes.
+
+Historical native PASS remains bound to its prior checkpoint. No successor
+activation/sealing, production deadline repair, main merge or production
+protocol acceptance is authorized by this review.

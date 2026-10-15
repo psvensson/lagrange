@@ -1,0 +1,52 @@
+{
+  "source": "raw.tap.txt; Node TAP diagnostic backslash escaping decoded once before JSON parsing",
+  "rawTapSha256": "36826f2733fabcf7126f57492d096c6ec0c54c897d7a9a5f55926537ec003272",
+  "testSha": "f02153dbd406ef55010d596fe15579890bc97e5c",
+  "host": "lenovo-laptop",
+  "passFiles": 1,
+  "failFiles": 0,
+  "classifiedMs": 5015,
+  "releaseElapsedMs": 78.26840500000071,
+  "outcome": "cut_over",
+  "queryCoordinatorState": "ROLLED_BACK",
+  "deliveryCount": 2,
+  "proofObservations": 4,
+  "queryCensusStates": [
+    "held",
+    "held",
+    "held",
+    "held"
+  ],
+  "replicas": [
+    {
+      "replicaId": "release-tx1-native-r1",
+      "applied": "6",
+      "committed": "6",
+      "last": "6",
+      "admission": "open",
+      "participant": "ROLLED_BACK",
+      "decisionIndex": 6,
+      "decisionTerm": 1
+    },
+    {
+      "replicaId": "release-tx1-native-r2",
+      "applied": "6",
+      "committed": "6",
+      "last": "6",
+      "admission": "open",
+      "participant": "ROLLED_BACK",
+      "decisionIndex": 6,
+      "decisionTerm": 1
+    },
+    {
+      "replicaId": "release-tx1-native-r3",
+      "applied": "6",
+      "committed": "6",
+      "last": "6",
+      "admission": "open",
+      "participant": "ROLLED_BACK",
+      "decisionIndex": 6,
+      "decisionTerm": 1
+    }
+  ]
+}

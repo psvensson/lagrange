@@ -1,0 +1,164 @@
+SETTLEMENT / D3 / SNAPSHOT DEPENDENCY CONTENT REVIEW — 2026-10-15
+
+Reviewer: subagent:/root/snapshot_contract_audit
+Scope: final content check delegated by the principal agent. No new snapshot
+investigation, tests, lab execution, production edits or prior evidence edits.
+Only this separate review file was written. The prior settlement audit remains
+unchanged. Concurrent test/fixture/metadata work is other-owned and not reviewed
+or certified by this report.
+
+Worktree: /mnt/data/peter/projects/.worktrees/runtime-result-credit-contract-20261015
+Branch: review/runtime-result-credit-contract-20261015
+Source HEAD: fb3c09d4a90952ee57bb2de09aa1e0b6cf1f2e9c
+git diff --numstat -- src: empty at review. Current test/partition fixtures and
+test/shards metadata were modified by their owner, and new evidence/recorder
+files were untracked. This is an observation, not a worktree or lab lease.
+
+Exact reviewed identities (SHA256)
+----------------------------------
+CAPACITY-CONTRACT.md, final reviewed content:
+337723b03aa85d8f7d370250bab4ff4732b2c4fe79af13d22983d45d37d667a8
+reviews/settlement-size-audit.txt, preserved full source/category audit:
+8bfc453a52211ded8fb2c964d7bb015151ade2af84c4458e26b6c4e516881124
+../release-decision-closeout-20261015/SNAPSHOT-DECISION.md, preserved dependency:
+998be9039a942a8a4d0d03938991130d8e1250dab8b3befbbb3ee660bfa92329
+
+Verdict: APPROVE the scoped document's faithful preservation of the settlement,
+D3 and snapshot dependency findings, with production implementation HOLD.
+This approves evidence and owner-boundary wording only. It does not approve the
+new runtime/result algorithm, numeric limits, fairness mechanism, new canonical
+profile, production settlement custody, retirement implementation or snapshot
+path. Other reviewers own the remaining contract sections and test changes.
+
+Findings closed during this content review
+-----------------------------------------
+Initial full document SHA256:
+e00b23942179cafb0baec5ca5835f7c2cb2af4736e62ad4e25f29ab0d52ea4fc
+
+C1 — Conditional encoding assumptions were abbreviated as a 64-participant /
+256-byte-ID profile. The final lines 272-276 now explicitly name raw UTF-8
+partitionId <=256 B, transactionId exactly 32 lowercase ASCII hex characters,
+and preparedDigest exactly 64 lowercase ASCII hex characters. These are the
+assumptions needed for the audit's manifest<=199233 B and decision<=105115 B
+calculation. Both estimates remain partial, conditional and unadopted. CLOSED.
+
+C2 — The current D3 invalidation list omitted leaderId. The final lines 290-292
+include it, matching partition-participant-transaction-pause.js:218-232. CLOSED.
+
+C3 — Explicit HOLD / immutable admission-token fencing followed the description
+of actual current D3 behavior without distinguishing the unimplemented contract.
+The final lines 292-294 explicitly identify those checks as proposed and not
+implemented. No new contract is disguised as existing behavior. CLOSED.
+
+No additional blocking content defect was found within this scoped review.
+The existing substantive implementation blockers below remain explicit; their
+presence is why the scoped approval does not authorize implementation.
+
+Source and evidence correspondence
+----------------------------------
+1. CAPACITY-CONTRACT.md:250-264 correctly preserves current source constraints
+   and their limits. partition-participant-transaction-constants.js:133-140
+   bounds local operations JSON to 256 operations/1 MiB. transaction-bytes.js
+   :140-175 and distributed-transaction-participant-manifest.js:5-23 have no
+   participant-count or encoded-size cap. The pure probe's 4096-participant,
+   458841-B decision and 65536-B field samples are accurately classified as
+   reader behavior, not normal-producer or native-cluster evidence. The normal
+  32-hex transaction ID and real SHA256 producer constraints are preserved.
+   Source hashes for the four probe imports were rechecked and exactly match
+   the unchanged settlement audit. No probe was rerun.
+
+2. The one-PREPARED-per-partition rule does not bound global DECISION bytes;
+   repeated terminal transactions accumulate participant operations/outcomes
+   and Q history. The new document does not mistake staging count, previous
+  7304-B history sample, parser acceptance or SQL deletion for a total database,
+   snapshot, retained-history or physical memory bound. Audit F1-F6 remain
+   applicable and unresolved by this documentation-only packet.
+
+3. Lines 266-271 correctly place the proposed reservation before durable query
+   enlistment and before creating a new durable participant obligation.
+   distributed-transaction-participant-set.js:32-47 persists the manifest before
+   participant BEGIN; :51-59 freezes that exact manifest. Query remains the
+   sole global decision owner; participant request/apply owns PREPARE/outcome.
+   New profile bytes, complete encoding and recovery obligations are explicitly
+   new work. A resource projection is not allowed to choose COMMIT/ROLLBACK or
+   change a deterministic committed effect. Atomic new custody enforcement and
+   full encodings remain unimplemented rather than assumed by this review.
+
+4. Lines 278-285 correctly retain existing larger acknowledged obligations.
+   Query/TX owners inventory actual bytes and retain measured custody while new
+   work is backpressured; release credits cannot refuse their DECISION. If one
+   exact retained encoding cannot fit the supported path, the measured mismatch
+   remains an explicit settlement capacity blocker. There is no falsely claimed
+   universal legacy reserve, silent truncation, alternative global decision,
+   row deletion or parallel transport. COMMIT is explicitly not proved by the
+   ROLLBACK baseline. Same-trace capacity/admission/settlement witnesses remain
+   required, as in audit OI3 and formation checks.
+
+5. Lines 287-294 preserve the important D3 phase distinction. The current OPEN
+   invalidator compares lifecycle/runtime/term/leader/configuration/membership
+   (pause.js:218-232). CLOSED->OPEN checks census/drain and then current identity
+   after the await (:264-280); exact same-grant OPEN replay does not reimpose
+   drain (:252-262). Normal admitted BEGIN/staging/PREPARED/pending activity must
+   not self-revoke the release, while proposed explicit HOLD and stale binding
+   checks remain a separate first-admission contract. D3 never supplies local
+   inputs that change replicated deterministic application effects.
+
+6. Fixed-cell retirement is described as retiring eligible RELEASE history,
+   not TX/query rows or pending command copies. The document explicitly leaves
+   authoritative TX/query obligation bindings intact and requires policy review
+   if another owner actually pins a refusal as sole proof. This is consistent
+   with the preserved snapshot decision's query-discharge pinning requirement.
+   This scoped review does not certify the complete retirement/fairness design;
+   the document itself retains its concrete starvation and custody blockers.
+
+7. Snapshot refs in lines 298-304 exactly match the preserved dependency record:
+  9554f689ef1fd4560e23ed8ca4f386266539f83f
+  458076e64b4e36ac1525f93f6daa41bbf3fadc5c
+  2384216d16d11dc6d62a682ffef192dc944a7a15
+  82b54ef9b7c8d6be9f2d6450cbc5e6713ade00af
+   These are historical preserved refs, not leases; no old worktree/process
+   claim is upgraded into current authority. No snapshot investigation or
+   takeover was repeated for this review.
+
+8. The prior exact SNAPSHOT-DECISION.md remains normative, not replaced by the
+   shorter new summary. Its lines 52-67 include one boundary B for application
+   data/schema/sequences/HLC, participant operations/validation/origin/generation,
+   terminal outcomes, release state/results, committed accounting, retirement
+   protection, query discharge/provenance/pins, INIT marker and protocol version.
+   A pre-INIT image requires retained INIT suffix; post-INIT missing row/marker
+   is unavailable/corrupt, never fresh. The new contract does not remove these
+   requirements. Source core/Ready/uncommitted credits are excluded; receiver
+   reconstructs actual suffix custody before admission (prior lines 59-63).
+
+9. Receiver identity/eligibility in new lines 305-307 must be read under the
+   referenced prior contract: membership and peer identity come from their
+   existing owners, never unfiltered sender-local authority (prior lines 77-79).
+   Native accepted Ready, exact target binding and atomic durable/application
+   import remain required (prior lines 81-87); source APPROVED state does not
+   transfer serving permission and receiver D3 starts CLOSED. New acceptance
+   matrix line 323 explicitly preserves that requirement. Serialize byte counts
+   and ordinary process restart remain insufficient witnesses.
+
+10. Open-owner list and acceptance matrix lines 309-330 retain application-prefix
+    membership provenance, image provenance, query discharge/token custody,
+    fresh/retained activation, fair finite custody, complete TX profile and
+    legacy inventory. No focused green certifies the complete release protocol.
+    Application image/native import, exact replay, epoch repair, COMMIT control,
+    saturated reauthorization and actual suffix accounting remain required.
+
+Category closure and review limits
+---------------------------------
+The unchanged settlement-size-audit contains the full 10 owner-interaction,
+5 recovery, 7 admission, 5 concurrency, 6 harness and 5 formation checklist items
+with concrete evidence paths. This content check preserves all 38 dispositions:
+single Q/P/result authority, exact identity rather than cache authority,
+same-trace admission-plus-settlement proof still missing, correct before-ack
+admission point, retained legacy debt, existing budget/backoff, no new timer
+or priority escape hatch, and no serving-dependent settlement/recovery cycle.
+This report does not relabel any missing native witness as passed.
+
+No new tests were run. Existing historical failed/positive evidence was not
+edited. Concurrent recorder/test metadata changes require their own review.
+Production HOLD; successor unsealed/unactivated; shared-control-wave HELD;
+Runner/TAP PARKED; PR122 and bde70cec remain rejected. Stop at the requested
+content-bound review boundary.

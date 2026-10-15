@@ -1,0 +1,264 @@
+INDEPENDENT RECORDER DESIGN REVIEW — 2026-10-15
+Verifier: subagent:/root/native_witness_verifier
+Worktree: /mnt/data/peter/projects/.worktrees/runtime-result-credit-contract-20261015
+Reviewed baseline: fb3c09d4a90952ee57bb2de09aa1e0b6cf1f2e9c
+Branch observed: review/runtime-result-credit-contract-20261015
+Scope: test-owned recorder design only; no tests, lab leases, source edits,
+Git mutations, process intervention or production implementation performed.
+The worktree was clean at the source reads. Only this review report is written.
+
+VERDICT
+
+The initial query-recorder-only proposal is insufficient: a second wrapper
+underneath drops the same arguments and fixes the receiver. The amended design
+covering BOTH fixture observers is APPROVED FOR TEST-ONLY IMPLEMENTATION,
+subject to the concrete requirements below and a later exact-content review.
+This is not source-checkpoint approval or a native PASS. Production protocol,
+outer-deadline handoff, successor activation and main merge remain HOLD.
+
+Read actual AGENTS.md -> docs/steering/rules.md -> docs/steering/router.md,
+quest-subagents.md, verification-template index and all eight templates below,
+testing fixture guidance, architecture index and runtime contracts. Current
+source, rather than historical reports or memory, supplies the evidence below.
+
+SOURCE KEY AND EXACT BASELINE SHA256
+
+Q = test/partition/participant-release-query-engine-fixture.js
+4523c8a43ab3f6e75e4d2993ed14e44717a4003825bbb699a3f923578be4109a
+N = test/partition/participant-release-tx1-native-fixture.js
+12c914b98ce063bfa023c14314c173907a16ed6a744ddc71902462af209bec13
+T = test/partition/participant-release-prepared-settlement-native.test.js
+99d05469b9df1240d3c566c81cf4989e3fdb49fe35c9e34e7272b78f3846ebaa
+L = test/partition/partition-service-test-support.js
+8f29fc58fbb5343ebba18ec8465e2678c31daded2ff8461a46140e24cd1205bf
+I = test/shards/impact-contracts.json
+39dfbbf495f3a7bcb8bc6763c941fc989e2977a8db8811139bdf85ea53c5891f
+
+FINDINGS AND MINIMAL COUNTEREXAMPLES — ALL CATEGORIES
+
+R1 [harness/transport/concurrency, required]: Q:94-103 declares only address
+and payload, invokes deliver.call(transport, ...), and thus drops the third
+options argument and all later arguments while forcing a different receiver.
+N:63-71 already does the same underneath it via bind plus a two-argument arrow.
+Call either observer through alternateReceiver with (address, payload, options,
+extra): the original receives transport as this and only two arguments. The
+current native loopback ignores options and this, so its healthy PASS cannot
+detect this defect. QueryExecutor actually supplies the third argument at
+src/query/query-executor-partition-delivery.js:388-392; its builder includes
+timeoutMs, delivery priority/source and replacement key at
+src/query/query-executor-partition-attempt-budget.js:300-340. The production
+MessageRouter consumes signal and timeoutMs at
+src/transport/message-router-delivery-behaviors.js:171-225.
+
+R2 [harness/transport/ownership, required]: Observation failure can replace or
+prevent the real outcome. At Q:95-100, a successful TRANSACTION response that
+contains a function makes structuredClone throw after delivery succeeded;
+the caller instead receives DataCloneError. At N:67-69 an uncloneable RESUME
+payload throws before the underlying delivery is invoked. Separate observer
+failure reporting is required in BOTH wrappers; it must neither suppress the
+original invocation nor replace its value/error. The native test must fail
+separately for observation errors so lost evidence cannot produce a green
+certification claim. Keep actual delivery errors and observer errors distinct.
+
+R3 [harness/owner-interaction, required witness discipline]: A missing exported
+factory is not a semantic RED. The forwarding witness must reach these behavior
+assertions through a callable old-shape implementation/control, retaining
+receiver/argument loss as the failure. New helper import failure counts only
+as test setup failure. The full native file is a separate later measurement;
+it cannot certify options enforcement, deadline cancellation or cross-host
+transport by passing over L:86-103.
+
+R4 [scope/semantics, qualification]: The parent's amended ordinary-function
+proposal can preserve the exact original Promise/return value and synchronous
+throw, unlike an async wrapper. For this existing native-Promise contract,
+attach Promise.resolve(answer).then(observe, rejectionNoOp), then return answer.
+The fulfillment observer must catch record/clone/accessor failures into a
+fixture-owned error list. That list is asserted separately after owned cleanup;
+do not throw observation failures into the caller's delivery path. Underlying
+delivery executes exactly once via Reflect.apply(deliver, this, args).
+
+This is not a universal JavaScript transparency claim: assimilating an arbitrary
+thenable can invoke its then again when a caller also awaits the original;
+attaching a rejection handler can affect unhandled-rejection diagnostics.
+The actual seam is explicitly async (L:96) and its callers await delivery.
+Do not expand the factory's advertised contract to hostile thenables, altered
+Promise intrinsics or synchronous observation timing. No production transport
+change is needed or authorized for this narrow repair.
+
+R5 [ordering/evidence, qualification]: The amended observer records fulfillment
+after completion, before its caller's continuation on the same ordinary native
+Promise: observer registration precedes returning that Promise to the caller.
+Nested wrappers register in order and do not await each other's observation.
+Moving RESUME capture after fulfillment is acceptable for this fixture because
+N:96 awaits the initial release and N:105-115 consumes captured requests only
+later. A fulfilled delivery may still contain a refusal; capture is not semantic
+approval. Keep original PAUSE assertions. Post-completion clones describe that
+observation time, not immutable submitted wire bytes or durable authorization.
+
+SMALLEST REQUIRED WITNESS
+
+Use the actual test-owned helper in nested wrappers around one controlled async
+function. This stub tests forwarding, not router/transaction authority. Preserve
+the same witness's assertions for both observer completion and original outcome:
+
+- Invoke with a receiver distinct from any fixture transport; assert strict
+  identity of this, address, payload, opaque third options and each extra arg,
+  including exact argument count. Do not copy/read/normalize options in helper.
+- Return a captured native Promise; assert wrapper return === original Promise
+  and awaited result === original object. Both observers receive the same
+  completed value. Underlying call count is one and neither observer runs before
+  the controlled Promise is released. No timer or sleep is needed.
+- Reject using one captured Error; assert the same object rejects and no
+  fulfillment record appears. Also retain a synchronous-throw identity case;
+  the ordinary wrapper must not convert that throw into an async rejection.
+- Use an actually selected transaction/release observation with an uncloneable
+  field so structuredClone really throws. Original success/Promise identity must
+  survive, the observer failure list must be nonempty, and a subsequent valid
+  delivery must still call the original once and record normally.
+- Carry an ACK/noHandler-shaped object or other non-success value unchanged;
+  observer presence must never mean processed/settled. Do not introduce a new
+  transport result shape or classifier.
+- Exercise both nested observers used by the fixture. If callbacks are factored
+  separately, cover their filters and clone-failure behavior, not only an unused
+  generic factory. The native whole-file run retains every original T assertion,
+  adds separate observer-error assertions and uses the reviewed exact checkpoint.
+
+CATEGORY-COMPLETE CHECKLIST
+
+Statuses here assess the amended DESIGN, not unexecuted future source/tests.
+Each pending proof is explicitly named. Items outside this narrow repair are
+marked unengaged, rather than credited with historical/native proof.
+
+Harness fidelity (all 6)
+H1 Required/pending: R1/R2 name reachable old behavior, Q:94-103 and N:63-71.
+   Old-shape behavior control must reach assertion, not fail on a new import.
+H2 Bounded: the controlled function is an observer forwarding seam only.
+   L:96-101 calls the registered handler and ignores transport options; compare
+   real MessageRouter behavior at message-router-delivery-behaviors.js:171-225.
+H3 Unengaged timing compression: add no timers/budgets. Preserve N:28-31 and
+   T:17. A manually resolved Promise establishes order without time scaling.
+H4 Required/pending: strict identity of every argument and exact value/error
+   as in smallest witness; QueryExecutor's actual third arg is :388-392 above.
+H5 Required/pending: distinct receiver, nonempty opaque options/extra args,
+   matching record filter, clone-breaking value and explicit call counts rule
+   out default receiver, omitted options, no-op recording and empty success.
+H6 Separate proof: forwarding witness proves observer behavior only; T:63-95
+   is the existing real-owner control to rerun at a new exact checkpoint.
+
+Transport delivery (all 5)
+D1 No new classification: return even acknowledged/noHandler unchanged;
+   test/contract/message-router-contract.test.js:57-70 shows why ACK is weaker.
+   T:83-92 requires actual participant result/digest/proof, not ACK alone.
+D2 No waiter/re-drive ownership: helper observes only actual completion, never
+   cancels/settles/retries. Q:94-103 is the changed seam. Late router semantics
+   remain unengaged; no cancellation certification may be inferred.
+D3 No new outcome shape: return original value, preserve rejection object;
+   witness requirements above. No classifier modification is proposed.
+D4 Existing delivery budgets only; no extra waits/deadlines or hanging observer
+   Promise awaited by caller. Original errors/rejections are transparent. Real
+   missing-handler policy remains L:97-99 / production transport-owned.
+D5 Stub scope explicit: fake async function is not a substitute MessageRouter
+   success. The canonical router suite remains unchanged, and native uses L.
+
+Owner interaction (all 10)
+O1 Single decision owner: transport/handler decides the original outcome;
+   observer owns diagnostics only (Q:94-103). TX1 and query/release owners keep
+   settlement decisions, witnessed by T:38-58 and T:63-95.
+O2 Typed boundary preserved: exact args and original return cross once;
+   src/query/query-executor-partition-delivery.js:388-395 consumes original
+   response. Opaque options receive no local interpretation.
+O3 Paired proof pending: same witness checks successful observation AND exact
+   transport outcome, then clone failure with outcome preservation. R1/R2 old
+   shortcuts must fail behavior controls. Separate greens are insufficient.
+O4 Required/pending: rejection/observer failure then a valid call through the
+   same helper; no permanent local veto or poisoned state. Q arrays are fixture
+   diagnostics, not recovery authority.
+O5 No added retry/gate/force path: one Reflect.apply per call; assert count under
+   nested calls. Existing QueryExecutor budget/backoff owns pressure (:300-350
+   in query-executor-partition-attempt-budget.js), not recorder urgency.
+O6 Completion is the observer trigger. No polling/wake added. Actual later
+   release uses T:74 and existing production owner path, whose healthy control
+   is to be remeasured; observer supplies no authority to release it.
+O7 Projection stays projection: Q deliveries/proofs and N resumeRequests do
+   not manufacture success. N:110-115 asks actual PAUSE owner and checks it;
+   T:83-92 verifies observed replies and actual proof grammar.
+O8 Required/pending: retain old-shape negative separately, identify exact bytes
+   and assertion. No missing-symbol or original native PASS relabeled new-run.
+O9 No escape hatch: helper only forwards and records; no fallback, raw row
+   deletion, fabricated success, alternative retry or production hook allowed.
+   Existing real owner path and all T assertions remain untouched.
+O10 Required/pending: update existing impact registration for new witness and
+   generated dependencies. I:599-664 and I:1539-1613 already register T in
+   raft-rs-runtime-application-transaction; new helper/witness coverage must be
+   checked in the exact source round, without inventing a new authority.
+
+Concurrency and serialization (all 5)
+C1 No new admission/serialization gate: observer attaches a callback only;
+   same native Promise is returned, no lock or async precheck. Q:94-103 target.
+C2 Preserve receiver and complete args synchronously at the call through
+   Reflect.apply; no awaited check then mutation. Completion clones remain
+   diagnostics, not request-identity sealing (R5).
+C3 No durable claim/multi-winner behavior introduced. Nested wrapper witness
+   asserts one original invocation; production CAS/transaction scope unchanged.
+C4 No timers, interval callbacks or scheduled retry added. Pending Promise
+   witness is manually settled; N:28-31 existing runtime timing unchanged.
+C5 No mutex or transport-wide serialization claim. Completion order may differ
+   for concurrent calls; records are observations, not an ordered commit log.
+
+Recovery and replay (all 5)
+R1 No recovered owner state written: arrays/map in Q:64-65 and N:65 are local
+   test custody. Real query recovery remains T:63-69; observer does not replace it.
+R2 No restart/live discriminator added. Existing original deliver/engine restore
+   at Q:67-75 and owner-draining teardown N:79-90 stay intact. Assert observer
+   errors only after cleanup, preserving cleanup/error provenance.
+R3 No synthetic empty participant manifest/progress success introduced.
+   T:63-69 real recovery result and T:94-95 retained coordinator checks remain.
+R4 Observer never re-delivers. Original invocation exactly once is witnessed;
+   T:32-55 continues to measure transaction-owned durable replay separately.
+R5 Rejection, undefined/missing result and absent record do not mean settled.
+   T:83-92 positive controls remain necessary; failed observation invalidates
+   test evidence through a separate assertion, never through transport outcome.
+
+Admission and budgets (all 7)
+A1 No precheck/enforcer added; actual admission checks T:43,56-58,80 remain.
+A2 No new transient/hard refusal classification; pass the exact original error
+   and result. Observation failures are test defects, not admission reasons.
+A3 Existing N:28 10-second release budget, T:17 30-second test budget unchanged.
+   Forward all options verbatim; production QueryExecutor/router own deadlines.
+A4 No reason normalization; exact result/error identity is required. ACK and
+   noHandler retain their producer shape (router contract test:57-70).
+A5 Healthy later reopening remains T:74-95. Historical NATIVE-RESULT.md:9-13
+   explicitly records the outer-deadline handoff gap. Neither unit transparency
+   nor native loopback success closes stalled-delivery/outer-budget schedules.
+A6 No cached gate decision introduced. Fixture routing metadata scope unchanged
+   at Q:20-39,91-93; recorder does not adjudicate fresh release authority.
+A7 Observation failures name their own recorder/stage and retain actual error;
+   do not present them as participant refusal or transport failure. Exact native
+   diagnostics preserve actual address/payload/answer without adding a verdict.
+
+Retry loops (all 7, unengaged except non-amplification)
+Y1 No retry registration: Q:94-103 / N:66-71 target wrappers only.
+Y2 No loop stop or new timestamp/budget: same source scope; opaque args forwarded.
+Y3 No retry exits/classifications created; rejection remains original (witness).
+Y4 No mutual suppression queue: observer callbacks do not suppress owner paths.
+Y5 One original call per invocation, no cadence: assert exact call counts.
+Y6 No observer-generated replay; T:32-55 keeps actual TX1 replay controls.
+Y7 No retry counters or ACK-as-success reset; keep outcome unchanged (D1).
+
+Formation circularity (all 5, unengaged)
+F1 Recorder reads no moving subsystem; it sees the original call/result only.
+F2 No CDC-dependent re-drive introduced; Q:59-61 actual CDC remains unchanged.
+F3 No formation admission change; fixture initializes progress Q:78-82 before
+   the initial measured release N:96, as before.
+F4 No new formation window/margin claim; existing budgets remain unchanged.
+F5 No consistency bypass: both wrappers preserve original handler delivery;
+   N:110-115 uses the owner PAUSE path, and T's durable checks remain required.
+
+NEXT BOUNDARY
+
+Implement only the amended test-owned observer plus its honest forwarding
+witness and existing registration/derived metadata. Return exact changed bytes
+for independent source review before the test checkpoint/native run. Retain
+all previous archives/source/evidence unchanged. No production deadline,
+release fencing, runtime credit, retention, snapshot, activation or merge
+approval is conferred by this recorder review.

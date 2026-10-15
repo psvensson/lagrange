@@ -1,0 +1,542 @@
+SETTLEMENT SIZE, CUSTODY AND D3 PHASE AUDIT — 2026-10-15
+
+Scope and identity
+------------------
+Auditor: subagent:/root/snapshot_contract_audit, delegated by the principal agent.
+Worktree: /mnt/data/peter/projects/.worktrees/runtime-result-credit-contract-20261015
+Branch: review/runtime-result-credit-contract-20261015
+Source HEAD: fb3c09d4a90952ee57bb2de09aa1e0b6cf1f2e9c
+Actual AGENTS.md -> docs/steering/rules.md -> docs/steering/router.md read;
+conditional owner and six category checklists consulted. Source was read-only.
+On the pre-report identity check, git diff --stat was empty and git status --short
+contained only the new runtime-result-credit-20261015 evidence directory. At
+report close, concurrent owner work had changed the query-engine and TX1 native
+fixture files and added the delivery-recorder helper/test under test/partition;
+this auditor did not edit or validate those changes. Production source remained
+the pinned audit input; the report does not certify concurrent test changes.
+This observation is not a lease on any shared checkout, lab host or old worktree.
+No native tests, lab jobs, dependency mutations, production changes or snapshot
+changes were performed. Only this new review file and the separate /tmp parser
+probe artifacts were written by this auditor. Other agents own packet assembly.
+
+Conclusion: current sources do not establish a universal finite TX1 settlement
+byte bound, durable history bound, or total outstanding-request bound. The local
+staging bound is real but narrower. A new admission profile and owner-produced
+custody requirements must precede new acknowledged obligations; they cannot be
+retroactively imposed on already durable obligations. Implementation stays HOLD.
+
+Consumed surfaces and single ownership
+-------------------------------------
+Q (query transaction owner): src/query/distributed/distributed-transaction-*.js,
+plus src/query/sql-query-engine-transaction-{set,persistence}-methods.js.
+Q alone chooses and durably records global COMMIT/ROLLBACK, freezes the exact
+manifest, reads uncertainty from authoritative rows, and redrives that decision.
+P (participant/TX1 owner): src/partition/partition-participant-transaction-*.js.
+P owns volatile local staging, sealed PREPARE bytes, the durable participant row,
+reservation, deterministic application, and replay. It consumes Q's canonical
+decision; it does not create a second global decision authority.
+O (committed result owner): partition-committed-statement-outcome.js and constants.
+O records per-operation terminal results in the same application transaction.
+D3 (local admission owner): partition-participant-transaction-pause.js and
+partition-participant-release-contract.js. It owns receiver-local serving
+eligibility, not replicated decision outcomes or global settlement.
+R (runtime/custody owner): consumes exact owner-produced immutable byte/count
+requirements; any new reservation interface below is proposed, not available.
+Release is a consumer of obligation status, never an alternative Q/P/O owner.
+
+Identity anchors: transactionId+transactionEpoch identify the transaction;
+participantId derives transactionId:partitionId; preparedDigest binds prepared
+content; decisionText+decisionDigest bind the full global decision. SessionId is
+the request FIFO/routing key, not a replacement for immutable transaction identity.
+Release version/admission binding and exact release-request identity remain
+separate identities. New resource accounting must preserve these distinctions.
+
+Actual bounds and findings
+--------------------------
+F1 — Local staging is bounded; its limit is not a sealed command or settlement
+limit. Evidence: partition-participant-transaction-constants.js:133-140 sets
+MAX_OPERATIONS=256 and MAX_BYTES=1,048,576. staging.js:165-195 measures the JSON
+encoding of all staged operations and refuses REPLAY_BUDGET_EXCEEDED before
+updating the session or acknowledging provisional success. It dry-runs inside a
+rolled-back synchronous SQLite transaction; BEGIN/staging remain volatile and
+leader-local. request.js:291-319 permits only one nonterminal participant per
+partition, then opens a local session. request.js:347-388 seals operationsText,
+validationText, identities and stamp into PREPARE, retaining sealed retry bytes.
+
+Counterexample to using 1 MiB as a complete-message bound: a near-limit valid
+operationsText is itself a JSON string inside PREPARE, with escaping, identity,
+validation and execution-envelope fields added. Full serialization is larger.
+operationsOf() and isPinnedParticipantCommand() do not independently enforce the
+session count/byte bound (bytes.js:111-137,315-369). The probe accepts 257 operations
+and an operationsText of 1,048,640 B. This is a parser/admission fidelity finding,
+not a demonstrated native path bypass: ordinary session staging rejects those
+operations before producing PREPARE. The complete new contract must specify a
+bounded canonical wire profile at both new admission and deterministic apply.
+
+F2 — The global manifest and DECISION have no owner-enforced participant-count
+or encoded-byte bound in the inspected path. participant-manifest.js:5-23 accepts
+canonical ordered unique pairs without count/size caps; participant-set.js:32-47
+durably appends every admitted identity BEFORE participant BEGIN, and :62-87
+iterates the requested set without a protocol count cap. The normal coordinator
+can enlist an arbitrary finite set of available partitions subject to resources
+and its existing time budget. That time budget is not a numeric encoding bound.
+bytes.js:140-196 validates and canonicalizes the full participants array, without
+a cap. DECISION carries the whole decisionText to each participant (:283-293).
+
+Minimal size schedule: one transaction enlists N distinct partitions, stages a
+small operation on each, freezes N, prepares each once, then records a decision
+with N [participantId, preparedDigest] pairs. Each partition still has at most
+one PREPARED row, but each receives O(N) decision bytes and the whole fan-out is
+O(N^2) payload bytes before transport copies. The probe proves grammar acceptance
+through N=4096, not physical availability of 4096 partitions or a native run.
+No finite N ceiling was established from the actual query/participant owners.
+
+F3 — Several canonical-reader string fields are syntactically unbounded, and a
+digest label is not a hash-shape validator. bytes.js:87-96 checks nonempty IDs,
+safe-integer epoch and derived participantId; :140-149 accepts any nonempty
+preparedDigest for COMMIT. execution-envelope.js:58-66 checks four nonempty
+strings, not their byte lengths. The probe accepts a 65,536-B partitionId and a
+65,536-B preparedDigest. These are parser-boundary examples, NOT claims the
+normal producer emits them. Normal transaction identity is already stronger:
+distributed-transaction-identity.js:1-36 mints 128 random bits as 32 lowercase hex,
+and distributed-transaction-schema-enforcement.js:24-42,88-104 enforces this at
+coordinator INSERT with safe-integer epoch/deadline. The same schema only requires
+nonempty sessionId. Normal PREPARE produces a real SHA256 digest. Preserve those
+actual producer constraints; specify independent byte caps where a complete
+wire/custody claim depends on them. Changing the accepted grammar is a new owner
+contract and needs a retained-obligation policy, not an undocumented restriction.
+
+F4 — One active obligation does not bound retained history. The participant
+schema retains operations_text even after UPDATE_DECIDED (constants.js:174-277;
+especially :270-277). No DELETE/retirement statement exists in that owner.
+apply.js:400-409 records one statement outcome per committed operation, then
+:433-441 retains the terminal participant row while releasing its reservation.
+Rollback also keeps its terminal row (:445-459). Terminal replay reads those
+rows/results (:462-467). The inspected Q persistence owner inserts/updates
+sql_transactions, sql_transaction_participants and sql_write_operations; no
+owned durable retirement path was found. Decision-protocol.js:91-96 removes
+volatile workflow state, not durable history. The 4096 limit in commit-point.js
+:28-31,86-117 is only the volatile per-session last-ended-transaction map and
+correctly returns unknown after eviction. It bounds none of these SQL tables.
+
+Minimal reachable accumulation: T1 BEGIN -> stage one operation -> durable
+PREPARE -> authoritative decision -> terminal; then T2 follows the same path on
+the same partition. Repeat serially. This obeys one-active-participant and every
+local staging limit while accumulating terminal participant rows, operation
+outcomes on COMMIT and coordinator history. This is a source-backed reachable
+schedule, consistent with earlier native history evidence; no new native run was
+performed. Existing comments promising outcome compaction with a future
+snapshot/log-bound quest (statement-outcome-constants.js:18-21) are not an
+implemented retirement proof and conflict with any claim the current checkpoint
+already preserves an application image. Carry the existing snapshot dependency.
+
+F5 — The operation count is not a bound on application data, CDC obligations,
+SQLite pages/WAL or snapshot payload. apply.js:397-441 executes carried SQL,
+records outcome rows and captures CDC. A single accepted SQL statement can affect
+many existing rows; the operation-text bound constrains input, not every effect.
+statement-outcome.js:137-145 stores failure message and owner_result_text without
+a local byte truncation policy; their exact producers must be included in any
+new outcome bound. The successful TX1 operation result itself is the pair
+{changes,lastInsertRowid} (statement-outcome-constants.js:144-149), not arbitrary
+user result rows. Do not inflate that narrow result shape into a database-size
+bound or claim every error/result payload is already bounded. CDC ACK limits of
+256 events, 2 outstanding batches and 64 KiB (partition-cdc-obligation-constants.js
+:60-63) bound that ACK lane, not total transaction effects or durable history.
+
+F6 — Serialization is not finite request custody. statement.js:22-33 chains a
+Promise per transaction operation in a session FIFO and imposes no queue count
+or byte cap; independent sessions are independent queues. The recovery sweep's
+synchronous in-flight gate (recovery.js:204-226) prevents duplicate sweeps, not
+all requests, all replicas, all retained obligations or unapplied Raft entries.
+Neither this FIFO nor P's one-nonterminal rule proves a durable global Q bound.
+Minimal source schedule: callers enqueue K distinct operations on one session
+while its first operation awaits a dependency; all K tails exist before progress.
+This schedule is not a demonstrated native exhaustion failure. It shows why
+finite admission/custody must be enforced before asynchronous retention and
+reconstructed from durable state plus actual retained suffix after leadership
+change, rather than inferred from a process-local map.
+
+F7 — Preserve D3's phase distinction; do not continuously require drain after
+grant. pause.js:218-232 invalidates an OPEN grant on term, leader, configuration,
+membership generation, runtime generation or lifecycle incarnation change.
+Staging, PREPARED rows and proposal/pending counts are deliberately absent.
+:252-262 returns idempotent RESUMED for the same still-current OPEN release.
+The CLOSED->OPEN path :264-280 checks releaseCensusDefect, then synchronously
+rechecks lifecycle/leadership. release-contract.js:116-155 requires no local
+staging/PREPARED/pending proposals and applied=commit=last at that grant boundary.
+
+Counterexample to a proposed continuous-drain D3 rule: OPEN -> a legitimately
+admitted BEGIN/stage -> drain becomes false -> D3 closes -> first PREPARE loses
+permission -> reopening requires the staging to disappear. This would make normal
+admitted work revoke its own authorization. It is NOT a current native bug;
+the current invalidator correctly separates transition eligibility from ongoing
+grant validity. Future immutable release binding, actual-prefix D2 enforcement
+and current D3 generation validity must preserve this phase distinction. New
+admission HOLD must still allow exact durable replay and authoritative settlement.
+
+Limited executable evidence
+---------------------------
+Directory: /tmp/lagrange-settlement-size-audit-20261015.0YD8Xl
+Node: v22.23.2. One execution, exit 0; stderr empty; no retry.
+Exact command, cwd the worktree named above:
+node '/tmp/lagrange-settlement-size-audit-20261015.0YD8Xl/encoding-probe.mjs' > '/tmp/lagrange-settlement-size-audit-20261015.0YD8Xl/encoding-output.json' 2> '/tmp/lagrange-settlement-size-audit-20261015.0YD8Xl/encoding-stderr.txt'
+
+SHA256:
+encoding-probe.mjs 72785e12b03076fb6489bf2c001791051c3d33b6e86e831699d35aa379e2ef52
+encoding-output.json d096c59ab5c4fdb4aa4072f9d257a8995352a7446529654c00d1dc37d327ef8c
+encoding-stderr.txt e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+
+Imported source SHA256, recorded again inside output:
+partition-participant-transaction-bytes.js
+  1aeba1c2cf2323f85bd10b6105338a1a9689c74a112da1f432840e32972b2fc4
+partition-participant-transaction-constants.js
+  85efa686cf3f9000be46706de706a74b8ff8eba70b94d12d7ebe9d2d26ef7a35
+partition-transaction-execution-envelope.js
+  fcb29eab0ca2a084b86bf601604666d365b7b60424a5b2ee115a66f7683d60ee
+distributed-transaction-participant-manifest.js
+  5d22f63532c7dd3f3c05deb1da2bf27fd000b4372ed178e055c649a15a743089
+
+Existing exports used: participantSetTextOf/readParticipantSet,
+buildDecisionRecord/canonicalDecisionRecord/decisionBindingRefusalOf,
+operationsOf/buildPrepareCommand/isPinnedParticipantCommand/identityRefusalOf.
+These are pure existing parser/encoder calls. No mocked authoritative success,
+replicated staging, database, Raft proposal or protocol model is involved.
+Synthetic execution-envelope values satisfy the shape parser; they do not prove
+execution compatibility or a native PREPARE. NUL-containing identifiers below
+are encoding stress inputs, not a claim about normal partition-name allocation.
+
+For 32-ASCII-hex transaction ID, 7-ASCII-byte partition IDs and 64-ASCII digest:
+participants | manifest B | canonical COMMIT decision B | both parsers accepted
+0            | 2          | 90                          | true
+1            | 56         | 201                         | true
+64           | 3521       | 7257                        | true
+257          | 14136      | 28873                       | true
+1024         | 56321      | 114777                      | true
+4096         | 225281     | 458841                      | true
+Empty is a positive parser control; legitimately empty transactions are legal.
+One 65,536-B partition ID: manifest 131,114 B; decision 65,730 B; accepted.
+One 65,536-B preparedDigest: decision 65,667 B; binding refusal null.
+257 operations: operationsText 17,000 B; operations and pinned-command accepted.
+One operation: operationsText 1,048,640 B; both accepted despite staging limit.
+
+Conditional calculation, NOT a selected production policy: if Q/P enforce at
+new admission N<=64, transaction ID exactly 32 lowercase ASCII hex, raw UTF-8
+partition ID <=256 B, prepared digest exactly 64 lowercase ASCII hex, and the
+existing operation cap, then JSON string-content expansion is at most 6 per
+input byte. Manifest <= 1 + N*(41 + 2*6*256) = 199,233 B. A canonical decision
+with nonnull digest <= 91 + N*(105 + 6*256) = 105,115 B, using the longer
+ROLLBACK spelling as the conservative base. Wrapping that already canonical JSON
+text as a JSON string costs <= 2*105,115 + 2 = 210,232 B. Actual 64 unique IDs
+of 250 NUL bytes plus a 6-digit suffix measure manifest 195,393 B, COMMIT decision
+103,193 B and nested decision string 119,461 B. These are partial encodings,
+not a complete DECISION command, transport/native frame or total memory bound.
+SessionId, origin, validation, envelope, timestamp/proposer fields, exact result
+format, wrapper/base64 encoding and simultaneous copies still require owners and
+complete caps. Picking 64 here demonstrates the calculation; it is not justified
+deployment capacity or approval. No universal old-obligation bound follows.
+
+Proposed owner contract inputs and admission points (new, not implemented)
+------------------------------------------------------------------------
+1. Q creates a versioned immutable closure requirement from its actual canonical
+   transaction/manifest/decision encoders: transactionId, transactionEpoch,
+   profile version, exact expected manifest bytes/digest, participant count,
+   maximum encoded COMMIT and ROLLBACK delivery bytes for that manifest, and its
+   own required retained coordinator/decision/result records and byte budget.
+   It must reserve initial durable history before acknowledging coordinator
+   BEGIN, and incremental eventual closure before OPEN-manifest CAS admits each
+   participant. The manifest is already an obligation before PREPARE; reserving
+   only at PREPARE is too late. Freeze retains the exact full manifest/profile.
+   Existing CAS/readback remains authoritative (transaction-set-methods.js:32-63).
+
+2. P creates its requirement from the local sealed PREPARE and owner-validated Q
+   profile, not a caller-supplied boolean priority: transaction/participant/epoch,
+   exact preparedDigest, release admission binding (the separate proposed repair),
+   operations count/text bytes, complete encoded command bytes, maximum terminal
+   decision/result delivery and per-operation outcome count/bytes. Any information
+   not currently carried from Q to P is an explicit NEW byte-field/interaction
+   contract, never presumed present. The first PREPARE path must validate and
+   reserve before proposal/ack; deterministic application must enforce the same
+   replicated profile/count/byte rules at the actual committed prefix. Runtime
+   local transport pressure cannot alter the replicated terminal result.
+   A matched existing durable PREPARE/terminal replay takes the existing identity
+   validation/replay path before new admission rules. Preserve the accepted
+   transactionEpoch replay finding as an independent repair requirement.
+
+3. R accepts a typed immutable requirement from Q/P/O, deduplicated by the exact
+   transaction/participant/request plus content digest. Claim happens before
+   asynchronous custody; actual retained command bytes and copies remain charged
+   through unknown outcome, retry and leadership change. Timeout/demotion is not
+   a release event. Atomic committed application converts the relevant claim
+   into its retained outcome/remaining obligation; authoritative retirement or
+   proved non-admission releases it. This is an interface requirement, not a
+   claim current process maps implement it. Runtime needs one resource key for
+   the contended partition/runtime budget, not one independent quota per session.
+
+4. Recovery asks Q/P/O for retained obligations at their authoritative boundary,
+   reconstructs actual suffix custody, and treats unavailable/incomplete authority
+   as held debt. Do not copy source-local volatile credits in a snapshot. Q alone
+   reads/writes the recorded global decision; R/release cannot choose ROLLBACK to
+   reduce size. One exact decision replay must share its original custody/result,
+   not allocate another authoritative annotation.
+
+5. Proposed typed failures need final owner vocabulary before implementation:
+   NEW_ADMISSION_CAPACITY_HELD (transient, existing retry/budget),
+   CANONICAL_PROFILE_UNSUPPORTED (hard for new work only),
+   RETAINED_SETTLEMENT_SIZE_UNAVAILABLE (held, authority unreadable), and
+   RETAINED_SETTLEMENT_EXCEEDS_AVAILABLE_CUSTODY (explicit operator/design blocker,
+   obligation preserved). These names are proposals, not current exports.
+   Reasons carry the actual held partition, transaction, epoch, digest, measured
+   requirement and limiting owner; no generic empty/success interpretation.
+
+Already acknowledged larger obligations
+---------------------------------------
+Do not apply a new 64-participant or wire-size ceiling to an existing PREPARED
+row or recorded decision. Q must enumerate the actual retained manifest/decision
+and P the actual participant rows; measure the complete exact settlement encodings
+and retained results. Account those obligations in TX/query-owned settlement
+custody while ordinary new obligation admission remains backpressured. This is
+separate from release-request history/credits and must not consume the reserved
+HOLD/reauthorization resources. Admission policy and settlement delivery remain
+different paths through the same trusted semantic owners.
+
+For an actual finite retained set that fits the supported transport/native/storage
+budgets, measured custody plus bounded concurrent delivery can be finite. That
+conditional observation does not establish a universal numeric reserve for the
+present unbounded grammar. If even one exact retained decision cannot fit, a
+single 'critical slot' does not solve the problem. Report the measured requirement
+and explicit blocker; retain the decision/obligation. Do not split or truncate
+the manifest, replace a recorded decision, reject terminal replay, borrow release
+budget, claim PAUSE rolls back work or invent a second persistence path. A new
+streaming/reference decision protocol would be a Q/P owner-contract change
+requiring separate review; it is not proposed as a hidden workaround here.
+
+Retirement remains necessary even with bounded new requests: accepted serial
+transactions otherwise grow history indefinitely (F4). Retiring Q/P/O data needs
+one owned proof/frontier preserving exact outcomes for the retained interval and
+typed historical-unavailable/retired semantics outside it; absence cannot mean
+NOT_COMMITTED. Pinned undecided/prepared obligations retain exact data. Existing
+enforcement and recovery prerequisites must survive in the application image at
+one applied boundary. Source-level row counts and raw JSON bytes do not bound
+SQLite file/WAL/snapshot allocation. These are concrete unresolved dependencies.
+
+Cached views and recovery evidence
+---------------------------------
+The workflow maps, recovery-discovered ID set, CDC/cache rows, progress status,
+last-ended map and D3 admission WeakMap are projections or local lifecycle state.
+None can prove a durable transaction decision absent. recovery-authority.js:80-99
+reads authoritative transaction+participant state; unavailable/missing/legacy or
+invalid payload returns false and :102-127 remains IN_DOUBT until the canonical
+owner can record/redrive its exact decision. transaction-set-methods.js:65-82
+reads coordinator row, participants, coordinator row and checks an exact fence.
+decision.js:146-177,193-202 follows a recorded decision after lost persistence
+reply; uncertainty sets commit-point reached and never manufactures noncommit.
+
+The four stale-live clobber seams are guarded: durable-workflow-coordinator.js
+:603-629 skips any known workflow and preserves a newer live session binding;
+distributed-transaction-recovery.js:473-491 excludes participant rows for known
+IDs; :580-592 enrolls recovered IDs only for actually restored workflows; :594-617
+adds operation history only for those restored IDs. True restart has no known
+workflow; live refresh fills gaps. A stale discovery ID still requires fresh
+authoritative reread under the same FIFO before action. Existing code is useful
+precedent, not proof that proposed credit restore already exists.
+
+Category-complete checklists
+---------------------------
+Each item below applies to the proposed custody interaction; a source reference
+is evidence of current behavior, not a claim a proposed witness has passed.
+
+OWNER INTERACTION (10)
+OI1 Single semantic question: Q alone decides global COMMIT/ROLLBACK
+    (decision.js:146-177); P applies its exact binding (bytes.js:159-227;
+    apply.js:445-467). Release/R only consume requirements/outcomes. New typed
+    requirement interfaces above must not let cached census become authority.
+OI2 Typed seam: existing canonical participant/decision shapes are in bytes.js;
+    immutable admission/profile/custody fields are explicit new contracts in
+    proposals1-4. Missing profile/credit contract is a blocker, not a boolean
+    'critical=true' exemption.
+OI3 Paired invariants: ordinary admission cannot overrun capacity; already
+    acknowledged PREPARED/decision must settle while admission is held. Source
+    apply.js:445-467 preserves settlement/replay, but the future SAME native RF3
+    trace must saturate admission, settle recorded COMMIT and ROLLBACK, perform
+    exact replay, reopen, and show unchanged terminal outcomes. No same-trace
+    new finite-credit proof or red-on-revert exists in this audit.
+OI4 Stale->fresh: recovery-authority.js:80-127 rereads under Q; stale/unavailable
+    retains obligation, later authoritative record permits canonical redrive.
+    Future credit-unavailable -> restored bytes/returned credit -> admitted work
+    must follow this path; no permanent stale veto or caller reinterpretation.
+OI5 Pressure: existing retry3/base10ms/max250ms and recovery deferral1000..30000ms
+    (coordinator-constants.js:38-48), recovery gate204-226 and FIFOstatement22-33
+    must remain. They do not establish byte custody. Duplicate callers must
+    share retained claim where identity is exact; no unbounded waiter addition.
+OI6 Wake/release: actual apply/terminal outcome, durable retirement and restored
+    authority can release custody. Proposed credit-return wake through the owner
+    queue is missing and needs a witness; a retry timer alone is not progression
+    proof. Existing recovery-discovered IDs survive failed cache discovery
+    (recovery.js:228-242).
+OI7 Projections: enumerated in cached-views section; authoritative readback is
+    transaction-set-methods.js:65-82. Neither counters nor last-ended map prove
+    settlement or free a durable claim; D3 WeakMap is local eligibility only.
+OI8 Controlled negative: no treatment/source patch was made. Parser samples are
+    measured source behavior with exact fingerprints, not native REDs. The
+    future before/after/revert must fail a reachable semantic capacity or replay
+    assertion, not a missing credit symbol. No positive certification claimed.
+OI9 No escape hatch: existing request.js:441-484 and recovery-authority.js:102-127
+    preserve the decision owner. Search/read of the inspected Q/P persistence,
+    retry and parser paths found no existing finite closure-size contract; no
+    direct row deletion, fake census, force bypass or alternate persistence was
+    added. Legacy oversized settlement remains an explicit blocker if it cannot
+    fit the owner path, not justification for such an escape hatch.
+OI10 Registry: test/shards/impact-contracts.json coupled pair
+    distributed-transaction-coordinator-participant-protocol (around1047) binds
+    sole-coordinator-decision-and-wire to participant-request-and-apply. Primary
+    existing witnesses include test/query/transaction-coordinator-participant-protocol.test.js,
+    test/query/transaction-recovery-ownership.test.js,
+    test/query/transaction-evidence-binding-production.test.js,
+    test/partition/participant-decision-canonical-record.test.js and
+    test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js.
+    The new full release/capacity interaction and its native witnesses must be
+    registered together in the future complete implementation unit. None rerun.
+
+RECOVERY/REPLAY (5)
+RR1 No stale clobber: all four exact seams enumerated above; new credit recovery
+    must likewise preserve live retained claims and cannot replace them from a
+    lagging projection. Evidence recovery.js:473-617; workflow coordinator603-629.
+RR2 Restart/live: known workflow IDs and restoredWorkflowIds distinguish them.
+    New credit restore must also distinguish receiver incarnation and exact
+    actual retained suffix; a restart cannot reset owed bytes to zero.
+RR3 Lost enlistment: durable manifest precedes BEGIN (participant-set.js:32-47),
+    freeze checks full registry (:51-59), recovery-authority.js:58-77 checks frozen
+    count against canonical pairs and exact decision participants. Empty probe
+    control is legitimate; nonempty retained manifest must never collapse to it.
+RR4 Replay/rollback: existing participant row/digest comparison and terminal
+    replay (apply.js:258-276,445-467) are the dedup owner; store.js:1-10 binds row,
+    reservation and applied position to one SQLite transaction. A rolled-back
+    apply must roll back outcome and proposed credit conversion with effects;
+    retained command custody remains until retry. New atomic credit semantics
+    unimplemented/unproved. Exact transactionEpoch repair remains required.
+RR5 Absence: decision.js:193-202 and recovery-authority.js:88-118 retain doubt.
+    Missing/unreadable retired history must not clear credit or become terminal;
+    typed retirement knowledge and application restore remain blockers.
+
+ADMISSION/GATING (7)
+AG1 Same facts: existing staging measures operations JSON but pinned parser does
+    not (F1). Proposed precheck/apply need one canonical profile and owner byte
+    measure; local transport availability must remain separate from D2 effects.
+AG2 Transient/hard: capacity pressure is transient; malformed new profile is
+    hard; already retained larger/unreadable obligation is held, not discarded.
+    Exact consumer classification for proposed types is still missing. Existing
+    pausedWriteAnswerOf pause.js:284-289 supplies failureCode/deferRetry/retryAfter.
+AG3 Budgets: existing transaction timeout and owner retries/deferral govern waits
+    (coordinator.js:267-279; constants38-48). No timeouts increased. Time budget
+    does not prove record/byte bounds, and caller expiry does not cancel debt.
+AG4 Shapes: current pause response is an object; proposed typed requirements and
+    failures need one owner export and consumer tests, not stringification of
+    arbitrary objects. Existing query result errorCode differs legitimately from
+    participant failureCode; mapping belongs at the named boundary, not callers.
+AG5 Release event: actual apply/retirement/recovery can return capacity; D3 grant
+    has its existing generation/census path. New finite-credit wake latency vs
+    existing caller budgets is unmeasured and remains a witness requirement.
+AG6 Freshness: D3 mutation checks current status synchronously (pause.js:210-232),
+    final resume rechecks after await (:264-280); Q authority uses double read.
+    New normal-work drain rechecks would violate F7; continuous grant validity
+    must use the proper phase, immutable authority and current generation.
+AG7 Honest IDs: pausedWriteAnswerOf includes actual service.partitionId. Proposed
+    capacity failures must identify actual resource, transaction/epoch/digest
+    and measured encoding, not merely the incoming session or current winner.
+
+CONCURRENCY/SERIALIZATION (5)
+CS1 Sync/async: session FIFO installs its tail synchronously before execution;
+    recovery sets inFlight before awaits; durable manifest CAS is the backstop
+    (statement.js:22-33; recovery.js:204-226; set-methods.js:37-59). New credit claim
+    must precede retain/await; FIFO alone is not bounded (F6).
+CS2 TOCTOU: query statement lane encloses enlistment, execution and outcome
+    persistence (statement.js:46-70); manifest CAS includes exact prior text;
+    D3 final check has no await. New profile/credit claim must survive subsequent
+    awaits/unknown outcome and be validated atomically at actual apply.
+CS3 Winner: exact manifest CAS and decision persist/readback choose one durable
+    result (set-methods.js:37-59; decision.js:146-177). Retry drivers must nudge
+    that result, not allocate separate claims or select a smaller decision.
+CS4 Timers: recovery sweep inFlight/deferred gate plus per-session FIFO
+    (recovery.js:204-270) prevents timer reentry against request operations;
+    future credit-return callbacks must use the same owner queue. Timer-only
+    map clearing or speculative refund is invalid.
+CS5 Key: FIFO intentionally keys sessionId for transaction request ordering;
+    durable identity is transaction+epoch and participant; resource capacity is
+    keyed to actual partition/runtime pool. A per-session credit map alone
+    cannot bound all sessions or a Raft suffix across leaders.
+
+HARNESS FIDELITY (6)
+HF1 Correct reason: exact parser acceptance/byte measurements are the claim;
+    exit0 is not a native RED/GREEN. No missing-new-symbol failure occurred.
+HF2 Seam: real production encoders/readers imported; no stub of authority or
+    native success. PreparedDigest and envelope stress inputs test syntax only,
+    explicitly excluding ordinary producer/native reachability claims.
+HF3 Time: no timers, shortened budgets or timing model in the probe. None of
+    its results certifies retry timing, backpressure progression or recovery.
+HF4 Fields: complete synthetic fields required by buildPrepareCommand and
+    isPinnedParticipantCommand are in the retained script; fake execution
+    compatibility fields are disclosed. Complete normal wire/copy sizing remains
+    missing and must use real owners, not these synthetic stamps.
+HF5 Nonvacuity: N=1/64/257/1024/4096 and nonempty operations demonstrate actual
+    growth. N=0 separately controls legitimate empty behavior. No quorum,
+    participant-row, D3 or release assertion is claimed by this parser probe.
+HF6 Live binding: no new live runtime evidence. Future RF3 witness must read
+    actual participant/coordinator rows, committed positions, application
+    effects, exact outcomes, admission state and retained command/custody bytes.
+    Existing prepared-settlement and COMMIT native fixtures are dependencies,
+    not rerun or upgraded here.
+
+FORMATION/CIRCULARITY (5)
+FC1 Dependency inventory: Q persists manifest/decision through the control-plane
+    system-table gateway (set-methods.js:46-50; persistence-methods owner), reads
+    transaction+participant authority through the same substrate, and P reads
+    its application rows/raft status. During restore/unavailability retain
+    obligation and hold new admission. Settlement must not require user-serving
+    D3 OPEN, which would prevent clearing what blocks reopening.
+FC2 Re-drive: retained IDs remain eligible when cache discovery fails
+    (recovery.js:228-242); fresh authority under FIFO is required before action.
+    This is not an independent source of decision authority. New credit-return
+    wake/suffix reconstruction cannot depend solely on CDC visibility in the
+    recovering partition; exact recovery contract remains open.
+FC3 Window clients: BEGIN/write/new first PREPARE must wait/refuse typed pressure
+    under existing budgets; durable decision/replay retain their settlement
+    lane. Current local PAUSE misses first PREPARE fencing (accepted earlier
+    native RED), so no current complete release contract is asserted.
+FC4 Window arithmetic: no new end-to-end formation/install/discharge measurement
+    was authorized here. Pending-client count, retained-byte margin and caller
+    budget margin remain UNPROVED. A conditional encoding estimate cannot close
+    those liveness obligations.
+FC5 No bypass: preserved Q/P/application/snapshot owners only; no direct result
+    writes, second persistence path, receiver serving clone or independent
+    coordinator decision. Oversized retained settlement or unavailable image
+    provenance is an explicit blocker, not authority to bypass consistency.
+
+Preserved snapshot dependencies; no duplicate investigation
+---------------------------------------------------------
+Carry prior owner refs as preserved dependencies, not current leases:
+9554f689ef1fd4560e23ed8ca4f386266539f83f snapshot-catchup-ownership-wip;
+458076e64b4e36ac1525f93f6daa41bbf3fadc5c snapshot-content-format-wip;
+2384216d16d11dc6d62a682ffef192dc944a7a15 snapshot-dependency-b-wip;
+82b54ef9b7c8d6be9f2d6450cbc5e6713ade00af integrated diagnostic checkpoint.
+Existing application provenance, native Ready persistence/install, atomic import
+and suffix replay remain owner obligations. No snapshot worktree or refs changed.
+The prior exact snapshot decision has SHA256
+998be9039a942a8a4d0d03938991130d8e1250dab8b3befbbb3ee660bfa92329.
+Committed accounting belongs at the application boundary; source-local volatile
+credits do not. Receiver-local eligibility starts closed and is independently
+reconstructed. This packet must not claim SQLite serialization or process restart
+proves native snapshot/install/replay.
+
+Bounded disposition
+-------------------
+Accept this as source/encoding evidence only. It does not approve a production
+capacity profile, protocol implementation, snapshot path or retirement policy.
+The smallest complete implementation unit still requires owned finite ingress/
+result custody, exact immutable identity/bindings, first-admission enforcement,
+settlement/replay during HOLD, reauthorization under saturation, and recovery/
+retirement preserving the same obligations. Explicit blockers are F2/F3 complete
+encodings, F4 retirement/history, F6 cross-leader outstanding custody, exact
+legacy-settlement capacity and the preserved snapshot dependencies. F7 is a
+constraint to preserve, not a defect to 'fix'. No timeout changes or model repair.
+Production HOLD; successor unsealed/unactivated; shared-control-wave HELD;
+Runner/TAP PARKED; PR122 and bde70cec rejected. Stop for exact-content review.

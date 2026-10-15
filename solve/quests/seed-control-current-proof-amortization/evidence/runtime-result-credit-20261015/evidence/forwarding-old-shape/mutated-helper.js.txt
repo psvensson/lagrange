@@ -1,0 +1,19 @@
+// Test-owned observation of the existing async/native-Promise delivery seam.
+// Preserve its receiver, arguments and original return/error. Observer defects
+// are reported separately by fixture teardown, never as transport failures.
+function observeParticipantReleaseDelivery(deliver, observe, observationErrors) {
+  return function(address, payload) {
+    const args = [address, payload];
+    const answer = Reflect.apply(deliver, this, args);
+    Promise.resolve(answer).then((value) => {
+      try {
+        observe(args, value);
+      } catch (error) {
+        observationErrors.push(error);
+      }
+    }, () => {});
+    return answer;
+  };
+}
+
+export {observeParticipantReleaseDelivery};
