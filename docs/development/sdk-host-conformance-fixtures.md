@@ -45,6 +45,16 @@ budgets, and host/runtime identity. The canonical case IDs should be shared
 between WASM and native SDKs. An absent or unsupported provider is not a skip
 or a pass. A runtime error cannot be rewritten as a success by the adapter.
 
+The present OCI provider always remains `provider-unavailable` here, even
+if ordinary managed-container activation is marked ready. An executable
+native Call Cell SDK/broker path is a separate, owner-certified capability,
+not implied by container lifecycle readiness.
+
+The fixture requires same-mode denial coverage as well as cross-mode refusal,
+including specifically the missing-outbound-authorization, emit budget and
+nested-target denial scenarios. These are **planned acceptance obligations**,
+not assertions that native execution already exists.
+
 The tool deliberately does not accept handwritten `passed` flags or a
 manually selected provider override. Only the real execution tests and
 independently reviewed receipts can close the portability acceptance ladder.

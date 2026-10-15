@@ -52,8 +52,10 @@ function providerStatus(provider, portability) {
     return runtime.genuineComponentExecution === true ?
       NOT_EXECUTED : UNAVAILABLE;
   }
-  return runtime.realContainerActivation === true ?
-    NOT_EXECUTED : UNAVAILABLE;
+  // Managed OCI activation alone does not enable native Call Cell invoke.
+  // This preparatory tool cannot certify the missing broker/SDK execution
+  // path. Only an owner-reviewed capability contract can change this state.
+  return UNAVAILABLE;
 }
 
 function validFixtureHeader(fixture, inventory) {
@@ -162,9 +164,32 @@ function validateMethodCoverage(inventory, cases, problems) {
         item.mode === mode && item.expectation === 'accepted')) {
         problems.push(`missing admitted scenario: ${iface.name}.${method.name}`);
       }
-      if (!matching.some((item) => item.expectation === 'refused')) {
-        problems.push(`missing refusal scenario: ${iface.name}.${method.name}`);
+      if (!matching.some((item) => item.mode === mode &&
+        item.expectation === 'refused')) {
+        problems.push(`missing same-mode refusal scenario: ${iface.name}.${method.name}`);
       }
+      if (!matching.some((item) => item.mode !== mode &&
+        item.expectation === 'refused')) {
+        problems.push(`missing cross-mode refusal scenario: ${iface.name}.${method.name}`);
+      }
+    }
+  }
+}
+
+const REQUIRED_DENIAL_SCENARIOS = Object.freeze([
+  ['context', 'call-binding', 'request', 'missing-outbound-authorization'],
+  ['call-context', 'emit', 'call', 'emit-budget-exhausted'],
+  ['call-context', 'call-bounded', 'call', 'undeclared-nested-target'],
+  ['call-context', 'call-bounded', 'call', 'nested-call-budget-exhausted'],
+]);
+
+function validateRequiredDenials(cases, problems) {
+  const entries = cases.map((entry) => entry.case);
+  for (const [iface, method, mode, scenario] of REQUIRED_DENIAL_SCENARIOS) {
+    if (!entries.some((item) => item.interface === iface &&
+        item.function === method && item.mode === mode &&
+        item.scenario === scenario && item.expectation === 'refused')) {
+      problems.push('missing required denial scenario: ' + scenario);
     }
   }
 }
@@ -204,6 +229,7 @@ function evaluateSdkHostConformance(inputs) {
   validateWorlds(inventory, problems);
   const cases = collectCases(inventory, fixture, problems);
   validateMethodCoverage(inventory, cases, problems);
+  validateRequiredDenials(cases, problems);
   const providerStates = validateProviders(portability, problems);
   if (problems.length > 0) return {valid: false, problems, plan: []};
   return {

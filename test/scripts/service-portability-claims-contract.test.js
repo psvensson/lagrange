@@ -178,7 +178,7 @@ tap.test('native SDK parity cannot be claimed by smuggling a passed state',
     t.end();
   });
 
-tap.test('native container activation alone is not host-capability proof',
+tap.test('native container activation alone cannot enable OCI Call Cells',
   (t) => {
     const inputs = sdkInputs();
     inputs.portability.runtimes.oci_container.realContainerActivation = true;
@@ -186,7 +186,7 @@ tap.test('native container activation alone is not host-capability proof',
     t.equal(result.valid, true, result.problems.join('; '));
     t.ok(result.plan.filter((entry) =>
       entry.provider === 'oci_container').every((entry) =>
-      entry.status === 'requires-runtime-evidence'));
+      entry.status === 'provider-unavailable'));
     t.end();
   });
 
@@ -256,3 +256,59 @@ tap.test('an extra host interface on a single-mode WIT world is not ignored',
     t.match(result.problems.join('; '), /WIT world admission changed/u);
     t.end();
   });
+
+tap.test('removing a same-mode request binding refusal fails closed',
+  (t) => {
+    const inputs = sdkInputs();
+    inputs.fixture.cases = inputs.fixture.cases.filter((item) =>
+      item.id !== 'request-binding-denied');
+    const result = evaluateSdkHostConformance(inputs);
+    t.equal(result.valid, false);
+    t.match(result.problems.join('; '), /same-mode refusal|missing required denial/u);
+    t.end();
+  });
+
+tap.test('removing call emit budget refusal fails closed', (t) => {
+  const inputs = sdkInputs();
+  inputs.fixture.cases = inputs.fixture.cases.filter((item) =>
+    item.id !== 'call-emit-budget-denied');
+  const result = evaluateSdkHostConformance(inputs);
+  t.equal(result.valid, false);
+  t.match(result.problems.join('; '), /same-mode refusal|missing required denial/u);
+  t.end();
+});
+
+tap.test('undeclared nested target refusal cannot be replaced by budget denial',
+  (t) => {
+    const inputs = sdkInputs();
+    inputs.fixture.cases = inputs.fixture.cases.filter((item) =>
+      item.id !== 'call-nested-undeclared-denied');
+    const result = evaluateSdkHostConformance(inputs);
+    t.equal(result.valid, false);
+    t.match(result.problems.join('; '), /missing required denial scenario/u);
+    t.end();
+  });
+
+tap.test('same-mode refusal coverage is independent of cross-mode denials',
+  (t) => {
+    const inputs = sdkInputs();
+    inputs.fixture.cases = inputs.fixture.cases.filter((item) =>
+      item.id !== 'request-read-policy-denied');
+    const result = evaluateSdkHostConformance(inputs);
+    t.equal(result.valid, false);
+    t.match(result.problems.join('; '), /missing same-mode refusal/u);
+    t.end();
+  });
+
+tap.test('unknown OCI readiness projection remains unavailable', (t) => {
+  const inputs = sdkInputs();
+  inputs.portability.runtimes.oci_container.realContainerActivation = true;
+  inputs.portability.runtimes.oci_container.nativeCallCellInvocation =
+    'reported-ready';
+  const result = evaluateSdkHostConformance(inputs);
+  t.equal(result.valid, true, result.problems.join('; '));
+  t.ok(result.plan.filter((entry) =>
+    entry.provider === 'oci_container').every((entry) =>
+    entry.status === 'provider-unavailable'));
+  t.end();
+});

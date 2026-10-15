@@ -130,6 +130,30 @@
       "function": "call-bounded",
       "scenario": "call-capability-in-request-mode",
       "expectation": "refused"
+    },
+    {
+      "id": "request-read-policy-denied",
+      "mode": "request",
+      "interface": "context",
+      "function": "read",
+      "scenario": "undeclared-table-read",
+      "expectation": "refused"
+    },
+    {
+      "id": "request-write-policy-denied",
+      "mode": "request",
+      "interface": "context",
+      "function": "write",
+      "scenario": "undeclared-table-write",
+      "expectation": "refused"
+    },
+    {
+      "id": "request-probe-policy-denied",
+      "mode": "request",
+      "interface": "context",
+      "function": "capability",
+      "scenario": "unavailable-capability-probe",
+      "expectation": "refused"
     }
   ]
 }
