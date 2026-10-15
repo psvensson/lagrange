@@ -1,0 +1,52 @@
+{
+  "format": "runtime-result-credit-publication/1",
+  "packetCommit": "d5a2a7821d99c6445bc21128fb80803ac4d3ab17",
+  "testCheckpoint": "f02153dbd406ef55010d596fe15579890bc97e5c",
+  "contractSha256": "785993d39dd966a20461c3fb8563826d2fa785c6a523e68335b65908f4928684",
+  "archiveVerification": {
+    "archive": "/home/peter/Downloads/LAGRANGE_RUNTIME_RESULT_CREDIT_20261015T132003Z.tar.gz",
+    "sha256": "ba56d1c6c16396583adb78b8301a51f0010dd744b983fe6fe4ba5e06be8a31f1",
+    "bytes": 251387,
+    "manifestSha256": "9c93ad193e868a824428b61de3e118dad36b77e52c44e3a30d92cecea042b3e9",
+    "payloadFiles": 59,
+    "members": 60,
+    "packetCommit": "d5a2a7821d99c6445bc21128fb80803ac4d3ab17",
+    "testCheckpoint": "f02153dbd406ef55010d596fe15579890bc97e5c",
+    "verifiedEveryPayloadMember": true
+  },
+  "publication": {
+    "id": "seed-control-current-proof-amortization",
+    "uploaded": {
+      "sha256": "ba56d1c6c16396583adb78b8301a51f0010dd744b983fe6fe4ba5e06be8a31f1",
+      "bytes": 251387,
+      "asset": "seed-control-current-proof-amortization--LAGRANGE_RUNTIME_RESULT_CREDIT_20261015T132003Z.tar.gz",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/seed-control-current-proof-amortization--LAGRANGE_RUNTIME_RESULT_CREDIT_20261015T132003Z.tar.gz"
+    },
+    "entry": {
+      "ts": "2026-10-15T13:20:21.968Z",
+      "type": "finding",
+      "kind": "evidence",
+      "text": "Runtime/result credit review: recorder-only native ROLLBACK checkpoint f02153dbd406ef55010d596fe15579890bc97e5c passes once on locked lenovo-laptop; exact capacity contract 785993d39dd966a20461c3fb8563826d2fa785c6a523e68335b65908f4928684 retained for content-bound review. Complete-system bounds and ordered retirement progress remain blocked; production, successor activation/sealing and merge remain HOLD.",
+      "evidence": "sha256:ba56d1c6c16396583adb78b8301a51f0010dd744b983fe6fe4ba5e06be8a31f1",
+      "asset": "seed-control-current-proof-amortization--LAGRANGE_RUNTIME_RESULT_CREDIT_20261015T132003Z.tar.gz",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/seed-control-current-proof-amortization--LAGRANGE_RUNTIME_RESULT_CREDIT_20261015T132003Z.tar.gz",
+      "bytes": 251387
+    }
+  },
+  "canonicalUploadDownloadHashVerified": true,
+  "evidencePublisherSourceSha256": "0896d7bee16e9f584176bc7a33a28833d8fa9ea2b7c505a345237ee2d532eee8",
+  "questLogPrefixPreserved": true,
+  "questLogNewRecords": 1,
+  "sharedFinal": {
+    "head": "0996d7576516af24f5f4d3e1e9aee37c775aabae",
+    "stagedPaths": 18,
+    "stagedSha256": "0b2ea79142a13f4dcada523f01108fbd8a4809492838e23f7a0246a7159953fc",
+    "stagedSame": true,
+    "statusSame": true
+  },
+  "mainObserved": "52399faabb412a291a3a4dfb0feadb4bcad12cec",
+  "priorDecisionBranchObserved": "fb3c09d4a90952ee57bb2de09aa1e0b6cf1f2e9c",
+  "publicationScope": "unique archive and non-main preservation branch only; no merge/Quest seal/activation",
+  "manifest": "59 payload members plus MANIFEST.json; every payload hash and length checked locally. Canonical publisher downloaded and rehashed complete archive before appending finding.",
+  "rawWhitespace": "git diff --check reports whitespace inside unchanged negative-control raw TAP and exact original probe bytes; preserved per evidence requirement. Normal commit hooks passed."
+}
