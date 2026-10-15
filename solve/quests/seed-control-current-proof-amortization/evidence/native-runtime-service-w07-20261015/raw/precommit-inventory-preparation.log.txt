@@ -1,0 +1,5 @@
+Error: owner-debt import graph report is stale; rerun with --refresh
+    at readImportGraphReport (file:///mnt/data/peter/projects/.worktrees/native-runtime-service-w07-20261015/scripts/generate-global-owner-debt-inventory.js:910:11)
+    at collectLiveInputs (file:///mnt/data/peter/projects/.worktrees/native-runtime-service-w07-20261015/scripts/generate-global-owner-debt-inventory.js:931:23)
+    at async buildInventory (file:///mnt/data/peter/projects/.worktrees/native-runtime-service-w07-20261015/scripts/generate-global-owner-debt-inventory.js:976:5)
+    at async runCli (file:///mnt/data/peter/projects/.worktrees/native-runtime-service-w07-20261015/scripts/generate-global-owner-debt-inventory.js:1000:21)

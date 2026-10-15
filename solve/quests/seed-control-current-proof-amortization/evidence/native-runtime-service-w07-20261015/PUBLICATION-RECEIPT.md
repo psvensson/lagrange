@@ -23,7 +23,11 @@ prefix; exactly one new line was added. Publication/ archive receipts generated
 after packing are Git-side records, not self-referential archive payloads.
 The archive retains the complete new packet as text, including exact test and
 executor `.txt` copies; prior packets remain at their existing refs/assets.
-Private staged-patch bytes and full process command lines were excluded.
+Git ignores `*.log`, so Git-side `.log.txt` mirrors retain each original log's
+exact bytes. The archive/manifest keep the original `.log` names; this is an
+intentional path-layout difference, not a rerun or rewritten log. Raw TAP and
+parsed event traces are directly present in Git. Private staged-patch bytes
+and full process command lines were excluded.
 
 The only native execution is the first whole file on locked lenovo-laptop:
 3 passing controls, 1 intended semantic RED, exit 1, 3,005 ms. No rerun.
