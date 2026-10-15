@@ -54,7 +54,7 @@ function trace(t, label, data) {
     typeof value === 'bigint' ? value.toString() : value)}`);
 }
 
-async function nativeFixture(t) {
+async function nativeFixture(t, attachQueryRelease = null) {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
   ConfigurationManager.getInstance().initialize({node: {id: NODE_ID},
@@ -75,18 +75,24 @@ async function nativeFixture(t) {
       schema: {columns: [{name: 'id', type: 'TEXT', primaryKey: true},
         {name: 'value', type: 'TEXT'}]}}});
   let owners = null;
+  let queryRelease = null;
   t.after(async () => {
     try {
       await owners?.dispose();
     } finally {
-      transport.deliver = async () => undefined;
-      await group.dispose();
-      ConfigurationManager.resetInstance();
-      LoggingService.resetInstance();
+      try {
+        await queryRelease?.dispose();
+      } finally {
+        transport.deliver = async () => undefined;
+        await group.dispose();
+        ConfigurationManager.resetInstance();
+        LoggingService.resetInstance();
+      }
     }
   });
   owners = await attachPartitionReleaseOwners(group.services,
     {directory: path.dirname(group.dbFileOf(MEMBERS[0])), budgetMs: BUDGET_MS});
+  if (attachQueryRelease !== null) queryRelease = await attachQueryRelease({group, owners});
   const released = await owners.release(PARTITION_ID);
   trace(t, 'initial-release', released);
   const leader = group.services.find((service) => service.raft.readStatus().role ===
@@ -116,7 +122,7 @@ async function nativeFixture(t) {
     assert.equal(answer.success, true, JSON.stringify(answer));
     return identity;
   };
-  return {group, owners, leader, views, waitRows, pause, stage};
+  return {group, owners, leader, views, waitRows, pause, stage, queryRelease};
 }
 
 export {nativeFixture, trace, INSERT_SQL};

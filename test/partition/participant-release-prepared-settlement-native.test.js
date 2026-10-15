@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {performance} from 'node:perf_hooks';
 import {test} from 'node:test';
 import {nativeFixture, trace, INSERT_SQL} from './participant-release-tx1-native-fixture.js';
 import {coordinatorIntent, recordRollback, finishCoordinator} from
@@ -6,10 +7,15 @@ import {coordinatorIntent, recordRollback, finishCoordinator} from
 import {beginMessage, identityOf, prepareMessage, send, commitMessage} from
   '../test-helpers/participant-transaction-fixture.js';
 import {PARTITION_SERVICE_OPERATION as OP} from '../../src/partition/partition-service-constants.js';
+import {attachQueryRelease} from './participant-release-query-engine-fixture.js';
+import {readTransactionReleaseCensus} from
+  '../../src/query/distributed/distributed-transaction-release-census.js';
+import {transactionReleaseProofValid} from
+  '../../src/partition/partition-participant-release-contract.js';
 
 test('durable PREPARE replay and recorded coordinator ROLLBACK settle while admission is closed',
   {timeout: 30000}, async (t) => {
-    const f = await nativeFixture(t);
+    const f = await nativeFixture(t, attachQueryRelease);
     const control = f.owners.control;
     await f.owners.release(control.partitionId);
     const identity = await f.stage('b');
@@ -54,9 +60,37 @@ test('durable PREPARE replay and recorded coordinator ROLLBACK settle while admi
       {denied, prepared, before, replay, decision, settled, after,
         replayDecision, opposite, terminalPrepare, ordinary});
     await finishCoordinator(control, base, decision.message.decisionDigest);
-    const reopened = await f.owners.release(f.leader.partitionId);
-    trace(t, 'later-local-reauthorization', {reopened, views: f.views(identity)});
+    const authority = await f.queryRelease.engine
+      .readDistributedTransactionRecoveryState(identity.transactionId);
+    assert.equal(authority.state, 'available', JSON.stringify(authority));
+    assert.equal(authority.transaction.status, 'ROLLED_BACK');
+    assert.equal(authority.transaction.decision_digest, decision.message.decisionDigest);
+    assert.deepEqual(authority.participants, [], 'actual native progress table is empty');
+    assert.equal(readTransactionReleaseCensus(control.db).state, 'held');
+    const {deliveries, proofs} = f.queryRelease;
+    const releaseStartedAt = performance.now();
+    let reopened = null;
+    try {
+      reopened = await f.owners.release(f.leader.partitionId);
+    } finally {
+      trace(t, 'later-local-reauthorization', {reopened, authority, deliveries, proofs,
+        routing: f.queryRelease.routing, releaseElapsedMs: performance.now() - releaseStartedAt});
+    }
+    trace(t, 'reauthorized-participant-rows', f.views(identity));
     assert.ok(f.views(identity).every((v) => v.admission.state === 'open'));
     assert.deepEqual(f.views(identity).map((v) => v.participant),
       after.map((v) => v.participant), 'reauthorization cannot erase a terminal outcome');
+    assert.ok(deliveries.some(({payload, answer}) =>
+      payload.operation === OP.ROLLBACK && payload.transactionId === identity.transactionId &&
+      payload.decisionDigest === decision.message.decisionDigest &&
+      answer.state === 'ROLLED_BACK' && answer.decisionIndex === settled.decisionIndex));
+    assert.ok(proofs.length > 0, 'release actually carried a QueryEngine discharge proof');
+    for (const {payload} of proofs) {
+      const census = payload.census.find((facts) =>
+        facts.generation.replicaId === control.replicaId).queryCensus;
+      assert.equal(transactionReleaseProofValid(payload.queryDrainProof,
+        {release: payload.release, attempt: payload.attempt, census}), true);
+    }
+    assert.equal(readTransactionReleaseCensus(control.db).state, 'held');
+    assert.equal(control.db.prepare('SELECT count(*) AS n FROM sql_transactions').get().n, 1);
   });

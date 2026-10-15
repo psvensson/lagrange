@@ -658,7 +658,8 @@
         "test/node/replica-handler-replica-membership.test.js",
         "test/partition/participant-release-protocol.test.js",
         "test/bootstrap/seed-participant-release-failure-projection.test.js",
-        "test/partition/participant-release-native-application-order.test.js"
+        "test/partition/participant-release-native-application-order.test.js",
+        "test/partition/participant-release-prepared-settlement-native.test.js"
       ]
     },
     "partition-raft-operation-port": {
@@ -1606,7 +1607,8 @@
         "test/node/replica-handler-replica-membership.test.js",
         "test/partition/participant-release-protocol.test.js",
         "test/bootstrap/seed-participant-release-failure-projection.test.js",
-        "test/partition/participant-release-native-application-order.test.js"
+        "test/partition/participant-release-native-application-order.test.js",
+        "test/partition/participant-release-prepared-settlement-native.test.js"
       ]
     },
     "partition-raft-operation-port": {
