@@ -660,7 +660,8 @@
         "test/bootstrap/seed-participant-release-failure-projection.test.js",
         "test/partition/participant-release-native-application-order.test.js",
         "test/partition/participant-release-prepared-settlement-native.test.js",
-        "test/partition/participant-release-delivery-recorder.test.js"
+        "test/partition/participant-release-delivery-recorder.test.js",
+        "test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js"
       ]
     },
     "partition-raft-operation-port": {
