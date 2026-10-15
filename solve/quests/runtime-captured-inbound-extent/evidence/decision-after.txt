@@ -1,0 +1,5 @@
+Scanned 1 JavaScript files
+Found 2 decision-boundary guideline violations
+Top files:
+- src/raft/raft-rs-runtime-owner.js: 2
+Matched 0 inherited decision-boundary baseline violations

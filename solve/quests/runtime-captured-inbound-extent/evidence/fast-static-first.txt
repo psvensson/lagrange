@@ -1,0 +1,17 @@
+proof range: a7e821154f1039df82bfc73ef4f2e25e4fa0468d..HEAD (flag)
+changed paths: 58 (3 JavaScript)
+  ok   6682ms  test:deps
+  ok   1602ms  audit:shards
+  ok    697ms  test:metrics:scoped
+  ok    626ms  audit:runtime-grammar
+  ok    447ms  audit:current-capabilities
+  ok    437ms  eslint(3 changed)
+  ok    168ms  audit:doc-ascii
+  ok    129ms  test:metadata-gateway:audit
+  ok    113ms  audit:impact-contracts
+  ok     98ms  audit:roadmap-authority
+  ok     87ms  audit:doc-audience
+  ok     76ms  audit:cli-docs
+  ok     74ms  audit:closure-ledger
+  ok     72ms  audit:service-portability-claims
+fast-static: ok in 11308ms
