@@ -8,6 +8,7 @@
  * @module wasm-service/wasm-service-replica
  */
 
+import {initializeWasmCreationContext} from './wasm-creation-opening.js';
 import {EventEmitter} from 'node:events';
 import {AddressManager} from '../address/address-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
@@ -50,7 +51,7 @@ import {
   shutdownWasmServiceReplica,
 } from './wasm-service-replica-lifecycle.js';
 import {
-  admitWasmServiceCommand,
+  admitWasmServiceCommand, admitWasmBootstrapCommand,
   wasmServiceCommandRefusalError,
 } from './wasm-service-committed-command-admission.js';
 import {
@@ -113,6 +114,8 @@ class WasmServiceReplica extends EventEmitter {
     this.replicaIds = [...options.replicaIds];
     this.transport = options.transport || null;
     this.dbPath = options.dbPath;
+    initializeWasmCreationContext(this, options);
+    this.providedTimeSource = options.timeSource;
     this.entityType = SERVICE_TYPE.WASM_SERVICE;
     this.addressManager = AddressManager.getInstance();
     this.unifiedAddress = this.addressManager.format(
@@ -277,7 +280,13 @@ class WasmServiceReplica extends EventEmitter {
     }
   }
 
-  /** @return {boolean} Whether the replica is open and serving (READY). */
+  /** @return {Object|null} Explicit user refusal while creation is only bootstrapped. */
+  heldCreationRefusal() {
+    return this.consensusCreation === null ? null :
+      {status: WRITER_STATUS.REFUSED, reason: WRITER_REASON.NOT_READY, identity: null};
+  }
+
+  /** @return {boolean} Whether native opening is READY, independently of serving. */
   get initialized() {
     return this.lifecycleState === WASM_SERVICE_REPLICA_STATE.READY;
   }
@@ -345,6 +354,8 @@ class WasmServiceReplica extends EventEmitter {
       }
       return {acknowledged: true};
     }
+    const refusal = this.heldCreationRefusal();
+    if (refusal !== null) return refusal;
     const operation = payload.operation || payload.op;
 
     if (operation === MESSAGE_OP.READ) {
@@ -367,6 +378,8 @@ class WasmServiceReplica extends EventEmitter {
    * @private
    */
   _handleRead(payload) {
+    const refusal = this.heldCreationRefusal();
+    if (refusal !== null) return refusal;
     const decision = routeRead(
       this.readConsistency,
       this.isLeader,
@@ -405,6 +418,8 @@ class WasmServiceReplica extends EventEmitter {
    * @private
    */
   async _handleWrite(payload) {
+    const refusal = this.heldCreationRefusal();
+    if (refusal !== null) return refusal;
     if (!this.isLeader) {
       return {forwarded: true, leaderId: this.leaderId};
     }
@@ -444,7 +459,8 @@ class WasmServiceReplica extends EventEmitter {
    * @return {Promise<Object>} The port's CORE_OK answer.
    */
   async proposeEntry(entry) {
-    const admission = admitWasmServiceCommand(entry);
+    const admission = this.consensusCreation === null ?
+      admitWasmServiceCommand(entry) : admitWasmBootstrapCommand(entry);
     if (!admission.admitted) {
       throw wasmServiceCommandRefusalError(admission);
     }
@@ -470,6 +486,7 @@ class WasmServiceReplica extends EventEmitter {
    * @param {string} role - The role the port announced.
    */
   queueRoleUpdate(role) {
+    if (this.consensusCreation !== null) return;
     if (!role || role === this.persistedRole) {
       return;
     }
@@ -491,6 +508,7 @@ class WasmServiceReplica extends EventEmitter {
    * @param {string} leaderNodeId - The leading node.
    */
   queueLeaderNodeUpdate(leaderNodeId) {
+    if (this.consensusCreation !== null) return;
     if (!leaderNodeId || leaderNodeId === this.persistedLeaderNodeId) {
       return;
     }
@@ -523,6 +541,7 @@ class WasmServiceReplica extends EventEmitter {
    * Reconstructs timers and starts safety interval broadcasts.
    */
   onBecameLeader() {
+    if (this.consensusCreation !== null) return;
     this.logger.info(WASM_SERVICE_LOG_MSG.BECAME_LEADER, {
       replicaId: this.replicaId,
       serviceDefinitionId: this.serviceDefinitionId,
@@ -561,6 +580,7 @@ class WasmServiceReplica extends EventEmitter {
    * @return {Promise<void>}
    */
   async flushRoleUpdate() {
+    if (this.consensusCreation !== null) return;
     return this.roleMutationHelper.flush();
   }
 
@@ -570,6 +590,7 @@ class WasmServiceReplica extends EventEmitter {
    * @return {Promise<void>}
    */
   async flushLeaderNodeUpdate() {
+    if (this.consensusCreation !== null) return;
     return this.leaderNodeMutationHelper.flush();
   }
 

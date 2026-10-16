@@ -18,7 +18,6 @@ import {REPLICA_OPERATION_CREATE_ADMISSION_COLUMNS} from
 import {REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_COLUMNS,
   REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_LANE_INDEX} from
   './replica-operation-message-group-membership-schema-constants.js';
-
 const CONTROL_PLANE_PUBLICATIONS_SCHEMA = {
   tableName: SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
   columns: [
@@ -586,9 +585,7 @@ const MODULE_DEPENDENCY_LOCKS_SCHEMA = {
   ],
 };
 
-/**
- * WASM operations system table schema.
- * Stores async operation workflow state and idempotency metadata.
+/** WASM operation workflow, creation origin, first opening and idempotency metadata.
  * Requirements: 8.1, 8.3, 10.1, 10.2
  */
 const WASM_OPERATIONS_SCHEMA = {
@@ -596,6 +593,7 @@ const WASM_OPERATIONS_SCHEMA = {
   columns: [
     {name: WO_COL.INTENT_JSON, type: COLUMN_TYPE.TEXT},
     {name: WO_COL.ADMISSION_JSON, type: COLUMN_TYPE.TEXT},
+    {name: WO_COL.OPENING_JSON, type: COLUMN_TYPE.TEXT},
     {name: 'operation_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
     {name: 'tenant_id', type: COLUMN_TYPE.TEXT, notNull: true},
     {name: 'command', type: COLUMN_TYPE.TEXT, notNull: true},

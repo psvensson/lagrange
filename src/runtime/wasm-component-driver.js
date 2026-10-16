@@ -1,3 +1,5 @@
+import {hasConsensusCreation, captureConsensusBootstrap, CONSENSUS_BOOTSTRAP} from
+  '../service/service-consensus-bootstrap.js';
 /**
  * Wasm_Component_Driver — runtime driver for WASM component
  * workloads running inside replicated service runtime.
@@ -18,7 +20,6 @@
  *
  * @module runtime/wasm-component-driver
  */
-
 import {RUNTIME_KIND, RUNTIME_FIELD} from '../constants/runtime.js';
 import {FIELD} from '../constants/fields.js';
 import {CancellationToken} from '../query/cancellation-token.js';
@@ -141,7 +142,6 @@ function buildDriverStatusResult(status, error, detailKey, detailValue) {
   return result;
 }
 
-
 function buildDriverServiceScopedError(baseMessage, serviceId) {
   return `${baseMessage}${DRIVER_SEPARATOR.DETAIL}'${serviceId}'`;
 }
@@ -216,14 +216,6 @@ async function resolveRuntimeAccessTables(replicaContext) {
  * Wasm_Component_Driver — delegates to WasmServiceLifecycle
  * for actual WASM replica management while conforming to the
  * unified RuntimeDriver contract.
- *
- * Usage:
- *   const driver = new WasmComponentDriver({wasmServiceLifecycle});
- *   const validation = driver.validateDescriptor(definition);
- *   await driver.prepare(definition, context);
- *   await driver.start(replicaContext);
- *   const health = await driver.health(replicaContext);
- *   await driver.stop(replicaContext);
  *
  * @extends RuntimeDriver
  */
@@ -323,9 +315,7 @@ class WasmComponentDriver extends RuntimeDriver {
    * Delegates to the composition root's WasmServiceLifecycle,
    * when one is wired, to create the placed consensus replica.
    *
-   * Idempotent: re-preparing an already-prepared service
-   * updates the stored definition.
-   *
+   * Bound re-entry preserves the captured original instance, not a new definition.
    * @param {Object} definition - The service definition.
    * @param {Object} context - Optional prepare context.
    * @return {Promise<{status: string, error?: string}>}
@@ -351,11 +341,20 @@ class WasmComponentDriver extends RuntimeDriver {
 
     const serviceId = resolveDriverServiceId(definition);
 
-    if (isRequestCellDefinition(definition)) {
+    if (hasConsensusCreation(definition)) {
+      if (isRequestCellDefinition(definition) || this._requestCells.has(serviceId)) {
+        return buildDriverStatusResult(
+          PREPARE_STATUS.FAILED, CONSENSUS_BOOTSTRAP.CONTEXT_REQUIRED);
+      }
+      return this.#prepareConsensusReplica(definition, serviceId, context);
+    } else if (hasConsensusCreation(this._prepared.get(serviceId))) {
+      return buildDriverStatusResult(
+        PREPARE_STATUS.FAILED, CONSENSUS_BOOTSTRAP.CONTEXT_REQUIRED);
+    } else if (isRequestCellDefinition(definition)) {
       return this.#prepareRequestCell(definition, serviceId);
+    } else {
+      return this.#prepareConsensusReplica(definition, serviceId, context);
     }
-
-    return this.#prepareConsensusReplica(definition, serviceId);
   }
 
   async #prepareRequestCell(definition, serviceId) {
@@ -393,7 +392,7 @@ class WasmComponentDriver extends RuntimeDriver {
     }
   }
 
-  #prepareConsensusReplica(definition, serviceId) {
+  #prepareConsensusReplica(definition, serviceId, context) {
     const lifecycle = this._wasmServiceLifecycle;
     if (!lifecycle) {
       return buildDriverStatusResult(
@@ -402,10 +401,17 @@ class WasmComponentDriver extends RuntimeDriver {
       );
     }
     try {
-      lifecycle.createReplica(definition, {
-        replicaId: definition[FIELD.REPLICA_ID],
-        replicaIds: definition[FIELD.REPLICA_IDS],
-      });
+      if (hasConsensusCreation(definition)) {
+        const {origin} = captureConsensusBootstrap(definition, context);
+        const app = JSON.parse(origin.intent.descriptor.runtimeConfig).definition;
+        lifecycle.createReplica({...app, serviceId}, {consensusCreation: origin,
+          consensusOpeningOwner: context.consensusOpeningOwner});
+      } else {
+        lifecycle.createReplica(definition, {
+          replicaId: definition[FIELD.REPLICA_ID],
+          replicaIds: definition[FIELD.REPLICA_IDS],
+        });
+      }
     } catch (cause) {
       return buildDriverStatusResult(
         PREPARE_STATUS.FAILED,
@@ -459,7 +465,12 @@ class WasmComponentDriver extends RuntimeDriver {
       );
     }
 
+    const bound = hasConsensusCreation(this._prepared.get(serviceId));
+    const incomingBound = hasConsensusCreation(replicaContext.definition ?? replicaContext);
     const requestCell = this._requestCells.get(serviceId);
+    if (bound !== incomingBound || (bound && requestCell)) {
+      return {status: START_STATUS.FAILED, error: CONSENSUS_BOOTSTRAP.CONTEXT_REQUIRED};
+    }
     if (requestCell) {
       return this.#startRequestCell(
         requestCell,
@@ -507,9 +518,14 @@ class WasmComponentDriver extends RuntimeDriver {
 
   async #startConsensusReplica(lifecycle, replicaContext, serviceId) {
     try {
-      const startResult = await lifecycle.startReplica(
-        serviceId, replicaContext.startOptions,
-      );
+      const definition = this._prepared.get(serviceId);
+      let startOptions = replicaContext.startOptions;
+      if (hasConsensusCreation(definition)) {
+        const {origin} = captureConsensusBootstrap(definition, replicaContext);
+        const app = JSON.parse(origin.intent.descriptor.runtimeConfig).definition;
+        startOptions = {handlerFunctionId: app.handlerFunctionId};
+      }
+      const startResult = await lifecycle.startReplica(serviceId, startOptions);
       return this.#projectConsensusStartResult(
         startResult,
         replicaContext,
@@ -530,6 +546,12 @@ class WasmComponentDriver extends RuntimeDriver {
         START_STATUS.FAILED,
         WASM_COMPONENT_ERROR.START_REPLICA_NO_RESULT,
       );
+    }
+    if (startResult.status === CONSENSUS_BOOTSTRAP.HELD &&
+        startResult.bootstrapped === true && startResult.started === false) {
+      return {status: CONSENSUS_BOOTSTRAP.HELD,
+        consensusBinding: startResult.consensusBinding,
+        consensusResourceToken: startResult.consensusResourceToken};
     }
     if (startResult.started === false) {
       const result = buildDriverStatusResult(

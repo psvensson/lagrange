@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2382,
+    "ordinary": 2383,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2399,
-  "digest": "fnv1a32-9f9c13b0",
+  "censusSize": 2400,
+  "digest": "fnv1a32-35f8c6fb",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -2386,6 +2386,7 @@
     "test/wasm-service/wasm-executor.test.js": "ordinary",
     "test/wasm-service/wasm-meta-models.property.test.js": "ordinary",
     "test/wasm-service/wasm-meta-models.test.js": "ordinary",
+    "test/wasm-service/wasm-retained-bootstrap.integration.test.js": "ordinary",
     "test/wasm-service/wasm-service-constants.test.js": "ordinary",
     "test/wasm-service/wasm-service-lifecycle.test.js": "ordinary",
     "test/wasm-service/wasm-service-models.property.test.js": "ordinary",

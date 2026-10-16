@@ -9,7 +9,7 @@ import {
   WASM_SERVICE_COMMAND_TYPE,
   WASM_SERVICE_ERROR_MSG,
 } from './wasm-service-constants.js';
-import {WASM_WRITER_PROFILE} from './wasm-writer-profile.js';
+import {WASM_WRITER_PROFILE, WRITER_ACTION, WRITER_REASON} from './wasm-writer-profile.js';
 import {canonicalWriterCommand} from './wasm-writer-codec.js';
 
 const COMMITTED_COMMAND_TYPES = Object.freeze(
@@ -56,7 +56,18 @@ function wasmServiceCommandRefusalError(admission) {
   return error;
 }
 
+/** Only genesis can be submitted while a creation-bound replica is held. */
+function admitWasmBootstrapCommand(command) {
+  const admission = admitWasmServiceCommand(command);
+  if (!admission.admitted) return admission;
+  if (command.type === WASM_WRITER_PROFILE.type && command.action === WRITER_ACTION.INIT) {
+    return admission;
+  }
+  return {admitted: false, reason: WRITER_REASON.NOT_READY, type: command.type};
+}
+
 export {
+  admitWasmBootstrapCommand,
   WASM_SERVICE_COMMAND_REFUSAL,
   admitWasmServiceCommand,
   wasmServiceCommandRefusalError,

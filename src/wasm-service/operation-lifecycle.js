@@ -271,7 +271,22 @@ function buildRetainedCreationAdmissionSQL({operationId, tenantId, command, inte
   return {sql, params};
 }
 
+/** Retain first opening once, against the same live creation origin/token. */
+function buildRetainedCreationOpeningSQL({operationId, tenantId, command, intentJson,
+  admissionJson, openingJson, now}) {
+  const params = [openingJson, now, operationId, tenantId, command, intentJson,
+    admissionJson, WASM_OPERATION_STATE.IN_PROGRESS];
+  const sql = `${SQL.UPDATE} ${TABLES.WASM_OPERATIONS} ${SQL.SET} ` +
+    `${WO_COL.OPENING_JSON} = $1, ${WO_COL.UPDATED_AT} = $2 ` +
+    `${SQL.WHERE} ${WO_COL.OPERATION_ID} = $3 ${SQL.AND} ${WO_COL.TENANT_ID} = $4 ` +
+    `${SQL.AND} ${WO_COL.COMMAND} = $5 ${SQL.AND} ${WO_COL.INTENT_JSON} = $6 ` +
+    `${SQL.AND} ${WO_COL.ADMISSION_JSON} = $7 ${SQL.AND} ${WO_COL.STATE} = $8 ` +
+    `${SQL.AND} ${WO_COL.OPENING_JSON} IS NULL`;
+  return {sql, params};
+}
+
 export {
+  buildRetainedCreationOpeningSQL,
   buildRetainedCreationOperationSQL, buildRetainedCreationAdmissionSQL,
   OPERATION_LIFECYCLE_ERROR_MSG,
   VALID_TRANSITIONS,

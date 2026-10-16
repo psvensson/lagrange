@@ -1,3 +1,6 @@
+import {captureWasmCreation} from './wasm-creation-opening.js';
+import {CONSENSUS_BOOTSTRAP} from '../service/service-consensus-bootstrap.js';
+import {instanceDigest} from '../control-plane/owners/service-instance-contract.js';
 /**
  * WasmServiceLifecycle — manages creation, startup, and
  * shutdown of WasmServiceReplica instances from service
@@ -81,6 +84,14 @@ function lifecycleRefusal(code, message, serviceId) {
   return error;
 }
 
+function sameLiveCreation(current, creation) {
+  return creation !== null && current?.live && current.consensusCreation !== null &&
+    instanceDigest(current.consensusCreation) === instanceDigest(creation);
+}
+function physicalReplicaIdentity(creation, replicaConfig, serviceId) {
+  return creation === null ? {...replicaConfig, groupId: serviceId} : creation.identity;
+}
+
 /**
  * Manages the full lifecycle of WasmServiceReplica instances.
  * Tracks active replicas by serviceId and coordinates startup
@@ -99,6 +110,7 @@ class WasmServiceLifecycle {
    */
   constructor(dependencies = {}) {
     this.dependencies = dependencies;
+    this.consensusClosing = false;
 
     /** @type {Map<string, WasmServiceReplica>} */
     this.activeReplicas = new Map();
@@ -182,7 +194,13 @@ class WasmServiceLifecycle {
    */
   createReplica(serviceDefinition, replicaConfig) {
     const serviceId = serviceDefinition.serviceId;
+    const creation = captureWasmCreation(serviceDefinition, replicaConfig, this.nodeId);
+    if (creation !== null && this.consensusClosing) {
+      throw lifecycleRefusal(WASM_SERVICE_LIFECYCLE_REFUSAL.REPLICA_RETIRED,
+        WASM_SERVICE_ERROR_MSG.REPLICA_RETIRED, serviceId);
+    }
     const current = this.activeReplicas.get(serviceId);
+    if (sameLiveCreation(current, creation)) return current;
     const priorStop = [...this.retiringReplicas].some((replica) =>
       replica.serviceDefinitionId === serviceId &&
       (replica !== current || replica.lifecycleState ===
@@ -194,16 +212,21 @@ class WasmServiceLifecycle {
     if (current?.lifecycleState === WASM_SERVICE_REPLICA_STATE.STOPPING) {
       this.retiringReplicas.add(current);
     }
-    assertFoundingReplicaSet(replicaConfig.replicaId,
-      replicaConfig.replicaIds);
+    const physical = physicalReplicaIdentity(creation, replicaConfig, serviceId);
+    assertFoundingReplicaSet(physical.replicaId, physical.replicaIds);
     const dbPath = this.dataDirectoryManager.getWasmServiceDbPath(
-      serviceId, replicaConfig.replicaId,
+      physical.groupId, physical.replicaId,
     );
-    this.dataDirectoryManager.ensureWasmServiceDirExists(serviceId);
+    if (creation === null) this.dataDirectoryManager.ensureWasmServiceDirExists(serviceId);
     const replica = new WasmServiceReplica({
-      replicaId: replicaConfig.replicaId,
+      replicaId: physical.replicaId,
       nodeId: this.nodeId,
-      replicaIds: replicaConfig.replicaIds,
+      replicaIds: physical.replicaIds,
+      consensusCreation: creation,
+      consensusOpeningOwner: replicaConfig.consensusOpeningOwner,
+      dataDirectoryManager: this.dataDirectoryManager,
+      serviceDefinitionsOwner: this.dependencies.serviceDefinitionsOwner,
+      timeSource: this.dependencies.timeSource,
       transport: this.messageRouter,
       serviceDefinitionId: serviceId,
       dbPath,
@@ -320,6 +343,13 @@ class WasmServiceLifecycle {
         code: WASM_SERVICE_LIFECYCLE_REFUSAL.STOPPED_DURING_START,
         error: WASM_SERVICE_ERROR_MSG.STOPPED_DURING_START,
       }, replica);
+    }
+
+    if (replica.consensusCreation !== null) {
+      replica.portAllocation = port;
+      return {started: false, bootstrapped: true, status: CONSENSUS_BOOTSTRAP.HELD,
+        consensusBinding: replica.consensusCreation.intent.consensusBinding,
+        consensusResourceToken: replica.consensusCreation.token};
     }
 
     const endpoint = this.registerEndpoint(serviceId, startOptions, port);
@@ -589,6 +619,7 @@ class WasmServiceLifecycle {
    * @return {Promise<void>}
    */
   async shutdownAll() {
+    this.consensusClosing = true;
     const serviceIds = new Set([...this.activeReplicas.keys(),
       ...[...this.retiringReplicas].map((replica) => replica.serviceDefinitionId)]);
     const outcomes = await Promise.allSettled([...serviceIds].map((serviceId) =>

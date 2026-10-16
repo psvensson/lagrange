@@ -5,8 +5,10 @@
 // and both handles are released. The port's runtime owner makes every Raft
 // decision; nothing here reproduces one.
 
+import {requireInstance} from '../control-plane/owners/service-instance-contract.js';
 import {isRaftOpeningFailure, assertRaftOperationSucceeded} from
   '../raft/raft-operation-port.js';
+import {CONSENSUS_CREATION_OPENING as OPENING} from '../service/service-consensus-creation-intent.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
@@ -30,6 +32,7 @@ import {
 
 const LOCAL_STR_STRING = 'string';
 const SQLITE_MEMORY_PATH = ':memory:';
+const STORAGE_FILE_MISSING = 'ENOENT';
 
 /**
  * Refuse a replica without its own durable consensus file.
@@ -115,6 +118,12 @@ function resolveWasmServicePeerAddress(replica, replicaIdentity) {
   if (replicaIdentity === replica.replicaId) {
     return replica.unifiedAddress;
   }
+  if (replica.consensusCreation !== null) {
+    const peer = replica.consensusCreation.identity.peers.find((candidate) =>
+      candidate.physicalReplicaId === replicaIdentity);
+    if (!peer) throw new Error(`${WASM_SERVICE_ERROR_MSG.PEER_UNPLACED}: ${replicaIdentity}`);
+    return replica.addressManager.format(peer.nodeId, SERVICE_TYPE.WASM_SERVICE, replicaIdentity);
+  }
   const row = replica.systemTableCache?.get(TABLES.SERVICES, replicaIdentity);
   const placedNodeId = row && !isPartitionCleanupServiceRow(row) ?
     row[COLUMN.NODE_ID] : null;
@@ -137,7 +146,8 @@ function resolveWasmServicePeerAddress(replica, replicaIdentity) {
  */
 function wasmServiceConsensusRequest(replica) {
   return {
-    [RAFT_OPERATION_PORT_REQUEST.GROUP_ID]: replica.serviceDefinitionId,
+    [RAFT_OPERATION_PORT_REQUEST.GROUP_ID]:
+      replica.consensusCreation?.identity.groupId ?? replica.serviceDefinitionId,
     [RAFT_OPERATION_PORT_REQUEST.PEER_ID]: replica.replicaId,
     [RAFT_OPERATION_PORT_REQUEST.PEER_ADDRESS]: replica.unifiedAddress,
     [RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_PEER_IDS]: replica.replicaIds,
@@ -167,8 +177,19 @@ function wasmServiceConsensusRequest(replica) {
  * @return {Object} The open connection, also held as replica.db.
  */
 function openWasmServiceDatabase(replica) {
-  fs.mkdirSync(path.dirname(replica.dbPath), {recursive: true});
-  replica.db = new Database(replica.dbPath);
+  if (replica.creationOpening?.outcome === OPENING.RETAINED) {
+    try {
+      fs.statSync(replica.dbPath);
+    } catch (error) {
+      requireInstance(error.code !== STORAGE_FILE_MISSING, OPENING.STORAGE_MISSING);
+      throw error;
+    }
+  } else {
+    fs.mkdirSync(path.dirname(replica.dbPath), {recursive: true});
+  }
+  replica.db = new Database(replica.dbPath, {
+    fileMustExist: replica.creationOpening?.outcome === OPENING.RETAINED,
+  });
   replica.db.pragma(REPLICA_DB_PRAGMA.JOURNAL_MODE);
   replica.db.pragma(REPLICA_DB_PRAGMA.SYNCHRONOUS);
   return replica.db;
