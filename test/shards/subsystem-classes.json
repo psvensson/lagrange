@@ -19,16 +19,16 @@
     "services-runtime": 146,
     "solver-tooling": 7,
     "storage-partition": 189,
-    "storage-raft": 131,
+    "storage-raft": 134,
     "test-infrastructure": 143,
     "transactions": 16,
     "transport-messaging": 95,
-    "wasm-toolchain": 57
+    "wasm-toolchain": 58
   },
-  "censusSize": 2380,
-  "digest": "fnv1a32-3db4ea2e",
+  "censusSize": 2384,
+  "digest": "fnv1a32-a4919c8e",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-11230b96",
+  "observationDigest": "fnv1a32-cf1bd10a",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1628,9 +1628,12 @@
     "test/raft/raft-rs-backend/restart-from-durable-record.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/runtime-completion-consumers-partition.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/runtime-completion-consumers-transfers.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-trap-and-restore.test.js": "storage-raft",
     "test/raft/raft-rs-backend/runtime-turn-integrity.test.js": "storage-raft",
@@ -2398,6 +2401,7 @@
     "test/wasm-service/wasm-service-models.property.test.js": "wasm-toolchain",
     "test/wasm-service/wasm-service-models.test.js": "wasm-toolchain",
     "test/wasm-service/wasm-service-replica.test.js": "wasm-toolchain",
+    "test/wasm-service/wasm-strong-write-native-completion.test.js": "wasm-toolchain",
     "test/workflow/durable-workflow-coordinator.test.js": "transactions",
     "test/workflow/durable-workflow-recovery-identity.test.js": "transactions",
     "test/workflow/durable-workflow-storage-ownership.test.js": "transactions",
@@ -11179,6 +11183,71 @@
         "src/raft/raft-rs-runtime-owner.js"
       ]
     },
+    "test/raft/raft-rs-backend/runtime-completion-consumers-partition.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/bootstrap/system-table-workflow-schema-definitions.js",
+        "src/partition/partition-committed-statement-outcome-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-participant-transaction-session.js",
+        "src/partition/partition-participant-transaction-store.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-shared.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-ingress-constants.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/partition/participant-release-tx1-native-fixture.js",
+        "test/raft/raft-rs-backend/runtime-completion-consumers-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/participant-transaction-fixture.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/runtime-completion-consumers-transfers.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/bootstrap/system-table-workflow-schema-definitions.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-participant-transaction-session.js",
+        "src/partition/partition-participant-transaction-store.js",
+        "src/partition/partition-service-shared.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-ingress-constants.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/rebalancer/operation-workflow-owner-shared.js",
+        "src/rebalancer/operation-workflow-replace-handoff-attempt.js",
+        "src/rebalancer/operation-workflow-replace-surviving-membership.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/user-table-leader-placement-cure.js",
+        "test/raft/raft-rs-backend/runtime-completion-consumers-fixture.js",
+        "test/raft/raft-rs-backend/runtime-completion-consumers-transfer-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/participant-transaction-fixture.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
     "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js": {
       "files": [
         "package.json",
@@ -11205,6 +11274,23 @@
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js": {
+      "files": [
+        "src/partition/partition-service-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-ingress-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner-constants.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/raft/replica-election-timeouts.js",
+        "test/raft/raft-rs-backend/runtime-ordering-native-companion-fixture.js",
+        "test/raft/raft-rs-backend/transfer-leadership-drain-oracle-harness.js"
       ]
     },
     "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js": {
@@ -16001,6 +16087,23 @@
         "src/raft/raft-operation-port-constants.js",
         "src/wasm-service/wasm-service-committed-command-admission.js",
         "test/test-helpers/boot-incarnation-fixture.js"
+      ]
+    },
+    "test/wasm-service/wasm-strong-write-native-completion.test.js": {
+      "files": [
+        "src/constants/index.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/wasm-service/wasm-service-committed-command-codec.js",
+        "src/wasm-service/wasm-service-constants.js",
+        "src/wasm-service/wasm-service-replica.js",
+        "test/partition/partition-service-test-support.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js",
+        "test/wasm-service/wasm-strong-write-native-fixture.js"
       ]
     },
     "test/workflow/durable-workflow-coordinator.test.js": {

@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2926954,
-        "sha256": "f3328f4cffa24a502544d5ce7bce39e2df3a555ab00ffe118e08288fb4581ae1"
+        "bytes": 2934243,
+        "sha256": "94891856f578dd811697618a8f6eb9894ea58d28816e42e4f3997debe6eb911c"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "8c92d8e23a4830df35cab8482dcbb8567b1fcbe9ae2a3218016bcfb1ccb846a6"
+        "sha256": "986b15314cc76d7ac31e543927b3ab695ea6e5b9541ed8b9968b426deabaa032"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,7 +62,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "4946091f485316fe5ea544cff7b523997a091fedb9822dcfb864d360f4c492fe"
+    "inputDigest": "b6c0c7af9ea4bf232cc514eb8d03266993825138b50611319962d75afb54ea80"
   },
   "reconciliation": {
     "complexity": {
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "8c92d8e23a4830df35cab8482dcbb8567b1fcbe9ae2a3218016bcfb1ccb846a6"
+          "sha256": "986b15314cc76d7ac31e543927b3ab695ea6e5b9541ed8b9968b426deabaa032"
         },
         "cloneGroups": 697,
         "duplicatedLines": 26415,
@@ -167,17 +167,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2926954,
-        "sha256": "f3328f4cffa24a502544d5ce7bce39e2df3a555ab00ffe118e08288fb4581ae1"
+        "bytes": 2934243,
+        "sha256": "94891856f578dd811697618a8f6eb9894ea58d28816e42e4f3997debe6eb911c"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "cb009514714f0752f074b02f1f99852108535c45deab3f84222a8c1d591bc6f0",
-      "moduleCount": 5428,
-      "edgeCount": 27930,
+      "sourceDigest": "a13c417e2597a16314dcd3700d3a9e194e8b1027c3409892100c775c9f8216ba",
+      "moduleCount": 5436,
+      "edgeCount": 28005,
       "unresolvedCount": 36
     }
   },
@@ -779,7 +779,7 @@
       "cloneTouches": 45,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 51,
+      "importIn": 53,
       "importOut": 170,
       "score": 151.3,
       "topPaths": [
@@ -1254,7 +1254,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 669,
+      "importIn": 671,
       "importOut": 44,
       "score": 56,
       "topPaths": [
@@ -1310,7 +1310,7 @@
       "cloneTouches": 2,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 172,
+      "importIn": 173,
       "importOut": 26,
       "score": 52.6,
       "topPaths": [
@@ -1393,7 +1393,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 207,
+      "importIn": 212,
       "importOut": 42,
       "score": 44,
       "topPaths": [
@@ -1558,7 +1558,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 76,
+      "importIn": 77,
       "importOut": 47,
       "score": 40,
       "topPaths": [
@@ -1585,7 +1585,7 @@
       "cloneTouches": 1,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 48,
+      "importIn": 49,
       "importOut": 37,
       "score": 36.1,
       "topPaths": [
@@ -3436,7 +3436,8 @@
           "test/convergence/dt6-operation-ledger-self-move-holder-release.test.js",
           "test/convergence/dt6-priority-recovery-drain-parked-self-move.test.js",
           "test/convergence/operation-ledger-self-move-hold-fairness-witness-fixture.js",
-          "test/raft/raft-rs-backend/evidence-o1-static.test.js"
+          "test/raft/raft-rs-backend/evidence-o1-static.test.js",
+          "test/raft/raft-rs-backend/runtime-completion-consumers-transfer-fixture.js"
         ],
         "ownerAreas": [
           "scripts/run-owner-complexity-operation-workflow-owner-operation-workflow-progression-scenarios.js",

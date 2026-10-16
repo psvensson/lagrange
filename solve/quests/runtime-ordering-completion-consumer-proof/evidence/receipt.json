@@ -1,0 +1,36 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "ordering-vectors-and-references",
+      "passed": false,
+      "reason": "Authorized test-only proof not yet collected; no safety or completion claim."
+    },
+    {
+      "id": "transfer-completion-consumers",
+      "passed": false,
+      "reason": "Authorized test-only proof not yet collected; no safety or completion claim."
+    },
+    {
+      "id": "partition-outcome-custody",
+      "passed": false,
+      "reason": "Authorized test-only proof not yet collected; no safety or completion claim."
+    },
+    {
+      "id": "wasm-identical-source-pair",
+      "passed": false,
+      "reason": "Authorized test-only proof not yet collected; no safety or completion claim."
+    },
+    {
+      "id": "message-group-custody",
+      "passed": false,
+      "reason": "Authorized test-only proof not yet collected; no safety or completion claim."
+    },
+    {
+      "id": "independent-review-and-preservation",
+      "passed": false,
+      "reason": "Authorized test-only proof not yet collected; no safety or completion claim."
+    }
+  ]
+}

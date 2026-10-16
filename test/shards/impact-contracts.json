@@ -403,7 +403,7 @@
       ]
     },
     "CL-041": {
-      "description": "A follower grants its vote to at most one candidate per term, so at most one leader can be elected per term (Raft §5.2 Election Safety).",
+      "description": "A follower grants its vote to at most one candidate per term, so at most one leader can be elected per term (Raft \u00a75.2 Election Safety).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -414,7 +414,7 @@
       ]
     },
     "CL-040": {
-      "description": "A committed Raft log entry is identical cluster-wide at its index; a follower never stale-commits its own same-index/different-term entry on catch-up (Raft §5.3 Log Matching).",
+      "description": "A committed Raft log entry is identical cluster-wide at its index; a follower never stale-commits its own same-index/different-term entry on catch-up (Raft \u00a75.3 Log Matching).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -425,7 +425,7 @@
       ]
     },
     "CL-042": {
-      "description": "An empty raft log's last-log-term is 0 (Raft §5.4.1): the consensus core never masquerades an empty log as up-to-date, so a voter holding committed entries denies an empty-log candidate regardless of the candidate's election term (CL-042).",
+      "description": "An empty raft log's last-log-term is 0 (Raft \u00a75.4.1): the consensus core never masquerades an empty log as up-to-date, so a voter holding committed entries denies an empty-log candidate regardless of the candidate's election term (CL-042).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -594,7 +594,9 @@
         "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
         "test/raft/raft-opening-cleanup-error.test.js",
         "test/raft/raft-rs-backend/startup-cleanup.integration.test.js",
-        "test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js"
+        "test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js",
+        "test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js",
+        "test/wasm-service/wasm-strong-write-native-completion.test.js"
       ]
     },
     "raft-rs-runtime-application-transaction": {
@@ -663,7 +665,9 @@
         "test/partition/participant-release-prepared-settlement-native.test.js",
         "test/partition/participant-release-delivery-recorder.test.js",
         "test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js",
-        "test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js"
+        "test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js",
+        "test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js",
+        "test/raft/raft-rs-backend/runtime-completion-consumers-partition.test.js"
       ]
     },
     "partition-raft-operation-port": {
@@ -685,7 +689,8 @@
         "test/partition/partition-write-typed-releases.test.js",
         "test/partition/partition-consensus-hold-log.test.js",
         "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
-        "test/raft/raft-rs-backend/startup-cleanup.integration.test.js"
+        "test/raft/raft-rs-backend/startup-cleanup.integration.test.js",
+        "test/raft/raft-rs-backend/runtime-completion-consumers-transfers.test.js"
       ]
     },
     "partition-session-transaction-persistence-admission": {
@@ -750,7 +755,8 @@
         "test/partition/partition-write-typed-releases.test.js",
         "test/query/partition-write-answer-consumers.test.js",
         "test/query/query-executor-executeonpartition-no-handler-repair.test.js",
-        "test/query/write-path-internal-pacing.test.js"
+        "test/query/write-path-internal-pacing.test.js",
+        "test/raft/raft-rs-backend/runtime-completion-consumers-partition.test.js"
       ]
     },
     "committed-bootstrap-stamp": {
@@ -797,7 +803,8 @@
         "test/rebalancer/replace-named-handoff-attempt.test.js",
         "test/rebalancer/replace-real-group-completion.test.js",
         "test/rebalancer/replace-real-group-scheduling.test.js",
-        "test/rebalancer/replace-witness-boundary.test.js"
+        "test/rebalancer/replace-witness-boundary.test.js",
+        "test/raft/raft-rs-backend/runtime-completion-consumers-transfers.test.js"
       ]
     },
     "public-application-database-seam": {
