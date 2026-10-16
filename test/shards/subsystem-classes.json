@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 116,
     "architecture-governance": 19,
-    "bootstrap-membership": 315,
+    "bootstrap-membership": 316,
     "cdc-metadata": 63,
     "cli-tooling": 96,
     "control-plane": 215,
@@ -25,10 +25,10 @@
     "transport-messaging": 96,
     "wasm-toolchain": 64
   },
-  "censusSize": 2395,
-  "digest": "fnv1a32-cbbac020",
+  "censusSize": 2396,
+  "digest": "fnv1a32-7ee3dbaa",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-10b5109f",
+  "observationDigest": "fnv1a32-e9f6f4e3",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -281,6 +281,7 @@
     "test/bootstrap/seed-restart-recovery-gate.test.js": "bootstrap-membership",
     "test/bootstrap/seed-startup-session-store.test.js": "bootstrap-membership",
     "test/bootstrap/seed-teardown-pending-cdc-delivery.test.js": "bootstrap-membership",
+    "test/bootstrap/service-instance-table-schema.test.js": "bootstrap-membership",
     "test/bootstrap/shared/cdc-integration-setup.test.js": "bootstrap-membership",
     "test/bootstrap/shared/control-plane-setup.test.js": "bootstrap-membership",
     "test/bootstrap/shared/message-router-setup.test.js": "bootstrap-membership",
@@ -3271,6 +3272,12 @@
         "src/topology/latency-topology-constants.js"
       ]
     },
+    "test/bootstrap/service-instance-table-schema.test.js": {
+      "files": [
+        "src/cache/system-cache-key-descriptor.js",
+        "src/partition/partition-service-table-bootstrap.js"
+      ]
+    },
     "test/bootstrap/shared/control-plane-setup.test.js": {
       "files": [
         "src/bootstrap/bootstrap-errors.js",
@@ -4644,7 +4651,7 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway.js",
-        "src/control-plane/owners/service-install-catalog-contract.js"
+        "src/service/service-lifecycle-command-contract.js"
       ]
     },
     "test/control-plane/system-metadata-owner-modules.test.js": {
@@ -16121,12 +16128,12 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/constants/index.js",
         "src/control-plane/control-plane-system-table-gateway.js",
-        "src/control-plane/owners/service-install-catalog-contract.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
+        "src/service/service-lifecycle-command-contract.js",
         "src/wasm-service/wasm-service-committed-command-codec.js",
         "src/wasm-service/wasm-service-constants.js",
         "src/wasm-service/wasm-service-replica.js",

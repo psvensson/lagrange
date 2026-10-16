@@ -101,6 +101,16 @@ const SYSTEM_TABLE_CDC_POLICIES = Object.freeze({
     bootstrapHydrationMode: CDC_BOOTSTRAP_HYDRATION_MODE.BOOTSTRAP_ONLY,
     externalCdcAllowed: false,
   }),
+  // Projection/wake only. Serving grants require the authoritative row owner;
+  // this table does not add a cluster-readiness dependency.
+  [TABLES.SERVICE_INSTANCES]: createTablePolicy(TABLES.SERVICE_INSTANCES, {
+    policyClass: CDC_POLICY_CLASS.CONTROL_INTERNAL_PROPAGATION,
+    authorityClass: CDC_AUTHORITY_CLASS.CONTROL,
+    internalCachePropagation: true,
+    readinessRelevant: false,
+    bootstrapHydrationMode: CDC_BOOTSTRAP_HYDRATION_MODE.BOOTSTRAP_ONLY,
+    externalCdcAllowed: false,
+  }),
   [TABLES.SERVICE_DEFINITIONS]: createTablePolicy(TABLES.SERVICE_DEFINITIONS, {
     policyClass: CDC_POLICY_CLASS.CONTROL_INTERNAL_PROPAGATION,
     authorityClass: CDC_AUTHORITY_CLASS.CONTROL,

@@ -9,9 +9,12 @@ import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
 import {ControlPlaneSystemTableGateway} from
   '../../src/control-plane/control-plane-system-table-gateway.js';
 import {createSystemMetadataOwners} from '../../src/control-plane/owners/index.js';
-import {deriveTenantPackageId} from
-  '../../src/control-plane/owners/service-install-catalog-contract.js';
-import {deriveServiceDefinitionId} from '../../src/service/service-lifecycle-command-owner.js';
+import {SERVICE_LIFECYCLE_COMMAND} from
+  '../../src/service/service-lifecycle-command-contract.js';
+import {
+  SERVICE_LIFECYCLE_DEFAULT_SIGNATURE_POLICY,
+  ServiceLifecycleCommandOwner,
+} from '../../src/service/service-lifecycle-command-owner.js';
 
 const TABLES = ['service_instances', 'service_packages', 'service_revisions',
   'service_installations', 'service_install_failures'];
@@ -19,7 +22,6 @@ const QUIET = {debug() {}, info() {}, warn() {}, error() {}};
 const TENANT = 'creation-test-tenant';
 const NAME = 'creation-test-service';
 const DIGEST = `sha256:${'a'.repeat(64)}`;
-const REVISION = 'creation-test-revision';
 const PROFILE = 'wasm-writer-v1/1';
 const PEERS = [1, 2, 3].map((n) => ({replicaId: `founder-${n}`, nodeId: `host-${n}`}));
 const DEFINITION = {serviceName: NAME, handlerFunctionId: 'creation-test-handler',
@@ -107,18 +109,29 @@ async function createCreationSqliteFixture(t) {
     exports: [{interface: 'request_v1', name: 'serve'}],
     artifact: {type: 'oci', ref: 'registry.example.test/creation-test:1.0.0',
       digest: DIGEST, media_type: 'application/wasm'}, runtime: {kind: 'wasm_component'}};
-  const packageId = deriveTenantPackageId(manifest, TENANT);
-  await primary.catalog.recordPackage({packageId, manifest,
-    resolvedArtifact: {status: 'resolved', artifact: {digest: DIGEST,
-      payloadMediaType: 'application/wasm', signature: {status: 'verified', keyId: 'fixture'}}}},
-  {skipCacheWait: true});
-  await primary.catalog.recordRevision({revisionId: REVISION, packageId,
-    config: {definition: DEFINITION}}, {skipCacheWait: true});
-  const serviceId = deriveServiceDefinitionId(TENANT, NAME);
+  // Obtain identity and revision from the existing authenticated command owner,
+  // not a fixture hash or a nonexistent identity-helper export. This seed is
+  // component catalog intent only: resolver evidence is explicit fixture data,
+  // no artifact payload store, native service or activation is provided.
+  const commandOwner = new ServiceLifecycleCommandOwner({
+    catalogOwner: primary.catalog,
+    signaturePolicy: SERVICE_LIFECYCLE_DEFAULT_SIGNATURE_POLICY,
+    artifactResolver: {async resolve() {
+      return {status: 'resolved', artifact: {digest: DIGEST,
+        payloadMediaType: 'application/wasm', signature: {status: 'verified', keyId: 'fixture'}}};
+    }},
+  });
+  const installed = await commandOwner.execute(SERVICE_LIFECYCLE_COMMAND.INSTALL,
+    {manifest, config: {definition: DEFINITION}, artifact_source: {kind: 'remote_oci'},
+      idempotency_key: 'creation-component-seed'},
+    {tenantId: TENANT, principal: 'creation-fixture', roles: ['service-operator']});
+  assert.equal(installed.success, true, JSON.stringify(installed));
+  assert.equal(installed.rows.length, 1);
+  const {service_definition_id: serviceId, revision_id: revisionId} = installed.rows[0];
   function request(expectedVersion = 0, nonce = 1, expectedIncarnation = null) {
     return {format: 1, requestId: {serviceDefinitionId: serviceId, expectedVersion,
       nonce: nonce.toString(16).padStart(64, '0')}, tenantId: TENANT, expectedIncarnation,
-    action: 'CREATE', revisionId: REVISION, definition: structuredClone(DEFINITION),
+    action: 'CREATE', revisionId, definition: structuredClone(DEFINITION),
     profile: PROFILE, foundingPeers: structuredClone(PEERS)};
   }
   const slotRequest = (slot = 0, expectedOrdinal = 0, operationId = `operation-${slot}`,

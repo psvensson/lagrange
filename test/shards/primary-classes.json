@@ -4,12 +4,12 @@
   "counts": {
     "unit": 2086,
     "integration": 98,
-    "bootstrap": 204,
+    "bootstrap": 205,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2395,
-  "digest": "fnv1a32-ed6f6e1d",
+  "censusSize": 2396,
+  "digest": "fnv1a32-11c2f7d2",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -262,6 +262,7 @@
     "test/bootstrap/seed-restart-recovery-gate.test.js": "bootstrap",
     "test/bootstrap/seed-startup-session-store.test.js": "bootstrap",
     "test/bootstrap/seed-teardown-pending-cdc-delivery.test.js": "bootstrap",
+    "test/bootstrap/service-instance-table-schema.test.js": "bootstrap",
     "test/bootstrap/shared/cdc-integration-setup.test.js": "bootstrap",
     "test/bootstrap/shared/control-plane-setup.test.js": "bootstrap",
     "test/bootstrap/shared/message-router-setup.test.js": "bootstrap",
