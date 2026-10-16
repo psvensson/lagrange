@@ -54,7 +54,7 @@ async function commitState(owner, id, observation, change, options, resolve) {
   try {
     submitted = observation.row === null ?
       await rows.insertRow({service_id: id, format: LIMIT.FORMAT, state}, options) :
-      await rows.updateWhere({service_id: id, format: LIMIT.FORMAT, state: observation.row.state},
+      await rows.updateWhere({service_id: id, format: LIMIT.FORMAT},
         {state}, options);
   } catch {
     submitted = null;
