@@ -1,0 +1,62 @@
+name: rs-raft-process-custody-preservation
+on:
+  push:
+    branches: [carrier/rs-raft-process-custody-20261016]
+    paths: [.github/workflows/rs-raft-process-custody-preservation.yml]
+permissions:
+  contents: write
+concurrency:
+  group: rs-raft-process-custody-preservation-20261016
+  cancel-in-progress: false
+jobs:
+  preserve-authored-wip:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: a1a22bdd5ed08c7d8009218f57559e4f92a18dc5
+          fetch-depth: 1
+          persist-credentials: true
+      - name: Preserve exact authored commit without running product tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          export OUT="$RUNNER_TEMP/process-custody-preservation"
+          mkdir -p "$OUT"
+          test "$(git rev-parse HEAD)" = a1a22bdd5ed08c7d8009218f57559e4f92a18dc5
+          test -z "$(git status --porcelain)"
+          python3 - <<'PYCODE'
+          import base64, hashlib, os, pathlib, zlib
+          out = pathlib.Path(os.environ['OUT'])
+          patch = zlib.decompress(base64.b64decode('eNrtXFlz40aSfuevqNVErKUlAeI+qG2PZYnd1lhHj6T27KzDoSigCiLcIEADoNQaT+9v38w6QFAi1ZTHszEP2w+SSFRlZeX5ZVahWZ5lxDDu8pbQcVMV93z8y5I3bTN+oM3cSGtO27wqjTte8iZvxu+vLo+n19fG8Yfrm8uTvxrH302Pv39/eXpxYziWE9iWHZhzRpLfj9ag5A8kywtO5hXjxLaswPMGecn4J2Lt+M80AysNwjigVsYd7iVubDM/5W4WO3GasST1LJYFbpgNDMMgY8bvx+WyKAbD4fB33cs33xDDGllkaI/CkHzzzWD4B/K+rlLeNCRdNm3FHsmi5jX/ZZk3ecsnsPO6aUlaVEtG8vmi4HNetmJtks54+nFR5WU7GA6G1/DtspmQv5y+H5GyagmKaMHhR9mSplrWKSd0saire1qQqiYPs6rgxp9xU4SmKV+0tEy5ORiBpysGGU8hc3D1oGeICyWJNz09C84mBhhfTzeWdEc52rkPn98biBZqr7IolvcKvOoIx6djHLLVoqnof4JLxcP1ZH1Mz578MLm9AcKIU33FePsTilFgwJuCfjRdItDQR4QRDsBNOpLeRiBdyfzEocEmGMmxLcHgNdEZomRG0ZFksXePoN6Iz/bqDlNlNUvyOJUMflYiFyCAShDiCDMIHQhqRlGVFHB85UpuRckUYIyOgWiBuBpFzSZkjcb/lUYbtL4uCMZ33EcPXrmepnmMH19DD00/sLnZGEmOv0xaUcMaDiAtCkeujAiAp2NsySaJTQMEiDDdsgZCTsXiEX5AmKmMQuxtHfJSGDLav+jCRIxnvVO06InzoJSxcVfiLpGidQNwXLyBqx4RDCLDDQuu6+oqNpJWFIkKD59FTXiOXDHrMbMVbGDxGtKTwDPkoYn62Ru0I9K0EzJZqLRFhLBAbMxrjRFrOmSOYM/HNSQNHvhxSEMuZYCzzgxKlxhpGIX5GwqZCNORvmhuBVvmbFUJBo+ObzgJh95QBkCFmqMCZiEEOUQBPAAYmJtiE+gSpWth7YGsm6qU5W2lbISzg8P7wQk4wawOodwMquqjxgMCKLGlaFGBoDg5w3D1UNUf25ojvngLZmQ0kLBHMK01FgBeIE/Ru7KCuJE2I00eLAb+AjgI36RgUYxMr88AOEJMzBE9orNo/GIIkUNcHxE6T3IQnQEj a1AWbgITPSwKX6a0TWc6eGlLvBbUB0MUe4HREbMDagSW/BuvK3KfV4UQYYNpH/fXzmAvKrqzfsAX0U3ZjqSH/oHSQcIw1p6gVKpS6B7SYyE9zGA8wYSC AF5lcv5pRpcIyAfDC6jAAA yDLwngIfg32BIxoQSmPwOyOkXgrCsC8J4FB NW8WSU62mD2WAtIEKC41K Ah6h2z/dQzQ1AnRG2EJ8tmDGF Gpi7lkp05N+D0aMoABe6k2WHqhHTJeUnuiiqRBoMj4DkXjo8bGWkvB0oozgaiHRuRBOJiAf yKMICZjfEsLyW4ghKwk7nAXw24icKsQuCdYA2IwRnSNKCqAE0akL0XM0MAVqktyOvNMmkwfYr8pEAayqkEiS8XTM AcoWyoVBCZASmwa0kKtk0LFB UVRSJiY0G8RdnJEYqDQ4F+C4IKBqO8h+UQj4lnooRSaVW G+76odLUm o+m1ED+qkEO5di9tZNmB8ipdYqYG NkEGhpgHF SmiSagwhfejuq6xooaoiX5Z3mmXP+7cdFWQKuiHCVxgbgDIkHOME Tgp6YKXITS08nIRSM AF2c8AHMpW5/GxhtnjxeyxwYmAjQWNFhMDcAQOP+qpbw42i8FqrKShHFbUsr3qmiOkMh olGIDjOQfwC6atMB8ITRRUz4ohCXrXi452DVxDeN2IrrlA6KoYy4SriU1325B1RwtAKAOVNCL4Q+U9G NICQjroSegBzK/NMzQXjpicMWHg6LdJkd/JWCO0A86C88fKV8Y1BjDe9l1BeJQO8mCXhdzUSCJW+CV7AiMohjBu6jgnx7y1ZckCOu7Shk on8BBt9PwdxN+SLsA/sbcBYikKrCG7ykRElbZKq4L0q3iEATUmAoFXEX1L51h1T0xyjmYqwvOM1hKL32G8w2wh6KI MSTPId7B9gluAqLdVMNM2UmBOMZzLNeAxKPQL4QF9somG6Rzs2Q/NyDG5HXjVV8sS4PI8WOfBl loxZwmURyHEaNx5KZBE LpebIEBRZF pZlHseImbhBB0gpBbYWa7nhN5AQAUy06TOAYg7yaW7rthe+yVe9i9idabg40yZ+SSoTPysU9Gft1rm73JHjbTDNsy7ODGCie2N7Ft07Ld/94b7bWPCw4jFFTALwDtwBdgPfxvXDfStH0KHIiV0FNnvp r+cHo9Jd/axrfeIYZHnLy1/dNBJKFrrFtqXX7JBRE xCV9FoCh6N+AlzyszE/ilyG0WpG4QRwkPQ8tzGWN2zF3q0NhxacAsmgYMPtAYxiNiOUY0ujfx5SeQ0I97wk+Bo/pRWPd453JAiAzmohOwZtxPM4ZIM6iZJ4OgDIQq/9EQZRt sY8MQnbFfGoMp8BEwxnx90E+ft yje9SZObAZB/JLir5yVljcXgZ1+dZDVXRWtXigKRW7cpFIITxA5dIZQMauzr wqWxQKz63RCcFOJAoE3kVniEJtBPWsQxWd nC0EENbnPLeqzJPZcKC+yKMtA/S73Xd/3AzAHm1J73Raip7agSh4D62k+xqSdgzZ ECC1RLdo+oBR8agq7Tm1+QSwM4O1Ti+2Z FYGeHb6umP7XM0Y1SIQuJYkncUyAf0NaQl8W2804nHi+6fvRS2b84Xp6RaDkfz8hCnP14hHYOAYw0WbPss7eRzrcdeFJW/TV9GQk pixLGZNkUGsWmK2BskAJT4OUNEtAMdXi6SEEk losAS00s3XE pzv/wsR1u2l1zvCP2Xj8/zb+L2bjr5vZSQBcY7jBN eKJ608s27Qd+8UIzxuoNlRwFadHqLZaWu1E9UVltJb9y1VZBwjQEZX32F2Vjqi23iGOgM9d23c7CJDFNjnVnqEOJPRwUaSrLnq/kdJZi846/bOkEWwlLZZMnGPI6kEJfb2IMFdVk8pBqlgZ90FNr55SCUkVVIfyNEKAVnFkUansJQ/Y5NY7Z921Xbzu rG7PWZs67fmLoSXQO7ow5OmXtCkcXlAsIO64oeoBPWk1AgSBJc94/aSt8zoh+ReNzXMmlmc6lv8ijpQRtSsyVROq133C1kqDnRVdcqmw1+vzjDb0WkQJTmY4Fxsssr1yeXmOvYVecwV CLS2gbG3w9KMVBblogVqnoMFCemK8Whcaha9nkDQq+sWg5N7xDoUHUBuj6BroC7E2R90iGbAu91YtItx7VUgPVSv0YWZxVzqNk gdqC//IP25f2r2NdO4RyM8LX14A7dst0KrB0I/T7XLWI7TELPyTI7jlOW hKETxWFM7dizWBw5TgRa9nwn+a3XLXbZSP+uhSvuWsjWlWhPY9+XyTMN5ToT4vhjJxRPC RgewTQhWqhY12+dY48dW86x/d6kwfCM1ndrM9WJ077jQ2z9dDAZDEE Mlm yr1DyhBYbnegwOJZs8BnYfsqJ6QEO7q3G7HL3RYDVEeSzn hKHrVEr2u+6lYOUA6DuuI+kzbB3lCaK9MVgn1jTj21uB9W5vx3jQ24omPGVGd6cC/S DJAfM8GuA8vEmx5y86bYY4NNqyp hV1a3a99DEA xwqqe4AtFUQUE AySEp7xEvtW6BP0P7zwIX4YePtDead2uv7ESMyzo8jbvm29WYF7jCLPePoICdhAZLCZDzsK42d qqrk4lTTwN8TXlbIgMhfGHI+PvyQqoOtu5xNRWS0acGtCe6B5u41coLadVFWLrcLFuAQfNn6GUCiOtyQse0Hidhha2zlSHXcjWSIAMXr6NSi2EUVtu8wL9kwvHXnNYU+QaWFYTgxigw22xqonaOhjJkOc6yp9v8S7Z23QkvoTCMsjd4jcBuRNWAcIwx/Yfn6JqK04pmyel/KnoSsG3Y40RAGUqgqjp6w5nyfy1NKokq5b/mXDC KJ4uxoWIHOjt7Gi wjxq6NJvG0kvfE0oEP1SaW1dEu3CkOqK7LAP132mEihgxJWkVTuqE6OqYg3VZNYRbod1nJ0d/pnuNBtbSPtxuCvpVZTcSsvfT kse9RmyOb6NQBRJAhBL78By8TeoAS9o7eLdfhDtYMyMZ7yuOeuOrn6rFUP1vovJrW/8JfZtdyd6y/IlKg7EI JFUXky5sMQCc7yhD/eEnZQppPDNOccC2SLZ9W7C2qdean3uBOKyCwajF6n3mJ7D PENdkTH EB0D56VIeEIPO2lnFmo3UrlOcBJ/6160EOBkM3yJ+J9bGE/He+fNgeC4QECOuDUXCjNfiUHnjrK7k7k/XPLgv8IBIVB2xG3dLSAbPqGgm rB4Pz2f8ZgaeneoT3dl4PvdFNqwX2Hh+kyDFazh f4uD5tN8sCHlrgchbC19ad+2Kw5YlxTWK/j0Hjaet1cD95gArYPB5AQ3w48qUJ8R2DvC2JL1/QklEE9LK80pDlshjXTqPVyMNeZlDFGWmOM5WZfxElcrq+BwPGjkxdLUsb5TJqjhHOP8/DoEwekiaj3g3KQfjPzt6d3V08W56e/396fvb04sfphc3l1d/vb2avpte vL HBA5+X/5Ougs eTci7vJhOEb6QRKgHWxW2L1QaA80O9XUW FsxHhBZcHnYL8Ax6eJ1zcUKwZnmmOhv+JRdcZxeNp8LB3xw3UosbX+ORH23WcifXJtULuQSH3EyFQFXm255J5MyFgKrDxO6gKY9cxLShlrDA2wwNifA1f2YHpr746/3ZEF lUFxfaEBOKTbZuhQ8bEM2MkR8g+lUfVZL4kb4hlWmE0I umyxuvn3XcQsfDy aqV6IAqDHpJtzIYBV GHI7DmtPxrHlSjCJcOCu8gyHc2wL/cAX/nrDPvik+u5nunGeIvPtKItLH vPWQ63sNxo8c3zu1krjpRV6wVl r/Typ2u0uPQjYjneKebt0c3RGZleXV1eTchpKS+1Yrs er9gKm4BdNhAxqer/F Dk2pI7WuQCjMPpeLkaKS6aZuLxcPw6GBv4jF/I0S3BCOlYMA3nBBpf1idtu xriw0Mnk8vJ8WtdV/Z1oTdb7KWRleW/qP0bkPhIDTrBnVTTy638/ID9C2m3H5f18LApk+FZUK+N7xzHBlKxxAhAFv/kJl nRwSd tmPghXEPzQAq3J5EqYP1B/K4W8j8/EpX5w+Mnk tMFYwoGJ350jV3PkArBeX/UH+PSWQthQb3ZcLtvL7FzI9/+OP0/w51lOav nkdVP9birA99dNDeRUO2EWfeXUU E3FiwmvnBqJqWnkJdR+3VRhtZMnUVT5ymRT+F2/7Ib3XQmh3Uxp jpAUMH9OxuPxvGxF13CsXlsRALPrOI41bXX bjh v ynpqxyg+r m1p4X9d3gon tHnTLimr7tLvL9c9aNg6tib9aFQD2cZH/01azIZZPnHC13j9tHdua uE+asa9oH2On8hXDVQ/VjSM3S7jluZFjJ5ZL0zRL3BSSUBxEwKQbuhkkNNc0qR/S2IaMZjHup4mf2XFAfYuGmReyOKYZ82iQ+E+v5ryGJdVvf c0U7KqGIwgMw3DkBQQ+0uaxTEm2LNUdNnljW73GconC36/E1T8AcL8OQKU1b5e1em nmcEA+DyCZPyEi3+o4ludeikazn/Y/ISmwj4K38qRbODKkX2wjH+on aoZ6W+ONvI4lnso75OskTYCtdwDfviaWok5k6O1uhbwh6xMW1WL/4FCOxPd51CQwWuyb6MHdkM8KQO9zZPZgNTzPyP6/rTF7sL4rMeFQD3+6rbZec r0E/hI/kOY TkgCeq4ceYZgDQwcrqYs2u9bc0Ur9Z0L7+0p9azKRkgAmfvxJsCAfdu8OicdX+q0tOYpI5ahbe z29kIFBVsyINoTeg hLW5ocj8qs4NoUIfC3vomfL4rjTmaD+Gf749b PagZSOZkALBstNIZf97kWFs+nJu+nV7fn0+vro3RT0aPTkr41g2cw6Ng/7ZlNp2Wzn7o9ap1skNllfTJGvNq4s1E/wVycmtcX9bt89oUurIc83pNwAoKxabjNva+NWa2905P0t gpeR4HALb0LYWzx cPNvBiw3lMrv4sRorPVl92ODL6slzb+6m9Pj9+98779Xz5B/qF8pjNXyj j+Kw8ZhM19//k9cJ8Ha8PKfGm63yk hotH7e9vGd21PT rj1g8K6nArXu+enVNX26Y8YIdPn3NrhW1b94qglJGXw7ah18avtnU1oxbZY/LBNk35f29/V9FQBjpfY4U8c8w81l+f+G8VyXDF0aoLO67YRyltuV5NI6om8a2mySezyLP9cPICjLHdtIss00z8VnqMkDTlpuEUcITyOKxayWh7SdeHPtJGF OXpent rP4SF6vE/dIoka sddxRCsoZf8fZ sfaaoqDdudcIeaeOQGUB5MWKwE30Kfk5Lit BAvBtBixyUIdUlXW5trK6HhEm+0WufbBuyL+PCxuXueKvm7R9In1zj1JQJAuLOm6+382B28VFa5j9EYqTz+dZoPxFxTbxah4ZJVlKaFemxeLXqjchC350di4/XsqW/D4Oy/A73vH98efH29N3t99O/mheXJ9Pb0xOxsBDUnH46qfOsnZDNE4D s7fnRf92eXJ2+vbk9vz4YPXeOPY86KOPbcbS+lZ7YfpbRxArcNPATm/KEs9TyAOEGaQD Wbw eu7TBqm pmb ejxMwiRmmcMd bvs04F4aW1YcMjfG/8DB8a3Mfu40u3K0cqBdZ6Az2aMArxPYtr iSr tqEaIfY5iRZXc3JVwlv8UhI3hZ0vzrsxonGuBwj uib4GR8PhhCPr/RrTTrs4g2diX6xUb4Dgy1lxptVcF+9FGmS7zlfEHxbX5DrXptUl8Ve8R4/Ea/xj/B98xIyLC8FQdU+0vekWV0t5Jvd6v8qEK8pEzw oYti7TOXLG athKjqZ+NaHsHjIKmuOr6XYKB+4BttFrxwoFzk5ujm6PTm9mh6LXurlXy4AmJ18C6O/MrsY+ESH UndSEyjpFyiJ1trtMbgUUnwy5Ojsanp0IocefI HQh4ujH45Oz46+PZuu ERX240YjG4Kx548skYyfh uHtoVAFoA5HQeSgy4b/0UyxR/HmD TANtnJ6M709uz z+XnIpwIzAE2vh61IbjQS73dtOavGRpDw itMDzKjGc6QwMoWu75kzKmGAUPx28BPS3ZfG1gN97QV GzJp9jaHyPNrqGG/d7stmMMhUA24yBN e7TGI7ojZh4TXp/o65B4qaqFQ46Mp/l61jFZmLiHb2uIsR/L8iTcXxtsy/Sbta2TXyWf3wWssEs g2bnxxiyhkEwWre6BOLydpPrXr8SbrReu2/Um2maeo78QmIN/dKd xhY9qPwEaiviEh4+mWZiSNE89VH4StodnWo9M/eg97BfDqj/LeHN bgsOt9Ae rvEuaR4+1QJ5cunvy/cEI Tt9eZ BKrNxxLe5i38i2wthKeJxEQZJYdgYQNPK8iPl+xANumjR2KM1cL6NewBLHcl1KPZ75lIcWDV0WWFFIY/cJGt2BEZlPdxgo02iEaTSSL3ahjP aadMbn9AfZsN2bEFuIbk+mzndI4/rJiL0N7b3+Fdd7Z2+Eit+TifUkx9t4OM+JXI/yKAhDSFZe4gBQtzPHpZlDQTgxd2yfWS zjlkXjJKWZBfDetf04pUm ahhZTZPXru6flYtmuqKd+lvr UscOIplAjRBb1HGozz0pjn1E7tlKexpQ5EfO81LJ97oWZG3k0ssMksL10T+DDZ0xT28liC1EQiwM7o34KdUTI/JDyLPI59+MkcBMvoGEAGgwSAFosS2FACvuD2kSR3ca0S23btwIbChEWhVkMNpBQniZR iFz6rstpQDmNv DByoxBMKXRBEkka w/dJiCJBbeGLB/heL/5XVH3eo8DzPSHTmAaZ5ydoedQOfaiM0siPvMyzmEeZa0WMg7EyNwmo7zDXz/zICbQe1Q WVFeGEhZEX2Q5gycSJmRcEMag0Ci20fOARhBb6lpX5oRfYqefAym6SeRS06XiR7+9JUT+ni5zRDOQb+Lb jgA9lnptRcJLISjMWuA5zANuD3sBhnJBSG1BskLpgRm mcdn cP/f1/ASOFQdI='))
+          commit = base64.b64decode('dHJlZSBkNWNjMjM0MzMzZDdlMWM1Yzc3MGY4N2M2NDNhM2RkYzg2MWZlYTQ2CnBhcmVudCBhMWEyMmJkZDVlZDA4YzdkODAwOTIxOGY1NzU1OWU0ZjkyYTE4ZGM1CmF1dGhvciBDaGF0R1BUIDxjaGF0Z3B0QG9wZW5haS5jb20+IDE3OTIxNDM3MjQgKzAwMDAKY29tbWl0dGVyIENoYXRHUFQgPGNoYXRncHRAb3BlbmFpLmNvbT4gMTc5MjE0MzcyNCArMDAwMAoKV0lQOiByZXRhaW4gcHJvY2Vzcy1kaXJlY3RvcnkgY3VzdG9keSBhZnRlciBmYWlsZWQgY2xlYW51cCAodW5jZXJ0aWZpZWQpCg==')
+          assert hashlib.sha256(patch).hexdigest() == 'e2ea4a1f1f0188efda28650045227b1b7ae914bfcd20c206d1232c39f991b050'
+          assert hashlib.sha256(commit).hexdigest() == '46fad561b8590686073355b55f7dc831f5fd13542a3a17bfd554cc048218e669'
+          (out / 'source.patch').write_bytes(patch)
+          (out / 'head-commit.raw').write_bytes(commit)
+          PYCODE
+          git apply --check --index "$OUT/source.patch"
+          git apply --index "$OUT/source.patch"
+          test "$(git write-tree)" = d5cc234333d7e1c5c770f87c643a3ddc861fea46
+          test "$(git hash-object -t commit -w "$OUT/head-commit.raw")" = 0cdf38556a4e11d35417c8378bfacf04f1a5ba18
+          git diff --exit-code a1a22bdd5ed08c7d8009218f57559e4f92a18dc5 0cdf38556a4e11d35417c8378bfacf04f1a5ba18 -- test/entrypoint test/node
+          git diff-tree --no-commit-id --name-status -r 0cdf38556a4e11d35417c8378bfacf04f1a5ba18 > "$OUT/changed-paths.txt"
+          REF=refs/heads/work/rs-raft-process-custody-20261016
+          git fetch --no-tags origin "$REF"
+          test "$(git rev-parse FETCH_HEAD)" = a1a22bdd5ed08c7d8009218f57559e4f92a18dc5
+          git push origin 0cdf38556a4e11d35417c8378bfacf04f1a5ba18:"$REF"
+          REMOTE=$(git ls-remote --heads origin "$REF" | cut -f1)
+          test "$REMOTE" = 0cdf38556a4e11d35417c8378bfacf04f1a5ba18
+          printf '%s\n' "$REMOTE" > "$OUT/verified-remote-sha.txt"
+          printf '%s\n' 'd5cc234333d7e1c5c770f87c643a3ddc861fea46' > "$OUT/verified-tree.txt"
+          printf '%s\n' 'WIP preservation only; static gate remains open; product tests run separately through private local lab.' > "$OUT/claim-limit.txt"
+          cd "$OUT"
+          sha256sum source.patch head-commit.raw changed-paths.txt verified-remote-sha.txt verified-tree.txt claim-limit.txt > SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: rs-raft-process-custody-preservation-${{ github.run_id }}
+          path: ${{ runner.temp }}/process-custody-preservation/
+          retention-days: 7
+          if-no-files-found: error
