@@ -1,0 +1,71 @@
+Lagrange: bounded ordering and completion-consumer evidence, 2026-10-16
+
+Verdict: ACCEPT the measured evidence within the limits below; HOLD the proposed F1 temporal supersession and whole runtime increment. This is a test-only preservation checkpoint, not approval of a replacement contract or a production repair.
+
+IDENTITIES AND OWNERSHIP
+Base publication: 96985eb2ba0720b7f5e3b36c63ce10e3a2ff71b3.
+Frozen production source: 4aa8780cfec6f2718b86b4d1e27ee9711492be59.
+First test checkpoint: 6cddf137b85975947d09c0165eeb0e2f4c4bdcda.
+Second test checkpoint: 5a3cdc71854c7d97d2e3b688258b73c19dd0c6e4.
+Predecessor comparison: d2c7c600a09cfa371d54c5c9efda6e80438bbb98, restoring exact runtime-owner source from 04391697aeabea5ddd504491321546212b95982e onto the first checkpoint. Its diff is one production file plus two generated metadata files. WASM test and fixture bytes are identical in both treatments.
+Review branch: review/runtime-ordering-consumer-proof-20261015. Publication receipt separately binds the final evidence head and archive; it does not substitute the publication SHA for either executed checkpoint.
+
+The work used its own isolated worktree. Shared integration was observed at 0996d7576516af24f5f4d3e1e9aee37c775aabae, integrate/rs-raft-2026-09-30, with 18 staged paths and staged binary-diff SHA256 0b2ea79142a13f4dcada523f01108fbd8a4809492838e23f7a0246a7159953fc. No shared changes, dependency installation, foreign process cancellation or harnessd dependency. Final ownership observation is retained separately. Historical observations were not used as leases.
+
+Current source, original F1 oracle/harness and frozen W07 remain unchanged. W07 blob debc16f442ba63b100332d93b285865d36d1c376 is preserved. The historical F1 result remains predecessor 155/155 and candidate 152/155; those three failures are not waived. The prior wider cone remains 1,339 passed, 96 failed and seven incomplete, individually unclassified; it was not rerun.
+
+WHOLE-FILE RESULTS
+Every row is its first execution; no retry or threshold adjustment. Full commands, exact test SHA256, host, source SHA and raw TAP hash are in whole-file-results.json; each run also retains request.json, discovery.json, plan.json, run.log and exit-code.txt. Durations below are classified TAP time, not wall time including host thermal holds.
+
+Checkpoint  Run                      Host            Pass Fail Exit Time(ms)
+6cddf137    ordering-first           adams-gamla       3    0    0    1497
+6cddf137    partition-first          adam-laptop       2    0    0   10522
+6cddf137    wasm-candidate-first     lenovo-laptop     1    1    1    2283
+d2c7c600    wasm-predecessor-first   lenovo-laptop     1    1    1    2347
+5a3cdc71    ordering-exact-first     adams-gamla       3    0    0    1534
+5a3cdc71    transfers-first          adam-laptop       3    0    0    4329
+5a3cdc71    message-group-first      tv-dator          0    1    1    2524
+
+Existing lab executor/locks and isolated exact-commit checkouts were used. Adam's thermal hold was respected. These are independent same-host native RF3 groups, not physical cross-host certification. Node v22.23.2 is recorded in the lab commands. The external capture wrapper is preserved with the archive; it calls the existing lab and classified-test owners rather than implementing another executor.
+
+ORDERING: ACCEPT NARROW COMPANION EVIDENCE; SUPERSESSION HOLD
+Three independently constructed schedules per D1 named transfer, D2 most-caught-up transfer and D3 proposal align initial state, relevant message bytes and declared delivery/clock choices. Late input is accepted during a held send; the independent O-before-V reference withholds that same vote until the selected invocation Promise is observed; pre-capture V-before-O accepts it before the selected operation. The reference is not a transcript generated from the candidate's answer. Full vectors are emitted before assertions.
+
+The actual prefix append response is core-produced. The higher-term vote is test-crafted original-cell input and is labelled as such. Native entry/arguments, inbound stages, send settlement and caller Promise observation are recorded; no passive native-return seam is claimed. One declared zero-time owned-clock dispatch follows selected settlement. Measured observers do not call status, settle, deliverAll or tick. Setup and post-measurement convergence/restart do drive progress and are explicitly separated. Listener reentry is explicitly disabled in this companion, whereas original F1 retains its own schedule. Oracle SQLite synchronous=OFF does not prove power-loss durability.
+
+The first companion's legacy durable observer rounded vote 7818641245414824798 to Number 7818641245414825000. Its three passing assertions and raw vectors remain preserved with that limitation. The second checkpoint adds exact passive RaftRsDurableStore.readDurableRecordIn observations in the new companion only. Exactness starts at the durable owner's statement-level safe-integer read, then serializes BigInt to decimal strings; it does not stringify a rounded Number or change connection-wide execution settings. Exact identity observations are included in initial, passive, returned and recovered vectors and compared across independent runs. The second file passes all three cases. See ordering-exact-results-summary.json and its review for exact event positions and identities.
+
+Effects differ materially across declared orders. Late/reference D1 and D2 perform transfer and emit TimeoutNow; post-measurement convergence elects C at term 2 and commits/applies position 6. Pre-capture refusal has no transfer core call/TimeoutNow and stays at position 5 in the declared interval. Late/reference D3 leaves uncommitted index 6 while commit/applied remains 5; pre-capture dropped proposal does not create index 6. These observations are retained, not normalized away. A truthful operation receipt supports the proposed interpretation, but these companion greens alone do not supersede F1 or establish all consumers' completion contracts.
+
+PARTITION: ACCEPT EXERCISED COMPLETION/CUSTODY CONTROL
+The actual PartitionService write consumer stays pending after native proposal at index 5 while commit/applied is 4, statement outcome is unsettled and user data is absent. After quorum traffic is released, application records the result and one row; exact replay returns the original position without another effect. Shutdown after possible proposal returns partition_write_outcome_unknown for the same entry identity. A surviving native quorum commits retained index 5 and same-identity replay produces one effect. This establishes the exercised application/result/lifecycle interaction, not query ingress, all redirects, TX1, or general crash certification.
+
+TRANSFERS: ACCEPT EXERCISED DECISIONS; LATER AUTHORITIES UNPROVED
+All three tests pass. The corrected REPLACE test invokes PriorityPublicationHandoff.evaluateReplaceNamedHandoffSafety with its actual dispatch/result composition. Transfer acceptance records an accepted attempt, while the evaluator continues to defer until the target's subsequent leadership witness. The operation intent is explicitly in memory: this is not durable workflow completion, terminal majority completion or actual source removal.
+
+D2 exercises the actual placement-cure consumer and handlers/native ports. It reports dispatch_handoff while the target remains candidate; after real replication/election, a new census reports spread_satisfied. Legitimate RF1 no-eligible-successor and no-known-leader refusals are retained. Test projection of native observations into caches does not prove production CDC/planning provenance.
+
+The participant control keeps ordinary admission closed through accepted transfer, then uses a later real existing release to reopen. It does not exercise the historical servedLegacy=true reopenCohort branch. Current native initialization stamps connection state clean (partition-service-raft-init-base.js); the connection owner has no current legitimate writer setting servedLegacy=true. Fabricating that history would invent activation provenance. Full REPLACE removal and historical participant-cutover reopening remain explicit coverage gaps, not failed production claims.
+
+WASM: DEMONSTRATED INHERITED STRONG-WRITE COMPLETION DEFECT
+The actual RF3 WasmServiceReplica.handleMessage strong-write route returns {accepted:true, async:false} at exact proposal index 2 while all replicas have commit/applied 1 and absent KV. Two actual non-rejected follower APPEND_RESPONSEs at index 2 are withheld. Healing commits/applies index 2 and the value. The healthy control also completes through real replication/application.
+
+Both source treatments on lenovo-laptop fail STRONG_WRITE_SUCCESS_BEFORE_COMMIT and pass their healthy control. Recursive comparison of the three retained raw cuts finds exactly 165 differences, all native event sequence leaves; the differences remain in wasm-source-cut-differences.json. There is no hidden normalization and no all-schedule equivalence claim. This is inherited on the tested schedule, not demonstrated W07 regression or data loss.
+
+Single owner: WasmServiceReplica._handleWrite (strong branch) promises commitment, but awaits proposeEntry, which checks only CORE_OK; committed application has a separate callback. Its source blob is unchanged between treatments. Smallest later correction packet: the WASM application/result/lifecycle interaction must register immutable completion identity before proposal, complete from the actual committed application result, and preserve uncertainty and exact retry across role/process/response loss. Identity and recovery semantics need content-bound selection; do not weaken strong semantics or block the serialized generic runtime proposal on the replication it must process. No WASM source repair was made here.
+
+MESSAGE GROUP: FIRST RUN IS A PRECONDITION/COVERAGE FAILURE, NOT CUSTODY RED
+The file fails "exact actual recipient proposal is retained": observed 0 rather than 1. It never reaches SOURCE_CUSTODY_RELEASED_BEFORE_RECIPIENT_COMMIT. At its retained cut, the source obligation is still owed/delivered=false, retry is armed and delivery is held_by_subscriber. No routing return or recipient proposal occurred; all recipient replicas remain at their initial noop commit/applied 1 with no CDC row. Therefore this run does not establish premature discharge, recipient custody transfer, permanent liveness failure, lost event or authoritative suffix replacement. The planned leader-change, suffix-replacement, replay and eventual-discharge assertions were not reached. They are incomplete coverage, not successes inferred from the fixture code.
+
+The emitted source event lacks config_key/value and contains only updated_at_hlc="", despite the source SQL row containing values. The precise read-only classification is fixture/input-boundary failure: direct applyWrite supplied INSERT plus SQL/params but omitted structured data and the normal timestamp-building path. The existing CDC generator parses SQL/params for QUERY, while production insertData supplies data and proposeWrite supplies HLC. A pre-proposal missing-key exception is source-consistent but remains inferential because the exact subscriber exception was not recorded. Source lines and full limits are retained in MG-FIRST-RESULT-CLASSIFICATION.md. This packet stops on that first result; it does not revise the fixture until green or patch production.
+
+Separate source inspection finds that SeedRuntimeBridgeOwner forwards table/operation/data without the source durable identity; the subscriber awaits but does not return the propagation result, and committed-outcome helpers have no production invocation in the inspected tree. These are source-level completion/correlation questions, not native custody-loss proof. Producer retention at this failed cut is safety evidence for this cut only; it is not eventual completion. The next MG work, if authorized, must first establish a valid production event through the existing producer/subscriber boundary, then observe actual acknowledgement/discharge and authoritative suffix replacement. Keep the existing durable obligation owner; do not invent a second ledger or fabricate a committed receipt.
+
+VERIFICATION, PRESERVATION AND STOP
+Exact test/fixture identities and changed files are retained in final-test-identities-5a3cdc7.json and changed-files.txt. Earlier second-checkpoint-test-identities.json is an intermediate working snapshot, retained as history, not the final manifest. Pre-run independent reviews bind the final bytes. One final cross-review assesses resulting claims without rerunning tests. Its verdict and hash are preserved separately.
+
+Both main test checkpoints passed normal commit hooks and metadata producers. Fast-static passed at the second exact checkpoint against base 96985eb2 (10,815 ms). Scoped lint and generated impact registration were performed. The predecessor comparison's normal commit was refused by existing decision-boundary checks; the documented WIP preservation route retained comparison bytes, not a green gate or landing claim. Static/complexity qualifications and the unrelated wider-cone reds remain separate. No ratchet or timeout was raised.
+
+Archive manifest and download verification are publication evidence, not native test reruns. Raw first results, independent reviews, exact test files, predecessor bundle and original limited observations remain preserved. Unrelated full local process inventory is retained locally; its relevant ownership derivative is published. This evidence Quest remains open where custody/consumer proof is incomplete. No terminal Quest/release seal is claimed.
+
+Smallest justified next production correction for later approval is the WASM completion-owner packet above, using the frozen premature-success witness and its healthy/partition controls. MG fixture/correlation follow-up and remaining F1 consumer coverage are separately owned proof tasks. None authorizes another runtime drain-loop patch. F1 supersession and whole-increment approval remain HOLD; complete release successor unsealed/unactivated; shared-control-wave HELD; Runner/TAP PARKED; PR #122 rejected. Stop after reviewed evidence publication.

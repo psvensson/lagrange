@@ -1,0 +1,12 @@
+{
+  "archive": "/tmp/LAGRANGE_ORDERING_CONSUMER_PROOF_5a3cdc7_2026-10-16.tar.gz",
+  "sha256": "1fc137f4027fa9791aa0088d88eff855512c6fd2a22422fe66a66e20927954bc",
+  "bytes": 406271,
+  "payloads": 96,
+  "manifestSha256": "64ea5a1453d773e9ff9201abbfb38ea1780f0c02f29e778fd5b535e2eef82bb5",
+  "freshExtractionVerified": true,
+  "verificationDirectory": "/tmp/lagrange-consumer-packet-verify-rple7apk",
+  "excludedLocallyRetained": [
+    "ownership-resume-20261016.json"
+  ]
+}

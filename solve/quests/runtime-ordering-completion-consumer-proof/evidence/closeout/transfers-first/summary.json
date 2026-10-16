@@ -1,0 +1,18 @@
+{
+  "sha": "5a3cdc71854c7d97d2e3b688258b73c19dd0c6e4",
+  "host": "adam-laptop",
+  "requested": [
+    "test/raft/raft-rs-backend/runtime-completion-consumers-transfers.test.js"
+  ],
+  "results": [
+    {
+      "file": "test/raft/raft-rs-backend/runtime-completion-consumers-transfers.test.js",
+      "code": 0,
+      "rawTap": true,
+      "testSha256": "b0744aa40989929ba5e8e5ca92ade2e92d2ccf59002b1ca56cfad219b6e5bf19"
+    }
+  ],
+  "unrun": [],
+  "exitCode": 0,
+  "meaning": "Per-file original executions; no retries; no overall release certification"
+}

@@ -1,0 +1,5173 @@
+{
+  "kind": "review-derived-summary-not-new-execution",
+  "request": {
+    "root": "/mnt/data/peter/projects/.worktrees/runtime-ordering-consumer-proof-20261015",
+    "sha": "6cddf137b85975947d09c0165eeb0e2f4c4bdcda",
+    "host": "adams-gamla",
+    "files": [
+      "test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js"
+    ],
+    "testIdentity": {
+      "test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js": "458a7ca245aef183f593d76a9474f2aeffdd8789016aa4bb73a8c6448a34661a"
+    },
+    "apiIdentity": {
+      "scripts/lab/probe.js": "493381e074c12987446a27f4feb7a0385f6afea46e97fa41f4c826464f7e8b70",
+      "scripts/run-classified-test-files.js": "cbbfcb9494a76069b33457b87e2cebf1d0e6e7a69c0b2d08181ab89736791aea",
+      "scripts/checks/git-process-environment.js": "c06f8458b6ad8b8725605676ddb7ef269b19bb0bf8bcfc680ce255e92565a078"
+    },
+    "runtimeOwnerSha256": "b47951f39c6a5e7b93670a3a730115b3993976e808ec2e7d76598ade270dbc0f",
+    "retry": "0",
+    "inheritedTapTimeout": null,
+    "command": [
+      "/home/peter/.nvm/versions/node/v22.23.2/bin/node",
+      "/tmp/lagrange-runtime-correction-20261015/run-group-capture.mjs",
+      "/mnt/data/peter/projects/.worktrees/runtime-ordering-consumer-proof-20261015",
+      "/tmp/lagrange-ordering-consumer-proof-20261015/ordering-first",
+      "6cddf137b85975947d09c0165eeb0e2f4c4bdcda",
+      "adams-gamla",
+      "test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js"
+    ]
+  },
+  "result": {
+    "sha": "6cddf137b85975947d09c0165eeb0e2f4c4bdcda",
+    "host": "adams-gamla",
+    "requested": [
+      "test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js"
+    ],
+    "results": [
+      {
+        "file": "test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js",
+        "code": 0,
+        "rawTap": true,
+        "testSha256": "458a7ca245aef183f593d76a9474f2aeffdd8789016aa4bb73a8c6448a34661a"
+      }
+    ],
+    "unrun": [],
+    "exitCode": 0,
+    "meaning": "Per-file original executions; no retries; no overall release certification"
+  },
+  "raw": {
+    "path": "/tmp/lagrange-ordering-consumer-proof-20261015/ordering-first/01/raw.tap",
+    "sha256": "079dbc50d81786e9b772f9ba1088e1d50f77df7dfc6cea9935ec49cf9eb04272",
+    "bytes": 2020654
+  },
+  "tapTotals": {
+    "tests": 3,
+    "pass": 3,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0
+  },
+  "decoding": "Undo Node internal/test_runner/reporter/tap diagnostic escape mapping for backslash/hash, then JSON.parse equivalent; retain values including inherited rounded SQLite INTEGER vote observations. No semantic normalization.",
+  "sourceMappings": {
+    "schedule": "test/raft/raft-rs-backend/runtime-ordering-native-companion-fixture.js:173",
+    "nativeEntry": "src/raft/raft-rs-runtime-owner.js:349",
+    "receiptObserver": "test/raft/raft-rs-backend/runtime-ordering-native-companion-fixture.js:45",
+    "comparisons": "test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js:151",
+    "historicalDurableRead": "test/raft/raft-rs-backend/transfer-leadership-drain-oracle-harness.js:414"
+  },
+  "limitations": [
+    "Crafted higher-term transfer-election vote, not core-emitted vote.",
+    "Native entry and invocation Promise completion are observed; no passive per-native-call return seam.",
+    "One declared zero-time owned-clock dispatch after selected receipt; no measured tick/status/settle. Post interval explicitly drives convergence and restart.",
+    "OracleRun uses synchronous=OFF and is not a power-loss witness.",
+    "Original OracleRun.durable() uses default JS Number SQLite integers: peer vote IDs above MAX_SAFE_INTEGER are rounded. Original raw preserved; exact message and ConfState IDs retained. No claim exact hardState.vote equality from this first run.",
+    "No F1 supersession, completion-consumer certification or whole-increment approval."
+  ],
+  "cases": [
+    {
+      "cell": "mid-turn-D1",
+      "independentReferenceEquality": {
+        "initial": true,
+        "prefix": true,
+        "vote": true,
+        "completeMeasuredPackets": true,
+        "completePassiveEndState": true,
+        "completeOriginalReturnedVector": true
+      },
+      "preCaptureComparison": {
+        "initial": true,
+        "prefix": true,
+        "vote": true,
+        "differentOriginalVectorFields": [
+          "answer",
+          "outbound",
+          "exact",
+          "streams",
+          "durable"
+        ],
+        "equalOriginalVectorFields": [
+          "afterTurn",
+          "atExact",
+          "settled",
+          "recovered"
+        ]
+      },
+      "runs": [
+        {
+          "order": "accepted-during-held-send",
+          "rawLine": 8,
+          "rawLineSha256": "85d3eb8d1b585741299dff087fb353bdd0cb724ab48511c618c595fa8ea9694e",
+          "fixtureChoices": {
+            "reentry": false,
+            "send": "async",
+            "plannedVirtualElapsedMs": 0,
+            "plannedOwnedClockDispatches": 1,
+            "vote": "original-cell-crafted-transfer-election",
+            "persistence": "original-OracleRun-synchronous-OFF-not-power-loss-proof",
+            "nativeCompletion": "existing-seams-record-native-entry-not-native-return",
+            "responseCompletion": "actual-selected-invocation-Promise-observer",
+            "acceptanceDifference": "accepted-during-held-send"
+          },
+          "eventOrder": [
+            {
+              "order": 98,
+              "phase": "measured",
+              "kind": "interval-start",
+              "clockNow": 0,
+              "captureObservation": "source-mapped-between-admission-and-first-prefix-step"
+            },
+            {
+              "order": 102,
+              "phase": "measured",
+              "kind": "delivery-answer",
+              "label": "prefix-0",
+              "result": {
+                "outcome": "CORE_OK",
+                "reason": "inbound-enqueued"
+              },
+              "packetHash": "5e726eb952faa8efbaaaf84d150e9f5155dd09df12fe272f1744dfef929a826b",
+              "unchanged": true
+            },
+            {
+              "order": 106,
+              "phase": "measured",
+              "kind": "delivery-answer",
+              "label": "prefix-1",
+              "result": {
+                "outcome": "CORE_OK",
+                "reason": "inbound-enqueued"
+              },
+              "packetHash": "e0ca0fa28dd67ee17d129a266d955fb39d37b1c2925adc06f08b1d4033688c6c",
+              "unchanged": true
+            },
+            {
+              "order": 107,
+              "phase": "measured",
+              "kind": "selected-operation-call",
+              "decision": "D1"
+            },
+            {
+              "order": 117,
+              "phase": "measured",
+              "kind": "selected-operation-returned",
+              "thenable": true
+            },
+            {
+              "order": 118,
+              "phase": "measured",
+              "kind": "held-send-cut",
+              "heldSends": 1
+            },
+            {
+              "order": 122,
+              "phase": "measured",
+              "kind": "delivery-answer",
+              "label": "vote",
+              "result": {
+                "outcome": "CORE_OK",
+                "reason": "inbound-enqueued"
+              },
+              "packetHash": "b60743bbeb70f2040dbc20bb61130e8e91ae1fdb1895c738662669e53365f2fc",
+              "unchanged": true
+            },
+            {
+              "order": 123,
+              "phase": "measured",
+              "kind": "release-held-sends"
+            },
+            {
+              "order": 154,
+              "phase": "measured",
+              "kind": "native-call",
+              "sequence": 533,
+              "operation": "step",
+              "groupId": "mid-turn-D1",
+              "runtimeGeneration": 1,
+              "args": [
+                {
+                  "msgType": 13,
+                  "from": "3059117043180310503",
+                  "to": "7818641245414824798"
+                }
+              ],
+              "proposalHex": null
+            },
+            {
+              "order": 173,
+              "phase": "measured",
+              "kind": "promise-observed-fulfilled",
+              "label": "selected-operation",
+              "value": {
+                "outcome": "CORE_OK",
+                "reason": "transfer-requested"
+              }
+            },
+            {
+              "order": 175,
+              "phase": "measured",
+              "kind": "owned-clock-dispatch",
+              "before": 0,
+              "advanceMs": 0
+            },
+            {
+              "order": 183,
+              "phase": "measured",
+              "kind": "native-call",
+              "sequence": 542,
+              "operation": "step",
+              "groupId": "mid-turn-D1",
+              "runtimeGeneration": 1,
+              "args": [
+                {
+                  "msgType": 5,
+                  "from": "6347309190110158551",
+                  "to": "7818641245414824798",
+                  "term": "2",
+                  "logTerm": "1",
+                  "index": "4",
+                  "commit": "0",
+                  "context": "Q2FtcGFpZ25UcmFuc2Zlcg=="
+                }
+              ],
+              "proposalHex": null
+            },
+            {
+              "order": 202,
+              "phase": "measured",
+              "kind": "interval-end",
+              "clockNow": 0
+            }
+          ],
+          "initialNativeObservations": [
+            {
+              "replicaId": "oracle-a",
+              "role": "leader",
+              "term": 1,
+              "leaderId": "oracle-a",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            },
+            {
+              "replicaId": "oracle-b",
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            },
+            {
+              "replicaId": "oracle-c",
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            }
+          ],
+          "vote": {
+            "protocol": "raft-rs",
+            "groupId": "mid-turn-D1",
+            "from": "6347309190110158551",
+            "to": "7818641245414824798",
+            "message": {
+              "msgType": 5,
+              "from": "6347309190110158551",
+              "to": "7818641245414824798",
+              "term": "2",
+              "logTerm": "1",
+              "index": "4",
+              "commit": "0",
+              "context": "Q2FtcGFpZ25UcmFuc2Zlcg=="
+            }
+          },
+          "selectedReceipt": {
+            "outcome": "CORE_OK",
+            "reason": "transfer-requested"
+          },
+          "afterSelectedPromiseProjection": {
+            "oracle-a": {
+              "role": "leader",
+              "term": 1,
+              "leaderId": "oracle-a"
+            },
+            "oracle-b": {
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a"
+            },
+            "oracle-c": {
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a"
+            }
+          },
+          "measuredEndProjection": {
+            "oracle-a": {
+              "role": "follower",
+              "term": 2,
+              "leaderId": null
+            },
+            "oracle-b": {
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a"
+            },
+            "oracle-c": {
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a"
+            }
+          },
+          "measuredPositions": [
+            {
+              "replicaId": "oracle-a",
+              "hard": {
+                "term": 2,
+                "vote": 0,
+                "commit_index": 5
+              },
+              "applied": {
+                "applied_index": 5,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 5,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJhY2tub3dsZWRnZWQiOiJtaWQtdHVybiJ9"
+              }
+            },
+            {
+              "replicaId": "oracle-b",
+              "hard": {
+                "term": 1,
+                "vote": 7818641245414825000,
+                "commit_index": 4
+              },
+              "applied": {
+                "applied_index": 4,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 5,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJhY2tub3dsZWRnZWQiOiJtaWQtdHVybiJ9"
+              }
+            },
+            {
+              "replicaId": "oracle-c",
+              "hard": {
+                "term": 1,
+                "vote": 7818641245414825000,
+                "commit_index": 4
+              },
+              "applied": {
+                "applied_index": 4,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 5,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJhY2tub3dsZWRnZWQiOiJtaWQtdHVybiJ9"
+              }
+            }
+          ],
+          "measuredApplicationCommands": {
+            "oracle-a": [
+              {
+                "formation": 0
+              },
+              {
+                "formation": 1
+              },
+              {
+                "formation": 2
+              },
+              {
+                "acknowledged": "mid-turn"
+              }
+            ],
+            "oracle-b": [
+              {
+                "formation": 0
+              },
+              {
+                "formation": 1
+              },
+              {
+                "formation": 2
+              }
+            ],
+            "oracle-c": [
+              {
+                "formation": 0
+              },
+              {
+                "formation": 1
+              },
+              {
+                "formation": 2
+              }
+            ]
+          },
+          "measuredApplicationEvents": [
+            {
+              "order": 129,
+              "phase": "measured",
+              "kind": "application-enter",
+              "replicaId": "oracle-a",
+              "command": {
+                "acknowledged": "mid-turn"
+              },
+              "index": 5,
+              "term": 1
+            },
+            {
+              "order": 130,
+              "phase": "measured",
+              "kind": "application-after-commit",
+              "replicaId": "oracle-a",
+              "command": {
+                "acknowledged": "mid-turn"
+              },
+              "index": 5,
+              "term": 1
+            }
+          ],
+          "outbound": [
+            [
+              3,
+              "oracle-b"
+            ],
+            [
+              3,
+              "oracle-c"
+            ],
+            [
+              14,
+              "oracle-c"
+            ],
+            [
+              6,
+              "oracle-b"
+            ]
+          ],
+          "postDrivenNativeObservations": [
+            {
+              "replicaId": "oracle-a",
+              "role": "follower",
+              "term": 2,
+              "leaderId": "oracle-c",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            },
+            {
+              "replicaId": "oracle-b",
+              "role": "follower",
+              "term": 2,
+              "leaderId": "oracle-c",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            },
+            {
+              "replicaId": "oracle-c",
+              "role": "leader",
+              "term": 2,
+              "leaderId": "oracle-c",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            }
+          ],
+          "postDrivenStreams": {
+            "oracle-a": [
+              [
+                "follower",
+                null
+              ],
+              [
+                "term change",
+                2
+              ],
+              [
+                "leader change",
+                null
+              ],
+              [
+                "leader change",
+                "oracle-c"
+              ]
+            ],
+            "oracle-b": [
+              [
+                "term change",
+                2
+              ],
+              [
+                "leader change",
+                null
+              ],
+              [
+                "leader change",
+                "oracle-c"
+              ]
+            ],
+            "oracle-c": [
+              [
+                "candidate",
+                null
+              ],
+              [
+                "term change",
+                2
+              ],
+              [
+                "leader change",
+                null
+              ],
+              [
+                "leader",
+                null
+              ],
+              [
+                "leader change",
+                "oracle-c"
+              ]
+            ]
+          },
+          "postDrivenPositions": [
+            {
+              "replicaId": "oracle-a",
+              "hard": {
+                "term": 2,
+                "vote": 3059117043180310500,
+                "commit_index": 6
+              },
+              "applied": {
+                "applied_index": 6,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 6,
+                "term": 2,
+                "entry_type": 0,
+                "data": null
+              }
+            },
+            {
+              "replicaId": "oracle-b",
+              "hard": {
+                "term": 2,
+                "vote": 3059117043180310500,
+                "commit_index": 6
+              },
+              "applied": {
+                "applied_index": 6,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 6,
+                "term": 2,
+                "entry_type": 0,
+                "data": null
+              }
+            },
+            {
+              "replicaId": "oracle-c",
+              "hard": {
+                "term": 2,
+                "vote": 3059117043180310500,
+                "commit_index": 6
+              },
+              "applied": {
+                "applied_index": 6,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 6,
+                "term": 2,
+                "entry_type": 0,
+                "data": null
+              }
+            }
+          ],
+          "recovery": {
+            "before": {
+              "term": 2,
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": []
+            },
+            "after": {
+              "term": 2,
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": []
+            }
+          },
+          "projectionMismatches": {
+            "afterTurn": [],
+            "afterDrivenConvergence": []
+          },
+          "observationErrors": [],
+          "failure": null
+        },
+        {
+          "order": "independent-operation-before-vote",
+          "rawLine": 10,
+          "rawLineSha256": "d770c13cc225a0394532458f6a4145d69cfc8ef02ca768e41e3a494221a50a72",
+          "fixtureChoices": {
+            "reentry": false,
+            "send": "async",
+            "plannedVirtualElapsedMs": 0,
+            "plannedOwnedClockDispatches": 1,
+            "vote": "original-cell-crafted-transfer-election",
+            "persistence": "original-OracleRun-synchronous-OFF-not-power-loss-proof",
+            "nativeCompletion": "existing-seams-record-native-entry-not-native-return",
+            "responseCompletion": "actual-selected-invocation-Promise-observer",
+            "acceptanceDifference": "vote-withheld-until-selected-Promise-observed"
+          },
+          "eventOrder": [
+            {
+              "order": 98,
+              "phase": "measured",
+              "kind": "interval-start",
+              "clockNow": 0,
+              "captureObservation": "source-mapped-between-admission-and-first-prefix-step"
+            },
+            {
+              "order": 102,
+              "phase": "measured",
+              "kind": "delivery-answer",
+              "label": "prefix-0",
+              "result": {
+                "outcome": "CORE_OK",
+                "reason": "inbound-enqueued"
+              },
+              "packetHash": "5e726eb952faa8efbaaaf84d150e9f5155dd09df12fe272f1744dfef929a826b",
+              "unchanged": true
+            },
+            {
+              "order": 106,
+              "phase": "measured",
+              "kind": "delivery-answer",
+              "label": "prefix-1",
+              "result": {
+                "outcome": "CORE_OK",
+                "reason": "inbound-enqueued"
+              },
+              "packetHash": "e0ca0fa28dd67ee17d129a266d955fb39d37b1c2925adc06f08b1d4033688c6c",
+              "unchanged": true
+            },
+            {
+              "order": 107,
+              "phase": "measured",
+              "kind": "selected-operation-call",
+              "decision": "D1"
+            },
+            {
+              "order": 117,
+              "phase": "measured",
+              "kind": "selected-operation-returned",
+              "thenable": true
+            },
+            {
+              "order": 118,
+              "phase": "measured",
+              "kind": "held-send-cut",
+              "heldSends": 1
+            },
+            {
+              "order": 119,
+              "phase": "measured",
+              "kind": "release-held-sends"
+            },
+            {
+              "order": 150,
+              "phase": "measured",
+              "kind": "native-call",
+              "sequence": 1684,
+              "operation": "step",
+              "groupId": "mid-turn-D1",
+              "runtimeGeneration": 1,
+              "args": [
+                {
+                  "msgType": 13,
+                  "from": "3059117043180310503",
+                  "to": "7818641245414824798"
+                }
+              ],
+              "proposalHex": null
+            },
+            {
+              "order": 169,
+              "phase": "measured",
+              "kind": "promise-observed-fulfilled",
+              "label": "selected-operation",
+              "value": {
+                "outcome": "CORE_OK",
+                "reason": "transfer-requested"
+              }
+            },
+            {
+              "order": 174,
+              "phase": "measured",
+              "kind": "delivery-answer",
+              "label": "vote",
+              "result": {
+                "outcome": "CORE_OK",
+                "reason": "inbound-enqueued"
+              },
+              "packetHash": "b60743bbeb70f2040dbc20bb61130e8e91ae1fdb1895c738662669e53365f2fc",
+              "unchanged": true
+            },
+            {
+              "order": 175,
+              "phase": "measured",
+              "kind": "owned-clock-dispatch",
+              "before": 0,
+              "advanceMs": 0
+            },
+            {
+              "order": 183,
+              "phase": "measured",
+              "kind": "native-call",
+              "sequence": 1693,
+              "operation": "step",
+              "groupId": "mid-turn-D1",
+              "runtimeGeneration": 1,
+              "args": [
+                {
+                  "msgType": 5,
+                  "from": "6347309190110158551",
+                  "to": "7818641245414824798",
+                  "term": "2",
+                  "logTerm": "1",
+                  "index": "4",
+                  "commit": "0",
+                  "context": "Q2FtcGFpZ25UcmFuc2Zlcg=="
+                }
+              ],
+              "proposalHex": null
+            },
+            {
+              "order": 202,
+              "phase": "measured",
+              "kind": "interval-end",
+              "clockNow": 0
+            }
+          ],
+          "initialNativeObservations": [
+            {
+              "replicaId": "oracle-a",
+              "role": "leader",
+              "term": 1,
+              "leaderId": "oracle-a",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            },
+            {
+              "replicaId": "oracle-b",
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            },
+            {
+              "replicaId": "oracle-c",
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            }
+          ],
+          "vote": {
+            "protocol": "raft-rs",
+            "groupId": "mid-turn-D1",
+            "from": "6347309190110158551",
+            "to": "7818641245414824798",
+            "message": {
+              "msgType": 5,
+              "from": "6347309190110158551",
+              "to": "7818641245414824798",
+              "term": "2",
+              "logTerm": "1",
+              "index": "4",
+              "commit": "0",
+              "context": "Q2FtcGFpZ25UcmFuc2Zlcg=="
+            }
+          },
+          "selectedReceipt": {
+            "outcome": "CORE_OK",
+            "reason": "transfer-requested"
+          },
+          "afterSelectedPromiseProjection": {
+            "oracle-a": {
+              "role": "leader",
+              "term": 1,
+              "leaderId": "oracle-a"
+            },
+            "oracle-b": {
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a"
+            },
+            "oracle-c": {
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a"
+            }
+          },
+          "measuredEndProjection": {
+            "oracle-a": {
+              "role": "follower",
+              "term": 2,
+              "leaderId": null
+            },
+            "oracle-b": {
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a"
+            },
+            "oracle-c": {
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a"
+            }
+          },
+          "measuredPositions": [
+            {
+              "replicaId": "oracle-a",
+              "hard": {
+                "term": 2,
+                "vote": 0,
+                "commit_index": 5
+              },
+              "applied": {
+                "applied_index": 5,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 5,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJhY2tub3dsZWRnZWQiOiJtaWQtdHVybiJ9"
+              }
+            },
+            {
+              "replicaId": "oracle-b",
+              "hard": {
+                "term": 1,
+                "vote": 7818641245414825000,
+                "commit_index": 4
+              },
+              "applied": {
+                "applied_index": 4,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 5,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJhY2tub3dsZWRnZWQiOiJtaWQtdHVybiJ9"
+              }
+            },
+            {
+              "replicaId": "oracle-c",
+              "hard": {
+                "term": 1,
+                "vote": 7818641245414825000,
+                "commit_index": 4
+              },
+              "applied": {
+                "applied_index": 4,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 5,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJhY2tub3dsZWRnZWQiOiJtaWQtdHVybiJ9"
+              }
+            }
+          ],
+          "measuredApplicationCommands": {
+            "oracle-a": [
+              {
+                "formation": 0
+              },
+              {
+                "formation": 1
+              },
+              {
+                "formation": 2
+              },
+              {
+                "acknowledged": "mid-turn"
+              }
+            ],
+            "oracle-b": [
+              {
+                "formation": 0
+              },
+              {
+                "formation": 1
+              },
+              {
+                "formation": 2
+              }
+            ],
+            "oracle-c": [
+              {
+                "formation": 0
+              },
+              {
+                "formation": 1
+              },
+              {
+                "formation": 2
+              }
+            ]
+          },
+          "measuredApplicationEvents": [
+            {
+              "order": 125,
+              "phase": "measured",
+              "kind": "application-enter",
+              "replicaId": "oracle-a",
+              "command": {
+                "acknowledged": "mid-turn"
+              },
+              "index": 5,
+              "term": 1
+            },
+            {
+              "order": 126,
+              "phase": "measured",
+              "kind": "application-after-commit",
+              "replicaId": "oracle-a",
+              "command": {
+                "acknowledged": "mid-turn"
+              },
+              "index": 5,
+              "term": 1
+            }
+          ],
+          "outbound": [
+            [
+              3,
+              "oracle-b"
+            ],
+            [
+              3,
+              "oracle-c"
+            ],
+            [
+              14,
+              "oracle-c"
+            ],
+            [
+              6,
+              "oracle-b"
+            ]
+          ],
+          "postDrivenNativeObservations": [
+            {
+              "replicaId": "oracle-a",
+              "role": "follower",
+              "term": 2,
+              "leaderId": "oracle-c",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            },
+            {
+              "replicaId": "oracle-b",
+              "role": "follower",
+              "term": 2,
+              "leaderId": "oracle-c",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            },
+            {
+              "replicaId": "oracle-c",
+              "role": "leader",
+              "term": 2,
+              "leaderId": "oracle-c",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            }
+          ],
+          "postDrivenStreams": {
+            "oracle-a": [
+              [
+                "follower",
+                null
+              ],
+              [
+                "term change",
+                2
+              ],
+              [
+                "leader change",
+                null
+              ],
+              [
+                "leader change",
+                "oracle-c"
+              ]
+            ],
+            "oracle-b": [
+              [
+                "term change",
+                2
+              ],
+              [
+                "leader change",
+                null
+              ],
+              [
+                "leader change",
+                "oracle-c"
+              ]
+            ],
+            "oracle-c": [
+              [
+                "candidate",
+                null
+              ],
+              [
+                "term change",
+                2
+              ],
+              [
+                "leader change",
+                null
+              ],
+              [
+                "leader",
+                null
+              ],
+              [
+                "leader change",
+                "oracle-c"
+              ]
+            ]
+          },
+          "postDrivenPositions": [
+            {
+              "replicaId": "oracle-a",
+              "hard": {
+                "term": 2,
+                "vote": 3059117043180310500,
+                "commit_index": 6
+              },
+              "applied": {
+                "applied_index": 6,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 6,
+                "term": 2,
+                "entry_type": 0,
+                "data": null
+              }
+            },
+            {
+              "replicaId": "oracle-b",
+              "hard": {
+                "term": 2,
+                "vote": 3059117043180310500,
+                "commit_index": 6
+              },
+              "applied": {
+                "applied_index": 6,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 6,
+                "term": 2,
+                "entry_type": 0,
+                "data": null
+              }
+            },
+            {
+              "replicaId": "oracle-c",
+              "hard": {
+                "term": 2,
+                "vote": 3059117043180310500,
+                "commit_index": 6
+              },
+              "applied": {
+                "applied_index": 6,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 6,
+                "term": 2,
+                "entry_type": 0,
+                "data": null
+              }
+            }
+          ],
+          "recovery": {
+            "before": {
+              "term": 2,
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": []
+            },
+            "after": {
+              "term": 2,
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": []
+            }
+          },
+          "projectionMismatches": {
+            "afterTurn": [],
+            "afterDrivenConvergence": []
+          },
+          "observationErrors": [],
+          "failure": null
+        },
+        {
+          "order": "vote-accepted-before-selected-operation",
+          "rawLine": 12,
+          "rawLineSha256": "ec137ebbf5bea45e511ebde849616acd5f91ef54a9c8dae4b627f38bf70a5c5c",
+          "fixtureChoices": {
+            "reentry": false,
+            "send": "async",
+            "plannedVirtualElapsedMs": 0,
+            "plannedOwnedClockDispatches": 1,
+            "vote": "original-cell-crafted-transfer-election",
+            "persistence": "original-OracleRun-synchronous-OFF-not-power-loss-proof",
+            "nativeCompletion": "existing-seams-record-native-entry-not-native-return",
+            "responseCompletion": "actual-selected-invocation-Promise-observer",
+            "acceptanceDifference": "vote-accepted-before-selected-operation"
+          },
+          "eventOrder": [
+            {
+              "order": 98,
+              "phase": "measured",
+              "kind": "interval-start",
+              "clockNow": 0,
+              "captureObservation": "source-mapped-between-admission-and-first-prefix-step"
+            },
+            {
+              "order": 102,
+              "phase": "measured",
+              "kind": "delivery-answer",
+              "label": "prefix-0",
+              "result": {
+                "outcome": "CORE_OK",
+                "reason": "inbound-enqueued"
+              },
+              "packetHash": "5e726eb952faa8efbaaaf84d150e9f5155dd09df12fe272f1744dfef929a826b",
+              "unchanged": true
+            },
+            {
+              "order": 106,
+              "phase": "measured",
+              "kind": "delivery-answer",
+              "label": "prefix-1",
+              "result": {
+                "outcome": "CORE_OK",
+                "reason": "inbound-enqueued"
+              },
+              "packetHash": "e0ca0fa28dd67ee17d129a266d955fb39d37b1c2925adc06f08b1d4033688c6c",
+              "unchanged": true
+            },
+            {
+              "order": 110,
+              "phase": "measured",
+              "kind": "delivery-answer",
+              "label": "vote",
+              "result": {
+                "outcome": "CORE_OK",
+                "reason": "inbound-enqueued"
+              },
+              "packetHash": "b60743bbeb70f2040dbc20bb61130e8e91ae1fdb1895c738662669e53365f2fc",
+              "unchanged": true
+            },
+            {
+              "order": 111,
+              "phase": "measured",
+              "kind": "selected-operation-call",
+              "decision": "D1"
+            },
+            {
+              "order": 121,
+              "phase": "measured",
+              "kind": "selected-operation-returned",
+              "thenable": true
+            },
+            {
+              "order": 122,
+              "phase": "measured",
+              "kind": "held-send-cut",
+              "heldSends": 1
+            },
+            {
+              "order": 123,
+              "phase": "measured",
+              "kind": "release-held-sends"
+            },
+            {
+              "order": 150,
+              "phase": "measured",
+              "kind": "native-call",
+              "sequence": 2833,
+              "operation": "step",
+              "groupId": "mid-turn-D1",
+              "runtimeGeneration": 1,
+              "args": [
+                {
+                  "msgType": 5,
+                  "from": "6347309190110158551",
+                  "to": "7818641245414824798",
+                  "term": "2",
+                  "logTerm": "1",
+                  "index": "4",
+                  "commit": "0",
+                  "context": "Q2FtcGFpZ25UcmFuc2Zlcg=="
+                }
+              ],
+              "proposalHex": null
+            },
+            {
+              "order": 173,
+              "phase": "measured",
+              "kind": "promise-observed-fulfilled",
+              "label": "selected-operation",
+              "value": {
+                "outcome": "CORE_REFUSED",
+                "reason": "no-known-leader",
+                "phase": "leadership-transfer",
+                "retryable": true,
+                "recoveryRequired": false
+              }
+            },
+            {
+              "order": 175,
+              "phase": "measured",
+              "kind": "owned-clock-dispatch",
+              "before": 0,
+              "advanceMs": 0
+            },
+            {
+              "order": 182,
+              "phase": "measured",
+              "kind": "interval-end",
+              "clockNow": 0
+            }
+          ],
+          "initialNativeObservations": [
+            {
+              "replicaId": "oracle-a",
+              "role": "leader",
+              "term": 1,
+              "leaderId": "oracle-a",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            },
+            {
+              "replicaId": "oracle-b",
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            },
+            {
+              "replicaId": "oracle-c",
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            }
+          ],
+          "vote": {
+            "protocol": "raft-rs",
+            "groupId": "mid-turn-D1",
+            "from": "6347309190110158551",
+            "to": "7818641245414824798",
+            "message": {
+              "msgType": 5,
+              "from": "6347309190110158551",
+              "to": "7818641245414824798",
+              "term": "2",
+              "logTerm": "1",
+              "index": "4",
+              "commit": "0",
+              "context": "Q2FtcGFpZ25UcmFuc2Zlcg=="
+            }
+          },
+          "selectedReceipt": {
+            "outcome": "CORE_REFUSED",
+            "reason": "no-known-leader",
+            "phase": "leadership-transfer",
+            "retryable": true,
+            "recoveryRequired": false
+          },
+          "afterSelectedPromiseProjection": {
+            "oracle-a": {
+              "role": "follower",
+              "term": 2,
+              "leaderId": null
+            },
+            "oracle-b": {
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a"
+            },
+            "oracle-c": {
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a"
+            }
+          },
+          "measuredEndProjection": {
+            "oracle-a": {
+              "role": "follower",
+              "term": 2,
+              "leaderId": null
+            },
+            "oracle-b": {
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a"
+            },
+            "oracle-c": {
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a"
+            }
+          },
+          "measuredPositions": [
+            {
+              "replicaId": "oracle-a",
+              "hard": {
+                "term": 2,
+                "vote": 0,
+                "commit_index": 5
+              },
+              "applied": {
+                "applied_index": 5,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 5,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJhY2tub3dsZWRnZWQiOiJtaWQtdHVybiJ9"
+              }
+            },
+            {
+              "replicaId": "oracle-b",
+              "hard": {
+                "term": 1,
+                "vote": 7818641245414825000,
+                "commit_index": 4
+              },
+              "applied": {
+                "applied_index": 4,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 5,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJhY2tub3dsZWRnZWQiOiJtaWQtdHVybiJ9"
+              }
+            },
+            {
+              "replicaId": "oracle-c",
+              "hard": {
+                "term": 1,
+                "vote": 7818641245414825000,
+                "commit_index": 4
+              },
+              "applied": {
+                "applied_index": 4,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 5,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJhY2tub3dsZWRnZWQiOiJtaWQtdHVybiJ9"
+              }
+            }
+          ],
+          "measuredApplicationCommands": {
+            "oracle-a": [
+              {
+                "formation": 0
+              },
+              {
+                "formation": 1
+              },
+              {
+                "formation": 2
+              },
+              {
+                "acknowledged": "mid-turn"
+              }
+            ],
+            "oracle-b": [
+              {
+                "formation": 0
+              },
+              {
+                "formation": 1
+              },
+              {
+                "formation": 2
+              }
+            ],
+            "oracle-c": [
+              {
+                "formation": 0
+              },
+              {
+                "formation": 1
+              },
+              {
+                "formation": 2
+              }
+            ]
+          },
+          "measuredApplicationEvents": [
+            {
+              "order": 129,
+              "phase": "measured",
+              "kind": "application-enter",
+              "replicaId": "oracle-a",
+              "command": {
+                "acknowledged": "mid-turn"
+              },
+              "index": 5,
+              "term": 1
+            },
+            {
+              "order": 130,
+              "phase": "measured",
+              "kind": "application-after-commit",
+              "replicaId": "oracle-a",
+              "command": {
+                "acknowledged": "mid-turn"
+              },
+              "index": 5,
+              "term": 1
+            }
+          ],
+          "outbound": [
+            [
+              3,
+              "oracle-b"
+            ],
+            [
+              3,
+              "oracle-c"
+            ],
+            [
+              6,
+              "oracle-b"
+            ]
+          ],
+          "postDrivenNativeObservations": [
+            {
+              "replicaId": "oracle-a",
+              "role": "follower",
+              "term": 2,
+              "leaderId": null,
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            },
+            {
+              "replicaId": "oracle-b",
+              "role": "follower",
+              "term": 2,
+              "leaderId": null,
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            },
+            {
+              "replicaId": "oracle-c",
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            }
+          ],
+          "postDrivenStreams": {
+            "oracle-a": [
+              [
+                "follower",
+                null
+              ],
+              [
+                "term change",
+                2
+              ],
+              [
+                "leader change",
+                null
+              ]
+            ],
+            "oracle-b": [
+              [
+                "term change",
+                2
+              ],
+              [
+                "leader change",
+                null
+              ]
+            ],
+            "oracle-c": []
+          },
+          "postDrivenPositions": [
+            {
+              "replicaId": "oracle-a",
+              "hard": {
+                "term": 2,
+                "vote": 0,
+                "commit_index": 5
+              },
+              "applied": {
+                "applied_index": 5,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 5,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJhY2tub3dsZWRnZWQiOiJtaWQtdHVybiJ9"
+              }
+            },
+            {
+              "replicaId": "oracle-b",
+              "hard": {
+                "term": 2,
+                "vote": 0,
+                "commit_index": 5
+              },
+              "applied": {
+                "applied_index": 5,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 5,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJhY2tub3dsZWRnZWQiOiJtaWQtdHVybiJ9"
+              }
+            },
+            {
+              "replicaId": "oracle-c",
+              "hard": {
+                "term": 1,
+                "vote": 7818641245414825000,
+                "commit_index": 5
+              },
+              "applied": {
+                "applied_index": 5,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 5,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJhY2tub3dsZWRnZWQiOiJtaWQtdHVybiJ9"
+              }
+            }
+          ],
+          "recovery": {
+            "before": {
+              "term": 2,
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": []
+            },
+            "after": {
+              "term": 2,
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": []
+            }
+          },
+          "projectionMismatches": {
+            "afterTurn": [],
+            "afterDrivenConvergence": []
+          },
+          "observationErrors": [],
+          "failure": null
+        }
+      ],
+      "interpretation": "Late/reference native transfer emits TimeoutNow to C and post-driven schedule elects C at term2, commit/applied6; pre-capture refuses transfer, emits no TimeoutNow, retains commit/applied5 and no new leader during the fixed interval."
+    },
+    {
+      "cell": "mid-turn-D2",
+      "independentReferenceEquality": {
+        "initial": true,
+        "prefix": true,
+        "vote": true,
+        "completeMeasuredPackets": true,
+        "completePassiveEndState": true,
+        "completeOriginalReturnedVector": true
+      },
+      "preCaptureComparison": {
+        "initial": true,
+        "prefix": true,
+        "vote": true,
+        "differentOriginalVectorFields": [
+          "answer",
+          "outbound",
+          "exact",
+          "streams",
+          "durable"
+        ],
+        "equalOriginalVectorFields": [
+          "afterTurn",
+          "atExact",
+          "settled",
+          "recovered"
+        ]
+      },
+      "runs": [
+        {
+          "order": "accepted-during-held-send",
+          "rawLine": 21,
+          "rawLineSha256": "b0ee6a847177c4d6314662997044648d1a24709bd79c918e50f36374dd4f6274",
+          "fixtureChoices": {
+            "reentry": false,
+            "send": "async",
+            "plannedVirtualElapsedMs": 0,
+            "plannedOwnedClockDispatches": 1,
+            "vote": "original-cell-crafted-transfer-election",
+            "persistence": "original-OracleRun-synchronous-OFF-not-power-loss-proof",
+            "nativeCompletion": "existing-seams-record-native-entry-not-native-return",
+            "responseCompletion": "actual-selected-invocation-Promise-observer",
+            "acceptanceDifference": "accepted-during-held-send"
+          },
+          "eventOrder": [
+            {
+              "order": 98,
+              "phase": "measured",
+              "kind": "interval-start",
+              "clockNow": 0,
+              "captureObservation": "source-mapped-between-admission-and-first-prefix-step"
+            },
+            {
+              "order": 102,
+              "phase": "measured",
+              "kind": "delivery-answer",
+              "label": "prefix-0",
+              "result": {
+                "outcome": "CORE_OK",
+                "reason": "inbound-enqueued"
+              },
+              "packetHash": "7a5d726143b7576a32b33bcb24a970743815404cd423bd11092f8a74eeee8af2",
+              "unchanged": true
+            },
+            {
+              "order": 106,
+              "phase": "measured",
+              "kind": "delivery-answer",
+              "label": "prefix-1",
+              "result": {
+                "outcome": "CORE_OK",
+                "reason": "inbound-enqueued"
+              },
+              "packetHash": "162af99edf78ac3b5a7bfd05c731cf8b3a465acfe6e12cc27d841af2008ab6de",
+              "unchanged": true
+            },
+            {
+              "order": 107,
+              "phase": "measured",
+              "kind": "selected-operation-call",
+              "decision": "D2"
+            },
+            {
+              "order": 117,
+              "phase": "measured",
+              "kind": "selected-operation-returned",
+              "thenable": true
+            },
+            {
+              "order": 118,
+              "phase": "measured",
+              "kind": "held-send-cut",
+              "heldSends": 1
+            },
+            {
+              "order": 122,
+              "phase": "measured",
+              "kind": "delivery-answer",
+              "label": "vote",
+              "result": {
+                "outcome": "CORE_OK",
+                "reason": "inbound-enqueued"
+              },
+              "packetHash": "ed567acc315f59c40a767b31e2012a6c08a2fb57edb7d3d1cd277172dfd1d492",
+              "unchanged": true
+            },
+            {
+              "order": 123,
+              "phase": "measured",
+              "kind": "release-held-sends"
+            },
+            {
+              "order": 154,
+              "phase": "measured",
+              "kind": "native-call",
+              "sequence": 3712,
+              "operation": "step",
+              "groupId": "mid-turn-D2",
+              "runtimeGeneration": 1,
+              "args": [
+                {
+                  "msgType": 13,
+                  "from": "3059117043180310503",
+                  "to": "7818641245414824798"
+                }
+              ],
+              "proposalHex": null
+            },
+            {
+              "order": 173,
+              "phase": "measured",
+              "kind": "promise-observed-fulfilled",
+              "label": "selected-operation",
+              "value": {
+                "outcome": "CORE_OK",
+                "reason": "transfer-requested"
+              }
+            },
+            {
+              "order": 175,
+              "phase": "measured",
+              "kind": "owned-clock-dispatch",
+              "before": 0,
+              "advanceMs": 0
+            },
+            {
+              "order": 183,
+              "phase": "measured",
+              "kind": "native-call",
+              "sequence": 3721,
+              "operation": "step",
+              "groupId": "mid-turn-D2",
+              "runtimeGeneration": 1,
+              "args": [
+                {
+                  "msgType": 5,
+                  "from": "6347309190110158551",
+                  "to": "7818641245414824798",
+                  "term": "2",
+                  "logTerm": "1",
+                  "index": "4",
+                  "commit": "0",
+                  "context": "Q2FtcGFpZ25UcmFuc2Zlcg=="
+                }
+              ],
+              "proposalHex": null
+            },
+            {
+              "order": 202,
+              "phase": "measured",
+              "kind": "interval-end",
+              "clockNow": 0
+            }
+          ],
+          "initialNativeObservations": [
+            {
+              "replicaId": "oracle-a",
+              "role": "leader",
+              "term": 1,
+              "leaderId": "oracle-a",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            },
+            {
+              "replicaId": "oracle-b",
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            },
+            {
+              "replicaId": "oracle-c",
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            }
+          ],
+          "vote": {
+            "protocol": "raft-rs",
+            "groupId": "mid-turn-D2",
+            "from": "6347309190110158551",
+            "to": "7818641245414824798",
+            "message": {
+              "msgType": 5,
+              "from": "6347309190110158551",
+              "to": "7818641245414824798",
+              "term": "2",
+              "logTerm": "1",
+              "index": "4",
+              "commit": "0",
+              "context": "Q2FtcGFpZ25UcmFuc2Zlcg=="
+            }
+          },
+          "selectedReceipt": {
+            "outcome": "CORE_OK",
+            "reason": "transfer-requested"
+          },
+          "afterSelectedPromiseProjection": {
+            "oracle-a": {
+              "role": "leader",
+              "term": 1,
+              "leaderId": "oracle-a"
+            },
+            "oracle-b": {
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a"
+            },
+            "oracle-c": {
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a"
+            }
+          },
+          "measuredEndProjection": {
+            "oracle-a": {
+              "role": "follower",
+              "term": 2,
+              "leaderId": null
+            },
+            "oracle-b": {
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a"
+            },
+            "oracle-c": {
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a"
+            }
+          },
+          "measuredPositions": [
+            {
+              "replicaId": "oracle-a",
+              "hard": {
+                "term": 2,
+                "vote": 0,
+                "commit_index": 5
+              },
+              "applied": {
+                "applied_index": 5,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 5,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJhY2tub3dsZWRnZWQiOiJtaWQtdHVybiJ9"
+              }
+            },
+            {
+              "replicaId": "oracle-b",
+              "hard": {
+                "term": 1,
+                "vote": 7818641245414825000,
+                "commit_index": 4
+              },
+              "applied": {
+                "applied_index": 4,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 5,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJhY2tub3dsZWRnZWQiOiJtaWQtdHVybiJ9"
+              }
+            },
+            {
+              "replicaId": "oracle-c",
+              "hard": {
+                "term": 1,
+                "vote": 7818641245414825000,
+                "commit_index": 4
+              },
+              "applied": {
+                "applied_index": 4,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 5,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJhY2tub3dsZWRnZWQiOiJtaWQtdHVybiJ9"
+              }
+            }
+          ],
+          "measuredApplicationCommands": {
+            "oracle-a": [
+              {
+                "formation": 0
+              },
+              {
+                "formation": 1
+              },
+              {
+                "formation": 2
+              },
+              {
+                "acknowledged": "mid-turn"
+              }
+            ],
+            "oracle-b": [
+              {
+                "formation": 0
+              },
+              {
+                "formation": 1
+              },
+              {
+                "formation": 2
+              }
+            ],
+            "oracle-c": [
+              {
+                "formation": 0
+              },
+              {
+                "formation": 1
+              },
+              {
+                "formation": 2
+              }
+            ]
+          },
+          "measuredApplicationEvents": [
+            {
+              "order": 129,
+              "phase": "measured",
+              "kind": "application-enter",
+              "replicaId": "oracle-a",
+              "command": {
+                "acknowledged": "mid-turn"
+              },
+              "index": 5,
+              "term": 1
+            },
+            {
+              "order": 130,
+              "phase": "measured",
+              "kind": "application-after-commit",
+              "replicaId": "oracle-a",
+              "command": {
+                "acknowledged": "mid-turn"
+              },
+              "index": 5,
+              "term": 1
+            }
+          ],
+          "outbound": [
+            [
+              3,
+              "oracle-b"
+            ],
+            [
+              3,
+              "oracle-c"
+            ],
+            [
+              14,
+              "oracle-c"
+            ],
+            [
+              6,
+              "oracle-b"
+            ]
+          ],
+          "postDrivenNativeObservations": [
+            {
+              "replicaId": "oracle-a",
+              "role": "follower",
+              "term": 2,
+              "leaderId": "oracle-c",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            },
+            {
+              "replicaId": "oracle-b",
+              "role": "follower",
+              "term": 2,
+              "leaderId": "oracle-c",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            },
+            {
+              "replicaId": "oracle-c",
+              "role": "leader",
+              "term": 2,
+              "leaderId": "oracle-c",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            }
+          ],
+          "postDrivenStreams": {
+            "oracle-a": [
+              [
+                "follower",
+                null
+              ],
+              [
+                "term change",
+                2
+              ],
+              [
+                "leader change",
+                null
+              ],
+              [
+                "leader change",
+                "oracle-c"
+              ]
+            ],
+            "oracle-b": [
+              [
+                "term change",
+                2
+              ],
+              [
+                "leader change",
+                null
+              ],
+              [
+                "leader change",
+                "oracle-c"
+              ]
+            ],
+            "oracle-c": [
+              [
+                "candidate",
+                null
+              ],
+              [
+                "term change",
+                2
+              ],
+              [
+                "leader change",
+                null
+              ],
+              [
+                "leader",
+                null
+              ],
+              [
+                "leader change",
+                "oracle-c"
+              ]
+            ]
+          },
+          "postDrivenPositions": [
+            {
+              "replicaId": "oracle-a",
+              "hard": {
+                "term": 2,
+                "vote": 3059117043180310500,
+                "commit_index": 6
+              },
+              "applied": {
+                "applied_index": 6,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 6,
+                "term": 2,
+                "entry_type": 0,
+                "data": null
+              }
+            },
+            {
+              "replicaId": "oracle-b",
+              "hard": {
+                "term": 2,
+                "vote": 3059117043180310500,
+                "commit_index": 6
+              },
+              "applied": {
+                "applied_index": 6,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 6,
+                "term": 2,
+                "entry_type": 0,
+                "data": null
+              }
+            },
+            {
+              "replicaId": "oracle-c",
+              "hard": {
+                "term": 2,
+                "vote": 3059117043180310500,
+                "commit_index": 6
+              },
+              "applied": {
+                "applied_index": 6,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 6,
+                "term": 2,
+                "entry_type": 0,
+                "data": null
+              }
+            }
+          ],
+          "recovery": {
+            "before": {
+              "term": 2,
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": []
+            },
+            "after": {
+              "term": 2,
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": []
+            }
+          },
+          "projectionMismatches": {
+            "afterTurn": [],
+            "afterDrivenConvergence": []
+          },
+          "observationErrors": [],
+          "failure": null
+        },
+        {
+          "order": "independent-operation-before-vote",
+          "rawLine": 23,
+          "rawLineSha256": "1151cf5b6362e2728ae3ea2a4d43691158b69e3802effaab2bac09a795aa9ce1",
+          "fixtureChoices": {
+            "reentry": false,
+            "send": "async",
+            "plannedVirtualElapsedMs": 0,
+            "plannedOwnedClockDispatches": 1,
+            "vote": "original-cell-crafted-transfer-election",
+            "persistence": "original-OracleRun-synchronous-OFF-not-power-loss-proof",
+            "nativeCompletion": "existing-seams-record-native-entry-not-native-return",
+            "responseCompletion": "actual-selected-invocation-Promise-observer",
+            "acceptanceDifference": "vote-withheld-until-selected-Promise-observed"
+          },
+          "eventOrder": [
+            {
+              "order": 98,
+              "phase": "measured",
+              "kind": "interval-start",
+              "clockNow": 0,
+              "captureObservation": "source-mapped-between-admission-and-first-prefix-step"
+            },
+            {
+              "order": 102,
+              "phase": "measured",
+              "kind": "delivery-answer",
+              "label": "prefix-0",
+              "result": {
+                "outcome": "CORE_OK",
+                "reason": "inbound-enqueued"
+              },
+              "packetHash": "7a5d726143b7576a32b33bcb24a970743815404cd423bd11092f8a74eeee8af2",
+              "unchanged": true
+            },
+            {
+              "order": 106,
+              "phase": "measured",
+              "kind": "delivery-answer",
+              "label": "prefix-1",
+              "result": {
+                "outcome": "CORE_OK",
+                "reason": "inbound-enqueued"
+              },
+              "packetHash": "162af99edf78ac3b5a7bfd05c731cf8b3a465acfe6e12cc27d841af2008ab6de",
+              "unchanged": true
+            },
+            {
+              "order": 107,
+              "phase": "measured",
+              "kind": "selected-operation-call",
+              "decision": "D2"
+            },
+            {
+              "order": 117,
+              "phase": "measured",
+              "kind": "selected-operation-returned",
+              "thenable": true
+            },
+            {
+              "order": 118,
+              "phase": "measured",
+              "kind": "held-send-cut",
+              "heldSends": 1
+            },
+            {
+              "order": 119,
+              "phase": "measured",
+              "kind": "release-held-sends"
+            },
+            {
+              "order": 150,
+              "phase": "measured",
+              "kind": "native-call",
+              "sequence": 4863,
+              "operation": "step",
+              "groupId": "mid-turn-D2",
+              "runtimeGeneration": 1,
+              "args": [
+                {
+                  "msgType": 13,
+                  "from": "3059117043180310503",
+                  "to": "7818641245414824798"
+                }
+              ],
+              "proposalHex": null
+            },
+            {
+              "order": 169,
+              "phase": "measured",
+              "kind": "promise-observed-fulfilled",
+              "label": "selected-operation",
+              "value": {
+                "outcome": "CORE_OK",
+                "reason": "transfer-requested"
+              }
+            },
+            {
+              "order": 174,
+              "phase": "measured",
+              "kind": "delivery-answer",
+              "label": "vote",
+              "result": {
+                "outcome": "CORE_OK",
+                "reason": "inbound-enqueued"
+              },
+              "packetHash": "ed567acc315f59c40a767b31e2012a6c08a2fb57edb7d3d1cd277172dfd1d492",
+              "unchanged": true
+            },
+            {
+              "order": 175,
+              "phase": "measured",
+              "kind": "owned-clock-dispatch",
+              "before": 0,
+              "advanceMs": 0
+            },
+            {
+              "order": 183,
+              "phase": "measured",
+              "kind": "native-call",
+              "sequence": 4872,
+              "operation": "step",
+              "groupId": "mid-turn-D2",
+              "runtimeGeneration": 1,
+              "args": [
+                {
+                  "msgType": 5,
+                  "from": "6347309190110158551",
+                  "to": "7818641245414824798",
+                  "term": "2",
+                  "logTerm": "1",
+                  "index": "4",
+                  "commit": "0",
+                  "context": "Q2FtcGFpZ25UcmFuc2Zlcg=="
+                }
+              ],
+              "proposalHex": null
+            },
+            {
+              "order": 202,
+              "phase": "measured",
+              "kind": "interval-end",
+              "clockNow": 0
+            }
+          ],
+          "initialNativeObservations": [
+            {
+              "replicaId": "oracle-a",
+              "role": "leader",
+              "term": 1,
+              "leaderId": "oracle-a",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            },
+            {
+              "replicaId": "oracle-b",
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            },
+            {
+              "replicaId": "oracle-c",
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            }
+          ],
+          "vote": {
+            "protocol": "raft-rs",
+            "groupId": "mid-turn-D2",
+            "from": "6347309190110158551",
+            "to": "7818641245414824798",
+            "message": {
+              "msgType": 5,
+              "from": "6347309190110158551",
+              "to": "7818641245414824798",
+              "term": "2",
+              "logTerm": "1",
+              "index": "4",
+              "commit": "0",
+              "context": "Q2FtcGFpZ25UcmFuc2Zlcg=="
+            }
+          },
+          "selectedReceipt": {
+            "outcome": "CORE_OK",
+            "reason": "transfer-requested"
+          },
+          "afterSelectedPromiseProjection": {
+            "oracle-a": {
+              "role": "leader",
+              "term": 1,
+              "leaderId": "oracle-a"
+            },
+            "oracle-b": {
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a"
+            },
+            "oracle-c": {
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a"
+            }
+          },
+          "measuredEndProjection": {
+            "oracle-a": {
+              "role": "follower",
+              "term": 2,
+              "leaderId": null
+            },
+            "oracle-b": {
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a"
+            },
+            "oracle-c": {
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a"
+            }
+          },
+          "measuredPositions": [
+            {
+              "replicaId": "oracle-a",
+              "hard": {
+                "term": 2,
+                "vote": 0,
+                "commit_index": 5
+              },
+              "applied": {
+                "applied_index": 5,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 5,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJhY2tub3dsZWRnZWQiOiJtaWQtdHVybiJ9"
+              }
+            },
+            {
+              "replicaId": "oracle-b",
+              "hard": {
+                "term": 1,
+                "vote": 7818641245414825000,
+                "commit_index": 4
+              },
+              "applied": {
+                "applied_index": 4,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 5,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJhY2tub3dsZWRnZWQiOiJtaWQtdHVybiJ9"
+              }
+            },
+            {
+              "replicaId": "oracle-c",
+              "hard": {
+                "term": 1,
+                "vote": 7818641245414825000,
+                "commit_index": 4
+              },
+              "applied": {
+                "applied_index": 4,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 5,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJhY2tub3dsZWRnZWQiOiJtaWQtdHVybiJ9"
+              }
+            }
+          ],
+          "measuredApplicationCommands": {
+            "oracle-a": [
+              {
+                "formation": 0
+              },
+              {
+                "formation": 1
+              },
+              {
+                "formation": 2
+              },
+              {
+                "acknowledged": "mid-turn"
+              }
+            ],
+            "oracle-b": [
+              {
+                "formation": 0
+              },
+              {
+                "formation": 1
+              },
+              {
+                "formation": 2
+              }
+            ],
+            "oracle-c": [
+              {
+                "formation": 0
+              },
+              {
+                "formation": 1
+              },
+              {
+                "formation": 2
+              }
+            ]
+          },
+          "measuredApplicationEvents": [
+            {
+              "order": 125,
+              "phase": "measured",
+              "kind": "application-enter",
+              "replicaId": "oracle-a",
+              "command": {
+                "acknowledged": "mid-turn"
+              },
+              "index": 5,
+              "term": 1
+            },
+            {
+              "order": 126,
+              "phase": "measured",
+              "kind": "application-after-commit",
+              "replicaId": "oracle-a",
+              "command": {
+                "acknowledged": "mid-turn"
+              },
+              "index": 5,
+              "term": 1
+            }
+          ],
+          "outbound": [
+            [
+              3,
+              "oracle-b"
+            ],
+            [
+              3,
+              "oracle-c"
+            ],
+            [
+              14,
+              "oracle-c"
+            ],
+            [
+              6,
+              "oracle-b"
+            ]
+          ],
+          "postDrivenNativeObservations": [
+            {
+              "replicaId": "oracle-a",
+              "role": "follower",
+              "term": 2,
+              "leaderId": "oracle-c",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            },
+            {
+              "replicaId": "oracle-b",
+              "role": "follower",
+              "term": 2,
+              "leaderId": "oracle-c",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            },
+            {
+              "replicaId": "oracle-c",
+              "role": "leader",
+              "term": 2,
+              "leaderId": "oracle-c",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            }
+          ],
+          "postDrivenStreams": {
+            "oracle-a": [
+              [
+                "follower",
+                null
+              ],
+              [
+                "term change",
+                2
+              ],
+              [
+                "leader change",
+                null
+              ],
+              [
+                "leader change",
+                "oracle-c"
+              ]
+            ],
+            "oracle-b": [
+              [
+                "term change",
+                2
+              ],
+              [
+                "leader change",
+                null
+              ],
+              [
+                "leader change",
+                "oracle-c"
+              ]
+            ],
+            "oracle-c": [
+              [
+                "candidate",
+                null
+              ],
+              [
+                "term change",
+                2
+              ],
+              [
+                "leader change",
+                null
+              ],
+              [
+                "leader",
+                null
+              ],
+              [
+                "leader change",
+                "oracle-c"
+              ]
+            ]
+          },
+          "postDrivenPositions": [
+            {
+              "replicaId": "oracle-a",
+              "hard": {
+                "term": 2,
+                "vote": 3059117043180310500,
+                "commit_index": 6
+              },
+              "applied": {
+                "applied_index": 6,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 6,
+                "term": 2,
+                "entry_type": 0,
+                "data": null
+              }
+            },
+            {
+              "replicaId": "oracle-b",
+              "hard": {
+                "term": 2,
+                "vote": 3059117043180310500,
+                "commit_index": 6
+              },
+              "applied": {
+                "applied_index": 6,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 6,
+                "term": 2,
+                "entry_type": 0,
+                "data": null
+              }
+            },
+            {
+              "replicaId": "oracle-c",
+              "hard": {
+                "term": 2,
+                "vote": 3059117043180310500,
+                "commit_index": 6
+              },
+              "applied": {
+                "applied_index": 6,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 6,
+                "term": 2,
+                "entry_type": 0,
+                "data": null
+              }
+            }
+          ],
+          "recovery": {
+            "before": {
+              "term": 2,
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": []
+            },
+            "after": {
+              "term": 2,
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": []
+            }
+          },
+          "projectionMismatches": {
+            "afterTurn": [],
+            "afterDrivenConvergence": []
+          },
+          "observationErrors": [],
+          "failure": null
+        },
+        {
+          "order": "vote-accepted-before-selected-operation",
+          "rawLine": 25,
+          "rawLineSha256": "872d6b8abda627db148cd032523826cea38ce751562f889a8fbf293c13ed1f42",
+          "fixtureChoices": {
+            "reentry": false,
+            "send": "async",
+            "plannedVirtualElapsedMs": 0,
+            "plannedOwnedClockDispatches": 1,
+            "vote": "original-cell-crafted-transfer-election",
+            "persistence": "original-OracleRun-synchronous-OFF-not-power-loss-proof",
+            "nativeCompletion": "existing-seams-record-native-entry-not-native-return",
+            "responseCompletion": "actual-selected-invocation-Promise-observer",
+            "acceptanceDifference": "vote-accepted-before-selected-operation"
+          },
+          "eventOrder": [
+            {
+              "order": 98,
+              "phase": "measured",
+              "kind": "interval-start",
+              "clockNow": 0,
+              "captureObservation": "source-mapped-between-admission-and-first-prefix-step"
+            },
+            {
+              "order": 102,
+              "phase": "measured",
+              "kind": "delivery-answer",
+              "label": "prefix-0",
+              "result": {
+                "outcome": "CORE_OK",
+                "reason": "inbound-enqueued"
+              },
+              "packetHash": "7a5d726143b7576a32b33bcb24a970743815404cd423bd11092f8a74eeee8af2",
+              "unchanged": true
+            },
+            {
+              "order": 106,
+              "phase": "measured",
+              "kind": "delivery-answer",
+              "label": "prefix-1",
+              "result": {
+                "outcome": "CORE_OK",
+                "reason": "inbound-enqueued"
+              },
+              "packetHash": "162af99edf78ac3b5a7bfd05c731cf8b3a465acfe6e12cc27d841af2008ab6de",
+              "unchanged": true
+            },
+            {
+              "order": 110,
+              "phase": "measured",
+              "kind": "delivery-answer",
+              "label": "vote",
+              "result": {
+                "outcome": "CORE_OK",
+                "reason": "inbound-enqueued"
+              },
+              "packetHash": "ed567acc315f59c40a767b31e2012a6c08a2fb57edb7d3d1cd277172dfd1d492",
+              "unchanged": true
+            },
+            {
+              "order": 111,
+              "phase": "measured",
+              "kind": "selected-operation-call",
+              "decision": "D2"
+            },
+            {
+              "order": 121,
+              "phase": "measured",
+              "kind": "selected-operation-returned",
+              "thenable": true
+            },
+            {
+              "order": 122,
+              "phase": "measured",
+              "kind": "held-send-cut",
+              "heldSends": 1
+            },
+            {
+              "order": 123,
+              "phase": "measured",
+              "kind": "release-held-sends"
+            },
+            {
+              "order": 150,
+              "phase": "measured",
+              "kind": "native-call",
+              "sequence": 6012,
+              "operation": "step",
+              "groupId": "mid-turn-D2",
+              "runtimeGeneration": 1,
+              "args": [
+                {
+                  "msgType": 5,
+                  "from": "6347309190110158551",
+                  "to": "7818641245414824798",
+                  "term": "2",
+                  "logTerm": "1",
+                  "index": "4",
+                  "commit": "0",
+                  "context": "Q2FtcGFpZ25UcmFuc2Zlcg=="
+                }
+              ],
+              "proposalHex": null
+            },
+            {
+              "order": 173,
+              "phase": "measured",
+              "kind": "promise-observed-fulfilled",
+              "label": "selected-operation",
+              "value": {
+                "outcome": "CORE_REFUSED",
+                "reason": "not-leader",
+                "phase": "leadership-transfer",
+                "retryable": false,
+                "recoveryRequired": false
+              }
+            },
+            {
+              "order": 175,
+              "phase": "measured",
+              "kind": "owned-clock-dispatch",
+              "before": 0,
+              "advanceMs": 0
+            },
+            {
+              "order": 182,
+              "phase": "measured",
+              "kind": "interval-end",
+              "clockNow": 0
+            }
+          ],
+          "initialNativeObservations": [
+            {
+              "replicaId": "oracle-a",
+              "role": "leader",
+              "term": 1,
+              "leaderId": "oracle-a",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            },
+            {
+              "replicaId": "oracle-b",
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            },
+            {
+              "replicaId": "oracle-c",
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            }
+          ],
+          "vote": {
+            "protocol": "raft-rs",
+            "groupId": "mid-turn-D2",
+            "from": "6347309190110158551",
+            "to": "7818641245414824798",
+            "message": {
+              "msgType": 5,
+              "from": "6347309190110158551",
+              "to": "7818641245414824798",
+              "term": "2",
+              "logTerm": "1",
+              "index": "4",
+              "commit": "0",
+              "context": "Q2FtcGFpZ25UcmFuc2Zlcg=="
+            }
+          },
+          "selectedReceipt": {
+            "outcome": "CORE_REFUSED",
+            "reason": "not-leader",
+            "phase": "leadership-transfer",
+            "retryable": false,
+            "recoveryRequired": false
+          },
+          "afterSelectedPromiseProjection": {
+            "oracle-a": {
+              "role": "follower",
+              "term": 2,
+              "leaderId": null
+            },
+            "oracle-b": {
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a"
+            },
+            "oracle-c": {
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a"
+            }
+          },
+          "measuredEndProjection": {
+            "oracle-a": {
+              "role": "follower",
+              "term": 2,
+              "leaderId": null
+            },
+            "oracle-b": {
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a"
+            },
+            "oracle-c": {
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a"
+            }
+          },
+          "measuredPositions": [
+            {
+              "replicaId": "oracle-a",
+              "hard": {
+                "term": 2,
+                "vote": 0,
+                "commit_index": 5
+              },
+              "applied": {
+                "applied_index": 5,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 5,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJhY2tub3dsZWRnZWQiOiJtaWQtdHVybiJ9"
+              }
+            },
+            {
+              "replicaId": "oracle-b",
+              "hard": {
+                "term": 1,
+                "vote": 7818641245414825000,
+                "commit_index": 4
+              },
+              "applied": {
+                "applied_index": 4,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 5,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJhY2tub3dsZWRnZWQiOiJtaWQtdHVybiJ9"
+              }
+            },
+            {
+              "replicaId": "oracle-c",
+              "hard": {
+                "term": 1,
+                "vote": 7818641245414825000,
+                "commit_index": 4
+              },
+              "applied": {
+                "applied_index": 4,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 5,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJhY2tub3dsZWRnZWQiOiJtaWQtdHVybiJ9"
+              }
+            }
+          ],
+          "measuredApplicationCommands": {
+            "oracle-a": [
+              {
+                "formation": 0
+              },
+              {
+                "formation": 1
+              },
+              {
+                "formation": 2
+              },
+              {
+                "acknowledged": "mid-turn"
+              }
+            ],
+            "oracle-b": [
+              {
+                "formation": 0
+              },
+              {
+                "formation": 1
+              },
+              {
+                "formation": 2
+              }
+            ],
+            "oracle-c": [
+              {
+                "formation": 0
+              },
+              {
+                "formation": 1
+              },
+              {
+                "formation": 2
+              }
+            ]
+          },
+          "measuredApplicationEvents": [
+            {
+              "order": 129,
+              "phase": "measured",
+              "kind": "application-enter",
+              "replicaId": "oracle-a",
+              "command": {
+                "acknowledged": "mid-turn"
+              },
+              "index": 5,
+              "term": 1
+            },
+            {
+              "order": 130,
+              "phase": "measured",
+              "kind": "application-after-commit",
+              "replicaId": "oracle-a",
+              "command": {
+                "acknowledged": "mid-turn"
+              },
+              "index": 5,
+              "term": 1
+            }
+          ],
+          "outbound": [
+            [
+              3,
+              "oracle-b"
+            ],
+            [
+              3,
+              "oracle-c"
+            ],
+            [
+              6,
+              "oracle-b"
+            ]
+          ],
+          "postDrivenNativeObservations": [
+            {
+              "replicaId": "oracle-a",
+              "role": "follower",
+              "term": 2,
+              "leaderId": null,
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            },
+            {
+              "replicaId": "oracle-b",
+              "role": "follower",
+              "term": 2,
+              "leaderId": null,
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            },
+            {
+              "replicaId": "oracle-c",
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            }
+          ],
+          "postDrivenStreams": {
+            "oracle-a": [
+              [
+                "follower",
+                null
+              ],
+              [
+                "term change",
+                2
+              ],
+              [
+                "leader change",
+                null
+              ]
+            ],
+            "oracle-b": [
+              [
+                "term change",
+                2
+              ],
+              [
+                "leader change",
+                null
+              ]
+            ],
+            "oracle-c": []
+          },
+          "postDrivenPositions": [
+            {
+              "replicaId": "oracle-a",
+              "hard": {
+                "term": 2,
+                "vote": 0,
+                "commit_index": 5
+              },
+              "applied": {
+                "applied_index": 5,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 5,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJhY2tub3dsZWRnZWQiOiJtaWQtdHVybiJ9"
+              }
+            },
+            {
+              "replicaId": "oracle-b",
+              "hard": {
+                "term": 2,
+                "vote": 0,
+                "commit_index": 5
+              },
+              "applied": {
+                "applied_index": 5,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 5,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJhY2tub3dsZWRnZWQiOiJtaWQtdHVybiJ9"
+              }
+            },
+            {
+              "replicaId": "oracle-c",
+              "hard": {
+                "term": 1,
+                "vote": 7818641245414825000,
+                "commit_index": 5
+              },
+              "applied": {
+                "applied_index": 5,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 5,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJhY2tub3dsZWRnZWQiOiJtaWQtdHVybiJ9"
+              }
+            }
+          ],
+          "recovery": {
+            "before": {
+              "term": 2,
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": []
+            },
+            "after": {
+              "term": 2,
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": []
+            }
+          },
+          "projectionMismatches": {
+            "afterTurn": [],
+            "afterDrivenConvergence": []
+          },
+          "observationErrors": [],
+          "failure": null
+        }
+      ],
+      "interpretation": "Late/reference native transfer emits TimeoutNow to C and post-driven schedule elects C at term2, commit/applied6; pre-capture refuses transfer, emits no TimeoutNow, retains commit/applied5 and no new leader during the fixed interval."
+    },
+    {
+      "cell": "mid-turn-D3",
+      "independentReferenceEquality": {
+        "initial": true,
+        "prefix": true,
+        "vote": true,
+        "completeMeasuredPackets": true,
+        "completePassiveEndState": true,
+        "completeOriginalReturnedVector": true
+      },
+      "preCaptureComparison": {
+        "initial": true,
+        "prefix": true,
+        "vote": true,
+        "differentOriginalVectorFields": [
+          "answer",
+          "outbound",
+          "durable"
+        ],
+        "equalOriginalVectorFields": [
+          "afterTurn",
+          "exact",
+          "streams",
+          "atExact",
+          "settled",
+          "recovered"
+        ]
+      },
+      "runs": [
+        {
+          "order": "accepted-during-held-send",
+          "rawLine": 34,
+          "rawLineSha256": "763998d2cccb55160dd81a4c8d199ab0a48a71fb7b40cf65357df6b5f60c4ddc",
+          "fixtureChoices": {
+            "reentry": false,
+            "send": "async",
+            "plannedVirtualElapsedMs": 0,
+            "plannedOwnedClockDispatches": 1,
+            "vote": "original-cell-crafted-transfer-election",
+            "persistence": "original-OracleRun-synchronous-OFF-not-power-loss-proof",
+            "nativeCompletion": "existing-seams-record-native-entry-not-native-return",
+            "responseCompletion": "actual-selected-invocation-Promise-observer",
+            "acceptanceDifference": "accepted-during-held-send"
+          },
+          "eventOrder": [
+            {
+              "order": 98,
+              "phase": "measured",
+              "kind": "interval-start",
+              "clockNow": 0,
+              "captureObservation": "source-mapped-between-admission-and-first-prefix-step"
+            },
+            {
+              "order": 102,
+              "phase": "measured",
+              "kind": "delivery-answer",
+              "label": "prefix-0",
+              "result": {
+                "outcome": "CORE_OK",
+                "reason": "inbound-enqueued"
+              },
+              "packetHash": "c20ad593ad4b7202296ffcfa65cea4310d8c9a27e5a527d6c7c5a6cac20f18ac",
+              "unchanged": true
+            },
+            {
+              "order": 106,
+              "phase": "measured",
+              "kind": "delivery-answer",
+              "label": "prefix-1",
+              "result": {
+                "outcome": "CORE_OK",
+                "reason": "inbound-enqueued"
+              },
+              "packetHash": "2f56cd8a3780525ed803513e07e09030546adbe6ed54dff93b20e43f1eda3ade",
+              "unchanged": true
+            },
+            {
+              "order": 107,
+              "phase": "measured",
+              "kind": "selected-operation-call",
+              "decision": "D3"
+            },
+            {
+              "order": 117,
+              "phase": "measured",
+              "kind": "selected-operation-returned",
+              "thenable": true
+            },
+            {
+              "order": 118,
+              "phase": "measured",
+              "kind": "held-send-cut",
+              "heldSends": 1
+            },
+            {
+              "order": 122,
+              "phase": "measured",
+              "kind": "delivery-answer",
+              "label": "vote",
+              "result": {
+                "outcome": "CORE_OK",
+                "reason": "inbound-enqueued"
+              },
+              "packetHash": "d25f987c0c3ea59b9da9908b021fa4f78249fe813c4883174f781666e3d1f9c9",
+              "unchanged": true
+            },
+            {
+              "order": 123,
+              "phase": "measured",
+              "kind": "release-held-sends"
+            },
+            {
+              "order": 150,
+              "phase": "measured",
+              "kind": "native-call",
+              "sequence": 6889,
+              "operation": "propose",
+              "groupId": "mid-turn-D3",
+              "runtimeGeneration": 1,
+              "args": [
+                {
+                  "0": 123,
+                  "1": 34,
+                  "2": 100,
+                  "3": 101,
+                  "4": 99,
+                  "5": 105,
+                  "6": 115,
+                  "7": 105,
+                  "8": 111,
+                  "9": 110,
+                  "10": 34,
+                  "11": 58,
+                  "12": 34,
+                  "13": 112,
+                  "14": 114,
+                  "15": 111,
+                  "16": 112,
+                  "17": 111,
+                  "18": 115,
+                  "19": 101,
+                  "20": 34,
+                  "21": 44,
+                  "22": 34,
+                  "23": 97,
+                  "24": 116,
+                  "25": 34,
+                  "26": 58,
+                  "27": 34,
+                  "28": 111,
+                  "29": 114,
+                  "30": 97,
+                  "31": 99,
+                  "32": 108,
+                  "33": 101,
+                  "34": 45,
+                  "35": 97,
+                  "36": 34,
+                  "37": 125
+                }
+              ],
+              "proposalHex": "7b226465636973696f6e223a2270726f706f7365222c226174223a226f7261636c652d61227d"
+            },
+            {
+              "order": 171,
+              "phase": "measured",
+              "kind": "promise-observed-fulfilled",
+              "label": "selected-operation",
+              "value": {
+                "outcome": "CORE_OK",
+                "reason": "drained"
+              }
+            },
+            {
+              "order": 173,
+              "phase": "measured",
+              "kind": "owned-clock-dispatch",
+              "before": 0,
+              "advanceMs": 0
+            },
+            {
+              "order": 181,
+              "phase": "measured",
+              "kind": "native-call",
+              "sequence": 6898,
+              "operation": "step",
+              "groupId": "mid-turn-D3",
+              "runtimeGeneration": 1,
+              "args": [
+                {
+                  "msgType": 5,
+                  "from": "6347309190110158551",
+                  "to": "7818641245414824798",
+                  "term": "2",
+                  "logTerm": "1",
+                  "index": "4",
+                  "commit": "0",
+                  "context": "Q2FtcGFpZ25UcmFuc2Zlcg=="
+                }
+              ],
+              "proposalHex": null
+            },
+            {
+              "order": 200,
+              "phase": "measured",
+              "kind": "interval-end",
+              "clockNow": 0
+            }
+          ],
+          "initialNativeObservations": [
+            {
+              "replicaId": "oracle-a",
+              "role": "leader",
+              "term": 1,
+              "leaderId": "oracle-a",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            },
+            {
+              "replicaId": "oracle-b",
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            },
+            {
+              "replicaId": "oracle-c",
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            }
+          ],
+          "vote": {
+            "protocol": "raft-rs",
+            "groupId": "mid-turn-D3",
+            "from": "6347309190110158551",
+            "to": "7818641245414824798",
+            "message": {
+              "msgType": 5,
+              "from": "6347309190110158551",
+              "to": "7818641245414824798",
+              "term": "2",
+              "logTerm": "1",
+              "index": "4",
+              "commit": "0",
+              "context": "Q2FtcGFpZ25UcmFuc2Zlcg=="
+            }
+          },
+          "selectedReceipt": {
+            "outcome": "CORE_OK",
+            "reason": "drained"
+          },
+          "afterSelectedPromiseProjection": {
+            "oracle-a": {
+              "role": "leader",
+              "term": 1,
+              "leaderId": "oracle-a"
+            },
+            "oracle-b": {
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a"
+            },
+            "oracle-c": {
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a"
+            }
+          },
+          "measuredEndProjection": {
+            "oracle-a": {
+              "role": "follower",
+              "term": 2,
+              "leaderId": null
+            },
+            "oracle-b": {
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a"
+            },
+            "oracle-c": {
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a"
+            }
+          },
+          "measuredPositions": [
+            {
+              "replicaId": "oracle-a",
+              "hard": {
+                "term": 2,
+                "vote": 0,
+                "commit_index": 5
+              },
+              "applied": {
+                "applied_index": 5,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 6,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJkZWNpc2lvbiI6InByb3Bvc2UiLCJhdCI6Im9yYWNsZS1hIn0="
+              }
+            },
+            {
+              "replicaId": "oracle-b",
+              "hard": {
+                "term": 1,
+                "vote": 7818641245414825000,
+                "commit_index": 4
+              },
+              "applied": {
+                "applied_index": 4,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 5,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJhY2tub3dsZWRnZWQiOiJtaWQtdHVybiJ9"
+              }
+            },
+            {
+              "replicaId": "oracle-c",
+              "hard": {
+                "term": 1,
+                "vote": 7818641245414825000,
+                "commit_index": 4
+              },
+              "applied": {
+                "applied_index": 4,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 5,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJhY2tub3dsZWRnZWQiOiJtaWQtdHVybiJ9"
+              }
+            }
+          ],
+          "measuredApplicationCommands": {
+            "oracle-a": [
+              {
+                "formation": 0
+              },
+              {
+                "formation": 1
+              },
+              {
+                "formation": 2
+              },
+              {
+                "acknowledged": "mid-turn"
+              }
+            ],
+            "oracle-b": [
+              {
+                "formation": 0
+              },
+              {
+                "formation": 1
+              },
+              {
+                "formation": 2
+              }
+            ],
+            "oracle-c": [
+              {
+                "formation": 0
+              },
+              {
+                "formation": 1
+              },
+              {
+                "formation": 2
+              }
+            ]
+          },
+          "measuredApplicationEvents": [
+            {
+              "order": 129,
+              "phase": "measured",
+              "kind": "application-enter",
+              "replicaId": "oracle-a",
+              "command": {
+                "acknowledged": "mid-turn"
+              },
+              "index": 5,
+              "term": 1
+            },
+            {
+              "order": 130,
+              "phase": "measured",
+              "kind": "application-after-commit",
+              "replicaId": "oracle-a",
+              "command": {
+                "acknowledged": "mid-turn"
+              },
+              "index": 5,
+              "term": 1
+            }
+          ],
+          "outbound": [
+            [
+              3,
+              "oracle-b"
+            ],
+            [
+              3,
+              "oracle-c"
+            ],
+            [
+              3,
+              "oracle-b"
+            ],
+            [
+              3,
+              "oracle-c"
+            ],
+            [
+              6,
+              "oracle-b"
+            ]
+          ],
+          "postDrivenNativeObservations": [
+            {
+              "replicaId": "oracle-a",
+              "role": "follower",
+              "term": 2,
+              "leaderId": null,
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            },
+            {
+              "replicaId": "oracle-b",
+              "role": "follower",
+              "term": 2,
+              "leaderId": null,
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            },
+            {
+              "replicaId": "oracle-c",
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            }
+          ],
+          "postDrivenStreams": {
+            "oracle-a": [
+              [
+                "follower",
+                null
+              ],
+              [
+                "term change",
+                2
+              ],
+              [
+                "leader change",
+                null
+              ]
+            ],
+            "oracle-b": [
+              [
+                "term change",
+                2
+              ],
+              [
+                "leader change",
+                null
+              ]
+            ],
+            "oracle-c": []
+          },
+          "postDrivenPositions": [
+            {
+              "replicaId": "oracle-a",
+              "hard": {
+                "term": 2,
+                "vote": 0,
+                "commit_index": 5
+              },
+              "applied": {
+                "applied_index": 5,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 6,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJkZWNpc2lvbiI6InByb3Bvc2UiLCJhdCI6Im9yYWNsZS1hIn0="
+              }
+            },
+            {
+              "replicaId": "oracle-b",
+              "hard": {
+                "term": 2,
+                "vote": 0,
+                "commit_index": 5
+              },
+              "applied": {
+                "applied_index": 5,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 6,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJkZWNpc2lvbiI6InByb3Bvc2UiLCJhdCI6Im9yYWNsZS1hIn0="
+              }
+            },
+            {
+              "replicaId": "oracle-c",
+              "hard": {
+                "term": 1,
+                "vote": 7818641245414825000,
+                "commit_index": 5
+              },
+              "applied": {
+                "applied_index": 5,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 6,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJkZWNpc2lvbiI6InByb3Bvc2UiLCJhdCI6Im9yYWNsZS1hIn0="
+              }
+            }
+          ],
+          "recovery": {
+            "before": {
+              "term": 2,
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": []
+            },
+            "after": {
+              "term": 2,
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": []
+            }
+          },
+          "projectionMismatches": {
+            "afterTurn": [],
+            "afterDrivenConvergence": []
+          },
+          "observationErrors": [],
+          "failure": null
+        },
+        {
+          "order": "independent-operation-before-vote",
+          "rawLine": 36,
+          "rawLineSha256": "d8a12ca23093390992ae2291026083955581bfb43e602bc36b895ec3fe73dc5a",
+          "fixtureChoices": {
+            "reentry": false,
+            "send": "async",
+            "plannedVirtualElapsedMs": 0,
+            "plannedOwnedClockDispatches": 1,
+            "vote": "original-cell-crafted-transfer-election",
+            "persistence": "original-OracleRun-synchronous-OFF-not-power-loss-proof",
+            "nativeCompletion": "existing-seams-record-native-entry-not-native-return",
+            "responseCompletion": "actual-selected-invocation-Promise-observer",
+            "acceptanceDifference": "vote-withheld-until-selected-Promise-observed"
+          },
+          "eventOrder": [
+            {
+              "order": 98,
+              "phase": "measured",
+              "kind": "interval-start",
+              "clockNow": 0,
+              "captureObservation": "source-mapped-between-admission-and-first-prefix-step"
+            },
+            {
+              "order": 102,
+              "phase": "measured",
+              "kind": "delivery-answer",
+              "label": "prefix-0",
+              "result": {
+                "outcome": "CORE_OK",
+                "reason": "inbound-enqueued"
+              },
+              "packetHash": "c20ad593ad4b7202296ffcfa65cea4310d8c9a27e5a527d6c7c5a6cac20f18ac",
+              "unchanged": true
+            },
+            {
+              "order": 106,
+              "phase": "measured",
+              "kind": "delivery-answer",
+              "label": "prefix-1",
+              "result": {
+                "outcome": "CORE_OK",
+                "reason": "inbound-enqueued"
+              },
+              "packetHash": "2f56cd8a3780525ed803513e07e09030546adbe6ed54dff93b20e43f1eda3ade",
+              "unchanged": true
+            },
+            {
+              "order": 107,
+              "phase": "measured",
+              "kind": "selected-operation-call",
+              "decision": "D3"
+            },
+            {
+              "order": 117,
+              "phase": "measured",
+              "kind": "selected-operation-returned",
+              "thenable": true
+            },
+            {
+              "order": 118,
+              "phase": "measured",
+              "kind": "held-send-cut",
+              "heldSends": 1
+            },
+            {
+              "order": 119,
+              "phase": "measured",
+              "kind": "release-held-sends"
+            },
+            {
+              "order": 146,
+              "phase": "measured",
+              "kind": "native-call",
+              "sequence": 7799,
+              "operation": "propose",
+              "groupId": "mid-turn-D3",
+              "runtimeGeneration": 1,
+              "args": [
+                {
+                  "0": 123,
+                  "1": 34,
+                  "2": 100,
+                  "3": 101,
+                  "4": 99,
+                  "5": 105,
+                  "6": 115,
+                  "7": 105,
+                  "8": 111,
+                  "9": 110,
+                  "10": 34,
+                  "11": 58,
+                  "12": 34,
+                  "13": 112,
+                  "14": 114,
+                  "15": 111,
+                  "16": 112,
+                  "17": 111,
+                  "18": 115,
+                  "19": 101,
+                  "20": 34,
+                  "21": 44,
+                  "22": 34,
+                  "23": 97,
+                  "24": 116,
+                  "25": 34,
+                  "26": 58,
+                  "27": 34,
+                  "28": 111,
+                  "29": 114,
+                  "30": 97,
+                  "31": 99,
+                  "32": 108,
+                  "33": 101,
+                  "34": 45,
+                  "35": 97,
+                  "36": 34,
+                  "37": 125
+                }
+              ],
+              "proposalHex": "7b226465636973696f6e223a2270726f706f7365222c226174223a226f7261636c652d61227d"
+            },
+            {
+              "order": 167,
+              "phase": "measured",
+              "kind": "promise-observed-fulfilled",
+              "label": "selected-operation",
+              "value": {
+                "outcome": "CORE_OK",
+                "reason": "drained"
+              }
+            },
+            {
+              "order": 172,
+              "phase": "measured",
+              "kind": "delivery-answer",
+              "label": "vote",
+              "result": {
+                "outcome": "CORE_OK",
+                "reason": "inbound-enqueued"
+              },
+              "packetHash": "d25f987c0c3ea59b9da9908b021fa4f78249fe813c4883174f781666e3d1f9c9",
+              "unchanged": true
+            },
+            {
+              "order": 173,
+              "phase": "measured",
+              "kind": "owned-clock-dispatch",
+              "before": 0,
+              "advanceMs": 0
+            },
+            {
+              "order": 181,
+              "phase": "measured",
+              "kind": "native-call",
+              "sequence": 7808,
+              "operation": "step",
+              "groupId": "mid-turn-D3",
+              "runtimeGeneration": 1,
+              "args": [
+                {
+                  "msgType": 5,
+                  "from": "6347309190110158551",
+                  "to": "7818641245414824798",
+                  "term": "2",
+                  "logTerm": "1",
+                  "index": "4",
+                  "commit": "0",
+                  "context": "Q2FtcGFpZ25UcmFuc2Zlcg=="
+                }
+              ],
+              "proposalHex": null
+            },
+            {
+              "order": 200,
+              "phase": "measured",
+              "kind": "interval-end",
+              "clockNow": 0
+            }
+          ],
+          "initialNativeObservations": [
+            {
+              "replicaId": "oracle-a",
+              "role": "leader",
+              "term": 1,
+              "leaderId": "oracle-a",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            },
+            {
+              "replicaId": "oracle-b",
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            },
+            {
+              "replicaId": "oracle-c",
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            }
+          ],
+          "vote": {
+            "protocol": "raft-rs",
+            "groupId": "mid-turn-D3",
+            "from": "6347309190110158551",
+            "to": "7818641245414824798",
+            "message": {
+              "msgType": 5,
+              "from": "6347309190110158551",
+              "to": "7818641245414824798",
+              "term": "2",
+              "logTerm": "1",
+              "index": "4",
+              "commit": "0",
+              "context": "Q2FtcGFpZ25UcmFuc2Zlcg=="
+            }
+          },
+          "selectedReceipt": {
+            "outcome": "CORE_OK",
+            "reason": "drained"
+          },
+          "afterSelectedPromiseProjection": {
+            "oracle-a": {
+              "role": "leader",
+              "term": 1,
+              "leaderId": "oracle-a"
+            },
+            "oracle-b": {
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a"
+            },
+            "oracle-c": {
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a"
+            }
+          },
+          "measuredEndProjection": {
+            "oracle-a": {
+              "role": "follower",
+              "term": 2,
+              "leaderId": null
+            },
+            "oracle-b": {
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a"
+            },
+            "oracle-c": {
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a"
+            }
+          },
+          "measuredPositions": [
+            {
+              "replicaId": "oracle-a",
+              "hard": {
+                "term": 2,
+                "vote": 0,
+                "commit_index": 5
+              },
+              "applied": {
+                "applied_index": 5,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 6,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJkZWNpc2lvbiI6InByb3Bvc2UiLCJhdCI6Im9yYWNsZS1hIn0="
+              }
+            },
+            {
+              "replicaId": "oracle-b",
+              "hard": {
+                "term": 1,
+                "vote": 7818641245414825000,
+                "commit_index": 4
+              },
+              "applied": {
+                "applied_index": 4,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 5,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJhY2tub3dsZWRnZWQiOiJtaWQtdHVybiJ9"
+              }
+            },
+            {
+              "replicaId": "oracle-c",
+              "hard": {
+                "term": 1,
+                "vote": 7818641245414825000,
+                "commit_index": 4
+              },
+              "applied": {
+                "applied_index": 4,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 5,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJhY2tub3dsZWRnZWQiOiJtaWQtdHVybiJ9"
+              }
+            }
+          ],
+          "measuredApplicationCommands": {
+            "oracle-a": [
+              {
+                "formation": 0
+              },
+              {
+                "formation": 1
+              },
+              {
+                "formation": 2
+              },
+              {
+                "acknowledged": "mid-turn"
+              }
+            ],
+            "oracle-b": [
+              {
+                "formation": 0
+              },
+              {
+                "formation": 1
+              },
+              {
+                "formation": 2
+              }
+            ],
+            "oracle-c": [
+              {
+                "formation": 0
+              },
+              {
+                "formation": 1
+              },
+              {
+                "formation": 2
+              }
+            ]
+          },
+          "measuredApplicationEvents": [
+            {
+              "order": 125,
+              "phase": "measured",
+              "kind": "application-enter",
+              "replicaId": "oracle-a",
+              "command": {
+                "acknowledged": "mid-turn"
+              },
+              "index": 5,
+              "term": 1
+            },
+            {
+              "order": 126,
+              "phase": "measured",
+              "kind": "application-after-commit",
+              "replicaId": "oracle-a",
+              "command": {
+                "acknowledged": "mid-turn"
+              },
+              "index": 5,
+              "term": 1
+            }
+          ],
+          "outbound": [
+            [
+              3,
+              "oracle-b"
+            ],
+            [
+              3,
+              "oracle-c"
+            ],
+            [
+              3,
+              "oracle-b"
+            ],
+            [
+              3,
+              "oracle-c"
+            ],
+            [
+              6,
+              "oracle-b"
+            ]
+          ],
+          "postDrivenNativeObservations": [
+            {
+              "replicaId": "oracle-a",
+              "role": "follower",
+              "term": 2,
+              "leaderId": null,
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            },
+            {
+              "replicaId": "oracle-b",
+              "role": "follower",
+              "term": 2,
+              "leaderId": null,
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            },
+            {
+              "replicaId": "oracle-c",
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            }
+          ],
+          "postDrivenStreams": {
+            "oracle-a": [
+              [
+                "follower",
+                null
+              ],
+              [
+                "term change",
+                2
+              ],
+              [
+                "leader change",
+                null
+              ]
+            ],
+            "oracle-b": [
+              [
+                "term change",
+                2
+              ],
+              [
+                "leader change",
+                null
+              ]
+            ],
+            "oracle-c": []
+          },
+          "postDrivenPositions": [
+            {
+              "replicaId": "oracle-a",
+              "hard": {
+                "term": 2,
+                "vote": 0,
+                "commit_index": 5
+              },
+              "applied": {
+                "applied_index": 5,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 6,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJkZWNpc2lvbiI6InByb3Bvc2UiLCJhdCI6Im9yYWNsZS1hIn0="
+              }
+            },
+            {
+              "replicaId": "oracle-b",
+              "hard": {
+                "term": 2,
+                "vote": 0,
+                "commit_index": 5
+              },
+              "applied": {
+                "applied_index": 5,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 6,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJkZWNpc2lvbiI6InByb3Bvc2UiLCJhdCI6Im9yYWNsZS1hIn0="
+              }
+            },
+            {
+              "replicaId": "oracle-c",
+              "hard": {
+                "term": 1,
+                "vote": 7818641245414825000,
+                "commit_index": 5
+              },
+              "applied": {
+                "applied_index": 5,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 6,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJkZWNpc2lvbiI6InByb3Bvc2UiLCJhdCI6Im9yYWNsZS1hIn0="
+              }
+            }
+          ],
+          "recovery": {
+            "before": {
+              "term": 2,
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": []
+            },
+            "after": {
+              "term": 2,
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": []
+            }
+          },
+          "projectionMismatches": {
+            "afterTurn": [],
+            "afterDrivenConvergence": []
+          },
+          "observationErrors": [],
+          "failure": null
+        },
+        {
+          "order": "vote-accepted-before-selected-operation",
+          "rawLine": 38,
+          "rawLineSha256": "5bfd2dcbcc0a498fe5f416fb35c98d5e734d481907cc72a758941d7d37c1303b",
+          "fixtureChoices": {
+            "reentry": false,
+            "send": "async",
+            "plannedVirtualElapsedMs": 0,
+            "plannedOwnedClockDispatches": 1,
+            "vote": "original-cell-crafted-transfer-election",
+            "persistence": "original-OracleRun-synchronous-OFF-not-power-loss-proof",
+            "nativeCompletion": "existing-seams-record-native-entry-not-native-return",
+            "responseCompletion": "actual-selected-invocation-Promise-observer",
+            "acceptanceDifference": "vote-accepted-before-selected-operation"
+          },
+          "eventOrder": [
+            {
+              "order": 98,
+              "phase": "measured",
+              "kind": "interval-start",
+              "clockNow": 0,
+              "captureObservation": "source-mapped-between-admission-and-first-prefix-step"
+            },
+            {
+              "order": 102,
+              "phase": "measured",
+              "kind": "delivery-answer",
+              "label": "prefix-0",
+              "result": {
+                "outcome": "CORE_OK",
+                "reason": "inbound-enqueued"
+              },
+              "packetHash": "c20ad593ad4b7202296ffcfa65cea4310d8c9a27e5a527d6c7c5a6cac20f18ac",
+              "unchanged": true
+            },
+            {
+              "order": 106,
+              "phase": "measured",
+              "kind": "delivery-answer",
+              "label": "prefix-1",
+              "result": {
+                "outcome": "CORE_OK",
+                "reason": "inbound-enqueued"
+              },
+              "packetHash": "2f56cd8a3780525ed803513e07e09030546adbe6ed54dff93b20e43f1eda3ade",
+              "unchanged": true
+            },
+            {
+              "order": 110,
+              "phase": "measured",
+              "kind": "delivery-answer",
+              "label": "vote",
+              "result": {
+                "outcome": "CORE_OK",
+                "reason": "inbound-enqueued"
+              },
+              "packetHash": "d25f987c0c3ea59b9da9908b021fa4f78249fe813c4883174f781666e3d1f9c9",
+              "unchanged": true
+            },
+            {
+              "order": 111,
+              "phase": "measured",
+              "kind": "selected-operation-call",
+              "decision": "D3"
+            },
+            {
+              "order": 121,
+              "phase": "measured",
+              "kind": "selected-operation-returned",
+              "thenable": true
+            },
+            {
+              "order": 122,
+              "phase": "measured",
+              "kind": "held-send-cut",
+              "heldSends": 1
+            },
+            {
+              "order": 123,
+              "phase": "measured",
+              "kind": "release-held-sends"
+            },
+            {
+              "order": 150,
+              "phase": "measured",
+              "kind": "native-call",
+              "sequence": 8709,
+              "operation": "step",
+              "groupId": "mid-turn-D3",
+              "runtimeGeneration": 1,
+              "args": [
+                {
+                  "msgType": 5,
+                  "from": "6347309190110158551",
+                  "to": "7818641245414824798",
+                  "term": "2",
+                  "logTerm": "1",
+                  "index": "4",
+                  "commit": "0",
+                  "context": "Q2FtcGFpZ25UcmFuc2Zlcg=="
+                }
+              ],
+              "proposalHex": null
+            },
+            {
+              "order": 170,
+              "phase": "measured",
+              "kind": "native-call",
+              "sequence": 8718,
+              "operation": "propose",
+              "groupId": "mid-turn-D3",
+              "runtimeGeneration": 1,
+              "args": [
+                {
+                  "0": 123,
+                  "1": 34,
+                  "2": 100,
+                  "3": 101,
+                  "4": 99,
+                  "5": 105,
+                  "6": 115,
+                  "7": 105,
+                  "8": 111,
+                  "9": 110,
+                  "10": 34,
+                  "11": 58,
+                  "12": 34,
+                  "13": 112,
+                  "14": 114,
+                  "15": 111,
+                  "16": 112,
+                  "17": 111,
+                  "18": 115,
+                  "19": 101,
+                  "20": 34,
+                  "21": 44,
+                  "22": 34,
+                  "23": 97,
+                  "24": 116,
+                  "25": 34,
+                  "26": 58,
+                  "27": 34,
+                  "28": 111,
+                  "29": 114,
+                  "30": 97,
+                  "31": 99,
+                  "32": 108,
+                  "33": 101,
+                  "34": 45,
+                  "35": 97,
+                  "36": 34,
+                  "37": 125
+                }
+              ],
+              "proposalHex": "7b226465636973696f6e223a2270726f706f7365222c226174223a226f7261636c652d61227d"
+            },
+            {
+              "order": 175,
+              "phase": "measured",
+              "kind": "promise-observed-fulfilled",
+              "label": "selected-operation",
+              "value": {
+                "outcome": "CORE_REFUSED",
+                "reason": "propose: raft: proposal dropped",
+                "phase": "propose",
+                "retryable": false,
+                "recoveryRequired": false
+              }
+            },
+            {
+              "order": 177,
+              "phase": "measured",
+              "kind": "owned-clock-dispatch",
+              "before": 0,
+              "advanceMs": 0
+            },
+            {
+              "order": 184,
+              "phase": "measured",
+              "kind": "interval-end",
+              "clockNow": 0
+            }
+          ],
+          "initialNativeObservations": [
+            {
+              "replicaId": "oracle-a",
+              "role": "leader",
+              "term": 1,
+              "leaderId": "oracle-a",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            },
+            {
+              "replicaId": "oracle-b",
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            },
+            {
+              "replicaId": "oracle-c",
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            }
+          ],
+          "vote": {
+            "protocol": "raft-rs",
+            "groupId": "mid-turn-D3",
+            "from": "6347309190110158551",
+            "to": "7818641245414824798",
+            "message": {
+              "msgType": 5,
+              "from": "6347309190110158551",
+              "to": "7818641245414824798",
+              "term": "2",
+              "logTerm": "1",
+              "index": "4",
+              "commit": "0",
+              "context": "Q2FtcGFpZ25UcmFuc2Zlcg=="
+            }
+          },
+          "selectedReceipt": {
+            "outcome": "CORE_REFUSED",
+            "reason": "propose: raft: proposal dropped",
+            "phase": "propose",
+            "retryable": false,
+            "recoveryRequired": false
+          },
+          "afterSelectedPromiseProjection": {
+            "oracle-a": {
+              "role": "follower",
+              "term": 2,
+              "leaderId": null
+            },
+            "oracle-b": {
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a"
+            },
+            "oracle-c": {
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a"
+            }
+          },
+          "measuredEndProjection": {
+            "oracle-a": {
+              "role": "follower",
+              "term": 2,
+              "leaderId": null
+            },
+            "oracle-b": {
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a"
+            },
+            "oracle-c": {
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a"
+            }
+          },
+          "measuredPositions": [
+            {
+              "replicaId": "oracle-a",
+              "hard": {
+                "term": 2,
+                "vote": 0,
+                "commit_index": 5
+              },
+              "applied": {
+                "applied_index": 5,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 5,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJhY2tub3dsZWRnZWQiOiJtaWQtdHVybiJ9"
+              }
+            },
+            {
+              "replicaId": "oracle-b",
+              "hard": {
+                "term": 1,
+                "vote": 7818641245414825000,
+                "commit_index": 4
+              },
+              "applied": {
+                "applied_index": 4,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 5,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJhY2tub3dsZWRnZWQiOiJtaWQtdHVybiJ9"
+              }
+            },
+            {
+              "replicaId": "oracle-c",
+              "hard": {
+                "term": 1,
+                "vote": 7818641245414825000,
+                "commit_index": 4
+              },
+              "applied": {
+                "applied_index": 4,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 5,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJhY2tub3dsZWRnZWQiOiJtaWQtdHVybiJ9"
+              }
+            }
+          ],
+          "measuredApplicationCommands": {
+            "oracle-a": [
+              {
+                "formation": 0
+              },
+              {
+                "formation": 1
+              },
+              {
+                "formation": 2
+              },
+              {
+                "acknowledged": "mid-turn"
+              }
+            ],
+            "oracle-b": [
+              {
+                "formation": 0
+              },
+              {
+                "formation": 1
+              },
+              {
+                "formation": 2
+              }
+            ],
+            "oracle-c": [
+              {
+                "formation": 0
+              },
+              {
+                "formation": 1
+              },
+              {
+                "formation": 2
+              }
+            ]
+          },
+          "measuredApplicationEvents": [
+            {
+              "order": 129,
+              "phase": "measured",
+              "kind": "application-enter",
+              "replicaId": "oracle-a",
+              "command": {
+                "acknowledged": "mid-turn"
+              },
+              "index": 5,
+              "term": 1
+            },
+            {
+              "order": 130,
+              "phase": "measured",
+              "kind": "application-after-commit",
+              "replicaId": "oracle-a",
+              "command": {
+                "acknowledged": "mid-turn"
+              },
+              "index": 5,
+              "term": 1
+            }
+          ],
+          "outbound": [
+            [
+              3,
+              "oracle-b"
+            ],
+            [
+              3,
+              "oracle-c"
+            ],
+            [
+              6,
+              "oracle-b"
+            ]
+          ],
+          "postDrivenNativeObservations": [
+            {
+              "replicaId": "oracle-a",
+              "role": "follower",
+              "term": 2,
+              "leaderId": null,
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            },
+            {
+              "replicaId": "oracle-b",
+              "role": "follower",
+              "term": 2,
+              "leaderId": null,
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            },
+            {
+              "replicaId": "oracle-c",
+              "role": "follower",
+              "term": 1,
+              "leaderId": "oracle-a",
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": [],
+              "inboundStepRefusals": []
+            }
+          ],
+          "postDrivenStreams": {
+            "oracle-a": [
+              [
+                "follower",
+                null
+              ],
+              [
+                "term change",
+                2
+              ],
+              [
+                "leader change",
+                null
+              ]
+            ],
+            "oracle-b": [
+              [
+                "term change",
+                2
+              ],
+              [
+                "leader change",
+                null
+              ]
+            ],
+            "oracle-c": []
+          },
+          "postDrivenPositions": [
+            {
+              "replicaId": "oracle-a",
+              "hard": {
+                "term": 2,
+                "vote": 0,
+                "commit_index": 5
+              },
+              "applied": {
+                "applied_index": 5,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 5,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJhY2tub3dsZWRnZWQiOiJtaWQtdHVybiJ9"
+              }
+            },
+            {
+              "replicaId": "oracle-b",
+              "hard": {
+                "term": 2,
+                "vote": 0,
+                "commit_index": 5
+              },
+              "applied": {
+                "applied_index": 5,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 5,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJhY2tub3dsZWRnZWQiOiJtaWQtdHVybiJ9"
+              }
+            },
+            {
+              "replicaId": "oracle-c",
+              "hard": {
+                "term": 1,
+                "vote": 7818641245414825000,
+                "commit_index": 5
+              },
+              "applied": {
+                "applied_index": 5,
+                "voters": "[\"7818641245414824798\",\"6347309190110158551\",\"3059117043180310503\"]",
+                "learners": "[]"
+              },
+              "lastEntry": {
+                "log_index": 5,
+                "term": 1,
+                "entry_type": 0,
+                "data": "eyJhY2tub3dsZWRnZWQiOiJtaWQtdHVybiJ9"
+              }
+            }
+          ],
+          "recovery": {
+            "before": {
+              "term": 2,
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": []
+            },
+            "after": {
+              "term": 2,
+              "voters": [
+                "3059117043180310503",
+                "6347309190110158551",
+                "7818641245414824798"
+              ],
+              "learners": []
+            }
+          },
+          "projectionMismatches": {
+            "afterTurn": [],
+            "afterDrivenConvergence": []
+          },
+          "observationErrors": [],
+          "failure": null
+        }
+      ],
+      "interpretation": "Late/reference proposal adds index6 term1, replicated after interval but still uncommitted/unapplied at index5; pre-capture native refusal adds no index6. No acknowledged SQL or data-loss claim."
+    }
+  ]
+}

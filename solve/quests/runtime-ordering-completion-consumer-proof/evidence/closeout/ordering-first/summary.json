@@ -1,0 +1,18 @@
+{
+  "sha": "6cddf137b85975947d09c0165eeb0e2f4c4bdcda",
+  "host": "adams-gamla",
+  "requested": [
+    "test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js"
+  ],
+  "results": [
+    {
+      "file": "test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js",
+      "code": 0,
+      "rawTap": true,
+      "testSha256": "458a7ca245aef183f593d76a9474f2aeffdd8789016aa4bb73a8c6448a34661a"
+    }
+  ],
+  "unrun": [],
+  "exitCode": 0,
+  "meaning": "Per-file original executions; no retries; no overall release certification"
+}

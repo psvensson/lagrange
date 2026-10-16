@@ -1,0 +1,18 @@
+{
+  "sha": "6cddf137b85975947d09c0165eeb0e2f4c4bdcda",
+  "host": "adam-laptop",
+  "requested": [
+    "test/raft/raft-rs-backend/runtime-completion-consumers-partition.test.js"
+  ],
+  "results": [
+    {
+      "file": "test/raft/raft-rs-backend/runtime-completion-consumers-partition.test.js",
+      "code": 0,
+      "rawTap": true,
+      "testSha256": "26ac2af22d1da5f85790aedc1d43a194e53fb04d09c8ca453d6b7497352b1cd9"
+    }
+  ],
+  "unrun": [],
+  "exitCode": 0,
+  "meaning": "Per-file original executions; no retries; no overall release certification"
+}

@@ -1,0 +1,21 @@
+{
+  "observedAt": "2026-10-16T04:52:34.999073+00:00",
+  "shared": {
+    "head": "0996d7576516af24f5f4d3e1e9aee37c775aabae",
+    "branch": "integrate/rs-raft-2026-09-30",
+    "stagedPaths": 18,
+    "stagedBinaryDiffSha256": "0b2ea79142a13f4dcada523f01108fbd8a4809492838e23f7a0246a7159953fc"
+  },
+  "reviewHead": "5a3cdc71854c7d97d2e3b688258b73c19dd0c6e4",
+  "reviewBranch": "review/runtime-ordering-consumer-proof-20261015",
+  "frozenPathsEqual": [
+    "src",
+    "test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js",
+    "test/raft/raft-rs-backend/transfer-leadership-drain-oracle.test.js",
+    "test/raft/raft-rs-backend/transfer-leadership-drain-oracle-harness.js",
+    "test/raft/raft-rs-backend/transfer-leadership-drain-oracle-cells.js"
+  ],
+  "trackedStatus": "",
+  "ownedExecutionProcessMatches": [],
+  "note": "Read-only current observations; no process termination. Prior worktree/process inventory retained locally; this record is not a lease."
+}

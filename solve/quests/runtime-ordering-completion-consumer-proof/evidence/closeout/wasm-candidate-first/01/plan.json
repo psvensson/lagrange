@@ -1,0 +1,23 @@
+{
+  "sha": "6cddf137b85975947d09c0165eeb0e2f4c4bdcda",
+  "host": "lenovo-laptop",
+  "file": "test/wasm-service/wasm-strong-write-native-completion.test.js",
+  "plan": [
+    {
+      "files": [
+        "test/wasm-service/wasm-strong-write-native-completion.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ],
+  "costs": [
+    {
+      "file": "test/wasm-service/wasm-strong-write-native-completion.test.js",
+      "jobs": 4,
+      "ms": 10000,
+      "lane": "ordinary"
+    }
+  ],
+  "results": ".tap/test-results/test/wasm-service/wasm-strong-write-native-completion.test.js.tap"
+}

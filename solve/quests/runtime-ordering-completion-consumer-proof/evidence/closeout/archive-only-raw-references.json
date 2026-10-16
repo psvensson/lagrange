@@ -1,0 +1,20 @@
+[
+  {
+    "path": "ordering-first/01/raw.tap",
+    "bytes": 2020654,
+    "sha256": "079dbc50d81786e9b772f9ba1088e1d50f77df7dfc6cea9935ec49cf9eb04272",
+    "reason": "Repository solve binary guard requires evidence larger than1MB in uploaded evidence archive. Raw local original and96-payload verified archive preserved unchanged.",
+    "archive": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/runtime-ordering-completion-consumer-proof--LAGRANGE_ORDERING_CONSUMER_PROOF_5a3cdc7_2026-10-16.tar.gz",
+    "archiveSha256": "1fc137f4027fa9791aa0088d88eff855512c6fd2a22422fe66a66e20927954bc",
+    "member": "packet/ordering-first/01/raw.tap"
+  },
+  {
+    "path": "ordering-exact-first/01/raw.tap",
+    "bytes": 2167184,
+    "sha256": "dfbd4df5701087bde076084f2376098435a15683396bc1d1573001a0b87bd182",
+    "reason": "Repository solve binary guard requires evidence larger than1MB in uploaded evidence archive. Raw local original and96-payload verified archive preserved unchanged.",
+    "archive": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/runtime-ordering-completion-consumer-proof--LAGRANGE_ORDERING_CONSUMER_PROOF_5a3cdc7_2026-10-16.tar.gz",
+    "archiveSha256": "1fc137f4027fa9791aa0088d88eff855512c6fd2a22422fe66a66e20927954bc",
+    "member": "packet/ordering-exact-first/01/raw.tap"
+  }
+]

@@ -1,0 +1,42 @@
+{
+  "test/raft/raft-rs-backend/runtime-completion-consumers-fixture.js": {
+    "sha256": "55c85301d2f37cc0b582c4e0f9181e6c6e2dc81edcd431b6bebe608e2a27145c",
+    "blob": "3a96cad3774a1e9c744226202a5aa7c6c68cbb34"
+  },
+  "test/raft/raft-rs-backend/runtime-completion-consumers-partition.test.js": {
+    "sha256": "26ac2af22d1da5f85790aedc1d43a194e53fb04d09c8ca453d6b7497352b1cd9",
+    "blob": "01561863073663608f15acd7956afdc086ab1c40"
+  },
+  "test/raft/raft-rs-backend/runtime-completion-consumers-transfer-fixture.js": {
+    "sha256": "d8ef1beaaecb6f532fc96dea088789bb52df8fc1dff34f4023f596ffb071becb",
+    "blob": "9f03da0a52de21a53159974989e238038466cc0b"
+  },
+  "test/raft/raft-rs-backend/runtime-completion-consumers-transfers.test.js": {
+    "sha256": "b0744aa40989929ba5e8e5ca92ade2e92d2ccf59002b1ca56cfad219b6e5bf19",
+    "blob": "16004b138c6d8edccfcaaf9cae0abd62dda12f3d"
+  },
+  "test/raft/raft-rs-backend/runtime-ordering-native-companion-fixture.js": {
+    "sha256": "ec6f9fa7c763552c958705206576f15dc793f6a6de896869a1b10ee3b2c51d20",
+    "blob": "4cfbf37d6f8e2225bb22beb8f496df4af9e1672e"
+  },
+  "test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js": {
+    "sha256": "3dfec10f6c37a2f5b0c58d8c937f1d8c43c695ec7d70a2df0dff3885546c9c54",
+    "blob": "7e1bb4e023f3a1d73e3364e6a596d2420ade6b8c"
+  },
+  "test/wasm-service/wasm-strong-write-native-completion.test.js": {
+    "sha256": "591dd4c77abedd4685cfcdcc563cf2bd04bdd578c73daf8ab8c14d256d14e45f",
+    "blob": "32bc78324927187134ea2e2e59de63467dbebed9"
+  },
+  "test/wasm-service/wasm-strong-write-native-fixture.js": {
+    "sha256": "3a949083e132ac9eba399d82c1df90aba09bda321a959e04a3bdb41623feba34",
+    "blob": "c15b2ca4b10c7a27988d11ae2eae3c974690313b"
+  },
+  "test/message-group/message-group-native-custody-fixture.js": {
+    "sha256": "a10f1462a1248121022399ad0777be7a95a4ffdc405a12f0ad5ead68bae58a0e",
+    "blob": "ae6779d8c33b087ac2902e40aa77495713ac3c37"
+  },
+  "test/message-group/message-group-native-custody-handoff.test.js": {
+    "sha256": "4818de9c31d0669aa95d152431ed12b720965e4c477e0765d0737a670be60c28",
+    "blob": "42309a81432a22a04e453c0cc600fea5983095e6"
+  }
+}

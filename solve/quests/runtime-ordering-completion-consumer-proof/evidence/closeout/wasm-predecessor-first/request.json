@@ -1,0 +1,28 @@
+{
+  "root": "/mnt/data/peter/projects/.worktrees/runtime-consumer-predecessor-20261016",
+  "sha": "d2c7c600a09cfa371d54c5c9efda6e80438bbb98",
+  "host": "lenovo-laptop",
+  "files": [
+    "test/wasm-service/wasm-strong-write-native-completion.test.js"
+  ],
+  "testIdentity": {
+    "test/wasm-service/wasm-strong-write-native-completion.test.js": "591dd4c77abedd4685cfcdcc563cf2bd04bdd578c73daf8ab8c14d256d14e45f"
+  },
+  "apiIdentity": {
+    "scripts/lab/probe.js": "493381e074c12987446a27f4feb7a0385f6afea46e97fa41f4c826464f7e8b70",
+    "scripts/run-classified-test-files.js": "cbbfcb9494a76069b33457b87e2cebf1d0e6e7a69c0b2d08181ab89736791aea",
+    "scripts/checks/git-process-environment.js": "c06f8458b6ad8b8725605676ddb7ef269b19bb0bf8bcfc680ce255e92565a078"
+  },
+  "runtimeOwnerSha256": "a560a052bf9b470a2046009555162b60669c340d86274fca9c74126fc8fbd01b",
+  "retry": "0",
+  "inheritedTapTimeout": null,
+  "command": [
+    "/home/peter/.nvm/versions/node/v22.23.2/bin/node",
+    "/tmp/lagrange-runtime-correction-20261015/run-group-capture.mjs",
+    "/mnt/data/peter/projects/.worktrees/runtime-consumer-predecessor-20261016",
+    "/tmp/lagrange-ordering-consumer-proof-20261015/wasm-predecessor-first",
+    "d2c7c600a09cfa371d54c5c9efda6e80438bbb98",
+    "lenovo-laptop",
+    "test/wasm-service/wasm-strong-write-native-completion.test.js"
+  ]
+}

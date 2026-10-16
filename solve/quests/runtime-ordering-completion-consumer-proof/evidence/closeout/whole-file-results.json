@@ -1,0 +1,177 @@
+[
+  {
+    "run": "ordering-first",
+    "sha": "6cddf137b85975947d09c0165eeb0e2f4c4bdcda",
+    "host": "adams-gamla",
+    "command": [
+      "/home/peter/.nvm/versions/node/v22.23.2/bin/node",
+      "/tmp/lagrange-runtime-correction-20261015/run-group-capture.mjs",
+      "/mnt/data/peter/projects/.worktrees/runtime-ordering-consumer-proof-20261015",
+      "/tmp/lagrange-ordering-consumer-proof-20261015/ordering-first",
+      "6cddf137b85975947d09c0165eeb0e2f4c4bdcda",
+      "adams-gamla",
+      "test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js"
+    ],
+    "exitCode": 0,
+    "counts": {
+      "tests": 3,
+      "pass": 3,
+      "fail": 0
+    },
+    "tapTimeMs": 1497,
+    "rawSha256": "079dbc50d81786e9b772f9ba1088e1d50f77df7dfc6cea9935ec49cf9eb04272",
+    "testIdentity": {
+      "test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js": "458a7ca245aef183f593d76a9474f2aeffdd8789016aa4bb73a8c6448a34661a"
+    }
+  },
+  {
+    "run": "partition-first",
+    "sha": "6cddf137b85975947d09c0165eeb0e2f4c4bdcda",
+    "host": "adam-laptop",
+    "command": [
+      "/home/peter/.nvm/versions/node/v22.23.2/bin/node",
+      "/tmp/lagrange-runtime-correction-20261015/run-group-capture.mjs",
+      "/mnt/data/peter/projects/.worktrees/runtime-ordering-consumer-proof-20261015",
+      "/tmp/lagrange-ordering-consumer-proof-20261015/partition-first",
+      "6cddf137b85975947d09c0165eeb0e2f4c4bdcda",
+      "adam-laptop",
+      "test/raft/raft-rs-backend/runtime-completion-consumers-partition.test.js"
+    ],
+    "exitCode": 0,
+    "counts": {
+      "tests": 2,
+      "pass": 2,
+      "fail": 0
+    },
+    "tapTimeMs": 10522,
+    "rawSha256": "8b56337683b40e54201451362c0fb76fea9c217cf3200270d28268d17f4075ad",
+    "testIdentity": {
+      "test/raft/raft-rs-backend/runtime-completion-consumers-partition.test.js": "26ac2af22d1da5f85790aedc1d43a194e53fb04d09c8ca453d6b7497352b1cd9"
+    }
+  },
+  {
+    "run": "wasm-candidate-first",
+    "sha": "6cddf137b85975947d09c0165eeb0e2f4c4bdcda",
+    "host": "lenovo-laptop",
+    "command": [
+      "/home/peter/.nvm/versions/node/v22.23.2/bin/node",
+      "/tmp/lagrange-runtime-correction-20261015/run-group-capture.mjs",
+      "/mnt/data/peter/projects/.worktrees/runtime-ordering-consumer-proof-20261015",
+      "/tmp/lagrange-ordering-consumer-proof-20261015/wasm-candidate-first",
+      "6cddf137b85975947d09c0165eeb0e2f4c4bdcda",
+      "lenovo-laptop",
+      "test/wasm-service/wasm-strong-write-native-completion.test.js"
+    ],
+    "exitCode": 1,
+    "counts": {
+      "tests": 2,
+      "pass": 1,
+      "fail": 1
+    },
+    "tapTimeMs": 2283,
+    "rawSha256": "05823694c5eca5824cfd04a33e9da339e938b26f8bb3374aeab986db8637cd7a",
+    "testIdentity": {
+      "test/wasm-service/wasm-strong-write-native-completion.test.js": "591dd4c77abedd4685cfcdcc563cf2bd04bdd578c73daf8ab8c14d256d14e45f"
+    }
+  },
+  {
+    "run": "wasm-predecessor-first",
+    "sha": "d2c7c600a09cfa371d54c5c9efda6e80438bbb98",
+    "host": "lenovo-laptop",
+    "command": [
+      "/home/peter/.nvm/versions/node/v22.23.2/bin/node",
+      "/tmp/lagrange-runtime-correction-20261015/run-group-capture.mjs",
+      "/mnt/data/peter/projects/.worktrees/runtime-consumer-predecessor-20261016",
+      "/tmp/lagrange-ordering-consumer-proof-20261015/wasm-predecessor-first",
+      "d2c7c600a09cfa371d54c5c9efda6e80438bbb98",
+      "lenovo-laptop",
+      "test/wasm-service/wasm-strong-write-native-completion.test.js"
+    ],
+    "exitCode": 1,
+    "counts": {
+      "tests": 2,
+      "pass": 1,
+      "fail": 1
+    },
+    "tapTimeMs": 2347,
+    "rawSha256": "70fcc1ed6870db67eceae6e001ded18bf6ed1b62b5a9c16cbce644ad3d823311",
+    "testIdentity": {
+      "test/wasm-service/wasm-strong-write-native-completion.test.js": "591dd4c77abedd4685cfcdcc563cf2bd04bdd578c73daf8ab8c14d256d14e45f"
+    }
+  },
+  {
+    "run": "ordering-exact-first",
+    "sha": "5a3cdc71854c7d97d2e3b688258b73c19dd0c6e4",
+    "host": "adams-gamla",
+    "command": [
+      "/home/peter/.nvm/versions/node/v22.23.2/bin/node",
+      "/tmp/lagrange-runtime-correction-20261015/run-group-capture.mjs",
+      "/mnt/data/peter/projects/.worktrees/runtime-ordering-consumer-proof-20261015",
+      "/tmp/lagrange-ordering-consumer-proof-20261015/ordering-exact-first",
+      "5a3cdc71854c7d97d2e3b688258b73c19dd0c6e4",
+      "adams-gamla",
+      "test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js"
+    ],
+    "exitCode": 0,
+    "counts": {
+      "tests": 3,
+      "pass": 3,
+      "fail": 0
+    },
+    "tapTimeMs": 1534,
+    "rawSha256": "dfbd4df5701087bde076084f2376098435a15683396bc1d1573001a0b87bd182",
+    "testIdentity": {
+      "test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js": "3dfec10f6c37a2f5b0c58d8c937f1d8c43c695ec7d70a2df0dff3885546c9c54"
+    }
+  },
+  {
+    "run": "transfers-first",
+    "sha": "5a3cdc71854c7d97d2e3b688258b73c19dd0c6e4",
+    "host": "adam-laptop",
+    "command": [
+      "/home/peter/.nvm/versions/node/v22.23.2/bin/node",
+      "/tmp/lagrange-runtime-correction-20261015/run-group-capture.mjs",
+      "/mnt/data/peter/projects/.worktrees/runtime-ordering-consumer-proof-20261015",
+      "/tmp/lagrange-ordering-consumer-proof-20261015/transfers-first",
+      "5a3cdc71854c7d97d2e3b688258b73c19dd0c6e4",
+      "adam-laptop",
+      "test/raft/raft-rs-backend/runtime-completion-consumers-transfers.test.js"
+    ],
+    "exitCode": 0,
+    "counts": {
+      "tests": 3,
+      "pass": 3,
+      "fail": 0
+    },
+    "tapTimeMs": 4329,
+    "rawSha256": "59b41398b70a941b98492bcbbdee1b0b19f0deb923bda11735544fee2b98af2c",
+    "testIdentity": {
+      "test/raft/raft-rs-backend/runtime-completion-consumers-transfers.test.js": "b0744aa40989929ba5e8e5ca92ade2e92d2ccf59002b1ca56cfad219b6e5bf19"
+    }
+  },
+  {
+    "run": "message-group-first",
+    "sha": "5a3cdc71854c7d97d2e3b688258b73c19dd0c6e4",
+    "host": "tv-dator",
+    "command": [
+      "/home/peter/.nvm/versions/node/v22.23.2/bin/node",
+      "/tmp/lagrange-runtime-correction-20261015/run-group-capture.mjs",
+      "/mnt/data/peter/projects/.worktrees/runtime-ordering-consumer-proof-20261015",
+      "/tmp/lagrange-ordering-consumer-proof-20261015/message-group-first",
+      "5a3cdc71854c7d97d2e3b688258b73c19dd0c6e4",
+      "tv-dator",
+      "test/message-group/message-group-native-custody-handoff.test.js"
+    ],
+    "exitCode": 1,
+    "counts": {
+      "tests": 1,
+      "pass": 0,
+      "fail": 1
+    },
+    "tapTimeMs": 2524,
+    "rawSha256": "f82369643142af3679151d9ed5cedcc405e4b5a1b620925727e148eb982d3def",
+    "testIdentity": {
+      "test/message-group/message-group-native-custody-handoff.test.js": "4818de9c31d0669aa95d152431ed12b720965e4c477e0765d0737a670be60c28"
+    }
+  }
+]

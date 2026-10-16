@@ -1,0 +1,19 @@
+{
+  "id": "runtime-ordering-completion-consumer-proof",
+  "uploaded": {
+    "sha256": "1fc137f4027fa9791aa0088d88eff855512c6fd2a22422fe66a66e20927954bc",
+    "bytes": 406271,
+    "asset": "runtime-ordering-completion-consumer-proof--LAGRANGE_ORDERING_CONSUMER_PROOF_5a3cdc7_2026-10-16.tar.gz",
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/runtime-ordering-completion-consumer-proof--LAGRANGE_ORDERING_CONSUMER_PROOF_5a3cdc7_2026-10-16.tar.gz"
+  },
+  "entry": {
+    "ts": "2026-10-16T04:54:43.599Z",
+    "type": "finding",
+    "kind": "evidence",
+    "text": "Bounded test-only ordering/consumer packet: reviewed checkpoints6cddf137 and5a3cdc71, same-host predecessor d2c7c600. All first raws, exact vectors, tests, comparison bundle and cross-review. WASM semantic RED inherited on tested schedule; MG fixture failure and incomplete custody proof; F1/whole increment HOLD. Fresh extraction manifest verified before upload.",
+    "evidence": "sha256:1fc137f4027fa9791aa0088d88eff855512c6fd2a22422fe66a66e20927954bc",
+    "asset": "runtime-ordering-completion-consumer-proof--LAGRANGE_ORDERING_CONSUMER_PROOF_5a3cdc7_2026-10-16.tar.gz",
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/runtime-ordering-completion-consumer-proof--LAGRANGE_ORDERING_CONSUMER_PROOF_5a3cdc7_2026-10-16.tar.gz",
+    "bytes": 406271
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "sha": "d2c7c600a09cfa371d54c5c9efda6e80438bbb98",
+  "host": "lenovo-laptop",
+  "requested": [
+    "test/wasm-service/wasm-strong-write-native-completion.test.js"
+  ],
+  "results": [
+    {
+      "file": "test/wasm-service/wasm-strong-write-native-completion.test.js",
+      "code": 1,
+      "rawTap": true,
+      "testSha256": "591dd4c77abedd4685cfcdcc563cf2bd04bdd578c73daf8ab8c14d256d14e45f"
+    }
+  ],
+  "unrun": [],
+  "exitCode": 1,
+  "meaning": "Per-file original executions; no retries; no overall release certification"
+}
