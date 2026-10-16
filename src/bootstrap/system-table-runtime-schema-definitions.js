@@ -1,6 +1,7 @@
 /**
  * Runtime and service system table schema definitions.
  */
+import {WASM_OPERATION_COL as WO_COL} from '../wasm-service/wasm-meta-models-constants.js';
 import {
   SD_COL,
   SERVICE_DEFINITION_COLUMN_LIST,
@@ -593,6 +594,8 @@ const MODULE_DEPENDENCY_LOCKS_SCHEMA = {
 const WASM_OPERATIONS_SCHEMA = {
   tableName: SYSTEM_TABLE_NAME.WASM_OPERATIONS,
   columns: [
+    {name: WO_COL.INTENT_JSON, type: COLUMN_TYPE.TEXT},
+    {name: WO_COL.ADMISSION_JSON, type: COLUMN_TYPE.TEXT},
     {name: 'operation_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
     {name: 'tenant_id', type: COLUMN_TYPE.TEXT, notNull: true},
     {name: 'command', type: COLUMN_TYPE.TEXT, notNull: true},

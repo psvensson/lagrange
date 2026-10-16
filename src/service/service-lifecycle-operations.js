@@ -4,6 +4,7 @@ import {
   SERVICE_OPERATION_STATE,
 } from '../constants/index.js';
 import {assertServiceDescriptor} from './service-descriptor.js';
+import {isBoundConsensusDescriptor} from './service-consensus-creation-intent.js';
 import {ServiceDescriptorValidationError} from './service-lifecycle-errors.js';
 import {
   SERVICE_LIFECYCLE_LOG,
@@ -189,6 +190,11 @@ async function createReplica(manager, definition, context = {}, options = {}) {
   let operation;
   let fields = {};
   try {
+    if (isBoundConsensusDescriptor(definition)) {
+      throw new ServiceDescriptorValidationError([
+        SERVICE_LIFECYCLE_MANAGER_LITERAL.BOUND_CREATION_UNAVAILABLE,
+      ]);
+    }
     canonicalDefinition = assertServiceDescriptor(definition, {
       adapterResolver: (serviceType) => manager._adapters.get(serviceType),
     });

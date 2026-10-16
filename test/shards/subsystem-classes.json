@@ -16,7 +16,7 @@
     "query-sql": 184,
     "release-packaging": 15,
     "runtime-primitives": 22,
-    "services-runtime": 146,
+    "services-runtime": 148,
     "solver-tooling": 7,
     "storage-partition": 189,
     "storage-raft": 134,
@@ -25,10 +25,10 @@
     "transport-messaging": 96,
     "wasm-toolchain": 64
   },
-  "censusSize": 2397,
-  "digest": "fnv1a32-0f7b1513",
+  "censusSize": 2399,
+  "digest": "fnv1a32-f76a8b1c",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-1fd2dbf7",
+  "observationDigest": "fnv1a32-cc59db84",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2226,6 +2226,8 @@
     "test/service/replicated-service-topology.test.js": "services-runtime",
     "test/service/request-cell-call-bridge.test.js": "services-runtime",
     "test/service/service-compiler-editor-typings.test.js": "services-runtime",
+    "test/service/service-consensus-creation-intent.test.js": "services-runtime",
+    "test/service/service-consensus-creation-recovery.integration.test.js": "services-runtime",
     "test/service/service-deployment-record-generator.test.js": "services-runtime",
     "test/service/service-descriptor.test.js": "services-runtime",
     "test/service/service-dispatcher.test.js": "services-runtime",
@@ -15585,6 +15587,19 @@
     "test/service/request-cell-call-bridge.test.js": {
       "files": [
         "src/service/request-cell-call-bridge.js"
+      ]
+    },
+    "test/service/service-consensus-creation-intent.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/service/service-lifecycle-command-contract.js",
+        "test/control-plane/service-instance-creation-sqlite-fixture.js"
+      ]
+    },
+    "test/service/service-consensus-creation-recovery.integration.test.js": {
+      "files": [
+        "test/service/service-consensus-creation-recovery-child.js"
       ]
     },
     "test/service/service-lifecycle-command-owner.test.js": {

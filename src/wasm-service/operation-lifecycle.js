@@ -35,6 +35,8 @@ const VALID_TRANSITIONS = Object.freeze({
   ],
 });
 
+const SQL_COLUMN_SEPARATOR = ', ';
+
 const INSERT_COLUMNS = [
   WO_COL.OPERATION_ID,
   WO_COL.TENANT_ID,
@@ -93,9 +95,9 @@ function createOperation(tenantId, command, idempotencyKey) {
 
   const placeholders = INSERT_COLUMNS
     .map((_col, i) => `$${i + 1}`)
-    .join(', ');
+    .join(SQL_COLUMN_SEPARATOR);
   const sql = `${SQL.INSERT_INTO} ${TABLES.WASM_OPERATIONS}` +
-    ` (${INSERT_COLUMNS.join(', ')})` +
+    ` (${INSERT_COLUMNS.join(SQL_COLUMN_SEPARATOR)})` +
     ` ${SQL.VALUES} (${placeholders})`;
 
   const params = [
@@ -166,7 +168,7 @@ function transitionOperation(
   const stateIdx = params.length;
 
   const sql = `${SQL.UPDATE} ${TABLES.WASM_OPERATIONS}` +
-    ` ${SQL.SET} ${setClauses.join(', ')}` +
+    ` ${SQL.SET} ${setClauses.join(SQL_COLUMN_SEPARATOR)}` +
     ` ${SQL.WHERE} ${WO_COL.OPERATION_ID} = $${idIdx}` +
     ` ${SQL.AND} ${WO_COL.STATE} = $${stateIdx}`;
 
@@ -246,7 +248,31 @@ function buildIdempotencyCheckSQL(tenantId, idempotencyKey) {
   return {success: true, sql, params: [tenantId, idempotencyKey]};
 }
 
+/** Construct one immutable CREATE origin; no generated id or upsert. */
+function buildRetainedCreationOperationSQL({operationId, tenantId, command, intentJson, now}) {
+  const columns = [...INSERT_COLUMNS, WO_COL.INTENT_JSON, WO_COL.ADMISSION_JSON];
+  const params = [operationId, tenantId, command, null, WASM_OPERATION_STATE.PENDING,
+    JSON.stringify({}), JSON.stringify({}), now, now, intentJson, null];
+  const placeholders = columns.map((_column, i) => `$${i + 1}`).join(SQL_COLUMN_SEPARATOR);
+  return {sql: `${SQL.INSERT_INTO} ${TABLES.WASM_OPERATIONS}` +
+    ` (${columns.join(SQL_COLUMN_SEPARATOR)}) ${SQL.VALUES} (${placeholders})`, params};
+}
+
+/** Record the original resource token only against its original pending intent. */
+function buildRetainedCreationAdmissionSQL({operationId, tenantId, command, intentJson,
+  admissionJson, now}) {
+  const params = [admissionJson, WASM_OPERATION_STATE.IN_PROGRESS, now,
+    operationId, tenantId, command, intentJson, WASM_OPERATION_STATE.PENDING];
+  const sql = `${SQL.UPDATE} ${TABLES.WASM_OPERATIONS} ${SQL.SET} ` +
+    `${WO_COL.ADMISSION_JSON} = $1, ${WO_COL.STATE} = $2, ${WO_COL.UPDATED_AT} = $3 ` +
+    `${SQL.WHERE} ${WO_COL.OPERATION_ID} = $4 ${SQL.AND} ${WO_COL.TENANT_ID} = $5 ` +
+    `${SQL.AND} ${WO_COL.COMMAND} = $6 ${SQL.AND} ${WO_COL.INTENT_JSON} = $7 ` +
+    `${SQL.AND} ${WO_COL.STATE} = $8 ${SQL.AND} ${WO_COL.ADMISSION_JSON} IS NULL`;
+  return {sql, params};
+}
+
 export {
+  buildRetainedCreationOperationSQL, buildRetainedCreationAdmissionSQL,
   OPERATION_LIFECYCLE_ERROR_MSG,
   VALID_TRANSITIONS,
   createOperation,

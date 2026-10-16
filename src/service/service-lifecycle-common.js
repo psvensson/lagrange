@@ -2,6 +2,7 @@ import {SERVICE_DESCRIPTOR_FIELD} from '../constants/index.js';
 
 const SERVICE_LIFECYCLE_MANAGER_LITERAL = Object.freeze({
   UNKNOWNADAPTER: 'UnknownAdapter',
+  BOUND_CREATION_UNAVAILABLE: 'bound consensus physical creation is not yet composed',
   VALUE: '; ',
   ADAPTER_REJECTED_SERVICE_DEFINITION: 'adapter rejected service definition',
 });
