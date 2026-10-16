@@ -1,6 +1,8 @@
 // Fixed application records. All apply calls join the existing Raft SQLite transaction.
 import {WASM_WRITER_PROFILE as P, WRITER_ACTION as A, WRITER_STATUS as S,
   WRITER_REASON as R, WRITER_ENCODING} from './wasm-writer-profile.js';
+import {KV_TABLE_NAME} from './session-kv-store.js';
+import {readWasmCreationRoot, WASM_CREATION_OPENING} from './wasm-service-creation-storage.js';
 import {canonicalWriterCommand, writerDigest, boundedJson, exactWriterPosition,
   writerError} from './wasm-writer-codec.js';
 
@@ -73,15 +75,17 @@ function validateSlot(row, slot, meta) {
 }
 
 class WasmWriterState {
-  constructor(db, serviceId) {
+  constructor(db, serviceId, creation = null) {
     this.db = db;
+    this.creationBound = creation?.kind === WASM_CREATION_OPENING.BOUND;
     const tables = db.prepare(SQL.TABLES).all().map((row) => row.name);
-    if (tables.length === 0) {
+    if (tables.length === 0 || creation?.fresh === true) {
       boundedJson({serviceId}, P.metadataBytes);
       db.exec(SQL.CREATE);
       db.prepare(SQL.PUT_META).run(JSON.stringify({format: P.id, serviceId, initialization: null}));
     } else {
-      requireFormat(tables.includes(META) && tables.includes(SLOTS) && tables.includes('_kv_store'));
+      requireFormat(tables.includes(META) && tables.includes(SLOTS) &&
+        tables.includes(KV_TABLE_NAME));
     }
     this.readMeta = db.prepare(SQL.META);
     this.writeMeta = db.prepare(SQL.PUT_META);
@@ -89,6 +93,12 @@ class WasmWriterState {
     this.writeSlot = db.prepare(SQL.PUT_SLOT);
     this.allSlots = db.prepare(SQL.ALL);
     this.validate(serviceId);
+    if (this.creationBound) {
+      const root = readWasmCreationRoot(db);
+      requireFormat(root.serviceDefinitionId === serviceId &&
+        (this.meta().initialization === null ||
+         this.meta().initialization.command.incarnation === root.incarnation));
+    }
   }
 
   validate(serviceId) {
@@ -126,6 +136,13 @@ class WasmWriterState {
     const meta = this.meta();
     const identity = responseIdentity(command);
     if (identity.serviceId !== meta.serviceId) return refused(command, R.INCARNATION);
+    if (this.creationBound) {
+      const root = readWasmCreationRoot(this.db);
+      if (identity.serviceId !== root.serviceDefinitionId ||
+          identity.incarnation !== root.incarnation) {
+        return refused(command, R.INCARNATION);
+      }
+    }
     if (command.action === A.INIT) {
       if (meta.initialization === null) return {status: S.NEW};
       return writerDigest(command) === writerDigest(meta.initialization.command) ?

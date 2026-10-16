@@ -29,7 +29,7 @@ const LIVE_PHASES = new Set([PHASE.ADMITTED, PHASE.PUBLISHED]);
 function commandOf(intent) {
   return `${COMMAND_PREFIX}${intent.descriptor.serviceId}`;
 }
-function captureIntent(value) {
+function captureConsensusCreationIntent(value) {
   const intent = captureInstanceJson(value, INTENT_BYTES);
   requireInstance(exactFields(intent, INTENT_FIELDS) && intent.format === LIMIT.FORMAT);
   const descriptor = intent.descriptor;
@@ -166,7 +166,7 @@ async function continueIntent(manager, intent, row) {
 }
 async function prepareConsensusCreation(manager, value, context = {}) {
   try {
-    const intent = captureIntent(value);
+    const intent = captureConsensusCreationIntent(value);
     requireDependencies(manager);
     await manager._enforceRuntimePolicy(
       SERVICE_LIFECYCLE_OPERATION.CREATE, intent.descriptor, context);
@@ -194,7 +194,7 @@ async function recoverConsensusCreation(manager, operationId, context = {}) {
       OUTCOME.CORRUPT_STATE);
     let intent;
     try {
-      intent = captureIntent(JSON.parse(encoded));
+      intent = captureConsensusCreationIntent(JSON.parse(encoded));
     } catch {
       requireInstance(false, OUTCOME.CORRUPT_STATE);
     }
@@ -220,5 +220,6 @@ function isBoundConsensusDescriptor(value) {
   return value !== null && typeof value === 'object' &&
     BOUND_DESCRIPTOR_FIELDS.some((field) => Object.hasOwn(value, field));
 }
-export {isBoundConsensusDescriptor, prepareConsensusCreation, recoverConsensusCreation,
+export {captureConsensusCreationIntent, isBoundConsensusDescriptor, prepareConsensusCreation,
+  recoverConsensusCreation,
   isConsensusCreationRow, recoverConsensusCreationRow};

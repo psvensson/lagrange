@@ -23,12 +23,12 @@
     "test-infrastructure": 143,
     "transactions": 16,
     "transport-messaging": 96,
-    "wasm-toolchain": 64
+    "wasm-toolchain": 67
   },
-  "censusSize": 2399,
-  "digest": "fnv1a32-f76a8b1c",
+  "censusSize": 2402,
+  "digest": "fnv1a32-71a693ea",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-cc59db84",
+  "observationDigest": "fnv1a32-3e80b5d1",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2400,6 +2400,9 @@
     "test/wasm-service/time-binding-compilation.test.js": "wasm-toolchain",
     "test/wasm-service/timer-manager.property.test.js": "wasm-toolchain",
     "test/wasm-service/timer-manager.test.js": "wasm-toolchain",
+    "test/wasm-service/wasm-admitted-bootstrap-native.integration.test.js": "wasm-toolchain",
+    "test/wasm-service/wasm-admitted-bootstrap-review.test.js": "wasm-toolchain",
+    "test/wasm-service/wasm-admitted-bootstrap.test.js": "wasm-toolchain",
     "test/wasm-service/wasm-creation-bound-native.test.js": "wasm-toolchain",
     "test/wasm-service/wasm-executor-run-export.test.js": "wasm-toolchain",
     "test/wasm-service/wasm-executor-runtime-adapter-parity.test.js": "wasm-toolchain",
@@ -16145,6 +16148,66 @@
         "src/runtime/service-runtime-lifecycle.js",
         "src/runtime/wasi-component-cell-runtime.js",
         "src/runtime/wasm-component-driver.js"
+      ]
+    },
+    "test/wasm-service/wasm-admitted-bootstrap-native.integration.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/index.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/service/service-lifecycle-command-contract.js",
+        "src/wasm-service/wasm-service-committed-command-codec.js",
+        "src/wasm-service/wasm-service-constants.js",
+        "src/wasm-service/wasm-service-replica.js",
+        "test/control-plane/service-instance-creation-sqlite-fixture.js",
+        "test/partition/partition-service-test-support.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/wasm-service/wasm-admitted-bootstrap-review.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/index.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/service/service-lifecycle-command-contract.js",
+        "src/wasm-service/wasm-service-committed-command-codec.js",
+        "src/wasm-service/wasm-service-constants.js",
+        "src/wasm-service/wasm-service-replica.js",
+        "test/control-plane/service-instance-creation-sqlite-fixture.js",
+        "test/partition/partition-service-test-support.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/wasm-service/wasm-admitted-bootstrap.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/index.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/service/service-lifecycle-command-contract.js",
+        "src/wasm-service/wasm-service-committed-command-codec.js",
+        "src/wasm-service/wasm-service-constants.js",
+        "src/wasm-service/wasm-service-replica.js",
+        "test/control-plane/service-instance-creation-sqlite-fixture.js",
+        "test/partition/partition-service-test-support.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/wasm-service/wasm-creation-bound-native.test.js": {
