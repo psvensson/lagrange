@@ -43,7 +43,6 @@ function acquireDataDirectoryProcessOwner(dataDir) {
       cause?.code === 'SQLITE_LOCKED';
     throw dataDirectoryOwnershipError(canonicalDataDir, cause, alreadyOwned);
   }
-  heldDataDirectoryDatabases.add(database);
   let released = false;
   return Object.freeze({
     dataDir: canonicalDataDir,
