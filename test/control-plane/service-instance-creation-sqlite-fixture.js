@@ -35,8 +35,8 @@ function gate() {
   return {promise, release};
 }
 
-async function createCreationSqliteFixture(t) {
-  const db = new Database(':memory:');
+async function createCreationSqliteFixture(t, options = {}) {
+  const db = new Database(options.databasePath ?? ':memory:');
   const cdcOwners = [];
   t.after(() => {
     for (const cdc of cdcOwners) cdc.markShuttingDown();
