@@ -12,7 +12,7 @@ import {
 const SERVICE_INSTANCES_SCHEMA = {
   tableName: SYSTEM_TABLE_NAME.SERVICE_INSTANCES,
   columns: [
-    {name: COLUMN.SERVICE_ID, type: COLUMN_TYPE.TEXT, primaryKey: true, notNull: true},
+    {name: COLUMN.SERVICE_ID, type: COLUMN_TYPE.TEXT, primaryKey: true},
     {name: COLUMN.FORMAT, type: COLUMN_TYPE.INTEGER, notNull: true},
     {name: COLUMN.STATE, type: COLUMN_TYPE.TEXT, notNull: true},
   ],
