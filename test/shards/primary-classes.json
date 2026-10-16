@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2087,
-    "integration": 98,
+    "unit": 2088,
+    "integration": 99,
     "bootstrap": 205,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2397,
-  "digest": "fnv1a32-cac20d87",
+  "censusSize": 2399,
+  "digest": "fnv1a32-bfb0b2ca",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -2207,6 +2207,8 @@
     "test/service/replicated-service-topology.test.js": "unit",
     "test/service/request-cell-call-bridge.test.js": "unit",
     "test/service/service-compiler-editor-typings.test.js": "unit",
+    "test/service/service-consensus-creation-intent.test.js": "unit",
+    "test/service/service-consensus-creation-recovery.integration.test.js": "integration",
     "test/service/service-deployment-record-generator.test.js": "unit",
     "test/service/service-descriptor.test.js": "unit",
     "test/service/service-dispatcher.test.js": "unit",

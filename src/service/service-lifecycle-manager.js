@@ -41,6 +41,7 @@ import {
 } from './service-lifecycle-operations.js';
 import {recoverPendingOperations as recoverLifecyclePendingOperations} from './service-lifecycle-recovery.js';
 import {resolveTimeSource} from '../time/time-source.js';
+import {prepareConsensusCreation, recoverConsensusCreation} from './service-consensus-creation-intent.js';
 
 const DEFAULT_DIAGNOSTICS_LIMIT = 100;
 const MAX_DIAGNOSTICS_LIMIT = 500;
@@ -48,6 +49,9 @@ const MAX_DIAGNOSTICS_LIMIT = 500;
  * ServiceLifecycleManager is the single lifecycle owner for all service types.
  */ class ServiceLifecycleManager {
   constructor(options = {}) {
+    // The existing instance owner decides admission; this manager retains the
+    // caller intent in its existing operation journal before asking that owner.
+    this._serviceDefinitionsOwner = options.serviceDefinitionsOwner ?? null;
     // One clock for this node's lifecycle owner: every duration and stamp
     // below describes work on one node, so they read one source. Unsupplied,
     // that is the host clock exactly as each site read it before.
@@ -533,6 +537,14 @@ const MAX_DIAGNOSTICS_LIMIT = 500;
    * @return {Promise<Object[]>}
    */ async recoverPendingOperations(options = {}) {
     return recoverLifecyclePendingOperations(this, options);
+  }
+  /** Retain direct-consensus creation intent/admission; no physical effects. */
+  async prepareConsensusCreation(intent, context = {}) {
+    return prepareConsensusCreation(this, intent, context);
+  }
+  /** Resume only the original journaled intent, never a current-definition reconstruction. */
+  async recoverConsensusCreation(operationId, context = {}) {
+    return recoverConsensusCreation(this, operationId, context);
   }
   /**
    * Create a service replica via the matching adapter.

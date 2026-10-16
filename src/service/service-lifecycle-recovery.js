@@ -10,6 +10,8 @@ import {
   resolveServiceFields,
 } from './service-lifecycle-common.js';
 
+import {isConsensusCreationRow, recoverConsensusCreationRow} from './service-consensus-creation-intent.js';
+
 const OPERATION_COMMAND_SEPARATOR = ':';
 const RECOVERY_RESULT_STATUS = Object.freeze({
   RECOVERED: 'recovered',
@@ -92,6 +94,9 @@ async function failRecoveryJournalState(manager, {
 }
 
 async function recoverOperationRow(manager, operationRow, resolveServiceContext, defaultContext) {
+  if (isConsensusCreationRow(operationRow)) {
+    return recoverConsensusCreationRow(manager, operationRow, defaultContext);
+  }
   const operationId = operationRow.operation_id || operationRow.operationId;
   const operationState = operationRow.state;
   const operation = {operationId};

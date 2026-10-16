@@ -1104,6 +1104,25 @@
         "test/service/service-lifecycle-command-owner.test.js",
         "test/bootstrap/service-instance-table-schema.test.js"
       ]
+    },
+    "service-consensus-original-intent-admission": {
+      "description": "The existing lifecycle journal retains the immutable original binding/slot request before the instance owner may reserve it, then retains the exact returned token. Re-entry and process-loss recovery use that journal, not current-definition reconstruction or a new operation identity. Retained admission starts no physical resource and is not serving authority.",
+      "owners": [
+        "src/service/service-consensus-creation-intent.js",
+        "src/service/service-lifecycle-manager.js",
+        "src/service/service-lifecycle-operations.js",
+        "src/service/service-lifecycle-recovery.js",
+        "src/wasm-service/operation-lifecycle.js",
+        "src/wasm-service/wasm-meta-models-constants.js",
+        "src/bootstrap/system-table-runtime-schema-definitions.js",
+        "src/control-plane/owners/service-instance-state.js",
+        "src/control-plane/owners/service-instance-metadata.js",
+        "src/control-plane/owners/service-definitions-owner.js"
+      ],
+      "tests": [
+        "test/service/service-consensus-creation-intent.test.js",
+        "test/service/service-consensus-creation-recovery.integration.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -2215,6 +2234,36 @@
       "witnessTests": [
         "test/control-plane/service-instance-creation-cas.test.js",
         "test/control-plane/service-instance-selection-admission.test.js"
+      ]
+    },
+    "service-consensus-original-intent-admission": {
+      "description": "Original intent/admission persistence and exact instance resource CAS are one ordered interaction. Lost replies retain original identity; generic physical creation remains unavailable for bound descriptors until the physical lifecycle is composed.",
+      "contract": "service-consensus-original-intent-admission",
+      "endpoints": [
+        {
+          "id": "durable-original-lifecycle-intent",
+          "owners": [
+            "src/service/service-consensus-creation-intent.js",
+            "src/service/service-lifecycle-manager.js",
+            "src/service/service-lifecycle-operations.js",
+            "src/service/service-lifecycle-recovery.js",
+            "src/wasm-service/operation-lifecycle.js",
+            "src/wasm-service/wasm-meta-models-constants.js",
+            "src/bootstrap/system-table-runtime-schema-definitions.js"
+          ]
+        },
+        {
+          "id": "authoritative-resource-admission",
+          "owners": [
+            "src/control-plane/owners/service-instance-state.js",
+            "src/control-plane/owners/service-instance-metadata.js",
+            "src/control-plane/owners/service-definitions-owner.js"
+          ]
+        }
+      ],
+      "witnessTests": [
+        "test/service/service-consensus-creation-intent.test.js",
+        "test/service/service-consensus-creation-recovery.integration.test.js"
       ]
     }
   }

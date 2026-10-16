@@ -273,6 +273,10 @@ function validResourceToken(token) {
     instanceCounter(token.slot) && token.slot < LIMIT.RESOURCES &&
     instanceCounter(token.ordinal) && token.ordinal > 0 && instanceIdentifier(token.operationId);
 }
-export {emptyInstanceState, decodeInstanceState, selectionHistory, selectionAdmission,
+function matchesInstanceResourceToken(binding, request, token) {
+  return validResourceToken(token) && same(token, resourceToken(binding, request));
+}
+export {validateBinding, matchesInstanceResourceToken,
+  emptyInstanceState, decodeInstanceState, selectionHistory, selectionAdmission,
   validCreationLineage, selectInstanceState, validSlotRequest, reserveResourceState,
   resolveResourceState, changeResourceState, validResourceToken};
