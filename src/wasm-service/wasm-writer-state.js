@@ -142,8 +142,9 @@ class WasmWriterState {
     const identity = responseIdentity(command);
     if (identity.serviceId !== meta.serviceId) return refused(command, R.INCARNATION);
     const root = this.creationBinding();
-    if (root !== null && (root.serviceDefinitionId !== identity.serviceId ||
-        root.incarnation !== identity.incarnation)) return refused(command, R.INCARNATION);
+    if (root !== null && root.serviceDefinitionId !== identity.serviceId) {
+      return refused(command, R.INCARNATION);
+    }
     if (command.action === A.INIT) {
       if (meta.initialization === null) return {status: S.NEW};
       return writerDigest(command) === writerDigest(meta.initialization.command) ?
