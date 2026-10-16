@@ -41,3 +41,34 @@ Original WASM test blob32bc78324927187134ea2e2e59de63467dbebed9, original fixtur
 Full release successor stays unsealed/unactivated; F1 and runtime-increment approval HOLD; shared-control-wave HELD; Runner/TAP PARKED; PR122 rejected. No harnessd used. No new lab job remains intentionally running. Use existing locked lab executor; no shared dependency installation changes.
 
 User requests early preservation/handover when usage falls below5%. Live usage percentage was unavailable; preservation is performed now at the protocol STOP rather than awaiting that threshold. Final remote publication identity and archive receipt are recorded alongside this handover after evidence preservation.
+
+
+## Appended creation-origin decision and owner audit — 2026-10-16
+
+The guiding owner accepts the recreation counterexample and selects common
+creation-owner-bound incarnation while retaining reusable logical service IDs.
+INIT confirms that already authoritative incarnation; it never selects it from
+empty storage. Retained restart and same-instance replica replacement preserve
+the binding; explicit recreation obtains a new one. Old CREATE historical
+completion does not grant current activation. Application compares stored
+binding; retained DB/image mismatch refuses opening without rewriting history.
+No writer sequence, slot, acknowledgment or retirement redesign is selected.
+
+Read `creation-binding/CONTRACT-GATE.md`, its source manifest and independent
+owner audit before source work. The current inspected paths have immutable
+installation intent and replica CREATE machinery, but no common durable
+per-service current-incarnation transition or complete activation-to-genesis
+handoff. Catalog-install activation explicitly records unsupported; the
+direct desired-state CREATE path resolves a cached definition and tracks local
+operations. Neither supplies the missing authority. The gap includes stale
+CREATE across awaits and existing group/peer/storage identity. An injected
+expectedIncarnation would not close it. This is the user's explicit stop
+condition for an unavailable common creation authority.
+
+No source/test edits or executions in this follow-up audit. The original
+2-pass/1-fail component result and all prepared-but-unexecuted proof remain
+as previously recorded. The prototype and static violations remain HOLD.
+The next bounded unit must establish current service-creation authority and
+its replica/genesis handoff in the existing owners, then resume the already
+prepared WASM completion plan. Full native recreation/snapshot proof is still
+unavailable. No main merge or release activation.
