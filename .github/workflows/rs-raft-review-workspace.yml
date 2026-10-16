@@ -1,7 +1,7 @@
 name: rs-raft-review-workspace
 on:
   push:
-    branches: [resume/rs-raft-runtime-recovery-20261012]
+    branches: [review/wasm-creation-genesis-cloud-20261016]
     paths: [.github/workflows/rs-raft-review-workspace.yml]
 permissions:
   contents: read
