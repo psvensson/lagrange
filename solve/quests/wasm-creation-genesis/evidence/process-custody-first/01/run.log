@@ -1,0 +1,87 @@
+lab test: lenovo-laptop: ordinary (1 files) cores=8 mem=15.5GiB speed x2.26
+[lenovo-laptop] placement-shell=1823215
+[lenovo-laptop] placement-head=688c75e0a5db943985f8ff2a93e5355560ac1aa1
+[lenovo-laptop] placement-link=node_modules
+[lenovo-laptop] placement-link=data/examples
+[lenovo-laptop] placement-link=data/partitions
+[lenovo-laptop] placement-link=tools/alloy-6.2.0
+[lenovo-laptop] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[lenovo-laptop] placement-link=tools/tla2tools.jar
+[lenovo-laptop] placement-prepared=import-graph
+[lenovo-laptop] placement-env=factor:2.3 mode:local retry:0 timeout: lanecap:7
+[lenovo-laptop] placement-pid=1823607
+[lenovo-laptop] # test-files planned=1
+[lenovo-laptop] classified lane ordinary: 1 file(s), jobs=4
+[lenovo-laptop] thermal: ok cpu 50C (coretemp/Package id 0) nvme unmeasured
+[lenovo-laptop] not ok test/entrypoint/creation-recovery-process-custody.test.js (3 assertions, 1648ms)
+[lenovo-laptop] # TAP assertions failed; test process exited 1
+[lenovo-laptop] TAP version 13
+[lenovo-laptop] # Subtest: creation recovery cannot use process-lock acquisition after closeApplicationDatabases rejects
+[lenovo-laptop] not ok 1 - creation recovery cannot use process-lock acquisition after closeApplicationDatabases rejects
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 119.265484
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/688c75e0a5db-mvamtxgz-3020551/test/entrypoint/creation-recovery-process-custody.test.js:98:3'
+[lenovo-laptop]   failureType: 'testCodeFailure'
+[lenovo-laptop]   error: |-
+[lenovo-laptop]     SUCCESSOR_ADMITTED_WITH_UNRELEASED_OLD_RESOURCE
+[lenovo-laptop]     
+[lenovo-laptop]     0 !== 23
+[lenovo-laptop]     
+[lenovo-laptop]   code: 'ERR_ASSERTION'
+[lenovo-laptop]   name: 'AssertionError'
+[lenovo-laptop]   expected: 23
+[lenovo-laptop]   actual: 0
+[lenovo-laptop]   operator: 'strictEqual'
+[lenovo-laptop]   stack: |-
+[lenovo-laptop]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/688c75e0a5db-mvamtxgz-3020551/test/entrypoint/creation-recovery-process-custody.test.js:118:12)
+[lenovo-laptop]     process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[lenovo-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[lenovo-laptop]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[lenovo-laptop]   ...
+[lenovo-laptop] # {"scope":"component creation-recovery custody premise","failureAt":"closeApplicationDatabases","parentPid":1823622,"before":{"exitCode":23,"signal":null,"stderr":"","acquired":false,"pid":1823631,"code":"DATA_DIRECTORY_ALREADY_OWNED","message":"Data directory is already owned by another Lagrange process: /tmp/creation-process-custody-qmP76z"},"events":["closeApplicationDatabases"],"shutdownError":{"message":"injected closeApplicationDatabases failure"},"oldResourceOpen":true,"after":{"exitCode":0,"signal":null,"stderr":"","acquired":true,"pid":1823638},"limitation":"acquisition is tested; no successor startup, recreation or RF3 is claimed"}
+[lenovo-laptop] # Subtest: creation recovery cannot use process-lock acquisition after submitDrainIntent rejects
+[lenovo-laptop] not ok 2 - creation recovery cannot use process-lock acquisition after submitDrainIntent rejects
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 101.932506
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/688c75e0a5db-mvamtxgz-3020551/test/entrypoint/creation-recovery-process-custody.test.js:98:3'
+[lenovo-laptop]   failureType: 'testCodeFailure'
+[lenovo-laptop]   error: |-
+[lenovo-laptop]     SUCCESSOR_ADMITTED_WITH_UNRELEASED_OLD_RESOURCE
+[lenovo-laptop]     
+[lenovo-laptop]     0 !== 23
+[lenovo-laptop]     
+[lenovo-laptop]   code: 'ERR_ASSERTION'
+[lenovo-laptop]   name: 'AssertionError'
+[lenovo-laptop]   expected: 23
+[lenovo-laptop]   actual: 0
+[lenovo-laptop]   operator: 'strictEqual'
+[lenovo-laptop]   stack: |-
+[lenovo-laptop]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/688c75e0a5db-mvamtxgz-3020551/test/entrypoint/creation-recovery-process-custody.test.js:118:12)
+[lenovo-laptop]     process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[lenovo-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[lenovo-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[lenovo-laptop]   ...
+[lenovo-laptop] # {"scope":"component creation-recovery custody premise","failureAt":"submitDrainIntent","parentPid":1823622,"before":{"exitCode":23,"signal":null,"stderr":"","acquired":false,"pid":1823645,"code":"DATA_DIRECTORY_ALREADY_OWNED","message":"Data directory is already owned by another Lagrange process: /tmp/creation-process-custody-b806b4"},"events":["closeApplicationDatabases","submitDrainIntent"],"shutdownError":{"message":"injected submitDrainIntent failure"},"oldResourceOpen":true,"after":{"exitCode":0,"signal":null,"stderr":"","acquired":true,"pid":1823652},"limitation":"acquisition is tested; no successor startup, recreation or RF3 is claimed"}
+[lenovo-laptop] # Subtest: healthy runtime shutdown releases the process lock only after owned resource cleanup
+[lenovo-laptop] ok 3 - healthy runtime shutdown releases the process lock only after owned resource cleanup
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 109.026706
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   ...
+[lenovo-laptop] # {"scope":"healthy component shutdown","before":{"exitCode":23,"signal":null,"stderr":"","acquired":false,"pid":1823659,"code":"DATA_DIRECTORY_ALREADY_OWNED","message":"Data directory is already owned by another Lagrange process: /tmp/creation-process-custody-CSGEdp"},"events":["closeApplicationDatabases","submitDrainIntent","ownerCleanup","bootstrapAPI.shutdown"],"oldResourceOpen":false,"after":{"exitCode":0,"signal":null,"stderr":"","acquired":true,"pid":1823666}}
+[lenovo-laptop] 1..3
+[lenovo-laptop] # tests 3
+[lenovo-laptop] # suites 0
+[lenovo-laptop] # pass 1
+[lenovo-laptop] # fail 2
+[lenovo-laptop] # cancelled 0
+[lenovo-laptop] # skipped 0
+[lenovo-laptop] # todo 0
+[lenovo-laptop] # duration_ms 335.963025
+[lenovo-laptop] # time=1648ms
+[lenovo-laptop] # test-files total=1 pass=0 fail=1 assertions=3
+lab test: lenovo-laptop: # test-files total=1 pass=0 fail=1 assertions=3
+lab test: lenovo-laptop: results copied to test-output/reports/test-results-lenovo-laptop.ndjson
+# test-files total=1 pass=0 fail=1 assertions=3

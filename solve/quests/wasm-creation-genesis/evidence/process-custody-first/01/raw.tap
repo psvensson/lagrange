@@ -1,0 +1,66 @@
+TAP version 13
+# Subtest: creation recovery cannot use process-lock acquisition after closeApplicationDatabases rejects
+not ok 1 - creation recovery cannot use process-lock acquisition after closeApplicationDatabases rejects
+  ---
+  duration_ms: 119.265484
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/688c75e0a5db-mvamtxgz-3020551/test/entrypoint/creation-recovery-process-custody.test.js:98:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    SUCCESSOR_ADMITTED_WITH_UNRELEASED_OLD_RESOURCE
+    
+    0 !== 23
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 23
+  actual: 0
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/688c75e0a5db-mvamtxgz-3020551/test/entrypoint/creation-recovery-process-custody.test.js:118:12)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# {"scope":"component creation-recovery custody premise","failureAt":"closeApplicationDatabases","parentPid":1823622,"before":{"exitCode":23,"signal":null,"stderr":"","acquired":false,"pid":1823631,"code":"DATA_DIRECTORY_ALREADY_OWNED","message":"Data directory is already owned by another Lagrange process: /tmp/creation-process-custody-qmP76z"},"events":["closeApplicationDatabases"],"shutdownError":{"message":"injected closeApplicationDatabases failure"},"oldResourceOpen":true,"after":{"exitCode":0,"signal":null,"stderr":"","acquired":true,"pid":1823638},"limitation":"acquisition is tested; no successor startup, recreation or RF3 is claimed"}
+# Subtest: creation recovery cannot use process-lock acquisition after submitDrainIntent rejects
+not ok 2 - creation recovery cannot use process-lock acquisition after submitDrainIntent rejects
+  ---
+  duration_ms: 101.932506
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/688c75e0a5db-mvamtxgz-3020551/test/entrypoint/creation-recovery-process-custody.test.js:98:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    SUCCESSOR_ADMITTED_WITH_UNRELEASED_OLD_RESOURCE
+    
+    0 !== 23
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 23
+  actual: 0
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/688c75e0a5db-mvamtxgz-3020551/test/entrypoint/creation-recovery-process-custody.test.js:118:12)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# {"scope":"component creation-recovery custody premise","failureAt":"submitDrainIntent","parentPid":1823622,"before":{"exitCode":23,"signal":null,"stderr":"","acquired":false,"pid":1823645,"code":"DATA_DIRECTORY_ALREADY_OWNED","message":"Data directory is already owned by another Lagrange process: /tmp/creation-process-custody-b806b4"},"events":["closeApplicationDatabases","submitDrainIntent"],"shutdownError":{"message":"injected submitDrainIntent failure"},"oldResourceOpen":true,"after":{"exitCode":0,"signal":null,"stderr":"","acquired":true,"pid":1823652},"limitation":"acquisition is tested; no successor startup, recreation or RF3 is claimed"}
+# Subtest: healthy runtime shutdown releases the process lock only after owned resource cleanup
+ok 3 - healthy runtime shutdown releases the process lock only after owned resource cleanup
+  ---
+  duration_ms: 109.026706
+  type: 'test'
+  ...
+# {"scope":"healthy component shutdown","before":{"exitCode":23,"signal":null,"stderr":"","acquired":false,"pid":1823659,"code":"DATA_DIRECTORY_ALREADY_OWNED","message":"Data directory is already owned by another Lagrange process: /tmp/creation-process-custody-CSGEdp"},"events":["closeApplicationDatabases","submitDrainIntent","ownerCleanup","bootstrapAPI.shutdown"],"oldResourceOpen":false,"after":{"exitCode":0,"signal":null,"stderr":"","acquired":true,"pid":1823666}}
+1..3
+# tests 3
+# suites 0
+# pass 1
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 335.963025
+# time=1648ms

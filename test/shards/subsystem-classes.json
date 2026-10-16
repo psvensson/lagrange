@@ -4,10 +4,10 @@
   "counts": {
     "admin-diagnostics": 116,
     "architecture-governance": 19,
-    "bootstrap-membership": 313,
+    "bootstrap-membership": 314,
     "cdc-metadata": 63,
     "cli-tooling": 96,
-    "control-plane": 214,
+    "control-plane": 215,
     "convergence-topology": 82,
     "distributed-harness": 177,
     "examples-e2e": 7,
@@ -23,12 +23,12 @@
     "test-infrastructure": 143,
     "transactions": 16,
     "transport-messaging": 96,
-    "wasm-toolchain": 63
+    "wasm-toolchain": 64
   },
-  "censusSize": 2391,
-  "digest": "fnv1a32-93c55dd0",
+  "censusSize": 2394,
+  "digest": "fnv1a32-2d37a266",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-34d1938c",
+  "observationDigest": "fnv1a32-b731500b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -689,6 +689,7 @@
     "test/control-plane/request-binding-service-definition-owner.test.js": "control-plane",
     "test/control-plane/runtime-access-policy-owner.test.js": "control-plane",
     "test/control-plane/service-install-catalog-owner.test.js": "control-plane",
+    "test/control-plane/service-instance-creation-cas.test.js": "control-plane",
     "test/control-plane/shared-node-readiness-policy.test.js": "control-plane",
     "test/control-plane/single-readiness-owner.receipt.test.js": "control-plane",
     "test/control-plane/startup-authority-serve-eligible-spread-satisfied.repro.test.js": "control-plane",
@@ -977,6 +978,7 @@
     "test/entrypoint/entrypoint-startup-shutdown-parity-characterization.test.js": "bootstrap-membership",
     "test/entrypoint/join-reattempt-wait-bound-spent.test.js": "bootstrap-membership",
     "test/entrypoint/shutdown-best-effort-step-timebox.test.js": "bootstrap-membership",
+    "test/entrypoint/startup-failed-cleanup-process-custody.test.js": "bootstrap-membership",
     "test/examples/comparative-efficiency-movielens-public-request-workload.test.js": "examples-e2e",
     "test/examples/dockerized-pg-client-compatibility-example.test.js": "examples-e2e",
     "test/examples/js-request-binding-example.test.js": "examples-e2e",
@@ -2393,6 +2395,7 @@
     "test/wasm-service/time-binding-compilation.test.js": "wasm-toolchain",
     "test/wasm-service/timer-manager.property.test.js": "wasm-toolchain",
     "test/wasm-service/timer-manager.test.js": "wasm-toolchain",
+    "test/wasm-service/wasm-creation-bound-native.test.js": "wasm-toolchain",
     "test/wasm-service/wasm-executor-run-export.test.js": "wasm-toolchain",
     "test/wasm-service/wasm-executor-runtime-adapter-parity.test.js": "wasm-toolchain",
     "test/wasm-service/wasm-executor.test.js": "wasm-toolchain",
@@ -4633,6 +4636,13 @@
       "files": [
         "src/config/configuration-manager.js",
         "src/control-plane/owners/request-binding-service-definition-contract.js",
+        "src/control-plane/owners/service-install-catalog-contract.js"
+      ]
+    },
+    "test/control-plane/service-instance-creation-cas.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
         "src/control-plane/owners/service-install-catalog-contract.js"
       ]
     },
@@ -7008,6 +7018,12 @@
     "test/entrypoint/entrypoint-startup-shutdown-parity-characterization.test.js": {
       "files": [
         "src/bootstrap/bootstrap-readiness-state-constants.js"
+      ]
+    },
+    "test/entrypoint/startup-failed-cleanup-process-custody.test.js": {
+      "files": [
+        "src/entrypoint-startup-acquisition-ledger.js",
+        "src/storage/data-directory-process-owner.js"
       ]
     },
     "test/examples/comparative-efficiency-movielens-public-request-workload.test.js": {
@@ -16091,6 +16107,27 @@
         "src/runtime/service-runtime-lifecycle.js",
         "src/runtime/wasi-component-cell-runtime.js",
         "src/runtime/wasm-component-driver.js"
+      ]
+    },
+    "test/wasm-service/wasm-creation-bound-native.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/index.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/owners/service-install-catalog-contract.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/wasm-service/wasm-service-committed-command-codec.js",
+        "src/wasm-service/wasm-service-constants.js",
+        "src/wasm-service/wasm-service-replica.js",
+        "test/partition/partition-service-test-support.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js",
+        "test/wasm-service/wasm-creation-bound-native-fixture.js",
+        "test/wasm-service/wasm-strong-write-native-fixture.js"
       ]
     },
     "test/wasm-service/wasm-executor-run-export.test.js": {
