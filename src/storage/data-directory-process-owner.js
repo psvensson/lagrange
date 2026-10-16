@@ -1,6 +1,11 @@
 import Database from 'better-sqlite3';
 import path from 'node:path';
 
+// Resource custody only: SQLite still decides exclusive ownership. Keep each
+// acquired handle reachable until explicit release or process death, even when
+// failed startup drops its ledger or an embedded caller drops its runtime.
+const heldDataDirectoryDatabases = new Set();
+
 const DATA_DIRECTORY_OWNER_DB = '.lagrange-data-directory-owner.sqlite';
 const DATA_DIRECTORY_OWNER_ERROR_CODE = 'DATA_DIRECTORY_ALREADY_OWNED';
 const DATA_DIRECTORY_OWNER_UNAVAILABLE_ERROR_CODE =
@@ -38,17 +43,19 @@ function acquireDataDirectoryProcessOwner(dataDir) {
       cause?.code === 'SQLITE_LOCKED';
     throw dataDirectoryOwnershipError(canonicalDataDir, cause, alreadyOwned);
   }
+  heldDataDirectoryDatabases.add(database);
   let released = false;
   return Object.freeze({
     dataDir: canonicalDataDir,
     lockPath,
     release() {
       if (released) return;
-      released = true;
       try {
         database.exec(DATA_DIRECTORY_OWNER_SQL.RELEASE);
       } finally {
         database.close();
+        heldDataDirectoryDatabases.delete(database);
+        released = true;
       }
     },
   });
@@ -59,11 +66,9 @@ function bindDataDirectoryProcessOwner(runtime, owner) {
   return Object.freeze({
     ...runtime,
     async shutdownRuntime() {
-      try {
-        return await shutdownRuntime.call(runtime);
-      } finally {
-        owner.release();
-      }
+      const result = await shutdownRuntime.call(runtime);
+      owner.release();
+      return result;
     },
   });
 }

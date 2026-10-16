@@ -809,7 +809,7 @@
       ]
     },
     "public-application-database-seam": {
-      "description": "The public Application Database seam (createEmbeddedLagrange -> openApplicationDatabase -> query/transaction): public result shape, typed errors, statement policy, and behaviour through embedded processes.",
+      "description": "The public Application Database seam (createEmbeddedLagrange -> openApplicationDatabase -> query/transaction): public result shape, typed errors, statement policy, and behaviour through embedded processes. Process-directory custody is retained across failed startup or shutdown cleanup; startup preserves both the initiating failure and cleanup rejection. Failed teardown permits no new directory owner until actual native release or process death.",
       "owners": [
         "src/query/application-database.js",
         "src/query/application-database-result.js",
@@ -817,7 +817,11 @@
         "src/query/application-database-statement-policy.js",
         "src/query/application-database-input.js",
         "src/embedded-lagrange.js",
-        "src/public-api.js"
+        "src/public-api.js",
+        "src/storage/data-directory-process-owner.js",
+        "src/entrypoint-startup-acquisition-ledger.js",
+        "src/lagrange-runtime-startup.js",
+        "src/entrypoint-runtime-shutdown-lifecycle.js"
       ],
       "tests": [
         "test/query/application-database.test.js",
@@ -826,7 +830,11 @@
         "test/integration/public-application-database-transaction-facade.integration.test.js",
         "test/integration/public-consumer-contract-ratchet.integration.test.js",
         "test/release/public-consumer-contract-ratchet.test.js",
-        "test/test-helpers/topology-leak-check.test.js"
+        "test/test-helpers/topology-leak-check.test.js",
+        "test/entrypoint/application-database-runtime-composition.test.js",
+        "test/entrypoint/creation-recovery-process-custody.test.js",
+        "test/entrypoint/startup-failed-cleanup-process-custody.test.js",
+        "test/entrypoint/process-custody-review.integration.test.js"
       ]
     },
     "test-listener-port-block": {

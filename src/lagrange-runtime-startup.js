@@ -57,6 +57,7 @@ import {resolveNodeJoiningConfig} from './entrypoint-runtime-join-config.js';
 import {
   acquireStartupOwner,
   createStartupAcquisitionLedger,
+  runStartupWithCleanup,
 } from
   './entrypoint-startup-acquisition-ledger.js';
 import {
@@ -682,16 +683,6 @@ async function logBootProvenance(options) {
   }
 }
 
-async function runStartupWithCleanup(cleanupLedger, startup) {
-  try {
-    const runtime = await startup();
-    cleanupLedger.release();
-    return runtime;
-  } catch (error) {
-    await cleanupLedger.unwind().catch(() => undefined);
-    throw error;
-  }
-}
 async function acquireLagrangeRuntime(options, cleanupLedger) {
   const environment = options.environment;
   const cliArgs = options.cliArgs;
@@ -723,7 +714,9 @@ async function acquireLagrangeRuntime(options, cleanupLedger) {
   dataDirectoryManager.initialize();
   const dataDirectoryProcessOwner = acquireDataDirectoryProcessOwner(
     dataDirectoryManager.getDataDir());
-  cleanupLedger.defer(() => dataDirectoryProcessOwner.release());
+  cleanupLedger.defer(() => dataDirectoryProcessOwner.release(), {
+    requiresSuccessfulCleanup: true,
+  });
 
   const hlcClock = new HLCClockService(config.get(CONFIG_KEY.NODE_ID), {
     maxDrift: config.get(CONFIG_KEY.HLC_MAX_DRIFT_MS),

@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 116,
     "architecture-governance": 19,
-    "bootstrap-membership": 314,
+    "bootstrap-membership": 315,
     "cdc-metadata": 63,
     "cli-tooling": 96,
     "control-plane": 215,
@@ -25,10 +25,10 @@
     "transport-messaging": 96,
     "wasm-toolchain": 64
   },
-  "censusSize": 2394,
-  "digest": "fnv1a32-2d37a266",
+  "censusSize": 2395,
+  "digest": "fnv1a32-cbbac020",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-b731500b",
+  "observationDigest": "fnv1a32-10b5109f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -977,6 +977,7 @@
     "test/entrypoint/entrypoint-admin-runtime-cleanup.test.js": "bootstrap-membership",
     "test/entrypoint/entrypoint-startup-shutdown-parity-characterization.test.js": "bootstrap-membership",
     "test/entrypoint/join-reattempt-wait-bound-spent.test.js": "bootstrap-membership",
+    "test/entrypoint/process-custody-review.integration.test.js": "bootstrap-membership",
     "test/entrypoint/shutdown-best-effort-step-timebox.test.js": "bootstrap-membership",
     "test/entrypoint/startup-failed-cleanup-process-custody.test.js": "bootstrap-membership",
     "test/examples/comparative-efficiency-movielens-public-request-workload.test.js": "examples-e2e",
@@ -7018,6 +7019,12 @@
     "test/entrypoint/entrypoint-startup-shutdown-parity-characterization.test.js": {
       "files": [
         "src/bootstrap/bootstrap-readiness-state-constants.js"
+      ]
+    },
+    "test/entrypoint/process-custody-review.integration.test.js": {
+      "files": [
+        "src/entrypoint-startup-acquisition-ledger.js",
+        "test/entrypoint/process-custody-review-child.js"
       ]
     },
     "test/entrypoint/startup-failed-cleanup-process-custody.test.js": {
