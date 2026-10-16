@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2373,
+    "ordinary": 2374,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2390,
-  "digest": "fnv1a32-d458d17d",
+  "censusSize": 2391,
+  "digest": "fnv1a32-ed84aa3f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -950,6 +950,7 @@
     "test/distributed/scenarios/__tests__/rolling-restart-budget-calibration.test.js": "ordinary",
     "test/entrypoint-runtime-helpers-join-decision.test.js": "ordinary",
     "test/entrypoint/application-database-runtime-composition.test.js": "ordinary",
+    "test/entrypoint/creation-recovery-process-custody.test.js": "ordinary",
     "test/entrypoint/early-admin-sql-engine.test.js": "ordinary",
     "test/entrypoint/embedded-lagrange-input.test.js": "ordinary",
     "test/entrypoint/entrypoint-admin-runtime-cleanup.test.js": "ordinary",

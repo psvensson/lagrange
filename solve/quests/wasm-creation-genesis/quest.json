@@ -1,0 +1,47 @@
+{
+  "schema": "solve-quest/2",
+  "id": "wasm-creation-genesis",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "Establish one durable service-instance selection through the existing catalog/service-definition owner and carry original identity and resource custody through lifecycle, publication, recovery and WASM genesis; prove old-instance exclusion and valid current-instance progress without widening catalog activation or changing runtime ordering.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/wasm-creation-genesis/evidence/receipt.json",
+      "requiredReceipts": [
+        "contract-approved",
+        "creation-native",
+        "recreation-mutation",
+        "async-custody",
+        "process-recovery",
+        "writer-completion",
+        "static-cone",
+        "independent-final-review"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "review-first",
+      "statement": "Independent content-bound contract and oracle approval before production edits; test-only checkpoint before execution."
+    },
+    {
+      "id": "scope",
+      "statement": "No main merge, F1 supersession, runtime drain/propose edit, request-Cell redirection, OCI activation, snapshot installer, timer/MG repair or full-release seal."
+    },
+    {
+      "id": "proof",
+      "statement": "Preserve historical evidence; real owner creation outputs; meaningful same-profile mutations; locked lab first results; explicit snapshot and native versus component limits."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "admission-gating",
+    "concurrency-serialization",
+    "recovery-replay",
+    "transport-delivery",
+    "harness-fidelity",
+    "formation-circularity"
+  ],
+  "sealedAt": "f6c3698be77043ddd19e3a2a923a6d0ac6d2a9a9"
+}

@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 116,
     "architecture-governance": 19,
-    "bootstrap-membership": 312,
+    "bootstrap-membership": 313,
     "cdc-metadata": 63,
     "cli-tooling": 96,
     "control-plane": 214,
@@ -25,10 +25,10 @@
     "transport-messaging": 96,
     "wasm-toolchain": 63
   },
-  "censusSize": 2390,
-  "digest": "fnv1a32-200c85d7",
+  "censusSize": 2391,
+  "digest": "fnv1a32-93c55dd0",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-23072567",
+  "observationDigest": "fnv1a32-34d1938c",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -970,6 +970,7 @@
     "test/distributed/scenarios/__tests__/rolling-restart-budget-calibration.test.js": "distributed-harness",
     "test/entrypoint-runtime-helpers-join-decision.test.js": "bootstrap-membership",
     "test/entrypoint/application-database-runtime-composition.test.js": "bootstrap-membership",
+    "test/entrypoint/creation-recovery-process-custody.test.js": "bootstrap-membership",
     "test/entrypoint/early-admin-sql-engine.test.js": "bootstrap-membership",
     "test/entrypoint/embedded-lagrange-input.test.js": "bootstrap-membership",
     "test/entrypoint/entrypoint-admin-runtime-cleanup.test.js": "bootstrap-membership",
@@ -6985,6 +6986,11 @@
         "src/entrypoint-startup-acquisition-ledger.js",
         "src/query/application-database.js",
         "src/storage/data-directory-manager.js",
+        "src/storage/data-directory-process-owner.js"
+      ]
+    },
+    "test/entrypoint/creation-recovery-process-custody.test.js": {
+      "files": [
         "src/storage/data-directory-process-owner.js"
       ]
     },
