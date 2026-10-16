@@ -1,0 +1,157 @@
+name: rs-raft-genesis-observation-preservation
+on:
+  push:
+    branches: [carrier/rs-raft-genesis-observation-20261016]
+    paths: [.github/workflows/rs-raft-genesis-observation-preservation.yml]
+permissions:
+  contents: write
+concurrency:
+  group: rs-raft-genesis-observation-preservation-20261016
+  cancel-in-progress: false
+jobs:
+  preserve-reviewed-wip:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: 50c64ac476bca16c607d42e8c11d3b8606a01f53
+          fetch-depth: 1
+          persist-credentials: true
+      - name: Verify patches and publish exact source without product execution
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GIT_AUTHOR_NAME: ChatGPT
+          GIT_AUTHOR_EMAIL: chatgpt@openai.com
+          GIT_COMMITTER_NAME: ChatGPT
+          GIT_COMMITTER_EMAIL: chatgpt@openai.com
+        run: |
+          set -euo pipefail
+          export OUT="$RUNNER_TEMP/genesis-observation-preservation"
+          mkdir -p "$OUT"
+          python3 - <<'PY'
+          import base64, hashlib, json, os, pathlib, subprocess, zlib
+          out = pathlib.Path(os.environ['OUT'])
+          base = '50c64ac476bca16c607d42e8c11d3b8606a01f53'
+          def git(*args):
+            return subprocess.check_output(['git', *args])
+          def text(*args):
+            return git(*args).decode().strip()
+          def blob(data):
+            return hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest()
+          def remote(ref):
+            answer = text('ls-remote', '--heads', 'origin', ref)
+            return answer.split()[0] if answer else None
+          def commit(tree, parent, message):
+            return subprocess.check_output(['git', 'commit-tree', tree, '-p', parent],
+              input=(message + '\n').encode()).decode().strip()
+          assert text('rev-parse', 'HEAD') == base
+          assert not git('status', '--porcelain').strip()
+          parts = [
+            '52099448566b6737b20170d4896bf1e32a1b8142',
+            '68ec5867e4682a59f5983afbbc6b5a22b79048f2',
+            '6d0c151db9ce3d1001eed831c62f67a9ed7ab11b',
+            'cb756d11c50acb1a0572beca410e955f3e3d8a29',
+          ]
+          encoded = []
+          for sha in parts:
+            reply = json.loads(subprocess.check_output([
+              'gh', 'api', 'repos/psvensson/lagrange/git/blobs/' + sha]))
+            data = base64.b64decode(reply['content'])
+            assert blob(data) == sha
+            encoded.append(data)
+          raw = zlib.decompress(base64.b64decode(b''.join(encoded), validate=True))
+          assert hashlib.sha256(raw).hexdigest() == 'ea0b41046f2683c435954d6150b6e6592ca87d2ef9a17ad9c6bc3a321e4b1ad7'
+          payload = json.loads(raw)
+          identity = payload['identity']
+          assert identity['baseRemote'] == base
+          (out / 'expected.json').write_text(json.dumps(identity, indent=2) + '\n')
+          (out / 'transfer.json').write_text(json.dumps({'parts': parts,
+            'payloadSha256': hashlib.sha256(raw).hexdigest()}, indent=2) + '\n')
+          for stage in ('tests', 'source'):
+            patch = out / (stage + '.patch')
+            patch.write_text(payload[stage])
+            git('apply', '--check', '--index', str(patch))
+            git('apply', '--index', str(patch))
+            if stage == 'tests':
+              test_tree = text('write-tree')
+              test_commit = commit(test_tree, base,
+                'WIP test checkpoint: freeze genesis reentry and membership observation witnesses')
+          tree = text('write-tree')
+          for path, sha in identity['postimages'].items():
+            assert blob(pathlib.Path(path).read_bytes()) == sha, path
+          for name in ('src', 'test'):
+            assert text('rev-parse', tree + ':' + name) == identity[name + 'Tree']
+          ref = 'refs/heads/work/rs-raft-genesis-observation-20261016'
+          observed = remote(ref)
+          assert observed is not None
+          if observed != base:
+            git('fetch', '--no-tags', 'origin', ref)
+            candidate = text('rev-parse', 'FETCH_HEAD')
+            assert candidate == observed
+            assert text('rev-parse', candidate + '^{tree}') == tree
+            parents = text('show', '-s', '--format=%P', candidate).split()
+            assert len(parents) == 1
+            test_commit = parents[0]
+            git('fetch', '--no-tags', 'origin', test_commit)
+            assert text('rev-parse', test_commit + '^{tree}') == test_tree
+            assert text('show', '-s', '--format=%P', test_commit) == base
+          else:
+            candidate = commit(tree, test_commit,
+              'WIP: connect bound INIT to applied genesis and native membership observation; serving held')
+            assert remote(ref) == base
+            git('push', 'origin', candidate + ':' + ref)
+          assert remote(ref) == candidate
+          (out / 'candidate-commit.raw').write_bytes(git('cat-file', 'commit', candidate))
+          (out / 'test-commit.raw').write_bytes(git('cat-file', 'commit', test_commit))
+          (out / 'verified-remote-sha.txt').write_text(candidate + '\n')
+          (out / 'verified-tree.txt').write_text(tree + '\n')
+          (out / 'test-checkpoint-sha.txt').write_text(test_commit + '\n')
+          (out / 'complete.patch').write_bytes(git('diff', '--binary', base, candidate))
+          (out / 'changed-paths.txt').write_bytes(git('diff', '--name-status', base, candidate))
+          proofs = []
+          for index, item in enumerate(payload['mutations']):
+            git('reset', '--hard', candidate)
+            path = pathlib.Path(item['path'])
+            data = path.read_bytes()
+            assert blob(data) == item['candidateBlob']
+            before = item['before'].encode()
+            assert data.count(before) == 1
+            path.write_bytes(data.replace(before, item['after'].encode(), 1))
+            assert blob(path.read_bytes()) == item['blob']
+            git('add', item['path'])
+            proof_tree = text('write-tree')
+            assert text('rev-parse', proof_tree + ':test') == identity['testTree']
+            target = 'refs/heads/' + item['branch']
+            existing = remote(target)
+            if existing:
+              git('fetch', '--no-tags', 'origin', target)
+              proof = text('rev-parse', 'FETCH_HEAD')
+              assert proof == existing
+              assert text('rev-parse', proof + '^{tree}') == proof_tree
+              assert text('show', '-s', '--format=%P', proof) == candidate
+            else:
+              proof = commit(proof_tree, candidate,
+                'PROOF ONLY: ' + item['name'] + ' requirement removed; never a product candidate')
+              git('push', 'origin', proof + ':' + target)
+            assert remote(target) == proof
+            (out / ('proof-' + str(index) + '.raw')).write_bytes(git('cat-file', 'commit', proof))
+            (out / ('proof-' + str(index) + '.patch')).write_bytes(git('diff', candidate, proof))
+            proofs.append({'branch': item['branch'], 'sha': proof,
+              'path': item['path'], 'blob': item['blob']})
+            (out / 'proofs.json').write_text(json.dumps(proofs, indent=2) + '\n')
+          git('reset', '--hard', candidate)
+          assert not git('status', '--porcelain').strip()
+          assert remote(ref) == candidate
+          (out / 'claim-limit.txt').write_text('WIP byte preservation only. No product execution, serving permission, full static acceptance, main merge or release proof. Local synthetic ancestry is never published.\n')
+          PY
+          cd "$OUT"
+          sha256sum *.patch *.json *.raw *.txt > SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: rs-raft-genesis-observation-preservation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/genesis-observation-preservation/
+          retention-days: 7
+          if-no-files-found: error
