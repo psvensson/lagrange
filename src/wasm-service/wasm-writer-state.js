@@ -146,9 +146,6 @@ class WasmWriterState {
     if (root !== null && (root.serviceDefinitionId !== identity.serviceId ||
         root.incarnation !== identity.incarnation)) return refused(command, R.INCARNATION);
     if (command.action === A.INIT) {
-      if (root !== null && writerDigest(command) !== writerDigest(boundWasmInitialization(root))) {
-        return refused(command, R.CONFLICT);
-      }
       if (meta.initialization === null) return {status: S.NEW};
       return writerDigest(command) === writerDigest(meta.initialization.command) ?
         recorded(meta.initialization.receipt) : refused(command, R.CONFLICT);
