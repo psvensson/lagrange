@@ -57,6 +57,7 @@ import {resolveNodeJoiningConfig} from './entrypoint-runtime-join-config.js';
 import {
   acquireStartupOwner,
   createStartupAcquisitionLedger,
+  runStartupWithCleanup,
 } from
   './entrypoint-startup-acquisition-ledger.js';
 import {
@@ -682,16 +683,6 @@ async function logBootProvenance(options) {
   }
 }
 
-async function runStartupWithCleanup(cleanupLedger, startup) {
-  try {
-    const runtime = await startup();
-    cleanupLedger.release();
-    return runtime;
-  } catch (error) {
-    await cleanupLedger.unwind().catch(() => undefined);
-    throw error;
-  }
-}
 async function acquireLagrangeRuntime(options, cleanupLedger) {
   const environment = options.environment;
   const cliArgs = options.cliArgs;

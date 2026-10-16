@@ -1,4 +1,6 @@
 const RELEASED_LEDGER_MESSAGE = 'Startup acquisition ledger is released';
+const STARTUP_CLEANUP_FAILURE_MESSAGE =
+  'Startup failed and acquired-resource cleanup also failed';
 
 async function acquireStartupOwner(options) {
   const owner = await options.acquire();
@@ -52,4 +54,27 @@ function createStartupAcquisitionLedger() {
   return Object.freeze({defer, release, unwind});
 }
 
-export {acquireStartupOwner, createStartupAcquisitionLedger};
+async function runStartupWithCleanup(cleanupLedger, startup) {
+  try {
+    const runtime = await startup();
+    cleanupLedger.release();
+    return runtime;
+  } catch (startupError) {
+    try {
+      await cleanupLedger.unwind();
+    } catch (cleanupError) {
+      throw new AggregateError(
+        [startupError, cleanupError],
+        STARTUP_CLEANUP_FAILURE_MESSAGE,
+        {cause: startupError},
+      );
+    }
+    throw startupError;
+  }
+}
+
+export {
+  acquireStartupOwner,
+  createStartupAcquisitionLedger,
+  runStartupWithCleanup,
+};
