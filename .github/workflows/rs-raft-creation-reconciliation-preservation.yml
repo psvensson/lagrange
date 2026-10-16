@@ -1,0 +1,142 @@
+name: rs-raft-creation-reconciliation-preservation
+on:
+  push:
+    branches: [carrier/rs-raft-creation-reconciliation-20261016]
+    paths: [.github/workflows/rs-raft-creation-reconciliation-preservation.yml]
+permissions:
+  contents: write
+concurrency:
+  group: rs-raft-creation-reconciliation-preservation-20261016
+  cancel-in-progress: false
+jobs:
+  preserve-reviewed-wip:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: 6ba84863490bff9a43874a03f69ad2afff4b5898
+          fetch-depth: 1
+          persist-credentials: true
+      - name: Preserve exact reviewed bytes without executing product code
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GIT_AUTHOR_NAME: ChatGPT
+          GIT_AUTHOR_EMAIL: chatgpt@openai.com
+          GIT_COMMITTER_NAME: ChatGPT
+          GIT_COMMITTER_EMAIL: chatgpt@openai.com
+          GIT_AUTHOR_DATE: '2026-10-16T22:17:43+00:00'
+          GIT_COMMITTER_DATE: '2026-10-16T22:17:43+00:00'
+        run: |
+          set -euo pipefail
+          export OUT="$RUNNER_TEMP/event-reconciliation-preservation"
+          mkdir -p "$OUT"
+          python3 - <<'PY'
+          import base64, hashlib, json, os, pathlib, subprocess, zlib
+          out = pathlib.Path(os.environ['OUT'])
+          base = '6ba84863490bff9a43874a03f69ad2afff4b5898'
+          def git(*args):
+              return subprocess.check_output(['git', *args])
+          def blob(data):
+              return hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest()
+          def remote(ref):
+              reply = git('ls-remote', '--heads', 'origin', ref).decode().split()
+              return reply[0] if reply else None
+          def preserve(sha, ref, predecessor):
+              current = remote(ref)
+              if current == sha:
+                  return
+              assert current == predecessor, (ref, current, predecessor)
+              git('push', 'origin', sha + ':' + ref)
+              assert remote(ref) == sha
+          def commit(tree, parent, message):
+              return subprocess.check_output(['git', 'commit-tree', tree, '-p', parent],
+                  input=(message + '\n').encode()).decode().strip()
+          assert git('rev-parse', 'HEAD').decode().strip() == base
+          assert not git('status', '--porcelain').strip()
+          parts = [
+              '1d0c519494c948130d4cb64e17bba44701fae2f9',
+              'f10b3f4fd20013b337cbe3844f72dc38b8216b77',
+              '6c44283763b154d6e01bc94309f147e7285fed25',
+              '11aa49ee8ecbbdbf59d77d8978bc42bc646a46f1',
+              '27a279268b36d9111af9bfddd9f18b5ab02e0f77',
+          ]
+          encoded = []
+          for sha in parts:
+              reply = json.loads(subprocess.check_output([
+                  'gh', 'api', 'repos/psvensson/lagrange/git/blobs/' + sha]))
+              data = base64.b64decode(reply['content'])
+              assert blob(data) == sha
+              encoded.append(data)
+          raw = zlib.decompress(base64.b64decode(b''.join(encoded), validate=True))
+          assert hashlib.sha256(raw).hexdigest() == 'f8c8876330066899b91b18e05e751de0a429775439a34e150483567130cbf33e'
+          payload = json.loads(raw)
+          identity = payload['identity']
+          assert identity['baseRemote'] == base
+          assert identity['authorDate'] == os.environ['GIT_AUTHOR_DATE']
+          assert identity['branch'] == 'work/rs-raft-creation-reconciliation-20261016'
+          assert all(not path.startswith('.github/') for path in identity['paths'])
+          (out / 'expected.json').write_text(json.dumps(identity, indent=2) + '\n')
+          (out / 'transfer.json').write_text(json.dumps({'parts': parts,
+              'payloadSha256': hashlib.sha256(raw).hexdigest()}, indent=2) + '\n')
+          parent = base
+          for stage in ('tests', 'source'):
+              patch = out / (stage + '.patch')
+              patch.write_text(payload[stage])
+              git('apply', '--check', '--index', str(patch))
+              git('apply', '--index', str(patch))
+              tree = git('write-tree').decode().strip()
+              message = ('WIP test checkpoint: freeze native event reconciliation and shutdown witnesses'
+                  if stage == 'tests' else
+                  'WIP: connect native events to owned held-creation reconciliation; serving remains held')
+              parent = commit(tree, parent, message)
+              (out / (stage + '-commit.raw')).write_bytes(git('cat-file', 'commit', parent))
+              (out / (stage + '-sha.txt')).write_text(parent + '\n')
+          candidate = parent
+          for path, expected in identity['postimages'].items():
+              assert blob(pathlib.Path(path).read_bytes()) == expected, path
+          for subtree in ('src', 'test'):
+              assert git('rev-parse', candidate + ':' + subtree).decode().strip() == identity[subtree + 'Tree']
+          changed = git('diff', '--name-only', base, candidate).decode().splitlines()
+          assert changed == identity['paths']
+          ref = 'refs/heads/' + identity['branch']
+          preserve(candidate, ref, base)
+          (out / 'verified-remote-sha.txt').write_text(candidate + '\n')
+          (out / 'complete.patch').write_bytes(git('diff', '--binary', base, candidate))
+          (out / 'changed-paths.txt').write_bytes(git('diff', '--name-status', base, candidate))
+          proofs = []
+          for index, item in enumerate(payload['mutations']):
+              git('reset', '--hard', candidate)
+              path = pathlib.Path(item['path'])
+              data = path.read_bytes()
+              assert blob(data) == item['preimage']
+              before, after = item['before'].encode(), item['after'].encode()
+              assert data.count(before) == 1
+              path.write_bytes(data.replace(before, after, 1))
+              assert blob(path.read_bytes()) == item['blob']
+              git('add', item['path'])
+              tree = git('write-tree').decode().strip()
+              assert git('rev-parse', tree + ':test').decode().strip() == identity['testTree']
+              proof = commit(tree, candidate, 'PROOF ONLY: ' + item['name'] + '; never a product candidate')
+              target = 'refs/heads/' + item['branch']
+              assert item['branch'].startswith('proof/rs-raft-creation-')
+              (out / ('proof-' + str(index) + '.raw')).write_bytes(git('cat-file', 'commit', proof))
+              (out / ('proof-' + str(index) + '.patch')).write_bytes(git('diff', candidate, proof))
+              preserve(proof, target, None)
+              proofs.append({'branch': item['branch'], 'sha': proof, 'path': item['path'], 'blob': item['blob']})
+              (out / 'proofs.json').write_text(json.dumps(proofs, indent=2) + '\n')
+          git('reset', '--hard', candidate)
+          assert not git('status', '--porcelain').strip()
+          assert remote(ref) == candidate
+          (out / 'claim-limit.txt').write_text('WIP byte preservation only. No product test, serving, main merge, full static/corpus or release certification. Real remote ancestry preserved; synthetic local reconstruction ancestry is not published.\n')
+          PY
+          cd "$OUT"
+          sha256sum *.patch *.json *.raw *.txt > SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: rs-raft-creation-reconciliation-preservation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/event-reconciliation-preservation/
+          retention-days: 7
+          if-no-files-found: error
