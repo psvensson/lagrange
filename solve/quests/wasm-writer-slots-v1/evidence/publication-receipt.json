@@ -1,0 +1,19 @@
+{
+  "id": "wasm-writer-slots-v1",
+  "uploaded": {
+    "sha256": "abd050284d27a4918c366f1ba1115efb9896f43d4445abee96542534e66c238e",
+    "bytes": 480986,
+    "asset": "wasm-writer-slots-v1--LAGRANGE_WASM_WRITER_V1_CREATION_HOLD_20261016.tar.gz",
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/wasm-writer-slots-v1--LAGRANGE_WASM_WRITER_V1_CREATION_HOLD_20261016.tar.gz"
+  },
+  "entry": {
+    "ts": "2026-10-16T06:03:51.833Z",
+    "type": "finding",
+    "kind": "evidence",
+    "text": "WIP STOP preservation: frozen source9b53962f, test-only26cded6c, independent reviews, exact first lenovo recreation counterexample2pass/1fail,76payloadmanifest verified by fresh extraction. No completed WASM repair or merge approval.",
+    "evidence": "sha256:abd050284d27a4918c366f1ba1115efb9896f43d4445abee96542534e66c238e",
+    "asset": "wasm-writer-slots-v1--LAGRANGE_WASM_WRITER_V1_CREATION_HOLD_20261016.tar.gz",
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/wasm-writer-slots-v1--LAGRANGE_WASM_WRITER_V1_CREATION_HOLD_20261016.tar.gz",
+    "bytes": 480986
+  }
+}

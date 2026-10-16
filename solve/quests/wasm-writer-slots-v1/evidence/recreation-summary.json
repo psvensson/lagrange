@@ -1,0 +1,18 @@
+{
+  "sha": "9b53962f2e7b8402b2a6a02a4a24b45985cd3563",
+  "host": "lenovo-laptop",
+  "requested": [
+    "test/wasm-service/wasm-writer-recreation-origin-v1.test.js"
+  ],
+  "results": [
+    {
+      "file": "test/wasm-service/wasm-writer-recreation-origin-v1.test.js",
+      "code": 1,
+      "rawTap": true,
+      "testSha256": "9edc4b49f2de67da1c3cfce310b171a36e8329437c4c2b189a97db0ac480ec1f"
+    }
+  ],
+  "unrun": [],
+  "exitCode": 1,
+  "meaning": "Per-file original executions; no retries; no overall release certification"
+}
