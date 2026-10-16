@@ -238,6 +238,18 @@ workload succeeds across multiple partition hosts, worker loss demonstrates the
 documented retry/ambiguity semantics, and a second language/runtime conforms to
 the same broker/context contract.
 
+The SDK contract is deliberately broader than Call Cell `emit/call` parity:
+every Lagrange-provided capability supported by a WASM Component world
+(including request-world host imports) must have an equivalent authorized,
+typed native SDK projection for the **same** Binding mode. WIT defines
+interface shape; existing Lagrange owners define behavior, budgets, failures,
+deadlines and retry rules. Capability conformance requires paired positive
+and denied/failure cases across WASM and multiple native SDKs. There is no
+native-only platform capability or SDK-owned scheduler, and a Call Cell does
+not acquire request-world privileges by using OCI. This is a release target,
+not a claim of current OCI activation or SDK support; see
+[Native OCI Call Cells](architecture/native-oci-call-cells.md#complete-host-capability-parity-architectural-target-not-yet-proven).
+
 The OCI host agent remains lifecycle-only. It may provision the managed process
 and its broker connectivity, but it must not become a partition router,
 scheduler, retry loop, or alternate Call Cell owner. A customer application may
