@@ -16,9 +16,16 @@ function admitted(result) {
   return result.token;
 }
 
+const EVIDENCE_CHUNK_CHARACTERS = 4096;
 function evidence(t, f, name, results) {
-  t.diagnostic(JSON.stringify({scope: 'SQLite component CAS; read adapter; no native consensus',
-    name, results, row: f.row(), writes: f.writes}));
+  const json = JSON.stringify({scope: 'SQLite component CAS; read adapter; no native consensus',
+    name, results, row: f.row(), writes: f.writes});
+  // Node escapes embedded newlines in diagnostic(), so chunk the complete JSON.
+  // Concatenating evidenceChunk by evidenceOffset recovers every original value.
+  for (let offset = 0; offset < json.length; offset += EVIDENCE_CHUNK_CHARACTERS) {
+    t.diagnostic(JSON.stringify({name, evidenceOffset: offset, jsonCharacters: json.length,
+      evidenceChunk: json.slice(offset, offset + EVIDENCE_CHUNK_CHARACTERS)}));
+  }
 }
 
 test('ServiceDefinitionsOwner C3 concurrent selection has one SQL winner and stable losing result', async (t) => {

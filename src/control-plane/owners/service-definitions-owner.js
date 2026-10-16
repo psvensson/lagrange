@@ -1,3 +1,4 @@
+import * as instanceMetadata from './service-instance-metadata.js';
 import {TABLES} from '../../constants/index.js';
 import {SD_COL} from '../../wasm-service/wasm-service-models.js';
 import {
@@ -60,6 +61,7 @@ class ServiceDefinitionsOwner {
       );
     }
     this.catalogOwner = options.catalogOwner;
+    instanceMetadata.registerInstanceRows(this, options);
     this.serialGates = new Map();
     SERVICE_DEFINITION_ROW_OWNERS.set(
       this,
@@ -81,6 +83,30 @@ class ServiceDefinitionsOwner {
 
   getSystemTableCache() {
     return rowOwnerFor(this).getSystemTableCache();
+  }
+
+  selectConsensusInstance(request, options) {
+    return instanceMetadata.selectConsensusInstance(this, request, options);
+  }
+
+  getCurrentInstance(serviceId, options) {
+    return instanceMetadata.getCurrentInstance(this, serviceId, options);
+  }
+
+  reserveInstanceResource(binding, request, options) {
+    return instanceMetadata.reserveInstanceResource(this, binding, request, options);
+  }
+
+  resolveInstanceResource(binding, token, options) {
+    return instanceMetadata.resolveInstanceResource(this, binding, token, options);
+  }
+
+  grantInstanceResource(binding, token, options) {
+    return instanceMetadata.grantInstanceResource(this, binding, token, options);
+  }
+
+  closeInstanceResource(binding, token, options) {
+    return instanceMetadata.closeInstanceResource(this, binding, token, options);
   }
 
   async getServiceDefinition(serviceDefinitionId, options = {}) {

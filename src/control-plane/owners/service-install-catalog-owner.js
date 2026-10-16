@@ -35,6 +35,7 @@ import {
   projectBindableArtifact,
   projectPackage,
   projectRevision,
+  projectCreationRevision,
   requireEnum,
   requireDigest,
   requireEligiblePackageIds,
@@ -388,6 +389,19 @@ class ServiceInstallCatalogOwner {
     const row = await this.readRow(
       this.revisionRows, id, CATALOG_PRIMARY_KEY_FIELD.REVISION);
     return row ? projectRevision(row) : null;
+  }
+
+  async getCreationRevision(revisionId, tenantId) {
+    const id = requireIdentifier(revisionId, '/revisionId');
+    const row = await this.readRow(this.revisionRows, id, CATALOG_PRIMARY_KEY_FIELD.REVISION);
+    if (row === null) return null;
+    const revision = projectCreationRevision(row);
+    const servicePackage = await this.getPackage(revision.packageId);
+    if (!servicePackage) return null;
+    const artifact = await this.getBindableArtifactForTenant(
+      revision.packageId, servicePackage.manifestDigest, tenantId);
+    if (!artifact || artifact.artifactDigest !== revision.artifactDigest) return null;
+    return deepFreeze({...revision, manifest: artifact.manifest});
   }
 
   async recordRevision(request = {}, options = {}) {

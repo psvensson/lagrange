@@ -1,3 +1,5 @@
+import {captureSelectionRequest, requireInstance} from
+  '../control-plane/owners/service-instance-contract.js';
 /**
  * Semantic owner for authenticated service lifecycle commands.
  *
@@ -6,7 +8,8 @@
  * from canonical intent plus the authenticated server context.
  */
 
-import {createHash} from 'node:crypto';
+import {SERVICE_LIFECYCLE_ID_KIND, deriveServiceLifecycleId as derivedId,
+  deriveServiceDefinitionId} from './service-lifecycle-command-identity.js';
 
 import {SERVICE_INSTALL_DESIRED_STATE} from
   '../control-plane/owners/index.js';
@@ -59,13 +62,6 @@ const SERVICE_LIFECYCLE_COMMAND_MESSAGE = Object.freeze({
   UNSUPPORTED_COMMAND: 'service lifecycle command is unsupported',
 });
 
-const SERVICE_LIFECYCLE_ID_KIND = Object.freeze({
-  DEFINITION: 'definition',
-  INSTALLATION: 'installation',
-  OPERATION: 'operation',
-  REVISION: 'revision',
-});
-
 const SERVICE_LIFECYCLE_OWNER_RESULT_STATUS = Object.freeze({
   REJECTED: 'rejected',
   RESOLVED: 'resolved',
@@ -83,8 +79,6 @@ const SERVICE_LIFECYCLE_DEFAULT_SIGNATURE_POLICY = Object.freeze({
 
 const SERVICE_NAME_PATTERN = /^[a-z][a-z0-9-]{0,127}$/u;
 const MAX_IDEMPOTENCY_KEY_LENGTH = 256;
-const HASH_ALGORITHM = 'sha256';
-const HASH_ENCODING = 'hex';
 
 function isPlainObject(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -108,20 +102,6 @@ function canonicalize(value) {
   return Object.fromEntries(
     Object.keys(value).sort().map((key) => [key, canonicalize(value[key])]),
   );
-}
-
-function stableJson(value) {
-  return JSON.stringify(canonicalize(value));
-}
-
-function shortHash(value) {
-  return createHash(HASH_ALGORITHM)
-    .update(stableJson(value))
-    .digest(HASH_ENCODING);
-}
-
-function derivedId(kind, value) {
-  return `service-${kind}-${shortHash(value)}`;
 }
 
 function validateSignaturePolicy(signaturePolicy) {
@@ -204,10 +184,7 @@ function buildIntentIdentity(command, payload, securityContext, manifest) {
     config,
     packageId,
   });
-  const serviceDefinitionId = derivedId(SERVICE_LIFECYCLE_ID_KIND.DEFINITION, {
-    tenantId: securityContext.tenantId,
-    serviceName: manifest.name,
-  });
+  const serviceDefinitionId = deriveServiceDefinitionId(securityContext.tenantId, manifest.name);
   const operationId = derivedId(SERVICE_LIFECYCLE_ID_KIND.OPERATION, {
     action: command,
     idempotencyKey: validateIdempotencyKey(payload.idempotency_key),
@@ -231,10 +208,7 @@ function buildIntentIdentity(command, payload, securityContext, manifest) {
 
 function buildRemovalIdentity(command, payload, securityContext) {
   const serviceName = validateServiceName(payload.service_name);
-  const serviceDefinitionId = derivedId(SERVICE_LIFECYCLE_ID_KIND.DEFINITION, {
-    tenantId: securityContext.tenantId,
-    serviceName,
-  });
+  const serviceDefinitionId = deriveServiceDefinitionId(securityContext.tenantId, serviceName);
   const operationId = derivedId(SERVICE_LIFECYCLE_ID_KIND.OPERATION, {
     action: command,
     idempotencyKey: validateIdempotencyKey(payload.idempotency_key),
@@ -369,6 +343,15 @@ class ServiceLifecycleCommandOwner {
     } catch (error) {
       return failureResult(error, command);
     }
+  }
+
+  // The caller must durably retain this complete request before its first
+  // delivery. This helper neither selects an instance nor certifies caller disk.
+  prepareConsensusInstanceRequest(intent, securityContext) {
+    const context = validateSecurityContext(securityContext);
+    const request = captureSelectionRequest(intent);
+    requireInstance(request.tenantId === context.tenantId);
+    return deepFreeze(request);
   }
 
   normalizeManifest(payload) {
@@ -628,13 +611,7 @@ class ServiceLifecycleCommandOwner {
 
   async showOne(payload, securityContext) {
     const serviceName = validateServiceName(payload.service_name);
-    const serviceDefinitionId = derivedId(
-      SERVICE_LIFECYCLE_ID_KIND.DEFINITION,
-      {
-        tenantId: securityContext.tenantId,
-        serviceName,
-      },
-    );
+    const serviceDefinitionId = deriveServiceDefinitionId(securityContext.tenantId, serviceName);
     const installations = await this.catalogOwner.listInstallations();
     const installation = installations
       .filter((entry) => entry.serviceDefinitionId === serviceDefinitionId)
@@ -651,13 +628,8 @@ class ServiceLifecycleCommandOwner {
       installations.map((installation) => this.statusRow(installation)),
     );
     const rows = projected.filter((row) =>
-      row.service_definition_id === derivedId(
-        SERVICE_LIFECYCLE_ID_KIND.DEFINITION,
-        {
-          tenantId: securityContext.tenantId,
-          serviceName: row.service_name,
-        },
-      ));
+      row.service_definition_id ===
+      deriveServiceDefinitionId(securityContext.tenantId, row.service_name));
     rows.sort((left, right) =>
       left.service_name.localeCompare(right.service_name));
     return successResult(SERVICE_LIFECYCLE_SQL_COMMAND.SHOW_ALL, rows);
