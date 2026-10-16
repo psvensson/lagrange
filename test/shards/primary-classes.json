@@ -3,13 +3,13 @@
   "id": "test-primary-classification",
   "counts": {
     "unit": 2086,
-    "integration": 97,
+    "integration": 98,
     "bootstrap": 204,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2394,
-  "digest": "fnv1a32-5a563274",
+  "censusSize": 2395,
+  "digest": "fnv1a32-ed6f6e1d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -958,6 +958,7 @@
     "test/entrypoint/entrypoint-admin-runtime-cleanup.test.js": "unit",
     "test/entrypoint/entrypoint-startup-shutdown-parity-characterization.test.js": "unit",
     "test/entrypoint/join-reattempt-wait-bound-spent.test.js": "unit",
+    "test/entrypoint/process-custody-review.integration.test.js": "integration",
     "test/entrypoint/shutdown-best-effort-step-timebox.test.js": "unit",
     "test/entrypoint/startup-failed-cleanup-process-custody.test.js": "unit",
     "test/examples/comparative-efficiency-movielens-public-request-workload.test.js": "unit",

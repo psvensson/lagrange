@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2377,
+    "ordinary": 2378,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2394,
-  "digest": "fnv1a32-22d61392",
+  "censusSize": 2395,
+  "digest": "fnv1a32-c22f55c7",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -957,6 +957,7 @@
     "test/entrypoint/entrypoint-admin-runtime-cleanup.test.js": "ordinary",
     "test/entrypoint/entrypoint-startup-shutdown-parity-characterization.test.js": "ordinary",
     "test/entrypoint/join-reattempt-wait-bound-spent.test.js": "ordinary",
+    "test/entrypoint/process-custody-review.integration.test.js": "ordinary",
     "test/entrypoint/shutdown-best-effort-step-timebox.test.js": "ordinary",
     "test/entrypoint/startup-failed-cleanup-process-custody.test.js": "ordinary",
     "test/examples/comparative-efficiency-movielens-public-request-workload.test.js": "ordinary",
