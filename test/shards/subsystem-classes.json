@@ -28,7 +28,7 @@
   "censusSize": 2395,
   "digest": "fnv1a32-cbbac020",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-10b5109f",
+  "observationDigest": "fnv1a32-185c4933",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -4644,7 +4644,7 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway.js",
-        "src/control-plane/owners/service-install-catalog-contract.js"
+        "src/service/service-lifecycle-command-contract.js"
       ]
     },
     "test/control-plane/system-metadata-owner-modules.test.js": {
@@ -16121,12 +16121,12 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/constants/index.js",
         "src/control-plane/control-plane-system-table-gateway.js",
-        "src/control-plane/owners/service-install-catalog-contract.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
+        "src/service/service-lifecycle-command-contract.js",
         "src/wasm-service/wasm-service-committed-command-codec.js",
         "src/wasm-service/wasm-service-constants.js",
         "src/wasm-service/wasm-service-replica.js",
