@@ -8,7 +8,7 @@ permissions:
 jobs:
   pinned-workspace:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
@@ -31,6 +31,23 @@ jobs:
           sha256sum package-lock.json > "$OUT/dependency-lock.sha256"
           cd "$OUT"
           sha256sum source.tar.gz head-commit.raw tracked-blobs.txt > SHA256SUMS
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22.16.0'
+          package-manager-cache: false
+      - name: Prepare exact locked dependencies for isolated verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/rs-raft-review-export"
+          npm ci --no-audit --no-fund
+          git diff --exit-code
+          node --version > "$OUT/node-version.txt"
+          npm --version > "$OUT/npm-version.txt"
+          sha256sum package-lock.json > "$OUT/installed-dependency-lock.sha256"
+          tar -czf "$OUT/node_modules.tar.gz" node_modules
+          cd "$OUT"
+          sha256sum node_modules.tar.gz >> SHA256SUMS
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
