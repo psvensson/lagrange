@@ -1,3 +1,6 @@
+import {hasConsensusCreation, CONSENSUS_BOOTSTRAP} from '../service/service-consensus-bootstrap.js';
+import {prepareConsensusBootstrap, startConsensusBootstrap} from
+  './service-runtime-consensus-bootstrap.js';
 import {PREPARE_STATUS} from './runtime-driver.js';
 import {RequestCellRoutingError} from
   '../service/request-cell-routing-contract.js';
@@ -9,9 +12,14 @@ const RUNTIME_DRIVER_PREPARE_FAILED = 'runtime driver prepare failed';
 const RUNTIME_DRIVER_INVOKE_UNSUPPORTED =
   'runtime driver does not support invocation';
 const RUNTIME_INVOKE_OPERATION = 'invoke';
+const SHUTDOWN_OUTCOME = Object.freeze({FULFILLED: 'fulfilled', REJECTED: 'rejected'});
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_DRIVER_SHUTDOWN_FAILED =
   'Service runtime driver shutdown failed during node teardown';
+
+function lifecycleIdempotencyKey(options) {
+  return options?.idempotencyKey ?? null;
+}
 
 function createServiceRuntimeLifecycleOperationMethods(deps) {
   const {
@@ -95,7 +103,8 @@ function createServiceRuntimeLifecycleOperationMethods(deps) {
    * no teardown resources (in-process runtimes die with the process)
    * and are skipped by capability check, not by runtime-kind branch.
    * A failing driver is logged and does not block the remaining
-   * drivers: teardown must be exhaustive, not fail-fast.
+   * drivers: teardown must be exhaustive, not fail-fast. Every rejected
+   * settlement is then surfaced to the caller, including logging failures.
    *
    * @param {Object} [options] - Optional shutdown context.
    * @param {Object} [options.logger] - Logger for driver failures.
@@ -103,6 +112,7 @@ function createServiceRuntimeLifecycleOperationMethods(deps) {
    */
     async shutdown(options = {}) {
       const logger = options.logger || null;
+      const settlements = [];
       for (const kind of this._registry.registeredKinds) {
         const driver = this._registry.getDriver(kind);
         if (typeof driver.shutdown !== LOCAL_STR_FUNCTION) {
@@ -110,13 +120,21 @@ function createServiceRuntimeLifecycleOperationMethods(deps) {
         }
         try {
           await driver.shutdown();
+          settlements.push({status: SHUTDOWN_OUTCOME.FULFILLED});
         } catch (error) {
-          logger?.warn?.(LOCAL_STR_DRIVER_SHUTDOWN_FAILED, {
-            runtimeKind: kind,
-            error: error?.message || String(error),
-          });
+          settlements.push({status: SHUTDOWN_OUTCOME.REJECTED, reason: error});
+          try {
+            logger?.warn?.(LOCAL_STR_DRIVER_SHUTDOWN_FAILED, {
+              runtimeKind: kind, error: error?.message || String(error),
+            });
+          } catch (loggingError) {
+            settlements.push({status: SHUTDOWN_OUTCOME.REJECTED, reason: loggingError});
+          }
         }
       }
+      const failures = settlements.filter((result) => result.status === SHUTDOWN_OUTCOME.REJECTED)
+        .map((result) => result.reason);
+      if (failures.length) throw new AggregateError(failures, LOCAL_STR_DRIVER_SHUTDOWN_FAILED);
     }
 
     /**
@@ -136,7 +154,7 @@ function createServiceRuntimeLifecycleOperationMethods(deps) {
       const runtimeKind = resolveRuntimeKind(definition);
       const serviceId = resolveServiceId(definition);
       const op = LIFECYCLE_OPERATION.PREPARE;
-      const idempotencyKey = options?.idempotencyKey ?? null;
+      const idempotencyKey = lifecycleIdempotencyKey(options);
 
       if (!runtimeKind) {
         throw new LifecycleOrchestrationError(
@@ -147,6 +165,10 @@ function createServiceRuntimeLifecycleOperationMethods(deps) {
       this._validateRuntimeDescriptor(
         definition, runtimeKind, op, serviceId,
       );
+
+      if (hasConsensusCreation(definition)) {
+        return prepareConsensusBootstrap(this, definition, context);
+      }
 
       this.emit(LIFECYCLE_EVENT.PREPARE_START, {
         runtimeKind, serviceId,
@@ -274,7 +296,7 @@ function createServiceRuntimeLifecycleOperationMethods(deps) {
       const runtimeKind = resolveRuntimeKind(definition);
       const serviceId = resolveServiceId(definition);
       const op = LIFECYCLE_OPERATION.START;
-      const idempotencyKey = options?.idempotencyKey ?? null;
+      const idempotencyKey = lifecycleIdempotencyKey(options);
 
       if (!runtimeKind) {
         throw new LifecycleOrchestrationError(
@@ -285,6 +307,10 @@ function createServiceRuntimeLifecycleOperationMethods(deps) {
       this._validateRuntimeDescriptor(
         definition, runtimeKind, op, serviceId,
       );
+
+      if (hasConsensusCreation(definition)) {
+        return startConsensusBootstrap(this, definition, replicaContext);
+      }
 
       this.emit(LIFECYCLE_EVENT.START_START, {
         runtimeKind, serviceId,
@@ -444,7 +470,7 @@ function createServiceRuntimeLifecycleOperationMethods(deps) {
       const runtimeKind = resolveRuntimeKind(definition);
       const serviceId = resolveServiceId(definition);
       const op = LIFECYCLE_OPERATION.STOP;
-      const idempotencyKey = options?.idempotencyKey ?? null;
+      const idempotencyKey = lifecycleIdempotencyKey(options);
 
       if (!runtimeKind) {
         throw new LifecycleOrchestrationError(
@@ -456,6 +482,9 @@ function createServiceRuntimeLifecycleOperationMethods(deps) {
         definition, runtimeKind, op, serviceId,
       );
 
+      if (hasConsensusCreation(definition)) {
+        throw new Error(CONSENSUS_BOOTSTRAP.SERVING_UNAVAILABLE);
+      }
       this.emit(LIFECYCLE_EVENT.STOP_START, {
         runtimeKind, serviceId,
       });

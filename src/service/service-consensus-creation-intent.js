@@ -1,19 +1,27 @@
 // ServiceLifecycleManager's original-intent handoff. This is not a second
-// execution orchestrator: it ends at retained admission and starts no resource.
+// execution orchestrator: it retains origin/first-use records and starts no resource.
+import {randomBytes} from 'node:crypto';
+import {runtimeServiceConsensusIdentity} from '../rebalancer/runtime-service-replica-identity.js';
 import {RUNTIME_KIND, UNIFIED_SERVICE_TYPE, SERVICE_LIFECYCLE_OPERATION,
   SERVICE_OPERATION_STATE as OP_STATE} from '../constants/index.js';
 import {SERVICE_INSTANCE_LIMIT as LIMIT, SERVICE_INSTANCE_OUTCOME as OUTCOME,
   SERVICE_INSTANCE_PHASE as PHASE} from '../constants/service-instance.js';
 import {WASM_OPERATION_COL as COL} from '../wasm-service/wasm-meta-models-constants.js';
 import {buildGetOperationSQL, buildRetainedCreationOperationSQL,
-  buildRetainedCreationAdmissionSQL} from '../wasm-service/operation-lifecycle.js';
-import {captureInstanceJson, encodeInstanceJson, exactFields, instanceIdentifier,
+  buildRetainedCreationAdmissionSQL, buildRetainedCreationOpeningSQL} from '../wasm-service/operation-lifecycle.js';
+import {HEX, captureInstanceJson, encodeInstanceJson, exactFields, instanceIdentifier,
   instanceDigest, requireInstance, instanceFailure, ServiceInstanceContractError} from
   '../control-plane/owners/service-instance-contract.js';
 import {validateBinding, validSlotRequest, matchesInstanceResourceToken} from
   '../control-plane/owners/service-instance-state.js';
 import {validateServiceDescriptor} from './service-descriptor.js';
 
+const CONSENSUS_CREATION_OPENING = Object.freeze({
+  FRESH: 'FRESH_OPENING', RETAINED: 'RETAINED_OPENING',
+  STORAGE_MISSING: 'CREATION_STORAGE_MISSING',
+  BYTES: 8192, NONCE_BYTES: 32,
+});
+const OPENING_FIELDS = ['format', 'claimId', 'intentDigest', 'token', 'groupId', 'replicaId', 'nodeId'];
 const COMMAND_PREFIX = 'consensus-create:';
 const BOUND_DESCRIPTOR_FIELDS = [
   'consensusBinding', 'consensusSlotRequest', 'consensusResourceToken',
@@ -220,5 +228,62 @@ function isBoundConsensusDescriptor(value) {
   return value !== null && typeof value === 'object' &&
     BOUND_DESCRIPTOR_FIELDS.some((field) => Object.hasOwn(value, field));
 }
-export {isBoundConsensusDescriptor, prepareConsensusCreation, recoverConsensusCreation,
+function openingBody(intent, token) {
+  const physical = runtimeServiceConsensusIdentity(intent.consensusBinding,
+    intent.consensusSlotRequest);
+  return {format: LIMIT.FORMAT, intentDigest: instanceDigest(intent), token,
+    groupId: physical.groupId, replicaId: physical.replicaId, nodeId: physical.nodeId};
+}
+function confirmOpeningRecord(row, body) {
+  const encoded = row[COL.OPENING_JSON];
+  requireInstance(typeof encoded === 'string' &&
+    Buffer.byteLength(encoded) <= CONSENSUS_CREATION_OPENING.BYTES, OUTCOME.CORRUPT_STATE);
+  const record = captureInstanceJson(JSON.parse(encoded), CONSENSUS_CREATION_OPENING.BYTES);
+  requireInstance(exactFields(record, OPENING_FIELDS) && typeof record.claimId === 'string' &&
+    HEX.test(record.claimId) &&
+    encodeInstanceJson(record, CONSENSUS_CREATION_OPENING.BYTES) === encoded,
+  OUTCOME.CORRUPT_STATE);
+  requireInstance(instanceDigest({...body, claimId: record.claimId}) === instanceDigest(record),
+    OUTCOME.CONTENT_CONFLICT);
+  return record;
+}
+/** One first-use record within the original CREATE journal, not a new resource grant. */
+async function claimConsensusCreationOpening(manager, value) {
+  try {
+    const intent = captureIntent(value.intent);
+    const token = captureInstanceJson(value.token, LIMIT.SLOT_BYTES);
+    requireInstance(value.outcome === RESULT.ADMISSION_RETAINED &&
+      matchesInstanceResourceToken(intent.consensusBinding, intent.consensusSlotRequest, token) &&
+      value.operationId === token.operationId, OUTCOME.CONTENT_CONFLICT);
+    requireDependencies(manager);
+    const identity = journalIdentity(intent);
+    let row = await readJournal(manager, identity.operationId);
+    confirmIntentRow(row, identity);
+    requireInstance(row[COL.STATE] === OP_STATE.IN_PROGRESS &&
+      instanceDigest(retainedToken(row, intent)) === instanceDigest(token),
+    OUTCOME.CONTENT_CONFLICT);
+    const body = openingBody(intent, token);
+    if (row[COL.OPENING_JSON] !== null) {
+      return {outcome: CONSENSUS_CREATION_OPENING.RETAINED,
+        record: confirmOpeningRecord(row, body)};
+    }
+    const claimId = randomBytes(CONSENSUS_CREATION_OPENING.NONCE_BYTES).toString('hex');
+    const openingJson = encodeInstanceJson({...body, claimId}, CONSENSUS_CREATION_OPENING.BYTES);
+    row = await writeAndObserve(manager, buildRetainedCreationOpeningSQL({...identity,
+      admissionJson: encodeInstanceJson(token, LIMIT.SLOT_BYTES), openingJson,
+      now: manager._timeSource.now()}), identity.operationId);
+    confirmIntentRow(row, identity);
+    requireInstance(row[COL.STATE] === OP_STATE.IN_PROGRESS &&
+      instanceDigest(retainedToken(row, intent)) === instanceDigest(token),
+    OUTCOME.CONTENT_CONFLICT);
+    const record = confirmOpeningRecord(row, body);
+    return {outcome: record.claimId === claimId ? CONSENSUS_CREATION_OPENING.FRESH :
+      CONSENSUS_CREATION_OPENING.RETAINED, record};
+  } catch (error) {
+    return instanceFailure(error);
+  }
+}
+export {CONSENSUS_CREATION_OPENING, claimConsensusCreationOpening,
+  captureIntent as captureConsensusCreationIntent, isBoundConsensusDescriptor,
+  prepareConsensusCreation, recoverConsensusCreation,
   isConsensusCreationRow, recoverConsensusCreationRow};

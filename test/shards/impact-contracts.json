@@ -1123,6 +1123,40 @@
         "test/service/service-consensus-creation-intent.test.js",
         "test/service/service-consensus-creation-recovery.integration.test.js"
       ]
+    },
+    "service-consensus-retained-native-bootstrap": {
+      "description": "The original CREATE journal retains first-opening identity and hands one bound operation through manager, adapter and runtime to instance-qualified native WASM opening. Common B, exact local file and resource token are checked before native bootstrap; all results remain BOOTSTRAPPED_HELD with no serving, publication or journal completion. Cleanup retains errors and physical custody. Native RF3 evidence uses explicitly component-level metadata/journal adapters; it does not prove distributed metadata or the remaining grant/retirement interaction.",
+      "owners": [
+        "src/service/service-consensus-bootstrap.js",
+        "src/service/service-consensus-creation-intent.js",
+        "src/service/service-lifecycle-manager.js",
+        "src/service/adapters/runtime-service-adapter.js",
+        "src/runtime/service-runtime-consensus-bootstrap.js",
+        "src/runtime/service-runtime-lifecycle-operation-methods.js",
+        "src/runtime/wasm-component-driver.js",
+        "src/runtime/wasm-component-driver-shutdown-methods.js",
+        "src/wasm-service/operation-lifecycle.js",
+        "src/wasm-service/wasm-meta-models-constants.js",
+        "src/bootstrap/system-table-runtime-schema-definitions.js",
+        "src/wasm-service/wasm-creation-opening.js",
+        "src/wasm-service/wasm-service-lifecycle.js",
+        "src/wasm-service/wasm-service-replica.js",
+        "src/wasm-service/wasm-service-replica-lifecycle.js",
+        "src/wasm-service/wasm-service-consensus-port.js",
+        "src/wasm-service/wasm-writer-state.js",
+        "src/rebalancer/runtime-service-replica-identity.js",
+        "src/storage/data-directory-manager.js",
+        "src/control-plane/owners/service-definitions-owner.js",
+        "src/control-plane/owners/service-instance-metadata.js",
+        "src/wasm-service/wasm-service-committed-command-admission.js"
+      ],
+      "tests": [
+        "test/wasm-service/wasm-retained-bootstrap.integration.test.js",
+        "test/runtime/node-shutdown-cell-worker-teardown.test.js",
+        "test/service/service-consensus-creation-intent.test.js",
+        "test/service/service-consensus-creation-recovery.integration.test.js",
+        "test/wasm-service/wasm-writer-state-v1.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -2264,6 +2298,48 @@
       "witnessTests": [
         "test/service/service-consensus-creation-intent.test.js",
         "test/service/service-consensus-creation-recovery.integration.test.js"
+      ]
+    },
+    "service-consensus-retained-native-bootstrap": {
+      "description": "Retained original intent, first-use identity, native common-root admission and exhaustive cleanup form one held bootstrap boundary; neither old metadata history, missing files nor native startup can manufacture serving permission.",
+      "contract": "service-consensus-retained-native-bootstrap",
+      "endpoints": [
+        {
+          "id": "original-operation-and-runtime-dispatch",
+          "owners": [
+            "src/service/service-consensus-bootstrap.js",
+            "src/service/service-consensus-creation-intent.js",
+            "src/service/service-lifecycle-manager.js",
+            "src/service/adapters/runtime-service-adapter.js",
+            "src/runtime/service-runtime-consensus-bootstrap.js",
+            "src/runtime/service-runtime-lifecycle-operation-methods.js",
+            "src/runtime/wasm-component-driver.js",
+            "src/runtime/wasm-component-driver-shutdown-methods.js",
+            "src/wasm-service/operation-lifecycle.js",
+            "src/wasm-service/wasm-meta-models-constants.js",
+            "src/bootstrap/system-table-runtime-schema-definitions.js"
+          ]
+        },
+        {
+          "id": "native-opening-and-local-custody",
+          "owners": [
+            "src/wasm-service/wasm-creation-opening.js",
+            "src/wasm-service/wasm-service-lifecycle.js",
+            "src/wasm-service/wasm-service-replica.js",
+            "src/wasm-service/wasm-service-replica-lifecycle.js",
+            "src/wasm-service/wasm-service-consensus-port.js",
+            "src/wasm-service/wasm-writer-state.js",
+            "src/rebalancer/runtime-service-replica-identity.js",
+            "src/storage/data-directory-manager.js",
+            "src/control-plane/owners/service-definitions-owner.js",
+            "src/control-plane/owners/service-instance-metadata.js",
+            "src/wasm-service/wasm-service-committed-command-admission.js"
+          ]
+        }
+      ],
+      "witnessTests": [
+        "test/wasm-service/wasm-retained-bootstrap.integration.test.js",
+        "test/runtime/node-shutdown-cell-worker-teardown.test.js"
       ]
     }
   }

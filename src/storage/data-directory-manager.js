@@ -170,6 +170,17 @@ class DataDirectoryManager {
     this.ensureDirectoryExists(partitionDir);
   }
 
+  /** Describe the exact local WASM file. This is identity, never serving permission.
+   * @param {string} serviceId - Instance-qualified group from the identity owner.
+   * @param {string} replicaId - Canonical physical peer.
+   * @return {Object} Local path/device/inode; filesystem errors remain observable.
+   */
+  getWasmServiceFileIdentity(serviceId, replicaId) {
+    const file = fs.realpathSync(this.getWasmServiceDbPath(serviceId, replicaId));
+    const stat = fs.statSync(file, {bigint: true});
+    return {path: file, device: String(stat.dev), inode: String(stat.ino)};
+  }
+
   /**
    * Get the durable consensus database path of a WASM service replica: one
    * file per replica, owned by this data directory.

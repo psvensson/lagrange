@@ -1,3 +1,4 @@
+import {resolveWasmCreationAdmission, openWasmCreationRecords} from './wasm-creation-opening.js';
 // The lifecycle of one WasmServiceReplica instance as a named state machine
 // (R07): CREATED -> STARTING -> READY -> STOPPING -> STOPPED. An instance is
 // single-use, as partition and message-group replica instances are used:
@@ -68,16 +69,21 @@ async function releaseWasmServiceReplicaConsensus(replica) {
 }
 
 /**
- * The open itself: synchronous up to READY, so no other lifecycle call
- * interleaves with a successful open; a failed open releases what it
- * acquired, registers nothing and returns the instance to CREATED.
+ * Bound opening first awaits its existing metadata and journal owners,
+ * then rechecks STARTING before synchronously constructing native resources.
+ * Failure releases acquired resources; failed release retains cleanup custody.
  * @param {Object} replica - The WasmServiceReplica.
  * @return {Promise<void>}
  */
 async function openReplica(replica) {
   try {
+    if (replica.consensusCreation !== null) {
+      await resolveWasmCreationAdmission(replica);
+      if (replica.lifecycleState !== STATE.STARTING) throw replicaRetiredError(replica);
+    }
     openWasmServiceDatabase(replica);
     replica.db.transaction(() => {
+      openWasmCreationRecords(replica);
       replica.writerState = new WasmWriterState(replica.db, replica.serviceDefinitionId);
       replica.kvStore = new SessionKVStore(replica.db);
     })();
@@ -116,6 +122,7 @@ async function openReplica(replica) {
     }
     throw error;
   }
+  if (replica.lifecycleState !== STATE.STARTING) throw replicaRetiredError(replica);
   replica.lifecycleState = STATE.READY;
 }
 

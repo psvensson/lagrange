@@ -1,3 +1,5 @@
+import {KV_TABLE_NAME} from './session-kv-store.js';
+import {isCreationOnlyDatabase, readWasmCreationBinding} from './wasm-creation-opening.js';
 // Fixed application records. All apply calls join the existing Raft SQLite transaction.
 import {WASM_WRITER_PROFILE as P, WRITER_ACTION as A, WRITER_STATUS as S,
   WRITER_REASON as R, WRITER_ENCODING} from './wasm-writer-profile.js';
@@ -75,13 +77,15 @@ function validateSlot(row, slot, meta) {
 class WasmWriterState {
   constructor(db, serviceId) {
     this.db = db;
+    this.creationRootDigest = writerDigest(readWasmCreationBinding(db));
     const tables = db.prepare(SQL.TABLES).all().map((row) => row.name);
-    if (tables.length === 0) {
+    if (tables.length === 0 || isCreationOnlyDatabase(tables)) {
       boundedJson({serviceId}, P.metadataBytes);
       db.exec(SQL.CREATE);
       db.prepare(SQL.PUT_META).run(JSON.stringify({format: P.id, serviceId, initialization: null}));
     } else {
-      requireFormat(tables.includes(META) && tables.includes(SLOTS) && tables.includes('_kv_store'));
+      requireFormat(tables.includes(META) && tables.includes(SLOTS) &&
+        tables.includes(KV_TABLE_NAME));
     }
     this.readMeta = db.prepare(SQL.META);
     this.writeMeta = db.prepare(SQL.PUT_META);
@@ -95,6 +99,8 @@ class WasmWriterState {
     const meta = this.meta();
     requireFormat(meta?.format === P.id && meta.serviceId === serviceId);
     boundedJson(meta, P.metadataBytes);
+    const root = this.creationBinding();
+    requireFormat(root === null || root.serviceDefinitionId === serviceId);
     const rows = this.allSlots.all();
     if (meta.initialization === null) {
       requireFormat(rows.length === 0);
@@ -102,12 +108,21 @@ class WasmWriterState {
     }
     const command = canonicalWriterCommand(meta.initialization.command);
     requireFormat(command.action === A.INIT && command.serviceId === serviceId);
+    // The same immutable common root was read before inspecting writer state.
+    requireFormat(root === null || (root.serviceDefinitionId === serviceId &&
+      root.incarnation === command.incarnation));
     validateReceipt(command, meta.initialization.receipt);
     requireFormat(rows.length === P.slots);
     for (let slot = 0; slot < P.slots; slot += 1) {
       requireFormat(rows[slot].slot === slot);
       validateSlot(JSON.parse(rows[slot].record), slot, meta);
     }
+  }
+
+  creationBinding() {
+    const root = readWasmCreationBinding(this.db);
+    requireFormat(writerDigest(root) === this.creationRootDigest);
+    return root;
   }
 
   meta() {
@@ -126,6 +141,9 @@ class WasmWriterState {
     const meta = this.meta();
     const identity = responseIdentity(command);
     if (identity.serviceId !== meta.serviceId) return refused(command, R.INCARNATION);
+    const root = this.creationBinding();
+    if (root !== null && (root.serviceDefinitionId !== identity.serviceId ||
+        root.incarnation !== identity.incarnation)) return refused(command, R.INCARNATION);
     if (command.action === A.INIT) {
       if (meta.initialization === null) return {status: S.NEW};
       return writerDigest(command) === writerDigest(meta.initialization.command) ?

@@ -6,6 +6,12 @@
  * dispatched replica. Callers must ask for the kind they actually own.
  */
 
+import {instanceDigest, requireInstance} from
+  '../control-plane/owners/service-instance-contract.js';
+
+const CONSENSUS_GROUP_DOMAIN = 'wasm-consensus-instance-r2';
+const CONSENSUS_GROUP_PREFIX = 'wasm-instance-';
+
 const RUNTIME_SERVICE_REPLICA_ID_SEPARATOR = '-r';
 const POSITIVE_DECIMAL_REPLICA_ORDINAL_PATTERN = /^[1-9]\d*$/;
 const RUNTIME_SERVICE_TARGET_CLAIM_VERSION = 'runtime-service-target-v1';
@@ -68,7 +74,21 @@ function buildRuntimeServiceTargetClaimKey(serviceId, entityId) {
   ]);
 }
 
+/** Canonical founding physical identities; not authority to add a new member. */
+function runtimeServiceConsensusIdentity(binding, request) {
+  const groupId = `${CONSENSUS_GROUP_PREFIX}${instanceDigest({domain: CONSENSUS_GROUP_DOMAIN,
+    serviceId: binding.serviceDefinitionId, incarnation: binding.incarnation})}`;
+  const peers = binding.foundingPeers.map((peer, index) => ({...peer,
+    physicalReplicaId: `${groupId}${RUNTIME_SERVICE_REPLICA_ID_SEPARATOR}${index + 1}`}));
+  const self = peers.find((peer) => peer.replicaId === request.replicaId &&
+    peer.nodeId === request.nodeId);
+  requireInstance(self !== undefined);
+  return {groupId, replicaId: self.physicalReplicaId, nodeId: self.nodeId,
+    replicaIds: peers.map((peer) => peer.physicalReplicaId), peers};
+}
+
 export {
+  runtimeServiceConsensusIdentity,
   buildRuntimeServiceTargetClaimKey,
   runtimeServiceReplicaBelongsToEntity,
 };

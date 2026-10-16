@@ -68,6 +68,7 @@ const WASM_OPERATION_COL = Object.freeze({
   OPERATION_ID: 'operation_id',
   INTENT_JSON: 'intent_json',
   ADMISSION_JSON: 'admission_json',
+  OPENING_JSON: 'opening_json',
   TENANT_ID: 'tenant_id',
   COMMAND: 'command',
   IDEMPOTENCY_KEY: 'idempotency_key',

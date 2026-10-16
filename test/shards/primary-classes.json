@@ -3,13 +3,13 @@
   "id": "test-primary-classification",
   "counts": {
     "unit": 2088,
-    "integration": 99,
+    "integration": 100,
     "bootstrap": 205,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2399,
-  "digest": "fnv1a32-bfb0b2ca",
+  "censusSize": 2400,
+  "digest": "fnv1a32-c346c32f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -2387,6 +2387,7 @@
     "test/wasm-service/wasm-executor.test.js": "unit",
     "test/wasm-service/wasm-meta-models.property.test.js": "unit",
     "test/wasm-service/wasm-meta-models.test.js": "unit",
+    "test/wasm-service/wasm-retained-bootstrap.integration.test.js": "integration",
     "test/wasm-service/wasm-service-constants.test.js": "unit",
     "test/wasm-service/wasm-service-lifecycle.test.js": "unit",
     "test/wasm-service/wasm-service-models.property.test.js": "unit",

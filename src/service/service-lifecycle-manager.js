@@ -41,13 +41,24 @@ import {
 } from './service-lifecycle-operations.js';
 import {recoverPendingOperations as recoverLifecyclePendingOperations} from './service-lifecycle-recovery.js';
 import {resolveTimeSource} from '../time/time-source.js';
-import {prepareConsensusCreation, recoverConsensusCreation} from './service-consensus-creation-intent.js';
+import {claimConsensusCreationOpening, prepareConsensusCreation, recoverConsensusCreation} from './service-consensus-creation-intent.js';
+
+import {bootstrapConsensusCreation} from './service-consensus-bootstrap.js';
 
 const DEFAULT_DIAGNOSTICS_LIMIT = 100;
 const MAX_DIAGNOSTICS_LIMIT = 500;
 /**
  * ServiceLifecycleManager is the single lifecycle owner for all service types.
  */ class ServiceLifecycleManager {
+  /** Continue the original retained CREATE only as far as held native bootstrap. */
+  claimConsensusCreationOpening(value) {
+    return claimConsensusCreationOpening(this, value);
+  }
+
+  bootstrapConsensusCreation(value, context = {}) {
+    return bootstrapConsensusCreation(this, value, context);
+  }
+
   constructor(options = {}) {
     // The existing instance owner decides admission; this manager retains the
     // caller intent in its existing operation journal before asking that owner.
