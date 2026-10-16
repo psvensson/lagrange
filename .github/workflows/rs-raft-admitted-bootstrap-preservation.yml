@@ -1,0 +1,109 @@
+name: rs-raft-admitted-bootstrap-preservation
+on:
+  push:
+    branches: [carrier/rs-raft-admitted-bootstrap-20261016]
+    paths: [.github/workflows/rs-raft-admitted-bootstrap-preservation.yml]
+permissions:
+  contents: write
+concurrency:
+  group: rs-raft-admitted-bootstrap-preservation-20261016
+  cancel-in-progress: false
+jobs:
+  preserve-reviewed-wip:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: 609f35524a40d3f7ce8ee6c5a2fdfe89c0859203
+          fetch-depth: 1
+          persist-credentials: true
+      - name: Verify and preserve exact authored source without product execution
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GIT_AUTHOR_NAME: ChatGPT
+          GIT_AUTHOR_EMAIL: chatgpt@openai.com
+          GIT_COMMITTER_NAME: ChatGPT
+          GIT_COMMITTER_EMAIL: chatgpt@openai.com
+        run: |
+          set -euo pipefail
+          export OUT="$RUNNER_TEMP/admitted-bootstrap-preservation"
+          mkdir -p "$OUT"
+          test "$(git rev-parse HEAD)" = 609f35524a40d3f7ce8ee6c5a2fdfe89c0859203
+          test -z "$(git status --porcelain)"
+          python3 - <<'PY'
+          import base64, hashlib, json, os, pathlib, subprocess, zlib
+          out = pathlib.Path(os.environ['OUT'])
+          parts = [
+            '356e4ed0e906ac928d4de7ed22ef35dafc76adf2',
+            'd46f8c9ae598acc0587bc6a7486bc5107ad0b997',
+            '948657bd8fd72820b66b1f5794881e571d8a9ae8',
+            '714254b8b95d632c8b00888340381d22290a9586',
+            '58800eb35180aa7fff865d4c17d572d7f0253e44',
+          ]
+          def blob(data):
+            return hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest()
+          encoded = []
+          for sha in parts:
+            reply = json.loads(subprocess.check_output(['gh', 'api', 'repos/psvensson/lagrange/git/blobs/' + sha]))
+            data = base64.b64decode(reply['content'])
+            assert blob(data) == sha
+            if sha == '714254b8b95d632c8b00888340381d22290a9586':
+              # Two observed text-transfer errors; verify the exact original chunk after correction.
+              assert data.count(b'WqmnZYvnd') == 1
+              assert data.count(b'gcqbmyy0WqJ') == 1
+              data = data.replace(b'WqmnZYvnd', b'WqmnZYznd').replace(b'gcqbmyy0WqJ', b'gcqyy0WqJ')
+              assert blob(data) == '1e2677ca34e004f73614ad03d036e79d7c8eb781'
+            encoded.append(data)
+          raw = zlib.decompress(base64.b64decode(b''.join(encoded), validate=True))
+          assert hashlib.sha256(raw).hexdigest() == 'de919421f8f913a8c2ef15233a49f8c26c7834e5a14a0181f1998b026d0de1a9'
+          payload = json.loads(raw)
+          assert payload['identity']['base'] == '609f35524a40d3f7ce8ee6c5a2fdfe89c0859203'
+          for name in ('tests', 'source'):
+            (out / (name + '.patch')).write_text(payload[name])
+          (out / 'expected.json').write_text(json.dumps(payload['identity'], indent=2) + '\n')
+          (out / 'transfer.json').write_text(json.dumps({'parts': parts, 'payloadSha256': hashlib.sha256(raw).hexdigest(), 'correctedOriginalPart3': '1e2677ca34e004f73614ad03d036e79d7c8eb781'}, indent=2) + '\n')
+          PY
+          git apply --check --index "$OUT/tests.patch"
+          git apply --index "$OUT/tests.patch"
+          TEST_TREE=$(git write-tree)
+          TEST_SHA=$(printf '%s\n' 'WIP test checkpoint: admitted native bootstrap and exact physical custody witnesses' | git commit-tree "$TEST_TREE" -p 609f35524a40d3f7ce8ee6c5a2fdfe89c0859203)
+          git apply --check --index "$OUT/source.patch"
+          git apply --index "$OUT/source.patch"
+          export TREE=$(git write-tree)
+          python3 - <<'PY'
+          import json, os, pathlib, subprocess
+          out = pathlib.Path(os.environ['OUT'])
+          expected = json.loads((out / 'expected.json').read_text())
+          for path, sha in expected['postimages'].items():
+            actual = subprocess.check_output(['git', 'hash-object', path], text=True).strip()
+            assert actual == sha, (path, actual, sha)
+          for name in ('src', 'test'):
+            actual = subprocess.check_output(['git', 'rev-parse', os.environ['TREE'] + ':' + name], text=True).strip()
+            assert actual == expected[name + 'Tree'], (name, actual)
+          PY
+          CANDIDATE=$(printf '%s\n' 'WIP: connect retained admission to exact physical native bootstrap with serving held' | git commit-tree "$TREE" -p "$TEST_SHA")
+          git cat-file commit "$TEST_SHA" > "$OUT/test-commit.raw"
+          git cat-file commit "$CANDIDATE" > "$OUT/candidate-commit.raw"
+          git diff 609f35524a40d3f7ce8ee6c5a2fdfe89c0859203 "$CANDIDATE" --binary > "$OUT/complete.patch"
+          git diff-tree --no-commit-id --name-status -r "$CANDIDATE" > "$OUT/changed-paths.txt"
+          REF=refs/heads/work/rs-raft-admitted-bootstrap-20261016
+          git fetch --no-tags origin "$REF"
+          test "$(git rev-parse FETCH_HEAD)" = 609f35524a40d3f7ce8ee6c5a2fdfe89c0859203
+          git push origin "$CANDIDATE:$REF"
+          REMOTE=$(git ls-remote --heads origin "$REF" | cut -f1)
+          test "$REMOTE" = "$CANDIDATE"
+          printf '%s\n' "$TEST_SHA" > "$OUT/test-checkpoint-sha.txt"
+          printf '%s\n' "$CANDIDATE" > "$OUT/verified-remote-sha.txt"
+          printf '%s\n' "$TREE" > "$OUT/verified-tree.txt"
+          printf '%s\n' 'WIP preservation only. No product tests, user serving, main merge, global static or release proof. Original transfer chunks and complete decompressed payload verified before source application.' > "$OUT/claim-limit.txt"
+          cd "$OUT"
+          sha256sum *.patch *.json *.raw *.txt > SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: rs-raft-admitted-bootstrap-preservation-${{ github.run_id }}
+          path: ${{ runner.temp }}/admitted-bootstrap-preservation/
+          retention-days: 7
+          if-no-files-found: error
