@@ -667,7 +667,8 @@
         "test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js",
         "test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js",
         "test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js",
-        "test/raft/raft-rs-backend/runtime-completion-consumers-partition.test.js"
+        "test/raft/raft-rs-backend/runtime-completion-consumers-partition.test.js",
+        "test/message-group/message-group-native-custody-handoff.test.js"
       ]
     },
     "partition-raft-operation-port": {

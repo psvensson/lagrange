@@ -6,12 +6,17 @@ import path from 'node:path';
 import {ConfigurationManager} from '../../../src/config/configuration-manager.js';
 import {LoggingService} from '../../../src/logging/logging-service.js';
 import {CDCOperation} from '../../../src/partition/partition-service.js';
-import {SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../../../src/constants/index.js';
+import {SERVICE_STATUS, SERVICE_TYPE, TABLES, WORKFLOW_STEP} from
+  '../../../src/constants/index.js';
 import {RAFT_ROLE} from '../../../src/raft/constants.js';
 import {ReplicaOperationMessageType as MESSAGE, ReplicaOperationReason as REASON} from
   '../../../src/rebalancer/replica-operation-constants.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from
   '../../../src/rebalancer/operation-workflow-owner-shared.js';
+import {PriorityRecoverySupersededTarget} from
+  '../../../src/rebalancer/priority-recovery-superseded-target.js';
+import {ReplicaOperationRepository} from
+  '../../../src/rebalancer/replica-operation-repository.js';
 import {formAdmittedGroup} from '../../partition/partition-admitted-group-fixture.js';
 import {attachPartitionReleaseOwners} from '../../partition/partition-release-fixture.js';
 import {createLoopbackTransport} from '../../partition/partition-service-test-support.js';
@@ -30,24 +35,24 @@ function requestHandoff(service, {operationId, reason = REASON.REPLACE_TARGET_LE
   });
 }
 
-// These fields are immutable request intent and routing, not a claimed
-// persisted REPLACE operation. The test invokes the existing exported attempt
-// and completion-authority owners; it does not simulate coordinator storage.
-function replaceConsumerContext(services, source, target) {
+// The operation is explicit in-memory ACTIVE caller intent, not a claimed
+// persisted REPLACE row. Use the actual repository predicates and inherited
+// handoff evaluator/dispatch/result builders; do not substitute the stronger
+// terminal completion reader for the production target-witness interaction.
+function replaceConsumerContext(source, target) {
   const operation = {operationId: 'runtime-consumer-replace',
     type: OPERATION_WORKFLOW_OWNER_SHARED.OperationType.REPLACE,
+    workflowStep: WORKFLOW_STEP.ACTIVE,
     entityType: SERVICE_TYPE.PARTITION, entityId: source.partitionId,
     partitionId: source.partitionId, sourceNodeId: source.nodeId,
     targetNodeId: target.nodeId, sourceReplicaId: source.replicaId,
     targetReplicaId: target.replicaId, replicaId: target.replicaId};
-  const owner = {messageRouter: source.transport,
-    repository: {getReplaceSourceReplicaId: (intent) => intent.sourceReplicaId,
-      getReplaceTargetReplicaId: (intent) => intent.targetReplicaId},
-    getCachedCriticalReplicaRows: () => services.map((service) =>
-      ({replica_id: service.replicaId, node_id: service.nodeId})),
-  };
-  return {owner, operation, replicaIds: {sourceReplicaId: source.replicaId,
-    targetReplicaId: target.replicaId}};
+  const repository = new ReplicaOperationRepository({nodeId: target.nodeId,
+    systemTableCache: target.systemTableCache, logger: target.logger,
+    timeSource: target.timeSource});
+  const owner = Object.assign(Object.create(PriorityRecoverySupersededTarget.prototype),
+    {messageRouter: source.transport, repository});
+  return {owner, operation};
 }
 
 function refreshCureProjection(groups, cache) {

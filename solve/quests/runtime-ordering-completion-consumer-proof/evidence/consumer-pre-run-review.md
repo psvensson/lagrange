@@ -84,3 +84,34 @@ No required pre-run code correction found. Native success is unmeasured. Setup f
 - D2 cache publication is manually refreshed from native observations, so no production CDC provenance or startup/stabilization proof.
 - Partition uncertainty case retains follower log occurrences; it does not model complete loss of uncommitted history, snapshot recovery, or generic query delivery.
 - These limits preclude treating a green pair as full F1 supersession or complete user packet fulfillment. First native results must stay separately classified.
+
+## Follow-up correction before first execution
+
+Further production-caller inspection sharpens the REPLACE gap above. `src/rebalancer/priority-publication-handoff.js:171-179` invokes `readReplaceWitnessMembership` and then `decideReplaceNamedHandoff` for the actual removal-safety gate. Draft `transfers.test.js:59,91,110` instead calls `readReplaceCompletionAuthority` before the same decision. That corroborated leader authority belongs to terminal completion (`operation-workflow-replace-owner.js:180-185`), not the live handoff gate. Real functions composed in this different order are not the exact production consumer interaction.
+
+The initial execution-only approval above therefore does not approve the draft REPLACE test as production handoff-consumer proof. Principal has requested a separately committed test correction BEFORE first transfer execution, preserving these draft bytes. The smallest faithful correction invokes exported `PriorityPublicationHandoff.prototype.evaluateReplaceNamedHandoffSafety` and its real dispatch method against the native registered handlers; production builders and repository phase/identity predicates must be used, not fabricated SAFE/DEFER answers. The parked-source schedule should allow target witness reads to report source-leading and actual evaluator DEFER; after native transfer a fresh target witness permits SAFE. A full durable workflow/removal remains separate unless actually composed.
+
+The `servedLegacy` gap is exact: `partition-participant-transaction-connection.js:15` returns true only for an unstamped connection. Its sole stamp writer at23-25 sets false; `partition-service-raft-init-base.js:370-385` unconditionally opens/stamps the connection before constructing the native port. No production writer sets an initialized connection true. `replica-handler-participant-cutover.js:228-238` requires that true branch before invoking the transfer consumer. Replacing the database or fabricating a census would bypass the connection owner. Existing current native fixture therefore cannot exercise that historical transition; no missing-symbol RED or fabricated legacy state is acceptable.
+
+`test/rebalancer/replace-real-group-harness.js` is useful history but not a drop-in full-native lifecycle proof: it has real consensus, while `createTestCoordinator` uses a map-backed SQL simulation (`test/rebalancer/test-helpers.js:724+`) and `answerStepDown` constructs the handler reply itself (`replace-real-group-harness.js:705-739`). Any reuse must retain these qualifications.
+
+## Corrected transfer checkpoint: independent execution approval
+
+Rechecked hashes before execution:
+- runtime-completion-consumers-transfer-fixture.js: d8ef1beaaecb6f532fc96dea088789bb52df8fc1dff34f4023f596ffb071becb
+- runtime-completion-consumers-transfers.test.js: b0744aa40989929ba5e8e5ca92ade2e92d2ccf59002b1ca56cfad219b6e5bf19
+
+Verdict: APPROVE corrected exact bytes for first locked native execution. No native execution performed by this reviewer. Prior partition/common-fixture hashes and review remain applicable.
+
+The identified interaction defect is corrected. transfer-fixture.js:41-55 constructs a real ReplicaOperationRepository and composes the inherited production PriorityRecoverySupersededTarget methods, with explicit ACTIVE caller intent. transfers.test.js invokes actual evaluateReplaceNamedHandoffSafety before dispatch, actual dispatchRemoveSafetyHandoffRequest for the attempt/answer ownership, the same evaluator while the source is parked, and that evaluator again after the native target election. Thus source priority-publication-handoff.js:171-211 now owns the witness-read/decision/result interaction; its dispatch at246-308 owns attempt admission and answer classification. No terminal-completion authority is substituted, and no SAFE/DEFER result is manufactured.
+
+Checklist delta, category complete:
+- Harness fidelity (1-6): original native-send gate and actual handler anti-vacuity retained; real repository predicates replace hand-written identity stubs; success remains unmeasured. Prototype composition calls production methods, while ACTIVE intent is explicitly an input premise rather than a durable operation row.
+- Owner interaction (1-10): exact production handoff caller now exercised; acceptance and DEFER/no-second-handoff pair precedes later SAFE in the same schedule. Sole gate owner and fresh target witness retained. Full workflow dispatch/removal, durable operation custody, publication/startup and quota/fairness remain outside scope. Principal owns registry update.
+- Concurrency (1-5): real dispatch now opens and resolves exact attempt; unresolved accepted attempt checked via actual evaluator. No fabricated null witness. No reconstructed owner, multi-driver claim or late-sequence race proof.
+- Transport (1-5): actual STEP_DOWN and READ_REPLICA_MEMBERSHIP routes, complete forwarding and recorded results unchanged; wire noHandler/deadline and general late-response gaps remain.
+- Recovery/replay (1-5): no new recovery claim. Real repository reads current cache terminal/phase predicates; missing row is not asserted durable absence. No durable workflow state is created. Partition same-entry survivor replay remains separately reviewed.
+- Admission (1-7): actual repository phase predicate and real result builders used. New ACTIVE caller intent is an explicit precondition, not an activation proof. Current target witness is re-read. Participant servedLegacy branch stays unavailable as documented.
+- Retry (1-7): evaluator checks accepted attempt produces no new handoff request; no retries, counter resets or timer recovery guarantees fabricated. Existing finite native-delivery schedule unchanged.
+
+Remaining limitations are explicit: this reaches the actual removal-safety decision and transfer dispatch, not source-removal execution or durable REPLACE workflow. It therefore materially closes the misbound decision interaction without claiming complete end-to-end REPLACE correctness or F1 supersession. The participant historical reopen and D2 publication limitations above remain.

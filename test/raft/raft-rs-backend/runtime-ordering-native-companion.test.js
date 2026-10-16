@@ -128,10 +128,18 @@ function assertBeforeOrder(result, cell) {
 }
 
 function assertAnchors(result) {
+  for (const {record} of result.initial.exactDurable) {
+    assert.equal(typeof record.hardState.vote, 'string',
+      'the owner read preserves the exact persisted vote identity as a decimal string');
+    assert.ok(record.confState.voters.includes(record.hardState.vote),
+      'the initial recorded vote exactly matches a native voter identity');
+  }
   assert.deepEqual(result.returned.afterTurn, [], 'post-interval projection agrees with core');
   assert.deepEqual(result.returned.atExact, [], 'post-convergence projection agrees with core');
   assert.deepEqual(result.returned.recovered.after, result.returned.recovered.before,
     'existing post-convergence restart preserves observed term and ConfState');
+  assert.deepEqual(result.returned.recoveredExact.after, result.returned.recoveredExact.before,
+    'post-convergence restart preserves the complete exact durable owner record');
 }
 
 for (const cell of orderingCells) {

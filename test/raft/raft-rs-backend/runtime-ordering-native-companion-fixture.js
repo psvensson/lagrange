@@ -4,6 +4,7 @@
 import assert from 'node:assert/strict';
 
 import {RAFT_RS_MESSAGE_TYPE} from '../../../src/raft/raft-rs-ingress-constants.js';
+import {RaftRsDurableStore} from '../../../src/raft/raft-rs-durable-store.js';
 import {setActualCoreEntryObserver, setCoreFaultInjector,
   setNativeInboundStageObserver} from '../../../src/raft/raft-rs-runtime-owner.js';
 import {OracleRun, bindingEnumerations} from
@@ -109,12 +110,25 @@ function applicationCommands(run) {
     .map(([id, replica]) => [id, copied(replica.appliedCommands)]));
 }
 
+function exactDurable(run) {
+  // Supplement, never replace, OracleRun's original vectors. Its independent
+  // SQLite reader converts INTEGER vote IDs to Number and can round them.
+  // The production store reader preserves exact decimal strings and performs
+  // only SELECTs; it never enters or drains a runtime operation.
+  return [...run.driver.cluster.replicas].map(([replicaId, replica]) => ({
+    replicaId,
+    record: RaftRsDurableStore.readDurableRecordIn(replica.db,
+      run.driver.cluster.partitionId),
+  }));
+}
+
 function passiveState(f) {
   return {
     clockNow: f.run.driver.clock.now(),
     projections: Object.fromEntries(f.run.projections),
     streams: Object.fromEntries(f.run.streams),
     durable: f.run.durable(),
+    exactDurable: exactDurable(f.run),
     inboxes: inboxes(f.run),
     applicationCommands: applicationCommands(f.run),
   };
@@ -210,12 +224,18 @@ async function collectOriginalVectors(f) {
   const exact = run.observe();
   const streams = copied(Object.fromEntries(run.streams));
   const durable = run.durable();
+  const durableExact = exactDurable(run);
   const atExact = run.projectionMismatches();
   // The original mid-turn cells do not select a timeout-driven settled axis.
   assert.equal(f.cell.settle, false, 'original mid-turn settled axis remains absent');
   const recovered = run.recover(f.cell.requester);
+  const recoveredExact = {
+    before: durableExact.find(({replicaId}) => replicaId === f.cell.requester),
+    after: exactDurable(run).find(({replicaId}) => replicaId === f.cell.requester),
+  };
   return {answer: f.selected.value, outbound: f.measured.outbound,
-    afterTurn, exact, streams, durable, atExact, settled: null, recovered};
+    afterTurn, exact, streams, durable, durableExact, atExact, settled: null,
+    recovered, recoveredExact};
 }
 
 function evidence(f) {

@@ -22,13 +22,13 @@
     "storage-raft": 134,
     "test-infrastructure": 143,
     "transactions": 16,
-    "transport-messaging": 95,
+    "transport-messaging": 96,
     "wasm-toolchain": 58
   },
-  "censusSize": 2384,
-  "digest": "fnv1a32-a4919c8e",
+  "censusSize": 2385,
+  "digest": "fnv1a32-0729a02c",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-cf1bd10a",
+  "observationDigest": "fnv1a32-ee940c9f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1097,6 +1097,7 @@
     "test/message-group/message-group-failover-cdc-continuity.test.js": "transport-messaging",
     "test/message-group/message-group-fresh-learner-promotion.test.js": "transport-messaging",
     "test/message-group/message-group-fresh-learner-snapshot.test.js": "transport-messaging",
+    "test/message-group/message-group-native-custody-handoff.test.js": "transport-messaging",
     "test/message-group/message-group-proposal-deadline-wait-bound-spent.test.js": "transport-messaging",
     "test/message-group/message-group-rebalancer-leadership-readiness-hysteresis.test.js": "transport-messaging",
     "test/message-group/message-group-replica-distribution.property.test.js": "transport-messaging",
@@ -7862,6 +7863,26 @@
         "test/test-helpers/boot-incarnation-fixture.js"
       ]
     },
+    "test/message-group/message-group-native-custody-handoff.test.js": {
+      "files": [
+        "src/bootstrap/shared/message-group-selection.js",
+        "src/bootstrap/shared/message-group-transport-handler.js",
+        "src/bootstrap/shared/partition-cdc-propagation-subscriber.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/bootstrap/system-table-workflow-schema-definitions.js",
+        "src/partition/partition-cdc-obligation-ledger.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-service-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/message-group/message-group-native-custody-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
     "test/message-group/message-group-proposal-deadline-wait-bound-spent.test.js": {
       "files": [
         "src/logging/wait-bound-spent.js",
@@ -11218,6 +11239,7 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/bootstrap/system-table-workflow-schema-definitions.js",
+        "src/constants/index.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
@@ -11238,8 +11260,9 @@
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/rebalancer/operation-workflow-owner-shared.js",
         "src/rebalancer/operation-workflow-replace-handoff-attempt.js",
-        "src/rebalancer/operation-workflow-replace-surviving-membership.js",
+        "src/rebalancer/priority-recovery-superseded-target.js",
         "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-operation-repository.js",
         "src/rebalancer/user-table-leader-placement-cure.js",
         "test/raft/raft-rs-backend/runtime-completion-consumers-fixture.js",
         "test/raft/raft-rs-backend/runtime-completion-consumers-transfer-fixture.js",

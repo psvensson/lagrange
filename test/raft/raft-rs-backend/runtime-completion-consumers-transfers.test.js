@@ -14,12 +14,11 @@ import {RAFT_RS_MESSAGE_TYPE as NATIVE, RAFT_RS_TRANSPORT_PROTOCOL} from
 import {ReplicaOperationMessageType as MESSAGE, ReplicaOperationReason as REASON,
   ReplicaOperationResponseStatus as STATUS} from
   '../../../src/rebalancer/replica-operation-constants.js';
-import {beginReplaceHandoffAttempt, recordReplaceHandoffAnswer,
-  readReplaceHandoffAttempt, decideReplaceNamedHandoff,
-  REPLACE_HANDOFF_DECISION as DECISION, REPLACE_HANDOFF_ANSWER_CLASS as ANSWER} from
+import {readReplaceHandoffAttempt,
+  REPLACE_HANDOFF_ANSWER_CLASS as ANSWER} from
   '../../../src/rebalancer/operation-workflow-replace-handoff-attempt.js';
-import {readReplaceCompletionAuthority} from
-  '../../../src/rebalancer/operation-workflow-replace-surviving-membership.js';
+import {OPERATION_WORKFLOW_OWNER_SHARED} from
+  '../../../src/rebalancer/operation-workflow-owner-shared.js';
 import {applyUserTableLeaderPlacementCure,
   USER_TABLE_LEADER_PLACEMENT_CURE_STATE as CURE} from
   '../../../src/rebalancer/user-table-leader-placement-cure.js';
@@ -34,6 +33,7 @@ import {requestHandoff, replaceConsumerContext, nativeCureFixture,
   './runtime-completion-consumers-transfer-fixture.js';
 
 const TIMEOUT_MS = 40000;
+const {REMOVE_SAFETY_EVALUATION_CLASSIFICATION: SAFETY} = OPERATION_WORKFLOW_OWNER_SHARED;
 
 function nativeMessage(partitionId, type) {
   return (_, packet) => packet?.protocol === RAFT_RS_TRANSPORT_PROTOCOL &&
@@ -49,20 +49,19 @@ function statuses(services) {
     durable: durableConsumerView(service)}));
 }
 
-test('REPLACE handoff decision waits after acceptance until its actual completion authority observes the target leading',
+test('actual REPLACE handoff evaluator defers after acceptance until its target witness observes leadership',
   {timeout: TIMEOUT_MS}, async (t) => {
     const f = await nativeFixture(t);
     f.group.services.forEach((service) => service.raft.stopScheduling());
     const target = f.group.services.find((service) => service !== f.leader);
-    const {owner, operation, replicaIds} =
-      replaceConsumerContext(f.group.services, f.leader, target);
-    const before = await readReplaceCompletionAuthority(owner, operation);
-    assert.equal(before.leaderReplicaId, f.leader.replicaId);
-    assert.equal(decideReplaceNamedHandoff(owner, operation, before, replicaIds).state,
-      DECISION.ISSUE);
+    const {owner, operation} = replaceConsumerContext(f.leader, target);
+    const before = statuses(f.group.services);
     const observer = observeConsumerDeliveries(f.leader.transport, (_, packet) =>
       packet?.type === MESSAGE.READ_REPLICA_MEMBERSHIP ||
       packet?.type === MESSAGE.STEP_DOWN_REPLICA);
+    const initial = await owner.evaluateReplaceNamedHandoffSafety(operation);
+    assert.equal(initial.classification, SAFETY.DEFER);
+    assert.equal(initial.handoffRequest.requestReplicaId, target.replicaId);
     // Park the source in its real Ready send. The follower's named transfer
     // can still be accepted into the source's inbound queue. This supplies a
     // deterministic acceptance/completion gap without a fabricated response.
@@ -73,54 +72,51 @@ test('REPLACE handoff decision waits after acceptance until its actual completio
       entryId: 'runtime-consumer-handoff-park'},
     {proposedBy: f.leader.replicaId, proposedAt: f.leader.timeSource.now()});
     const parked = trackAnswer(f.leader.applyWrite(entry));
-    let witness = null;
     try {
       assert.equal(await f.group.waitFor(() => gate.records.length > 0), true,
         'seam: source Ready is waiting on a real outbound Append');
-      const seq = beginReplaceHandoffAttempt(owner, operation.operationId);
-      const accepted = await requestHandoff(target,
-        {operationId: operation.operationId, attemptSeq: seq});
+      const accepted = await owner.dispatchRemoveSafetyHandoffRequest(operation,
+        initial.handoffRequest);
       assert.equal(accepted.status, STATUS.COMPLETED, JSON.stringify(accepted));
       assert.equal(accepted.handoffTransfer?.outcome, CORE.CORE_OK);
       assert.equal(accepted.handoffTransfer.reason,
         RAFT_LEADERSHIP_TRANSFER_REASON.TRANSFER_FORWARDED);
-      assert.equal(recordReplaceHandoffAnswer(owner, operation.operationId, accepted, seq), true);
       assert.equal(readReplaceHandoffAttempt(owner, operation.operationId).answerClass,
         ANSWER.ACCEPTED);
       assert.notEqual(target.role, RAFT_ROLE.LEADER);
-      witness = trackAnswer(readReplaceCompletionAuthority(owner, operation));
-      assert.equal(await f.group.waitFor(() => observer.records.some(({packet}) =>
-        packet.type === MESSAGE.READ_REPLICA_MEMBERSHIP &&
-        packet.replicaId === f.leader.replicaId)), true,
-      'real completion read redirects to the still-busy source');
-      assert.equal(witness.settled, false,
-        'accepted transfer did not answer the actual completion read');
-      assert.equal(decideReplaceNamedHandoff(owner, operation, null, replicaIds).state,
-        DECISION.WAIT_WITNESS_UNAVAILABLE);
-      traceConsumer(t, 'replace-accepted-without-completion', {before, accepted,
-        attempt: readReplaceHandoffAttempt(owner, operation.operationId),
-        witnessSettled: witness.settled, status: statuses(f.group.services),
-        requests: observer.evidence(), held: gate.evidence()});
+      // The actual production evaluator reads its target's native membership,
+      // not the separate majority-corroborated terminal completion owner.
+      const waiting = await owner.evaluateReplaceNamedHandoffSafety(operation);
+      traceConsumer(t, 'replace-accepted-without-safety', {before, initial, accepted,
+        waiting, attempt: readReplaceHandoffAttempt(owner, operation.operationId),
+        status: statuses(f.group.services), requests: observer.evidence(),
+        held: gate.evidence()});
+      assert.equal(waiting.classification, SAFETY.DEFER,
+        'actual consumer does not authorize removal from the accepted receipt');
+      assert.equal(waiting.handoffRequest, null,
+        'unresolved accepted attempt does not dispatch another transfer');
+      assert.ok(observer.records.filter(({packet}) =>
+        packet.type === MESSAGE.READ_REPLICA_MEMBERSHIP).every(({packet}) =>
+        packet.replicaId === target.replicaId),
+      'production handoff consumer reads its target witness');
       gate.release();
       assert.equal((await parked.promise).success, true);
-      const firstObservation = await witness.promise;
       assert.equal(await f.group.waitFor(() =>
         target.raft.readStatus().role === RAFT_ROLE.LEADER), true,
-      'actual native transfer elects the named target');
-      const current = await readReplaceCompletionAuthority(owner, operation);
-      const decision = decideReplaceNamedHandoff(owner, operation, current, replicaIds);
-      traceConsumer(t, 'replace-fresh-completion', {firstObservation, current, decision,
+      'post-measurement: actual native transfer elects the named target');
+      const current = await owner.evaluateReplaceNamedHandoffSafety(operation);
+      traceConsumer(t, 'replace-fresh-safety', {current,
         status: statuses(f.group.services), requests: observer.evidence()});
-      assert.equal(current.leaderReplicaId, target.replicaId);
-      assert.equal(decision.state, DECISION.LEADERSHIP_SAFE);
-      assert.ok(BigInt(current.term) > BigInt(before.term));
-      assert.equal(current.appliedIndex, current.commitIndex);
-      // This test reaches the removal authorization decision only. It does
-      // not manufacture a durable REPLACE workflow or invoke source removal.
+      assert.equal(current.classification, SAFETY.SAFE);
+      assert.equal(current.handoffRequest, null);
+      assert.ok(BigInt(durableConsumerView(target).term) >
+        BigInt(before.find((view) => view.replicaId === target.replicaId).durable.term));
+      // This calls the actual production removal-safety consumer and dispatch
+      // owners, not a durable REPLACE workflow or its source-removal effect.
       assert.equal(f.leader.isShutdown, false);
     } finally {
       await gate.restore();
-      await Promise.allSettled([parked.promise, ...(witness ? [witness.promise] : [])]);
+      await parked.promise.catch(() => undefined);
       observer.restore();
     }
   });

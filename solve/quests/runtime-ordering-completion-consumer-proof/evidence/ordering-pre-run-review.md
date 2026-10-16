@@ -47,3 +47,19 @@ No new retry loop, attempt reset, or conditional success. Fixed passive guard is
 - reentry:false changes the original oracle's subscriber behavior and is disclosed. A pass is proposed replacement ordering evidence for that explicit schedule, not all production reentrancy.
 - Post-observation convergence and recovery vectors are complete but deliberately driver-assisted; they do not prove passive service.
 - First native execution may expose fixture/semantic defects; preserve its full diagnostic vectors before classification.
+
+# Exact-integer supplement review (before its first execution)
+
+Reviewed new fixture SHA256 ec6f9fa7c763552c958705206576f15dc793f6a6de896869a1b10ee3b2c51d20 and test SHA256 3dfec10f6c37a2f5b0c58d8c937f1d8c43c695ec7d70a2df0dff3885546c9c54. Verdict APPROVE this exact test-only supplement for first locked execution. No native tests executed by reviewer.
+
+Diff adds exactDurable() alongside, not in place of, the old OracleRun SQLite vectors; adds the exact owner record to passive/returned state; and compares complete exact requester record before/after existing restart. Source RaftRsDurableStore.readDurableRecordIn at src/raft/raft-rs-durable-store.js:207-251 performs SELECTs using statement-local safeIntegers(true), converts durable uint64 values to exact decimal strings, and does not call a runtime/port/wake or mutate storage. It does not change the connection's global integer handling or normalize the preserved original vector. Original Number-rounded votes remain visible.
+
+Category-complete delta assessment:
+- Harness/time/field/vacuity: new strings and initial-vote membership assertion reject imprecise peer identity; unchanged original input/schedules and full-vector comparisons include the supplement. Initial actual RF3 election must establish a vote for a configured member; an assertion failure is retained, not normalized. This check is a formed-cluster precondition, not a fabricated expected transcript.
+- Concurrency: added synchronous SQL reads introduce no await, core entry, timer or new serialization authority. Existing process-global observer constraint remains.
+- Transport: zero delivery, ACK or response changes; caller/entry order remains original companion schedule.
+- Recovery: exact before/after durable comparison strengthens existing requester restart evidence; still clean component restart with synchronous=OFF, not power-loss/snapshot proof. No recovery state is written by the supplement, and no absent state becomes terminal.
+- Owner interaction/projection: owner reader provides additional evidence only. It is not passed into any native or production decision. Old vectors remain, and independent late/AFTER executions are still separate.
+- Admission/retry: no new gate, retry, budget, forced progression or success classification. Existing caveats and metadata obligations above remain.
+
+F1 supersession, production consumer correctness and whole-increment readiness remain HOLD independent of this pre-run approval.
