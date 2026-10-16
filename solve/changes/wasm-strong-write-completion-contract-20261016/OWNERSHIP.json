@@ -1,0 +1,48 @@
+{
+  "observedAt": "2026-10-16T05:11:19.405106+00:00",
+  "reviewHead": "d9b6872638166eb4ef5286399fa0fb4f99a73d4f",
+  "reviewBranch": "review/wasm-completion-contract-20261016",
+  "sharedHead": "0996d7576516af24f5f4d3e1e9aee37c775aabae",
+  "sharedBranch": "integrate/rs-raft-2026-09-30",
+  "sharedStagedPaths": [
+    "lagrange-handoff-20260930T162452Z.txt",
+    "solve/changes/global-owner-debt-inventory/inventory.json",
+    "src/diagnostics/formation-turn-attribution.js",
+    "src/diagnostics/raft-formation-attribution.js",
+    "src/node/replica-state-machine-serialization.js",
+    "src/node/replica-transport-handler-identity.js",
+    "src/raft/liferaft-timing-api.js",
+    "src/raft/liferaft.js",
+    "src/raft/raft-replica-base-runtime-helpers.js",
+    "src/rebalancer/operation-workflow-owner-handoff-state.js",
+    "src/rebalancer/operation-workflow-recovery-reconcile.js",
+    "src/rebalancer/operation-workflow-replace-owner-recovery.js",
+    "test/admin/admin-control-snapshot-publication-convergence-membership-observation-test-cases.js",
+    "test/admin/admin-control-snapshot-tail-test-cases.js",
+    "test/integration/replica-handler-metadata-propagation.integration.test.js",
+    "test/shards/impact-graph-seal.json",
+    "test/shards/subsystem-classes.json",
+    "test/simulation/formation-sim-raft-cohort.js"
+  ],
+  "sharedStagedDiffSha256": "0b2ea79142a13f4dcada523f01108fbd8a4809492838e23f7a0246a7159953fc",
+  "dependencyLink": "/tmp/opencode/release-linearization-rev2-correction/node_modules",
+  "dependencyFiles": [
+    {
+      "path": "/tmp/opencode/release-linearization-rev2-correction/node_modules/better-sqlite3/package.json",
+      "sha256": "58e81504576abccfacbfd08dc9432dc3a00d0fc0454685cb7a76aaf976cf25a9"
+    },
+    {
+      "path": "/tmp/opencode/release-linearization-rev2-correction/node_modules/better-sqlite3/build/Release/better_sqlite3.node",
+      "sha256": "d7d9272b12d11c1dc2bb787741b1b7c4037d336155f316ace3420410c28fda37"
+    },
+    {
+      "path": "/tmp/opencode/release-linearization-rev2-correction/node_modules/yaml/package.json",
+      "sha256": "20b8b197cbd10dad245d45e463dfe58e4c8c25a47e24bc4256ad9ab58bf35683"
+    }
+  ],
+  "node": "v22.23.2",
+  "reviewers": "Existing completion_consumers reactivated read-only; other task agents completed, no foreign work displaced.",
+  "processInventoryLocal": "/tmp/lagrange-wasm-processes-20261016.txt",
+  "worktreeInventoryLocal": "/tmp/lagrange-wasm-worktrees-20261016.txt",
+  "lab": "Fresh fleet discovery only; no lease acquired and no native test run. Existing locks must be rechecked for any later execution."
+}

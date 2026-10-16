@@ -1,0 +1,85 @@
+{
+  "base": "d9b6872638166eb4ef5286399fa0fb4f99a73d4f",
+  "files": [
+    {
+      "path": "src/wasm-service/wasm-service-replica.js",
+      "blob": "1f61a61f23fa3a425e400ea81f823933587ba76f",
+      "sha256": "8e37a0dda7d3fd429b2ea37acb1e1e2a2e0d131dc709842f7b6c33f4c28f4c52"
+    },
+    {
+      "path": "src/wasm-service/wasm-service-committed-command-codec.js",
+      "blob": "4eb0c6298e10d8be6212739a8bdb9b40b38c054d",
+      "sha256": "d2155a31257dfdd0c522cb61096dd49368c98783932f1c3d7b2fc268b5f201f0"
+    },
+    {
+      "path": "src/wasm-service/wasm-service-committed-command-admission.js",
+      "blob": "44a73c99b22e8cf569e7a2f74657e0f035d3e272",
+      "sha256": "47d303db827bda3460659dd7b6b9783a5ba00c9d28db4a6fcd70d11fe443e98f"
+    },
+    {
+      "path": "src/wasm-service/session-kv-store.js",
+      "blob": "96e959f1e07aacc9cf73d9d2d1b3d33648e7a556",
+      "sha256": "0bcacb977d329f63b274ae2e44b450fe70b716ed5cbe6c50af594c2cb3d9f4bc"
+    },
+    {
+      "path": "src/wasm-service/wasm-service-replica-lifecycle.js",
+      "blob": "962272e3867e8f21a6773d76b66192e7d9ba5a1f",
+      "sha256": "911dada52a3f96209f5c07669112e7df828d062723e284b1ea5b54cdf47929ef"
+    },
+    {
+      "path": "src/wasm-service/wasm-service-consensus-port.js",
+      "blob": "ff887721560f3d8de4b37b2bb64f0fbfa685e7da",
+      "sha256": "d20fd29372ad753f86ee88c7bb660d551cb16344543592bad27e91b313f7eebc"
+    },
+    {
+      "path": "src/wasm-service/timer-manager.js",
+      "blob": "fa6de8383260fe9efe248b7684af9be6e7b04555",
+      "sha256": "df32ee8e955903925ccef8f9ff32a8bea65da26ebc98d33853a43663cba301dd"
+    },
+    {
+      "path": "src/raft/raft-rs-application-transaction-owner.js",
+      "blob": "4481d2f0c9967ed17181620abddf89cb5414dc07",
+      "sha256": "f12ff39650a0c221212168129f24ff070b563bd3c65cb1498572af7e3642f6aa"
+    },
+    {
+      "path": "src/raft/snapshot-checkpoint-store.js",
+      "blob": "38d859ac3e29837b057695af40099287551d115c",
+      "sha256": "baf749bd06ebaf9cd88eecb10ef2a6fdb9c3e0308a85371b0fec58c66731772a"
+    },
+    {
+      "path": "src/transport/websocket-transport.js",
+      "blob": "4c2879cec785ccebae3e4f502f9545aebcbed9a0",
+      "sha256": "36f0eaa802dee3ed67d84703a307ccaf14936c5fb618f386c8f757e95a5ba309"
+    },
+    {
+      "path": "src/transport/message-router-shared-vocabulary.js",
+      "blob": "89c21a93432ed43db08c9df960dd1bd23ab99f7f",
+      "sha256": "0e7c72d2e9374dd77a2fc86b3228694f981343373fd5c2eb67c883ea8d770d1f"
+    },
+    {
+      "path": "src/partition/partition-committed-statement-outcome.js",
+      "blob": "23209153a3f599e5287b99f4262656b4aa152b92",
+      "sha256": "6c9fa9c3163a67d0b2eaca406e34ae2d2542665518829dcfca388f2f64f64739"
+    },
+    {
+      "path": "src/partition/partition-committed-statement-outcome-constants.js",
+      "blob": "feb49a7b39debdb7d091166ee2aa072963ae9ae7",
+      "sha256": "7a2792d0906d8cb86021fa9170daa35a3aec3e9c8aa3b01b81d62894a7915832"
+    },
+    {
+      "path": "test/wasm-service/wasm-strong-write-native-completion.test.js",
+      "blob": "32bc78324927187134ea2e2e59de63467dbebed9",
+      "sha256": "591dd4c77abedd4685cfcdcc563cf2bd04bdd578c73daf8ab8c14d256d14e45f"
+    },
+    {
+      "path": "test/wasm-service/wasm-strong-write-native-fixture.js",
+      "blob": "c15b2ca4b10c7a27988d11ae2eae3c974690313b",
+      "sha256": "3a949083e132ac9eba399d82c1df90aba09bda321a959e04a3bdb41623feba34"
+    },
+    {
+      "path": "src/raft/raft-rs-operation-port.js",
+      "blob": "6a41b2392cde027363b8c27b4d181fb8b7c46ea3",
+      "sha256": "ab3b0a3c27b1568ab644d458ebcf078f47d8da98255d41317bdc766923ff0597"
+    }
+  ]
+}
