@@ -1,5 +1,6 @@
 import {KV_TABLE_NAME} from './session-kv-store.js';
-import {isCreationOnlyDatabase, readWasmCreationBinding} from './wasm-creation-opening.js';
+import {isCreationOnlyDatabase, readWasmCreationBinding, boundWasmInitialization} from
+  './wasm-creation-opening.js';
 // Fixed application records. All apply calls join the existing Raft SQLite transaction.
 import {WASM_WRITER_PROFILE as P, WRITER_ACTION as A, WRITER_STATUS as S,
   WRITER_REASON as R, WRITER_ENCODING} from './wasm-writer-profile.js';
@@ -109,8 +110,8 @@ class WasmWriterState {
     const command = canonicalWriterCommand(meta.initialization.command);
     requireFormat(command.action === A.INIT && command.serviceId === serviceId);
     // The same immutable common root was read before inspecting writer state.
-    requireFormat(root === null || (root.serviceDefinitionId === serviceId &&
-      root.incarnation === command.incarnation));
+    requireFormat(root === null || writerDigest(command) ===
+      writerDigest(boundWasmInitialization(root)));
     validateReceipt(command, meta.initialization.receipt);
     requireFormat(rows.length === P.slots);
     for (let slot = 0; slot < P.slots; slot += 1) {
@@ -145,6 +146,9 @@ class WasmWriterState {
     if (root !== null && (root.serviceDefinitionId !== identity.serviceId ||
         root.incarnation !== identity.incarnation)) return refused(command, R.INCARNATION);
     if (command.action === A.INIT) {
+      if (root !== null && writerDigest(command) !== writerDigest(boundWasmInitialization(root))) {
+        return refused(command, R.CONFLICT);
+      }
       if (meta.initialization === null) return {status: S.NEW};
       return writerDigest(command) === writerDigest(meta.initialization.command) ?
         recorded(meta.initialization.receipt) : refused(command, R.CONFLICT);

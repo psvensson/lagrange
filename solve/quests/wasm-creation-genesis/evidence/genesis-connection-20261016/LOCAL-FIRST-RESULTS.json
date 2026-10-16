@@ -1,0 +1,260 @@
+{
+  "scope": "Cloud local measurements; normal locked dependencies. No physical-lab claim. Intermediate logs retained; not every intermediate source tree has an exact retained identity.",
+  "baseRemote": "50c64ac476bca16c607d42e8c11d3b8606a01f53",
+  "testOnlyLocalCheckpoint": "44f46bb97c63926fa13e96ef06bf332433794f19",
+  "results": [
+    {
+      "file": "baseline-cognitive.log",
+      "sha256": "d7bc7bbf6c487764877195187cba79a9e04818d770753b224777ad4016d5ea62",
+      "bytes": 176,
+      "exitCode": 0
+    },
+    {
+      "file": "baseline-complexity.log",
+      "sha256": "68a901af2a70796c2a7c1072003caf35cf6335715ea951df4da2c7cefcbdbff3",
+      "bytes": 260,
+      "exitCode": 0
+    },
+    {
+      "file": "bootstrap-neighbor-1.log",
+      "sha256": "0dbde64210cb01b10362248f65757a701f32a479924b4667f919e3148e957a2e",
+      "bytes": 241,
+      "exitCode": 0
+    },
+    {
+      "file": "cognitive-final.log",
+      "sha256": "a543e43553a46dc97e309997c5afb8e566747bd2e8c887379ba0238e149b1a1b",
+      "bytes": 52,
+      "exitCode": 0
+    },
+    {
+      "file": "cognitive-new.log",
+      "sha256": "a543e43553a46dc97e309997c5afb8e566747bd2e8c887379ba0238e149b1a1b",
+      "bytes": 52,
+      "exitCode": 0
+    },
+    {
+      "file": "complexity-new-corrected.log",
+      "sha256": "bb5445b6e1062efe06695d191f8a67894aa250bd135d7c0836d01705bfe571ea",
+      "bytes": 42,
+      "exitCode": 0
+    },
+    {
+      "file": "complexity-new.log",
+      "sha256": "f852ed2e1571d1af7b241a9663de5ae8f59c5656e456264db23c8d9e2294a936",
+      "bytes": 325,
+      "exitCode": 1
+    },
+    {
+      "file": "final-fourteen-corrected.log",
+      "sha256": "34d4e5c7a7172d6b50adbb7cb5f639fb1e398673d7950118f6e382fe36ea729e",
+      "bytes": 239,
+      "exitCode": 0
+    },
+    {
+      "file": "final-local-six-files.log",
+      "sha256": "1d5cd4f2a56a8be70e886f8cf9c306dfcada2e56688f5e9322ba1839455db457",
+      "bytes": 7749,
+      "exitCode": 1
+    },
+    {
+      "file": "final-metadata.log",
+      "sha256": "65166e4b8f0224ee569f91e98c0d9c8ad8239296187ecc00253ea61bed3b9428",
+      "bytes": 788,
+      "exitCode": 0
+    },
+    {
+      "file": "final-source-restored.log",
+      "sha256": "487fc6e12305789d99da39a9c75102b9c51ad230e7c4b6702d701e372fdb9aa2",
+      "bytes": 239,
+      "exitCode": 0
+    },
+    {
+      "file": "genesis-baseline.log",
+      "sha256": "879588246625273406d32609990c07f0abfb996ba3b02ec6f8325ce5ddeecb8d",
+      "bytes": 6242,
+      "exitCode": 1
+    },
+    {
+      "file": "genesis-candidate-1.log",
+      "sha256": "79e7d6acfa2a2f52bc13488b755cc2be779cb8ec55ba03b65e7c399ebb79466f",
+      "bytes": 243,
+      "exitCode": null
+    },
+    {
+      "file": "genesis-candidate-2.log",
+      "sha256": "8d3484e6378f4961cdbd8433f1fb29999d253c18f34f053ca201d6612a79b75e",
+      "bytes": 4249,
+      "exitCode": null
+    },
+    {
+      "file": "genesis-candidate-3-diagnostic.log",
+      "sha256": "1628a4d9c546e23b14ee58f7f3866752d58668c4e53bd1b9bf012bcc6f631a21",
+      "bytes": 4421,
+      "exitCode": 1
+    },
+    {
+      "file": "genesis-candidate-4.log",
+      "sha256": "c0bd5077d3c7a4fe9f5c826f53f6fc2f87259c8ffb46892118f93d96781b3edc",
+      "bytes": 305,
+      "exitCode": null
+    },
+    {
+      "file": "genesis-candidate-5.log",
+      "sha256": "b6fe329906d36712be3c51888b6e25e903f0479fed2f0b7a0b84187cdbf439d5",
+      "bytes": 237,
+      "exitCode": 0
+    },
+    {
+      "file": "genesis-review-expanded-first.log",
+      "sha256": "a4e17caffc7487dffed0fd288fef147c0a3e88f9bdd93ab3067799e5148d0fba",
+      "bytes": 7323,
+      "exitCode": 1
+    },
+    {
+      "file": "genesis-reviewed-candidate.log",
+      "sha256": "4c028d3468ec15bfb8bff97ef6e0679d9d3d87746ed76a676494400fa84a5b12",
+      "bytes": 239,
+      "exitCode": 0
+    },
+    {
+      "file": "impact-contracts-final.log",
+      "sha256": "8b3d4a27aaf181036627197fa9b5c4d622debabc43c767a08ed53758db96e42c",
+      "bytes": 129,
+      "exitCode": 0
+    },
+    {
+      "file": "lint-final-corrected.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "exitCode": 0
+    },
+    {
+      "file": "lint-final.log",
+      "sha256": "045595bf50e358b63acf08d445e9f81a2f7c509e63bef2679ca4e7b2d0fc629b",
+      "bytes": 217,
+      "exitCode": 1
+    },
+    {
+      "file": "lint-first.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "exitCode": null
+    },
+    {
+      "file": "lint-reviewed.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "exitCode": 0
+    },
+    {
+      "file": "local-proof-init-content.log",
+      "sha256": "f661fb2f7155393b63a5b81cfe5672d484aa9809bbc5ab0a9ae9f0b3d1e2b983",
+      "bytes": 7333,
+      "exitCode": 1
+    },
+    {
+      "file": "local-proof-membership-gate.log",
+      "sha256": "92b4d84fbee82b4e229efe5a6671694920f36d83c266b7e7741600d3487a2f0e",
+      "bytes": 7638,
+      "exitCode": 1
+    },
+    {
+      "file": "publication-metadata.log",
+      "sha256": "e35d0c38c821ec11d3622c873fdbbb86cddd96cde70fc5ce52db5475a2c4e0f5",
+      "bytes": 788,
+      "exitCode": 0
+    },
+    {
+      "file": "publication-shards.log",
+      "sha256": "bcc24ec97b8e74f6f82de1734c8c87534c907f7f5e75bc8cf26f7590c96e0f87",
+      "bytes": 548,
+      "exitCode": 0
+    },
+    {
+      "file": "scoped-ambient-intrinsics.log",
+      "sha256": "8c2aefa99064b65f9e747bad50f147e1ef6a70dbef483fa64da51b288aa8b9da",
+      "bytes": 127,
+      "exitCode": 0
+    },
+    {
+      "file": "scoped-boundary-mode-contracts.log",
+      "sha256": "bff792f104aa74b9af68128e2fafba5413d437419490dbd9a28806810677b4ff",
+      "bytes": 77,
+      "exitCode": 0
+    },
+    {
+      "file": "scoped-decision-boundaries.log",
+      "sha256": "954d6537a6cafb441c7e07fed5cc4221bbbe92a2c474cde29d944bbc68862464",
+      "bytes": 132,
+      "exitCode": 0
+    },
+    {
+      "file": "scoped-deferred-outcomes.log",
+      "sha256": "aa64ac939dd64af709a47dd62716d026ff82084cc0b1cee6fe154d9507065f0f",
+      "bytes": 82,
+      "exitCode": 0
+    },
+    {
+      "file": "scoped-grammar.log",
+      "sha256": "00ec1b85223c8d50f1fbba4bc307bdb78a77f0cccbce606454270e5663ea6169",
+      "bytes": 71,
+      "exitCode": 0
+    },
+    {
+      "file": "scoped-literals.log",
+      "sha256": "e80919b6689f0980ac332a9e6b9738bb7aff94c38691a88f3e51e8e196b29371",
+      "bytes": 126,
+      "exitCode": 0
+    },
+    {
+      "file": "scoped-silent-catch.log",
+      "sha256": "4990e8d4f38728834efe7841265c6d98aff589fe7fc8fdc738acfde83f4ee10b",
+      "bytes": 112,
+      "exitCode": 0
+    },
+    {
+      "file": "source-metadata-1.log",
+      "sha256": "91e76868a582aa4db562454f369b7022fefc1dbd080ed83442d2a1e00ed5f085",
+      "bytes": 788,
+      "exitCode": 0
+    },
+    {
+      "file": "source-metadata-2.log",
+      "sha256": "06a34a1157f406fe73a2aa9dbde03e6bbe775c67967a8feed49104a7009f195b",
+      "bytes": 788,
+      "exitCode": 0
+    },
+    {
+      "file": "strict-final.log",
+      "sha256": "bb5445b6e1062efe06695d191f8a67894aa250bd135d7c0836d01705bfe571ea",
+      "bytes": 42,
+      "exitCode": 0
+    },
+    {
+      "file": "test-baseline-metadata.log",
+      "sha256": "5762c7f93337aadc636d5d54e1e6939596fa9c290b12de0b77e260c0edcf247c",
+      "bytes": 788,
+      "exitCode": 0
+    },
+    {
+      "file": "test-complexity.log",
+      "sha256": "bb5445b6e1062efe06695d191f8a67894aa250bd135d7c0836d01705bfe571ea",
+      "bytes": 42,
+      "exitCode": 0
+    }
+  ],
+  "corrections": [
+    "Initial 5-case missing-connection and actual different-nonce admission baseline.",
+    "Initial candidate demanded premature membership observation; source correctly held until a later explicit reentry. The unsealed witness was revised, without weakening coverage.",
+    "Two new 12-case assertions exposed shutdown stale bootstrap reply and rejected INIT receipt counted as genesis; corrected source passed unchanged assertions.",
+    "Final extra cohort-fault precondition initially removed leader through raw/resolved identity mismatch; corrected fixture removes follower.",
+    "New-module complexity 13 lowered through pure membership and writer-result helpers; threshold remains 12.",
+    "Final test max-len formatting corrected; behavior unchanged."
+  ],
+  "uncompleted": [
+    "genesis-candidate-1.log",
+    "genesis-candidate-4.log"
+  ],
+  "globalStaticGate": "OPEN, not rerun or claimed satisfied in this stage"
+}
