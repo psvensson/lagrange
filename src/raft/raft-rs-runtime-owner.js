@@ -391,23 +391,18 @@ function invokeCore(group, operation, ...args) {
 // A continuation from before a core replacement, or of a group that failed
 // earlier in the same operation, enters no core. A replacement restored every
 // group from its durable record, so a stale continuation marks nothing.
-function refusedExecution(group, expectedGeneration) {
+function invokeCoreAt(group, expectedGeneration, operation, ...args) {
   if (expectedGeneration !== runtimeGeneration || group.closed ||
       group.handle === null || runtimeHealth !== HEALTHY ||
       group.health === RECOVERY_REQUIRED) {
-    return hostFailure(
-      RUNTIME_PHASE.GENERATION_CHANGED,
-      new Error(RUNTIME_REASON.GENERATION_CHANGED),
-      true,
-    );
-  }
-  return null;
-}
-
-function invokeCoreAt(group, expectedGeneration, operation, ...args) {
-  const refused = refusedExecution(group, expectedGeneration);
-  if (refused !== null) {
-    return {ok: false, result: refused};
+    return {
+      ok: false,
+      result: hostFailure(
+        RUNTIME_PHASE.GENERATION_CHANGED,
+        new Error(RUNTIME_REASON.GENERATION_CHANGED),
+        true,
+      ),
+    };
   }
   return invokeCore(group, operation, ...args);
 }
@@ -1693,17 +1688,13 @@ function performCommand(group, command, expectedGeneration) {
     invoked.result;
 }
 
-function drainInbound(group, expectedGeneration, remaining, continuation) {
-  const refused = refusedExecution(group, expectedGeneration);
-  if (refused !== null) {
-    return refused;
-  }
+function drainInbound(group, expectedGeneration, continuation) {
   if (!group.identityRecorded) {
     // Nothing delivered before the prior-existence fact is durable is ever
     // stepped (enqueueStep drops it; this keeps the drain to that rule).
     group.inbound.length = 0;
   }
-  if (remaining === 0 || group.inbound.length === 0) {
+  if (group.inbound.length === 0) {
     return continuation();
   }
   const envelope = group.inbound.shift();
@@ -1713,7 +1704,7 @@ function drainInbound(group, expectedGeneration, remaining, continuation) {
   const guarded = refuseInboundStep(group, envelope, expectedGeneration);
   if (guarded !== null) {
     return group.reseedHold ??
-      drainInbound(group, expectedGeneration, remaining - 1, continuation);
+      drainInbound(group, expectedGeneration, continuation);
   }
   const stepped = invokeCoreAt(
     group, expectedGeneration, 'step', envelope.message);
@@ -1730,7 +1721,7 @@ function drainInbound(group, expectedGeneration, remaining, continuation) {
   }
   return thenMaybe(drainReady(group, expectedGeneration), (result) =>
     result.outcome === CORE_OK ?
-      drainInbound(group, expectedGeneration, remaining - 1, continuation) : result);
+      drainInbound(group, expectedGeneration, continuation) : result);
 }
 
 function perform(group, command) {
@@ -1747,10 +1738,7 @@ function perform(group, command) {
       return ready;
     }
     const expectedGeneration = runtimeGeneration;
-    // Capture only after reconstruction admits execution. Later arrivals keep
-    // their place in the group queue and their existing owned inbound wake.
-    const inboundExtent = group.inbound.length;
-    return drainInbound(group, expectedGeneration, inboundExtent,
+    return drainInbound(group, expectedGeneration,
       () => performCommand(group, command, expectedGeneration));
   });
 }
