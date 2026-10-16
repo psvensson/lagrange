@@ -1082,6 +1082,28 @@
         "test/wasm-service/wasm-writer-completion-v1.test.js",
         "test/wasm-service/wasm-writer-recreation-origin-v1.test.js"
       ]
+    },
+    "service-instance-selection-resource-state": {
+      "description": "R2 ServiceDefinitionsOwner metadata arbitration: immutable caller request and catalog lineage feed one exact conditional service_instances row mutation; bounded decisions/slots retain replay fences and successor exclusion. Component SQL proof does not supply native genesis, local retirement or event-driven lifecycle reentry.",
+      "owners": [
+        "src/constants/service-instance.js",
+        "src/control-plane/owners/service-instance-",
+        "src/control-plane/owners/service-definitions-owner.js",
+        "src/control-plane/owners/service-install-catalog-owner.js",
+        "src/control-plane/owners/service-install-catalog-contract.js",
+        "src/service/service-lifecycle-command-owner.js",
+        "src/service/service-lifecycle-command-identity.js",
+        "src/control-plane/owners/system-metadata-owner-base.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/cdc/cdc-integration-service.js"
+      ],
+      "tests": [
+        "test/control-plane/service-instance-creation-cas.test.js",
+        "test/control-plane/service-instance-selection-admission.test.js",
+        "test/control-plane/service-install-catalog-owner.test.js",
+        "test/service/service-lifecycle-command-owner.test.js",
+        "test/bootstrap/service-instance-table-schema.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -2163,6 +2185,36 @@
         "test/wasm-service/wasm-writer-client-v1.test.js",
         "test/wasm-service/wasm-writer-completion-v1.test.js",
         "test/wasm-service/wasm-writer-recreation-origin-v1.test.js"
+      ]
+    },
+    "service-instance-selection-resource-state": {
+      "description": "Immutable command/catalog lineage and conditional row application share one request, outcome and exact-state predicate. No local serialization or projection can choose a winner. Physical lifecycle release is still a separate unconnected obligation.",
+      "contract": "service-instance-selection-resource-state",
+      "endpoints": [
+        {
+          "id": "immutable-request-lineage",
+          "owners": [
+            "src/control-plane/owners/service-install-catalog-owner.js",
+            "src/control-plane/owners/service-install-catalog-contract.js",
+            "src/service/service-lifecycle-command-owner.js",
+            "src/service/service-lifecycle-command-identity.js"
+          ]
+        },
+        {
+          "id": "conditional-instance-state",
+          "owners": [
+            "src/constants/service-instance.js",
+            "src/control-plane/owners/service-instance-",
+            "src/control-plane/owners/service-definitions-owner.js",
+            "src/control-plane/owners/system-metadata-owner-base.js",
+            "src/control-plane/control-plane-system-table-gateway.js",
+            "src/cdc/cdc-integration-service.js"
+          ]
+        }
+      ],
+      "witnessTests": [
+        "test/control-plane/service-instance-creation-cas.test.js",
+        "test/control-plane/service-instance-selection-admission.test.js"
       ]
     }
   }
