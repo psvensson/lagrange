@@ -15,10 +15,10 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          ref: a1a22bdd5ed08c7d8009218f57559e4f92a18dc5
+          ref: 0cdf38556a4e11d35417c8378bfacf04f1a5ba18
           fetch-depth: 1
           persist-credentials: true
-      - name: Preserve exact authored commit without running product tests
+      - name: Preserve frozen author-review stage, not source acceptance
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -26,50 +26,44 @@ jobs:
           set -euo pipefail
           export OUT="$RUNNER_TEMP/process-custody-preservation"
           mkdir -p "$OUT"
-          test "$(git rev-parse HEAD)" = a1a22bdd5ed08c7d8009218f57559e4f92a18dc5
+          test "$(git rev-parse HEAD)" = 0cdf38556a4e11d35417c8378bfacf04f1a5ba18
           test -z "$(git status --porcelain)"
           python3 - <<'PYCODE'
           import base64, hashlib, json, os, pathlib, subprocess, zlib
           out = pathlib.Path(os.environ['OUT'])
-          parts = [
-              '14b8d9f421a47b952e94d6ee0634afe9d8b2f961',
-              '40240ec6473d17af207a2ecd45b3058abd7e4479',
-              '1cf8acfe12cedf373b647c7d9794cf9d89300a99',
-              '7261cfaf9a99f2493f507dcb624de6f8c76a6223',
-              'a628d06af281edf2c994253d437b35b2e5885ea5',
-          ]
+          parts = ['84d00c0860df5a74cc41052de8b52ae1605a2231',
+                   'dfcec068637d9333d64f8010d5bccff870eeee32',
+                   'b654d0288f696a614196ff0479a5acc0898749aa',
+                   'c8090e63386aaf887d12827ddd048c97a1e82ef3',
+                   '771a5d6b1669ebd50162371fd931a828e3c03bf3']
           encoded = []
           for sha in parts:
               reply = json.loads(subprocess.check_output([
                   'gh', 'api', 'repos/psvensson/lagrange/git/blobs/' + sha]))
               data = base64.b64decode(reply['content'])
-              blob = b'blob ' + str(len(data)).encode() + b'\0' + data
-              assert hashlib.sha1(blob).hexdigest() == sha
+              assert hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest() == sha
               encoded.append(data)
-          patch = zlib.decompress(base64.b64decode(b''.join(encoded)))
-          commit = base64.b64decode('dHJlZSBkNWNjMjM0MzMzZDdlMWM1Yzc3MGY4N2M2NDNhM2RkYzg2MWZlYTQ2CnBhcmVudCBhMWEyMmJkZDVlZDA4YzdkODAwOTIxOGY1NzU1OWU0ZjkyYTE4ZGM1CmF1dGhvciBDaGF0R1BUIDxjaGF0Z3B0QG9wZW5haS5jb20+IDE3OTIxNDM3MjQgKzAwMDAKY29tbWl0dGVyIENoYXRHUFQgPGNoYXRncHRAb3BlbmFpLmNvbT4gMTc5MjE0MzcyNCArMDAwMAoKV0lQOiByZXRhaW4gcHJvY2Vzcy1kaXJlY3RvcnkgY3VzdG9keSBhZnRlciBmYWlsZWQgY2xlYW51cCAodW5jZXJ0aWZpZWQpCg==')
-          assert hashlib.sha256(patch).hexdigest() == 'e2ea4a1f1f0188efda28650045227b1b7ae914bfcd20c206d1232c39f991b050'
-          assert hashlib.sha256(commit).hexdigest() == '46fad561b8590686073355b55f7dc831f5fd13542a3a17bfd554cc048218e669'
+          patch = zlib.decompress(base64.b64decode(b''.join(encoded), validate=True))
+          assert hashlib.sha256(patch).hexdigest() == 'a16bf48ff54a06a599ed50bd0db6f099f76fb5491562f0e159fd71d83ee0edab'
+          commit = base64.b64decode('dHJlZSA4Y2VhMDFiYzNjZjUyOTVmNjcxY2Q0N2VlMzEzMzdhNzA3MjEwYmJhCnBhcmVudCAwY2RmMzg1NTZhNGUxMWQzNTQxN2M4Mzc4YmZhY2YwNGYxYTViYTE4CmF1dGhvciBDaGF0R1BUIDxjaGF0Z3B0QG9wZW5haS5jb20+IDE3OTIxNTAxMTMgKzAwMDAKY29tbWl0dGVyIENoYXRHUFQgPGNoYXRncHRAb3BlbmFpLmNvbT4gMTc5MjE1MDExMyArMDAwMAoKV0lQIHJldmlldzogZnJlZXplIHByb2Nlc3MtY3VzdG9keSBlZGdlIGFuZCBzdGFydHVwIGZhaWx1cmUgd2l0bmVzc2VzCg==')
           (out / 'source.patch').write_bytes(patch)
           (out / 'head-commit.raw').write_bytes(commit)
           PYCODE
           git apply --check --index "$OUT/source.patch"
           git apply --index "$OUT/source.patch"
-          test "$(git write-tree)" = d5cc234333d7e1c5c770f87c643a3ddc861fea46
-          test "$(git hash-object -t commit -w "$OUT/head-commit.raw")" = 0cdf38556a4e11d35417c8378bfacf04f1a5ba18
-          git diff --exit-code a1a22bdd5ed08c7d8009218f57559e4f92a18dc5 0cdf38556a4e11d35417c8378bfacf04f1a5ba18 -- test/entrypoint test/node
-          git diff-tree --no-commit-id --name-status -r 0cdf38556a4e11d35417c8378bfacf04f1a5ba18 > "$OUT/changed-paths.txt"
+          test "$(git write-tree)" = 8cea01bc3cf5295f671cd47ee31337a707210bba
+          test "$(git hash-object -t commit -w "$OUT/head-commit.raw")" = 9712d2633ed3d188faa2a418cca58c87db08045b
+          git diff --exit-code 0cdf38556a4e11d35417c8378bfacf04f1a5ba18 9712d2633ed3d188faa2a418cca58c87db08045b -- src
           REF=refs/heads/work/rs-raft-process-custody-20261016
           git fetch --no-tags origin "$REF"
-          test "$(git rev-parse FETCH_HEAD)" = a1a22bdd5ed08c7d8009218f57559e4f92a18dc5
-          git push origin 0cdf38556a4e11d35417c8378bfacf04f1a5ba18:"$REF"
+          test "$(git rev-parse FETCH_HEAD)" = 0cdf38556a4e11d35417c8378bfacf04f1a5ba18
+          git push origin 9712d2633ed3d188faa2a418cca58c87db08045b:"$REF"
           REMOTE=$(git ls-remote --heads origin "$REF" | cut -f1)
-          test "$REMOTE" = 0cdf38556a4e11d35417c8378bfacf04f1a5ba18
+          test "$REMOTE" = 9712d2633ed3d188faa2a418cca58c87db08045b
           printf '%s\n' "$REMOTE" > "$OUT/verified-remote-sha.txt"
-          printf '%s\n' 'd5cc234333d7e1c5c770f87c643a3ddc861fea46' > "$OUT/verified-tree.txt"
-          printf '%s\n' 'WIP preservation only; static gate remains open; product tests run separately through private local lab.' > "$OUT/claim-limit.txt"
+          printf '%s\n' 'Test-only WIP; original production bytes; author review is not independent certification; full static gate remains open.' > "$OUT/claim-limit.txt"
           cd "$OUT"
-          sha256sum source.patch head-commit.raw changed-paths.txt verified-remote-sha.txt verified-tree.txt claim-limit.txt > SHA256SUMS
+          sha256sum source.patch head-commit.raw verified-remote-sha.txt claim-limit.txt > SHA256SUMS
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
