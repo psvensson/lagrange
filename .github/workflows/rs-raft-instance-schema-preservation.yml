@@ -1,0 +1,80 @@
+name: rs-raft-instance-schema-preservation
+on:
+  push:
+    branches: [carrier/rs-raft-instance-schema-20261016]
+    paths: [.github/workflows/rs-raft-instance-schema-preservation.yml]
+permissions:
+  contents: write
+concurrency:
+  group: rs-raft-instance-schema-preservation-20261016
+  cancel-in-progress: false
+jobs:
+  preserve-schema-wip:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ed4707a2e48a13f78a9f752f69be12f245ee7c23
+          fetch-depth: 1
+      - name: Verify and preserve exact reviewed source and test bytes
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          export OUT="$RUNNER_TEMP/schema-preservation"
+          mkdir -p "$OUT"
+          BASE=ed4707a2e48a13f78a9f752f69be12f245ee7c23
+          REF=refs/heads/work/rs-raft-creation-selection-20261016
+          test "$(git rev-parse HEAD)" = "$BASE"
+          test -z "$(git status --porcelain)"
+          git fetch --no-tags origin "$REF"
+          test "$(git rev-parse FETCH_HEAD)" = "$BASE"
+          python3 - <<'PY'
+          import base64, hashlib, json, os, pathlib, subprocess, zlib
+          out = pathlib.Path(os.environ['OUT'])
+          parts = ['b09c4f3e5a4aa84091f74ffd73e8e73251f58879',
+                   '7292827107084f6a1f4ea9f8de9811b272480764',
+                   'ec616c944c913356bcb33238cc2b9ef59d421c25']
+          encoded = []
+          for sha in parts:
+              item = json.loads(subprocess.check_output([
+                  'gh', 'api', 'repos/psvensson/lagrange/git/blobs/' + sha]))
+              data = base64.b64decode(item['content'])
+              assert hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest() == sha
+              encoded.append(data)
+          raw = zlib.decompress(base64.b64decode(b''.join(encoded), validate=True))
+          assert hashlib.sha256(raw).hexdigest() == '1d8ce0b1f571a2012ca0d17881436663d206d5aed91dd4ee0fb3f5ab753039cf'
+          payload = json.loads(raw)
+          assert payload['base'] == 'ed4707a2e48a13f78a9f752f69be12f245ee7c23'
+          patch = out / 'source.patch'
+          patch.write_text(payload['patch'])
+          subprocess.run(['git', 'apply', '--check', '--index', str(patch)], check=True)
+          subprocess.run(['git', 'apply', '--index', str(patch)], check=True)
+          changed = subprocess.check_output(['git', 'diff', '--cached', '--name-only']).decode().splitlines()
+          assert sorted(changed) == sorted(payload['postimages'])
+          for path, sha in payload['postimages'].items():
+              assert subprocess.check_output(['git', 'hash-object', path]).decode().strip() == sha
+          (out / 'postimages.json').write_text(json.dumps(payload['postimages'], indent=2) + '\n')
+          PY
+          TREE=$(git write-tree)
+          test "$(git rev-parse "$TREE:src")" = 5eaead78b8851c83b38b29b544d691c5896bb2ac
+          test "$(git rev-parse "$TREE:test")" = 3b6e4128d63aa36f739d697cfdad50d5273334d4
+          git diff --cached --check
+          CANDIDATE=$(printf '%s\n' 'WIP: register R2 service-instance schema through bootstrap and CDC owners (not certified)' | git -c user.name=ChatGPT -c user.email=chatgpt@openai.com commit-tree "$TREE" -p "$BASE")
+          git push origin "$CANDIDATE:$REF"
+          test "$(git ls-remote --heads origin "$REF" | cut -f1)" = "$CANDIDATE"
+          git cat-file commit "$CANDIDATE" > "$OUT/head-commit.raw"
+          printf '%s\n' "$CANDIDATE" > "$OUT/verified-remote-sha.txt"
+          printf '%s\n' "$TREE" > "$OUT/tree-sha.txt"
+          printf '%s\n' 'Non-main WIP preservation only. No product tests, Solver landing, global-static acceptance or merge authorization.' > "$OUT/claim-limit.txt"
+          cd "$OUT"
+          sha256sum source.patch postimages.json head-commit.raw verified-remote-sha.txt tree-sha.txt claim-limit.txt > SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: rs-raft-instance-schema-preservation-${{ github.run_id }}
+          path: ${{ runner.temp }}/schema-preservation/
+          retention-days: 7
+          if-no-files-found: error
