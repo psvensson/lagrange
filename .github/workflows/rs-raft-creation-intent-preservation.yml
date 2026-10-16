@@ -1,0 +1,113 @@
+name: rs-raft-creation-intent-preservation
+on:
+  push:
+    branches: [carrier/rs-raft-creation-intent-20261016]
+    paths: [.github/workflows/rs-raft-creation-intent-preservation.yml]
+permissions:
+  contents: write
+concurrency:
+  group: rs-raft-creation-intent-preservation-20261016
+  cancel-in-progress: false
+jobs:
+  preserve-reviewed-wip:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: cd86d12d077ac75be3bd04ebc2c55fc27882f94d
+          fetch-depth: 1
+          persist-credentials: true
+      - name: Preserve reviewed bytes on real ancestry; no product execution
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GIT_AUTHOR_NAME: ChatGPT
+          GIT_AUTHOR_EMAIL: chatgpt@openai.com
+          GIT_COMMITTER_NAME: ChatGPT
+          GIT_COMMITTER_EMAIL: chatgpt@openai.com
+        run: |
+          set -euo pipefail
+          export OUT="$RUNNER_TEMP/creation-intent-preservation"
+          mkdir -p "$OUT"
+          BASE=cd86d12d077ac75be3bd04ebc2c55fc27882f94d
+          test "$(git rev-parse HEAD)" = "$BASE"
+          test -z "$(git status --porcelain)"
+          python3 - <<'PY'
+          import base64, hashlib, json, os, pathlib, subprocess, zlib
+          out = pathlib.Path(os.environ['OUT'])
+          parts = ['fe49405b502d5dd21018c15062f0e21ba5f27893',
+                   '4daeb2504246ea5940db8fd5c2ecfc67d1af95ee',
+                   '26afb0f97474a32d1f7664b806c7bf6d659282a8',
+                   '82e2be18f02e7a6e299c533c3540d7fc639c18f2']
+          def blob(data):
+            return hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest()
+          encoded = []
+          for sha in parts:
+            reply = json.loads(subprocess.check_output(['gh', 'api', 'repos/psvensson/lagrange/git/blobs/' + sha]))
+            data = base64.b64decode(reply['content'])
+            assert blob(data) == sha
+            encoded.append(data)
+          raw = zlib.decompress(base64.b64decode(b''.join(encoded), validate=True))
+          assert hashlib.sha256(raw).hexdigest() == '370a9008cb203aa22fa6f052d7adc89f80d2592660104145aa035a8cfe727e34'
+          payload = json.loads(raw)
+          expected = payload['identity']
+          assert expected['baseRemote'] == 'cd86d12d077ac75be3bd04ebc2c55fc27882f94d'
+          for path, sha in expected['preimages'].items():
+            p = pathlib.Path(path)
+            assert not p.is_symlink()
+            if sha is None:
+              assert not p.exists(), path
+            else:
+              assert blob(p.read_bytes()) == sha, path
+          for name in ('tests', 'source'):
+            data = payload[name].encode()
+            key = 'testPatchSha256' if name == 'tests' else 'sourcePatchSha256'
+            assert hashlib.sha256(data).hexdigest() == expected[key]
+            (out / (name + '.patch')).write_bytes(data)
+          (out / 'expected.json').write_text(json.dumps(expected, indent=2) + '\n')
+          (out / 'transfer.json').write_text(json.dumps({'parts': parts, 'payloadSha256': hashlib.sha256(raw).hexdigest()}, indent=2) + '\n')
+          PY
+          git apply --check --index "$OUT/tests.patch"
+          git apply --index "$OUT/tests.patch"
+          TEST_TREE=$(git write-tree)
+          TEST_SHA=$(printf '%s\n' 'WIP tests: original creation intent and two process-loss boundaries' | git commit-tree "$TEST_TREE" -p "$BASE")
+          printf '%s\n' "$TEST_SHA" > "$OUT/test-checkpoint-sha.txt"
+          git apply --check --index "$OUT/source.patch"
+          git apply --index "$OUT/source.patch"
+          export TREE=$(git write-tree)
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, subprocess
+          out = pathlib.Path(os.environ['OUT'])
+          expected = json.loads((out / 'expected.json').read_text())
+          for path, sha in expected['postimages'].items():
+            actual = subprocess.check_output(['git', 'hash-object', path], text=True).strip()
+            assert actual == sha, (path, actual, sha)
+            assert hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest() == expected['postimageSha256'][path]
+          for name in ('src', 'test'):
+            actual = subprocess.check_output(['git', 'rev-parse', os.environ['TREE'] + ':' + name], text=True).strip()
+            assert actual == expected[name + 'Tree'], (name, actual)
+          PY
+          CANDIDATE=$(printf '%s\n' 'WIP: retain original creation intent and exact admission across process loss; physical creation held' | git commit-tree "$TREE" -p "$TEST_SHA")
+          git cat-file commit "$TEST_SHA" > "$OUT/test-commit.raw"
+          git cat-file commit "$CANDIDATE" > "$OUT/candidate-commit.raw"
+          git diff "$BASE" "$CANDIDATE" --binary > "$OUT/complete.patch"
+          git diff-tree --no-commit-id --name-status -r "$CANDIDATE" > "$OUT/changed-paths.txt"
+          REF=refs/heads/work/rs-raft-creation-intent-20261016
+          git fetch --no-tags origin "$REF"
+          test "$(git rev-parse FETCH_HEAD)" = "$BASE"
+          git push origin "$CANDIDATE:$REF"
+          REMOTE=$(git ls-remote --heads origin "$REF" | cut -f1)
+          test "$REMOTE" = "$CANDIDATE"
+          printf '%s\n' "$CANDIDATE" > "$OUT/verified-remote-sha.txt"
+          printf '%s\n' "$TREE" > "$OUT/verified-tree.txt"
+          printf '%s\n' 'Non-main WIP preservation only. Product tests run separately through the private local lab. No physical activation, full static, Quest closure or main merge proof.' > "$OUT/claim-limit.txt"
+          cd "$OUT"
+          sha256sum *.patch *.json *.raw *.txt > SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: rs-raft-creation-intent-preservation-${{ github.run_id }}
+          path: ${{ runner.temp }}/creation-intent-preservation/
+          retention-days: 7
+          if-no-files-found: error
