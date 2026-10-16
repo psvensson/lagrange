@@ -68,7 +68,21 @@ function buildRuntimeServiceTargetClaimKey(serviceId, entityId) {
   ]);
 }
 
+
+// The selected incarnation already binds the entire tenant/service creation
+// request. These names qualify existing group/peer/storage consumers; they are
+// identities, not membership or resource permission.
+const CONSENSUS_INSTANCE_PREFIX = 'wasm-instance-';
+function runtimeServiceConsensusIdentity(binding) {
+  const groupId = `${CONSENSUS_INSTANCE_PREFIX}${binding.incarnation}`;
+  const peers = binding.foundingPeers.map((peer, index) => ({
+    ...peer, physicalReplicaId: `${groupId}${RUNTIME_SERVICE_REPLICA_ID_SEPARATOR}${index + 1}`,
+  }));
+  return {groupId, peers};
+}
+
 export {
+  runtimeServiceConsensusIdentity,
   buildRuntimeServiceTargetClaimKey,
   runtimeServiceReplicaBelongsToEntity,
 };

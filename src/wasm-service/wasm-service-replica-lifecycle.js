@@ -17,6 +17,7 @@ import {RAFT_EVENT} from '../raft/raft-operation-port-constants.js';
 import {withRaftOpeningCleanupFailure} from '../raft/raft-operation-port.js';
 import {wireReplicaLifecycleEvents} from '../raft/replica-leadership-state.js';
 import {SessionKVStore} from './session-kv-store.js';
+import {openWasmCreationState} from './wasm-service-creation-storage.js';
 import {WasmWriterState} from './wasm-writer-state.js';
 import {
   closeWasmServiceConsensus,
@@ -78,9 +79,12 @@ async function openReplica(replica) {
   try {
     openWasmServiceDatabase(replica);
     replica.db.transaction(() => {
-      replica.writerState = new WasmWriterState(replica.db, replica.serviceDefinitionId);
+      const creation = openWasmCreationState(replica);
+      replica.creationFresh = creation?.fresh ?? null;
+      replica.writerState = new WasmWriterState(replica.db, replica.serviceDefinitionId, creation);
       replica.kvStore = new SessionKVStore(replica.db);
     })();
+    replica.creationOpened = replica.consensusOpening !== null;
     openWasmServiceConsensusPort(replica);
     wireReplicaLifecycleEvents(replica, {
       events: RAFT_EVENT,
@@ -181,12 +185,12 @@ async function retireReplica(replica, handler, starting, activityFailure) {
     }
     await releaseWasmServiceReplicaConsensus(replica);
     if (activityFailure !== null) {
-      throw activityFailure;
+      throw activityFailure.cause;
     }
   } catch (error) {
     replica.lifecycleState = STATE.CLEANUP_REQUIRED;
-    throw activityFailure !== null && error !== activityFailure ?
-      withRaftOpeningCleanupFailure(activityFailure, error) : error;
+    throw activityFailure !== null && error !== activityFailure.cause ?
+      withRaftOpeningCleanupFailure(activityFailure.cause, error) : error;
   }
   replica.startupFailure = null;
   replica.lifecycleState = STATE.STOPPED;
@@ -224,8 +228,12 @@ async function shutdownWasmServiceReplica(replica, stopActivity) {
   try {
     stopActivity();
   } catch (error) {
-    activityFailure = error;
+    activityFailure = {cause: error};
   }
+  // The shared release tail reads this live obligation, including a failed
+  // open that began releasing before shutdown overtook it. A later exact
+  // shutdown can clear it only after stopActivity itself succeeds.
+  replica.activityStopFailure = activityFailure;
   // Joiners already see this settlement. Retirement proceeds even if an
   // activity stop failed, but cannot then claim every obligation completed.
   retireReplica(replica, handler, starting, activityFailure).then(resolve, reject);

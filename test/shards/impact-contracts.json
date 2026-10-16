@@ -1123,6 +1123,28 @@
         "test/service/service-consensus-creation-intent.test.js",
         "test/service/service-consensus-creation-recovery.integration.test.js"
       ]
+    },
+    "service-consensus-admitted-physical-bootstrap": {
+      "description": "The R2 retained intent/token crosses into the existing WASM physical lifecycle: canonical instance-qualified identities, common writer root before native founding, and bootstrap-only transport. No user serving or endpoint publication. Retirement joins exact cleanup and retains failed activity custody; local RETIRED does not report metadata CLOSED.",
+      "owners": [
+        "src/service/service-consensus-creation-intent.js",
+        "src/control-plane/owners/service-instance-state.js",
+        "src/control-plane/owners/service-instance-metadata.js",
+        "src/control-plane/owners/service-definitions-owner.js",
+        "src/rebalancer/runtime-service-replica-identity.js",
+        "src/wasm-service/wasm-service-creation-admission.js",
+        "src/wasm-service/wasm-service-creation-storage.js",
+        "src/wasm-service/wasm-service-lifecycle.js",
+        "src/wasm-service/wasm-service-replica.js",
+        "src/wasm-service/wasm-service-replica-lifecycle.js",
+        "src/wasm-service/wasm-service-consensus-port.js",
+        "src/wasm-service/wasm-writer-state.js"
+      ],
+      "tests": [
+        "test/wasm-service/wasm-admitted-bootstrap.test.js",
+        "test/wasm-service/wasm-admitted-bootstrap-review.test.js",
+        "test/wasm-service/wasm-admitted-bootstrap-native.integration.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -2264,6 +2286,39 @@
       "witnessTests": [
         "test/service/service-consensus-creation-intent.test.js",
         "test/service/service-consensus-creation-recovery.integration.test.js"
+      ]
+    },
+    "service-consensus-admitted-physical-bootstrap": {
+      "description": "The R2 retained intent/token crosses into the existing WASM physical lifecycle: canonical instance-qualified identities, common writer root before native founding, and bootstrap-only transport. No user serving or endpoint publication. Retirement joins exact cleanup and retains failed activity custody; local RETIRED does not report metadata CLOSED.",
+      "contract": "service-consensus-admitted-physical-bootstrap",
+      "endpoints": [
+        {
+          "id": "retained-request-and-metadata-admission",
+          "owners": [
+            "src/service/service-consensus-creation-intent.js",
+            "src/control-plane/owners/service-instance-state.js",
+            "src/control-plane/owners/service-instance-metadata.js",
+            "src/control-plane/owners/service-definitions-owner.js"
+          ]
+        },
+        {
+          "id": "physical-bootstrap-and-local-retirement",
+          "owners": [
+            "src/rebalancer/runtime-service-replica-identity.js",
+            "src/wasm-service/wasm-service-creation-admission.js",
+            "src/wasm-service/wasm-service-creation-storage.js",
+            "src/wasm-service/wasm-service-lifecycle.js",
+            "src/wasm-service/wasm-service-replica.js",
+            "src/wasm-service/wasm-service-replica-lifecycle.js",
+            "src/wasm-service/wasm-service-consensus-port.js",
+            "src/wasm-service/wasm-writer-state.js"
+          ]
+        }
+      ],
+      "witnessTests": [
+        "test/wasm-service/wasm-admitted-bootstrap.test.js",
+        "test/wasm-service/wasm-admitted-bootstrap-review.test.js",
+        "test/wasm-service/wasm-admitted-bootstrap-native.integration.test.js"
       ]
     }
   }

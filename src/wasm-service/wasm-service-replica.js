@@ -9,6 +9,8 @@
  */
 
 import {EventEmitter} from 'node:events';
+import {WASM_CREATION_HELD, CONSENSUS_OPENING_FIELD, captureWasmCreationOpening} from './wasm-service-creation-storage.js';
+import {WRITER_ACTION} from './wasm-writer-profile.js';
 import {AddressManager} from '../address/address-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {NodeService} from '../node/node-service.js';
@@ -113,6 +115,10 @@ class WasmServiceReplica extends EventEmitter {
     this.replicaIds = [...options.replicaIds];
     this.transport = options.transport || null;
     this.dbPath = options.dbPath;
+    Object.defineProperty(this, CONSENSUS_OPENING_FIELD, {enumerable: true,
+      value: captureWasmCreationOpening(options.consensusOpening ?? null)});
+    this.creationOpened = false;
+    this.activityStopFailure = null;
     this.entityType = SERVICE_TYPE.WASM_SERVICE;
     this.addressManager = AddressManager.getInstance();
     this.unifiedAddress = this.addressManager.format(
@@ -323,6 +329,10 @@ class WasmServiceReplica extends EventEmitter {
         afterCommit: committed.effects.afterCommit, afterRollback: [],
       });
     } else {
+      if (this.consensusOpening) {
+        throw wasmServiceCommandRefusalError({reason: WRITER_REASON.INCARNATION,
+          type: committed.command?.type});
+      }
       result = applyCommittedCommand(this.kvStore, committed);
     }
     committed.effects.afterCommit.push(() =>
@@ -344,6 +354,9 @@ class WasmServiceReplica extends EventEmitter {
         await Promise.resolve(this.raft.step(payload));
       }
       return {acknowledged: true};
+    }
+    if (this.consensusOpening) {
+      return {status: WRITER_STATUS.REFUSED, reason: WASM_CREATION_HELD};
     }
     const operation = payload.operation || payload.op;
 
@@ -444,6 +457,10 @@ class WasmServiceReplica extends EventEmitter {
    * @return {Promise<Object>} The port's CORE_OK answer.
    */
   async proposeEntry(entry) {
+    if (this.consensusOpening && (entry.type !== WASM_WRITER_PROFILE.type ||
+        entry.action === WRITER_ACTION.WRITE)) {
+      throw wasmServiceCommandRefusalError({reason: WASM_CREATION_HELD, type: entry.type});
+    }
     const admission = admitWasmServiceCommand(entry);
     if (!admission.admitted) {
       throw wasmServiceCommandRefusalError(admission);
@@ -470,6 +487,7 @@ class WasmServiceReplica extends EventEmitter {
    * @param {string} role - The role the port announced.
    */
   queueRoleUpdate(role) {
+    if (this.consensusOpening) return;
     if (!role || role === this.persistedRole) {
       return;
     }
@@ -491,6 +509,7 @@ class WasmServiceReplica extends EventEmitter {
    * @param {string} leaderNodeId - The leading node.
    */
   queueLeaderNodeUpdate(leaderNodeId) {
+    if (this.consensusOpening) return;
     if (!leaderNodeId || leaderNodeId === this.persistedLeaderNodeId) {
       return;
     }
@@ -523,6 +542,7 @@ class WasmServiceReplica extends EventEmitter {
    * Reconstructs timers and starts safety interval broadcasts.
    */
   onBecameLeader() {
+    if (this.consensusOpening) return;
     this.logger.info(WASM_SERVICE_LOG_MSG.BECAME_LEADER, {
       replicaId: this.replicaId,
       serviceDefinitionId: this.serviceDefinitionId,

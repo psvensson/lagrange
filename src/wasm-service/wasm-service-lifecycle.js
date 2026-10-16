@@ -11,6 +11,10 @@
  */
 
 import {LoggingService} from '../logging/logging-service.js';
+import {createAdmittedWasmReplica, joinAdmittedWasmCreation} from './wasm-service-creation-admission.js';
+import {isBoundConsensusDescriptor} from '../service/service-consensus-creation-intent.js';
+import {requireInstance} from '../control-plane/owners/service-instance-contract.js';
+import {WASM_CREATION_HELD, CONSENSUS_OPENING_FIELD} from './wasm-service-creation-storage.js';
 import {DataDirectoryManager} from '../storage/data-directory-manager.js';
 import {WasmServiceReplica} from './wasm-service-replica.js';
 import {assertFoundingReplicaSet} from './wasm-service-consensus-port.js';
@@ -102,6 +106,8 @@ class WasmServiceLifecycle {
 
     /** @type {Map<string, WasmServiceReplica>} */
     this.activeReplicas = new Map();
+    this.pendingConsensusCreations = new Map();
+    this.consensusCreationClosed = false;
     this.retiringReplicas = new Set();
 
     /** @type {Map<string, Object>} */
@@ -181,6 +187,18 @@ class WasmServiceLifecycle {
    * @return {WasmServiceReplica} The created replica.
    */
   createReplica(serviceDefinition, replicaConfig) {
+    requireInstance(!isBoundConsensusDescriptor(serviceDefinition) &&
+      !isBoundConsensusDescriptor(replicaConfig) &&
+      !Object.hasOwn(replicaConfig, CONSENSUS_OPENING_FIELD));
+    return this.#createReplica(serviceDefinition, replicaConfig, null);
+  }
+
+  createAdmittedReplica(preparation) {
+    return createAdmittedWasmReplica(this, preparation,
+      (definition, config, opening) => this.#createReplica(definition, config, opening));
+  }
+
+  #createReplica(serviceDefinition, replicaConfig, opening) {
     const serviceId = serviceDefinition.serviceId;
     const current = this.activeReplicas.get(serviceId);
     const priorStop = [...this.retiringReplicas].some((replica) =>
@@ -196,12 +214,14 @@ class WasmServiceLifecycle {
     }
     assertFoundingReplicaSet(replicaConfig.replicaId,
       replicaConfig.replicaIds);
+    const storageId = opening?.identity.groupId ?? serviceId;
     const dbPath = this.dataDirectoryManager.getWasmServiceDbPath(
-      serviceId, replicaConfig.replicaId,
+      storageId, replicaConfig.replicaId,
     );
-    this.dataDirectoryManager.ensureWasmServiceDirExists(serviceId);
+    this.dataDirectoryManager.ensureWasmServiceDirExists(storageId);
     const replica = new WasmServiceReplica({
       replicaId: replicaConfig.replicaId,
+      consensusOpening: opening,
       nodeId: this.nodeId,
       replicaIds: replicaConfig.replicaIds,
       transport: this.messageRouter,
@@ -290,6 +310,10 @@ class WasmServiceLifecycle {
 
     this.clearStartDiagnostic(serviceId);
 
+    if (replica.consensusOpening) {
+      return this.#startAdmittedReplica(serviceId, replica, startOptions);
+    }
+
     const port = this.portAllocator.allocate(serviceId);
 
     this.logger.info(WASM_SERVICE_LOG_MSG.PORT_ALLOCATED, {
@@ -337,6 +361,26 @@ class WasmServiceLifecycle {
       [START_RESULT_FIELD.ENDPOINT]: endpoint,
       [START_RESULT_FIELD.DIAGNOSTIC]: null,
     };
+  }
+
+  async #startAdmittedReplica(serviceId, replica, startOptions) {
+    try {
+      await replica.initialize();
+    } catch (cause) {
+      return this.refuseStart(serviceId, startOptions, {
+        code: cause.outcome ?? cause.code ?? START_DIAGNOSTIC_CODE.CONSENSUS_START_REFUSED,
+        error: cause.message,
+      }, replica);
+    }
+    if (!replica.initialized || this.activeReplicas.get(serviceId) !== replica) {
+      return this.refuseStart(serviceId, startOptions, {
+        code: WASM_SERVICE_LIFECYCLE_REFUSAL.STOPPED_DURING_START,
+        error: WASM_SERVICE_ERROR_MSG.STOPPED_DURING_START,
+      }, replica);
+    }
+    return {started: false, bootstrapped: true, status: WASM_CREATION_HELD,
+      consensusBinding: replica.consensusOpening.binding,
+      consensusResourceToken: replica.consensusOpening.token};
   }
 
   /**
@@ -461,6 +505,18 @@ class WasmServiceLifecycle {
    * @return {Promise<{stopped: boolean}>} Shutdown result.
    */
   async stopReplica(serviceId) {
+    const pending = this.pendingConsensusCreations.get(serviceId);
+    if (pending) await joinAdmittedWasmCreation(this, serviceId);
+    try {
+      return await this.#stopReplicaTargets(serviceId);
+    } finally {
+      if (pending && this.pendingConsensusCreations.get(serviceId) === pending) {
+        this.pendingConsensusCreations.delete(serviceId);
+      }
+    }
+  }
+
+  async #stopReplicaTargets(serviceId) {
     const targets = new Set([...this.retiringReplicas].filter((replica) =>
       replica.serviceDefinitionId === serviceId));
     const current = this.activeReplicas.get(serviceId);
@@ -482,7 +538,8 @@ class WasmServiceLifecycle {
    */
   async stopOwnedReplica(serviceId, replica) {
     this.retiringReplicas.add(replica);
-    if (this.activeReplicas.get(serviceId) === replica) {
+    if (this.activeReplicas.get(serviceId) === replica &&
+        (!replica.consensusOpening || replica.portAllocation !== null)) {
       this.portAllocator?.release(serviceId);
       this.logger.info(WASM_SERVICE_LOG_MSG.PORT_RELEASED, {serviceId});
     }
@@ -589,7 +646,9 @@ class WasmServiceLifecycle {
    * @return {Promise<void>}
    */
   async shutdownAll() {
-    const serviceIds = new Set([...this.activeReplicas.keys(),
+    this.consensusCreationClosed = true;
+    const serviceIds = new Set([...this.pendingConsensusCreations.keys(),
+      ...this.activeReplicas.keys(),
       ...[...this.retiringReplicas].map((replica) => replica.serviceDefinitionId)]);
     const outcomes = await Promise.allSettled([...serviceIds].map((serviceId) =>
       this.stopReplica(serviceId)));

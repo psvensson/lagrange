@@ -8,6 +8,7 @@
 import {isRaftOpeningFailure, assertRaftOperationSucceeded} from
   '../raft/raft-operation-port.js';
 import fs from 'node:fs';
+import {retireWasmCreationState} from './wasm-service-creation-storage.js';
 import path from 'node:path';
 import Database from 'better-sqlite3';
 import {COLUMN, TABLES} from '../constants/index.js';
@@ -115,6 +116,12 @@ function resolveWasmServicePeerAddress(replica, replicaIdentity) {
   if (replicaIdentity === replica.replicaId) {
     return replica.unifiedAddress;
   }
+  if (replica.consensusOpening) {
+    const peer = replica.consensusOpening.identity.peers.find((entry) =>
+      entry.physicalReplicaId === replicaIdentity);
+    if (!peer) throw new Error(`${WASM_SERVICE_ERROR_MSG.PEER_UNPLACED}: ${replicaIdentity}`);
+    return replica.addressManager.format(peer.nodeId, SERVICE_TYPE.WASM_SERVICE, replicaIdentity);
+  }
   const row = replica.systemTableCache?.get(TABLES.SERVICES, replicaIdentity);
   const placedNodeId = row && !isPartitionCleanupServiceRow(row) ?
     row[COLUMN.NODE_ID] : null;
@@ -137,7 +144,10 @@ function resolveWasmServicePeerAddress(replica, replicaIdentity) {
  */
 function wasmServiceConsensusRequest(replica) {
   return {
-    [RAFT_OPERATION_PORT_REQUEST.GROUP_ID]: replica.serviceDefinitionId,
+    [RAFT_OPERATION_PORT_REQUEST.GROUP_ID]: replica.consensusOpening?.identity.groupId ??
+      replica.serviceDefinitionId,
+    [RAFT_OPERATION_PORT_REQUEST.IDENTITY_EXISTED]: replica.consensusOpening !== null &&
+      replica.creationFresh === false,
     [RAFT_OPERATION_PORT_REQUEST.PEER_ID]: replica.replicaId,
     [RAFT_OPERATION_PORT_REQUEST.PEER_ADDRESS]: replica.unifiedAddress,
     [RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_PEER_IDS]: replica.replicaIds,
@@ -228,7 +238,13 @@ function closeWasmServiceConsensus(replica) {
         replica.kvStore = null;
       }
     }
+    // Bound retirement cannot certify closure while another cleanup owner failed.
+    // Retain the database so a later exact shutdown can durably retire it.
+    if (replica.consensusOpening && replica.activityStopFailure !== null) {
+      throw replica.activityStopFailure.cause;
+    }
     if (db?.open) {
+      retireWasmCreationState(replica);
       db.close();
     }
     if (replica.db === db) {
