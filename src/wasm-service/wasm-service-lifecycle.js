@@ -1,3 +1,5 @@
+import {createWasmCreationReconcileQueue, bindWasmCreationReconciliation} from
+  './wasm-creation-reconciliation.js';
 import {progressWasmCreationGenesis} from './wasm-creation-genesis.js';
 import {captureWasmCreation} from './wasm-creation-opening.js';
 import {CONSENSUS_BOOTSTRAP} from '../service/service-consensus-bootstrap.js';
@@ -112,6 +114,7 @@ class WasmServiceLifecycle {
   constructor(dependencies = {}) {
     this.dependencies = dependencies;
     this.consensusClosing = false;
+    this.creationReconcileQueue = createWasmCreationReconcileQueue(this);
 
     /** @type {Map<string, WasmServiceReplica>} */
     this.activeReplicas = new Map();
@@ -337,7 +340,7 @@ class WasmServiceLifecycle {
         error: cause.message,
       }, replica);
     }
-    if (!replica.initialized) {
+    if (!this.ownsInitializedReplica(serviceId, replica)) {
       // Its stop began while this start awaited: the stop released the
       // port and owns the replica's retirement.
       return this.refuseStart(serviceId, startOptions, {
@@ -348,8 +351,9 @@ class WasmServiceLifecycle {
 
     if (replica.consensusCreation !== null) {
       replica.portAllocation = port;
+      bindWasmCreationReconciliation(this, replica, startOptions);
       const genesis = await progressWasmCreationGenesis(replica);
-      if (!replica.initialized || this.activeReplicas.get(serviceId) !== replica) {
+      if (!this.ownsInitializedReplica(serviceId, replica)) {
         return this.refuseStart(serviceId, startOptions, {
           code: WASM_SERVICE_LIFECYCLE_REFUSAL.STOPPED_DURING_START,
           error: WASM_SERVICE_ERROR_MSG.STOPPED_DURING_START,
@@ -375,6 +379,15 @@ class WasmServiceLifecycle {
       [START_RESULT_FIELD.ENDPOINT]: endpoint,
       [START_RESULT_FIELD.DIAGNOSTIC]: null,
     };
+  }
+
+  /** Exact live-registry ownership shared by START and event admission.
+   * @param {string} serviceId
+   * @param {WasmServiceReplica} replica
+   * @return {boolean}
+   */
+  ownsInitializedReplica(serviceId, replica) {
+    return replica.initialized && this.activeReplicas.get(serviceId) === replica;
   }
 
   /**
@@ -632,6 +645,9 @@ class WasmServiceLifecycle {
       ...[...this.retiringReplicas].map((replica) => replica.serviceDefinitionId)]);
     const outcomes = await Promise.allSettled([...serviceIds].map((serviceId) =>
       this.stopReplica(serviceId)));
+    // Each replica has joined its actual reconciliation flight. Queue shutdown
+    // retires only scheduling state; it is not a substitute for that joining.
+    this.creationReconcileQueue.shutdown();
     const failures = outcomes.filter((outcome) => outcome.status === STOP_REJECTED)
       .map((outcome) => outcome.reason);
     if (failures.length === 1) throw failures[0];

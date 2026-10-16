@@ -1,0 +1,212 @@
+{
+  "scope": "Local native diagnostics; source/test ancestry reconstructed and verified; not lab or release certification",
+  "notes": [
+    "baseline.log is an invalid test-runner invocation, not semantic proof",
+    "baseline-native.log measures the initial one-case missing event progression witness",
+    "candidate-first.log is a new observer field mistake, corrected without source change",
+    "first-neighbors.log exposes explicit-reentry fixture scheduling assumptions after native automatic INIT",
+    "review-five.log includes delivery to a correctly retired handler; the final witness asserts the refusal",
+    "initial static diagnostics are retained; reviewed source shares exact live-registry owner predicate and introduces no new decision or complexity finding",
+    "All raw logs remain in the checkpoint archive; this indexed record is not their contents"
+  ],
+  "results": [
+    {
+      "name": "baseline-native.log",
+      "bytes": 2030,
+      "sha256": "8c420e2ef1d43f1c0cb912587113ec56c1b3aaa9feefae16d435944e7bfb0264",
+      "exit": 1
+    },
+    {
+      "name": "baseline.log",
+      "bytes": 837,
+      "sha256": "f46a2565cecd9cc09cc050ae0de48fbce82ab19737465aa0ba38f3a97c6bbc8e",
+      "exit": 1
+    },
+    {
+      "name": "candidate-first.log",
+      "bytes": 1360,
+      "sha256": "ea2db22feec74d92c6bc10ae5c6e22c3030b6625be6a9b64b82ac40479ce5fc1",
+      "exit": 1
+    },
+    {
+      "name": "cognitive-base.log",
+      "bytes": 176,
+      "sha256": "775ddfcd7d760774b566e721afe52fab3fed3b0caba16812b555449c1c0675c0",
+      "exit": 0
+    },
+    {
+      "name": "cognitive.log",
+      "bytes": 52,
+      "sha256": "a543e43553a46dc97e309997c5afb8e566747bd2e8c887379ba0238e149b1a1b",
+      "exit": 0
+    },
+    {
+      "name": "complexity-base.log",
+      "bytes": 146,
+      "sha256": "7bea3eb83ec2dc02af3901363aa64006c78d559167d7b89c72891bc0aaa6896f",
+      "exit": 0
+    },
+    {
+      "name": "complexity-reviewed.log",
+      "bytes": 42,
+      "sha256": "bb5445b6e1062efe06695d191f8a67894aa250bd135d7c0836d01705bfe571ea",
+      "exit": 0
+    },
+    {
+      "name": "complexity.log",
+      "bytes": 42,
+      "sha256": "bb5445b6e1062efe06695d191f8a67894aa250bd135d7c0836d01705bfe571ea",
+      "exit": 0
+    },
+    {
+      "name": "decisions-base.log",
+      "bytes": 199,
+      "sha256": "90d87066ef1f57c27b027d36da9e20df5163e567d88651a7a19713b90451ea82",
+      "exit": 1
+    },
+    {
+      "name": "decisions-reviewed.log",
+      "bytes": 199,
+      "sha256": "675e57407cfcd90094d42b654519c12dccad241b1fb36b55545c864c4cb6abad",
+      "exit": 1
+    },
+    {
+      "name": "decisions.log",
+      "bytes": 253,
+      "sha256": "9127bb3d3c5a8b91e84764264d9815c9ebe3258b85b774ca77cf35a7ba6610f4",
+      "exit": 1
+    },
+    {
+      "name": "drop-applied-wake-reviewed.log",
+      "bytes": 7309,
+      "sha256": "68856fd4b57cefcda2375bc299894258f7df956340c74747f2d9cfa5ec323e0c",
+      "exit": 1
+    },
+    {
+      "name": "drop-applied-wake.log",
+      "bytes": 7306,
+      "sha256": "77665646d79c10e4d0ec31b82d11b9d4c6d0c1832356eaeb0317314fda311d33",
+      "exit": 1
+    },
+    {
+      "name": "final-local-cone.log",
+      "bytes": 1713,
+      "sha256": "23d56fc2d7b88704f78ac9b530b133410a0efae282e0adb7a2f889918b0aa50a",
+      "exit": 0
+    },
+    {
+      "name": "first-neighbors.log",
+      "bytes": 64877,
+      "sha256": "ef09a8d01d38cef36b656bee75a77e64df635bccde667d61f4a14c347372236e",
+      "exit": 1
+    },
+    {
+      "name": "grammar.log",
+      "bytes": 71,
+      "sha256": "e12c20041df1cb7d4405d78452f4f5a2f3417841073f72075e08ab0eb764d1b0",
+      "exit": 0
+    },
+    {
+      "name": "impact.log",
+      "bytes": 228,
+      "sha256": "5546c31481ddc63acb52b844ee3000e9eb64970b738a693aeadf53cd321b3ea0",
+      "exit": 0
+    },
+    {
+      "name": "lint-final.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit": 0
+    },
+    {
+      "name": "lint-first.log",
+      "bytes": 1928,
+      "sha256": "8e4166e62d53ea1f96649b605ae9500ff1b4c92c9979567d2463cf4e48fb27f5",
+      "exit": 1
+    },
+    {
+      "name": "lint-format.log",
+      "bytes": 211,
+      "sha256": "023d9d6af7c90e6bceb12ba10a4dfc4dd0a43b386a1a9d0c167e32c42713103a",
+      "exit": null
+    },
+    {
+      "name": "lint-reviewed.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit": 0
+    },
+    {
+      "name": "literals.log",
+      "bytes": 126,
+      "sha256": "2ebfc1072cdbd7a44b562c3a53d7beed8634e588c0dc977cdd8a03d58fe6a6be",
+      "exit": 0
+    },
+    {
+      "name": "metadata-refresh.log",
+      "bytes": 788,
+      "sha256": "1c13f104eef20142e8358d6b0da743b0b023815a365d98312e40409acb913465",
+      "exit": 0
+    },
+    {
+      "name": "no-flight-join-reviewed.log",
+      "bytes": 3931,
+      "sha256": "0b3e2d711880d9b53240ddf50078de2a5b35d27f5b5fb21be12d7a529675c777",
+      "exit": 1
+    },
+    {
+      "name": "no-flight-join.log",
+      "bytes": 3931,
+      "sha256": "945d1d2092ecd3c2446665cbf88e6f95ad4143074e1add73f5e81af8d69c19a1",
+      "exit": 1
+    },
+    {
+      "name": "review-eight.log",
+      "bytes": 141,
+      "sha256": "9e49a63cb27cca1def8389e120129ca36fd1bd024cf4167ced4b078665e773b4",
+      "exit": 0
+    },
+    {
+      "name": "review-five.log",
+      "bytes": 3180,
+      "sha256": "34f345ea4c626e1e4ea96f0f4fa40ac47111b4e4c80b9cc5dd4904bb6c24a43e",
+      "exit": 1
+    },
+    {
+      "name": "review-nine.log",
+      "bytes": 318,
+      "sha256": "a729c0d4ce18c0096215814a1dcd9735a72dc378582f2f97140d443a77fd6c28",
+      "exit": 0
+    },
+    {
+      "name": "reviewed-local-cone.log",
+      "bytes": 1713,
+      "sha256": "32b20fa8b38371878d5e2d3502896202d44ccbc8f8e3ca2c500fd99b5b462593",
+      "exit": 0
+    },
+    {
+      "name": "shards.log",
+      "bytes": 548,
+      "sha256": "bfef084b21322440f948979306be8b2728ca9da98b3075c7c9fc36050b1ebdbd",
+      "exit": 0
+    },
+    {
+      "name": "source-cognitive.log",
+      "bytes": 176,
+      "sha256": "38985d7de3d31cdfce4b21412483b979a21cc165626766a7d409f66e9a715659",
+      "exit": 0
+    },
+    {
+      "name": "source-complexity.log",
+      "bytes": 270,
+      "sha256": "64754d11ba5e016e93525a9b99bb810597f30ab4c1e47f834b6730432423ae7f",
+      "exit": 0
+    },
+    {
+      "name": "whitespace.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit": 0
+    }
+  ]
+}

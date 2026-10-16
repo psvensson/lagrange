@@ -1,3 +1,4 @@
+import {stopWasmCreationReconciliation} from './wasm-creation-reconciliation.js';
 import {resolveWasmCreationAdmission, openWasmCreationRecords} from './wasm-creation-opening.js';
 // The lifecycle of one WasmServiceReplica instance as a named state machine
 // (R07): CREATED -> STARTING -> READY -> STOPPING -> STOPPED. An instance is
@@ -159,9 +160,10 @@ async function initializeWasmServiceReplica(replica) {
  * @param {Function|null} handler - The handler this instance registered.
  * @param {Promise|null} starting - A failing open still releasing.
  * @param {Error|null} activityFailure - An activity stop still owed.
+ * @param {Promise|null} reconciliation - The snapshotted event continuation to join.
  * @return {Promise<void>}
  */
-async function retireReplica(replica, handler, starting, activityFailure) {
+async function retireReplica(replica, handler, starting, activityFailure, reconciliation) {
   try {
     if (starting) {
       // The failed open releases its own handles first; its error belongs
@@ -194,6 +196,10 @@ async function retireReplica(replica, handler, starting, activityFailure) {
     replica.lifecycleState = STATE.CLEANUP_REQUIRED;
     throw activityFailure !== null && error !== activityFailure ?
       withRaftOpeningCleanupFailure(activityFailure, error) : error;
+  } finally {
+    // Writer abort/native close settle genesis interest first: waiting before
+    // those owners run would deadlock teardown against the work it must stop.
+    if (reconciliation) await Promise.allSettled([reconciliation]);
   }
   replica.startupFailure = null;
   replica.lifecycleState = STATE.STOPPED;
@@ -228,14 +234,21 @@ async function shutdownWasmServiceReplica(replica, stopActivity) {
   replica.lifecycleSettlement = promise;
   const handler = replica.transportHandler;
   let activityFailure = null;
+  const reconciliation = replica.consensusReconciliation?.flight ?? null;
   try {
-    stopActivity();
+    stopWasmCreationReconciliation(replica);
   } catch (error) {
     activityFailure = error;
   }
+  try {
+    stopActivity();
+  } catch (error) {
+    activityFailure = activityFailure === null ? error :
+      withRaftOpeningCleanupFailure(activityFailure, error);
+  }
   // Joiners already see this settlement. Retirement proceeds even if an
   // activity stop failed, but cannot then claim every obligation completed.
-  retireReplica(replica, handler, starting, activityFailure).then(resolve, reject);
+  retireReplica(replica, handler, starting, activityFailure, reconciliation).then(resolve, reject);
   return promise;
 }
 

@@ -23,12 +23,12 @@
     "test-infrastructure": 143,
     "transactions": 16,
     "transport-messaging": 96,
-    "wasm-toolchain": 66
+    "wasm-toolchain": 67
   },
-  "censusSize": 2401,
-  "digest": "fnv1a32-397a1ddb",
+  "censusSize": 2402,
+  "digest": "fnv1a32-5eced1de",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-4ece5ef1",
+  "observationDigest": "fnv1a32-5193b15d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2402,6 +2402,7 @@
     "test/wasm-service/timer-manager.test.js": "wasm-toolchain",
     "test/wasm-service/wasm-creation-bound-native.test.js": "wasm-toolchain",
     "test/wasm-service/wasm-creation-genesis.integration.test.js": "wasm-toolchain",
+    "test/wasm-service/wasm-creation-reconciliation.integration.test.js": "wasm-toolchain",
     "test/wasm-service/wasm-executor-run-export.test.js": "wasm-toolchain",
     "test/wasm-service/wasm-executor-runtime-adapter-parity.test.js": "wasm-toolchain",
     "test/wasm-service/wasm-executor.test.js": "wasm-toolchain",
@@ -16171,6 +16172,27 @@
       ]
     },
     "test/wasm-service/wasm-creation-genesis.integration.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/index.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/service/service-lifecycle-command-contract.js",
+        "src/wasm-service/wasm-service-committed-command-codec.js",
+        "src/wasm-service/wasm-service-constants.js",
+        "src/wasm-service/wasm-service-replica.js",
+        "test/control-plane/service-instance-creation-sqlite-fixture.js",
+        "test/partition/partition-service-test-support.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js",
+        "test/wasm-service/wasm-retained-bootstrap-fixture.js"
+      ]
+    },
+    "test/wasm-service/wasm-creation-reconciliation.integration.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/constants/index.js",

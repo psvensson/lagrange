@@ -1125,7 +1125,7 @@
       ]
     },
     "service-consensus-retained-native-bootstrap": {
-      "description": "The original CREATE journal retains first-opening identity and hands one bound operation through manager, adapter and runtime to instance-qualified native WASM opening. Common B, exact local file and resource token are checked before native bootstrap; all results remain BOOTSTRAPPED_HELD with no serving, publication or journal completion. Cleanup retains errors and physical custody. Native RF3 evidence uses explicitly component-level metadata/journal adapters; it does not prove distributed metadata or the remaining grant/retirement interaction. Normal held lifecycle reentry constructs the exact binding-owned INIT through the existing writer completion owner; applied acceptance must be covered by a validated native committed founding membership observation. This is evidence only, never serving authority or an automatic progress wake.",
+      "description": "The original CREATE journal retains first-opening identity and hands one bound operation through manager, adapter and runtime to instance-qualified native WASM opening. Common B, exact local file and resource token are checked before native bootstrap; all results remain BOOTSTRAPPED_HELD with no serving, publication or journal completion. Cleanup retains errors and physical custody. Native RF3 evidence uses explicitly component-level metadata/journal adapters; it does not prove distributed metadata or the remaining grant/retirement interaction. Normal held lifecycle reentry constructs the exact binding-owned INIT through the existing writer completion owner; applied acceptance must be covered by a validated native committed founding membership observation. Native leadership/applied/membership events enqueue exact replica keys through the existing OwnerKeyReconcileQueue and reenter that same held lifecycle. Wakes carry no permission, stale lifetimes are refused, and retirement joins actual active work rather than queue bookkeeping. Genesis observation remains evidence only, never serving authority.",
       "owners": [
         "src/service/service-consensus-bootstrap.js",
         "src/service/service-consensus-creation-intent.js",
@@ -1152,7 +1152,9 @@
         "src/wasm-service/wasm-creation-genesis.js",
         "src/wasm-service/wasm-writer-completion.js",
         "src/raft/raft-committed-membership-stamp.js",
-        "src/raft/raft-committed-membership-constants.js"
+        "src/raft/raft-committed-membership-constants.js",
+        "src/wasm-service/wasm-creation-reconciliation.js",
+        "src/workflow/owner-key-reconcile-queue.js"
       ],
       "tests": [
         "test/wasm-service/wasm-retained-bootstrap.integration.test.js",
@@ -1160,7 +1162,8 @@
         "test/service/service-consensus-creation-intent.test.js",
         "test/service/service-consensus-creation-recovery.integration.test.js",
         "test/wasm-service/wasm-writer-state-v1.test.js",
-        "test/wasm-service/wasm-creation-genesis.integration.test.js"
+        "test/wasm-service/wasm-creation-genesis.integration.test.js",
+        "test/wasm-service/wasm-creation-reconciliation.integration.test.js"
       ]
     }
   },
@@ -2306,7 +2309,7 @@
       ]
     },
     "service-consensus-retained-native-bootstrap": {
-      "description": "Retained original intent, first-use identity, native common-root admission and exhaustive cleanup form one held bootstrap boundary; neither old metadata history, missing files nor native startup can manufacture serving permission. Applied INIT and committed founding-membership evidence are consumed from their existing owners on reentry, without promoting a proposal acknowledgement or stale observation into genesis completion.",
+      "description": "Retained original intent, first-use identity, native common-root admission and exhaustive cleanup form one held bootstrap boundary; neither old metadata history, missing files nor native startup can manufacture serving permission. Applied INIT and committed founding-membership evidence are consumed from their existing owners on reentry, without promoting a proposal acknowledgement or stale observation into genesis completion. Native events are enqueue-only hints into the same held lifecycle; exact-lifetime admission, coalescing and joined shutdown preserve event custody without serving activation.",
       "contract": "service-consensus-retained-native-bootstrap",
       "endpoints": [
         {
@@ -2342,14 +2345,17 @@
             "src/wasm-service/wasm-creation-genesis.js",
             "src/wasm-service/wasm-writer-completion.js",
             "src/raft/raft-committed-membership-stamp.js",
-            "src/raft/raft-committed-membership-constants.js"
+            "src/raft/raft-committed-membership-constants.js",
+            "src/wasm-service/wasm-creation-reconciliation.js",
+            "src/workflow/owner-key-reconcile-queue.js"
           ]
         }
       ],
       "witnessTests": [
         "test/wasm-service/wasm-retained-bootstrap.integration.test.js",
         "test/runtime/node-shutdown-cell-worker-teardown.test.js",
-        "test/wasm-service/wasm-creation-genesis.integration.test.js"
+        "test/wasm-service/wasm-creation-genesis.integration.test.js",
+        "test/wasm-service/wasm-creation-reconciliation.integration.test.js"
       ]
     }
   }
