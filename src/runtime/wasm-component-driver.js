@@ -551,7 +551,8 @@ class WasmComponentDriver extends RuntimeDriver {
         startResult.bootstrapped === true && startResult.started === false) {
       return {status: CONSENSUS_BOOTSTRAP.HELD,
         consensusBinding: startResult.consensusBinding,
-        consensusResourceToken: startResult.consensusResourceToken};
+        consensusResourceToken: startResult.consensusResourceToken,
+        genesis: startResult.genesis};
     }
     if (startResult.started === false) {
       const result = buildDriverStatusResult(

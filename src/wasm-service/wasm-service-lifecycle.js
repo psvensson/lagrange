@@ -1,3 +1,4 @@
+import {progressWasmCreationGenesis} from './wasm-creation-genesis.js';
 import {captureWasmCreation} from './wasm-creation-opening.js';
 import {CONSENSUS_BOOTSTRAP} from '../service/service-consensus-bootstrap.js';
 import {instanceDigest} from '../control-plane/owners/service-instance-contract.js';
@@ -347,9 +348,16 @@ class WasmServiceLifecycle {
 
     if (replica.consensusCreation !== null) {
       replica.portAllocation = port;
+      const genesis = await progressWasmCreationGenesis(replica);
+      if (!replica.initialized || this.activeReplicas.get(serviceId) !== replica) {
+        return this.refuseStart(serviceId, startOptions, {
+          code: WASM_SERVICE_LIFECYCLE_REFUSAL.STOPPED_DURING_START,
+          error: WASM_SERVICE_ERROR_MSG.STOPPED_DURING_START,
+        }, replica);
+      }
       return {started: false, bootstrapped: true, status: CONSENSUS_BOOTSTRAP.HELD,
         consensusBinding: replica.consensusCreation.intent.consensusBinding,
-        consensusResourceToken: replica.consensusCreation.token};
+        consensusResourceToken: replica.consensusCreation.token, genesis};
     }
 
     const endpoint = this.registerEndpoint(serviceId, startOptions, port);

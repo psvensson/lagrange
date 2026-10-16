@@ -9,6 +9,8 @@ import {captureConsensusBootstrap, consensusBootstrapDescriptor} from
 import {runtimeServiceConsensusIdentity} from '../rebalancer/runtime-service-replica-identity.js';
 import {CONSENSUS_CREATION_OPENING as OPENING} from '../service/service-consensus-creation-intent.js';
 import {validateBinding} from '../control-plane/owners/service-instance-state.js';
+import {WASM_WRITER_PROFILE, WRITER_ACTION} from './wasm-writer-profile.js';
+import {canonicalWriterCommand} from './wasm-writer-codec.js';
 
 const ROOT = '_wasm_creation_root';
 const LOCAL = '_wasm_creation_local';
@@ -53,6 +55,15 @@ async function resolveWasmCreationAdmission(replica) {
   requireInstance(opening?.outcome === OPENING.FRESH || opening?.outcome === OPENING.RETAINED,
     opening?.outcome ?? OUTCOME.UNKNOWN);
   replica.creationOpening = opening;
+}
+/** One deterministic INIT from the immutable common root, never a new caller nonce. */
+function boundWasmInitialization(binding) {
+  requireInstance(binding !== null &&
+    binding.profileDigest === instanceDigest(WASM_WRITER_PROFILE.id), OUTCOME.INVALID_LINEAGE);
+  return canonicalWriterCommand({type: WASM_WRITER_PROFILE.type,
+    profile: WASM_WRITER_PROFILE.id, action: WRITER_ACTION.INIT,
+    serviceId: binding.serviceDefinitionId, incarnation: binding.incarnation,
+    nonce: binding.requestId.nonce});
 }
 function isCreationOnlyDatabase(tables) {
   return tables.length === 2 && tables.includes(ROOT) && tables.includes(LOCAL);
@@ -104,4 +115,4 @@ function initializeWasmCreationContext(replica, options) {
 }
 export {initializeWasmCreationContext, captureWasmCreation, resolveWasmCreationAdmission,
   openWasmCreationRecords,
-  isCreationOnlyDatabase, readWasmCreationBinding};
+  isCreationOnlyDatabase, readWasmCreationBinding, boundWasmInitialization};
