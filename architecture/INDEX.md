@@ -67,6 +67,11 @@ Phase 0.3 `SELECT ... FOR UPDATE` contract. [Live Query Data Plane](live-query-d
 describes the target for general push-backed query observation. Their presence
 in this index does not mean those product contracts are already supported.
 
+[General invocation primitive — research investigation](general-invocation-investigation.md)
+compares an admitted-execution seam with the existing request, Call Cell,
+native OCI and Images owners. It is exploratory; it does **not** select or
+implement a replacement execution contract.
+
 ## By question
 
 | Question | Start here |
