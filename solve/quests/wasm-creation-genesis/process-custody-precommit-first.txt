@@ -1,0 +1,73 @@
+Source oversized-file ratchet: 25/27 over 800 lines.
+Test oversized-file ratchet: 21/21 over 1500 lines.
+
+Largest oversized files (25 max):
+2820 test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js (threshold 1500)
+2232 test/distributed/harness/__tests__/cluster-load-readiness-stability-quiescence-test-cases.js (threshold 1500)
+2082 test/diagnostics/topology-convergence-graph.test.js (threshold 1500)
+2075 src/raft/raft-rs-runtime-owner.js (threshold 800)
+1884 test/distributed/harness/cluster-class-lifecycle-base.js (threshold 1500)
+1879 test/rebalancer/replace-replica-workflow-tail-more-test-cases.js (threshold 1500)
+1873 test/distributed/harness/assertions-convergence-wait.js (threshold 1500)
+1864 test/bootstrap/node-joining-service.test.js (threshold 1500)
+1770 test/distributed/harness/failure-bundle-diagnostics-artifact-builder.js (threshold 1500)
+1764 test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js (threshold 1500)
+1740 test/rebalancer/rebalance-coordinator-outcome-routing.test.js (threshold 1500)
+1714 test/admin/admin-control-snapshot-publication-convergence-membership-observation-test-cases.js (threshold 1500)
+1689 test/distributed/harness/post-rebalance-closure-contract.js (threshold 1500)
+1647 test/distributed/harness/__tests__/cluster-active-wait-startup-progress-witness-test-cases.js (threshold 1500)
+1633 test/rebalancer/priority-recovery-snapshot-handoff-timeout-reentry-test-cases.js (threshold 1500)
+1624 test/distributed/harness/cluster-class-control-snapshot-recovery.js (threshold 1500)
+1597 test/distributed/harness/cluster-class-quiescence.js (threshold 1500)
+1595 test/distributed/harness/report-writer.js (threshold 1500)
+1588 test/logging/logs-table-service.test.js (threshold 1500)
+1568 test/admin/admin-control-snapshot-deferred-refresh-membership-observation-test-cases.js (threshold 1500)
+1555 test/distributed/harness/__tests__/report-writer.test.js (threshold 1500)
+1513 test/distributed/harness/__tests__/run.test.js (threshold 1500)
+1264 src/rebalancer/operation-workflow-dispatch-response-reconcile.js (threshold 800)
+1068 src/control-plane/control-plane-readiness-priority-recovery-planning.js (threshold 800)
+1068 src/rebalancer/move-planner-move-calculation-methods.js (threshold 800)
+Scanned 8 JavaScript files
+Found 0 hot-path diagnostics violations
+Matched 31 inherited hot-path diagnostics baseline violations
+Scanned 3 JavaScript files
+Found 0 new literal-guideline violations
+Matched 0 inherited literal-guideline baseline violations
+Scanned 3 JavaScript files
+Found 0 decision-boundary guideline violations
+Matched 0 inherited decision-boundary baseline violations
+Scanned 0 JavaScript files
+Found 0 ambient-intrinsic call violations
+Matched 0 inherited ambient-intrinsic baseline violations
+Scanned 3 JavaScript files
+Found 0 silent catch violations
+Matched 0 inherited silent-catch baseline violations
+Scoped complexity ratchet: 0 violation(s) in 3 target(s) (threshold: 12).
+Saved complexity report to test-output/analysis/complexity-scoped.json.
+pre-commit: import graph stale - refreshing inventories (~2 min; skip with LAGRANGE_SKIP_INVENTORY_REGEN=1)
+owner-debt refresh: ratchet exceeded in node scripts/check-complexity.js; report refreshed, elevated debt will be recorded
+
+<--- Last few GCs --->
+
+[1322:0x307e4000]   254143 ms: Scavenge 1932.0 (2079.7) -> 1916.5 (2079.7) MB, pooled: 6 MB, 11.72 / 4.93 ms  (average mu = 0.078, current mu = 0.000) allocation failure; 
+[1322:0x307e4000]   257600 ms: Mark-Compact 1932.5 (2080.2) -> 1915.0 (2080.5) MB, pooled: 5 MB, 3434.39 / 1.08 ms  (average mu = 0.074, current mu = 0.070) allocation failure; scavenge might not succeed
+
+
+<--- JS stacktrace --->
+
+FATAL ERROR: Ineffective mark-compacts near heap limit Allocation failed - JavaScript heap out of memory
+----- Native stack trace -----
+
+ 1: 0xe13fde node::OOMErrorHandler(char const*, v8::OOMDetails const&) [/opt/nvm/versions/node/v22.16.0/bin/node]
+ 2: 0x11d5070 v8::Utils::ReportOOMFailure(v8::internal::Isolate*, char const*, v8::OOMDetails const&) [/opt/nvm/versions/node/v22.16.0/bin/node]
+ 3: 0x11d5347 v8::internal::V8::FatalProcessOutOfMemory(v8::internal::Isolate*, char const*, v8::OOMDetails const&) [/opt/nvm/versions/node/v22.16.0/bin/node]
+ 4: 0x1402c05  [/opt/nvm/versions/node/v22.16.0/bin/node]
+ 5: 0x1402c33  [/opt/nvm/versions/node/v22.16.0/bin/node]
+ 6: 0x141bd0a  [/opt/nvm/versions/node/v22.16.0/bin/node]
+ 7: 0x141eed8  [/opt/nvm/versions/node/v22.16.0/bin/node]
+ 8: 0x1c84ba1  [/opt/nvm/versions/node/v22.16.0/bin/node]
+Error: report refresh failed: node scripts/check-duplication.js
+    at refreshReports (file:///mnt/data/rs-raft-work/lagrange/scripts/generate-global-owner-debt-inventory.js:526:13)
+    at buildInventory (file:///mnt/data/rs-raft-work/lagrange/scripts/generate-global-owner-debt-inventory.js:970:5)
+    at runCli (file:///mnt/data/rs-raft-work/lagrange/scripts/generate-global-owner-debt-inventory.js:1000:27)
+    at file:///mnt/data/rs-raft-work/lagrange/scripts/generate-global-owner-debt-inventory.js:1010:3

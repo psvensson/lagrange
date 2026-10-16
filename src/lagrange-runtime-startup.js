@@ -723,7 +723,9 @@ async function acquireLagrangeRuntime(options, cleanupLedger) {
   dataDirectoryManager.initialize();
   const dataDirectoryProcessOwner = acquireDataDirectoryProcessOwner(
     dataDirectoryManager.getDataDir());
-  cleanupLedger.defer(() => dataDirectoryProcessOwner.release());
+  cleanupLedger.defer(() => dataDirectoryProcessOwner.release(), {
+    requiresSuccessfulCleanup: true,
+  });
 
   const hlcClock = new HLCClockService(config.get(CONFIG_KEY.NODE_ID), {
     maxDrift: config.get(CONFIG_KEY.HLC_MAX_DRIFT_MS),
