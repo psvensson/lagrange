@@ -26,7 +26,7 @@ function currentCreation(replica, port, creation) {
 function matchesFounders(stamp, creation) {
   const voters = stamp.voters.map((peer) => stamp.identities[peer]).sort();
   const expected = [...creation.identity.replicaIds].sort();
-  return stamp.gateOpen && stamp.learners.length === 0 && stamp.learnersNext.length === 0 &&
+  return stamp.learners.length === 0 && stamp.learnersNext.length === 0 &&
     instanceDigest(voters) === instanceDigest(expected);
 }
 function unresolved(applied) {
