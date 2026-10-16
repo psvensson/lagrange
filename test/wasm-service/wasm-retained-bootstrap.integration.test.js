@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {existsSync, rmSync, copyFileSync, renameSync, readFileSync} from 'node:fs';
 import {WASM_SERVICE_COMMAND_TYPE} from '../../src/wasm-service/wasm-service-constants.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
-import {fixture, bootstrapGroup, initialization, administer} from
+import {fixtureWithHeldReconciliation as fixture, bootstrapGroup, initialization, administer} from
   './wasm-retained-bootstrap-fixture.js';
 
 // This file does not prove metadata quorum or user serving. All native groups

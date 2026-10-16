@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {fixture, bootstrapGroup, initialization, administer, deliverScheduled} from
+import {fixtureWithHeldReconciliation as fixture, bootstrapGroup, initialization, administer, deliverScheduled} from
   './wasm-retained-bootstrap-fixture.js';
 import {raftRsConfStateKey} from '../../src/raft/raft-rs-conf-state-key.js';
 import {committedStampOfAnswer} from '../../src/raft/raft-committed-membership-stamp.js';

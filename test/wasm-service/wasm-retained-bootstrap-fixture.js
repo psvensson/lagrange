@@ -43,7 +43,7 @@ async function mirror(handler) {
       dependencies: [], capabilities: []}, exports: {run: (_ctx, args) => args}});
   return owner;
 }
-async function fixture(t) {
+async function fixture(t, {holdCreationReconciliation = false} = {}) {
   const cleanups = [];
   const metadata = await createOriginFixture({after: (fn) => cleanups.push(fn)});
   const directory = mkdtempSync(join(tmpdir(), 'wasm-retained-bootstrap-'));
@@ -94,6 +94,14 @@ async function fixture(t) {
       messageRouter: f.transport, serviceDefinitionsOwner: metadata.primary,
       dataDirectoryManager, moduleMirror, portAllocator: new PortAllocator()});
     lifecycle.logger = QUIET;
+    // Earlier bootstrap/genesis tests prescribe explicit reentry order. Hold
+    // only the new event queue's delivery at its existing scheduling seam;
+    // assertions and native event production are unchanged. Default is live.
+    const reconciliationDrains = [];
+    if (holdCreationReconciliation && lifecycle.creationReconcileQueue) {
+      lifecycle.creationReconcileQueue.scheduleDrainFn = (drain) =>
+        reconciliationDrains.push(drain);
+    }
     const driver = new WasmComponentDriver({wasmServiceLifecycle: lifecycle});
     const registry = new RuntimeDriverRegistry();
     registry.register(driver);
@@ -114,7 +122,7 @@ async function fixture(t) {
     const manager = metadata.manager();
     manager.registerAdapter(new RuntimeServiceAdapter({serviceRuntimeLifecycle: runtime}));
     const host = {intent, nodeId, manager, runtime, driver, lifecycle, publications,
-      timeSource, processOwner};
+      timeSource, processOwner, reconciliationDrains};
     f.hosts.push(host);
     return host;
   };
@@ -163,4 +171,8 @@ async function administer(f, command) {
   assert.ok(answer, 'native administration settled in the declared delivery schedule');
   return answer;
 }
-export {fixture, bootstrapGroup, initialization, administer, deliverScheduled};
+async function fixtureWithHeldReconciliation(t) {
+  return fixture(t, {holdCreationReconciliation: true});
+}
+export {fixture, fixtureWithHeldReconciliation, bootstrapGroup, initialization,
+  administer, deliverScheduled};
