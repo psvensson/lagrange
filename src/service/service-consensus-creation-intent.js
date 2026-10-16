@@ -173,6 +173,8 @@ async function prepareConsensusCreation(manager, value, context = {}) {
     const identity = journalIdentity(intent);
     let row = await readJournal(manager, identity.operationId);
     if (row === null) {
+      await manager._serviceDefinitionsOwner.reserveInstanceResource(
+        intent.consensusBinding, intent.consensusSlotRequest);
       const query = buildRetainedCreationOperationSQL(
         {...identity, now: manager._timeSource.now()});
       row = await writeAndObserve(manager, query, identity.operationId);
