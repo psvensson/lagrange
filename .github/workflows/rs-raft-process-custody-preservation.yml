@@ -15,57 +15,66 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          ref: 9712d2633ed3d188faa2a418cca58c87db08045b
+          ref: 2218eeb58f99f2ecd527094662938ce4f76ad491
           fetch-depth: 1
           persist-credentials: true
-      - name: Preserve reviewed source for measurement, not merge approval
+      - name: Preserve exact fixture patch without executing product tests
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          export OUT="$RUNNER_TEMP/process-custody-preservation"
+          export OUT="$RUNNER_TEMP/creation-fixture-preservation"
           mkdir -p "$OUT"
-          test "$(git rev-parse HEAD)" = 9712d2633ed3d188faa2a418cca58c87db08045b
+          BASE=2218eeb58f99f2ecd527094662938ce4f76ad491
+          test "$(git rev-parse HEAD)" = "$BASE"
           test -z "$(git status --porcelain)"
           python3 - <<'PYCODE'
           import base64, hashlib, json, os, pathlib, subprocess, zlib
           out = pathlib.Path(os.environ['OUT'])
-          parts = ['d825b1e08260049927927f462676969cd41fa54f',
-                   '1e06ac2be3103792bdc5cf7b447de09216a30d56',
-                   'c65a25d43cd5a6b91ed784d293c14405a389fc1a']
-          encoded = []
-          for sha in parts:
-              reply = json.loads(subprocess.check_output([
-                  'gh', 'api', 'repos/psvensson/lagrange/git/blobs/' + sha]))
-              data = base64.b64decode(reply['content'])
-              assert hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest() == sha
-              encoded.append(data)
-          patch = zlib.decompress(base64.b64decode(b''.join(encoded), validate=True))
-          assert hashlib.sha256(patch).hexdigest() == '9174b03f677c5d20e44b6ac4a0ac5f7b5aacde0a0947017357b531b7a01c2793'
-          commit = base64.b64decode('dHJlZSBhOGQ3MjFjM2ZjYjc0ODk4NzhkOTMzYTk0ZjY2YTJkMGNjN2MyNjAxCnBhcmVudCA5NzEyZDI2MzNlZDNkMTg4ZmFhMmE0MThjY2E1OGM4N2RiMDgwNDViCmF1dGhvciBDaGF0R1BUIDxjaGF0Z3B0QG9wZW5haS5jb20+IDE3OTIxNTA5NDkgKzAwMDAKY29tbWl0dGVyIENoYXRHUFQgPGNoYXRncHRAb3BlbmFpLmNvbT4gMTc5MjE1MDk0OSArMDAwMAoKV0lQOiBwcmVzZXJ2ZSBvcmlnaW5hbCBzdGFydHVwIGFuZCBmYWlsZWQtY2xlYW51cCBjYXVzZXMgdGhyb3VnaCBsZWRnZXIgb3duZXIK')
+          sha = 'aa66c14ce26a54ff0f13560a23ae198e1a4f2808'
+          reply = json.loads(subprocess.check_output([
+              'gh', 'api', 'repos/psvensson/lagrange/git/blobs/' + sha]))
+          encoded = base64.b64decode(reply['content'])
+          assert hashlib.sha1(b'blob ' + str(len(encoded)).encode() + b'\0' + encoded).hexdigest() == sha
+          patch = zlib.decompress(base64.b64decode(encoded, validate=True))
+          assert hashlib.sha256(patch).hexdigest() == 'd452a3f5a68f91bbf621262373b2b588a039a5a63745ff022482c796b0c6a2d4'
           (out / 'source.patch').write_bytes(patch)
-          (out / 'head-commit.raw').write_bytes(commit)
+          subprocess.run(['git', 'apply', '--check', '--index', str(out / 'source.patch')], check=True)
+          subprocess.run(['git', 'apply', '--index', str(out / 'source.patch')], check=True)
+          expected = {
+              'test/control-plane/service-instance-creation-sqlite-fixture.js': '6feaa80dbfaf23374a27db5cd8c9b6b763ccc78f',
+              'test/shards/impact-graph-seal.json': '55a9a0665206e6d03b23813a65a7b21b588ad342',
+              'test/shards/subsystem-classes.json': '39cdec033de6080134a5af4af1a71fc3146ee50b',
+          }
+          changed = subprocess.check_output(['git', 'diff', '--cached', '--name-only', '-z']).decode().split('\0')
+          assert set(filter(None, changed)) == set(expected)
+          for path, blob in expected.items():
+              assert subprocess.check_output(['git', 'hash-object', path]).decode().strip() == blob
+          (out / 'verified-postimages.json').write_text(json.dumps(expected, indent=2) + '\n')
           PYCODE
-          git apply --check --index "$OUT/source.patch"
-          git apply --index "$OUT/source.patch"
-          test "$(git write-tree)" = a8d721c3fcb7489878d933a94f66a2d0cc7c2601
-          test "$(git hash-object -t commit -w "$OUT/head-commit.raw")" = 1603b31a90e1c1d814898ddfa4de4851aae9865e
-          git diff --exit-code 9712d2633ed3d188faa2a418cca58c87db08045b 1603b31a90e1c1d814898ddfa4de4851aae9865e -- test/entrypoint test/node
-          REF=refs/heads/work/rs-raft-process-custody-20261016
+          git diff --exit-code
+          TREE=$(git write-tree)
+          export GIT_AUTHOR_NAME=ChatGPT GIT_COMMITTER_NAME=ChatGPT
+          export GIT_AUTHOR_EMAIL=chatgpt@openai.com GIT_COMMITTER_EMAIL=chatgpt@openai.com
+          NEW=$(printf '%s\n' 'WIP test: obtain creation fixture identity from the existing INSTALL command' '' 'Fix an unengaged fixture import, not product behavior. Preserve the first lab failure. Canonical metadata generated in the isolated cloud checkout. Local lab baseline follows; full static and creation/genesis acceptance remain held.' | git commit-tree "$TREE" -p "$BASE")
+          git diff --exit-code "$BASE" "$NEW" -- src test/control-plane/service-instance-creation-cas.test.js
+          REF=refs/heads/work/rs-raft-creation-selection-20261016
           git fetch --no-tags origin "$REF"
-          test "$(git rev-parse FETCH_HEAD)" = 9712d2633ed3d188faa2a418cca58c87db08045b
-          git push origin 1603b31a90e1c1d814898ddfa4de4851aae9865e:"$REF"
+          test "$(git rev-parse FETCH_HEAD)" = "$BASE"
+          git push origin "$NEW:$REF"
           REMOTE=$(git ls-remote --heads origin "$REF" | cut -f1)
-          test "$REMOTE" = 1603b31a90e1c1d814898ddfa4de4851aae9865e
+          test "$REMOTE" = "$NEW"
+          git cat-file commit "$NEW" > "$OUT/head-commit.raw"
           printf '%s\n' "$REMOTE" > "$OUT/verified-remote-sha.txt"
-          printf '%s\n' 'WIP source correction, unchanged tests; author review not independent certification; full static gate remains open.' > "$OUT/claim-limit.txt"
+          printf '%s\n' "$TREE" > "$OUT/verified-tree.txt"
+          printf '%s\n' 'Test fixture and generated metadata only. Not source acceptance or main merge. All behavioral tests run through the private local lab.' > "$OUT/claim-limit.txt"
           cd "$OUT"
-          sha256sum source.patch head-commit.raw verified-remote-sha.txt claim-limit.txt > SHA256SUMS
+          sha256sum source.patch verified-postimages.json head-commit.raw verified-remote-sha.txt verified-tree.txt claim-limit.txt > SHA256SUMS
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: rs-raft-process-custody-preservation-${{ github.run_id }}
-          path: ${{ runner.temp }}/process-custody-preservation/
+          name: rs-raft-creation-fixture-preservation-${{ github.run_id }}
+          path: ${{ runner.temp }}/creation-fixture-preservation/
           retention-days: 7
           if-no-files-found: error
