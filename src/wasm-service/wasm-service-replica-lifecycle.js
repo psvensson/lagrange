@@ -199,7 +199,7 @@ async function retireReplica(replica, handler, starting, activityFailure, reconc
   } finally {
     // Writer abort/native close settle genesis interest first: waiting before
     // those owners run would deadlock teardown against the work it must stop.
-    if (reconciliation) await Promise.allSettled([reconciliation]);
+    void reconciliation;
   }
   replica.startupFailure = null;
   replica.lifecycleState = STATE.STOPPED;
