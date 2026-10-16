@@ -264,7 +264,7 @@ async function claimConsensusCreationOpening(manager, value) {
     OUTCOME.CONTENT_CONFLICT);
     const body = openingBody(intent, token);
     if (row[COL.OPENING_JSON] !== null) {
-      return {outcome: CONSENSUS_CREATION_OPENING.RETAINED,
+      return {outcome: CONSENSUS_CREATION_OPENING.FRESH,
         record: confirmOpeningRecord(row, body)};
     }
     const claimId = randomBytes(CONSENSUS_CREATION_OPENING.NONCE_BYTES).toString('hex');
