@@ -78,6 +78,7 @@ function bindWasmCreationReconciliation(owner, replica, startOptions) {
   try {
     for (const event of WAKE_EVENTS) {
       const wake = () => {
+        if (event === RAFT_EVENT.APPLIED_PROGRESS) return;
         if (isCurrent(entry)) owner.creationReconcileQueue.enqueue(replica.replicaId, event, entry);
       };
       entry.unsubscribers.push(entry.port.subscribe(event, wake));
