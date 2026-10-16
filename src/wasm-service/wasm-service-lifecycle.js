@@ -15,6 +15,7 @@ import {DataDirectoryManager} from '../storage/data-directory-manager.js';
 import {WasmServiceReplica} from './wasm-service-replica.js';
 import {assertFoundingReplicaSet} from './wasm-service-consensus-port.js';
 import {buildEndpointRecord} from './service-endpoint-builder.js';
+import {WRITER_ACTION, WRITER_STATUS, WRITER_REASON} from './wasm-writer-profile.js';
 import {
   WASM_SERVICE_SUBSYSTEM,
   WASM_SERVICE_LOG_MSG,
@@ -223,6 +224,23 @@ class WasmServiceLifecycle {
     });
 
     return replica;
+  }
+
+  /**
+   * Trusted local administration only. Raw service messages cannot enroll or recycle writers.
+   * The caller must retain the complete intent before delivery and retry it unchanged.
+   * @param {string} serviceId - The hosted service definition identity.
+   * @param {Object} intent - The canonical v1 INIT/ENROLL/RECYCLE command.
+   * @return {Promise<Object>} Applied receipt, refusal, redirect or uncertainty.
+   */
+  administerWriter(serviceId, intent) {
+    const replica = this.activeReplicas.get(serviceId);
+    if (!replica?.initialized || intent?.serviceId !== serviceId ||
+        intent?.action === WRITER_ACTION.WRITE) {
+      return Promise.resolve({status: WRITER_STATUS.REFUSED,
+        reason: WRITER_REASON.NOT_READY, identity: null});
+    }
+    return replica.writerCompletion.submit(intent);
   }
 
   /**

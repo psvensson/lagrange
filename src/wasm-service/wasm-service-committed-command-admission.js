@@ -9,6 +9,8 @@ import {
   WASM_SERVICE_COMMAND_TYPE,
   WASM_SERVICE_ERROR_MSG,
 } from './wasm-service-constants.js';
+import {WASM_WRITER_PROFILE} from './wasm-writer-profile.js';
+import {canonicalWriterCommand} from './wasm-writer-codec.js';
 
 const COMMITTED_COMMAND_TYPES = Object.freeze(
   new Set(Object.values(WASM_SERVICE_COMMAND_TYPE)));
@@ -21,6 +23,14 @@ const ADMITTED = Object.freeze({admitted: true});
  *   type} with a WASM_SERVICE_COMMAND_REFUSAL reason.
  */
 function admitWasmServiceCommand(command) {
+  if (command?.type === WASM_WRITER_PROFILE.type) {
+    try {
+      canonicalWriterCommand(command);
+      return ADMITTED;
+    } catch (error) {
+      return {admitted: false, reason: error.code, type: command.type};
+    }
+  }
   if (COMMITTED_COMMAND_TYPES.has(command?.type)) {
     return ADMITTED;
   }

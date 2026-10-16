@@ -17,6 +17,7 @@ import {RAFT_EVENT} from '../raft/raft-operation-port-constants.js';
 import {withRaftOpeningCleanupFailure} from '../raft/raft-operation-port.js';
 import {wireReplicaLifecycleEvents} from '../raft/replica-leadership-state.js';
 import {SessionKVStore} from './session-kv-store.js';
+import {WasmWriterState} from './wasm-writer-state.js';
 import {
   closeWasmServiceConsensus,
   openWasmServiceConsensusPort,
@@ -76,7 +77,10 @@ async function releaseWasmServiceReplicaConsensus(replica) {
 async function openReplica(replica) {
   try {
     openWasmServiceDatabase(replica);
-    replica.kvStore = new SessionKVStore(replica.db);
+    replica.db.transaction(() => {
+      replica.writerState = new WasmWriterState(replica.db, replica.serviceDefinitionId);
+      replica.kvStore = new SessionKVStore(replica.db);
+    })();
     openWasmServiceConsensusPort(replica);
     wireReplicaLifecycleEvents(replica, {
       events: RAFT_EVENT,

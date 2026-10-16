@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2368,
+    "ordinary": 2373,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2385,
-  "digest": "fnv1a32-466a8d9e",
+  "censusSize": 2390,
+  "digest": "fnv1a32-d458d17d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -2383,6 +2383,11 @@
     "test/wasm-service/wasm-service-models.test.js": "ordinary",
     "test/wasm-service/wasm-service-replica.test.js": "ordinary",
     "test/wasm-service/wasm-strong-write-native-completion.test.js": "ordinary",
+    "test/wasm-service/wasm-strong-write-v1-native-completion.test.js": "ordinary",
+    "test/wasm-service/wasm-writer-client-v1.test.js": "ordinary",
+    "test/wasm-service/wasm-writer-completion-v1.test.js": "ordinary",
+    "test/wasm-service/wasm-writer-recreation-origin-v1.test.js": "ordinary",
+    "test/wasm-service/wasm-writer-state-v1.test.js": "ordinary",
     "test/workflow/durable-workflow-coordinator.test.js": "ordinary",
     "test/workflow/durable-workflow-recovery-identity.test.js": "ordinary",
     "test/workflow/durable-workflow-storage-ownership.test.js": "ordinary",

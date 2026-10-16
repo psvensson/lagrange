@@ -150,8 +150,8 @@ class SessionKVStore {
    * @param {Buffer|Uint8Array} value - Opaque byte value.
    * @return {{accepted: boolean, error: string|null}} Result.
    */
-  applySet(sessionId, key, value) {
-    const limitError = this._checkLimits(sessionId, key, value);
+  applySet(sessionId, key, value, limits = null) {
+    const limitError = this._checkLimits(sessionId, key, value, limits);
     if (limitError) {
       return {accepted: false, error: limitError};
     }
@@ -214,11 +214,13 @@ class SessionKVStore {
    * @return {string|null} Error message or null.
    * @private
    */
-  _checkLimits(sessionId, key, value) {
+  _checkLimits(sessionId, key, value, limits = null) {
+    const sessionLimit = limits ? limits.sessionBytes : this._sessionSizeLimitBytes;
+    const serviceLimit = limits ? limits.serviceBytes : this._serviceSizeLimitBytes;
     const hasSessionLimit =
-      this._sessionSizeLimitBytes !== null;
+      sessionLimit !== null;
     const hasServiceLimit =
-      this._serviceSizeLimitBytes !== null;
+      serviceLimit !== null;
     if (!hasSessionLimit && !hasServiceLimit) {
       return null;
     }
@@ -228,14 +230,14 @@ class SessionKVStore {
     if (hasSessionLimit) {
       const currentSessionSize = this.getSessionSize(sessionId);
       const projectedSessionSize = currentSessionSize + delta;
-      if (projectedSessionSize > this._sessionSizeLimitBytes) {
+      if (projectedSessionSize > sessionLimit) {
         return WASM_SERVICE_ERROR_MSG.SESSION_SIZE_LIMIT_EXCEEDED;
       }
     }
     if (hasServiceLimit) {
       const currentTotalSize = this.getTotalSize();
       const projectedTotalSize = currentTotalSize + delta;
-      if (projectedTotalSize > this._serviceSizeLimitBytes) {
+      if (projectedTotalSize > serviceLimit) {
         return WASM_SERVICE_ERROR_MSG.SERVICE_SIZE_LIMIT_EXCEEDED;
       }
     }

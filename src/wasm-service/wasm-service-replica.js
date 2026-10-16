@@ -27,6 +27,9 @@ import {createControlPlaneRuntimeBundle} from
   '../control-plane/control-plane-runtime-bundle.js';
 import {SafetyInterval} from './safety-interval.js';
 import {TimerManager} from './timer-manager.js';
+import {WasmWriterCompletion} from './wasm-writer-completion.js';
+import {WASM_WRITER_PROFILE, WRITER_STATUS, WRITER_REASON} from './wasm-writer-profile.js';
+import {canonicalWriterCommand, writerCommandFromDelivery} from './wasm-writer-codec.js';
 import {routeRead} from './read-router.js';
 import {
   assertDurableDbPath,
@@ -141,6 +144,8 @@ class WasmServiceReplica extends EventEmitter {
       WASM_SERVICE_DEFAULT.WRITE_CONSISTENCY;
 
     this.timerManager = new TimerManager(this);
+    this.writerState = null;
+    this.writerCompletion = new WasmWriterCompletion(this, options);
     this.safetyInterval = new SafetyInterval(
       options.safetyIntervalMs,
     );
@@ -306,8 +311,22 @@ class WasmServiceReplica extends EventEmitter {
    * @return {*} The KV store's answer.
    */
   applyCommittedEntry(committed) {
-    const result = applyCommittedCommand(this.kvStore, committed);
-    this.safetyInterval.updateLocalAppliedIndex(committed.index);
+    let result;
+    if (committed.command?.type === WASM_WRITER_PROFILE.type) {
+      const command = canonicalWriterCommand(committed.command);
+      // Install rollback publication before the application can throw.
+      this.writerCompletion.observeApplication(command, null, {
+        afterCommit: [], afterRollback: committed.effects.afterRollback,
+      });
+      result = this.writerState.apply(command, this.kvStore, committed.index, committed.term);
+      this.writerCompletion.observeApplication(command, result, {
+        afterCommit: committed.effects.afterCommit, afterRollback: [],
+      });
+    } else {
+      result = applyCommittedCommand(this.kvStore, committed);
+    }
+    committed.effects.afterCommit.push(() =>
+      this.safetyInterval.updateLocalAppliedIndex(committed.index));
     return result;
   }
 
@@ -407,8 +426,13 @@ class WasmServiceReplica extends EventEmitter {
       return {accepted: true, async: true};
     }
 
-    await this.proposeEntry(entry);
-    return {accepted: true, async: false};
+    let command;
+    try {
+      command = writerCommandFromDelivery(payload);
+    } catch {
+      return {status: WRITER_STATUS.REFUSED, reason: WRITER_REASON.INVALID, identity: null};
+    }
+    return this.writerCompletion.submit(command, payload.deadlineMs);
   }
 
   /**
@@ -423,6 +447,12 @@ class WasmServiceReplica extends EventEmitter {
     const admission = admitWasmServiceCommand(entry);
     if (!admission.admitted) {
       throw wasmServiceCommandRefusalError(admission);
+    }
+    if (entry.type === WASM_WRITER_PROFILE.type) {
+      const decision = this.writerState.classify(canonicalWriterCommand(entry));
+      if (decision.status !== WRITER_STATUS.NEW) {
+        throw wasmServiceCommandRefusalError({reason: decision.reason, type: entry.type});
+      }
     }
     if (!this.raft) {
       throw new Error(WASM_SERVICE_ERROR_MSG.SERVICE_NOT_READY);
@@ -515,6 +545,7 @@ class WasmServiceReplica extends EventEmitter {
    * Stops all timers and safety interval broadcasts.
    */
   onBecameFollower() {
+    this.writerCompletion.abort(WRITER_REASON.NOT_LEADER);
     this.logger.info(WASM_SERVICE_LOG_MSG.LOST_LEADERSHIP, {
       replicaId: this.replicaId,
       serviceDefinitionId: this.serviceDefinitionId,
@@ -690,6 +721,7 @@ class WasmServiceReplica extends EventEmitter {
    */
   shutdown() {
     return shutdownWasmServiceReplica(this, () => {
+      this.writerCompletion.abort(WRITER_REASON.SHUTDOWN);
       this.timerManager.stopAll();
       this._stopSafetyBroadcasts();
       this.roleMutationHelper.shutdown();

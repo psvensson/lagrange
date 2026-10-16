@@ -4,6 +4,8 @@
 // proposal the port did not append is a typed refusal.
 
 import {STRING} from '../constants/index.js';
+import {WASM_WRITER_PROFILE} from './wasm-writer-profile.js';
+import {canonicalWriterCommand} from './wasm-writer-codec.js';
 import {
   WASM_SERVICE_COMMAND_TYPE,
   WASM_SERVICE_ERROR_MSG,
@@ -32,6 +34,7 @@ function committedValueBytes(value) {
  * @return {Object} The command.
  */
 function encodeCommittedCommand(entry) {
+  if (entry.type === WASM_WRITER_PROFILE.type) return canonicalWriterCommand(entry);
   if (entry.value === undefined) {
     return {...entry};
   }

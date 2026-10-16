@@ -5,8 +5,8 @@
     "inputs": [
       {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 422714,
-        "sha256": "fab7d34d1483a9f5207f398966b8ec4d370459d072824cfc2d08999fc9c4d379"
+        "bytes": 423317,
+        "sha256": "57e9d2a26c5e86f53ae96d6c56d3169db8f9f36d4222c71b2291c2f2dd0cd306"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2936999,
-        "sha256": "3d37a6d22aca2481878bf346f97a8e10c68757455c3f3db6bc4cbb28269736bb"
+        "bytes": 2943566,
+        "sha256": "8cbf12b56231230975f5804eb1bfd8bddab0f86c98c21e917508ec91f827ee8e"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -30,7 +30,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "fa5925dd3f4ea6e5aadc22aa7ff57318ecaa34d087ba69181f6fb79a2005cc50"
+        "sha256": "454746c4503564c1ceea0240a72cd443063ad4885521ca24e4041f231365ce91"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "80a776253513c5ea037c12c04582f2a1d45946b22c954a5a95258a65543717ac"
+        "sha256": "dc3b90f92daf32e6584d00046c8f02c2eefc77c94e6eea743149245fd61aa41c"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,18 +62,18 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "4d2dd7c04fcff282b71e08d1fe12d975246a75841f7566ed33671c2844db6502"
+    "inputDigest": "2d53be52cf25433fcbf09e5235851c1edb376d123adbba1fdacaf2290febdc42"
   },
   "reconciliation": {
     "complexity": {
       "identity": {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 422714,
-        "sha256": "fab7d34d1483a9f5207f398966b8ec4d370459d072824cfc2d08999fc9c4d379"
+        "bytes": 423317,
+        "sha256": "57e9d2a26c5e86f53ae96d6c56d3169db8f9f36d4222c71b2291c2f2dd0cd306"
       },
-      "declaredCount": 1789,
-      "observedCount": 1789,
-      "assignedCount": 1789
+      "declaredCount": 1792,
+      "observedCount": 1792,
+      "assignedCount": 1792
     },
     "cognitive": {
       "identity": {
@@ -112,7 +112,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "fa5925dd3f4ea6e5aadc22aa7ff57318ecaa34d087ba69181f6fb79a2005cc50"
+          "sha256": "454746c4503564c1ceea0240a72cd443063ad4885521ca24e4041f231365ce91"
         },
         "cloneGroups": 47,
         "duplicatedLines": 1462,
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "80a776253513c5ea037c12c04582f2a1d45946b22c954a5a95258a65543717ac"
+          "sha256": "dc3b90f92daf32e6584d00046c8f02c2eefc77c94e6eea743149245fd61aa41c"
         },
         "cloneGroups": 697,
         "duplicatedLines": 26415,
@@ -167,35 +167,35 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2936999,
-        "sha256": "3d37a6d22aca2481878bf346f97a8e10c68757455c3f3db6bc4cbb28269736bb"
+        "bytes": 2943566,
+        "sha256": "8cbf12b56231230975f5804eb1bfd8bddab0f86c98c21e917508ec91f827ee8e"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "8b168eaaa131eddbfd39e44178f70169d9251c13249ae5beb535376043243bdf",
-      "moduleCount": 5438,
-      "edgeCount": 28040,
+      "sourceDigest": "d192702bdb99c538204811d322b2b24af05702c9a181a2664f0344aac5a6d185",
+      "moduleCount": 5449,
+      "edgeCount": 28111,
       "unresolvedCount": 36
     }
   },
   "assignment": {
-    "sourceSignalCount": 2535,
-    "assignedSignalCount": 2535,
-    "uniqueAssignmentCount": 2535,
-    "digest": "e03c847cd349cf32f192797d9aa89ea8766ce62a5f7794f2a0750f34177a60f9"
+    "sourceSignalCount": 2538,
+    "assignedSignalCount": 2538,
+    "uniqueAssignmentCount": 2538,
+    "digest": "e38557f228778be4635df3e9b2cc8ab7d4c65bc42cd299c82f37c37c933469b7"
   },
   "signalCounts": {
     "cognitive": 152,
-    "complexity": 1789,
+    "complexity": 1792,
     "duplication": 509,
     "fileSize": 46,
     "lintExclusion": 39
   },
   "summary": {
-    "filesWithDebt": 1307,
+    "filesWithDebt": 1310,
     "rankedBoundaryCount": 114,
     "semanticBoundaryCount": 20,
     "fallbackBoundaryCount": 94,
@@ -1254,7 +1254,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 672,
+      "importIn": 673,
       "importOut": 44,
       "score": 56,
       "topPaths": [
@@ -1318,6 +1318,34 @@
         "src/cache/system-table-cache.js",
         "src/cache/system-table-cache-authoritative-reconciliation.js",
         "src/cache/system-table-cache-row-merge.js"
+      ]
+    },
+    {
+      "key": "area:src/wasm-service",
+      "owner": null,
+      "boundary": "src/wasm-service",
+      "classification": "owner-area-fallback",
+      "ownerAreas": [
+        "src/wasm-service"
+      ],
+      "fileCount": 9,
+      "signalCount": 12,
+      "complexity": 11,
+      "cognitive": 0,
+      "oversizedFiles": 0,
+      "duplicatedLines": 41,
+      "cloneTouches": 1,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 57,
+      "importOut": 48,
+      "score": 48.1,
+      "topPaths": [
+        "src/wasm-service/module-manifest-models.js",
+        "src/wasm-service/wasm-executor.js",
+        "src/wasm-service/wasm-service-models.js",
+        "src/wasm-service/wasm-service-replica.js",
+        "src/wasm-service/manifest-runtime-validator.js"
       ]
     },
     {
@@ -1566,34 +1594,6 @@
         "src/rebalancer/operation-workflow-owner-ports.js",
         "src/rebalancer/operation-workflow-owner-execution-lane.js",
         "src/rebalancer/operation-workflow-owner-shared.js"
-      ]
-    },
-    {
-      "key": "area:src/wasm-service",
-      "owner": null,
-      "boundary": "src/wasm-service",
-      "classification": "owner-area-fallback",
-      "ownerAreas": [
-        "src/wasm-service"
-      ],
-      "fileCount": 6,
-      "signalCount": 9,
-      "complexity": 8,
-      "cognitive": 0,
-      "oversizedFiles": 0,
-      "duplicatedLines": 41,
-      "cloneTouches": 1,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 49,
-      "importOut": 37,
-      "score": 36.1,
-      "topPaths": [
-        "src/wasm-service/module-manifest-models.js",
-        "src/wasm-service/wasm-executor.js",
-        "src/wasm-service/wasm-service-models.js",
-        "src/wasm-service/wasm-service-replica.js",
-        "src/wasm-service/manifest-runtime-validator.js"
       ]
     },
     {

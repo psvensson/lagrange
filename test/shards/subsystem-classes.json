@@ -23,12 +23,12 @@
     "test-infrastructure": 143,
     "transactions": 16,
     "transport-messaging": 96,
-    "wasm-toolchain": 58
+    "wasm-toolchain": 63
   },
-  "censusSize": 2385,
-  "digest": "fnv1a32-0729a02c",
+  "censusSize": 2390,
+  "digest": "fnv1a32-200c85d7",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-ee940c9f",
+  "observationDigest": "fnv1a32-23072567",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2403,6 +2403,11 @@
     "test/wasm-service/wasm-service-models.test.js": "wasm-toolchain",
     "test/wasm-service/wasm-service-replica.test.js": "wasm-toolchain",
     "test/wasm-service/wasm-strong-write-native-completion.test.js": "wasm-toolchain",
+    "test/wasm-service/wasm-strong-write-v1-native-completion.test.js": "wasm-toolchain",
+    "test/wasm-service/wasm-writer-client-v1.test.js": "wasm-toolchain",
+    "test/wasm-service/wasm-writer-completion-v1.test.js": "wasm-toolchain",
+    "test/wasm-service/wasm-writer-recreation-origin-v1.test.js": "wasm-toolchain",
+    "test/wasm-service/wasm-writer-state-v1.test.js": "wasm-toolchain",
     "test/workflow/durable-workflow-coordinator.test.js": "transactions",
     "test/workflow/durable-workflow-recovery-identity.test.js": "transactions",
     "test/workflow/durable-workflow-storage-ownership.test.js": "transactions",
@@ -16127,6 +16132,42 @@
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js",
         "test/wasm-service/wasm-strong-write-native-fixture.js"
+      ]
+    },
+    "test/wasm-service/wasm-strong-write-v1-native-completion.test.js": {
+      "files": [
+        "src/constants/index.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/wasm-service/wasm-service-committed-command-codec.js",
+        "src/wasm-service/wasm-service-constants.js",
+        "src/wasm-service/wasm-service-replica.js",
+        "test/partition/partition-service-test-support.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js",
+        "test/wasm-service/wasm-strong-write-native-fixture.js",
+        "test/wasm-service/wasm-strong-write-v1-native-fixture.js"
+      ]
+    },
+    "test/wasm-service/wasm-writer-completion-v1.test.js": {
+      "files": [
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/wasm-service/wasm-service-constants.js"
+      ]
+    },
+    "test/wasm-service/wasm-writer-recreation-origin-v1.test.js": {
+      "files": [
+        "src/wasm-service/wasm-writer-codec.js",
+        "src/wasm-service/wasm-writer-profile.js"
+      ]
+    },
+    "test/wasm-service/wasm-writer-state-v1.test.js": {
+      "files": [
+        "src/wasm-service/wasm-writer-codec.js",
+        "src/wasm-service/wasm-writer-profile.js"
       ]
     },
     "test/workflow/durable-workflow-coordinator.test.js": {

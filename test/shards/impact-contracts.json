@@ -1054,6 +1054,26 @@
         "test/wasm-service/wasm-service-lifecycle.test.js",
         "test/node/replica-failed-create-cleanup-generation.test.js"
       ]
+    },
+    "wasm-writer-v1-application-completion": {
+      "description": "Review-only v1 writer-slot contract: exact durable outcomes and generation/sequence fences join KV effects and applied progress; live publication follows afterCommit. Fixed slot state, explicit acknowledgment and caller durable CAS preserve exact replay. INIT must not let delayed old administration revive a writer after recreation; this prerequisite is currently HOLD and the recreation witness retains its counterexample. This registration is not implementation approval or F1 supersession.",
+      "owners": [
+        "src/wasm-service/wasm-writer-",
+        "src/wasm-service/wasm-service-replica.js",
+        "src/wasm-service/wasm-service-replica-lifecycle.js",
+        "src/wasm-service/wasm-service-lifecycle.js",
+        "src/wasm-service/session-kv-store.js",
+        "src/wasm-service/wasm-service-committed-command-codec.js",
+        "src/wasm-service/wasm-service-committed-command-admission.js",
+        "src/raft/raft-rs-application-transaction-owner.js"
+      ],
+      "tests": [
+        "test/wasm-service/wasm-strong-write-v1-native-completion.test.js",
+        "test/wasm-service/wasm-writer-state-v1.test.js",
+        "test/wasm-service/wasm-writer-client-v1.test.js",
+        "test/wasm-service/wasm-writer-completion-v1.test.js",
+        "test/wasm-service/wasm-writer-recreation-origin-v1.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -2104,6 +2124,37 @@
         "test/node/replica-runtime-cleanup-custody.integration.test.js",
         "test/wasm-service/wasm-service-lifecycle.test.js",
         "test/node/replica-failed-create-cleanup-generation.test.js"
+      ]
+    },
+    "wasm-writer-v1-application-completion": {
+      "description": "WASM delivery/lifecycle and application/result ownership jointly define exact completion, replay, bounded retirement and creation identity.",
+      "endpoints": [
+        {
+          "id": "writer-delivery-and-lifecycle",
+          "owners": [
+            "src/wasm-service/wasm-writer-",
+            "src/wasm-service/wasm-service-replica.js",
+            "src/wasm-service/wasm-service-replica-lifecycle.js",
+            "src/wasm-service/wasm-service-lifecycle.js"
+          ]
+        },
+        {
+          "id": "application-result-and-transaction",
+          "owners": [
+            "src/wasm-service/session-kv-store.js",
+            "src/wasm-service/wasm-service-committed-command-codec.js",
+            "src/wasm-service/wasm-service-committed-command-admission.js",
+            "src/raft/raft-rs-application-transaction-owner.js"
+          ]
+        }
+      ],
+      "contract": "wasm-writer-v1-application-completion",
+      "witnessTests": [
+        "test/wasm-service/wasm-strong-write-v1-native-completion.test.js",
+        "test/wasm-service/wasm-writer-state-v1.test.js",
+        "test/wasm-service/wasm-writer-client-v1.test.js",
+        "test/wasm-service/wasm-writer-completion-v1.test.js",
+        "test/wasm-service/wasm-writer-recreation-origin-v1.test.js"
       ]
     }
   }
