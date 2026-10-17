@@ -1,0 +1,119 @@
+# test-files planned=1
+classified lane exclusive: 1 file(s), jobs=1
+thermal: unmeasurable (no sensors)
+not ok test/wasm-service/wasm-creation-reconciliation.integration.test.js (4 assertions, 2066ms)
+# TAP assertions failed; test process exited 1
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+TAP version 13
+# Subtest: native leadership and applied progress autonomously reconcile the original held creation
+not ok 1 - native leadership and applied progress autonomously reconcile the original held creation
+  ---
+  duration_ms: 305.451105
+  type: 'test'
+  location: '/mnt/data/event-reconcile/repo/test/wasm-service/wasm-creation-reconciliation.integration.test.js:45:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    NATIVE_EVENTS_DID_NOT_RECONCILE_ORIGINAL_CREATION
+    + actual - expected
+    
+    + undefined
+    - {
+    -   action: 'INIT',
+    -   incarnation: '0dc6dc73122fc1996bb646966cf8d4fa93335e71b26cb7031aa67b2eade4cd11',
+    -   nonce: '0000000000000000000000000000000000000000000000000000000000000001',
+    -   profile: 'wasm-writer-v1/1',
+    -   serviceId: 'service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c',
+    -   type: 'WASM_WRITER_V1'
+    - }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    type: 'WASM_WRITER_V1'
+    profile: 'wasm-writer-v1/1'
+    action: 'INIT'
+    serviceId: 'service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c'
+    incarnation: '0dc6dc73122fc1996bb646966cf8d4fa93335e71b26cb7031aa67b2eade4cd11'
+    nonce: '0000000000000000000000000000000000000000000000000000000000000001'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/event-reconcile/repo/test/wasm-service/wasm-creation-reconciliation.integration.test.js:53:14)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: native applied wake survives an in-flight no-quorum INIT and resolves after replies return
+not ok 2 - native applied wake survives an in-flight no-quorum INIT and resolves after replies return
+  ---
+  duration_ms: 243.162514
+  type: 'test'
+  location: '/mnt/data/event-reconcile/repo/test/wasm-service/wasm-creation-reconciliation.integration.test.js:68:1'
+  failureType: 'testCodeFailure'
+  error: 'NO_NATIVE_REPLIES_WITHHELD'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/event-reconcile/repo/test/wasm-service/wasm-creation-reconciliation.integration.test.js:78:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: an expired writer interest resumes from actual applied progress, not a poll or new intent
+not ok 3 - an expired writer interest resumes from actual applied progress, not a poll or new intent
+  ---
+  duration_ms: 211.547291
+  type: 'test'
+  location: '/mnt/data/event-reconcile/repo/test/wasm-service/wasm-creation-reconciliation.integration.test.js:95:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The expression evaluated to a falsy value:
+    
+      assert.ok(f.held.length > 0)
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/event-reconcile/repo/test/wasm-service/wasm-creation-reconciliation.integration.test.js:103:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: shutdown aborts event-owned INIT, joins the queue, and leaves no native handle or late success
+not ok 4 - shutdown aborts event-owned INIT, joins the queue, and leaves no native handle or late success
+  ---
+  duration_ms: 209.192787
+  type: 'test'
+  location: '/mnt/data/event-reconcile/repo/test/wasm-service/wasm-creation-reconciliation.integration.test.js:118:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    0 !== 1
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 1
+  actual: 0
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/event-reconcile/repo/test/wasm-service/wasm-creation-reconciliation.integration.test.js:128:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 0
+# fail 4
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 993.508693
+# time=2066ms
+# test-files total=1 pass=0 fail=1 assertions=4
