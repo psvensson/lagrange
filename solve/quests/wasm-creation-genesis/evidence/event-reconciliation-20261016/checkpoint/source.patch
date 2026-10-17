@@ -1,0 +1,203 @@
+diff --git a/src/wasm-service/wasm-creation-genesis.js b/src/wasm-service/wasm-creation-genesis.js
+index d5c064d..e6f222e 100644
+--- a/src/wasm-service/wasm-creation-genesis.js
++++ b/src/wasm-service/wasm-creation-genesis.js
+@@ -85,4 +85,4 @@ async function progressWasmCreationGenesis(replica) {
+       reason: error.code ?? SERVICE_INSTANCE_OUTCOME.UNAVAILABLE};
+   }
+ }
+-export {progressWasmCreationGenesis};
++export {progressWasmCreationGenesis, WASM_CREATION_GENESIS};
+diff --git a/src/wasm-service/wasm-creation-reconciliation.js b/src/wasm-service/wasm-creation-reconciliation.js
+new file mode 100644
+index 0000000..faa4349
+--- /dev/null
++++ b/src/wasm-service/wasm-creation-reconciliation.js
+@@ -0,0 +1,113 @@
++// Volatile trigger/custody adapter of WasmServiceLifecycle, not another genesis
++// or permission owner. Both START and native events use the same keyed queue.
++import {OwnerKeyReconcileQueue} from '../workflow/owner-key-reconcile-queue.js';
++import {RECONCILE_REASON} from '../workflow/reconcile-queue-constants.js';
++import {RAFT_EVENT} from '../raft/raft-operation-port-constants.js';
++import {WRITER_REASON} from './wasm-writer-profile.js';
++import {progressWasmCreationGenesis, WASM_CREATION_GENESIS} from './wasm-creation-genesis.js';
++
++const QUEUE_NAME = 'wasm-creation-reconciliation';
++const UNSUBSCRIBE_FAILED = 'WASM creation event retirement failed';
++const LISTENER_RETIREMENT = Object.freeze({RETIRED: 'RETIRED', FAILED: 'FAILED'});
++const WAKE_EVENTS = Object.freeze([
++  RAFT_EVENT.LEADER, RAFT_EVENT.FOLLOWER, RAFT_EVENT.CANDIDATE,
++  RAFT_EVENT.LEADER_CHANGE, RAFT_EVENT.TERM_CHANGE, RAFT_EVENT.APPLIED_PROGRESS,
++]);
++
++class WasmCreationReconciliation {
++  constructor(lifecycle, replica) {
++    this.lifecycle = lifecycle;
++    this.replica = replica;
++    this.closed = false;
++    this.subscriptions = [];
++    this.shutdownSettlement = null;
++    this.queue = new OwnerKeyReconcileQueue({name: QUEUE_NAME,
++      reconcileFn: (_key, _reasons, context) => this.reconcile(context)});
++  }
++
++  current(context) {
++    return !this.closed && !this.lifecycle.consensusClosing && this.replica.initialized &&
++      this.lifecycle.activeReplicas.get(this.replica.serviceDefinitionId) === this.replica &&
++      this.replica.raft === context.port && this.replica.consensusCreation === context.creation;
++  }
++
++  capture() {
++    return Object.freeze({port: this.replica.raft, creation: this.replica.consensusCreation});
++  }
++
++  stoppedResult() {
++    return {outcome: WASM_CREATION_GENESIS.HELD, reason: WRITER_REASON.SHUTDOWN};
++  }
++
++  bind() {
++    this.requireRetirement(this.unbind());
++    const context = this.capture();
++    for (const event of WAKE_EVENTS) {
++      this.subscriptions.push(context.port.subscribe(event, () => {
++        // Never read membership, submit INIT, await or retain event payloads here.
++        if (this.current(context)) this.queue.enqueue(this.replica.replicaId, event, context);
++      }));
++    }
++  }
++
++  request() {
++    const context = this.capture();
++    if (!this.current(context)) return Promise.resolve(this.stoppedResult());
++    return this.queue.enqueueAndWait(this.replica.replicaId,
++      RECONCILE_REASON.PROGRESS_RECONCILE, context);
++  }
++
++  async reconcile(context) {
++    if (!this.current(context)) return this.stoppedResult();
++    const result = await progressWasmCreationGenesis(this.replica);
++    return this.current(context) ? result : this.stoppedResult();
++  }
++
++  closeAdmission() {
++    this.closed = true;
++  }
++
++  shutdown() {
++    if (this.shutdownSettlement !== null) return this.shutdownSettlement;
++    this.closeAdmission();
++    this.shutdownSettlement = this.retire().catch((error) => {
++      // Failure stays visible to the current caller. A later explicit shutdown
++      // may retry the retained unsubscribe; this never schedules a retry itself.
++      this.shutdownSettlement = null;
++      throw error;
++    });
++    return this.shutdownSettlement;
++  }
++
++  unbind() {
++    const result = {outcome: LISTENER_RETIREMENT.RETIRED, errors: []};
++    for (const unsubscribe of this.subscriptions.splice(0)) {
++      try {
++        unsubscribe();
++      } catch (error) {
++        this.subscriptions.push(unsubscribe);
++        result.outcome = LISTENER_RETIREMENT.FAILED;
++        result.errors.push(error);
++      }
++    }
++    return result;
++  }
++
++  requireRetirement(result) {
++    if (result.outcome === LISTENER_RETIREMENT.FAILED) {
++      throw new AggregateError(result.errors, UNSUBSCRIBE_FAILED);
++    }
++  }
++
++  async retire() {
++    const result = this.unbind();
++    // The replica's shutdown already aborted writer interest. Do not call the
++    // queue's shutdown until its *actual* current work has ended: shutdown()
++    // clears its bookkeeping and therefore is not a join operation.
++    await this.queue.awaitCurrentWorkIdle();
++    this.queue.shutdown();
++    this.requireRetirement(result);
++  }
++}
++
++export {WasmCreationReconciliation};
+diff --git a/src/wasm-service/wasm-service-lifecycle.js b/src/wasm-service/wasm-service-lifecycle.js
+index 526ef9d..36eb1ea 100644
+--- a/src/wasm-service/wasm-service-lifecycle.js
++++ b/src/wasm-service/wasm-service-lifecycle.js
+@@ -1,4 +1,4 @@
+-import {progressWasmCreationGenesis} from './wasm-creation-genesis.js';
++import {WasmCreationReconciliation} from './wasm-creation-reconciliation.js';
+ import {captureWasmCreation} from './wasm-creation-opening.js';
+ import {CONSENSUS_BOOTSTRAP} from '../service/service-consensus-bootstrap.js';
+ import {instanceDigest} from '../control-plane/owners/service-instance-contract.js';
+@@ -239,6 +239,9 @@ class WasmServiceLifecycle {
+       leaderNodeUpdateWriter: this.leaderNodeUpdateWriter,
+     });
+ 
++    if (creation !== null) {
++      replica.creationReconciliation = new WasmCreationReconciliation(this, replica);
++    }
+     this.activeReplicas.set(serviceId, replica);
+ 
+     this.logger.info(WASM_SERVICE_LOG_MSG.REPLICA_CREATED, {
+@@ -348,7 +351,7 @@ class WasmServiceLifecycle {
+ 
+     if (replica.consensusCreation !== null) {
+       replica.portAllocation = port;
+-      const genesis = await progressWasmCreationGenesis(replica);
++      const genesis = await replica.creationReconciliation.request();
+       if (!replica.initialized || this.activeReplicas.get(serviceId) !== replica) {
+         return this.refuseStart(serviceId, startOptions, {
+           code: WASM_SERVICE_LIFECYCLE_REFUSAL.STOPPED_DURING_START,
+diff --git a/src/wasm-service/wasm-service-replica-lifecycle.js b/src/wasm-service/wasm-service-replica-lifecycle.js
+index e00521d..bdf1497 100644
+--- a/src/wasm-service/wasm-service-replica-lifecycle.js
++++ b/src/wasm-service/wasm-service-replica-lifecycle.js
+@@ -96,6 +96,7 @@ async function openReplica(replica) {
+       onFollower: () => replica.onBecameFollower(),
+       onCandidate: () => replica.onBecameFollower(),
+     });
++    replica.creationReconciliation?.bind();
+     if (replica.transport) {
+       // The exact handler identity is kept so retirement removes only it
+       // (owner decision N2). Registration is the open's last step.
+@@ -168,6 +169,12 @@ async function retireReplica(replica, handler, starting, activityFailure) {
+       // to its initialize caller.
+       await Promise.allSettled([starting]);
+     }
++    try {
++      await replica.creationReconciliation?.shutdown();
++    } catch (error) {
++      activityFailure = activityFailure === null ? error :
++        withRaftOpeningCleanupFailure(activityFailure, error);
++    }
+     // Exact-identity retirement (owner decision N2): a successor's handler
+     // at the same address is never removed. No replica-lifecycle activation
+     // binds a WASM service handler, so there is no effect section to wait on.
+@@ -225,6 +232,7 @@ async function shutdownWasmServiceReplica(replica, stopActivity) {
+     replica.lifecycleSettlement : null;
+   const {promise, resolve, reject} = Promise.withResolvers();
+   replica.lifecycleState = STATE.STOPPING;
++  replica.creationReconciliation?.closeAdmission();
+   replica.lifecycleSettlement = promise;
+   const handler = replica.transportHandler;
+   let activityFailure = null;
+diff --git a/src/wasm-service/wasm-service-replica.js b/src/wasm-service/wasm-service-replica.js
+index 15277b8..c7f7a25 100644
+--- a/src/wasm-service/wasm-service-replica.js
++++ b/src/wasm-service/wasm-service-replica.js
+@@ -136,6 +136,7 @@ class WasmServiceReplica extends EventEmitter {
+     this.startupFailure = null;
+     this.consensusCloseSettlement = null;
+     this.transportHandler = null;
++    this.creationReconciliation = null;
+     this.systemTableCache = options.systemTableCache ||
+       NodeService.getInstance().getSystemTableCache();
+     this.cdcIntegrationService = options.cdcIntegrationService || null;

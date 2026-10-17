@@ -1,0 +1,28 @@
+{
+  "scope": "WIP source and original evidence preservation; no product execution",
+  "base": "6ba84863490bff9a43874a03f69ad2afff4b5898",
+  "sourceCommit": "e221c8c63ae2baea9614c52db04b05336745f35f",
+  "branch": "refs/heads/work/rs-raft-event-reconciliation-20261016",
+  "sourceTree": "4d41f37c628ccdcf518989496b21a25908e6245c",
+  "testTree": "4f4b38381e1f20c2d6c311b5a7d7c695c4c8d28d",
+  "originalArchiveSha256": "00b7e514fdf01b86c527d4030aaaae4489835e2729cb98537c8dc19e36a0df64",
+  "patchSha256": "d19948a622750ade11e1c7216fd2f722b5490da6695962ef6a0f9b4c0c35fc93",
+  "preservedCheckpointMembers": 103,
+  "transportPayloadSha256": "de7dfbd8bc7d15c14e5357e004cfe8cb344d2eb344d8e809cb453edd0112d7a8",
+  "transportBlobs": [
+    "26aad1d166ae2ce6d360d38b1f23610e31a45106",
+    "02a07b87e8bb287d5fb1335134e68421ddb3c565",
+    "5599efd28160401ecc4a2b45ba51f32830397968",
+    "0cee9495738ef6e0e55efb9cb3f9b57a21201b67",
+    "d49f71717201d0bddf19e96a1c7764a87be89fec",
+    "7c37e9060fac957eba0ee5888429612670f3dd1b",
+    "a3576f0613adb34844254ce0882d9b0e302fa25a",
+    "71f237ad806a29b5b5105c04e39d7cc6b48c314a"
+  ],
+  "testsExecuted": false,
+  "homeLabJobsSubmitted": false,
+  "mainTargeted": false,
+  "fullStaticPassed": false,
+  "fullCorpusPassed": false,
+  "identityDocumentTransport": "Reconstructed exact original documents from Git-bound bytes and one recorded historical digest; all original hashes matched"
+}

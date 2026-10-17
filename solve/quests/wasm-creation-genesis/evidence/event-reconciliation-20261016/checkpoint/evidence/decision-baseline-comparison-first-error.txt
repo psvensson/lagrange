@@ -1,0 +1,8 @@
+The first author-side comparison helper failed before analysis because execFileSync
+received the string 'utf8' instead of an options object. No repository source or
+checker changed. Original stderr:
+TypeError [ERR_INVALID_ARG_TYPE]: The "options" argument must be of type object. Received type string ('utf8')
+    at normalizeExecFileArgs (node:child_process:280:5)
+    at execFileSync (node:child_process:908:30)
+    at file:///mnt/data/event-reconcile/repo/[eval1]:5:16
+Node.js v22.16.0

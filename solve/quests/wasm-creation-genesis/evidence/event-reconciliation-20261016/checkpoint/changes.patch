@@ -1,0 +1,1028 @@
+diff --git a/solve/quests/wasm-creation-genesis/EVENT-RECONCILIATION-STAGE-LOCAL-REVIEW-20261016.md b/solve/quests/wasm-creation-genesis/EVENT-RECONCILIATION-STAGE-LOCAL-REVIEW-20261016.md
+new file mode 100644
+index 0000000..5f54885
+--- /dev/null
++++ b/solve/quests/wasm-creation-genesis/EVENT-RECONCILIATION-STAGE-LOCAL-REVIEW-20261016.md
+@@ -0,0 +1,165 @@
++# Native events to held creation reconciliation: local source review
++
++Verdict: ACCEPT the bounded implementation and local native/component proof for
++continued WIP work. Publication and required home-lab measurement remain HELD.
++This is the implementing ChatGPT session's author review, as requested by the
++operator, not independent verification, terminal Quest landing, serving or merge
++approval. No GitHub branch, PR, lab request or Solver receipt was created.
++
++## Exact base and work boundary
++
++Published base: PR133, work/rs-raft-genesis-observation-20261016,
++6ba84863490bff9a43874a03f69ad2afff4b5898.
++Base source subtree: 5e193fa018a7b29fc2943f13d8d562c1e7b9f98d.
++Base test subtree: c1b896fa1c1a70b5c52555522bd699c75107f555.
++Both baseline subtrees were reconstructed from the retained source/dependency
++archive and published patches and checked against these actual Git identities.
++The reconstruction has incomplete intervening documentation-only ancestry. It
++must NOT be pushed as a Git history. Apply the delivered patch to a clean real
++checkout of the published base. The package manifest identifies every changed
++preimage/postimage and the final source/test subtree identities.
++
++## Implemented owner interaction
++
++WasmServiceLifecycle attaches one volatile WasmCreationReconciliation adapter to
++an exact bound replica. It delegates scheduling, key coalescing, completion
++waiters and in-flight exclusion to the existing OwnerKeyReconcileQueue. The
++shared queue implementation is unchanged. There is one key per adapter and at
++most one pending wake during an in-flight run; no timer or retry policy is added.
++
++The native replica lifecycle subscribes the adapter to LEADER, FOLLOWER,
++CANDIDATE, LEADER_CHANGE, TERM_CHANGE and APPLIED_PROGRESS after its ordinary
++role subscribers are installed. Callbacks capture the exact port and creation
++context and only enqueue. They do not perform a native read, submit INIT, await
++completion or retain event payloads. Explicit START and event wakes use this
++same keyed continuation and the existing genesis/writer-completion owners.
++
++Before and after each asynchronous continuation, the adapter checks the exact
++registered replica, port, creation context, initialization and closing state.
++An old callback cannot retarget a new replica or port. Event data is not authority:
++current applied state and committed membership are still read by the existing
++genesis owner. GENESIS_OBSERVED remains evidence; the outer state remains
++BOOTSTRAPPED_HELD. No endpoint, ACTIVE state, user read/write grant, completed
++creation journal or leader publication is added.
++
++Shutdown closes admission synchronously, aborts pending writer interest through
++the replica's existing stop path, retires exact event subscriptions, joins actual
++queue work, and only then clears queue bookkeeping before native closure.
++OwnerKeyReconcileQueue.shutdown() itself is not a join and is not used as one.
++Every unsubscribe is attempted. Failure retains its callback and remains visible;
++a later explicit cleanup call may retry it. There is no automatic cleanup retry.
++
++## Review corrections and first results
++
++1. The initial one-case native baseline formed its real three-voter group but
++   left INIT absent without a second lifecycle call. It failed at
++   NATIVE_EVENTS_DID_NOT_RECONCILE_ORIGINAL_CREATION. This baseline precedes the
++   expanded final witnesses and is not falsely identified as their full run.
++2. The first connection passed that native witness. Broader historical tests
++   then failed because automatic INIT preempted their manual/pre-INIT fault
++   schedules. Their assertion files remain byte-identical. Their shared fixture
++   now explicitly delays event enqueues for those schedules. The new main native
++   positive opts into ordinary automatic delivery with no interception. Three
++   fault cases delay only setup, install a real native-response fault, then resume
++   actual event delivery. This is test scheduling, not a production opt-out flag.
++3. Expanded review reproduced a cleanup defect: a permanently latched rejected
++   shutdown promise prevented a later explicit unsubscribe retry. Six controls
++   passed and the new seventh case failed. The adapter now returns the original
++   failure to its caller and clears only that failed settlement for later explicit
++   cleanup. The retained callback and closed-admission fence are unchanged.
++4. Scoped static review found two new empty/null cleanup-outcome violations.
++   Cleanup now returns an explicit RETIRED or FAILED result and its retained
++   errors. No allowance or baseline was raised. A formatting-only lint correction
++   and a failed author-side comparison helper are retained separately.
++
++## Final local measurement
++
++Execution environment: cloud container, Node 22.16.0, actual locked
++better-sqlite3 11.10.0 and actual raft-rs WASM. The standard classified repository
++runner reported sensors unavailable; no thermal policy was changed. This was
++not the user's controller and not a home-lab job. No test timeout or retry policy
++was overridden. Source/test bytes were hashed before and verified after execution.
++
++Final frozen run, after canonical metadata refresh:
++- 21 distinct files, 733 runner-reported assertions, all files PASS.
++- New mechanism witness: 8 cases, 646 ms whole file.
++- New native RF3 event witness: 4 cases, 2226 ms whole file.
++- Nineteen existing lifecycle, genesis, journal, schema, metadata, native-completion
++  and shared-queue files: 721 reported assertions.
++
++The native cases establish progress from one initial pre-election START, retained
++wake during real no-quorum INIT, resumption after the unchanged writer-interest
++deadline when the withheld APPEND_RESPONSE messages return, and joined shutdown
++while an event-owned writer interest is pending. No second START or manual INIT
++supplies the successful genesis. The existing fixed transport delivery schedule
++and zero-delay native wakes are used; no extra tick or status-as-progress helper
++is inserted after formation.
++
++Mechanism cases establish enqueue-only callbacks, 1000-event burst coalescing,
++retained wake during an await, stale registry/port rejection, listener rebind and
++retirement, actual queue joining, failure propagation and explicit cleanup retry,
++untrusted event-payload refusal, and ownership recheck after a pending result.
++They use a synthetic notification source and the actual shared queue, not fake
++successful genesis or membership answers.
++
++A preceding 21-file run also passed, but its import-graph seal was subsequently
++regenerated. That first run is preserved separately and is not the final frozen
++candidate receipt. The later run is not a retry of a failing behavioral result.
++
++## Unchanged-test source mutations
++
++Each source mutation was isolated locally, measured once, then restored in a
++finally block. Both new witness files remained byte-identical throughout.
++
++- Disconnect all native event enqueues: native file 0 pass / 4 fail. The first
++  failure is the named missing INIT after native formation. The remaining cases
++  stop at their required fault-engagement prerequisites; they are not three extra
++  established safety defects.
++- Remove only APPLIED_PROGRESS subscription: native file 1 pass / 3 fail. INIT
++  occurs, but its covering membership observation and no-quorum/deadline reentry
++  fail at APPLIED_EVENT_DID_NOT_RECONCILE_COVERING_MEMBERSHIP,
++  IN_FLIGHT_APPLIED_WAKE_WAS_LOST, and APPLIED_PROGRESS_DID_NOT_RESUME_UNKNOWN.
++  The shutdown control passes. These are causal liveness falsifiers of the same
++  omitted event connection, not import or timeout failures.
++- Remove only the post-await registry guard: mechanism file 7 pass / 1 fail at
++  STALE_RECONCILE_RESULT_ESCAPED_AFTER_AWAIT. An UNKNOWN/deadline result escapes
++  after replacement instead of the required held/shutdown classification.
++  This is a stale-result classification defect, not a demonstrated serving grant.
++
++## Static checks and remaining gates
++
++PASS: scoped ESLint; strict new-module/new-test cyclomatic and cognitive checks;
++changed-source literals, runtime grammar and silent-catch checks; source whitespace;
++canonical classification/import-graph refresh and shard validation; existing
++impact contract/pair update. Canonical census: 2403 tests, 66 contracts, 37 pairs.
++
++The changed-source decision-boundary check still exits 1 on four pre-existing
++replica-lifecycle findings. Direct baseline/current source comparison verifies
++identical findings apart from line positions. The new adapter has zero findings.
++The complete precommit, global inventory/duplication/analyzer-memory gate, full
++change-impact cone and whole corpus were not completed in this stage and remain
++open. No success of these scoped checks substitutes for them.
++
++## Evidence ceiling and publication hold
++
++Actual native groups and durable files are exercised, but metadata/journal reads
++still use the disclosed one-database component adapter; transport is queued
++loopback, setup timing virtual, and guest execution a fixture collaborator.
++This is not physical multi-host consensus, replicated metadata, native SIGKILL
++recovery, power-loss or real guest/artifact verification.
++
++The connected GitHub reads verified the actual published base, but this turn's
++available methods contain no issue/file/ref writes. Repeated discovery and the
++installed-plugin search did not expose an executable write action. Direct Git
++network access was also unavailable. Therefore no branch was published and no
++home-lab job was submitted. Existing standing lab authority was not revoked or
++changed; this is a session tool limitation. The patch, all available first-result
++logs, negative patches, review and exact-byte manifest are retained in the
++conversation checkpoint for application to real remote ancestry.
++
++The next activation boundaries remain current metadata permission, durable local
++serving/publication and RETIRED-before-CLOSED through joined lifecycle owners.
++The first-opening/file gap, upstream durable selection intent, artifacts,
++replicated-metadata/process-loss/multi-host proof and wider rs-raft gates remain
++open. Main, shared local staging, lab controller policy, F1/W07, TX1 and FreshMG
++were not modified. Existing Quest receipts remain unchanged.
+diff --git a/solve/quests/wasm-creation-genesis/EVENT-RECONCILIATION-STAGE-REVIEW-20261016.md b/solve/quests/wasm-creation-genesis/EVENT-RECONCILIATION-STAGE-REVIEW-20261016.md
+new file mode 100644
+index 0000000..ce91d17
+--- /dev/null
++++ b/solve/quests/wasm-creation-genesis/EVENT-RECONCILIATION-STAGE-REVIEW-20261016.md
+@@ -0,0 +1,43 @@
++# Native event to creation reconciliation: preimplementation author review
++
++Parent: PR133, 6ba84863490bff9a43874a03f69ad2afff4b5898.
++The operator requested this connection and author review between stages. This
++record is not independent verification, terminal Quest closure or merge approval.
++
++## Bounded interaction
++
++WasmServiceLifecycle remains the local replica/creation continuation owner.
++Its existing bound-genesis continuation is entered through the existing
++OwnerKeyReconcileQueue mechanism, once per exact hosted replica. Native role
++and APPLIED_PROGRESS callbacks only enqueue a wake; payloads convey no authority.
++Explicit start and event triggers reach the same genesis function and writer
++completion owner. No topology planner, permission algorithm, polling daemon,
++retry loop, extra native tick or new durable state is added.
++
++Capture the exact replica, port and common creation context. Recheck registry,
++initialization and shutdown state before and after an asynchronous continuation.
++A wake during in-flight INIT must remain pending and be reconsidered after the
++native observation covers the applied receipt. Shutdown fences new event work,
++unsubscribes exact listeners, aborts writer interest through its existing owner,
++and joins actual reconciliation before native storage is released. Queue shutdown
++is not by itself evidence that an in-flight callback ended.
++
++## Measurement
++
++First witness: one pre-election START per founding replica, normal native
++formation and retained transport delivery; thereafter no manual START/INIT/tick.
++Expect the exact production-authored INIT on all three native replicas while all
++serving and publication sinks remain held. Existing metadata, guest and queued
++loopback collaborators remain disclosed, not physical multi-host certification.
++Review must cover coalescing, events during await, stale port/replica callbacks,
++shutdown during pending writer completion and failure cleanup. Mutating only
++the event-to-queue connection must restore the named native-progress failure.
++
++Historical manual-reentry witnesses must be retained. Any explicit scheduling
++control added to their fixture must be documented as controlling event delivery,
++not as a product feature flag or a weakened assertion. The new positive witness
++must run ordinary automatic event delivery without that control.
++
++Serving grants, retirement, upstream selection intent, first-opening/file gap,
++artifact binding, global static/corpus, TX1, F1/W07 and full-release are not closed
++by this scope. Their owner contracts and Quest receipts remain unchanged.
+diff --git a/src/wasm-service/wasm-creation-genesis.js b/src/wasm-service/wasm-creation-genesis.js
+index d5c064d..e6f222e 100644
+--- a/src/wasm-service/wasm-creation-genesis.js
++++ b/src/wasm-service/wasm-creation-genesis.js
+@@ -85,4 +85,4 @@ async function progressWasmCreationGenesis(replica) {
+       reason: error.code ?? SERVICE_INSTANCE_OUTCOME.UNAVAILABLE};
+   }
+ }
+-export {progressWasmCreationGenesis};
++export {progressWasmCreationGenesis, WASM_CREATION_GENESIS};
+diff --git a/src/wasm-service/wasm-creation-reconciliation.js b/src/wasm-service/wasm-creation-reconciliation.js
+new file mode 100644
+index 0000000..faa4349
+--- /dev/null
++++ b/src/wasm-service/wasm-creation-reconciliation.js
+@@ -0,0 +1,113 @@
++// Volatile trigger/custody adapter of WasmServiceLifecycle, not another genesis
++// or permission owner. Both START and native events use the same keyed queue.
++import {OwnerKeyReconcileQueue} from '../workflow/owner-key-reconcile-queue.js';
++import {RECONCILE_REASON} from '../workflow/reconcile-queue-constants.js';
++import {RAFT_EVENT} from '../raft/raft-operation-port-constants.js';
++import {WRITER_REASON} from './wasm-writer-profile.js';
++import {progressWasmCreationGenesis, WASM_CREATION_GENESIS} from './wasm-creation-genesis.js';
++
++const QUEUE_NAME = 'wasm-creation-reconciliation';
++const UNSUBSCRIBE_FAILED = 'WASM creation event retirement failed';
++const LISTENER_RETIREMENT = Object.freeze({RETIRED: 'RETIRED', FAILED: 'FAILED'});
++const WAKE_EVENTS = Object.freeze([
++  RAFT_EVENT.LEADER, RAFT_EVENT.FOLLOWER, RAFT_EVENT.CANDIDATE,
++  RAFT_EVENT.LEADER_CHANGE, RAFT_EVENT.TERM_CHANGE, RAFT_EVENT.APPLIED_PROGRESS,
++]);
++
++class WasmCreationReconciliation {
++  constructor(lifecycle, replica) {
++    this.lifecycle = lifecycle;
++    this.replica = replica;
++    this.closed = false;
++    this.subscriptions = [];
++    this.shutdownSettlement = null;
++    this.queue = new OwnerKeyReconcileQueue({name: QUEUE_NAME,
++      reconcileFn: (_key, _reasons, context) => this.reconcile(context)});
++  }
++
++  current(context) {
++    return !this.closed && !this.lifecycle.consensusClosing && this.replica.initialized &&
++      this.lifecycle.activeReplicas.get(this.replica.serviceDefinitionId) === this.replica &&
++      this.replica.raft === context.port && this.replica.consensusCreation === context.creation;
++  }
++
++  capture() {
++    return Object.freeze({port: this.replica.raft, creation: this.replica.consensusCreation});
++  }
++
++  stoppedResult() {
++    return {outcome: WASM_CREATION_GENESIS.HELD, reason: WRITER_REASON.SHUTDOWN};
++  }
++
++  bind() {
++    this.requireRetirement(this.unbind());
++    const context = this.capture();
++    for (const event of WAKE_EVENTS) {
++      this.subscriptions.push(context.port.subscribe(event, () => {
++        // Never read membership, submit INIT, await or retain event payloads here.
++        if (this.current(context)) this.queue.enqueue(this.replica.replicaId, event, context);
++      }));
++    }
++  }
++
++  request() {
++    const context = this.capture();
++    if (!this.current(context)) return Promise.resolve(this.stoppedResult());
++    return this.queue.enqueueAndWait(this.replica.replicaId,
++      RECONCILE_REASON.PROGRESS_RECONCILE, context);
++  }
++
++  async reconcile(context) {
++    if (!this.current(context)) return this.stoppedResult();
++    const result = await progressWasmCreationGenesis(this.replica);
++    return this.current(context) ? result : this.stoppedResult();
++  }
++
++  closeAdmission() {
++    this.closed = true;
++  }
++
++  shutdown() {
++    if (this.shutdownSettlement !== null) return this.shutdownSettlement;
++    this.closeAdmission();
++    this.shutdownSettlement = this.retire().catch((error) => {
++      // Failure stays visible to the current caller. A later explicit shutdown
++      // may retry the retained unsubscribe; this never schedules a retry itself.
++      this.shutdownSettlement = null;
++      throw error;
++    });
++    return this.shutdownSettlement;
++  }
++
++  unbind() {
++    const result = {outcome: LISTENER_RETIREMENT.RETIRED, errors: []};
++    for (const unsubscribe of this.subscriptions.splice(0)) {
++      try {
++        unsubscribe();
++      } catch (error) {
++        this.subscriptions.push(unsubscribe);
++        result.outcome = LISTENER_RETIREMENT.FAILED;
++        result.errors.push(error);
++      }
++    }
++    return result;
++  }
++
++  requireRetirement(result) {
++    if (result.outcome === LISTENER_RETIREMENT.FAILED) {
++      throw new AggregateError(result.errors, UNSUBSCRIBE_FAILED);
++    }
++  }
++
++  async retire() {
++    const result = this.unbind();
++    // The replica's shutdown already aborted writer interest. Do not call the
++    // queue's shutdown until its *actual* current work has ended: shutdown()
++    // clears its bookkeeping and therefore is not a join operation.
++    await this.queue.awaitCurrentWorkIdle();
++    this.queue.shutdown();
++    this.requireRetirement(result);
++  }
++}
++
++export {WasmCreationReconciliation};
+diff --git a/src/wasm-service/wasm-service-lifecycle.js b/src/wasm-service/wasm-service-lifecycle.js
+index 526ef9d..36eb1ea 100644
+--- a/src/wasm-service/wasm-service-lifecycle.js
++++ b/src/wasm-service/wasm-service-lifecycle.js
+@@ -1,4 +1,4 @@
+-import {progressWasmCreationGenesis} from './wasm-creation-genesis.js';
++import {WasmCreationReconciliation} from './wasm-creation-reconciliation.js';
+ import {captureWasmCreation} from './wasm-creation-opening.js';
+ import {CONSENSUS_BOOTSTRAP} from '../service/service-consensus-bootstrap.js';
+ import {instanceDigest} from '../control-plane/owners/service-instance-contract.js';
+@@ -239,6 +239,9 @@ class WasmServiceLifecycle {
+       leaderNodeUpdateWriter: this.leaderNodeUpdateWriter,
+     });
+ 
++    if (creation !== null) {
++      replica.creationReconciliation = new WasmCreationReconciliation(this, replica);
++    }
+     this.activeReplicas.set(serviceId, replica);
+ 
+     this.logger.info(WASM_SERVICE_LOG_MSG.REPLICA_CREATED, {
+@@ -348,7 +351,7 @@ class WasmServiceLifecycle {
+ 
+     if (replica.consensusCreation !== null) {
+       replica.portAllocation = port;
+-      const genesis = await progressWasmCreationGenesis(replica);
++      const genesis = await replica.creationReconciliation.request();
+       if (!replica.initialized || this.activeReplicas.get(serviceId) !== replica) {
+         return this.refuseStart(serviceId, startOptions, {
+           code: WASM_SERVICE_LIFECYCLE_REFUSAL.STOPPED_DURING_START,
+diff --git a/src/wasm-service/wasm-service-replica-lifecycle.js b/src/wasm-service/wasm-service-replica-lifecycle.js
+index e00521d..bdf1497 100644
+--- a/src/wasm-service/wasm-service-replica-lifecycle.js
++++ b/src/wasm-service/wasm-service-replica-lifecycle.js
+@@ -96,6 +96,7 @@ async function openReplica(replica) {
+       onFollower: () => replica.onBecameFollower(),
+       onCandidate: () => replica.onBecameFollower(),
+     });
++    replica.creationReconciliation?.bind();
+     if (replica.transport) {
+       // The exact handler identity is kept so retirement removes only it
+       // (owner decision N2). Registration is the open's last step.
+@@ -168,6 +169,12 @@ async function retireReplica(replica, handler, starting, activityFailure) {
+       // to its initialize caller.
+       await Promise.allSettled([starting]);
+     }
++    try {
++      await replica.creationReconciliation?.shutdown();
++    } catch (error) {
++      activityFailure = activityFailure === null ? error :
++        withRaftOpeningCleanupFailure(activityFailure, error);
++    }
+     // Exact-identity retirement (owner decision N2): a successor's handler
+     // at the same address is never removed. No replica-lifecycle activation
+     // binds a WASM service handler, so there is no effect section to wait on.
+@@ -225,6 +232,7 @@ async function shutdownWasmServiceReplica(replica, stopActivity) {
+     replica.lifecycleSettlement : null;
+   const {promise, resolve, reject} = Promise.withResolvers();
+   replica.lifecycleState = STATE.STOPPING;
++  replica.creationReconciliation?.closeAdmission();
+   replica.lifecycleSettlement = promise;
+   const handler = replica.transportHandler;
+   let activityFailure = null;
+diff --git a/src/wasm-service/wasm-service-replica.js b/src/wasm-service/wasm-service-replica.js
+index 15277b8..c7f7a25 100644
+--- a/src/wasm-service/wasm-service-replica.js
++++ b/src/wasm-service/wasm-service-replica.js
+@@ -136,6 +136,7 @@ class WasmServiceReplica extends EventEmitter {
+     this.startupFailure = null;
+     this.consensusCloseSettlement = null;
+     this.transportHandler = null;
++    this.creationReconciliation = null;
+     this.systemTableCache = options.systemTableCache ||
+       NodeService.getInstance().getSystemTableCache();
+     this.cdcIntegrationService = options.cdcIntegrationService || null;
+diff --git a/test/shards/impact-contracts.json b/test/shards/impact-contracts.json
+index 33e6d72..51d6389 100644
+--- a/test/shards/impact-contracts.json
++++ b/test/shards/impact-contracts.json
+@@ -1125,7 +1125,7 @@
+       ]
+     },
+     "service-consensus-retained-native-bootstrap": {
+-      "description": "The original CREATE journal retains first-opening identity and hands one bound operation through manager, adapter and runtime to instance-qualified native WASM opening. Common B, exact local file and resource token are checked before native bootstrap; all results remain BOOTSTRAPPED_HELD with no serving, publication or journal completion. Cleanup retains errors and physical custody. Native RF3 evidence uses explicitly component-level metadata/journal adapters; it does not prove distributed metadata or the remaining grant/retirement interaction. Normal held lifecycle reentry constructs the exact binding-owned INIT through the existing writer completion owner; applied acceptance must be covered by a validated native committed founding membership observation. This is evidence only, never serving authority or an automatic progress wake.",
++      "description": "The original CREATE journal retains first-opening identity and hands one bound operation through manager, adapter and runtime to instance-qualified native WASM opening. Common B, exact local file and resource token are checked before native bootstrap; all results remain BOOTSTRAPPED_HELD with no serving, publication or journal completion. Cleanup retains errors and physical custody. Native RF3 evidence uses explicitly component-level metadata/journal adapters; it does not prove distributed metadata or the remaining grant/retirement interaction. Normal held lifecycle reentry constructs the exact binding-owned INIT through the existing writer completion owner; applied acceptance must be covered by a validated native committed founding membership observation. Native role and applied-progress events enqueue the same per-replica OwnerKeyReconcileQueue continuation used by explicit start. Exact registry/port/creation checks fence stale work; shutdown joins actual reconciliation before clearing queue custody. Observed genesis remains evidence only, never serving authority.",
+       "owners": [
+         "src/service/service-consensus-bootstrap.js",
+         "src/service/service-consensus-creation-intent.js",
+@@ -1152,7 +1152,10 @@
+         "src/wasm-service/wasm-creation-genesis.js",
+         "src/wasm-service/wasm-writer-completion.js",
+         "src/raft/raft-committed-membership-stamp.js",
+-        "src/raft/raft-committed-membership-constants.js"
++        "src/raft/raft-committed-membership-constants.js",
++        "src/wasm-service/wasm-creation-reconciliation.js",
++        "src/workflow/owner-key-reconcile-queue.js",
++        "src/workflow/reconcile-queue-constants.js"
+       ],
+       "tests": [
+         "test/wasm-service/wasm-retained-bootstrap.integration.test.js",
+@@ -1160,7 +1163,9 @@
+         "test/service/service-consensus-creation-intent.test.js",
+         "test/service/service-consensus-creation-recovery.integration.test.js",
+         "test/wasm-service/wasm-writer-state-v1.test.js",
+-        "test/wasm-service/wasm-creation-genesis.integration.test.js"
++        "test/wasm-service/wasm-creation-genesis.integration.test.js",
++        "test/wasm-service/wasm-creation-reconciliation.test.js",
++        "test/wasm-service/wasm-creation-reconciliation.integration.test.js"
+       ]
+     }
+   },
+@@ -2342,14 +2347,18 @@
+             "src/wasm-service/wasm-creation-genesis.js",
+             "src/wasm-service/wasm-writer-completion.js",
+             "src/raft/raft-committed-membership-stamp.js",
+-            "src/raft/raft-committed-membership-constants.js"
++            "src/raft/raft-committed-membership-constants.js",
++            "src/wasm-service/wasm-creation-reconciliation.js",
++            "src/workflow/owner-key-reconcile-queue.js"
+           ]
+         }
+       ],
+       "witnessTests": [
+         "test/wasm-service/wasm-retained-bootstrap.integration.test.js",
+         "test/runtime/node-shutdown-cell-worker-teardown.test.js",
+-        "test/wasm-service/wasm-creation-genesis.integration.test.js"
++        "test/wasm-service/wasm-creation-genesis.integration.test.js",
++        "test/wasm-service/wasm-creation-reconciliation.test.js",
++        "test/wasm-service/wasm-creation-reconciliation.integration.test.js"
+       ]
+     }
+   }
+diff --git a/test/shards/impact-graph-seal.json b/test/shards/impact-graph-seal.json
+index 1526913..c5a1727 100644
+--- a/test/shards/impact-graph-seal.json
++++ b/test/shards/impact-graph-seal.json
+@@ -1,8 +1,8 @@
+ {
+   "schemaVersion": 1,
+   "importGraphSchemaVersion": "global-owner-debt-import-graph-v2",
+-  "sourceDigest": "68858860249ef48ea5f2c6362006b1d852cf6f1d889b4e5a1494614131932735",
+-  "producerInputDigest": "fbfdaa08e3c7d7d80b6784aa03231b3fd9f06e1729b6a75aef8a669fecbc217e",
++  "sourceDigest": "9fd0f79bd9cc276122862316bb04f42878190ef04946a1c965948656b3f8c55d",
++  "producerInputDigest": "23afa10d1630dcc7329b5a807c38559708848ec80d4ac623f82cc718408eb1c8",
+   "resolverStateDigest": "afe99fef9f277b37d0f572547e2410c9f0cf5889aefaa134889834316163d6c1",
+-  "snapshotDigest": "a51a4a4ff2fe022d91d6b957010f436061ea5ea22d381b3ea80fbdc215068f7b"
++  "snapshotDigest": "cb13b73f4e2e5fb3a51ae14475e3c1ca632d724eda57117bda2a82d1754b7895"
+ }
+diff --git a/test/shards/primary-classes.json b/test/shards/primary-classes.json
+index da36447..3ee07e4 100644
+--- a/test/shards/primary-classes.json
++++ b/test/shards/primary-classes.json
+@@ -2,14 +2,14 @@
+   "schemaVersion": 1,
+   "id": "test-primary-classification",
+   "counts": {
+-    "unit": 2088,
+-    "integration": 101,
++    "unit": 2089,
++    "integration": 102,
+     "bootstrap": 205,
+     "convergence-probe": 3,
+     "packaging": 4
+   },
+-  "censusSize": 2401,
+-  "digest": "fnv1a32-992834a3",
++  "censusSize": 2403,
++  "digest": "fnv1a32-900dcc7d",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
+     "test/address/address-malformed-rejection.property.test.js": "unit",
+@@ -2383,6 +2383,8 @@
+     "test/wasm-service/timer-manager.test.js": "unit",
+     "test/wasm-service/wasm-creation-bound-native.test.js": "unit",
+     "test/wasm-service/wasm-creation-genesis.integration.test.js": "integration",
++    "test/wasm-service/wasm-creation-reconciliation.integration.test.js": "integration",
++    "test/wasm-service/wasm-creation-reconciliation.test.js": "unit",
+     "test/wasm-service/wasm-executor-run-export.test.js": "unit",
+     "test/wasm-service/wasm-executor-runtime-adapter-parity.test.js": "unit",
+     "test/wasm-service/wasm-executor.test.js": "unit",
+diff --git a/test/shards/resource-classes.json b/test/shards/resource-classes.json
+index e5bc331..b7201b5 100644
+--- a/test/shards/resource-classes.json
++++ b/test/shards/resource-classes.json
+@@ -2,13 +2,13 @@
+   "schemaVersion": 1,
+   "id": "test-resource-classification",
+   "counts": {
+-    "ordinary": 2384,
++    "ordinary": 2386,
+     "cpu-heavy": 0,
+     "external-toolchain": 14,
+     "exclusive": 3
+   },
+-  "censusSize": 2401,
+-  "digest": "fnv1a32-775f766f",
++  "censusSize": 2403,
++  "digest": "fnv1a32-b02479bb",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
+     "test/address/address-malformed-rejection.property.test.js": "ordinary",
+@@ -2382,6 +2382,8 @@
+     "test/wasm-service/timer-manager.test.js": "ordinary",
+     "test/wasm-service/wasm-creation-bound-native.test.js": "ordinary",
+     "test/wasm-service/wasm-creation-genesis.integration.test.js": "ordinary",
++    "test/wasm-service/wasm-creation-reconciliation.integration.test.js": "ordinary",
++    "test/wasm-service/wasm-creation-reconciliation.test.js": "ordinary",
+     "test/wasm-service/wasm-executor-run-export.test.js": "ordinary",
+     "test/wasm-service/wasm-executor-runtime-adapter-parity.test.js": "ordinary",
+     "test/wasm-service/wasm-executor.test.js": "ordinary",
+diff --git a/test/shards/subsystem-classes.json b/test/shards/subsystem-classes.json
+index 3fd494a..ba00e13 100644
+--- a/test/shards/subsystem-classes.json
++++ b/test/shards/subsystem-classes.json
+@@ -23,12 +23,12 @@
+     "test-infrastructure": 143,
+     "transactions": 16,
+     "transport-messaging": 96,
+-    "wasm-toolchain": 66
++    "wasm-toolchain": 68
+   },
+-  "censusSize": 2401,
+-  "digest": "fnv1a32-397a1ddb",
++  "censusSize": 2403,
++  "digest": "fnv1a32-eb26f96f",
+   "observationSchemaVersion": 2,
+-  "observationDigest": "fnv1a32-4ece5ef1",
++  "observationDigest": "fnv1a32-5193b15d",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
+     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
+@@ -2402,6 +2402,8 @@
+     "test/wasm-service/timer-manager.test.js": "wasm-toolchain",
+     "test/wasm-service/wasm-creation-bound-native.test.js": "wasm-toolchain",
+     "test/wasm-service/wasm-creation-genesis.integration.test.js": "wasm-toolchain",
++    "test/wasm-service/wasm-creation-reconciliation.integration.test.js": "wasm-toolchain",
++    "test/wasm-service/wasm-creation-reconciliation.test.js": "wasm-toolchain",
+     "test/wasm-service/wasm-executor-run-export.test.js": "wasm-toolchain",
+     "test/wasm-service/wasm-executor-runtime-adapter-parity.test.js": "wasm-toolchain",
+     "test/wasm-service/wasm-executor.test.js": "wasm-toolchain",
+@@ -16191,6 +16193,27 @@
+         "test/wasm-service/wasm-retained-bootstrap-fixture.js"
+       ]
+     },
++    "test/wasm-service/wasm-creation-reconciliation.integration.test.js": {
++      "files": [
++        "src/bootstrap/system-table-schemas-constants.js",
++        "src/constants/index.js",
++        "src/control-plane/control-plane-system-table-gateway.js",
++        "src/raft/raft-operation-port-constants.js",
++        "src/raft/raft-operation-port-request.js",
++        "src/raft/raft-rs-application-transaction-owner.js",
++        "src/raft/raft-rs-membership-transition.js",
++        "src/raft/raft-rs-ready-loop-constants.js",
++        "src/service/service-lifecycle-command-contract.js",
++        "src/wasm-service/wasm-service-committed-command-codec.js",
++        "src/wasm-service/wasm-service-constants.js",
++        "src/wasm-service/wasm-service-replica.js",
++        "test/control-plane/service-instance-creation-sqlite-fixture.js",
++        "test/partition/partition-service-test-support.js",
++        "test/test-helpers/controllable-consensus-port.js",
++        "test/test-helpers/replica-handler-identity-fixture.js",
++        "test/wasm-service/wasm-retained-bootstrap-fixture.js"
++      ]
++    },
+     "test/wasm-service/wasm-executor-run-export.test.js": {
+       "files": [
+         "src/wasm-service/wasm-executor.js"
+diff --git a/test/wasm-service/wasm-creation-reconciliation.integration.test.js b/test/wasm-service/wasm-creation-reconciliation.integration.test.js
+new file mode 100644
+index 0000000..854f2c4
+--- /dev/null
++++ b/test/wasm-service/wasm-creation-reconciliation.integration.test.js
+@@ -0,0 +1,143 @@
++import {test} from 'node:test';
++import assert from 'node:assert/strict';
++import {fixture, bootstrapGroup, initialization, deliverScheduled} from
++  './wasm-retained-bootstrap-fixture.js';
++import {WASM_WRITER_PROFILE} from '../../src/wasm-service/wasm-writer-profile.js';
++
++// Passive interception of the existing queue result, never a completion source.
++function watchReconciliation(f) {
++  const records = [];
++  const seen = new WeakSet();
++  const addHost = f.addHost;
++  f.addHost = async (slot) => {
++    const host = await addHost(slot);
++    const create = host.lifecycle.createReplica.bind(host.lifecycle);
++    host.lifecycle.createReplica = (...args) => {
++      const replica = create(...args);
++      const queue = replica.creationReconciliation?.queue;
++      if (queue && !seen.has(queue)) {
++        seen.add(queue);
++        const run = queue.reconcileFn;
++        queue.reconcileFn = async (...input) => {
++          const result = await run(...input);
++          records.push({replica, result});
++          return result;
++        };
++      }
++      return replica;
++    };
++    return host;
++  };
++  return records;
++}
++
++function assertNoServing(f) {
++  for (const host of f.hosts) {
++    assert.deepEqual(host.publications, []);
++    assert.equal(host.replica.heldCreationRefusal().reason, 'WRITER_NOT_READY');
++    assert.equal(host.replica.pendingLeaderNodeUpdate, null);
++    assert.equal(host.replica.timerManager.activeTimers.size, 0);
++  }
++}
++
++// Native events must make progress after the one original pre-election START.
++// No second START, manual INIT, status-as-progress call or extra tick follows formation.
++test('native leadership and applied progress autonomously reconcile the original held creation',
++  async (t) => {
++    const f = await fixture(t, {automaticReconciliation: true});
++    const records = watchReconciliation(f);
++    await bootstrapGroup(f);
++    await deliverScheduled(f);
++    const expected = initialization(f.metadata.intent.consensusBinding);
++    for (const host of f.hosts) {
++      assert.deepEqual(host.replica.writerState.meta().initialization?.command, expected,
++        'NATIVE_EVENTS_DID_NOT_RECONCILE_ORIGINAL_CREATION');
++      assert.ok(records.some((entry) => entry.replica === host.replica &&
++        entry.result.outcome === 'GENESIS_OBSERVED'),
++      'APPLIED_EVENT_DID_NOT_RECONCILE_COVERING_MEMBERSHIP');
++      assert.equal(host.result.status, 'BOOTSTRAPPED_HELD');
++      assert.deepEqual(host.publications, []);
++      assert.equal(host.replica.heldCreationRefusal().reason, 'WRITER_NOT_READY');
++    }
++    assert.equal(f.metadata.db.prepare('SELECT count(*) n FROM wasm_operations').get().n, 3);
++    assert.ok(f.metadata.state().selected.resources.every((slot) =>
++      slot.phase === 'ADMITTED' || slot.phase === 'CLOSED'));
++  });
++
++
++test('native applied wake survives an in-flight no-quorum INIT and resolves after replies return',
++  async (t) => {
++    // Only setup notifications are delayed, so we can install the genuine
++    // transport fault before INIT. Then all event delivery is automatic.
++    const f = await fixture(t);
++    const records = watchReconciliation(f);
++    await bootstrapGroup(f);
++    f.holdResponses = true;
++    for (const host of f.hosts) host.resumeReconciliation();
++    await deliverScheduled(f);
++    assert.ok(f.held.length > 0, 'NO_NATIVE_REPLIES_WITHHELD');
++    assert.equal(f.leader.writerState.meta().initialization, null);
++    assert.equal(f.leader.writerCompletion.pending.size, 1);
++    assert.equal(records.some((entry) => entry.result.outcome === 'GENESIS_OBSERVED'), false);
++    f.holdResponses = false;
++    f.queue.push(...f.held.splice(0));
++    await deliverScheduled(f);
++    for (const host of f.hosts) {
++      assert.ok(records.some((entry) => entry.replica === host.replica &&
++        entry.result.outcome === 'GENESIS_OBSERVED'), 'IN_FLIGHT_APPLIED_WAKE_WAS_LOST');
++      assert.equal(host.replica.creationReconciliation.queue.size, 0);
++    }
++    assert.deepEqual(f.leader.writerState.meta().initialization.command,
++      initialization(f.metadata.intent.consensusBinding));
++    assertNoServing(f);
++  });
++
++test('an expired writer interest resumes from actual applied progress, not a poll or new intent',
++  async (t) => {
++    const f = await fixture(t);
++    const records = watchReconciliation(f);
++    await bootstrapGroup(f);
++    f.holdResponses = true;
++    for (const host of f.hosts) host.resumeReconciliation();
++    await deliverScheduled(f);
++    assert.ok(f.held.length > 0);
++    f.clocks[0].advance(WASM_WRITER_PROFILE.interestMs);
++    await deliverScheduled(f);
++    assert.ok(records.some((entry) => entry.result.outcome === 'UNKNOWN'));
++    assert.equal(f.leader.writerState.meta().initialization, null);
++    f.holdResponses = false;
++    f.queue.push(...f.held.splice(0));
++    await deliverScheduled(f);
++    assert.ok(records.some((entry) => entry.replica === f.leader &&
++      entry.result.outcome === 'GENESIS_OBSERVED'), 'APPLIED_PROGRESS_DID_NOT_RESUME_UNKNOWN');
++    assert.equal(f.metadata.state().selected.resources[0].ordinal, 1);
++    assert.equal(f.metadata.db.prepare('SELECT count(*) n FROM wasm_operations').get().n, 3);
++    assertNoServing(f);
++  });
++
++test('shutdown aborts event-owned INIT, joins the queue, and leaves no native handle or late success',
++  async (t) => {
++    const f = await fixture(t);
++    const records = watchReconciliation(f);
++    await bootstrapGroup(f);
++    f.holdResponses = true;
++    for (const host of f.hosts) host.resumeReconciliation();
++    await deliverScheduled(f);
++    const replica = f.leader;
++    const queue = replica.creationReconciliation.queue;
++    assert.equal(replica.writerCompletion.pending.size, 1);
++    assert.equal(queue.inFlight.size, 1);
++    const boundary = records.length;
++    await f.hosts[0].runtime.shutdown();
++    assert.equal(queue.stopped, true);
++    assert.equal(queue.inFlight.size, 0);
++    assert.equal(queue.size, 0);
++    assert.equal(replica.writerCompletion.pending.size, 0);
++    assert.equal(replica.creationReconciliation.subscriptions.length, 0);
++    assert.equal(replica.db, null);
++    assert.equal(replica.raft, null);
++    assert.equal(replica.transportHandler, null);
++    assert.equal(records.slice(boundary).some((entry) => entry.replica === replica &&
++      entry.result.outcome === 'GENESIS_OBSERVED'), false);
++    assertNoServing(f);
++  });
+diff --git a/test/wasm-service/wasm-creation-reconciliation.test.js b/test/wasm-service/wasm-creation-reconciliation.test.js
+new file mode 100644
+index 0000000..0e9b382
+--- /dev/null
++++ b/test/wasm-service/wasm-creation-reconciliation.test.js
+@@ -0,0 +1,198 @@
++import {test} from 'node:test';
++import assert from 'node:assert/strict';
++import {EventEmitter} from 'node:events';
++import {WasmCreationReconciliation} from '../../src/wasm-service/wasm-creation-reconciliation.js';
++import {RAFT_EVENT} from '../../src/raft/raft-operation-port-constants.js';
++import {instanceDigest} from '../../src/control-plane/owners/service-instance-contract.js';
++import {WASM_WRITER_PROFILE} from '../../src/wasm-service/wasm-writer-profile.js';
++
++const QUIET = {debug() {}, info() {}, warn() {}, error() {}};
++
++// Mechanism tests: real OwnerKeyReconcileQueue, synthetic notification source.
++// No fake successful genesis or membership result is supplied.
++function fixture(t) {
++  const events = new EventEmitter();
++  const callbacks = [];
++  const port = {subscribe(event, listener) {
++    callbacks.push({event, listener});
++    events.on(event, listener);
++    return () => events.off(event, listener);
++  }};
++  const replica = {replicaId: 'physical-r1', serviceDefinitionId: 'service',
++    initialized: true, raft: port, consensusCreation: null};
++  const lifecycle = {consensusClosing: false, activeReplicas: new Map([['service', replica]])};
++  const owner = new WasmCreationReconciliation(lifecycle, replica);
++  owner.queue.logger = QUIET;
++  owner.bind();
++  t.after(() => owner.shutdown());
++  return {events, callbacks, port, replica, lifecycle, owner};
++}
++
++test('native event bursts enqueue once, do not run inline, and retain one wake during await',
++  async (t) => {
++    const f = fixture(t);
++    const entered = Promise.withResolvers();
++    const release = Promise.withResolvers();
++    const run = f.owner.queue.reconcileFn;
++    let calls = 0;
++    let active = 0;
++    let maximum = 0;
++    f.owner.queue.reconcileFn = async (...args) => {
++      calls += 1;
++      maximum = Math.max(maximum, ++active);
++      if (calls === 1) {
++        entered.resolve();
++        await release.promise;
++      }
++      try {
++        return await run(...args);
++      } finally {
++        active -= 1;
++      }
++    };
++    try {
++      for (let i = 0; i < 1000; i++) f.events.emit(RAFT_EVENT.LEADER);
++      assert.equal(calls, 0, 'NATIVE_CALLBACK_EXECUTED_RECONCILIATION_INLINE');
++      assert.equal(f.owner.queue.size, 1);
++      await entered.promise;
++      for (let i = 0; i < 1000; i++) f.events.emit(RAFT_EVENT.APPLIED_PROGRESS);
++      assert.equal(f.owner.queue.size, 1);
++      const joined = f.owner.request();
++      release.resolve();
++      await joined;
++      await f.owner.queue.awaitCurrentWorkIdle();
++      assert.equal(maximum, 1);
++      assert.equal(calls, 2, 'IN_FLIGHT_WAKE_WAS_LOST_OR_REPLAYED_AS_A_STORM');
++      assert.equal(f.owner.queue.size, 0);
++      assert.equal(f.owner.queue.retryTimers.size, 0);
++    } finally {
++      release.resolve();
++    }
++  });
++
++test('a queued old replica wake cannot run against its replacement', async (t) => {
++  const f = fixture(t);
++  let reads = 0;
++  f.replica.consensusCreation = {};
++  f.replica.writerState = {creationBinding() {
++    reads += 1; return null;
++  }};
++  f.owner.bind();
++  f.events.emit(RAFT_EVENT.APPLIED_PROGRESS);
++  f.lifecycle.activeReplicas.set('service', {...f.replica});
++  await f.owner.queue.awaitCurrentWorkIdle();
++  assert.equal(reads, 0, 'STALE_REPLICA_REENTERED_GENESIS');
++});
++
++test('a callback belonging to an old port cannot enqueue for a new port', async (t) => {
++  const f = fixture(t);
++  f.replica.raft = {...f.port};
++  for (const {listener} of f.callbacks) listener({forged: 'GENESIS_OBSERVED'});
++  assert.equal(f.owner.queue.size, 0);
++  assert.equal(f.owner.queue.isCurrentWorkIdle(), true);
++});
++
++test('rebind retires the old event listeners instead of accumulating callbacks', async (t) => {
++  const f = fixture(t);
++  for (let i = 0; i < 10; i++) f.owner.bind();
++  for (const event of f.events.eventNames()) assert.equal(f.events.listenerCount(event), 1);
++  await f.owner.shutdown();
++  assert.equal(f.events.eventNames().length, 0);
++  assert.equal(f.owner.subscriptions.length, 0);
++});
++
++test('shutdown joins actual in-flight reconciliation before clearing queue custody', async (t) => {
++  const f = fixture(t);
++  const entered = Promise.withResolvers();
++  const release = Promise.withResolvers();
++  const run = f.owner.queue.reconcileFn;
++  f.owner.queue.reconcileFn = async (...args) => {
++    entered.resolve();
++    await release.promise;
++    return run(...args);
++  };
++  let stopped = false;
++  try {
++    f.events.emit(RAFT_EVENT.APPLIED_PROGRESS);
++    await entered.promise;
++    const pending = f.owner.shutdown().then(() => {
++      stopped = true;
++    });
++    await Promise.resolve();
++    assert.equal(stopped, false, 'QUEUE_SHUTDOWN_WAS_MISTAKEN_FOR_A_JOIN');
++    assert.equal(f.owner.queue.inFlight.size, 1);
++    for (const {listener} of f.callbacks) listener();
++    assert.equal(f.owner.queue.size, 0);
++    release.resolve();
++    await pending;
++    assert.equal(f.owner.queue.stopped, true);
++    assert.equal(f.owner.queue.inFlight.size, 0);
++  } finally {
++    release.resolve();
++  }
++});
++
++test('event payloads cannot confer genesis or serving authority', async (t) => {
++  const f = fixture(t);
++  const results = [];
++  const run = f.owner.queue.reconcileFn;
++  f.owner.queue.reconcileFn = async (...args) => {
++    const result = await run(...args);
++    results.push(result);
++    return result;
++  };
++  f.events.emit(RAFT_EVENT.APPLIED_PROGRESS, {outcome: 'GENESIS_OBSERVED', gateOpen: true});
++  await f.owner.queue.awaitCurrentWorkIdle();
++  assert.deepEqual(results, [{outcome: 'GENESIS_HELD', reason: 'WRITER_NOT_READY'}]);
++});
++
++test('a failed listener retirement preserves the failure and permits an explicit cleanup retry',
++  async (t) => {
++    const f = fixture(t);
++    const failure = new Error('injected unsubscribe failure');
++    const dispose = f.owner.subscriptions[0];
++    let failing = true;
++    f.owner.subscriptions[0] = () => {
++      if (failing) throw failure;
++      dispose();
++    };
++    try {
++      await assert.rejects(f.owner.shutdown(), (error) => error.errors.includes(failure));
++      assert.equal(f.owner.queue.stopped, true);
++      assert.equal(f.owner.subscriptions.length, 1, 'FAILED_LISTENER_CUSTODY_WAS_LOST');
++      assert.equal(f.events.eventNames().length, 1, 'LATER_UNSUBSCRIBERS_WERE_NOT_ATTEMPTED');
++    } finally {
++      failing = false;
++    }
++    await f.owner.shutdown();
++    assert.equal(f.events.eventNames().length, 0);
++    assert.equal(f.owner.subscriptions.length, 0);
++  });
++
++
++test('reconciliation rechecks the exact registry owner after pending writer interest settles',
++  async (t) => {
++    const f = fixture(t);
++    const entered = Promise.withResolvers();
++    const release = Promise.withResolvers();
++    const binding = {serviceDefinitionId: 'service', incarnation: '1'.repeat(64),
++      requestId: {nonce: '2'.repeat(64)}, profileDigest: instanceDigest(WASM_WRITER_PROFILE.id)};
++    f.replica.consensusCreation = {intent: {consensusBinding: binding}};
++    f.replica.isLeader = true;
++    f.replica.writerState = {creationBinding: () => binding, classify: () => ({status: 'NEW'})};
++    f.replica.writerCompletion = {submit: async () => {
++      entered.resolve();
++      await release.promise;
++      return {status: 'UNKNOWN', reason: 'WRITER_DEADLINE'};
++    }};
++    try {
++      const pending = f.owner.request();
++      await entered.promise;
++      f.lifecycle.activeReplicas.set('service', {...f.replica});
++      release.resolve();
++      assert.deepEqual(await pending, {outcome: 'GENESIS_HELD', reason: 'WRITER_SHUTDOWN'},
++        'STALE_RECONCILE_RESULT_ESCAPED_AFTER_AWAIT');
++    } finally {
++      release.resolve();
++    }
++  });
+diff --git a/test/wasm-service/wasm-retained-bootstrap-fixture.js b/test/wasm-service/wasm-retained-bootstrap-fixture.js
+index 4545f52..aee1e77 100644
+--- a/test/wasm-service/wasm-retained-bootstrap-fixture.js
++++ b/test/wasm-service/wasm-retained-bootstrap-fixture.js
+@@ -43,7 +43,7 @@ async function mirror(handler) {
+       dependencies: [], capabilities: []}, exports: {run: (_ctx, args) => args}});
+   return owner;
+ }
+-async function fixture(t) {
++async function fixture(t, {automaticReconciliation = false} = {}) {
+   const cleanups = [];
+   const metadata = await createOriginFixture({after: (fn) => cleanups.push(fn)});
+   const directory = mkdtempSync(join(tmpdir(), 'wasm-retained-bootstrap-'));
+@@ -94,6 +94,32 @@ async function fixture(t) {
+       messageRouter: f.transport, serviceDefinitionsOwner: metadata.primary,
+       dataDirectoryManager, moduleMirror, portAllocator: new PortAllocator()});
+     lifecycle.logger = QUIET;
++    // Historical manual-reentry witnesses control native-wake delivery. This
++    // is a fixture-only queue boundary, not a product activation flag. New
++    // autonomous witnesses pass automaticReconciliation=true and never install it.
++    let deliverReconciliation = automaticReconciliation;
++    const delayedWakes = new Map();
++    const observed = new WeakSet();
++    const createReplica = lifecycle.createReplica.bind(lifecycle);
++    lifecycle.createReplica = (...args) => {
++      const replica = createReplica(...args);
++      const queue = replica.creationReconciliation?.queue;
++      if (queue && !observed.has(queue)) {
++        observed.add(queue);
++        queue.logger = QUIET;
++        if (!deliverReconciliation) {
++          const enqueue = queue.enqueue.bind(queue);
++          queue.enqueue = (...entry) => {
++            if (!deliverReconciliation && !entry[3]?.completionWaiter) {
++              delayedWakes.set(queue, () => enqueue(...entry));
++              return true;
++            }
++            return enqueue(...entry);
++          };
++        }
++      }
++      return replica;
++    };
+     const driver = new WasmComponentDriver({wasmServiceLifecycle: lifecycle});
+     const registry = new RuntimeDriverRegistry();
+     registry.register(driver);
+@@ -114,7 +140,11 @@ async function fixture(t) {
+     const manager = metadata.manager();
+     manager.registerAdapter(new RuntimeServiceAdapter({serviceRuntimeLifecycle: runtime}));
+     const host = {intent, nodeId, manager, runtime, driver, lifecycle, publications,
+-      timeSource, processOwner};
++      timeSource, processOwner, resumeReconciliation() {
++        deliverReconciliation = true;
++        for (const wake of delayedWakes.values()) wake();
++        delayedWakes.clear();
++      }};
+     f.hosts.push(host);
+     return host;
+   };

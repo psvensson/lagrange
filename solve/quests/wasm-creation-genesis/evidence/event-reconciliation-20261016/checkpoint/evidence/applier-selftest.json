@@ -1,0 +1,25 @@
+{
+  "scope": "checkpoint-applier tooling test using an isolated miniature git repository, not product proof",
+  "cases": [
+    {
+      "name": "exact-base check-only",
+      "exitCode": 0,
+      "output": "{\n  \"status\": \"PATCH_CHECKED_NOT_APPLIED\",\n  \"base\": \"8febcf34b71c5114e55afaf3afe7a130f4de1ede\"\n}\n"
+    },
+    {
+      "name": "dirty worktree refusal",
+      "exitCode": 1,
+      "output": "REFUSED: Worktree/index is not clean; no changes made\n"
+    },
+    {
+      "name": "apply and postimage verification",
+      "exitCode": 0,
+      "output": "{\n  \"status\": \"PATCH_APPLIED_AND_STAGED_NOT_COMMITTED\",\n  \"base\": \"8febcf34b71c5114e55afaf3afe7a130f4de1ede\",\n  \"sourceTree\": \"8f556932095bb2987e0882692fa509fe72c3aadf\",\n  \"testTree\": \"d972aa6e9441d297678a631133187d8887b47af5\",\n  \"testsExecuted\": false,\n  \"published\": false\n}\n"
+    },
+    {
+      "name": "repeated application refusal",
+      "exitCode": 1,
+      "output": "REFUSED: Worktree/index is not clean; no changes made\n"
+    }
+  ]
+}
