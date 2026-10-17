@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2269,
+    "ordinary": 2271,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2286,
-  "digest": "fnv1a32-2eb5668a",
+  "censusSize": 2288,
+  "digest": "fnv1a32-2a9f780f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1490,6 +1490,7 @@
     "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js": "ordinary",
     "test/raft/raft-rs-backend/membership-changed-event.test.js": "ordinary",
     "test/raft/raft-rs-backend/multi-replica-runtime-prerequisites.test.js": "ordinary",
+    "test/raft/raft-rs-backend/n0-multigroup-sender-only.test.js": "ordinary",
     "test/raft/raft-rs-backend/n0-raft-timing-measurement.test.js": "ordinary",
     "test/raft/raft-rs-backend/operation-port-boundary.test.js": "ordinary",
     "test/raft/raft-rs-backend/operation-port-lifecycle.test.js": "ordinary",
@@ -2165,6 +2166,7 @@
     "test/transport/message-router-readiness-reserve.test.js": "ordinary",
     "test/transport/message-router-transport-cleanup.test.js": "ordinary",
     "test/transport/message-router.test.js": "ordinary",
+    "test/transport/n0-router-socket-baseline.test.js": "ordinary",
     "test/transport/name-first-advertising-publication.test.js": "ordinary",
     "test/transport/node-address-resolution-contract.test.js": "ordinary",
     "test/transport/node-address-resolution.test.js": "ordinary",
