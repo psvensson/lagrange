@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2389,
+    "ordinary": 2390,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2406,
-  "digest": "fnv1a32-b0194ee9",
+  "censusSize": 2407,
+  "digest": "fnv1a32-a0489a83",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -865,6 +865,7 @@
     "test/distributed/harness/__tests__/logging-publication-queue-source-identity.test.js": "ordinary",
     "test/distributed/harness/__tests__/memory-leak-analyzer.test.js": "ordinary",
     "test/distributed/harness/__tests__/memory-soak-enforcement-oracle.test.js": "ordinary",
+    "test/distributed/harness/__tests__/n0-physical-network-baseline.test.js": "ordinary",
     "test/distributed/harness/__tests__/network-partition-split-brain-scenario.test.js": "ordinary",
     "test/distributed/harness/__tests__/node-client.test.js": "ordinary",
     "test/distributed/harness/__tests__/node-handle-control-snapshot-fallback.test.js": "ordinary",
