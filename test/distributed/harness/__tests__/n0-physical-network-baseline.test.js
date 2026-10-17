@@ -113,7 +113,7 @@ test('N0 measures each physical routed host interface and reports nonexclusive b
 test('N0 refuses three nodes on one machine rather than claiming three hosts',
   async () => {
     await assert.rejects(run(fakeCluster({sameHost: true}), testClock()),
-      /three distinct physical host identities/u);
+      /host count derives ONLY from harness physical host identity/u);
   });
 
 test('N0 refuses host-mode spoofed by a bridge network',
