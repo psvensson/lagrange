@@ -22,8 +22,8 @@
   "receipts": [
     {
       "id": "replacement-source-target-and-obligations-classified",
-      "passed": true,
-      "detail": "J1 is selected by the operator in operator-decision-20261008-j1.md. Exact O/S/T subjects and durable promotion-authorization boundary are classified; no WIP permit or full replacement acceptance is claimed."
+      "passed": false,
+      "detail": "Reopened after independent review 5454259637 / 4217048455: the operator has selected J1, but the exact durable promotion authorization carrier, conditional write/commit point and unknown-result recovery must be explicit before this classification is accepted. Earlier policy approval is not implementation of that boundary."
     },
     {
       "id": "workflow-commit-projection-and-restart-classified",
@@ -32,8 +32,8 @@
     },
     {
       "id": "snapshot-local-open-wipe-and-install-classified",
-      "passed": true,
-      "detail": "Four gates and existing owners classified in classification-disposition-20261008.md. Missing callback/Ready/application-image integration belongs to the existing snapshot product frontier. No successful intact catch-up or multi-host claim."
+      "passed": false,
+      "detail": "Reopened after independent review 5454259637 / 4217048521: four named gates are insufficient. Each current or missing transition needs its concrete owner method, durable carrier/commit point and restart/lost-answer/wake interaction. Existing component/refusal proofs remain valid only within their measured ceiling."
     },
     {
       "id": "source-bound-deterministic-discriminators-measured",
@@ -45,7 +45,7 @@
     {
       "id": "independent-category-complete-contract-review",
       "passed": false,
-      "detail": "Outstanding actual independent review of the new classification packet. Earlier rejections and author self-review remain unchanged."
+      "detail": "Review 5454259637 supports prior corrections but raises two new substantive classification findings. No approving verdict exists. Earlier rejections and author self-review remain unchanged."
     }
   ]
 }
