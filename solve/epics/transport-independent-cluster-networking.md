@@ -187,6 +187,7 @@ semantics.
   test passes on both machines at the same SHA
   ([#133](https://github.com/psvensson/lagrange-lab/issues/133),
   [#135](https://github.com/psvensson/lagrange-lab/issues/135)).
+- **Harnessd integration handoff (2026-10-17):** shared M10 dispatch [PR #365](https://github.com/psvensson/harnessd/pull/365) is still draft and supports only one-host Lagrange `raft-smoke`. The existing private lab `harness` operation owns multi-host execution; [lab issue #182](https://github.com/psvensson/lagrange-lab/issues/182) scopes a **fixed, locally opt-in** `n0-physical-network-3` profile. Live controller v0.1.6 has original job #160 `UNCERTAIN` after #159 reconciliation, so no new N0 source job is admissible until local physical clearance and the independently reviewed v0.1.7 parser upgrade. No new dispatcher, grant or execution has been activated.
 - **Operator execution** is prepared in the
   [pinned N0 physical lab procedure](transport-independent-cluster-networking/n0-physical-lab-operator.md):
   a separate detached clone of the proven SHA, the existing
