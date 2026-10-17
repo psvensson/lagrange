@@ -14,6 +14,9 @@ authorizes:
   - test/raft/raft-rs-backend/n0-raft-timing-measurement.test.js
   - test/raft/raft-rs-backend/n0-multigroup-sender-only.test.js
   - test/transport/n0-router-socket-baseline.test.js
+  - test/raft/raft-rs-backend/n0-connected-pump-attribution.test.js
+  - test/distributed/harness/__tests__/n0-physical-network-baseline.test.js
+  - test/distributed/scenarios/n0-physical-network-baseline.js
   - test/shards
 ---
 
@@ -154,40 +157,57 @@ semantics.
 - `docs/security.md`: current plain WebSocket node transport is not
   zero-trust hardened; node authentication is a separate acceptance gate.
 
-## Current state — N0 implementation measured, certification still open
+## Current state — N0 instrumented and twice verified; live three-host gate open
 
-- **Three N0 test-only measurements were implemented**: real native
-  rs-raft heartbeat/election/proposal timing; actual loopback
-  `MessageRouter` TCP stream framing/ACKs; and 1/8/16-group
-  native sender-only idle heartbeat scheduling.
-- **Exact tested SHA:**
-  [`a721da6b7216491dded515e9991dfdb6daff8a04`](https://github.com/psvensson/lagrange/commit/a721da6b7216491dded515e9991dfdb6daff8a04)
-  under `proof/n0-multigroup-sender-only-20261017`.
-  Both `lenovo-laptop` ([#120](https://github.com/psvensson/lagrange-lab/issues/120))
-  and `tv-dator` ([#121](https://github.com/psvensson/lagrange-lab/issues/121))
-  returned **COMPLETE PASS: all 3 test files, 7 cases, 0 failures**.
-- The [N0 evidence report](transport-independent-cluster-networking/n0-baseline-2026-10-17.md)
-  retains exact source identities, measured native tick/heartbeat/election
-  behavior, two-host green proof, and explicitly *unresolved* connected
-  16-group scheduling observations.
-- **Connected multi-group remains red:** the observed 16-group
-  in-process response-delivery fixture emitted one heartbeat wave per
-  group in ~820 ms despite retained leader status (lab #117).
-  The independent sender-only 16-group PASS does **not** close this.
-- No physical inter-host traffic or 100-node Veilid-bandwidth
-  certification has occurred. Real socket measurements here are
-  loopback TCP-stream counters; no IP headers, relay bytes or LAN RTT.
-- This project's `main`-derived `work/n0-raft-timing-measurement-20261017`
-  branch mirrors all three tests and the planning/evidence documents,
-  **but was not lab-executed** because the commissioned lab's dependency
-  lock matched a different rs-raft branch. Exact green proofs belong
-  only to their pinned proof commit, never to the untested mirror.
-- **No production `src/` changes**, no Raft timing/config changes, no
-  alternate network transports, no lab-controller policy changes,
-  no merge to `main`, and no claim that the future terminal
-  projector, independent owner review or N0 certification is done.
-- **Next scope:** commission a reviewed, fixed multi-host N0 measurement
-  operation under the existing shared lab/harness owner (no ad-hoc SSH
-  through `test-files`); characterize the connected 16-group red and
-  desired-versus-effective Raft timing without changing rs-raft until
-  its separate cutover gate has an approved baseline.
+- **Frozen five-file N0 test proof** at
+  [`ff50557a77749c9a5f59fc4d3c95f7b3cd5e93f0`](https://github.com/psvensson/lagrange/commit/ff50557a77749c9a5f59fc4d3c95f7b3cd5e93f0):
+  `lenovo-laptop` [#136](https://github.com/psvensson/lagrange-lab/issues/136)
+  and `tv-dator` [#137](https://github.com/psvensson/lagrange-lab/issues/137)
+  both report **COMPLETE PASS, 5 files, 14 cases, 0 failures** at the exact
+  same SHA. The source contains three-voter native heartbeat/election/proposal
+  timing, loopback WebSocket/TCP frame accounting, 1/8/16-group sender-only
+  observation, connected Raft response-pump attribution, and six fail-closed
+  contract tests for the physical-host network scenario.
+- **Connected short-window latency is a measured finding, not a closed
+  performance guarantee:** connected 1/8/16-group tests pass with a 1250 ms
+  window on both physical machines [#123](https://github.com/psvensson/lagrange-lab/issues/123),
+  [#124](https://github.com/psvensson/lagrange-lab/issues/124).
+  At the original **750 ms** window, 16 groups still fail because a single
+  shared synchronous response-delivery pump turn consumed **676.83 ms**
+  (see the exact [#125](https://github.com/psvensson/lagrange-lab/issues/125)
+  lab diagnostic). This is in-process fixture wall time, not measured network
+  RTT or proof of production safety at 16 groups; treat it as an N3/N5
+  latency and scaling falsifier, not grounds for arbitrary timeout extension.
+- **Three-host scenario exists but has NOT been physically executed.**
+  `test/distributed/scenarios/n0-physical-network-baseline.js`
+  requires three independently identified real hosts in Docker host-network
+  mode and reads source-backed, routed host-interface RX/TX counters after
+  convergence. It explicitly includes unrelated host traffic and excludes
+  per-peer RTT or Veilid relay claims. Its six-case preflight/negative-control
+  test passes on both machines at the same SHA
+  ([#133](https://github.com/psvensson/lagrange-lab/issues/133),
+  [#135](https://github.com/psvensson/lagrange-lab/issues/135)).
+- **Operator execution** is prepared in the
+  [pinned N0 physical lab procedure](transport-independent-cluster-networking/n0-physical-lab-operator.md):
+  a separate detached clone of the proven SHA, the existing
+  `lab harness run n0-physical-network-baseline` owner, and three locally
+  authorized Linux Docker hosts. The cloud bridge currently has no locally
+  enabled N0 three-host profile; do not evade this with `test-files`,
+  arbitrary SSH or a relabeled rolling-restart scenario.
+- All evidence and negative runs are preserved in the
+  [N0 evidence report](transport-independent-cluster-networking/n0-baseline-2026-10-17.md).
+  All six N0 test/scenario source files on the planning branch are
+  byte-identical to those at the exact lab-tested proof SHA.
+  The **planning branch itself was not lab-executed**: it inherits a
+  different `package-lock.json` and an older rs-raft runtime from
+  `main`. Never transfer the green result to an untested new base.
+- **Zero production source changes** and no merges, timer changes,
+  secondary retry/transport owner, lab grant changes, or certification
+  claims. The separate rs-raft cutover remains the prerequisite for
+  integrating N0 into production.
+- **N0 completion gate** remains open pending genuine three-host
+  report/evidence, appropriate independent inspection, and the
+  exact-accepted rs-raft baseline. The parent transport networking
+  epic necessarily stays open through NATS-only and Veilid-only
+  acceptance. The `doneWhen` projector above is still only a planned
+  parent-epic gate, not an executable certification tool.
