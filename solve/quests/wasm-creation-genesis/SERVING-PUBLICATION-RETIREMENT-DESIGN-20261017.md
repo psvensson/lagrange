@@ -684,3 +684,184 @@ hosts; scoped static as before; `audit:shards` refresh; impact contract
   `openReplica`'s mandatory metadata read, B-§4).
 - Timer owner: `TimerManager.reconstructTimers` idempotence (B-N2).
 - Tombstoned-path cleanup and slot reuse (A-D2-2).
+
+---
+
+# Revision 3 (2026-10-17, after the re-vet of Revision 2)
+
+The re-vet (`evidence/design-vets-20261017/design-revet-R2-20261017.md`) found
+every mechanism refutation of vets A and B closed or legitimately deferred, and
+four new defects introduced by Revision 2 (N1-N4) plus required items N5-N16.
+This revision supersedes the Revision 2 clauses named below; everything else in
+Revision 2 stands.
+
+## Superseded clauses of Revision 2
+
+- 6' "retained 21 files ... must run green" as if unchanged (N1).
+- D1'/D6' "the latch is the durable phase" (N2).
+- D4' step 3 as written against today's `changeResourceState` (N3).
+- D4' "driver keeps `_prepared`/`_lifecycles` for the serviceId (retains the
+  token)" and D4' step 1 "if none exists, continue as retire-by-token" keyed by
+  serviceId/token; `retireReplica(serviceId, exactToken)` as the only entry (N4).
+- D6' "wakes only on the local transition" as the sole wake (N7).
+- D2'/D6' silence on binding native events for a replica that opens SERVING (N16).
+
+## N1. Retained witnesses that Revision 2 flips, and their supersession
+
+With D1' the continuation grants as soon as genesis is observed and the metadata
+owner admits it. The lab-accepted witnesses that asserted the intermediate
+"OBSERVED but HELD" state therefore observe the stage's intended end state and
+are superseded, by appending (R21), never by a fixture seam that withholds the
+grant (R11):
+
+- `test/wasm-service/wasm-creation-genesis.integration.test.js`: assertions at
+  `:58-59, :85, :90, :105, :113, :179, :198, :217, :313` and `assertHeld :39-46`
+  become: where INIT is recorded and the committed founding membership covers
+  it, the START/re-entry result is `PUBLISHED`, the slot phase is PUBLISHED,
+  `heldCreationRefusal()` is null (serving), and no endpoint/state/journal sink
+  is called. Cases whose fault schedule keeps INIT unrecorded or the membership
+  read refused stay HELD with their existing reasons.
+- `test/wasm-service/wasm-creation-reconciliation.integration.test.js`: the
+  automatic positive (`:45-66`) and `assertNoServing :35-41` become: after the
+  wake-driven re-entry the replica serves (refusal null), slots PUBLISHED,
+  `host.publications` still `[]`; the shutdown case keeps "no late PUBLISHED".
+- The new behaviour is recorded in the quest log at implementation as a finding
+  (`decision`) naming these lines; the lab acceptance record of `35d533b6b` is
+  not rewritten.
+
+## N2. Latch and wake predicate are process-local
+
+The single-fire latch is the per-instance in-memory edge `servingState: HELD ->
+SERVING` on THIS replica object, set by the run that performs it (grant +
+local PUBLISHED + `enableServing`) or by the open-time check (D2'). Re-entry
+replays the leader effects iff `servingState !== SERVING` at that moment, so a
+failed `enableServing` (`SERVING_ENABLE_FAILED`, local already PUBLISHED) and a
+HELD-at-open replica whose re-grant lands both get their effects exactly once.
+The durable phase is only the restart latch: a restarted process re-enters
+through its own START and collects its own result. Wake predicate
+(`CREATION_GENESIS_OBSERVED`): this run flipped `servingState` to SERVING AND
+the run's reasons carry no `PROGRESS_RECONCILE` (no waited START); a waited
+START collects its result and fires no wake. `reconcileFn` therefore consumes
+its `reasons` argument (N13); a re-entrant `request()` while the key is in
+flight is deferred and merged, and the queue's `STALE_CLAIM_IN_FLIGHT`
+diagnostic is expected, not asserted absent.
+
+## N3. RELEASING is a guarded transition; slots are monotonic after CLOSED
+
+`changeResourceState` gains an explicit allowed-from table (R07):
+PUBLISHED from ADMITTED only (existing conditions); RELEASING from ADMITTED or
+PUBLISHED; CLOSED from ADMITTED, PUBLISHED or RELEASING; any target on a CLOSED
+slot answers `{outcome: CLOSED, phase: CLOSED, token}` without mutation; the
+same phase answers idempotently as today. A re-stop that finds the slot CLOSED
+skips the RELEASING step and proceeds to the wake. Owner component witness:
+`test/control-plane/service-instance-creation-cas.test.js` gains the table.
+
+## N4. Retirement custody is keyed by the creation identity, never by serviceId
+
+`WasmServiceLifecycle.retireReplica(creation)` takes the retained creation
+descriptor (intent `consensusBinding` + `consensusSlotRequest` + `token`, the
+same `owned.consensusCreation` object the manager passes to create/start), from
+which `runtimeServiceConsensusIdentity` derives `{groupId, replicaId, nodeId}`
+and `getWasmServiceDbPath` the file path. Step 1 matches a registered replica
+by `instanceDigest(consensusCreation)`; a different live replica under the same
+serviceId (a successor J) is not a conflict: the retire falls to the by-path
+branch for I's file while J stays untouched. Durable custody is the caller's
+retained creation (the creation row's `intent_json`/`admission_json`); the
+driver's `stop(replicaContext)` reads `replicaContext.consensusCreation`
+exactly as `start` does and never consults `_prepared` for a bound stop; no
+driver bookkeeping retention is needed. The manager's bound STOP branch takes
+the handle's `consensusCreation`, calls the adapter, returns the typed result,
+and performs no `_assertTransition`/row transition when `closed === false`
+(the STOP row stays IN_PROGRESS; no new SQL: nothing is written, N14).
+
+## N5-N16, resolved
+
+- N5 Unit witnesses driving user paths on CREATED unbound replicas
+  (`test/wasm-service/wasm-service-replica.test.js:273, :291, :306, :389, :405,
+  :427-430, :439, :462, :480`) are a fixture gap: the unit helper sets
+  `lifecycleState = READY` (as `wasm-writer-completion-v1.test.js:53` does);
+  assertions unchanged. `:683` must additionally assert the refusal shape so it
+  cannot pass vacuously.
+- N6 `publishReplica(serviceId, exactToken)` returns the mapped start shape
+  (identical to `startReplica`'s bound branch). The frozen C1 fixture
+  `wasm-creation-bound-native-fixture.js:305-347` is superseded, recorded: INIT
+  is no longer issued manually (nonce mismatch at `:308`; the continuation
+  authors it), ENROLL runs after publish, `retire()` calls `retireReplica` with
+  the creation. The C1 discriminator (old INIT refuses, valid J path completes)
+  is kept and the file joins the lane selection.
+- N7 A run that reaches OBSERVED but cannot grant (UNAVAILABLE, UNKNOWN,
+  STALE/PREDECESSOR/CLOSED holds, `LOCAL_GRANT_NOT_RECORDED`) fires one wake
+  with reason `CREATION_GRANT_HELD` carrying the typed grant outcome, exactly
+  once per run. The consumer owns the re-drive cadence: in production the
+  desired-state reconcile (`RUNTIME_SERVICE_DESIRED_STATE`); in this stage's
+  fixture the consumer records the wake and re-enters only when the test says.
+  No lifecycle-side retry.
+- N8 `RETIREMENT_BLOCKED_CLEANUP_REQUIRED` is decided on `replica.db?.open ===
+  true` for a replica in CLEANUP_REQUIRED after one re-entered `shutdown()`
+  (allowed by the lifecycle); if that re-entry releases the handles the retire
+  proceeds by path, else the typed refusal and no CLOSED. In-process a second
+  better-sqlite3 connection to the WAL file cannot corrupt; the data-directory
+  process owner is per directory and already held by this node.
+- N9 Manager acceptance of PUBLISHED requires `started === true`, binding and
+  token equality AND the re-resolved metadata phase PUBLISHED; RUNNING is
+  presentation only.
+- N10 The continuation is total: the grant steps are wrapped like
+  `progressWasmCreationGenesis` and every failure maps to a typed outcome in 3';
+  `reconcileFn` never throws, so `request()` never rejects and `startReplica`'s
+  bound branch needs no new catch.
+- N11 P4 drives a READ and an ASYNC proposal in the same synchronous turn as the
+  stop begins, via `replica.handleMessage` and `replica.proposeEntry` (the
+  retained origin is strong; the ASYNC proposal goes through `proposeEntry`
+  directly), so the refusal is the `serving` fence, not the retired handler.
+- N12 P12 also asserts that a user message WAS admitted and served after
+  publication (no vacuous pass).
+- N13 see N2.
+- N14 Vocabulary owners: `WASM_SERVICE_LIFECYCLE_REFUSAL`
+  (`wasm-service-constants.js`) gains `LOCAL_GRANT_NOT_RECORDED`,
+  `SERVING_ENABLE_FAILED`, `CREATION_RETIRED`,
+  `RETIREMENT_BLOCKED_CLEANUP_REQUIRED`; `WASM_CREATION_RETIREMENT` (outcomes
+  `RETIRED`, `CLOSE_UNRESOLVED`, `ALREADY`, `CREATION_STORAGE_MISSING`) lives in
+  `wasm-creation-opening.js` beside the local phase machine;
+  `CONSENSUS_BOOTSTRAP.PUBLISHED` and `CREATION_WAKE_OUTCOME` in
+  `service-consensus-bootstrap.js`; `RECONCILE_REASON.CREATION_GENESIS_OBSERVED`,
+  `CREATION_GRANT_HELD`, `CREATION_RESOURCE_CLOSED` in
+  `reconcile-queue-constants.js`. D8 consumer sites adjusted for the named
+  no-failure state: `wasm-service-replica-lifecycle.js:143, :175, :197, :202`
+  and `withRaftOpeningCleanupFailure` callers.
+- N15 Recorded supersession of CONTRACT-R2's order ("closes native port and
+  local handles, then durably marks RETIRED"): the tombstone is written on the
+  open connection before the handles close because the record lives in that
+  database; the intent (RETIRED durable before CLOSED acknowledged) is kept.
+- N16 A replica that opens SERVING (D2') does not `bind()` native events;
+  `current()` is false once `servingState === SERVING`, so no genesis read or
+  grant CAS runs per committed user write.
+
+## 6''. Proof plan additions (beyond 6')
+
+- P13 grant UNAVAILABLE (gateway read fault during the grant): one
+  `CREATION_GRANT_HELD` wake with outcome UNAVAILABLE, replica HELD, no retry
+  by the lifecycle; after the fault clears an explicit re-entry publishes.
+- P14 LEADER -> FOLLOWER -> LEADER across a held grant (`holdNext` on the grant
+  UPDATE while the fixture drives an election change): effects replayed once;
+  timers and safety broadcasts exist on the final leader only.
+- P15 grant lost reply (`loseReply` on the grant UPDATE): owner resolves to
+  PUBLISHED; one local write; one wake.
+- P16 local RETIRED write fails (fault on the replica connection): shutdown
+  reports cleanup failure, CLOSED not attempted, `RETIREMENT_BLOCKED_CLEANUP_REQUIRED`
+  on the next retire while handles are open.
+- P17 explicit START that reaches OBSERVED publishes and fires no wake.
+- P18 absent wake consumer: result `wake.outcome === CONSUMER_ABSENT`.
+- P1 additionally asserts, on the leader after publication,
+  `_safetyBroadcastTimer !== null` and `timerManager.activeTimers` reconstructed,
+  and on every host that the adapter's subscriptions are retired and a later
+  committed write triggers no genesis read.
+- Component CAS table (N3) and the by-path tombstone cases in the local-record
+  file.
+- M7 is retargeted to the waiter term of the wake predicate (P17 red); M10
+  removes the RELEASING allowed-from guard (CAS table red); M11 keys the
+  retire match by serviceId instead of creation digest (P10/P5b successor
+  variant red).
+
+Still uncovered and recorded: cell 29 (committed user writes applied between
+the tombstone and `port.close` are benign: the local record is not touched by
+apply); cross-node wake delivery (7').
