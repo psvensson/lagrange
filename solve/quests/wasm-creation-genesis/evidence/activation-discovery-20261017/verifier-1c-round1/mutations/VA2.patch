@@ -1,0 +1,12 @@
+--- a/src/runtime/runtime-startup-wiring.js	2026-10-17 17:28:09.257794117 +0200
++++ b/src/runtime/runtime-startup-wiring.js	2026-10-17 17:28:09.261794149 +0200
+@@ -53,8 +53,7 @@
+       return node.cdcIntegrationService;
+     },
+     get endpointHost() {
+-      return resolveEndpointAddress({nodeAddress: node.nodeAddress,
+-        advertisedNodeWsAddress: node.advertisedNodeWsAddress, nodeId: node.nodeId});
++      return node.nodeAddress ?? null;
+     },
+     get systemTableCache() {
+       return node.peekSystemTableCache?.() ?? null;

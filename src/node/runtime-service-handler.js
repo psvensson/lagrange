@@ -30,6 +30,8 @@ import {
 import {
   buildRuntimeServiceTargetClaimKey,
 } from '../rebalancer/runtime-service-replica-identity.js';
+import {consumeCreationWake, namesCreation, replyToRetainedMemo, routeBoundRemoval,
+  routeRuntimeServiceCreate, rowCreationHint} from './runtime-service-bound-creation-route.js';
 import {
   RUNTIME_SERVICE_HANDLER_ADDRESS,
   RUNTIME_SERVICE_HANDLER_ERROR_MSG,
@@ -267,41 +269,12 @@ class RuntimeServiceHandler extends EventEmitter {
       );
     }
 
-    // Idempotency: existing active replica
+    // Idempotency: an existing local replica answers from its memo.
     const existing = this.localReplicas.get(replicaId);
-    if (existing) {
-      if (existing.status === ReplicaStatus.ACTIVE) {
-        this.logger.info(
-          RUNTIME_SERVICE_HANDLER_LOG_MSG.CREATE_ALREADY_ACTIVE,
-          {replicaId, nodeId: this.nodeId},
-        );
-        this.emitExecutorOutcome(
-          EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_ACTIVE,
-          operationId,
-          WORKFLOW_STEP.ACTIVE,
-          {replicaId},
-        );
-        return buildReplicaOperationResponse(
-          ReplicaOperationResponseStatus.ALREADY_EXISTS,
-          {
-            replicaId,
-            nodeId: this.nodeId,
-          },
-        );
-      }
-      if (existing.status === ReplicaStatus.CREATING) {
-        this.logger.info(
-          RUNTIME_SERVICE_HANDLER_LOG_MSG.CREATE_IN_PROGRESS,
-          {replicaId, nodeId: this.nodeId},
-        );
-        return buildReplicaOperationResponse(
-          ReplicaOperationResponseStatus.IN_PROGRESS,
-          {
-            replicaId,
-            nodeId: this.nodeId,
-          },
-        );
-      }
+    const existingReply = this.replyToExistingReplica(
+      existing, {operationId, entityId, replicaId});
+    if (existingReply) {
+      return existingReply;
     }
 
     // Idempotency: in-progress operation
@@ -319,18 +292,7 @@ class RuntimeServiceHandler extends EventEmitter {
       );
     }
 
-    // Track in-progress
-    this.localReplicas.set(replicaId, {
-      replicaId,
-      entityId,
-      status: ReplicaStatus.CREATING,
-    });
-    this.inProgressOperations.set(operationId, {
-      type: ReplicaOperationMessageType.CREATE_REPLICA,
-      replicaId,
-      entityId,
-      startedAt: Date.now(),
-    });
+    this.trackCreateRequest(existing, {operationId, entityId, replicaId});
 
     // Async creation after ACK
     setImmediate(() => {
@@ -358,7 +320,100 @@ class RuntimeServiceHandler extends EventEmitter {
   }
 
   /**
-   * Async create: resolve definition, create + start replica,
+   * Track a CREATE in progress. A memo that names a creation has one writer,
+   * the bound route's settle (design RV6.1): the request is tracked in flight
+   * only; any other memo becomes CREATING as before.
+   * @param {Object|undefined} existing - The local replica memo.
+   * @param {Object} params - {operationId, entityId, replicaId}.
+   */
+  trackCreateRequest(existing, {operationId, entityId, replicaId}) {
+    if (!namesCreation(existing)) {
+      this.localReplicas.set(replicaId, {
+        replicaId,
+        entityId,
+        status: ReplicaStatus.CREATING,
+      });
+    }
+    this.inProgressOperations.set(operationId, {
+      type: ReplicaOperationMessageType.CREATE_REPLICA,
+      replicaId,
+      entityId,
+      startedAt: Date.now(),
+    });
+  }
+
+  /**
+   * The reply a CREATE gets from an existing local replica memo: ACTIVE
+   * re-announces; a locally retained creation (HELD, a named deferral, a
+   * named retirement) answers through the bound route (design RV3.5, RV5.1,
+   * RV6.2-RV6.4); CREATING is in progress; any other memo (or none) proceeds.
+   * @param {Object|undefined} existing - The local replica memo.
+   * @param {Object} params - {operationId, entityId, replicaId}.
+   * @return {Object|null} The reply, or null to proceed.
+   */
+  replyToExistingReplica(existing, {operationId, entityId, replicaId}) {
+    const status = existing?.status;
+    if (status === ReplicaStatus.ACTIVE) {
+      this.logger.info(
+        RUNTIME_SERVICE_HANDLER_LOG_MSG.CREATE_ALREADY_ACTIVE,
+        {replicaId, nodeId: this.nodeId},
+      );
+      this.emitExecutorOutcome(
+        EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_ACTIVE,
+        operationId,
+        WORKFLOW_STEP.ACTIVE,
+        {replicaId},
+      );
+      return buildReplicaOperationResponse(
+        ReplicaOperationResponseStatus.ALREADY_EXISTS,
+        {
+          replicaId,
+          nodeId: this.nodeId,
+        },
+      );
+    }
+    const retainedReply = replyToRetainedMemo(this, existing, {operationId, entityId, replicaId});
+    if (retainedReply) {
+      return retainedReply;
+    }
+    if (status === ReplicaStatus.CREATING) {
+      this.logger.info(
+        RUNTIME_SERVICE_HANDLER_LOG_MSG.CREATE_IN_PROGRESS,
+        {replicaId, nodeId: this.nodeId},
+      );
+      return buildReplicaOperationResponse(
+        ReplicaOperationResponseStatus.IN_PROGRESS,
+        {
+          replicaId,
+          nodeId: this.nodeId,
+        },
+      );
+    }
+    return null;
+  }
+
+  /**
+   * Async create: the retained creation first, else the generic create
+   * (runtime-service-bound-creation-route.js, design RV2.2).
+   * @param {Object} params - {operationId, entityId, replicaId}.
+   * @return {Promise<void>}
+   */
+  async createReplicaAsync(params) {
+    return routeRuntimeServiceCreate(this, params);
+  }
+
+  /**
+   * The node-local creation wake consumer (enqueue-only, design RV2.4).
+   * @param {string} serviceDefinitionId
+   * @param {Object} wake - {reason, binding, token}.
+   * @return {{outcome: string}}
+   */
+  onCreationWake(serviceDefinitionId, wake) {
+    return consumeCreationWake(this, serviceDefinitionId, wake);
+  }
+
+  /**
+   * Generic async create: resolve definition, create + start replica,
    * persist operation transitions.
    * @param {Object} params
    * @param {string} params.operationId
@@ -366,7 +421,7 @@ class RuntimeServiceHandler extends EventEmitter {
    * @param {string} params.replicaId
    * @return {Promise<void>}
    */
-  async createReplicaAsync({operationId, entityId, replicaId}) {
+  async createGenericReplicaAsync({operationId, entityId, replicaId}) {
     try {
       const definition = this.resolveServiceDefinition(entityId);
       if (!definition) {
@@ -485,13 +540,16 @@ class RuntimeServiceHandler extends EventEmitter {
     if (typeof this.systemTableCache?.get !== 'function') {
       return null;
     }
+    // A bound row is keyed by its physical id and names the canonical id in
+    // replica_id: the miss path finds it (design RV2.1, RV3.6 N3).
     const row = this.systemTableCache.get(
       SYSTEM_TABLE_NAME.SERVICES,
       replicaId,
-    );
+    ) || this.systemTableCache.find?.(SYSTEM_TABLE_NAME.SERVICES,
+      (candidate) => candidate?.replica_id === replicaId);
     if (
       !row ||
-      row.service_id !== replicaId ||
+      (row.service_id !== replicaId && row.replica_id !== replicaId) ||
       row.service_type !== UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE ||
       row.node_id !== this.nodeId ||
       row.status === ReplicaStatus.REMOVED
@@ -502,6 +560,7 @@ class RuntimeServiceHandler extends EventEmitter {
       replicaId,
       entityId,
       status: row.status || ReplicaStatus.ACTIVE,
+      ...rowCreationHint(row),
     };
     this.localReplicas.set(replicaId, recoveredReplica);
     return recoveredReplica;
@@ -638,7 +697,15 @@ class RuntimeServiceHandler extends EventEmitter {
    * @param {string} [params.reason]
    * @return {Promise<void>}
    */
-  async removeReplicaAsync({
+  async removeReplicaAsync(params) {
+    const creationOperationId = this.localReplicas.get(params.replicaId)?.operationId;
+    if (creationOperationId) {
+      return routeBoundRemoval(this, params, creationOperationId);
+    }
+    return this.removeGenericReplicaAsync(params);
+  }
+
+  async removeGenericReplicaAsync({
     operationId, entityId, replicaId, reason,
   }) {
     try {

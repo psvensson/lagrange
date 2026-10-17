@@ -44,10 +44,16 @@ async function initializeAndObserve(f) {
 // stays held. What still holds for every replica: no endpoint, state or nested
 // journal sink is called, no services-row leader publication is queued, no
 // timer exists, and the metadata slot, the local record and serving agree.
+// Superseded by design ACTIVATION-DISCOVERY-DESIGN-20261017 Revision 3 (stage 1c, RV1.3;
+// recorded supersession, R09/R21): "no services-row leader publication is
+// queued" now holds for every replica whose services row is not PRESENT; a
+// PRESENT leader replays its leader node once (queued here: no CDC owner).
 function assertHeld(f) {
   for (const host of f.hosts) {
     assert.deepEqual(host.publications, []);
-    assert.equal(host.replica.pendingLeaderNodeUpdate, null);
+    assert.equal(host.replica.pendingLeaderNodeUpdate,
+      host.replica.servicesRow.state === 'PRESENT' && host.replica.isLeader ?
+        host.replica.nodeId : null);
     assert.equal(host.replica.timerManager.activeTimers.size, 0);
     const slot = host.intent.consensusSlotRequest.slot;
     const phase = f.metadata.state().selected.resources[slot].phase;

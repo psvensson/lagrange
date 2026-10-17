@@ -1,0 +1,10 @@
+mutated sha: 2d0f704a12ebbadd9ecf9158923093d544e8c1309acc3eeedd7755a27d05dcd4
+catcher test/wasm-service/wasm-creation-publication.integration.test.js rc=1
+not ok test/wasm-service/wasm-creation-publication.integration.test.js (25 assertions, 3869ms)
+    not ok 13 - P11 a forged PUBLISHED or RUNNING driver answer never becomes serving presentation
+      name: 'AssertionError'
+catcher test/node/runtime-service-bound-route.test.js rc=1
+not ok test/node/runtime-service-bound-route.test.js (26 assertions, 824ms)
+    not ok 3 - Revision 4: a PUBLISHED_UNPROJECTED answer for an ungranted slot is contradicted and retired
+        - 'RUNTIME_SERVICE_CREATE_FAILED'
+RESTORED_BYTE_IDENTICAL src/service/service-consensus-bootstrap.js

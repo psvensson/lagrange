@@ -73,6 +73,12 @@ function createMockLifecycleManager(options = {}) {
   const calls = [];
   return {
     calls,
+    // The production-shaped manager without a journal (design
+    // ACTIVATION-DISCOVERY-DESIGN-20261017 Revision 3 RV2.2): every CREATE first resumes
+    // its retained creation, which this manager answers UNAVAILABLE.
+    async resumeConsensusCreation() {
+      return {outcome: 'UNAVAILABLE'};
+    },
     async createReplica(definition, context) {
       calls.push({method: 'createReplica', definition, context});
       if (options.createError) {
@@ -309,6 +315,27 @@ describe('RuntimeServiceHandler handleCreateReplica', () => {
       ReplicaOperationResponseStatus.IN_PROGRESS,
     );
   });
+
+  it('a CREATE over a nameless FAILED or REMOVING memo takes the generic path (RV6.1-RV6.3)',
+    async () => {
+      for (const status of [ReplicaStatus.FAILED, ReplicaStatus.REMOVING]) {
+        const {handler} = createHandler();
+        handler.localReplicas.set('sys-postgres-wire-r1', {
+          replicaId: 'sys-postgres-wire-r1', entityId: 'sys-postgres-wire', status,
+        });
+        const response = await handler.handleCreateReplica({
+          [ReplicaOperationField.OPERATION_ID]: 'op-1',
+          [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
+          [ReplicaOperationField.REPLICA_ID]: 'sys-postgres-wire-r1',
+        });
+        assert.equal(response.status, ReplicaOperationResponseStatus.INITIATED, status);
+        assert.equal(handler.getLocalReplica('sys-postgres-wire-r1').status,
+          ReplicaStatus.CREATING, `${status}: the tracker wrote the nameless memo`);
+        for (let turn = 0; turn < 5; turn += 1) await flushImmediate();
+        assert.equal(handler.getLocalReplica('sys-postgres-wire-r1').status,
+          ReplicaStatus.ACTIVE, `${status}: the generic create ran`);
+      }
+    });
 
   it('calls lifecycle create + start without direct workflow-step persistence',
     async () => {

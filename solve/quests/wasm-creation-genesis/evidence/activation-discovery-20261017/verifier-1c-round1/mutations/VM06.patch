@@ -1,0 +1,12 @@
+--- a/src/runtime/runtime-endpoint-publication-wiring.js	2026-10-17 17:28:09.189793585 +0200
++++ b/src/runtime/runtime-endpoint-publication-wiring.js	2026-10-17 17:28:09.201793678 +0200
+@@ -86,7 +86,8 @@
+ // parsed against the desired definitions as before.
+ function resolveRuntimeEndpointIdentity(systemTableCache, replicaId, consensusBinding) {
+   if (consensusBinding) {
+-    return {serviceId: consensusBinding.serviceDefinitionId, endpointKey: replicaId};
++    return {serviceId: consensusBinding.serviceDefinitionId,
++      endpointKey: consensusBinding.serviceDefinitionId};
+   }
+   const serviceId = resolveLogicalServiceId(systemTableCache, replicaId);
+   return {serviceId, endpointKey: serviceId};

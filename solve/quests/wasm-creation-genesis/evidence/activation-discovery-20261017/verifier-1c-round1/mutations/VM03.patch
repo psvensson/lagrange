@@ -1,0 +1,13 @@
+--- a/src/service/service-consensus-bootstrap.js	2026-10-17 17:28:09.173793459 +0200
++++ b/src/service/service-consensus-bootstrap.js	2026-10-17 17:28:09.181793523 +0200
+@@ -179,8 +179,8 @@
+  * @return {Promise<Object>} A bound START answer or a typed outcome.
+  */
+ async function resumeConsensusCreation(manager, operationId, context = {}) {
+-  return continueRetainedCreation(manager,
+-    await recoverConsensusCreation(manager, operationId, context));
++  return continueRetainedCreation(manager, await prepareConsensusCreation(manager,
++    await recoverConsensusCreation(manager, operationId, context), context));
+ }
+ export {CONSENSUS_BOOTSTRAP, CREATION_WAKE_OUTCOME, hasConsensusCreation,
+   consensusBootstrapDescriptor, captureConsensusBootstrap, confirmConsensusBootstrapResult,

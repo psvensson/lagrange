@@ -23,6 +23,8 @@ import {buildPgwireCredentialVerifier} from
 import {loadPgwireTlsOptions} from './pgwire-tls-context.js';
 import {WasmServiceLifecycle} from
   '../wasm-service/wasm-service-lifecycle.js';
+import {resolveEndpointAddress} from
+  '../bootstrap/shared/meta-service-definition-registration.js';
 
 /**
  * The node-owned dependencies a WASM service replica runs on, read when a
@@ -30,6 +32,11 @@ import {WasmServiceLifecycle} from
  * after its startup wiring). No node owns a WASM service port allocator or
  * module mirror yet, so neither is supplied: a placed replica's start is
  * the lifecycle's typed unavailability, never a locally built substitute.
+ * The bound route's node owners (design ACTIVATION-DISCOVERY-DESIGN-20261017
+ * RV2.3, RV2.4, RV3.1) resolve lazily too: the endpoint host is derived from
+ * the node's two address fields by their one owner (never the raw host:port
+ * NODE_ADDRESS, never a literal), the cache is the node's, and the creation
+ * wake consumer is the node's RuntimeServiceHandler once it exists.
  *
  * @param {Object} node - The node service owning the dependencies.
  * @return {Object} The dependency owner.
@@ -44,6 +51,18 @@ function createWasmServiceNodeDependencies(node) {
     },
     get cdcIntegrationService() {
       return node.cdcIntegrationService;
+    },
+    get endpointHost() {
+      return resolveEndpointAddress({nodeAddress: node.nodeAddress,
+        advertisedNodeWsAddress: node.advertisedNodeWsAddress, nodeId: node.nodeId});
+    },
+    get systemTableCache() {
+      return node.peekSystemTableCache?.() ?? null;
+    },
+    get creationWake() {
+      const handler = node.runtimeServiceHandler;
+      return handler ? (serviceDefinitionId, wake) =>
+        handler.onCreationWake(serviceDefinitionId, wake) : null;
     },
   });
 }

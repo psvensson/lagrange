@@ -1180,6 +1180,19 @@
         "test/wasm-service/wasm-creation-bound-native.test.js",
         "test/control-plane/service-instance-creation-cas.test.js"
       ]
+    },
+    "runtime-service-bound-creation-route": {
+      "description": "A node's RuntimeServiceHandler routes a bound CREATE through the manager's one-pass resume of the retained creation (recover + continue) and a bound REMOVE through the journal-only read and the manager's bound STOP; the consensus bootstrap and its runtime publication answer the typed HELD / PUBLISHED_UNPROJECTED / PUBLISHED shapes the route maps, project the services and endpoint rows and mark PRESENT by exact token. A HELD re-entry resumes the memo's creation, never the request (design RV5.1).",
+      "owners": [
+        "src/node/runtime-service-bound-creation-route.js",
+        "src/service/service-consensus-bootstrap.js",
+        "src/runtime/service-runtime-consensus-publication.js"
+      ],
+      "tests": [
+        "test/wasm-service/bound-creation-handler-embedding.integration.test.js",
+        "test/node/runtime-service-bound-route.test.js",
+        "test/runtime/service-runtime-consensus-publication.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -2384,6 +2397,28 @@
         "test/wasm-service/wasm-creation-reconciliation.integration.test.js",
         "test/wasm-service/wasm-creation-publication.integration.test.js",
         "test/wasm-service/wasm-creation-local-record.test.js"
+      ]
+    },
+    "runtime-service-bound-creation-route": {
+      "description": "The handler's bound route and the consensus bootstrap / runtime publication it consumes change together: the route's decision tables key on the bootstrap's answer shapes, and the C6 embedding (real handler, manager, runtime and native lifecycle on three hosts) is the paired witness (design RV5.6, HANDOFF C6).",
+      "endpoints": [
+        {
+          "id": "handler-bound-creation-route",
+          "owners": [
+            "src/node/runtime-service-bound-creation-route.js"
+          ]
+        },
+        {
+          "id": "consensus-bootstrap-and-publication",
+          "owners": [
+            "src/service/service-consensus-bootstrap.js",
+            "src/runtime/service-runtime-consensus-publication.js"
+          ]
+        }
+      ],
+      "contract": "runtime-service-bound-creation-route",
+      "witnessTests": [
+        "test/wasm-service/bound-creation-handler-embedding.integration.test.js"
       ]
     }
   }
