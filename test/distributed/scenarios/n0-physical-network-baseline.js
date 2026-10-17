@@ -112,18 +112,26 @@ async function readStaticPath(provider, containerId, filename) {
 
 function collectTargets(cluster) {
   const nodes = cluster.getNodes();
-  assert.ok(Array.isArray(nodes) && nodes.length >= MIN_DISTINCT_HOSTS,
-    'N0 requires three real running nodes');
+  assert.ok(Array.isArray(nodes) && nodes.length === MIN_DISTINCT_HOSTS,
+    'N0 requires exactly three running nodes, one per real host');
   const hostIds = nodes.map((n) => n.hostIdentity);
   assert.ok(hostIds.every((id) => typeof id === 'string' && id.length > 0),
     'harness must have proved physical host identity');
-  assert.ok(new Set(hostIds).size >= MIN_DISTINCT_HOSTS,
+  assert.equal(new Set(hostIds).size, nodes.length,
     'N0 host count derives ONLY from harness physical host identity');
   const assigned = cluster._hostAssignment;
   const providers = cluster._providers;
   const hostInfo = cluster._config?.docker?.hostInfo;
   assert.ok(Array.isArray(assigned) && Array.isArray(providers) &&
     Array.isArray(hostInfo), 'N0 requires existing harness provider facts');
+  assert.equal(assigned.length, nodes.length,
+    'N0 requires one provider assignment per node');
+  assert.equal(providers.length, nodes.length,
+    'N0 requires exactly one Docker provider per physical host');
+  assert.equal(hostInfo.length, nodes.length,
+    'N0 requires exactly one declared network host per provider');
+  assert.equal(new Set(assigned).size, nodes.length,
+    'N0 refuses duplicate Docker provider assignments; host counters would double count');
   return nodes.map((node, index) => {
     const providerIndex = assigned[index];
     assert.ok(Number.isInteger(providerIndex) && providerIndex >= 0 &&
