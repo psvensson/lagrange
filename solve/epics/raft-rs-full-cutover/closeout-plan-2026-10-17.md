@@ -245,3 +245,17 @@ called known.
   returns to the FreshMG quest as design work. Step 2 now composes lane tip ->
   #73 -> contract-first -> candidate with the analysis' resolutions, after
   stage 1b lands.
+- 2026-10-17 stage-1c design vet: REVISE (B1-B9 blocking, R1-R24 required; report
+  retained under the quest's `evidence/design-vets-20261017/`). Lead resolution:
+  scope split. The sealed CONTRACT-R2 (:217-220) and the quest statement keep
+  `wasm-creation-genesis` at embedding scope; Revision 1 of the design re-scopes
+  stage 1c to the node-side bound CREATE/REMOVE routes, the discovery rows and
+  the node-local wake consumer in embedding (the C6 handler integration), and
+  routes the production items (B1 journal wiring, B2 node owners, B3 slot read,
+  B5 planner discriminator, B9 held-CREATE time budget, R14 cross-node wake, B8
+  deletion unit, R1-R3/R6-R8/R17-R19/R24) to a new quest whose charter is
+  `activation-quest-charter-2026-10-17.md`. OWNER DECISIONS NEEDED (3): (a)
+  confirm the split (or widen the sealed contract instead); (b) B9 held-CREATE
+  time budget (recommended: a real HELD workflow step with its own owner timeout
+  constant); (c) B8: delete the unbound replica shape as its own unit after
+  activation (recommended) or keep it for tests.
