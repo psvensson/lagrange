@@ -13,7 +13,6 @@ import assert from 'node:assert/strict';
 import {CONVERGENCE_DEFAULTS} from '../harness/constants.js';
 import {SPREAD_UNIT} from '../harness/scenario-host-topology.js';
 
-const SCENARIO_NAME = 'n0-physical-network-baseline';
 const MIN_DISTINCT_HOSTS = 3;
 const BASELINE_WINDOW_MS = 12000;
 const CONVERGENCE_TIMEOUT_MS = 120000;
