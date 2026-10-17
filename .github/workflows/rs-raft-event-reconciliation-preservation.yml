@@ -1,0 +1,211 @@
+name: rs-raft-event-reconciliation-preservation
+on:
+  push:
+    branches: [carrier/rs-raft-event-reconciliation-publication-20261017]
+    paths: [.github/workflows/rs-raft-event-reconciliation-preservation.yml]
+permissions:
+  contents: write
+concurrency:
+  group: rs-raft-event-reconciliation-preservation-20261017
+  cancel-in-progress: false
+jobs:
+  preserve-reviewed-wip:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: 6ba84863490bff9a43874a03f69ad2afff4b5898
+          fetch-depth: 1
+          persist-credentials: true
+      - name: Verify and preserve source, evidence and handover without product execution
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GIT_AUTHOR_NAME: ChatGPT
+          GIT_AUTHOR_EMAIL: chatgpt@openai.com
+          GIT_COMMITTER_NAME: ChatGPT
+          GIT_COMMITTER_EMAIL: chatgpt@openai.com
+          GIT_AUTHOR_DATE: '2026-10-17T06:14:21Z'
+          GIT_COMMITTER_DATE: '2026-10-17T06:14:21Z'
+        run: |
+          set -euo pipefail
+          export OUT="$RUNNER_TEMP/event-reconciliation-preservation"
+          python3 - <<'PY'
+          import base64, hashlib, json, lzma, os, pathlib, shutil, subprocess, time
+          from datetime import datetime, timezone
+
+          root = pathlib.Path.cwd()
+          out = pathlib.Path(os.environ['OUT'])
+          package = out / 'checkpoint'
+          base = '6ba84863490bff9a43874a03f69ad2afff4b5898'
+          ref = 'refs/heads/work/rs-raft-event-reconciliation-20261016'
+          parts = [
+            '26aad1d166ae2ce6d360d38b1f23610e31a45106',
+            '02a07b87e8bb287d5fb1335134e68421ddb3c565',
+            '5599efd28160401ecc4a2b45ba51f32830397968',
+            '0cee9495738ef6e0e55efb9cb3f9b57a21201b67',
+            'd49f71717201d0bddf19e96a1c7764a87be89fec',
+            '7c37e9060fac957eba0ee5888429612670f3dd1b',
+            'a3576f0613adb34844254ce0882d9b0e302fa25a',
+            '71f237ad806a29b5b5105c04e39d7cc6b48c314a',
+          ]
+          def digest(data):
+            return hashlib.sha256(data).hexdigest()
+          def blob(data):
+            return hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest()
+          def git(*args):
+            return subprocess.check_output(['git', *args])
+          def textgit(*args):
+            return git(*args).decode().strip()
+          def safe(parent, name):
+            path = pathlib.Path(name)
+            assert not path.is_absolute() and '..' not in path.parts, name
+            target = parent / path
+            assert target.resolve().is_relative_to(parent.resolve()), name
+            return target
+
+          def read_api(sha):
+            for attempt in range(3):
+              p = subprocess.run(['gh', 'api', 'repos/psvensson/lagrange/git/blobs/' + sha],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+              if p.returncode == 0:
+                return json.loads(p.stdout)
+              (out / ('read-failure-' + sha + '-' + str(attempt) + '.log')).write_bytes(p.stderr)
+              if attempt == 2:
+                raise RuntimeError('GitHub blob read failed: ' + sha)
+              time.sleep(2 ** attempt)
+
+          out.mkdir(parents=True, exist_ok=True)
+          assert textgit('rev-parse', 'HEAD') == base
+          assert not git('status', '--porcelain', '--untracked-files=all').strip()
+          encoded = []
+          for sha in parts:
+            data = base64.b64decode(read_api(sha)['content'])
+            assert blob(data) == sha
+            encoded.append(data)
+          raw = lzma.decompress(base64.b64decode(b''.join(encoded), validate=True))
+          assert digest(raw) == 'de7dfbd8bc7d15c14e5357e004cfe8cb344d2eb344d8e809cb453edd0112d7a8'
+          payload = json.loads(raw)
+          for name, content in payload['files'].items():
+            path = safe(package, name)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content.encode())
+          manifest = json.loads((package / 'MANIFEST.json').read_text())
+          assert manifest['baseRemote'] == base
+          assert digest((package / 'changes.patch').read_bytes()) == manifest['patchSha256']
+          for subtree, key in [('src', 'baseSourceTree'), ('test', 'baseTestTree')]:
+            assert textgit('rev-parse', base + ':' + subtree) == manifest[key]
+          for path, expected in manifest['files'].items():
+            target = safe(root, path)
+            assert pathlib.Path(path).parts[0] in ('src', 'test', 'solve')
+            if expected['beforeGitBlob'] is None:
+              assert not target.exists(), path
+            else:
+              data = target.read_bytes()
+              assert blob(data) == expected['beforeGitBlob'], path
+              assert digest(data) == expected['beforeSha256'], path
+          patch = str(package / 'changes.patch')
+          git('apply', '--check', '--index', patch)
+          git('apply', '--index', patch)
+          assert set(textgit('diff', '--cached', '--name-only', base).splitlines()) == set(manifest['files'])
+          source_tree = textgit('write-tree')
+          for path, expected in manifest['files'].items():
+            data = safe(root, path).read_bytes()
+            assert blob(data) == expected['afterGitBlob'], path
+            assert digest(data) == expected['afterSha256'], path
+          for subtree, key in [('src', 'candidateSourceTree'), ('test', 'candidateTestTree')]:
+            assert textgit('rev-parse', source_tree + ':' + subtree) == manifest[key]
+
+          # Restore two large original data documents losslessly, not new test evidence.
+          identities = {str(p.relative_to(root)): digest(p.read_bytes())
+            for d in ('src', 'test') for p in (root / d).rglob('*') if p.is_file()}
+          assert len(identities) == 5203
+          frozen = (json.dumps(identities, sort_keys=True, indent=2) + '\n').encode()
+          assert digest(frozen) == payload['frozenIdentitySha256']
+          (package / 'evidence/frozen-input-file-identities.json').write_bytes(frozen)
+          identities.update(payload['earlierIdentityOverrides'])
+          earlier = (json.dumps(identities, sort_keys=True, indent=2) + '\n').encode()
+          assert digest(earlier) == payload['earlierIdentitySha256']
+          (package / 'evidence/final-input-file-identities.json').write_bytes(earlier)
+          for line in (package / 'SHA256SUMS').read_text().splitlines():
+            expected, name = line.split(maxsplit=1)
+            assert digest(safe(package, name.lstrip('*')).read_bytes()) == expected, name
+          assert len([p for p in package.rglob('*') if p.is_file()]) == 103
+
+          def commit(tree, parent, message):
+            return subprocess.check_output(['git', 'commit-tree', tree, '-p', parent],
+              input=(message + '\n').encode()).decode().strip()
+          source = commit(source_tree, base,
+            'WIP: preserve reviewed native event-to-reconciliation connection; home-lab acceptance open')
+          (out / 'source-commit.raw').write_bytes(git('cat-file', 'commit', source))
+          quest = root / 'solve/quests/wasm-creation-genesis'
+          evidence = quest / 'evidence/event-reconciliation-20261016'
+          assert not evidence.exists()
+          shutil.copytree(package, evidence / 'checkpoint')
+          handover = payload['handoverTemplate'].replace('__SOURCE_SHA__', source)
+          (quest / 'HANDOVER-20261017.md').write_text(handover)
+          (out / 'HANDOVER.md').write_text(handover)
+          preserved = {
+            'scope': 'WIP source and original evidence preservation; no product execution',
+            'base': base, 'sourceCommit': source, 'branch': ref,
+            'sourceTree': manifest['candidateSourceTree'], 'testTree': manifest['candidateTestTree'],
+            'originalArchiveSha256': payload['originalArchiveSha256'],
+            'patchSha256': manifest['patchSha256'], 'preservedCheckpointMembers': 103,
+            'transportPayloadSha256': digest(raw), 'transportBlobs': parts,
+            'testsExecuted': False, 'homeLabJobsSubmitted': False, 'mainTargeted': False,
+            'fullStaticPassed': False, 'fullCorpusPassed': False,
+            'identityDocumentTransport': 'Reconstructed exact original documents from Git-bound bytes and one recorded historical digest; all original hashes matched',
+          }
+          (evidence / 'PRESERVATION-INPUT.json').write_text(json.dumps(preserved, indent=2) + '\n')
+          git('add', '--', str(evidence.relative_to(root)), str((quest / 'HANDOVER-20261017.md').relative_to(root)))
+          head_tree = textgit('write-tree')
+          for subtree, key in [('src', 'candidateSourceTree'), ('test', 'candidateTestTree')]:
+            assert textgit('rev-parse', head_tree + ':' + subtree) == manifest[key]
+          head = commit(head_tree, source,
+            'docs: preserve all event-reconciliation evidence and next-agent handover; no merge approval')
+          (out / 'head-commit.raw').write_bytes(git('cat-file', 'commit', head))
+          (out / 'complete.patch').write_bytes(git('diff', '--binary', base, head))
+          (out / 'source.patch').write_bytes(git('diff', '--binary', base, source))
+          (out / 'changed-paths.txt').write_bytes(git('diff', '--name-status', base, head))
+          assert not git('diff', base, head, '--', '.github').strip()
+
+          def remote_tip():
+            return textgit('ls-remote', '--heads', 'origin', ref).split()[0]
+
+          # Only the named WIP branch may move. A changed remote base refuses; never force.
+          for attempt in range(3):
+            before = remote_tip()
+            if before == head:
+              break
+            assert before == base, 'Remote branch changed; refuse publication'
+            p = subprocess.run(['git', 'push', 'origin', head + ':' + ref],
+              stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            (out / ('push-attempt-' + str(attempt + 1) + '.log')).write_bytes(p.stdout)
+            if remote_tip() == head:
+              break
+            retryable = any(word in p.stdout.lower() for word in
+              (b'timeout', b'timed out', b'502', b'503', b'504', b'could not resolve', b'connection'))
+            if attempt == 2 or not retryable:
+              raise RuntimeError('Non-force publication refused; inspect retained push log')
+            time.sleep(2 ** (attempt + 1))
+          assert remote_tip() == head
+          # This checkout is the isolated disposable Actions workspace, not an operator tree.
+          git('reset', '--hard', head)
+          assert not git('status', '--porcelain', '--untracked-files=all').strip()
+          receipt = dict(preserved, headCommit=head, headTree=head_tree, verifiedRemoteSha=head,
+            recordedAt=datetime.now(timezone.utc).isoformat(), cleanWorktree=True,
+            sourceCommitIsParent=True, publicationComplete=True)
+          (out / 'PUBLICATION.json').write_text(json.dumps(receipt, indent=2) + '\n')
+          (out / 'verified-remote-sha.txt').write_text(head + '\n')
+          print(json.dumps(receipt, indent=2))
+          PY
+          cd "$OUT"
+          find . -type f ! -path ./SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: rs-raft-event-reconciliation-preservation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/event-reconciliation-preservation/
+          retention-days: 30
+          if-no-files-found: error
