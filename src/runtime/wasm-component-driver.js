@@ -57,7 +57,8 @@ import {
 } from './wasm-component-driver-shutdown-methods.js';
 import {WASM_COMPONENT_ERROR, DRIVER_ACTION, DRIVER_SEPARATOR, buildDriverStatusResult} from
   './wasm-component-driver-vocabulary.js';
-import {startBoundReplica, retireBoundReplica, markBoundServicesRowPresent} from
+import {startBoundReplica, retireBoundReplica, markBoundServicesRowPresent,
+  inspectBoundRetainedCreation} from
   './wasm-component-driver-consensus.js';
 
 // --- Driver-specific constants ---
@@ -520,6 +521,16 @@ class WasmComponentDriver extends RuntimeDriver {
    */
   markServicesRowPresent(serviceId, serviceType, consensusResourceToken) {
     return markBoundServicesRowPresent(this, serviceId, serviceType, consensusResourceToken);
+  }
+
+  /**
+   * The local half of one inventoried bound creation (design
+   * RECOVERY-DESIGN-20261017 R1-A): read by path, no physical effect.
+   * @param {Object} owned - {consensusCreation: {intent, token, opening}}.
+   * @return {{outcome: string}}
+   */
+  inspectRetainedCreation(owned) {
+    return inspectBoundRetainedCreation(this, owned);
   }
 
   /**

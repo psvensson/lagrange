@@ -437,7 +437,12 @@ describe('6prime: publication owned by the keyed continuation, retirement before
       // Metadata CLOSED refuses a new opening before any file handle; the file
       // itself refuses a retained reopen typed.
       const again = await f.bootstrap(host);
-      assert.equal(again.outcome, 'RESOURCE_CLOSED', JSON.stringify(again));
+      // SUPERSEDED (design RECOVERY-DESIGN-20261017 R1-D/D-R6): the retirement
+      // completes the creation row at CLOSED, so a re-bootstrap of the same
+      // creation is the TERMINAL history answer; successor line appended.
+      // assert.equal(again.outcome, 'RESOURCE_CLOSED', JSON.stringify(again));
+      assert.equal(again.outcome, 'TERMINAL_OPERATION', JSON.stringify(again));
+      assert.equal(again.rowState, 'completed');
       assert.equal(host.lifecycle.getReplica(f.metadata.serviceId), null);
       const db = new Database(path, {fileMustExist: true});
       try {

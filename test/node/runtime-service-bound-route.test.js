@@ -76,6 +76,13 @@ function scriptedRuntime() {
       bootstrapped: true, port: 9100, projection: {outcome: 'ENDPOINT_WRITE_FAILED'},
       ...bound(handle)}),
     FAILED: () => ({status: 'FAILED', error: 'port_allocator_unavailable'}),
+    // A driver FAILED answer carrying the open's typed code (design
+    // RECOVERY-DESIGN-20261017 R1-B): permanent, unavailable, transient.
+    STORAGE_MISSING: () => ({status: 'failed', error: 'refused',
+      outcome: 'CREATION_STORAGE_MISSING'}),
+    OPEN_UNAVAILABLE: () => ({status: 'failed', error: 'refused', outcome: 'UNAVAILABLE'}),
+    REPLICA_LIVE: () => ({status: 'failed', error: 'refused',
+      outcome: 'wasm_service_replica_live'}),
   };
   Object.assign(runtime, {
     async prepare(definition, context) {
@@ -658,8 +665,14 @@ describe('stage 1c round 3: the HELD creation keeps custody (RV5.1, RV5.2, RV5.3
     const late = await create(w);
     assert.equal(late.status, ReplicaOperationResponseStatus.INITIATED);
     const dead = w.handler.getLocalReplica(w.replicaId);
+    // SUPERSEDED (design RECOVERY-DESIGN-20261017 R1-D/D-R6: the REMOVE now
+    // completes the creation row at CLOSED, so the late duplicate is the
+    // permanent TERMINAL answer, RV7.1); successor line appended below.
+    // assert.deepEqual([dead.status, dead.operationId, dead.deferRetry, lastOutcome(w).errorCode],
+    //   [ReplicaStatus.FAILED, w.operationId, undefined, 'RESOURCE_CLOSED']);
     assert.deepEqual([dead.status, dead.operationId, dead.deferRetry, lastOutcome(w).errorCode],
-      [ReplicaStatus.FAILED, w.operationId, undefined, 'RESOURCE_CLOSED']);
+      [ReplicaStatus.FAILED, w.operationId, undefined, 'TERMINAL_OPERATION']);
+    assert.equal(w.metadata.row().state, 'completed', 'the REMOVE completed the creation row');
     const successor = await owner.selectConsensusInstance(
       w.metadata.request(1, 2, binding.incarnation));
     assert.equal(successor.outcome, 'SELECTED');
@@ -819,10 +832,20 @@ describe('stage 1c: bound REMOVE route (RV2.1, RV3.3 REMOVE table)', () => {
       await w.handler.handleRemoveReplica(removeRequest(w.metadata.serviceId, w.replicaId, 'rm-c'));
       await drain(w.handler);
       assertRemoveCompleted(w);
-      assert.equal(w.metadata.events.filter((event) => event.kind === 'reserve').length, reserves,
-        'the REMOVE minted no ordinal');
-      assert.equal(w.metadata.state().selected.resources[0].phase, 'CLOSED');
-      assert.equal(w.runtime.calls.length, 0, 'no physical effect for a PENDING creation');
+      // SUPERSEDED (design RECOVERY-DESIGN-20261017 R2-A, R3-E): a REMOVE of a
+      // PENDING row first resolves the reservation with the SAME request; the
+      // successor witness (P-R12, applied-now branch) is appended below.
+      // assert.equal(w.metadata.events.filter((event) => event.kind === 'reserve').length, reserves,
+      //   'the REMOVE minted no ordinal');
+      // assert.equal(w.metadata.state().selected.resources[0].phase, 'CLOSED');
+      // assert.equal(w.runtime.calls.length, 0, 'no physical effect for a PENDING creation');
+      assert.equal(w.metadata.events.filter((event) => event.kind === 'reserve').length,
+        reserves + 1, 'the REMOVE resolved the same request once');
+      assert.deepEqual(w.metadata.events.filter((event) => event.kind === 'reserve').at(-1).request,
+        w.metadata.intent.consensusSlotRequest);
+      assert.ok(w.runtime.calls.some((call) => call.kind === 'stop' && call.bound),
+        'the admitted slot is retired by the bound STOP');
+      assert.equal(w.metadata.row().state, 'completed', 'row COMPLETED at CLOSED (R1-D)');
     });
 
   test('C6-9 after a handler restart the services row hint (replica_id, create_attempt_token) recovers the creation',
@@ -886,5 +909,125 @@ describe('stage 1c: shared vocabulary (RV3.6, RV3.8)', () => {
       EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_REMOVE_HELD]) {
       assert.equal(EXECUTOR_OUTCOME_ACTION_MAP[type]?.action, EXECUTOR_OUTCOME_ACTION.UPDATE_STEP);
     }
+  });
+});
+
+describe('recovery unit 1 (design RECOVERY-DESIGN-20261017): the handler side', () => {
+  test('R1-H/R2-F a handler that awaits its restart inventory answers NOT_READY with ' +
+    'deferRetry and emits nothing; after recoverRetainedCreations it routes normally',
+  async (t) => {
+    const w = await world(t);
+    await w.metadata.prepare();
+    const handler = new RuntimeServiceHandler({nodeId: NODE_ID, systemTableCache: w.cache,
+      cdcIntegrationService: {}, serviceLifecycleManager: w.manager,
+      executorOutcomeEmitter: w.emitter, awaitsRestartInventory: true});
+    handler.logger = QUIET;
+    handler.initialize();
+    const envelope = {correlationId: 'c-1',
+      payload: createRequest(w.metadata.serviceId, w.replicaId, w.operationId)};
+    const refused = await handler.handleMessage(envelope);
+    assert.deepEqual([refused.status, refused.errorCode, refused.deferRetry, refused.correlationId],
+      [ReplicaOperationResponseStatus.ERROR, RUNTIME_SERVICE_HANDLER_ERROR_MSG.NOT_READY, true,
+        'c-1']);
+    assert.deepEqual(w.outcomes, [], 'NOT_READY emits no outcome');
+    const plans = await handler.recoverRetainedCreations();
+    await handler.ready;
+    assert.deepEqual(plans.map((plan) => [plan.creation.operationId, plan.local, plan.action]),
+      [[w.operationId, 'UNSUPPORTED', 'REENTER']], 'the scripted runtime has no local reader');
+    await drain(handler);
+    const memo = handler.getLocalReplica(w.replicaId);
+    assert.deepEqual([memo.status, memo.operationId], [ReplicaStatus.HELD, w.operationId]);
+    assert.equal((await handler.handleMessage(envelope)).status,
+      ReplicaOperationResponseStatus.IN_PROGRESS, 'after ready: the HELD memo re-enters');
+  });
+
+  test('R4-A rule 2 / R5-A a GRANT_HELD wake whose grant is UNAVAILABLE is RECORDED for a ' +
+    'HELD memo and leaves no pending wake in flight; another GRANT_HELD still re-enters',
+  async (t) => {
+    const w = await world(t);
+    const retained = await w.metadata.prepare();
+    await create(w);
+    const wake = (outcome) => ({reason: 'creation_grant_held',
+      binding: retained.intent.consensusBinding, token: retained.token, grant: {outcome}});
+    const before = w.runtime.calls.filter((call) => call.kind === 'start').length;
+    assert.equal(w.handler.onCreationWake(w.metadata.serviceId, wake('UNAVAILABLE')).outcome,
+      RUNTIME_SERVICE_CREATION_WAKE_OUTCOME.RECORDED, 'the HELD-target branch records it');
+    await drain(w.handler);
+    assert.equal(w.runtime.calls.filter((call) => call.kind === 'start').length, before,
+      'NO_REENTRY_FOR_AN_UNAVAILABLE_GRANT');
+    assert.equal(w.handler.onCreationWake(w.metadata.serviceId,
+      wake('PREDECESSOR_OUTSTANDING')).outcome, RUNTIME_SERVICE_CREATION_WAKE_OUTCOME.QUEUED);
+    const entry = w.handler.inProgressOperations.get(w.operationId);
+    assert.equal(w.handler.onCreationWake(w.metadata.serviceId, wake('UNAVAILABLE')).outcome,
+      RUNTIME_SERVICE_CREATION_WAKE_OUTCOME.RECORDED);
+    assert.equal(entry.wakePending, false, 'NO_WAKE_PENDING_FOR_AN_UNAVAILABLE_GRANT');
+    await drain(w.handler);
+    assert.equal(w.runtime.calls.filter((call) => call.kind === 'start').length, before + 1,
+      'one re-entry for the other GRANT_HELD, none after it');
+  });
+
+  test('R1-B/R3-C the open\'s typed code: a permanent code is a permanent CREATE_FAILED, ' +
+    'UNAVAILABLE the named deferral, a transient lifecycle code stays today\'s deferral',
+  async (t) => {
+    const cases = [['STORAGE_MISSING', 'CREATION_STORAGE_MISSING', undefined],
+      ['OPEN_UNAVAILABLE', 'UNAVAILABLE', true],
+      ['REPLICA_LIVE', 'CONSENSUS_SERVING_NOT_IMPLEMENTED', true]];
+    for (const [start, errorCode, deferRetry] of cases) {
+      const w = await world(t);
+      await w.metadata.prepare();
+      w.runtime.starts.push(start);
+      await create(w);
+      assert.deepEqual([lastOutcome(w).outcomeType, lastOutcome(w).errorCode,
+        lastOutcome(w).deferRetry], [EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_FAILED,
+        errorCode, deferRetry], start);
+      const memo = w.handler.getLocalReplica(w.replicaId);
+      assert.deepEqual([memo.status, memo.operationId, memo.deferRetry],
+        [ReplicaStatus.FAILED, w.operationId, deferRetry], `${start}: named memo`);
+    }
+  });
+
+  test('R3-D a REMOVE of a CANCELLED creation is REMOVE_COMPLETED; of a FAILED one ' +
+    'REMOVE_FAILED typed', async (t) => {
+    for (const [state, type] of [['cancelled', EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_REMOVE_COMPLETED],
+      ['failed', EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_REMOVE_FAILED]]) {
+      const w = await world(t);
+      await w.metadata.prepare();
+      w.metadata.db.prepare('UPDATE wasm_operations SET state = ? WHERE operation_id = ?')
+        .run(state, w.operationId);
+      w.handler.registerExistingReplica({replicaId: w.replicaId, entityId: w.metadata.serviceId,
+        status: ReplicaStatus.FAILED, operationId: w.operationId});
+      await w.handler.handleRemoveReplica(removeRequest(w.metadata.serviceId, w.replicaId,
+        `rm-${state}`));
+      await drain(w.handler);
+      assert.equal(lastOutcome(w).outcomeType, type, state);
+      assert.equal(w.runtime.calls.length, 0, `${state}: no physical effect`);
+    }
+  });
+
+  test('R2-A/R3-E a REMOVE of a PENDING row whose owner seals the request CANCELS the row ' +
+    '(never FAILED) and completes; an unreachable owner holds it PENDING', async (t) => {
+    const w = await world(t);
+    const reserve = w.metadata.primary.reserveInstanceResource;
+    w.metadata.primary.reserveInstanceResource = async () => {
+      throw new Error('RESERVATION_NOT_REACHED');
+    };
+    assert.equal((await w.metadata.prepare()).outcome, 'UNKNOWN');
+    w.handler.registerExistingReplica({replicaId: w.replicaId, entityId: w.metadata.serviceId,
+      status: ReplicaStatus.HELD, operationId: w.operationId});
+    w.metadata.primary.reserveInstanceResource = async () => ({outcome: 'UNAVAILABLE'});
+    await w.handler.handleRemoveReplica(removeRequest(w.metadata.serviceId, w.replicaId, 'rm-u'));
+    await drain(w.handler);
+    assert.deepEqual([lastOutcome(w).outcomeType, w.metadata.row().state,
+      w.handler.getLocalReplica(w.replicaId).status],
+    [EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_REMOVE_HELD, 'pending', ReplicaStatus.REMOVING]);
+    w.metadata.primary.reserveInstanceResource = reserve;
+    assert.equal((await reserve(w.metadata.intent.consensusBinding,
+      w.metadata.slotRequest(0, 0, 'foreign-operation'))).outcome, 'ADMITTED');
+    await w.handler.handleRemoveReplica(removeRequest(w.metadata.serviceId, w.replicaId, 'rm-u'));
+    await drain(w.handler);
+    assertRemoveCompleted(w);
+    assert.equal(w.metadata.row().state, 'cancelled');
+    assert.deepEqual(JSON.parse(w.metadata.row().error), {reason: 'CONFLICT'});
+    assert.equal(w.runtime.calls.length, 0, 'nothing of the cancelled request is retired');
   });
 });

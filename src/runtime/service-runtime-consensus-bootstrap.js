@@ -3,6 +3,8 @@
 import {captureConsensusBootstrap, confirmConsensusBootstrapResult, CONSENSUS_BOOTSTRAP} from
   '../service/service-consensus-bootstrap.js';
 import {requireInstance} from '../control-plane/owners/service-instance-contract.js';
+import {captureConsensusCreationIntent} from '../service/service-consensus-creation-intent.js';
+import {SERVICE_TYPE_ADAPTER_INSPECTION as OUTCOME} from '../service/service-type-adapter.js';
 import {PREPARE_STATUS} from './runtime-driver.js';
 import {projectPublishedConsensus, withdrawRetiredConsensus} from
   './service-runtime-consensus-publication.js';
@@ -43,4 +45,18 @@ async function retireConsensusBootstrap(owner, definition, context) {
   return withdrawRetiredConsensus(owner, owner._resolveDriver(bound.descriptor.runtimeKind),
     bound);
 }
-export {prepareConsensusBootstrap, startConsensusBootstrap, retireConsensusBootstrap};
+/**
+ * The local half of one inventoried creation (design RECOVERY-DESIGN-20261017
+ * R1-A): the intent's driver reads it by path; nothing is prepared or opened.
+ * @param {Object} owner - The ServiceRuntimeLifecycle.
+ * @param {Object} owned - {consensusCreation: {intent, token, opening}}.
+ * @return {Promise<{outcome: string}>}
+ */
+async function inspectConsensusBootstrap(owner, owned) {
+  const intent = captureConsensusCreationIntent(owned?.consensusCreation?.intent);
+  const driver = owner._resolveDriver(intent.descriptor.runtimeKind);
+  return typeof driver.inspectRetainedCreation === 'function' ?
+    driver.inspectRetainedCreation(owned) : {outcome: OUTCOME.UNSUPPORTED};
+}
+export {prepareConsensusBootstrap, startConsensusBootstrap, retireConsensusBootstrap,
+  inspectConsensusBootstrap};

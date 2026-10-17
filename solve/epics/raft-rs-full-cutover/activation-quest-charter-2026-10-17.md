@@ -84,3 +84,16 @@ a formed service (new incarnation); request Cells; OCI.
     `messageGroupLearnerJoinHost`.
 12. Stage-1c RV4.5: how a RETAINED projection (`retained: true` from the
     production projection owner) becomes PRESENT for a bound replica.
+13. Recovery stage D-R1/D-R9 (RECOVERY-DESIGN-20261017 section 7): production
+    startup wiring of the restart inventory. `StartupServiceLifecycleOwner.ensureOwners`
+    constructs the manager; the activation quest adds the one call that applies
+    `manager.recoverPendingOperations()` (the one scan entry point; its
+    INVENTORIED entries) through the handler's `recoverRetainedCreations`
+    after the handler exists and before its transport address is registered
+    (the handler's `ready` latch), under the exclusive data-directory process
+    owner. Today `recoverPendingOperations` has no production caller at all
+    (finding 2026-10-17); wiring it also re-runs GENERIC PENDING/IN_PROGRESS
+    rows through their adapters at startup (RECOVERY-DESIGN Revision 2 R2-G):
+    decide whether that is wanted before wiring. Also owns the production
+    journal reader under quorum loss and the endpoint-incarnation currentness
+    sweep (R1-J).

@@ -9,14 +9,15 @@ import Database from 'better-sqlite3';
 import {SERVICE_INSTANCE_LIMIT as LIMIT, SERVICE_INSTANCE_PHASE as PHASE,
   SERVICE_INSTANCE_OUTCOME as OUTCOME} from '../constants/service-instance.js';
 import {captureInstanceJson, encodeInstanceJson, exactFields, instanceCounter,
-  instanceDigest, instanceIdentifier, requireInstance} from
+  instanceDigest, instanceFailure, instanceIdentifier, requireInstance} from
   '../control-plane/owners/service-instance-contract.js';
 import {commitDurably} from '../raft/raft-rs-durable-store.js';
 import {WASM_SERVICE_LIFECYCLE_REFUSAL as REFUSAL} from './wasm-service-constants.js';
 import {captureConsensusBootstrap, consensusBootstrapDescriptor} from
   '../service/service-consensus-bootstrap.js';
 import {runtimeServiceConsensusIdentity} from '../rebalancer/runtime-service-replica-identity.js';
-import {CONSENSUS_CREATION_OPENING as OPENING} from '../service/service-consensus-creation-intent.js';
+import {CONSENSUS_CREATION_OPENING as OPENING, captureConsensusCreationIntent} from
+  '../service/service-consensus-creation-intent.js';
 import {validateBinding} from '../control-plane/owners/service-instance-state.js';
 import {WASM_WRITER_PROFILE, WRITER_ACTION} from './wasm-writer-profile.js';
 import {canonicalWriterCommand} from './wasm-writer-codec.js';
@@ -167,7 +168,8 @@ function tombstoneOn(db, identity, retirement) {
  * is never created (nothing local exists to retire). A file without a local
  * record cannot reopen either (a retained opening requires it), so it is the
  * same typed absence. A tombstone is a fail-closed effect, so a by-path
- * identity may carry only the fields derivable from the retained creation.
+ * identity may carry only the fields derivable from the retained creation,
+ * plus the present file's own storage identity (RECOVERY-DESIGN-20261017 R1-B).
  * @param {{db?: Object, dbPath?: string}} target
  * @param {Object} identity - Identity projection to match (see IDENTITY_FIELDS).
  * @param {{reason: string, at: number}} retirement
@@ -290,6 +292,85 @@ function openWasmCreationRecords(replica) {
   requireInstance(local.record.phase !== LOCAL_PHASE.RETIRED, REFUSAL.CREATION_RETIRED);
   return local.record.phase;
 }
+/**
+ * The by-path local reader's answers (design RECOVERY-DESIGN-20261017 R1-A,
+ * R2-C N13): the record's phase, the two absences, or the two refusals.
+ */
+const WASM_CREATION_LOCAL_INSPECTION = Object.freeze({
+  ABSENT_UNCLAIMED: 'ABSENT_UNCLAIMED', ABSENT_CLAIMED: 'ABSENT_CLAIMED',
+  ADMITTED: LOCAL_PHASE.ADMITTED, PUBLISHED: LOCAL_PHASE.PUBLISHED,
+  RETIRED: LOCAL_PHASE.RETIRED, CORRUPT_STATE: OUTCOME.CORRUPT_STATE,
+  CONTENT_CONFLICT: OUTCOME.CONTENT_CONFLICT,
+});
+const INSPECTION = WASM_CREATION_LOCAL_INSPECTION;
+// The (opening, file) classification of one open read-only file (N13).
+function inspectOpenFile(db, identity, binding) {
+  const tables = db.prepare(SQL.TABLES).all().map((row) => row.name);
+  const claimed = identity.opening !== null;
+  if (tables.length === 0) return claimed ? INSPECTION.ABSENT_CLAIMED : INSPECTION.ABSENT_UNCLAIMED;
+  requireInstance(claimed, OUTCOME.CONTENT_CONFLICT);
+  requireInstance(tables.includes(ROOT) && tables.includes(LOCAL), OUTCOME.CORRUPT_STATE);
+  requireInstance(instanceDigest(readWasmCreationBinding(db)) === instanceDigest(binding),
+    OUTCOME.CONTENT_CONFLICT);
+  const local = readWasmCreationLocal(db);
+  requireInstance(local !== null, OUTCOME.CORRUPT_STATE);
+  requireInstance(identityMatches(local.record, identity), OUTCOME.CONTENT_CONFLICT);
+  return local.record.phase;
+}
+/**
+ * Read one creation's local file by path, read-only (design
+ * RECOVERY-DESIGN-20261017 R1-A, R2-F): no schema creation, no checkpoint, no
+ * write; the connection closes before any open of the same file. Compares all
+ * seven identity fields (storage and opening included) and the root binding.
+ * Precondition: the data directory is writable (the read-only connection of
+ * a WAL file needs an existing or creatable -shm).
+ * @param {string} dbPath - The creation's database path on this node.
+ * @param {Object} identity - The seven identity fields (opening/storage may be null).
+ * @param {Object} binding - The retained creation's consensus binding.
+ * @return {{outcome: string}} A WASM_CREATION_LOCAL_INSPECTION answer.
+ */
+function inspectWasmCreationLocal(dbPath, identity, binding) {
+  if (!fs.existsSync(dbPath)) {
+    return {outcome: identity.opening === null ? INSPECTION.ABSENT_UNCLAIMED :
+      INSPECTION.ABSENT_CLAIMED};
+  }
+  let db = null;
+  try {
+    db = new Database(dbPath, {readonly: true, fileMustExist: true});
+    return {outcome: inspectOpenFile(db, identity, binding)};
+  } catch (error) {
+    const refusal = instanceFailure(error, OUTCOME.CORRUPT_STATE).outcome;
+    return {outcome: refusal === OUTCOME.CONTENT_CONFLICT ? INSPECTION.CONTENT_CONFLICT :
+      INSPECTION.CORRUPT_STATE};
+  } finally {
+    db?.close();
+  }
+}
+/**
+ * The lifecycle side of the by-path reader: this node's path and the identity
+ * derived from the retained creation ({intent, token|null, opening|null}).
+ * @param {Object} lifecycle - The WasmServiceLifecycle of this node.
+ * @param {Object} creation - The inventoried creation.
+ * @return {{outcome: string}} A WASM_CREATION_LOCAL_INSPECTION answer or a
+ *   typed refusal of the creation itself.
+ */
+function inspectRetainedWasmCreation(lifecycle, creation) {
+  try {
+    const intent = captureConsensusCreationIntent(creation?.intent);
+    const physical = runtimeServiceConsensusIdentity(intent.consensusBinding,
+      intent.consensusSlotRequest);
+    requireInstance(physical.nodeId === lifecycle.nodeId, OUTCOME.INVALID_LINEAGE);
+    const directory = lifecycle.dataDirectoryManager;
+    const dbPath = directory.getWasmServiceDbPath(physical.groupId, physical.replicaId);
+    const storage = fs.existsSync(dbPath) ?
+      directory.getWasmServiceFileIdentity(physical.groupId, physical.replicaId) : null;
+    return inspectWasmCreationLocal(dbPath, {format: LIMIT.FORMAT, groupId: physical.groupId,
+      replicaId: physical.replicaId, nodeId: physical.nodeId, token: creation.token ?? null,
+      opening: creation.opening ?? null, storage}, intent.consensusBinding);
+  } catch (error) {
+    return instanceFailure(error);
+  }
+}
 /** Attach opening context before native construction; nullable defaults are owned here. */
 function initializeWasmCreationContext(replica, options) {
   replica.consensusCreation = options.consensusCreation ?? null;
@@ -302,4 +383,5 @@ export {initializeWasmCreationContext, captureWasmCreation, resolveWasmCreationA
   openWasmCreationRecords, readWasmCreationLocal, recordWasmCreationLocalPhase,
   tombstoneWasmCreationLocal, wasmCreationLocalIdentity,
   WASM_CREATION_LOCAL_PHASE, WASM_CREATION_LOCAL_RECORD, WASM_CREATION_RETIREMENT,
+  WASM_CREATION_LOCAL_INSPECTION, inspectWasmCreationLocal, inspectRetainedWasmCreation,
   isCreationOnlyDatabase, readWasmCreationBinding, boundWasmInitialization};

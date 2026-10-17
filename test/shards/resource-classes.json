@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2392,
+    "ordinary": 2393,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2409,
-  "digest": "fnv1a32-8f7e78d2",
+  "censusSize": 2410,
+  "digest": "fnv1a32-a7b2ca03",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -2338,6 +2338,7 @@
     "test/utils/phase-state-machine.test.js": "ordinary",
     "test/wasm-service/backward-compat-serialization.test.js": "ordinary",
     "test/wasm-service/bound-creation-handler-embedding.integration.test.js": "ordinary",
+    "test/wasm-service/bound-creation-restart.integration.test.js": "ordinary",
     "test/wasm-service/call-cell-world-abi.test.js": "external-toolchain",
     "test/wasm-service/capability-policy.test.js": "ordinary",
     "test/wasm-service/dependency-lock-determinism.property.test.js": "ordinary",

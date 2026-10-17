@@ -1,5 +1,5 @@
 import {WasmCreationReconciliation} from './wasm-creation-reconciliation.js';
-import {captureWasmCreation} from './wasm-creation-opening.js';
+import {captureWasmCreation, inspectRetainedWasmCreation} from './wasm-creation-opening.js';
 import {boundStartResult} from './wasm-creation-publication.js';
 import {retireWasmCreation} from './wasm-creation-retirement.js';
 import {SERVICE_INSTANCE_OUTCOME} from '../constants/service-instance.js';
@@ -375,8 +375,10 @@ class WasmServiceLifecycle {
       if (!this.successorHoldsPort(serviceId, replica)) {
         this.portAllocator.release(serviceId);
       }
+      // A contract refusal's typed outcome is its code (design
+      // RECOVERY-DESIGN-20261017 R1-B, R4-D N18).
       return this.refuseStart(serviceId, startOptions, {
-        code: cause.code || START_DIAGNOSTIC_CODE.CONSENSUS_START_REFUSED,
+        code: cause.outcome ?? cause.code ?? START_DIAGNOSTIC_CODE.CONSENSUS_START_REFUSED,
         error: cause.message,
       }, replica);
     }
@@ -480,6 +482,17 @@ class WasmServiceLifecycle {
    */
   retireReplica(creation) {
     return retireWasmCreation(this, creation);
+  }
+
+  /**
+   * The local half of one inventoried creation, by path (design
+   * RECOVERY-DESIGN-20261017 R1-A, R2-C N13): this node's path and the seven
+   * identity fields derived from the retained creation; no physical effect.
+   * @param {Object} creation - {intent, token|null, opening|null}.
+   * @return {{outcome: string}} A WASM_CREATION_LOCAL_INSPECTION answer.
+   */
+  inspectLocalCreation(creation) {
+    return inspectRetainedWasmCreation(this, creation);
   }
 
   /**
