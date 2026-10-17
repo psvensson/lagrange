@@ -32,6 +32,12 @@ const EP_META = Object.freeze({
   SERVICE_NAME: 'service_name',
   VERSION: 'version',
   PROTOCOL: 'protocol',
+  // A bound replica's endpoint carries its exact creation (design
+  // ACTIVATION-DISCOVERY-DESIGN-20261017 RV1.3). Recorded choice (finding F-8,
+  // accepted): both values are digests, instanceDigest(binding) and
+  // instanceDigest(resource token), never the raw token.
+  BINDING_DIGEST: 'binding_digest',
+  RESOURCE_TOKEN: 'resource_token',
 });
 
 /**

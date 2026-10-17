@@ -15,6 +15,7 @@ import {START_STATUS} from './runtime-driver.js';
 import {DriverLifecycleError} from './runtime-driver-errors.js';
 import {WASM_COMPONENT_ERROR, DRIVER_ACTION, DRIVER_SEPARATOR, buildDriverStatusResult} from
   './wasm-component-driver-vocabulary.js';
+import {WASM_SERVICES_ROW_MARK} from '../wasm-service/wasm-service-serving-state.js';
 
 function startFailure(detail) {
   return buildDriverStatusResult(START_STATUS.FAILED,
@@ -52,7 +53,7 @@ function projectBoundStart(driver, startResult, serviceId) {
   case BOUND_START.PUBLISHED:
     driver._running.add(serviceId);
     return {status: CONSENSUS_BOOTSTRAP.PUBLISHED, started: true, bootstrapped: true,
-      port: startResult.port, ...bound};
+      port: startResult.port, host: startResult.host, ...bound};
   default:
     return {...startFailure(startResult.error || WASM_COMPONENT_ERROR.UNKNOWN_LIFECYCLE_FAILURE),
       ...(startResult.diagnostic ? {diagnostic: startResult.diagnostic} : {})};
@@ -111,4 +112,21 @@ async function retireBoundReplica(driver, replicaContext, serviceId) {
   return result;
 }
 
-export {startBoundReplica, retireBoundReplica};
+/**
+ * Enable role/leader services-row publication for the bound replica whose
+ * services row the runtime projected (design RV2.3, RV3.4): keyed by the exact
+ * retained token through the composition root's lifecycle, never by
+ * serviceId-keyed driver bookkeeping.
+ * @param {Object} driver - The WasmComponentDriver.
+ * @param {string} serviceId
+ * @param {string} serviceType - The projected row's service_type.
+ * @param {Object} consensusResourceToken - The creation's admission token.
+ * @return {{outcome: string}} The serving-state mark answer.
+ */
+function markBoundServicesRowPresent(driver, serviceId, serviceType, consensusResourceToken) {
+  const lifecycle = driver._wasmServiceLifecycle;
+  if (!lifecycle) return {outcome: WASM_SERVICES_ROW_MARK.NOT_REGISTERED};
+  return lifecycle.enableServicesRowPublication(serviceId, serviceType, consensusResourceToken);
+}
+
+export {startBoundReplica, retireBoundReplica, markBoundServicesRowPresent};

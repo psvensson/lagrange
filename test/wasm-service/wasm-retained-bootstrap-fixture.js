@@ -22,6 +22,8 @@ import {consensusBootstrapDescriptor, CONSENSUS_BOOTSTRAP} from
   '../../src/service/service-consensus-bootstrap.js';
 import {RECONCILE_REASON} from '../../src/workflow/reconcile-queue-constants.js';
 import {deliverScheduled} from './wasm-strong-write-native-fixture.js';
+import {resolveEndpointAddress} from
+  '../../src/bootstrap/shared/meta-service-definition-registration.js';
 
 const SETUP_ROUNDS = 200;
 const MODULE_VERSION = '1.0.0';
@@ -135,9 +137,11 @@ async function fixture(t, {automaticReconciliation = false, creationWake = null,
     const processOwner = acquireDataDirectoryProcessOwner(dataDirectoryManager.getDataDir());
     const host = {intent, nodeId, timeSource, processOwner, wakes: [], reentries: 0,
       reentryResults: []};
+    // endpointHost: the node's endpoint host from its owner (stage 1c RV3.1).
     const dependencies = {nodeId, timeSource,
       messageRouter: f.transport, serviceDefinitionsOwner: metadata.primary,
-      dataDirectoryManager, moduleMirror, portAllocator: new PortAllocator()};
+      dataDirectoryManager, moduleMirror, portAllocator: new PortAllocator(),
+      endpointHost: resolveEndpointAddress({nodeAddress: `${nodeId}.lab.test:8080`, nodeId})};
     if (creationWake !== null) {
       dependencies.creationWake = (serviceDefinitionId, wake) => {
         host.wakes.push({serviceDefinitionId, ...structuredClone(wake)});
@@ -176,22 +180,44 @@ async function fixture(t, {automaticReconciliation = false, creationWake = null,
     const registry = new RuntimeDriverRegistry();
     registry.register(driver);
     const runtime = new ServiceRuntimeLifecycle(registry);
+    // Superseded by design ACTIVATION-DISCOVERY-DESIGN-20261017 Revision 3 (stage 1c,
+    // RV1.1, RV2.3; the earlier bytes stay in b3793c7e5): the runtime now
+    // projects a PUBLISHED bound replica's services and endpoint rows. These
+    // sinks stay outside this fixture's scope (serving, publication,
+    // retirement), so they record and answer applied for exactly the replica
+    // that serves under the projected physical id (host.discovery). What the
+    // `publications` witnesses keep measuring is unchanged: a nested journal,
+    // or an ACTIVE projection or endpoint write for a replica that does not
+    // serve, is recorded there and refused.
     const publications = [];
+    const discovery = [];
+    const serves = (physicalReplicaId) => {
+      const replica = lifecycle.getReplica(metadata.serviceId);
+      return replica?.replicaId === physicalReplicaId && replica.serving === true;
+    };
     runtime.setOperationWriter(async (...args) => {
       publications.push({kind: 'nested-journal', args});
       throw new Error('BOUND_BOOTSTRAP_CREATED_NESTED_JOURNAL');
     });
     runtime.setEndpointWriter(async (...args) => {
-      publications.push({kind: 'endpoint', args});
-      throw new Error('BOUND_BOOTSTRAP_PUBLISHED_ENDPOINT');
+      if (!serves(args[0])) {
+        publications.push({kind: 'endpoint', args});
+        throw new Error('BOUND_BOOTSTRAP_PUBLISHED_ENDPOINT');
+      }
+      discovery.push({kind: 'endpoint', args});
+      return {success: true};
     });
     runtime.setStateProjectionWriter(async (...args) => {
-      publications.push({kind: 'projection', args});
-      throw new Error('BOUND_BOOTSTRAP_PUBLISHED_STATE');
+      if (args[1]?.status === 'active' && !serves(args[0])) {
+        publications.push({kind: 'projection', args});
+        throw new Error('BOUND_BOOTSTRAP_PUBLISHED_STATE');
+      }
+      discovery.push({kind: 'projection', args});
+      return {applied: true};
     });
     const manager = metadata.manager();
     manager.registerAdapter(new RuntimeServiceAdapter({serviceRuntimeLifecycle: runtime}));
-    Object.assign(host, {manager, runtime, driver, lifecycle, publications,
+    Object.assign(host, {manager, runtime, driver, lifecycle, publications, discovery,
       resumeReconciliation() {
         deliverReconciliation = true;
         for (const wake of delayedWakes.values()) wake();

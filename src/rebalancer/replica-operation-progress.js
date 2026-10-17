@@ -24,6 +24,11 @@ const ReplicaStatus = {
   REMOVED: 'removed',
   /** Operation failed */
   FAILED: 'failed',
+  /**
+   * A retained bound creation not yet serving or projected (design
+   * ACTIVATION-DISCOVERY-DESIGN-20261017 RV2.2): peer-excluded, never a row.
+   */
+  HELD: 'held',
 };
 
 /**

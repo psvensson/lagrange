@@ -3,6 +3,7 @@ import {captureWasmCreation} from './wasm-creation-opening.js';
 import {boundStartResult} from './wasm-creation-publication.js';
 import {retireWasmCreation} from './wasm-creation-retirement.js';
 import {SERVICE_INSTANCE_OUTCOME} from '../constants/service-instance.js';
+import {markServicesRowPresent, WASM_SERVICES_ROW_MARK} from './wasm-service-serving-state.js';
 import {instanceDigest} from '../control-plane/owners/service-instance-contract.js';
 /**
  * WasmServiceLifecycle — manages creation, startup, and
@@ -36,6 +37,8 @@ const STOP_FAILED = 'WASM service shutdown has retained cleanup failures';
 const START_RESULT_FIELD = Object.freeze({
   STARTED: 'started',
   PORT: 'port',
+  // A bound PUBLISHED answer's endpoint host (design RV3.1).
+  HOST: 'host',
   ENDPOINT: 'endpoint',
   ERROR: 'error',
   DIAGNOSTIC: 'diagnostic',
@@ -179,6 +182,19 @@ class WasmServiceLifecycle {
   }
 
   /**
+   * @return {string|null} The node's endpoint host, derived by its owner
+   *   (resolveEndpointAddress); a bound PUBLISHED answer carries it (RV3.1).
+   */
+  get endpointHost() {
+    return this.dependencies.endpointHost ?? null;
+  }
+
+  /** @return {Object|null} The node's system table cache for its replicas. */
+  get systemTableCache() {
+    return this.dependencies.systemTableCache || null;
+  }
+
+  /**
    * @return {Function|null} The enqueue-only wake consumer of the original
    *   CREATE's operation owner (design D6'); absent is a typed outcome.
    */
@@ -247,9 +263,7 @@ class WasmServiceLifecycle {
       readConsistency: serviceDefinition.readConsistency,
       writeConsistency: serviceDefinition.writeConsistency,
       safetyIntervalMs: serviceDefinition.safetyIntervalMs,
-      cdcIntegrationService: this.cdcIntegrationService,
-      roleUpdateWriter: this.roleUpdateWriter,
-      leaderNodeUpdateWriter: this.leaderNodeUpdateWriter,
+      ...this.replicaPublicationOwners(),
     });
 
     if (creation !== null) {
@@ -264,6 +278,19 @@ class WasmServiceLifecycle {
     });
 
     return replica;
+  }
+
+  /**
+   * The node owners a replica publishes its role and leader through: its CDC
+   * owner, the node's cache (design RV2.6, RV3.6; the replica keeps its
+   * singleton fallback when absent) and any injected writers.
+   * @return {Object}
+   * @private
+   */
+  replicaPublicationOwners() {
+    return {cdcIntegrationService: this.cdcIntegrationService,
+      systemTableCache: this.systemTableCache, roleUpdateWriter: this.roleUpdateWriter,
+      leaderNodeUpdateWriter: this.leaderNodeUpdateWriter};
   }
 
   /**
@@ -402,7 +429,27 @@ class WasmServiceLifecycle {
         error: WASM_SERVICE_ERROR_MSG.STOPPED_DURING_START,
       }, replica);
     }
-    return boundStartResult(replica, run);
+    return boundStartResult(replica, run, this.endpointHost);
+  }
+
+  /**
+   * Enable services-row publication for the registered bound replica whose
+   * creation token is exactly `consensusResourceToken` (design RV3.4): a
+   * successor under the same serviceId is never marked by its predecessor's
+   * projection; no match is the typed NOT_REGISTERED.
+   * @param {string} serviceId
+   * @param {string} serviceType - The projected row's service_type.
+   * @param {Object} consensusResourceToken
+   * @return {{outcome: string}}
+   */
+  enableServicesRowPublication(serviceId, serviceType, consensusResourceToken) {
+    const replica = this.activeReplicas.get(serviceId);
+    if (!replica || replica.consensusCreation === null ||
+        instanceDigest(replica.consensusCreation.token) !==
+          instanceDigest(consensusResourceToken ?? null)) {
+      return {outcome: WASM_SERVICES_ROW_MARK.NOT_REGISTERED};
+    }
+    return markServicesRowPresent(replica, serviceType);
   }
 
   /**

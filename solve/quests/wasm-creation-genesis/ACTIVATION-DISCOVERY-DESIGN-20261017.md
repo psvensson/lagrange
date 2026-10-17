@@ -879,3 +879,55 @@ module; memo HELD + `operationId`: handler; `NOT_ADMITTED`: RESULT in
 the lifecycle; `endpointHost`: the node dependency owner over
 `resolveEndpointAddress`; the deferral: the existing FAILED outcome with
 `deferRetry` and `errorCode`.
+
+---
+
+# Revision 4 (2026-10-17, lead decisions on the implementer's findings before verification)
+
+Implementer report: `evidence/serving-publication-20261017/implementer-stage1c-report.md`
+(retained at commit). Where this revision and Revisions 2-3 disagree, this
+revision wins.
+
+- **RV4.1 PUBLISHED_UNPROJECTED is confirmed against authority (supersedes
+  RR5's sentence "the manager returns before any re-resolve").** The stage-1
+  witness P11 (A-B5: a PUBLISHED-class driver answer is presentation until the
+  metadata owner confirms the exact slot PUBLISHED) went red under Revision 3:
+  a forged PUBLISHED answer whose projection failed was never contradicted, so
+  the forged resource was never retired and its slot stayed ADMITTED.
+  Decision: `bootstrapConsensusCreation` runs `confirmPublishedAuthority` for
+  PUBLISHED_UNPROJECTED exactly as for PUBLISHED; CONTRADICTED retires by
+  creation and answers `UNKNOWN{CONTENT_CONFLICT, retirement}`; UNRESOLVED
+  answers `UNKNOWN{reason}`; CONFIRMED returns the PUBLISHED_UNPROJECTED result
+  unchanged with the manager state kept STARTING (never RUNNING, never retire).
+  Mutation M18 (skip the confirmation for PUBLISHED_UNPROJECTED) must redden P11.
+- **RV4.2 The request-Cell predicate is null-safe at its owner (F-3).**
+  `isRequestCellDefinition` tested the `binding_*` keys by presence; a
+  serialized `service_definitions` row carries them with null values, so every
+  installed `wasm_component` row classified as a request Cell and the
+  bound-class refusal of RV2.2 could never fire for real rows. Decision: the
+  owner (`request-cell-runtime-contract.js`) treats null/undefined values as
+  absent; every caller is censused in the report; an owner witness classifies a
+  serialized row (keys present, null) as not a Cell and a compiled Cell row as a
+  Cell; the handler witness uses real-shaped rows. Mutation M19 (presence
+  test) must redden both. The activation quest's planner discriminator (B5)
+  inherits the corrected owner.
+- **RV4.3 Supersessions the implementation required beyond Revision 3
+  (accepted provisionally; the verifier judges; the quest-log decision entry
+  at commit names every line):** the retained fixture's endpoint/state sinks
+  record and answer "applied" only for the serving replica's physical id and
+  still refuse and record anything else (every `publications === []`
+  assertion unchanged); the genesis and reconciliation assertions "no leader
+  publication queued" hold only for replicas that are not PRESENT; the driver
+  conformance allowlist gains `markServicesRowPresent`; the handler tests'
+  mock managers answer `resumeConsensusCreation` -> UNAVAILABLE (the
+  production shape).
+- **RV4.4 Endpoint metadata carries digests (F-8):** `binding_digest` and
+  `resource_token_digest`, never the raw token; recorded at the EP_META owner.
+- **RV4.5 Recorded for the activation quest (F-4):** a production projection
+  owner that answers `retained: true` makes the bound route answer
+  PUBLISHED_UNPROJECTED on every re-drive; the embedding uses the direct
+  writer. The activation quest decides how a retained projection becomes
+  PRESENT.
+- **RV4.6 Accepted refactor (F-7):** `recoverConsensusCreation`'s intent
+  decoding moved into a shared helper used by `readRetainedCreation`; behaviour
+  byte-equivalent; the verifier checks the call sites.
