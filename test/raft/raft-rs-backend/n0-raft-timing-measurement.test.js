@@ -244,3 +244,45 @@ test('N0 physical lab host measures real scheduled native heartbeat envelopes',
       fixture.cluster.dispose();
     }
   });
+
+
+test('N0 first native election request follows observed election ticks',
+  {timeout: 25000}, async (t) => {
+    const fixture = makeFixture(BASE);
+    try {
+      fixture.trace.phase = 'election';
+      const expectedMinTicks = tuningOf(BASE).electionTick;
+      const electionTypes = new Set([
+        messageType('MsgRequestVote'),
+        messageType('MsgRequestPreVote'),
+      ]);
+      let firstRequest = null;
+      for (let tick = 1; tick <= expectedMinTicks * 3; tick += 1) {
+        fixture.trace.tick = tick;
+        await fixture.cluster.node(REPLICAS[0]).tick();
+        firstRequest = fixture.packets.find((packet) =>
+          packet.phase === 'election' &&
+          packet.fromReplicaId === REPLICAS[0] &&
+          electionTypes.has(packet.kind)) || null;
+        if (firstRequest) break;
+      }
+      assert.ok(firstRequest,
+        'a real native core must issue a vote or pre-vote when alone');
+      assert.ok(firstRequest.tick >= expectedMinTicks,
+        'election must not occur before its native lower bound');
+      // Current vendored raft-rs default randomizes inside
+      // [electionTick, 2 * electionTick). Do not interpret the configured
+      // electionMaxMs as the native upper bound without a core change.
+      assert.ok(firstRequest.tick <= expectedMinTicks * 2 + 1,
+        'election should follow the native core randomized window');
+      report(t, {sample: 'native-election-first-request',
+        requestedElectionMinMs: BASE.electionMinMs,
+        requestedElectionMaxMs: BASE.electionMaxMs,
+        nativeElectionTick: expectedMinTicks,
+        firstRequestTick: firstRequest.tick,
+        firstRequestNominalMs: firstRequest.tick * BASE.tickIntervalMs,
+        firstRequestKind: firstRequest.kind});
+    } finally {
+      fixture.cluster.dispose();
+    }
+  });
