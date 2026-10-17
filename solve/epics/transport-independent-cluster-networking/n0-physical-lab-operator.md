@@ -8,6 +8,30 @@ fixed N0 physical scenario profile**. Do not turn a test file into an
 unauthorized SSH runner and do not relabel old two-host unit-test
 receipts as inter-host measurements.
 
+## Preferred existing-controller route (not yet locally enabled)
+
+As of the latest [controller ping #181](https://github.com/psvensson/lagrange-lab/issues/181),
+the live bridge is **v0.1.6** with `uncertain_execution=true` due to original
+[lab job #160](https://github.com/psvensson/lagrange-lab/issues/160).
+Harnessd's [M10 dispatch PR #365](https://github.com/psvensson/harnessd/pull/365)
+is still draft and its Lagrange `raft-smoke` profile is single-host;
+it is **not** the N0 three-host scenario.
+
+The preferred controlled route is [lagrange-lab issue #182](https://github.com/psvensson/lagrange-lab/issues/182):
+a new, *locally commissioned*, fixed `n0-physical-network-3` entry under the
+**existing** private lab `harness` operation, using its current journal,
+three-host physical placement, machine locks and one physical source
+execution authority. It is **not yet installed or enabled**.
+
+No new cloud N0 source request should be posted until job #160 receives
+operator-verified physical reconciliation, the independently reviewed
+[v0.1.7 parser correction #168](https://github.com/psvensson/lagrange-lab/pull/168)
+is safely activated, and the fixed N0 profile is separately approved.
+The manual isolated-checkout commands below remain an optional operator
+procedure, not permission for an agent to evade the controller's journal
+or run SSH via a lab `test-files` job. Nothing in this runbook certifies
+a physical three-host measurement before its report exists.
+
 ## Tested source and expected output
 
 - Test-only proof branch: `proof/n0-full-bounded-20261017`.
