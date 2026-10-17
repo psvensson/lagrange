@@ -107,6 +107,17 @@ test('N0 bounded multi-group idle heartbeat profile on a physical lab CPU',
           return {frames: packets.length, waves: waves.length,
             gaps: waves.slice(1).map((x, i) => x - waves[i])};
         });
+        t.diagnostic('N0_MULTIGROUP_DIAG ' + JSON.stringify({
+          phase, groups: count,
+          wallWindowMs: Number((endedAt - startedAt).toFixed(2)),
+          initializationMs: Number(initializationMs.toFixed(2)),
+          nativeHeartbeatFrames: all.length,
+          perGroup: perGroup.map((g, i) => ({
+            index: i, frames: g.frames, waves: g.waves,
+            status: groups[i].cluster.node(groups[i].leader).readStatus()?.role,
+            intervalsMs: g.gaps.map((v) => Number(v.toFixed(2))),
+          })),
+        }));
         assert.ok(perGroup.every((g) => g.waves >= 4),
           'every group must emit repeated native heartbeats');
         const gaps = perGroup.flatMap((g) => g.gaps);
