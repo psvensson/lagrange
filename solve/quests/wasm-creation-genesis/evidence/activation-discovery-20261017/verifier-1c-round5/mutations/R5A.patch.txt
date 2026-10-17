@@ -1,0 +1,11 @@
+--- a/src/node/runtime-service-bound-creation-route.js	2026-10-17 19:07:02.004230965 +0200
++++ b/src/node/runtime-service-bound-creation-route.js	2026-10-17 19:07:02.008230998 +0200
+@@ -109,7 +109,7 @@
+   const deferral = decision.kind === DECISION.DEFERRED ? {deferRetry: true} : {};
+   const writes = writesMemo(handler, replicaId, decision);
+   const memo = (status) => writes && handler.localReplicas.set(replicaId,
+-    {replicaId, entityId, status, ...named, ...deferral});
++    {replicaId, entityId, status, ...named});
+   const fields = {operationId, replicaId, entityId, nodeId: handler.nodeId};
+   if (decision.kind === DECISION.ACTIVE) {
+     memo(ReplicaStatus.ACTIVE);

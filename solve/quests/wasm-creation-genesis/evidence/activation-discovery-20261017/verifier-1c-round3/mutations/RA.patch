@@ -1,0 +1,11 @@
+--- a/src/node/runtime-service-bound-creation-route.js	2026-10-17 18:19:02.853631871 +0200
++++ b/src/node/runtime-service-bound-creation-route.js	2026-10-17 18:19:02.865631983 +0200
+@@ -192,7 +192,7 @@
+  * @return {Object} The reply.
+  */
+ function reenterHeldCreation(handler, existing, params) {
+-  const creation = {operationId: existing.operationId ?? params.operationId,
++  const creation = {operationId: params.operationId,
+     entityId: params.entityId, replicaId: params.replicaId};
+   if (!handler.inProgressOperations.has(creation.operationId)) {
+     scheduleBoundReentry(handler, creation);

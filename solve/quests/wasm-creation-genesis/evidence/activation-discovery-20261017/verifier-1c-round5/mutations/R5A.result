@@ -1,0 +1,6 @@
+mutated sha: 687ed44c508e09e460f033279a3c155329475d7923ae77369d0c367d2798bbb1
+catcher test/node/runtime-service-bound-route.test.js rc=1
+not ok test/node/runtime-service-bound-route.test.js (44 assertions, 855ms)
+    # Subtest: UNKNOWN after retention is the handler-typed deferral: CREATE_FAILED + deferRetry, memo FAILED
+    ok 4 - UNKNOWN after retention is the handler-typed deferral: CREATE_FAILED + deferRetry, memo FAILED
+RESTORED_BYTE_IDENTICAL src/node/runtime-service-bound-creation-route.js

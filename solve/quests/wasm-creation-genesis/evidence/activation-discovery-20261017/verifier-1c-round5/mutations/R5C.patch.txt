@@ -1,0 +1,11 @@
+--- a/src/node/runtime-service-bound-creation-route.js	2026-10-17 19:07:02.012231033 +0200
++++ b/src/node/runtime-service-bound-creation-route.js	2026-10-17 19:07:02.020231103 +0200
+@@ -263,7 +263,7 @@
+  * @return {boolean}
+  */
+ function refuseForeignCreation(handler, existing, {operationId, replicaId}) {
+-  if (!namesCreation(existing) || existing.operationId === operationId) return false;
++  if (!namesCreation(existing) || existing.operationId === operationId || true) return false;
+   const decision = {kind: DECISION.FAILED, errorCode: OUTCOME.CONTENT_CONFLICT};
+   handler.emitExecutorOutcome(EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_FAILED,
+     operationId, WORKFLOW_STEP.FAILED, failureOptions(replicaId, decision));

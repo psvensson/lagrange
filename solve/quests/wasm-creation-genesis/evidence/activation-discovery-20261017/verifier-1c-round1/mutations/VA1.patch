@@ -1,0 +1,13 @@
+--- a/src/wasm-service/wasm-service-lifecycle.js	2026-10-17 17:28:09.245794024 +0200
++++ b/src/wasm-service/wasm-service-lifecycle.js	2026-10-17 17:28:09.253794087 +0200
+@@ -444,9 +444,7 @@
+    */
+   enableServicesRowPublication(serviceId, serviceType, consensusResourceToken) {
+     const replica = this.activeReplicas.get(serviceId);
+-    if (!replica || replica.consensusCreation === null ||
+-        instanceDigest(replica.consensusCreation.token) !==
+-          instanceDigest(consensusResourceToken ?? null)) {
++    if (!replica || replica.consensusCreation === null) {
+       return {outcome: WASM_SERVICES_ROW_MARK.NOT_REGISTERED};
+     }
+     return markServicesRowPresent(replica, serviceType);

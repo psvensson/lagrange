@@ -1,0 +1,306 @@
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: ok cpu 48C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+not ok test/rebalancer/replica-status-completeness.property.test.js (118 assertions, 1461ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: Property: ReplicaStatus enum contains all required values
+    # Subtest: ReplicaStatus contains all required values
+        ok 1 - ReplicaStatus should contain 'pending'
+        ok 2 - ReplicaStatus should contain 'creating'
+        ok 3 - ReplicaStatus should contain 'syncing'
+        ok 4 - ReplicaStatus should contain 'active'
+        ok 5 - ReplicaStatus should contain 'removing'
+        ok 6 - ReplicaStatus should contain 'removed'
+        ok 7 - ReplicaStatus should contain 'failed'
+        not ok 8 - ReplicaStatus should contain 'held'
+          ---
+          at:
+            fileName: test/rebalancer/replica-status-completeness.property.test.js
+            lineNumber: 61
+            columnNumber: 9
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/rebalancer/replica-status-completeness.property.test.js:61:9)
+          
+            Test.<anonymous>
+            (test/rebalancer/replica-status-completeness.property.test.js:57:11)
+          
+            test/rebalancer/replica-status-completeness.property.test.js:56:1
+          source: |2
+          
+                for (const required of REQUIRED_STATUS_VALUES) {
+                  t.ok(
+            --------^
+                    statusValues.includes(required),
+                    `ReplicaStatus should contain '${required}'`,
+          ...
+        
+        not ok 9 - ReplicaStatus should have exactly the required number of values
+          ---
+          compare: ===
+          at:
+            fileName: test/rebalancer/replica-status-completeness.property.test.js
+            lineNumber: 67
+            columnNumber: 7
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/rebalancer/replica-status-completeness.property.test.js:67:7)
+          
+            Test.<anonymous>
+            (test/rebalancer/replica-status-completeness.property.test.js:57:11)
+          
+            test/rebalancer/replica-status-completeness.property.test.js:56:1
+          source: |2
+                }
+          
+                t.equal(
+            ------^
+                  statusValues.length,
+                  REQUIRED_STATUS_VALUES.length,
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -8
+            +7
+          ...
+        
+        1..9
+    not ok 1 - ReplicaStatus contains all required values # time=12.936ms
+      ---
+      at:
+        fileName: test/rebalancer/replica-status-completeness.property.test.js
+        lineNumber: 57
+        columnNumber: 11
+        typeName: Test
+      source: >
+      
+        test('Property: ReplicaStatus enum contains all required values', async (t) =>
+        {
+          await t.test('ReplicaStatus contains all required values', async (t) => {
+        ----------^
+            const statusValues = getAllStatusValues();
+      ...
+    
+    # Subtest: ReplicaStatus enum keys match values
+        ok 1 - PENDING should map to pending
+        ok 2 - CREATING should map to creating
+        ok 3 - SYNCING should map to syncing
+        ok 4 - ACTIVE should map to active
+        ok 5 - REMOVING should map to removing
+        ok 6 - REMOVED should map to removed
+        ok 7 - FAILED should map to failed
+        1..7
+    ok 2 - ReplicaStatus enum keys match values # time=0.544ms
+    
+    # Subtest: isValidStatus correctly validates status values
+        not ok 1 - Property failed after 7 tests { seed: 280728437, path: "6", endOnFailure: true } Counterexample: ["held"] Shrunk 0 time(s) Got error: Property failed by returning false  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+          ---
+          stack: |
+            buildError (../../lagrange/node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+            throwIfFailed (../../lagrange/node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:138:11)
+            reportRunDetails (../../lagrange/node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:151:16)
+            Module.assert (../../lagrange/node_modules/fast-check/lib/esm/check/runner/Runner.js:69:9)
+            Test.<anonymous> (test/rebalancer/replica-status-completeness.property.test.js:86:14)
+          at:
+            fileName: ../../lagrange/node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+            lineNumber: 126
+            columnNumber: 15
+            functionName: buildError
+          tapCaught: returnedPromiseRejection
+          source: |
+            function buildError(errorMessage, out) {
+                if (!out.runConfiguration.errorWithCause) {
+                    throw new Error(errorMessage);
+            --------------^
+                }
+                const ErrorWithCause = Error;
+          ...
+        
+        1..1
+    not ok 3 - isValidStatus correctly validates status values # time=5.419ms
+      ---
+      at:
+        fileName: test/rebalancer/replica-status-completeness.property.test.js
+        lineNumber: 85
+        columnNumber: 11
+        typeName: Test
+      source: >2
+          });
+      
+          await t.test('isValidStatus correctly validates status values', async (t) => {
+        ----------^
+            await fc.assert(
+              fc.property(
+      ...
+    
+    # Subtest: isValidStatus rejects invalid status values
+        ok 1 - Invalid status values are rejected
+        1..1
+    ok 4 - isValidStatus rejects invalid status values # time=1.912ms
+    
+    # Subtest: WORKFLOW_STEP_TO_STATUS maps all steps to valid statuses
+        ok 1 - Step 'PENDING' should map to valid status 'pending'
+        ok 2 - Step 'SENDING' should map to valid status 'pending'
+        ok 3 - Step 'CREATING' should map to valid status 'creating'
+        ok 4 - Step 'SYNCING' should map to valid status 'syncing'
+        ok 5 - Step 'ACTIVE' should map to valid status 'active'
+        ok 6 - Step 'STOPPING' should map to valid status 'removing'
+        ok 7 - Step 'REMOVED' should map to valid status 'removed'
+        1..7
+    ok 5 - WORKFLOW_STEP_TO_STATUS maps all steps to valid statuses # time=0.468ms
+    
+    # Subtest: ADD workflow steps are complete and ordered
+        ok 1 - ADD workflow steps should match expected order
+        ok 2 - ADD step 'PENDING' should have a status mapping
+        ok 3 - ADD step 'SENDING' should have a status mapping
+        ok 4 - ADD step 'CREATING' should have a status mapping
+        ok 5 - ADD step 'SYNCING' should have a status mapping
+        ok 6 - ADD step 'ACTIVE' should have a status mapping
+        1..6
+    ok 6 - ADD workflow steps are complete and ordered # time=0.787ms
+    
+    # Subtest: REMOVE workflow steps are complete and ordered
+        ok 1 - REMOVE workflow steps should match expected order
+        ok 2 - REMOVE step 'PENDING' should have a status mapping
+        ok 3 - REMOVE step 'SENDING' should have a status mapping
+        ok 4 - REMOVE step 'STOPPING' should have a status mapping
+        ok 5 - REMOVE step 'REMOVED' should have a status mapping
+        1..5
+    ok 7 - REMOVE workflow steps are complete and ordered # time=0.512ms
+    
+    # Subtest: REPLACE workflow steps are complete and ordered
+        ok 1 - REPLACE workflow steps should match expected order
+        ok 2 - REPLACE step 'PENDING' should have a status mapping
+        ok 3 - REPLACE step 'SENDING' should have a status mapping
+        ok 4 - REPLACE step 'CREATING' should have a status mapping
+        ok 5 - REPLACE step 'SYNCING' should have a status mapping
+        ok 6 - REPLACE step 'ACTIVE' should have a status mapping
+        ok 7 - REPLACE step 'STOPPING' should have a status mapping
+        ok 8 - REPLACE step 'REMOVED' should have a status mapping
+        1..8
+    ok 8 - REPLACE workflow steps are complete and ordered # time=0.567ms
+    
+    # Subtest: getWorkflowSteps returns correct steps for operation types
+        ok 1 - ADD operation should return ADD workflow steps
+        ok 2 - REMOVE operation should return REMOVE workflow steps
+        ok 3 - REPLACE operation should return REPLACE workflow steps
+        ok 4 - Invalid operation type should return empty array
+        1..4
+    ok 9 - getWorkflowSteps returns correct steps for operation types # time=0.429ms
+    
+    # Subtest: isValidWorkflowStep validates steps correctly
+        ok 1 - Valid workflow steps are correctly identified
+        1..1
+    ok 10 - isValidWorkflowStep validates steps correctly # time=0.826ms
+    
+    # Subtest: getNextWorkflowStep returns correct next step
+        ok 1 - should be equal
+        ok 2 - should be equal
+        ok 3 - should be equal
+        ok 4 - should be equal
+        ok 5 - should be equal
+        ok 6 - should be equal
+        ok 7 - should be equal
+        ok 8 - should be equal
+        ok 9 - should be equal
+        ok 10 - should be equal
+        ok 11 - should be equal
+        ok 12 - should be equal
+        ok 13 - should be equal
+        ok 14 - should be equal
+        ok 15 - should be equal
+        ok 16 - should be equal
+        1..16
+    ok 11 - getNextWorkflowStep returns correct next step # time=0.784ms
+    
+    # Subtest: isTerminalStep identifies terminal steps correctly
+        ok 1 - ACTIVE is terminal for ADD
+        ok 2 - PENDING is not terminal
+        ok 3 - SYNCING is not terminal
+        ok 4 - REMOVED is terminal for REMOVE
+        ok 5 - STOPPING is not terminal
+        ok 6 - FAILED is terminal for ADD
+        ok 7 - FAILED is terminal for REMOVE
+        ok 8 - FAILED is terminal for REPLACE
+        ok 9 - REMOVED is terminal for REPLACE
+        ok 10 - ACTIVE is not terminal for REPLACE
+        1..10
+    ok 12 - isTerminalStep identifies terminal steps correctly # time=0.556ms
+    
+    # Subtest: createOperation creates valid operation objects
+        ok 1 - createOperation creates valid operation objects with all required fields
+        1..1
+    ok 13 - createOperation creates valid operation objects # time=1.179ms
+    
+    # Subtest: Operation type enum has correct values
+        ok 1 - ADD operation type should be ADD
+        ok 2 - REMOVE operation type should be REMOVE
+        ok 3 - REPLACE operation type should be REPLACE
+        1..3
+    ok 14 - Operation type enum has correct values # time=0.252ms
+    
+    # Subtest: semantic phase contract stays smaller than workflow-step contract
+        ok 1 - semantic phases should remain the shared compact lifecycle grammar
+        ok 2 - pre-activation ADD work should stay in accepted phase
+        ok 3 - replace promotion should be normalized to target_ready
+        ok 4 - replace source removal should use the shared source_retiring phase
+        ok 5 - semantic phase rules should preserve terminal status precedence
+        ok 6 - REPLACE removed status should win over active workflow evidence
+        ok 7 - REPLACE source retirement should win over active status evidence
+        ok 8 - terminal success should normalize to settled
+        ok 9 - settled phase should be terminal
+        ok 10 - failed phase should be terminal
+        ok 11 - target_ready should remain in-flight
+        1..11
+    ok 15 - semantic phase contract stays smaller than workflow-step contract # time=0.985ms
+    
+    # Subtest: semantic witnesses classify activation, retirement, and settlement
+        ok 1 - accepted work should not claim later lifecycle witnesses
+        ok 2 - target_ready should expose only activation witness
+        ok 3 - source_retiring should show both activation and retirement witnesses
+        ok 4 - settled work should expose all success witnesses
+        1..4
+    ok 16 - semantic witnesses classify activation, retirement, and settlement # time=0.648ms
+    
+    # Subtest: operation record projection keeps REPLACE active in-flight
+        ok 1 - REPLACE active target-ready record must not be terminal
+        ok 2 - ADD active record remains terminal
+        ok 3 - projection should expose one canonical in-flight progress snapshot
+        1..3
+    ok 17 - operation record projection keeps REPLACE active in-flight # time=0.447ms
+    
+    # Subtest: operation terminal SQL is operation-aware
+        ok 1 - ADD terminal SQL may treat active as terminal
+        ok 2 - REPLACE terminal SQL must not treat active as terminal
+        1..2
+    ok 18 - operation terminal SQL is operation-aware # time=0.431ms
+    
+    1..18
+not ok 1 - Property: ReplicaStatus enum contains all required values # time=41.155ms
+  ---
+  at:
+    fileName: test/rebalancer/replica-status-completeness.property.test.js
+    lineNumber: 56
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    ];
+  
+  
+    test('Property: ReplicaStatus enum contains all required values', async (t) =>
+    {
+  
+    ^
+      await t.test('ReplicaStatus contains all required values', async (t) => {
+        const statusValues = getAllStatusValues();
+  ...
+
+1..1
+# { total: 99, pass: 96, fail: 3 }
+# time=46.242ms
+# test-files total=1 pass=0 fail=1 assertions=118
+rc=1

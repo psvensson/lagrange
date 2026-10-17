@@ -57,7 +57,8 @@ import {
 } from './wasm-component-driver-shutdown-methods.js';
 import {WASM_COMPONENT_ERROR, DRIVER_ACTION, DRIVER_SEPARATOR, buildDriverStatusResult} from
   './wasm-component-driver-vocabulary.js';
-import {startBoundReplica, retireBoundReplica} from './wasm-component-driver-consensus.js';
+import {startBoundReplica, retireBoundReplica, markBoundServicesRowPresent} from
+  './wasm-component-driver-consensus.js';
 
 // --- Driver-specific constants ---
 
@@ -507,6 +508,18 @@ class WasmComponentDriver extends RuntimeDriver {
       };
     }
     return result;
+  }
+
+  /**
+   * Enable role/leader services-row publication for a bound replica whose
+   * row the runtime projected, by its exact retained token (design RV3.4).
+   * @param {string} serviceId
+   * @param {string} serviceType - The projected row's service_type.
+   * @param {Object} consensusResourceToken
+   * @return {{outcome: string}}
+   */
+  markServicesRowPresent(serviceId, serviceType, consensusResourceToken) {
+    return markBoundServicesRowPresent(this, serviceId, serviceType, consensusResourceToken);
   }
 
   /**
