@@ -55,6 +55,10 @@ const RUNTIME_SERVICE_HANDLER_LOG_MSG = Object.freeze({
   UNREGISTERED_ROUTER:
     'Unregistered RuntimeServiceHandler from message router',
   SHUTTING_DOWN: 'Shutting down RuntimeServiceHandler',
+  CREATE_HELD: 'Runtime service bound creation held',
+  REMOVE_HELD: 'Runtime service bound retirement held',
+  CREATION_WAKE_NO_LOCAL_OPERATION:
+    'Runtime service creation wake names no local operation',
 });
 
 const RUNTIME_SERVICE_HANDLER_ERROR_MSG = Object.freeze({
@@ -75,6 +79,15 @@ const RUNTIME_SERVICE_HANDLER_ERROR_MSG = Object.freeze({
     'RuntimeServiceHandler requires systemTableCache',
   DEFINITION_NOT_FOUND: (entityId) =>
     `Service definition not found: ${entityId}`,
+  // A bound-class definition whose CREATE names no retained creation (D0, RV2.2).
+  BOUND_ROUTE_REQUIRED: 'runtime_service_bound_route_required',
+});
+
+// The node-local creation wake consumer's answers (design RV2.4, RV3.5).
+const RUNTIME_SERVICE_CREATION_WAKE_OUTCOME = Object.freeze({
+  QUEUED: 'QUEUED',
+  RECORDED: 'RECORDED',
+  NO_LOCAL_OPERATION: 'NO_LOCAL_OPERATION',
 });
 
 const RUNTIME_SERVICE_HANDLER_WORKFLOW = Object.freeze({
@@ -82,6 +95,7 @@ const RUNTIME_SERVICE_HANDLER_WORKFLOW = Object.freeze({
 });
 
 export {
+  RUNTIME_SERVICE_CREATION_WAKE_OUTCOME,
   RUNTIME_SERVICE_HANDLER_ADDRESS,
   RUNTIME_SERVICE_HANDLER_ERROR_MSG,
   RUNTIME_SERVICE_HANDLER_LOG_MSG,

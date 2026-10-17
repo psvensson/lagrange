@@ -73,6 +73,12 @@ function createMockLifecycleManager(options = {}) {
   const calls = [];
   return {
     calls,
+    // The production-shaped manager without a journal (design
+    // ACTIVATION-DISCOVERY-DESIGN-20261017 Revision 3 RV2.2): every CREATE first resumes
+    // its retained creation, which this manager answers UNAVAILABLE.
+    async resumeConsensusCreation() {
+      return {outcome: 'UNAVAILABLE'};
+    },
     async createReplica(definition, context) {
       calls.push({method: 'createReplica', definition, context});
       if (options.createError) {

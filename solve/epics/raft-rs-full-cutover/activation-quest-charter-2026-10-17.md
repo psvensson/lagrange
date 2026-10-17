@@ -2,9 +2,13 @@
 
 Proposed by the lead after the stage-1c design vet (REVISE; report
 `solve/quests/wasm-creation-genesis/evidence/design-vets-20261017/design-vet-activation-discovery-20261017.md`).
-Not sealed: a quest is created with `node scripts/solve.js start` only after
-the owner confirms the scope split (CONTRACT-R2 :217-220 keeps
-`wasm-creation-genesis` at embedding scope) and rules the two decisions below.
+Owner rulings 2026-10-17: the scope split is CONFIRMED (CONTRACT-R2 :217-220
+keeps `wasm-creation-genesis` at embedding scope); B9 = a real HELD workflow
+step with its own owner timeout constant; the deletion of the unbound shape is
+this quest's final, separately reviewed unit; the learner CREATE cleanup
+custody check (composition finding F3) is a precondition here. A quest is
+created with `node scripts/solve.js start` when its design note and red probe
+exist.
 
 Mandate: owner ruling D0 (2026-10-17): the bound creation route is THE
 formation path for installed-package `wasm_component` services (not request
@@ -29,7 +33,7 @@ unbound WASM formation shape is deleted as its own reviewed unit.
    (`startup-service-lifecycle-owner.js:27-31`; owner exists at
    `bootstrap-service-control-plane-runtime-methods.js:158`); wiring order vs
    `RuntimeServiceHandlerSetup.create`.
-2. B2 (OWNER DECISION): production node owners for port allocation and module
+2. B2 (RULED: widen here, not in wasm-creation-genesis): production node owners for port allocation and module
    mirror injected through `createWasmServiceNodeDependencies` (plus time
    source, data directory, `serviceDefinitionsOwner`, `roleUpdateWriter`/
    `leaderNodeUpdateWriter`); records the supersession of CONTRACT-R2
@@ -49,11 +53,11 @@ unbound WASM formation shape is deleted as its own reviewed unit.
    row referencing it (R6); partial dispatch converges by the inventory
    decision table (R7); leader change re-dispatches from the slot's token
    (R8); `calculateMoves` bypassed for bound S (R24).
-6. B9 (OWNER DECISION): the held CREATE's time budget: a real workflow step
-   `HELD` with its own owner timeout constant that re-anchors the reaper
-   (recommended), or a typed exemption keyed on the slot being live, or
-   progress evidence through `reconcileOperationProgress`; invariant "never
-   FAILED while the slot is ADMITTED or PUBLISHED" with its witness.
+6. B9 (RULED): the held CREATE's time budget is a real workflow step `HELD`
+   with its own owner timeout constant that re-anchors the reaper; invariant
+   "never FAILED while the slot is ADMITTED or PUBLISHED" with its witness.
+   Also: honouring the handler's typed deferral (FAILED + `deferRetry`) for a
+   bound CREATE whose slot is live (stage-1c RV3.2).
 7. R14: `RuntimeServiceRebalancerOwner._cacheChangeListener` wakes
    `this._rebalancers.get(record.service_id)` on a `SERVICE_INSTANCES` change
    (the cross-node wake; periodic fallback exists).
@@ -62,7 +66,7 @@ unbound WASM formation shape is deleted as its own reviewed unit.
 9. R18, R19: founder node gone (slot held on a dead node; only that node can
    retire it) routed to the recovery stage / `group-retirement-operator-retirement-fact`;
    definition deleted mid-cohort -> `ACTION.RETIRE` gets its caller.
-10. B8: the alpha deletion unit: the dead production unbound formation
+10. B8 (RULED: after this quest proves the bound path end to end): the alpha deletion unit: the dead production unbound formation
     (`REPLICA_SET_REQUIRED` at prepare), `meta-service-lifecycle.js`, the
     unbound `WasmServiceReplica`/OPEN shape and `publishesServicesRow`'s
     unbound branch, with the measured witness inventory (about 80 unit cases
@@ -73,3 +77,10 @@ unbound WASM formation shape is deleted as its own reviewed unit.
 Discovery rows, node-side CREATE/REMOVE routes and the wake consumer (stage 1c
 of `wasm-creation-genesis`); recovery-stage items; scaling or redefinition of
 a formed service (new incarnation); request Cells; OCI.
+
+11. Composition finding F3 (RULED precondition): the candidate's learner CREATE
+    failure cleanup (`releaseLearner`) runs outside the host cleanup-custody
+    owner; route it through that owner before any production root composes
+    `messageGroupLearnerJoinHost`.
+12. Stage-1c RV4.5: how a RETAINED projection (`retained: true` from the
+    production projection owner) becomes PRESENT for a bound replica.

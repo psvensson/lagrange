@@ -6,14 +6,18 @@ import {SERVICE_INSTANCE_LIMIT as LIMIT, SERVICE_INSTANCE_OUTCOME as OUTCOME,
 import {captureInstanceJson, instanceDigest, instanceFailure, requireInstance} from
   '../control-plane/owners/service-instance-contract.js';
 import {matchesInstanceResourceToken} from '../control-plane/owners/service-instance-state.js';
-import {captureConsensusCreationIntent, prepareConsensusCreation} from
-  './service-consensus-creation-intent.js';
+import {captureConsensusCreationIntent, prepareConsensusCreation,
+  recoverConsensusCreation} from './service-consensus-creation-intent.js';
 
 const CONSENSUS_BOOTSTRAP = Object.freeze({
   HELD: 'BOOTSTRAPPED_HELD', ADMISSION: 'ADMISSION_RETAINED',
   // The exact admitted resource is granted, durably recorded locally and
   // serving (design SERVING-PUBLICATION-RETIREMENT-DESIGN-20261017 D7').
   PUBLISHED: 'PUBLISHED',
+  // PUBLISHED and serving, but the runtime's discovery projection did not land
+  // (design ACTIVATION-DISCOVERY-DESIGN-20261017 RV1.3/RV2.3): never retired,
+  // the manager keeps STARTING and a re-drive re-projects.
+  PUBLISHED_UNPROJECTED: 'PUBLISHED_UNPROJECTED',
   CONTEXT_REQUIRED: 'CONSENSUS_CREATION_CONTEXT_REQUIRED',
   SERVING_UNAVAILABLE: 'CONSENSUS_SERVING_NOT_IMPLEMENTED',
 });
@@ -46,13 +50,16 @@ function captureConsensusBootstrap(definition, context) {
     instanceDigest(descriptor), OUTCOME.CONTENT_CONFLICT);
   return {origin, descriptor};
 }
-// A bound START answer is accepted only as HELD or as PUBLISHED, and only
-// for the exact original binding and resource token. PUBLISHED additionally
-// requires the started flag: never a widened non-failed acceptance.
-const CONFIRMED_STATUSES = new Set([CONSENSUS_BOOTSTRAP.HELD, CONSENSUS_BOOTSTRAP.PUBLISHED]);
+// A bound START answer is accepted only as HELD, PUBLISHED or
+// PUBLISHED_UNPROJECTED, and only for the exact original binding and resource
+// token. Both serving answers additionally require the started flag: never a
+// widened non-failed acceptance.
+const SERVING_STATUSES = new Set([CONSENSUS_BOOTSTRAP.PUBLISHED,
+  CONSENSUS_BOOTSTRAP.PUBLISHED_UNPROJECTED]);
+const CONFIRMED_STATUSES = new Set([CONSENSUS_BOOTSTRAP.HELD, ...SERVING_STATUSES]);
 function confirmConsensusBootstrapResult(result, origin) {
   requireInstance(CONFIRMED_STATUSES.has(result?.status) &&
-    (result.status !== CONSENSUS_BOOTSTRAP.PUBLISHED || result.started === true) &&
+    (!SERVING_STATUSES.has(result.status) || result.started === true) &&
     instanceDigest(result.consensusBinding ?? null) ===
       instanceDigest(origin.intent.consensusBinding) &&
     instanceDigest(result.consensusResourceToken ?? null) === instanceDigest(origin.token),
@@ -115,7 +122,11 @@ async function confirmPublishedAuthority(manager, owned, confirmed) {
   }
   switch (publishedAuthority(current, token)) {
   case AUTHORITY.CONFIRMED:
-    manager._replicaStateById.set(owned.definition.replicaId, SERVICE_LIFECYCLE_STATE.RUNNING);
+    // A confirmed PUBLISHED_UNPROJECTED keeps STARTING: serving, not yet
+    // discoverable; never RUNNING and never retired (design Revision 4, F-1).
+    if (confirmed.status === CONSENSUS_BOOTSTRAP.PUBLISHED) {
+      manager._replicaStateById.set(owned.definition.replicaId, SERVICE_LIFECYCLE_STATE.RUNNING);
+    }
     return confirmed;
   case AUTHORITY.CONTRADICTED:
     return {outcome: OUTCOME.UNKNOWN, reason: OUTCOME.CONTENT_CONFLICT, operationId,
@@ -124,10 +135,11 @@ async function confirmPublishedAuthority(manager, owned, confirmed) {
     return {outcome: OUTCOME.UNKNOWN, reason: current?.outcome ?? OUTCOME.UNKNOWN, operationId};
   }
 }
-async function bootstrapConsensusCreation(manager, value, context = {}) {
+// The physical continuation of one retained creation answer, whichever owner
+// read produced it (prepare for a new intent, recover for a retained one).
+async function continueRetainedCreation(manager, retained) {
   let operationId = null;
   try {
-    const retained = await prepareConsensusCreation(manager, value, context);
     if (retained.outcome !== CONSENSUS_BOOTSTRAP.ADMISSION) return retained;
     operationId = retained.operationId;
     const descriptor = consensusBootstrapDescriptor(retained);
@@ -140,7 +152,10 @@ async function bootstrapConsensusCreation(manager, value, context = {}) {
     const confirmed = confirmConsensusBootstrapResult(result, retained);
     // The creation row stays IN_PROGRESS for a PUBLISHED answer too: the
     // COMPLETED-row re-entry belongs to the recovery stage (Revision 2 D7').
-    if (confirmed.status !== CONSENSUS_BOOTSTRAP.PUBLISHED) return confirmed;
+    // Both serving answers are presentation until the metadata owner confirms
+    // the exact slot PUBLISHED (A-B5); ACTIVATION-DISCOVERY-DESIGN-20261017
+    // Revision 4 supersedes RR5's "returns before any re-resolve".
+    if (!SERVING_STATUSES.has(confirmed.status)) return confirmed;
     return await confirmPublishedAuthority(manager, owned, confirmed);
   } catch (error) {
     // The original intent/admission remains IN_PROGRESS, including on a
@@ -150,6 +165,23 @@ async function bootstrapConsensusCreation(manager, value, context = {}) {
       {outcome: OUTCOME.UNKNOWN, reason: failure.outcome, operationId};
   }
 }
+async function bootstrapConsensusCreation(manager, value, context = {}) {
+  return continueRetainedCreation(manager,
+    await prepareConsensusCreation(manager, value, context));
+}
+/**
+ * Resume one retained creation by its operation id (design RV2.2): the
+ * manager's own recover and its continuation in one pass, so the journal, the
+ * runtime policy and the metadata resolve run once per re-entry.
+ * @param {Object} manager - The ServiceLifecycleManager.
+ * @param {string} operationId - The creation's operation id.
+ * @param {Object} [context] - The lifecycle context.
+ * @return {Promise<Object>} A bound START answer or a typed outcome.
+ */
+async function resumeConsensusCreation(manager, operationId, context = {}) {
+  return continueRetainedCreation(manager,
+    await recoverConsensusCreation(manager, operationId, context));
+}
 export {CONSENSUS_BOOTSTRAP, CREATION_WAKE_OUTCOME, hasConsensusCreation,
   consensusBootstrapDescriptor, captureConsensusBootstrap, confirmConsensusBootstrapResult,
-  bootstrapConsensusCreation, retireConsensusCreation};
+  bootstrapConsensusCreation, resumeConsensusCreation, retireConsensusCreation};

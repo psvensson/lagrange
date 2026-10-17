@@ -879,3 +879,122 @@ module; memo HELD + `operationId`: handler; `NOT_ADMITTED`: RESULT in
 the lifecycle; `endpointHost`: the node dependency owner over
 `resolveEndpointAddress`; the deferral: the existing FAILED outcome with
 `deferRetry` and `errorCode`.
+
+---
+
+# Revision 4 (2026-10-17, lead decisions on the implementer's findings before verification)
+
+Implementer report: `evidence/serving-publication-20261017/implementer-stage1c-report.md`
+(retained at commit). Where this revision and Revisions 2-3 disagree, this
+revision wins.
+
+- **RV4.1 PUBLISHED_UNPROJECTED is confirmed against authority (supersedes
+  RR5's sentence "the manager returns before any re-resolve").** The stage-1
+  witness P11 (A-B5: a PUBLISHED-class driver answer is presentation until the
+  metadata owner confirms the exact slot PUBLISHED) went red under Revision 3:
+  a forged PUBLISHED answer whose projection failed was never contradicted, so
+  the forged resource was never retired and its slot stayed ADMITTED.
+  Decision: `bootstrapConsensusCreation` runs `confirmPublishedAuthority` for
+  PUBLISHED_UNPROJECTED exactly as for PUBLISHED; CONTRADICTED retires by
+  creation and answers `UNKNOWN{CONTENT_CONFLICT, retirement}`; UNRESOLVED
+  answers `UNKNOWN{reason}`; CONFIRMED returns the PUBLISHED_UNPROJECTED result
+  unchanged with the manager state kept STARTING (never RUNNING, never retire).
+  Mutation M18 (skip the confirmation for PUBLISHED_UNPROJECTED) must redden P11.
+- **RV4.2 The request-Cell predicate is null-safe at its owner (F-3).**
+  `isRequestCellDefinition` tested the `binding_*` keys by presence; a
+  serialized `service_definitions` row carries them with null values, so every
+  installed `wasm_component` row classified as a request Cell and the
+  bound-class refusal of RV2.2 could never fire for real rows. Decision: the
+  owner (`request-cell-runtime-contract.js`) treats null/undefined values as
+  absent; every caller is censused in the report; an owner witness classifies a
+  serialized row (keys present, null) as not a Cell and a compiled Cell row as a
+  Cell; the handler witness uses real-shaped rows. Mutation M19 (presence
+  test) must redden both. The activation quest's planner discriminator (B5)
+  inherits the corrected owner.
+- **RV4.3 Supersessions the implementation required beyond Revision 3
+  (accepted provisionally; the verifier judges; the quest-log decision entry
+  at commit names every line):** the retained fixture's endpoint/state sinks
+  record and answer "applied" only for the serving replica's physical id and
+  still refuse and record anything else (every `publications === []`
+  assertion unchanged); the genesis and reconciliation assertions "no leader
+  publication queued" hold only for replicas that are not PRESENT; the driver
+  conformance allowlist gains `markServicesRowPresent`; the handler tests'
+  mock managers answer `resumeConsensusCreation` -> UNAVAILABLE (the
+  production shape).
+- **RV4.4 Endpoint metadata carries digests (F-8):** `binding_digest` and
+  `resource_token_digest`, never the raw token; recorded at the EP_META owner.
+- **RV4.5 Recorded for the activation quest (F-4):** a production projection
+  owner that answers `retained: true` makes the bound route answer
+  PUBLISHED_UNPROJECTED on every re-drive; the embedding uses the direct
+  writer. The activation quest decides how a retained projection becomes
+  PRESENT.
+- **RV4.6 Accepted refactor (F-7):** `recoverConsensusCreation`'s intent
+  decoding moved into a shared helper used by `readRetainedCreation`; behaviour
+  byte-equivalent; the verifier checks the call sites.
+
+## Revision 5 (lead, 2026-10-17): the stage-1c verifier's round-1 verdict (REJECT, narrow) ruled
+
+Verifier record: `evidence/activation-discovery-20261017/verifier-1c-round1/verdict.md`
+(snapshot `04f1a91129550c8c0bf54e509faddfda50528c45`). One required change
+(V-F1) and nine recorded notes (V-N2..V-N10). Rulings, appended, never
+rewriting an earlier line:
+
+- **RV5.1 A HELD re-entry resumes the CREATION, never the request (V-F1;
+  supersedes the implementer's F-5 line "a HELD re-entry uses the request's
+  operation id").** `reenterHeldCreation` resumes `existing.operationId` (the
+  HELD memo carries the retained creation's id for exactly this) and keys the
+  in-flight guard by that id, the same key wakes use (`token.operationId`), so
+  RV3.5 holds across both entry points. Every outcome the re-entry emits names
+  the creation's operation id (one owner of the operation row); the request's
+  reply stays IN_PROGRESS as today and its own id is a log field
+  (`requestOperationId`) of the re-entry. The one-id premise (RV1.2 R4/R1)
+  remains the producer's promise; the node never depends on it to keep custody
+  of a live bound replica.
+- **RV5.2 A nameless settle never overwrites a creation-naming memo (V-F1,
+  second half; V-N8).** A refusal or deferral for a request that names no
+  retained creation (`BOUND_ROUTE_REQUIRED`, the UNAVAILABLE deferral, or the
+  route's catch path before `resumeConsensusCreation` answered a retained
+  class) writes the replica's memo only when the current memo names no
+  creation (absent, or `operationId` undefined); otherwise the memo is left as
+  it is and only the outcome is emitted. The catch path names the request's id
+  on the memo only after the resume answered a retained class (the route
+  tracks that fact); before it, the settle is nameless under this guard.
+  Witnesses (unit, red on the round-2 tree by the verifier's probe P1): a CREATE
+  under another operation id for a HELD replica keeps the memo's creation,
+  re-enters it once, emits under the creation's id, and the next REMOVE is
+  bound; a wake during that re-entry is RECORDED on the creation's in-flight
+  entry (no second resume).
+- **RV5.3 Wake consumer corrections (V-N2, V-N3).** `findWakeTarget` requires a
+  string `token.operationId`; a wake without one is `NO_LOCAL_OPERATION` (never
+  matched against memos that carry no `operationId`). A RESOURCE_CLOSED wake
+  recorded on an in-flight CREATE sets no `wakePending` (design: "nothing
+  local"); only OBSERVED and GRANT_HELD do.
+- **RV5.4 The PRESENT latch is witnessed (V-N10, V-N4).** After PRESENT, a
+  second `enableServicesRowPublication(S, type, ownToken)` answers
+  ALREADY_PRESENT and leaves `pendingRoleUpdate` untouched (lifecycle unit
+  witness; mutation VA8 must redden it). C6 (h) asserts `born >= 0` before
+  ordering the first role write after the INSERT.
+- **RV5.5 RV4.3 wording (V-N6) and fixture leftovers (V-N5).** The retained
+  fixture's projection sink also accepts a STOPPED projection for any replica
+  (retirement needs it); RV4.3's sentence is read with that addition. The
+  embedding fixture drops the fields it inherited from the strong-write fixture
+  and does not read (`held`, `events`, `phase`, `holdResponses`).
+- **RV5.6 Recorded (V-N7, V-N9).** The repo-wide literals checker's 320 "new"
+  hits are all outside this diff (a stale committed baseline at the lane tip):
+  lane debt for closeout step 3, not this stage. A bound REMOVE's recovery of
+  its creation depends on the `wasm_operations` journal read; when the journal
+  is unavailable the REMOVE defers typed while the replica keeps serving
+  (RV2.1, fail-closed); whether `_wasm_creation_local` may serve as the
+  fallback token source is the recovery stage's decision. This stage registers
+  one coupled pair in `test/shards/impact-contracts.json` for the bound
+  interaction (route module <-> consensus bootstrap / publication module <->
+  the C6 embedding witness) so the cone selects them together.
+- **RV5.7 Round-3 proof.** Re-measure U, N, the lifecycle unit test, the
+  route-module statics (decision boundaries, complexity, literals, silent
+  catch), duplication and unused-export ratchets; the verifier re-runs VM01,
+  VM11, VA7, VA8 plus the new mutations "re-entry resumes the request id",
+  "nameless settle overwrites the memo", "CLOSED wake sets wakePending",
+  "token-less wake matches a nameless memo". Lab: the changed cone of the
+  round-3 delta at the new snapshot on one host, beside the round-2 broad run
+  at `04f1a9112` (85 files, three hosts) which stands as the base-comparison
+  classification of the unchanged files.

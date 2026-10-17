@@ -235,6 +235,7 @@ const PEER_ROW_EXCLUDED_STATUSES = Object.freeze(new Set([
   ReplicaStatus.FAILED,
   ReplicaStatus.REMOVING,
   ReplicaStatus.REMOVED,
+  ReplicaStatus.HELD,
 ]));
 
 function isPeerRowStatusAdmissible(status) {

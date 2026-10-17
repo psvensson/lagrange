@@ -164,6 +164,11 @@ async function drainImmediateWork() {
 
 function createLifecycleManager(cache, activeEffects, activationRecord) {
   return {
+    // The production-shaped manager without a journal (design
+    // ACTIVATION-DISCOVERY-DESIGN-20261017 Revision 3 RV2.2) answers UNAVAILABLE.
+    async resumeConsensusCreation() {
+      return {outcome: 'UNAVAILABLE'};
+    },
     async createReplica() {},
     async startReplica(handle) {
       activationRecord.executionEffects.push(handle.serviceId);
