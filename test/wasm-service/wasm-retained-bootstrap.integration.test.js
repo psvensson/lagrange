@@ -6,6 +6,11 @@ import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {fixture, bootstrapGroup, initialization, administer} from
   './wasm-retained-bootstrap-fixture.js';
 
+// Appended with design SERVING-PUBLICATION-RETIREMENT-DESIGN-20261017
+// Revision 3 N1: PUBLISHED is now the success status of a bound START whose
+// genesis is observed and granted, so every negative below that refused
+// BOOTSTRAPPED_HELD also refuses PUBLISHED (the old success vocabulary grew).
+const PUBLISHED = 'PUBLISHED';
 // This file does not prove metadata quorum or user serving. All native groups
 // below are real raft-rs groups, with the explicitly documented component SQL backing.
 test('retained manager intent opens native RF3 held without nested journal or ACTIVE routes', async (t) => {
@@ -57,7 +62,13 @@ test('common creation root refuses another INIT incarnation before any writer is
       init.incarnation);
     assert.deepEqual(host.publications, []);
     const result = await f.bootstrap(host);
-    assert.equal(result.status, 'BOOTSTRAPPED_HELD');
+    // Superseded by design SERVING-PUBLICATION-RETIREMENT-DESIGN-20261017
+    // Revision 3 N1 (same class as the genesis/reconciliation witnesses it
+    // names; this line was not listed there): was BOOTSTRAPPED_HELD. The INIT
+    // is recorded and covered on every founder, so each START grants its own
+    // slot and serves; still no endpoint, state or nested journal row.
+    assert.equal(result.status, PUBLISHED, JSON.stringify(result));
+    assert.deepEqual(host.publications, []);
   }
 });
 
@@ -97,6 +108,7 @@ test('shutdown during authoritative opening cannot leave a late native handle or
   const result = await pending;
   await stopped;
   assert.notEqual(result.status, 'BOOTSTRAPPED_HELD');
+  assert.notEqual(result.status, PUBLISHED);
   assert.equal(replica.db, null);
   assert.equal(replica.raft, null);
   assert.equal(replica.transportHandler, null);
@@ -110,6 +122,7 @@ test('bound bootstrap rejects a driver running claim instead of publishing it', 
   host.driver.start = async () => ({status: 'running', endpointIntent: {port: 8080}});
   const answer = await f.bootstrap(host);
   assert.notEqual(answer.status, 'BOOTSTRAPPED_HELD');
+  assert.notEqual(answer.status, PUBLISHED, 'A_RUNNING_CLAIM_WAS_ACCEPTED_AS_PUBLISHED');
   assert.deepEqual(host.publications, []);
   assert.equal(f.metadata.row().state, 'in_progress');
 });
@@ -124,6 +137,7 @@ test('a known opening with lost application storage cannot become a fresh peer',
   rmSync(dbPath);
   const answer = await f.bootstrap(host);
   assert.notEqual(answer.status, 'BOOTSTRAPPED_HELD', 'LOST_STORAGE_REOPENED_AS_FRESH');
+  assert.notEqual(answer.status, PUBLISHED, 'LOST_STORAGE_REOPENED_AS_FRESH');
   assert.equal(existsSync(dbPath), false, 'REFUSED_RECOVERY_RECREATED_MISSING_DATABASE');
   assert.equal(f.metadata.state().selected.resources[0].ordinal, 1);
   assert.deepEqual(host.publications, []);
@@ -196,6 +210,8 @@ test('runtime shutdown propagates failed consensus cleanup and keeps driver cust
 
 
 test('an intact original file reopens the same native history and remains held', async (t) => {
+  // Title kept as recorded; "held" now means held until its covered genesis
+  // publishes (Revision 3 N1).
   const f = await fixture(t);
   await bootstrapGroup(f);
   assert.equal((await administer(f, initialization(f.metadata.intent.consensusBinding))).status,
@@ -208,7 +224,10 @@ test('an intact original file reopens the same native history and remains held',
   }));
   for (const host of f.hosts) await host.lifecycle.stopReplica(f.metadata.serviceId);
   for (const [index, host] of f.hosts.entries()) {
-    assert.equal((await f.bootstrap(host)).status, 'BOOTSTRAPPED_HELD');
+    // Revision 3 N1 supersession (unlisted line, same class): was
+    // BOOTSTRAPPED_HELD. The intact file reopens the same history, and with
+    // its INIT recorded and covered the reopened START publishes its slot.
+    assert.equal((await f.bootstrap(host)).status, PUBLISHED);
     assert.equal(host.replica.replicaId, before[index].peer);
     assert.deepEqual(host.replica.writerState.meta().initialization, before[index].initialization);
     const durable = RaftRsDurableStore.readDurableRecordIn(host.replica.db, f.groupId);
@@ -232,6 +251,7 @@ test('copying application bytes into a different file does not copy local openin
   assert.ok(readFileSync(path).equals(before), 'the copy has the actual original application bytes');
   const result = await f.bootstrap(host);
   assert.notEqual(result.status, 'BOOTSTRAPPED_HELD', 'COPIED_LOCAL_RECORD_OPENED_A_NEW_FILE');
+  assert.notEqual(result.status, PUBLISHED, 'COPIED_LOCAL_RECORD_OPENED_A_NEW_FILE');
   assert.equal(host.replica.db, null);
   assert.equal(host.replica.raft, null);
   assert.deepEqual(host.publications, []);
@@ -269,11 +289,15 @@ test('uncertain first opening never recreates an unwitnessed missing application
     if (claimWritten) throw new Error('FIRST_OPENING_RESOLUTION_UNAVAILABLE');
     return f.metadata.reader(sql, params);
   });
-  assert.notEqual((await f.bootstrap(host)).status, 'BOOTSTRAPPED_HELD');
+  const uncertain = await f.bootstrap(host);
+  assert.notEqual(uncertain.status, 'BOOTSTRAPPED_HELD');
+  assert.notEqual(uncertain.status, PUBLISHED);
   assert.ok(JSON.parse(f.metadata.row().opening_json).claimId);
   assert.equal(existsSync(host.replica.dbPath), false);
   host.manager.setIdempotencyReader(f.metadata.reader);
-  assert.notEqual((await f.bootstrap(host)).status, 'BOOTSTRAPPED_HELD');
+  const resolved = await f.bootstrap(host);
+  assert.notEqual(resolved.status, 'BOOTSTRAPPED_HELD');
+  assert.notEqual(resolved.status, PUBLISHED);
   assert.equal(existsSync(host.replica.dbPath), false, 'AMBIGUOUS_OPENING_INVENTED_FRESH_PERMISSION');
   assert.equal(f.metadata.row().state, 'in_progress');
 });
@@ -284,7 +308,9 @@ test('a held driver answer must carry the original binding and token, not just a
   host.driver.start = async (context) => ({status: 'BOOTSTRAPPED_HELD',
     consensusBinding: context.consensusCreation.intent.consensusBinding,
     consensusResourceToken: {...context.consensusCreation.token, ordinal: 999}});
-  assert.notEqual((await f.bootstrap(host)).status, 'BOOTSTRAPPED_HELD');
+  const wrongToken = await f.bootstrap(host);
+  assert.notEqual(wrongToken.status, 'BOOTSTRAPPED_HELD');
+  assert.notEqual(wrongToken.status, PUBLISHED);
   assert.deepEqual(host.publications, []);
 });
 
@@ -292,7 +318,9 @@ test('whole-runtime shutdown closes new bound admission even before the first pr
   const f = await fixture(t);
   const host = await f.addHost(0);
   await host.runtime.shutdown();
-  assert.notEqual((await f.bootstrap(host)).status, 'BOOTSTRAPPED_HELD');
+  const closed = await f.bootstrap(host);
+  assert.notEqual(closed.status, 'BOOTSTRAPPED_HELD');
+  assert.notEqual(closed.status, PUBLISHED);
   assert.equal(host.lifecycle.getReplica(f.metadata.serviceId), null);
   assert.deepEqual(host.publications, []);
 });

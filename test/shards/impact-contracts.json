@@ -403,7 +403,7 @@
       ]
     },
     "CL-041": {
-      "description": "A follower grants its vote to at most one candidate per term, so at most one leader can be elected per term (Raft \u00a75.2 Election Safety).",
+      "description": "A follower grants its vote to at most one candidate per term, so at most one leader can be elected per term (Raft §5.2 Election Safety).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -414,7 +414,7 @@
       ]
     },
     "CL-040": {
-      "description": "A committed Raft log entry is identical cluster-wide at its index; a follower never stale-commits its own same-index/different-term entry on catch-up (Raft \u00a75.3 Log Matching).",
+      "description": "A committed Raft log entry is identical cluster-wide at its index; a follower never stale-commits its own same-index/different-term entry on catch-up (Raft §5.3 Log Matching).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -425,7 +425,7 @@
       ]
     },
     "CL-042": {
-      "description": "An empty raft log's last-log-term is 0 (Raft \u00a75.4.1): the consensus core never masquerades an empty log as up-to-date, so a voter holding committed entries denies an empty-log candidate regardless of the candidate's election term (CL-042).",
+      "description": "An empty raft log's last-log-term is 0 (Raft §5.4.1): the consensus core never masquerades an empty log as up-to-date, so a voter holding committed entries denies an empty-log candidate regardless of the candidate's election term (CL-042).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -1125,7 +1125,7 @@
       ]
     },
     "service-consensus-retained-native-bootstrap": {
-      "description": "The original CREATE journal retains first-opening identity and hands one bound operation through manager, adapter and runtime to instance-qualified native WASM opening. Common B, exact local file and resource token are checked before native bootstrap; all results remain BOOTSTRAPPED_HELD with no serving, publication or journal completion. Cleanup retains errors and physical custody. Native RF3 evidence uses explicitly component-level metadata/journal adapters; it does not prove distributed metadata or the remaining grant/retirement interaction. Normal held lifecycle reentry constructs the exact binding-owned INIT through the existing writer completion owner; applied acceptance must be covered by a validated native committed founding membership observation. Native role and applied-progress events enqueue the same per-replica OwnerKeyReconcileQueue continuation used by explicit start. Exact registry/port/creation checks fence stale work; shutdown joins actual reconciliation before clearing queue custody. Observed genesis remains evidence only, never serving authority.",
+      "description": "The original CREATE journal retains first-opening identity and hands one bound operation through manager, adapter and runtime to instance-qualified native WASM opening. Common B, exact local file and resource token are checked before native bootstrap. One per-replica OwnerKeyReconcileQueue continuation, entered by explicit START and by native role and applied-progress events, constructs the binding-owned INIT, requires a validated native committed founding membership observation, then grants the exact admitted slot through the ServiceDefinitionsOwner PUBLISHED CAS and records the grant durably in the receiver-local creation record before serving is enabled (serving = state AND READY, one fence for bound and unbound replicas). Retirement is keyed by the retained creation: it fences user admission at call, attempts metadata RELEASING without blocking, writes the local RETIRED tombstone durably and only then requests metadata CLOSED; an unresolved CLOSED keeps custody with the caller's retained creation. The lifecycle hands typed, enqueue-only wakes to the operation owner. Bound replicas still publish no endpoint, services row, ACTIVE projection or nested journal, and the creation row stays IN_PROGRESS. Native RF3 evidence uses explicitly component-level metadata/journal adapters; it does not prove distributed metadata, cross-node wake delivery or process-loss recovery.",
       "owners": [
         "src/service/service-consensus-bootstrap.js",
         "src/service/service-consensus-creation-intent.js",
@@ -1155,7 +1155,16 @@
         "src/raft/raft-committed-membership-constants.js",
         "src/wasm-service/wasm-creation-reconciliation.js",
         "src/workflow/owner-key-reconcile-queue.js",
-        "src/workflow/reconcile-queue-constants.js"
+        "src/workflow/reconcile-queue-constants.js",
+        "src/wasm-service/wasm-creation-publication.js",
+        "src/wasm-service/wasm-creation-retirement.js",
+        "src/wasm-service/wasm-creation-wake.js",
+        "src/wasm-service/wasm-service-serving-state.js",
+        "src/wasm-service/wasm-service-constants.js",
+        "src/control-plane/owners/service-instance-state.js",
+        "src/runtime/wasm-component-driver-consensus.js",
+        "src/runtime/wasm-component-driver-vocabulary.js",
+        "src/service/service-lifecycle-operations.js"
       ],
       "tests": [
         "test/wasm-service/wasm-retained-bootstrap.integration.test.js",
@@ -1165,7 +1174,11 @@
         "test/wasm-service/wasm-writer-state-v1.test.js",
         "test/wasm-service/wasm-creation-genesis.integration.test.js",
         "test/wasm-service/wasm-creation-reconciliation.test.js",
-        "test/wasm-service/wasm-creation-reconciliation.integration.test.js"
+        "test/wasm-service/wasm-creation-reconciliation.integration.test.js",
+        "test/wasm-service/wasm-creation-publication.integration.test.js",
+        "test/wasm-service/wasm-creation-local-record.test.js",
+        "test/wasm-service/wasm-creation-bound-native.test.js",
+        "test/control-plane/service-instance-creation-cas.test.js"
       ]
     }
   },
@@ -2311,7 +2324,7 @@
       ]
     },
     "service-consensus-retained-native-bootstrap": {
-      "description": "Retained original intent, first-use identity, native common-root admission and exhaustive cleanup form one held bootstrap boundary; neither old metadata history, missing files nor native startup can manufacture serving permission. Applied INIT and committed founding-membership evidence are consumed from their existing owners on reentry, without promoting a proposal acknowledgement or stale observation into genesis completion.",
+      "description": "Retained original intent, first-use identity, native common-root admission and exhaustive cleanup form one bound creation boundary; neither old metadata history, missing files nor native startup can manufacture serving permission. Applied INIT and committed founding-membership evidence are consumed from their existing owners, and only the metadata owner's PUBLISHED grant, durably copied into the receiver-local record, opens serving; retirement records RETIRED locally before the metadata CLOSED it requests.",
       "contract": "service-consensus-retained-native-bootstrap",
       "endpoints": [
         {
@@ -2327,7 +2340,10 @@
             "src/runtime/wasm-component-driver-shutdown-methods.js",
             "src/wasm-service/operation-lifecycle.js",
             "src/wasm-service/wasm-meta-models-constants.js",
-            "src/bootstrap/system-table-runtime-schema-definitions.js"
+            "src/bootstrap/system-table-runtime-schema-definitions.js",
+            "src/service/service-lifecycle-operations.js",
+            "src/runtime/wasm-component-driver-consensus.js",
+            "src/runtime/wasm-component-driver-vocabulary.js"
           ]
         },
         {
@@ -2349,7 +2365,14 @@
             "src/raft/raft-committed-membership-stamp.js",
             "src/raft/raft-committed-membership-constants.js",
             "src/wasm-service/wasm-creation-reconciliation.js",
-            "src/workflow/owner-key-reconcile-queue.js"
+            "src/workflow/owner-key-reconcile-queue.js",
+            "src/wasm-service/wasm-creation-publication.js",
+            "src/wasm-service/wasm-creation-retirement.js",
+            "src/wasm-service/wasm-creation-wake.js",
+            "src/wasm-service/wasm-service-serving-state.js",
+            "src/wasm-service/wasm-service-constants.js",
+            "src/control-plane/owners/service-instance-state.js",
+            "src/workflow/reconcile-queue-constants.js"
           ]
         }
       ],
@@ -2358,7 +2381,9 @@
         "test/runtime/node-shutdown-cell-worker-teardown.test.js",
         "test/wasm-service/wasm-creation-genesis.integration.test.js",
         "test/wasm-service/wasm-creation-reconciliation.test.js",
-        "test/wasm-service/wasm-creation-reconciliation.integration.test.js"
+        "test/wasm-service/wasm-creation-reconciliation.integration.test.js",
+        "test/wasm-service/wasm-creation-publication.integration.test.js",
+        "test/wasm-service/wasm-creation-local-record.test.js"
       ]
     }
   }

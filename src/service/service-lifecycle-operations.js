@@ -5,6 +5,7 @@ import {
 } from '../constants/index.js';
 import {assertServiceDescriptor} from './service-descriptor.js';
 import {isBoundConsensusDescriptor} from './service-consensus-creation-intent.js';
+import {retireConsensusCreation} from './service-consensus-bootstrap.js';
 import {ServiceDescriptorValidationError} from './service-lifecycle-errors.js';
 import {
   SERVICE_LIFECYCLE_LOG,
@@ -420,6 +421,12 @@ async function startReplica(manager, replicaHandle, context = {}, options = {}) 
 }
 
 async function stopReplica(manager, replicaHandle, context = {}, options = {}) {
+  // A creation-bound handle retires its exact retained resource through the
+  // manager's own consensus branch: no generic STOP row, no transition
+  // assertion, the typed retirement result (design Revision 3 N4).
+  if (isBoundConsensusDescriptor(replicaHandle?.definition ?? replicaHandle)) {
+    return retireConsensusCreation(manager, replicaHandle);
+  }
   return runReplicaOperation(
     manager,
     replicaHandle,

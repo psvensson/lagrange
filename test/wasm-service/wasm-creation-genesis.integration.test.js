@@ -34,16 +34,36 @@ async function initializeAndObserve(f) {
   // this is not a retry-until-green loop or an extra tick/read-side Raft drive.
   return startAndDeliver(f);
 }
+// Superseded by design SERVING-PUBLICATION-RETIREMENT-DESIGN-20261017
+// Revision 3 N1 (recorded supersession, R09/R21): the lab-accepted witness at
+// 35d533b6b asserted that every replica stays HELD after observed genesis
+// (refusal WRITER_NOT_READY, every slot ADMITTED|CLOSED). With Revision 2 D1'
+// the same keyed continuation grants once genesis is observed, so a replica
+// whose INIT is recorded and covered by the committed founding membership is
+// PUBLISHED and serves; a replica whose continuation never observed genesis
+// stays held. What still holds for every replica: no endpoint, state or nested
+// journal sink is called, no services-row leader publication is queued, no
+// timer exists, and the metadata slot, the local record and serving agree.
 function assertHeld(f) {
   for (const host of f.hosts) {
     assert.deepEqual(host.publications, []);
-    assert.equal(host.replica.heldCreationRefusal().reason, 'WRITER_NOT_READY');
     assert.equal(host.replica.pendingLeaderNodeUpdate, null);
     assert.equal(host.replica.timerManager.activeTimers.size, 0);
+    const slot = host.intent.consensusSlotRequest.slot;
+    const phase = f.metadata.state().selected.resources[slot].phase;
+    assert.ok(phase === 'ADMITTED' || phase === 'PUBLISHED', phase);
+    const local = host.replica.db.prepare('SELECT record FROM _wasm_creation_local').get();
+    assert.equal(JSON.parse(local.record).phase, phase, 'LOCAL_RECORD_DISAGREES_WITH_GRANT');
+    if (phase === 'PUBLISHED') {
+      assert.equal(host.replica.heldCreationRefusal(), null);
+    } else {
+      assert.equal(host.replica.heldCreationRefusal().reason, 'WRITER_NOT_READY');
+    }
   }
-  assert.ok(f.metadata.state().selected.resources.every((slot) =>
-    slot.phase === 'ADMITTED' || slot.phase === 'CLOSED'));
 }
+// The design's observable end state of an observed, covered genesis (N1).
+const PUBLISHED = 'PUBLISHED';
+const GENESIS_PUBLISHED = 'GENESIS_PUBLISHED';
 
 test('lifecycle reentry constructs exact bound INIT and observes committed native membership',
   async (t) => {
@@ -55,8 +75,10 @@ test('lifecycle reentry constructs exact bound INIT and observes committed nativ
       assert.deepEqual(replica.writerState.meta().initialization?.command, expected,
         'LIFECYCLE_REENTRY_DID_NOT_INITIALIZE_BOUND_NATIVE_GROUP');
     }
-    assert.equal(result.status, 'BOOTSTRAPPED_HELD');
-    assert.equal(result.genesis.outcome, 'GENESIS_OBSERVED', JSON.stringify(result.genesis));
+    // N1 supersession: was BOOTSTRAPPED_HELD / GENESIS_OBSERVED.
+    assert.equal(result.status, PUBLISHED);
+    assert.equal(result.genesis.outcome, GENESIS_PUBLISHED, JSON.stringify(result.genesis));
+    assert.equal(result.grant.outcome, PUBLISHED);
     assert.equal(result.genesis.membership.kind, 'committed');
     assert.equal(result.genesis.membership.gateOpen, true);
     assert.ok(BigInt(result.genesis.receipt.index) > 0n);
@@ -87,7 +109,8 @@ test('native submission without quorum remains pending then UNKNOWN and reentry 
     f.queue.push(...f.held.splice(0));
     await deliverScheduled(f);
     const result = await startAndDeliver(f);
-    assert.equal(result.genesis.outcome, 'GENESIS_OBSERVED');
+    // N1 supersession: was GENESIS_OBSERVED.
+    assert.equal(result.genesis.outcome, GENESIS_PUBLISHED);
     assert.deepEqual(f.leader.writerState.meta().initialization.command,
       initialization(f.metadata.intent.consensusBinding));
     assert.equal(f.metadata.state().selected.resources[0].ordinal, 1);
@@ -102,7 +125,8 @@ test('common creation binding refuses a different INIT nonce before writer initi
   assert.equal(result.status, 'REFUSED', 'FOREIGN_INIT_CONTENT_WAS_RECORDED');
   assert.equal(result.reason, 'WRITER_CONTENT_CONFLICT');
   assert.equal(f.leader.writerState.meta().initialization, null);
-  assert.equal((await initializeAndObserve(f)).genesis.outcome, 'GENESIS_OBSERVED');
+  // N1 supersession: was GENESIS_OBSERVED.
+  assert.equal((await initializeAndObserve(f)).genesis.outcome, GENESIS_PUBLISHED);
   assertHeld(f);
 });
 
@@ -110,7 +134,10 @@ test('recorded initialization does not replace a refused native membership read'
   const f = await fixture(t);
   await bootstrapGroup(f);
   const initialized = await initializeAndObserve(f);
-  assert.equal(initialized.genesis?.outcome, 'GENESIS_OBSERVED');
+  // N1 supersession: was GENESIS_OBSERVED. The later refused read keeps its
+  // existing HELD reason; an already granted replica keeps serving until its
+  // exact local retirement (CONTRACT-R2 "Already granted I may serve").
+  assert.equal(initialized.genesis?.outcome, GENESIS_PUBLISHED);
   const replica = f.leader;
   const port = replica.raft;
   try {
@@ -140,6 +167,10 @@ test('shutdown joins existing writer interest without a late genesis success or 
     assert.notEqual(operation.result.genesis?.outcome, 'GENESIS_OBSERVED');
     assert.notEqual(operation.result.status, 'BOOTSTRAPPED_HELD',
       'SHUTDOWN_RETURNED_BOOTSTRAPPED_HELD');
+    // Appended with Revision 3 N1: nor may a late publication escape a shutdown.
+    assert.notEqual(operation.result.genesis?.outcome, GENESIS_PUBLISHED);
+    assert.notEqual(operation.result.status, PUBLISHED, 'SHUTDOWN_RETURNED_PUBLISHED');
+    assert.notEqual(replica.servingState, 'SERVING');
     assert.equal(replica.db, null);
     assert.equal(replica.raft, null);
     assert.equal(replica.transportHandler, null);
@@ -176,7 +207,8 @@ test('concurrent genesis reentries join one native proposal and keep the origina
     assert.deepEqual(first.result, duplicate.result);
     assert.deepEqual(commands, [initialization(f.metadata.intent.consensusBinding)]);
     const observed = await startAndDeliver(f);
-    assert.equal(observed.genesis.outcome, 'GENESIS_OBSERVED');
+    // N1 supersession: was GENESIS_OBSERVED.
+    assert.equal(observed.genesis.outcome, GENESIS_PUBLISHED);
     assert.equal(commands.length, 1, 'REENTRY_REPROPOSED_RECORDED_GENESIS');
     assert.equal(f.metadata.state().selected.resources[0].ordinal, 1);
     assertHeld(f);
@@ -195,7 +227,9 @@ test('a follower observes its actual applied genesis without forwarding or propo
   };
   assert.equal(follower.replica.isLeader, false);
   const result = await startAndDeliver(f, follower);
-  assert.equal(result.genesis.outcome, 'GENESIS_OBSERVED');
+  // N1 supersession: was GENESIS_OBSERVED; the follower grants its own slot.
+  assert.equal(result.genesis.outcome, GENESIS_PUBLISHED);
+  assert.equal(result.status, PUBLISHED);
   assert.deepEqual(result.genesis.receipt, initialized.genesis.receipt);
   assert.equal(result.genesis.replicaId, follower.replica.replicaId);
   assert.deepEqual(proposals, []);
@@ -214,7 +248,8 @@ test('an unavailable native read after recorded genesis is UNKNOWN rather than c
       assert.equal(result.genesis.outcome, 'UNKNOWN');
       assertHeld(f);
     });
-    assert.equal((await startAndDeliver(f)).genesis.outcome, 'GENESIS_OBSERVED');
+    // N1 supersession: was GENESIS_OBSERVED; the re-grant is idempotent.
+    assert.equal((await startAndDeliver(f)).genesis.outcome, GENESIS_PUBLISHED);
   });
 
 test('genesis requires the applied native participation gate, not just a valid membership shape',
@@ -310,7 +345,11 @@ test('orderly reopen preserves production-authored genesis, native history and r
     for (const host of f.hosts) await host.lifecycle.stopReplica(f.metadata.serviceId);
     for (const [index, host] of f.hosts.entries()) {
       const result = await f.bootstrap(host);
-      assert.equal(result.status, 'BOOTSTRAPPED_HELD');
+      // N1 supersession: was BOOTSTRAPPED_HELD. Every founder applied the
+      // recorded INIT before its orderly stop, so each reopened START observes
+      // covered genesis and publishes its own slot (an orderly stop never
+      // tombstones; Revision 2 D4').
+      assert.equal(result.status, PUBLISHED, JSON.stringify(result));
       assert.equal(host.replica.replicaId, before[index].replicaId);
       assert.deepEqual(host.replica.writerState.meta().initialization,
         before[index].initialization);

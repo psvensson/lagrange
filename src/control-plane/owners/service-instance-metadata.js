@@ -175,5 +175,10 @@ const grantInstanceResource = (owner, binding, token, options) =>
   transitionInstanceResource(owner, binding, token, PHASE.PUBLISHED, options);
 const closeInstanceResource = (owner, binding, token, options) =>
   transitionInstanceResource(owner, binding, token, PHASE.CLOSED, options);
+// Retirement visibility: the local owner is releasing this exact resource.
+// Never a precondition of the local stop; CLOSED may follow from any live phase.
+const releaseInstanceResource = (owner, binding, token, options) =>
+  transitionInstanceResource(owner, binding, token, PHASE.RELEASING, options);
 export {registerInstanceRows, selectConsensusInstance, getCurrentInstance,
-  reserveInstanceResource, resolveInstanceResource, grantInstanceResource, closeInstanceResource};
+  reserveInstanceResource, resolveInstanceResource, grantInstanceResource, closeInstanceResource,
+  releaseInstanceResource};

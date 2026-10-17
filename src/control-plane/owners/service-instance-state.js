@@ -248,24 +248,54 @@ function resolveResourceState(state, binding, token) {
   ]);
   return outcome === OUTCOME.ADMITTED ? resourceResult(resource) : {outcome};
 }
+// The resource phase machine's explicit allowed-from table (R07; design
+// SERVING-PUBLICATION-RETIREMENT-DESIGN-20261017 Revision 3 N3). A slot is
+// monotonic once CLOSED: a later RELEASING or CLOSED answers CLOSED without a
+// mutation, so a repeated or racing retirement can never reopen what closed.
+const RESOURCE_PHASE_FROM = Object.freeze({
+  [PHASE.PUBLISHED]: Object.freeze([PHASE.ADMITTED]),
+  [PHASE.RELEASING]: Object.freeze([PHASE.ADMITTED, PHASE.PUBLISHED]),
+  [PHASE.CLOSED]: Object.freeze([PHASE.ADMITTED, PHASE.PUBLISHED, PHASE.RELEASING]),
+});
+const TRANSITION = Object.freeze({APPLY: 'APPLY', SAME: 'SAME'});
+function publicationRefusal(state, instance, resource) {
+  return chooseInstanceOutcome([
+    [instance !== state.selected, OUTCOME.STALE_BINDING],
+    [resource.phase === PHASE.CLOSED || resource.phase === PHASE.RELEASING,
+      OUTCOME.RESOURCE_CLOSED],
+    [outstanding(state.retiring), OUTCOME.PREDECESSOR_OUTSTANDING],
+    [true, null],
+  ]);
+}
+function resourceTransition(state, instance, resource, phase) {
+  const allowed = RESOURCE_PHASE_FROM[phase];
+  const refusal = phase === PHASE.PUBLISHED ? publicationRefusal(state, instance, resource) : null;
+  return chooseInstanceOutcome([
+    [allowed === undefined, OUTCOME.INVALID_REQUEST],
+    [refusal !== null, refusal],
+    [resource.phase === phase, TRANSITION.SAME],
+    [resource.phase === PHASE.CLOSED, OUTCOME.CLOSED],
+    [!allowed.includes(resource.phase), OUTCOME.INVALID_EXPECTED_STATE],
+    [true, TRANSITION.APPLY],
+  ]);
+}
 function changeResourceState(state, binding, token, phase) {
   const resolution = resolveResourceState(state, binding, token);
   if (resolution.outcome !== OUTCOME.ADMITTED) return {result: resolution};
   const instance = findInstance(state, binding);
   const resource = instance.resources[token.slot];
-  if (phase === PHASE.PUBLISHED) {
-    if (instance !== state.selected) return {result: {outcome: OUTCOME.STALE_BINDING}};
-    if (resource.phase === PHASE.CLOSED || resource.phase === PHASE.RELEASING) {
-      return {result: {outcome: OUTCOME.RESOURCE_CLOSED}};
-    }
-    if (outstanding(state.retiring)) {
-      return {result: {outcome: OUTCOME.PREDECESSOR_OUTSTANDING}};
-    }
+  const transition = resourceTransition(state, instance, resource, phase);
+  switch (transition) {
+  case TRANSITION.APPLY:
+    resource.phase = phase;
+    return {result: {outcome: phase, phase, token: resource.token}, next: state};
+  case TRANSITION.SAME:
+    return {result: {outcome: phase, phase, token: resource.token}};
+  case OUTCOME.CLOSED:
+    return {result: {outcome: OUTCOME.CLOSED, phase: PHASE.CLOSED, token: resource.token}};
+  default:
+    return {result: {outcome: transition}};
   }
-  const result = {outcome: phase, phase, token: resource.token};
-  if (resource.phase === phase) return {result};
-  resource.phase = phase;
-  return {result, next: state};
 }
 function validResourceToken(token) {
   return exactFields(token, TOKEN_FIELDS) &&

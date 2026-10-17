@@ -245,3 +245,52 @@ test('ServiceDefinitionsOwner successor waits for all old granted resources to c
   }
   evidence(t, f, 'all-old-resource barrier', {binding, tokens, next, nextToken, opened});
 });
+
+// Design SERVING-PUBLICATION-RETIREMENT-DESIGN-20261017 Revision 3 N3: the
+// resource phase machine has an explicit allowed-from table. RELEASING comes
+// only from ADMITTED or PUBLISHED; a CLOSED slot is monotonic and answers every
+// later transition CLOSED without a mutation; RELEASING still counts as
+// outstanding for the successor's grant.
+test('ServiceDefinitionsOwner resource phase table: guarded RELEASING, monotonic CLOSED slots',
+  async (t) => {
+    const f = await createCreationSqliteFixture(t);
+    const binding = selected(await f.primary.selectConsensusInstance(f.request()));
+    const admittedToken = admitted(await f.primary.reserveInstanceResource(binding,
+      f.slotRequest(0)));
+    const publishedToken = admitted(await f.primary.reserveInstanceResource(binding,
+      f.slotRequest(1)));
+    assert.equal((await f.primary.grantInstanceResource(binding, publishedToken)).outcome, 'PUBLISHED');
+    const releasedAdmitted = await f.primary.releaseInstanceResource(binding, admittedToken);
+    assert.deepEqual(releasedAdmitted,
+      {outcome: 'RELEASING', phase: 'RELEASING', token: admittedToken}, 'ADMITTED -> RELEASING');
+    assert.deepEqual(await f.primary.releaseInstanceResource(binding, admittedToken),
+      releasedAdmitted, 'RELEASING answers idempotently');
+    assert.equal((await f.primary.grantInstanceResource(binding, admittedToken)).outcome,
+      'RESOURCE_CLOSED', 'a RELEASING slot never re-publishes');
+    assert.equal((await f.primary.releaseInstanceResource(binding, publishedToken)).outcome,
+      'RELEASING', 'PUBLISHED -> RELEASING');
+    const next = selected(await f.primary.selectConsensusInstance(
+      f.request(1, 2, binding.incarnation)));
+    const nextToken = admitted(await f.primary.reserveInstanceResource(next, f.slotRequest()));
+    assert.equal((await f.primary.grantInstanceResource(next, nextToken)).outcome,
+      'PREDECESSOR_OUTSTANDING', 'RELEASING is outstanding for the successor');
+    assert.equal((await f.primary.closeInstanceResource(binding, admittedToken)).outcome, 'CLOSED',
+      'RELEASING -> CLOSED');
+    const before = f.row();
+    const writes = f.writes.length;
+    assert.deepEqual(await f.primary.releaseInstanceResource(binding, admittedToken),
+      {outcome: 'CLOSED', phase: 'CLOSED', token: admittedToken},
+      'RELEASING_REGRESSED_A_CLOSED_SLOT');
+    assert.deepEqual(f.row(), before, 'a CLOSED slot is never mutated');
+    assert.equal(f.writes.length, writes, 'no SQL is submitted for a CLOSED slot');
+    // The existing PUBLISHED rule order stands: a retiring instance answers
+    // STALE_BINDING before any slot phase is consulted.
+    assert.equal((await f.primary.grantInstanceResource(binding, admittedToken)).outcome,
+      'STALE_BINDING', 'the historical grant answer of a retiring instance stands');
+    assert.deepEqual(f.row(), before, 'a refused grant never mutates');
+    assert.equal((await f.primary.closeInstanceResource(binding, publishedToken)).outcome, 'CLOSED');
+    assert.equal((await f.primary.grantInstanceResource(next, nextToken)).outcome, 'PUBLISHED',
+      'the last CLOSED lifts the predecessor hold');
+    evidence(t, f, 'resource phase allowed-from table', {admittedToken, publishedToken, next,
+      nextToken, releasedAdmitted});
+  });

@@ -55,66 +55,17 @@ import {WasiComponentCellRuntime} from
 import {
   createWasmComponentDriverShutdownMethods,
 } from './wasm-component-driver-shutdown-methods.js';
+import {WASM_COMPONENT_ERROR, DRIVER_ACTION, DRIVER_SEPARATOR, buildDriverStatusResult} from
+  './wasm-component-driver-vocabulary.js';
+import {startBoundReplica, retireBoundReplica} from './wasm-component-driver-consensus.js';
 
 // --- Driver-specific constants ---
-
-const WASM_COMPONENT_ERROR = Object.freeze({
-  DEFINITION_REQUIRED: 'service definition is required',
-  REF_REQUIRED:
-    'runtime_ref is required for wasm_component driver',
-  REF_MUST_BE_STRING: 'runtime_ref must be a string',
-  REF_EMPTY: 'runtime_ref must not be empty',
-  REPLICA_CONTEXT_REQUIRED: 'replicaContext is required',
-  SERVICE_ID_REQUIRED:
-    'replicaContext.serviceId is required',
-  NOT_PREPARED:
-    'driver has not been prepared for this service',
-  NOT_STARTED: 'service is not running',
-  CREATE_REPLICA_FAILED: 'failed to create WASM replica',
-  CONSENSUS_LIFECYCLE_REQUIRED:
-    'WASM consensus replica lifecycle is unavailable',
-  START_REPLICA_FAILED: 'failed to start WASM replica',
-  START_REPLICA_NO_RESULT:
-    'failed to start WASM replica: lifecycle returned no startup result',
-  STOP_REPLICA_FAILED: 'failed to stop WASM replica',
-  VALIDATION_PIPELINE_FAILED:
-    'WASM validation pipeline failed',
-  DEPENDENCY_RESOLUTION_FAILED:
-    'WASM dependency resolution failed',
-  LOCK_VALIDATION_FAILED:
-    'WASM lock validation failed',
-  UNKNOWN_LIFECYCLE_FAILURE:
-    'unknown lifecycle failure',
-  ARTIFACT_LOADER_REQUIRED:
-    'request Cell Artifact loader is unavailable',
-  COMPONENT_INVOKE_FAILED:
-    'request Cell Component invocation failed',
-  COMPONENT_START_FAILED:
-    'request Cell Component startup failed',
-  CALL_COMPONENT_INVOKE_FAILED:
-    'call Cell Component invocation failed',
-  CALL_PARTIALS_INVALID:
-    'call Cell Component emitted invalid partials',
-  RUNTIME_ACCESS_POLICY_DENIED:
-    'request Cell runtime access policy is unavailable or denied',
-});
-
-const DRIVER_ACTION = Object.freeze({
-  INVOKE: 'invoke',
-  PREPARE: 'prepare',
-  START: 'start',
-  STOP: 'stop',
-});
 
 const DRIVER_FIELD = Object.freeze({
   SERVICE_ID: 'serviceId',
   SERVICE_ID_LEGACY: 'service_id',
 });
 
-const DRIVER_SEPARATOR = Object.freeze({
-  DETAIL: ': ',
-  ERROR_LIST: '; ',
-});
 const DRIVER_ENDPOINT_DEFAULT = Object.freeze({
   HOST: 'localhost',
   PROTOCOL: 'ws',
@@ -130,17 +81,6 @@ const RUNTIME_ACCESS = Object.freeze({
 const CELL_WORLD = Object.freeze({
   CALL: 'call-cell',
 });
-
-function buildDriverStatusResult(status, error, detailKey, detailValue) {
-  const result = {status};
-  if (error) {
-    result.error = error;
-  }
-  if (detailKey && detailValue !== undefined) {
-    result[detailKey] = detailValue;
-  }
-  return result;
-}
 
 function buildDriverServiceScopedError(baseMessage, serviceId) {
   return `${baseMessage}${DRIVER_SEPARATOR.DETAIL}'${serviceId}'`;
@@ -517,15 +457,11 @@ class WasmComponentDriver extends RuntimeDriver {
   }
 
   async #startConsensusReplica(lifecycle, replicaContext, serviceId) {
+    if (hasConsensusCreation(this._prepared.get(serviceId))) {
+      return startBoundReplica(this, lifecycle, replicaContext, serviceId);
+    }
     try {
-      const definition = this._prepared.get(serviceId);
-      let startOptions = replicaContext.startOptions;
-      if (hasConsensusCreation(definition)) {
-        const {origin} = captureConsensusBootstrap(definition, replicaContext);
-        const app = JSON.parse(origin.intent.descriptor.runtimeConfig).definition;
-        startOptions = {handlerFunctionId: app.handlerFunctionId};
-      }
-      const startResult = await lifecycle.startReplica(serviceId, startOptions);
+      const startResult = await lifecycle.startReplica(serviceId, replicaContext.startOptions);
       return this.#projectConsensusStartResult(
         startResult,
         replicaContext,
@@ -546,13 +482,6 @@ class WasmComponentDriver extends RuntimeDriver {
         START_STATUS.FAILED,
         WASM_COMPONENT_ERROR.START_REPLICA_NO_RESULT,
       );
-    }
-    if (startResult.status === CONSENSUS_BOOTSTRAP.HELD &&
-        startResult.bootstrapped === true && startResult.started === false) {
-      return {status: CONSENSUS_BOOTSTRAP.HELD,
-        consensusBinding: startResult.consensusBinding,
-        consensusResourceToken: startResult.consensusResourceToken,
-        genesis: startResult.genesis};
     }
     if (startResult.started === false) {
       const result = buildDriverStatusResult(
@@ -607,6 +536,10 @@ class WasmComponentDriver extends RuntimeDriver {
       );
     }
 
+    // A creation-bound stop retires its exact retained resource (D7'/N4).
+    if (hasConsensusCreation(replicaContext.definition ?? replicaContext)) {
+      return retireBoundReplica(this, replicaContext, serviceId);
+    }
     const lifecycle = this._lifecycles.get(serviceId);
     if (this._requestCells.has(serviceId)) {
       await this._componentRuntime.stop(serviceId);
