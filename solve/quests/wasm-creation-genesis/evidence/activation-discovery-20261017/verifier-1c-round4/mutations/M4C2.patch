@@ -1,0 +1,12 @@
+--- a/src/node/runtime-service-bound-creation-route.js	2026-10-17 18:42:43.064196666 +0200
++++ b/src/node/runtime-service-bound-creation-route.js	2026-10-17 18:42:43.072196725 +0200
+@@ -237,8 +237,7 @@
+ }
+ 
+ // The replies to a memo that names a retained creation, by its status.
+-const NAMED_MEMO_REPLIES = new Map([[ReplicaStatus.FAILED, reenterRetainedCreation],
+-  [ReplicaStatus.REMOVING, deferDuringRetirement]]);
++const NAMED_MEMO_REPLIES = new Map([[ReplicaStatus.FAILED, reenterRetainedCreation]]);
+ 
+ /**
+  * The reply a CREATE gets from a memo of a locally retained creation

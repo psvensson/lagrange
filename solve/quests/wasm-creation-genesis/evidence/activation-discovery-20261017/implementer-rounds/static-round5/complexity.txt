@@ -1,0 +1,7 @@
+Scoped complexity ratchet: 5 violation(s) in 38 target(s) (threshold: 12).
+src/bootstrap/shared/meta-service-definition-registration.js:147:1 Function 'resolveEndpointAddress' has a complexity of 14. Maximum allowed is 12.
+src/node/runtime-service-handler.js:578:3 Async method 'handleRemoveReplica' has a complexity of 14. Maximum allowed is 12.
+src/runtime/service-runtime-lifecycle.js:134:1 Function 'validateEndpointIntent' has a complexity of 15. Maximum allowed is 12.
+src/service/service-lifecycle-manager.js:246:7 Method '_buildLifecycleLogContext' has a complexity of 16. Maximum allowed is 12.
+test/rebalancer/replica-status-completeness.property.test.js:307:18 Arrow function has a complexity of 14. Maximum allowed is 12.
+Saved complexity report to test-output/analysis/complexity-scoped.json.

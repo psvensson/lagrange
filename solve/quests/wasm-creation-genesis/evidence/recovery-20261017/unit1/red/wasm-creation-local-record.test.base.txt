@@ -1,0 +1,18 @@
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: ok cpu 53C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+not ok test/wasm-service/wasm-creation-local-record.test.js (0 assertions, 219ms)
+# no assertions executed; test process exited 1
+# time=219ms
+file:///tmp/claude-1000/-mnt-data-peter-projects-lagrange/52d74044-bacb-41c7-9eb9-7fdbcbd93317/scratchpad/base/test/wasm-service/wasm-creation-local-record.test.js:25
+  WASM_CREATION_RETIREMENT as RETIREMENT, inspectWasmCreationLocal,
+                                          ^^^^^^^^^^^^^^^^^^^^^^^^
+SyntaxError: The requested module '../../src/wasm-service/wasm-creation-opening.js' does not provide an export named 'inspectWasmCreationLocal'
+    at ModuleJob._instantiate (node:internal/modules/esm/module_job:226:21)
+    at async ModuleJob.run (node:internal/modules/esm/module_job:335:5)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:681:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+
+Node.js v22.23.2
+# test-files total=1 pass=0 fail=1 assertions=0
+rc=1

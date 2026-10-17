@@ -1,0 +1,11 @@
+--- a/src/node/runtime-service-bound-creation-route.js	2026-10-17 17:28:09.157793334 +0200
++++ b/src/node/runtime-service-bound-creation-route.js	2026-10-17 17:28:09.169793428 +0200
+@@ -32,7 +32,7 @@
+ const BUILT_IN_META_SERVICE_IDS = new Set(Object.values(META_SERVICE_ID));
+ // RV3.3 resume table, keyed on the answer's status first, then its outcome;
+ // every other outcome is a permanent FAILED with its code.
+-const RESUME_STATUS = new Map([[CONSENSUS_BOOTSTRAP.HELD, DECISION.HELD],
++const RESUME_STATUS = new Map([[CONSENSUS_BOOTSTRAP.HELD, DECISION.FAILED],
+   [CONSENSUS_BOOTSTRAP.PUBLISHED_UNPROJECTED, DECISION.HELD],
+   [CONSENSUS_BOOTSTRAP.PUBLISHED, DECISION.ACTIVE]]);
+ const RESUME_OUTCOME = new Map([[CREATION.INTENT_NOT_FOUND, DECISION.UNROUTED],

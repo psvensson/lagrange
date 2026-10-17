@@ -1,0 +1,9 @@
+r6-01-local-record rc=0 RC=0 ELAPSED=1s FILES=test/wasm-service/wasm-creation-local-record.test.js
+r6-02-publication-int rc=0 RC=0 ELAPSED=4s FILES=test/wasm-service/wasm-creation-publication.integration.test.js
+r6-03-genesis rc=0 RC=0 ELAPSED=3s FILES=test/wasm-service/wasm-creation-genesis.integration.test.js
+r6-04-reconciliation rc=0 RC=0 ELAPSED=3s FILES=test/wasm-service/wasm-creation-reconciliation.integration.test.js
+r6-05-retained rc=0 RC=0 ELAPSED=2s FILES=test/wasm-service/wasm-retained-bootstrap.integration.test.js
+r6-06-bound-native rc=0 RC=0 ELAPSED=2s FILES=test/wasm-service/wasm-creation-bound-native.test.js
+r6-07-creation-intent rc=0 RC=0 ELAPSED=1s FILES=test/service/service-consensus-creation-intent.test.js
+r6-08-creation-recovery rc=0 RC=0 ELAPSED=1s FILES=test/service/service-consensus-creation-recovery.integration.test.js
+RUNS_DONE

@@ -1,0 +1,358 @@
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: ok cpu 50C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+not ok test/service/service-consensus-creation-intent.test.js (29 assertions, 843ms)
+# TAP assertions failed; test process exited 1
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+TAP version 13
+# Subtest: ServiceLifecycleManager persists original intent before reservation and token before return
+ok 1 - ServiceLifecycleManager persists original intent before reservation and token before return
+  ---
+  duration_ms: 38.601476
+  type: 'test'
+  ...
+# {"scope":"component intent-before-reservation","boundaries":[{"kind":"intent","intentRetained":false},{"kind":"reserve","intentRetained":true,"outcome":"ADMITTED","token":{"bindingDigest":"cdcd3a9e121a3177b3b3e618ffb2229683b9ad49bd1303e8acea10c2e8eeb8cf","slot":0,"ordinal":1,"operationId":"operation-0","bodyDigest":"7c4a89464b8684baafbdb0a3fc809484c4050e821c88fd6ec5cf10d00f6c53e5"}},{"kind":"admission","intentRetained":false}],"ordinal":1}
+# Subtest: ServiceLifecycleManager redelivery retains one origin and never reserves another ordinal
+ok 2 - ServiceLifecycleManager redelivery retains one origin and never reserves another ordinal
+  ---
+  duration_ms: 7.150674
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager recovers lost reservation from its original durable request
+ok 3 - ServiceLifecycleManager recovers lost reservation from its original durable request
+  ---
+  duration_ms: 7.079294
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager resolves an applied intent write with lost reply
+ok 4 - ServiceLifecycleManager resolves an applied intent write with lost reply
+  ---
+  duration_ms: 4.430604
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager resolves an applied admission write with lost reply
+ok 5 - ServiceLifecycleManager resolves an applied admission write with lost reply
+  ---
+  duration_ms: 4.237635
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager refuses reservation when intent write did not persist
+ok 6 - ServiceLifecycleManager refuses reservation when intent write did not persist
+  ---
+  duration_ms: 2.91558
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager retains the original request when admission persistence fails
+ok 7 - ServiceLifecycleManager retains the original request when admission persistence fails
+  ---
+  duration_ms: 4.57867
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager captures original intent before its first awaited read
+ok 8 - ServiceLifecycleManager captures original intent before its first awaited read
+  ---
+  duration_ms: 4.591646
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager rejects changed descriptor under a retained operation ID
+ok 9 - ServiceLifecycleManager rejects changed descriptor under a retained operation ID
+  ---
+  duration_ms: 4.847311
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager recovery does not replace original intent with current resolver data
+ok 10 - ServiceLifecycleManager recovery does not replace original intent with current resolver data
+  ---
+  duration_ms: 4.04723
+  type: 'test'
+  ...
+# Subtest: R5-A successor (:113-126): the scan inventories a PENDING row and reserves nothing; the re-entry resolves the same request
+ok 11 - R5-A successor (:113-126): the scan inventories a PENDING row and reserves nothing; the re-entry resolves the same request
+  ---
+  duration_ms: 5.809495
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager never revives CLOSED resource from retained admission
+ok 12 - ServiceLifecycleManager never revives CLOSED resource from retained admission
+  ---
+  duration_ms: 4.170141
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager completed journal is history, not a new effect grant
+ok 13 - ServiceLifecycleManager completed journal is history, not a new effect grant
+  ---
+  duration_ms: 3.138744
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager cancelled journal is history, not a new effect grant
+ok 14 - ServiceLifecycleManager cancelled journal is history, not a new effect grant
+  ---
+  duration_ms: 3.08424
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager failed journal is history, not a new effect grant
+ok 15 - ServiceLifecycleManager failed journal is history, not a new effect grant
+  ---
+  duration_ms: 3.008028
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager refuses forged persisted admission rather than borrowing another token
+ok 16 - ServiceLifecycleManager refuses forged persisted admission rather than borrowing another token
+  ---
+  duration_ms: 3.290147
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager absent or unavailable journal cannot invent recovery intent
+ok 17 - ServiceLifecycleManager absent or unavailable journal cannot invent recovery intent
+  ---
+  duration_ms: 2.05248
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager requires durable journal capabilities before resource admission
+ok 18 - ServiceLifecycleManager requires durable journal capabilities before resource admission
+  ---
+  duration_ms: 2.10361
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager malformed or oversized intent allocates no journal or reservation
+ok 19 - ServiceLifecycleManager malformed or oversized intent allocates no journal or reservation
+  ---
+  duration_ms: 2.118566
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager concurrent identical delivery converges on one original operation and token
+ok 20 - ServiceLifecycleManager concurrent identical delivery converges on one original operation and token
+  ---
+  duration_ms: 5.598258
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager validates descriptor lineage before retaining a new request
+ok 21 - ServiceLifecycleManager validates descriptor lineage before retaining a new request
+  ---
+  duration_ms: 2.4256
+  type: 'test'
+  ...
+# Subtest: SystemTableCache projects actual intent/admission columns without granting lifecycle completion
+ok 22 - SystemTableCache projects actual intent/admission columns without granting lifecycle completion
+  ---
+  duration_ms: 5.317846
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager damaged bound journal cannot fall through to old unbound recovery
+ok 23 - ServiceLifecycleManager damaged bound journal cannot fall through to old unbound recovery
+  ---
+  duration_ms: 3.288208
+  type: 'test'
+  ...
+# Subtest: R5-A successor (:222-230): a corrupt journal row is an INVENTORIED CORRUPT_STATE entry with reentry false
+ok 24 - R5-A successor (:222-230): a corrupt journal row is an INVENTORIED CORRUPT_STATE entry with reentry false
+  ---
+  duration_ms: 3.237949
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager unavailable resource resolution after retention stays UNKNOWN
+ok 25 - ServiceLifecycleManager unavailable resource resolution after retention stays UNKNOWN
+  ---
+  duration_ms: 3.165502
+  type: 'test'
+  ...
+# Subtest: R5-A successor (:232-239): an unreachable owner after retention is ADMISSION_RETAINED with phase UNAVAILABLE (answered or thrown)
+not ok 26 - R5-A successor (:232-239): an unreachable owner after retention is ADMISSION_RETAINED with phase UNAVAILABLE (answered or thrown)
+  ---
+  duration_ms: 3.974905
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/service/service-consensus-creation-intent.test.js:298:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+      {
+    +   outcome: 'UNKNOWN',
+    +   reason: 'UNAVAILABLE'
+    -   intent: {
+    -     consensusBinding: {
+    -       definitionDigest: '3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8',
+    -       format: 1,
+    -       foundingPeers: [
+    -         {
+    -           nodeId: 'host-1',
+    -           replicaId: 'founder-1'
+    -         },
+    -         {
+    -           nodeId: 'host-2',
+    -           replicaId: 'founder-2'
+    -         },
+    -         {
+    -           nodeId: 'host-3',
+    -           replicaId: 'founder-3'
+    -         }
+    -       ],
+    -       incarnation: '0dc6dc73122fc1996bb646966cf8d4fa93335e71b26cb7031aa67b2eade4cd11',
+    -       profileDigest: 'fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7',
+    -       requestDigest: 'a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d',
+    -       requestId: {
+    -         expectedVersion: 0,
+    -         nonce: '0000000000000000000000000000000000000000000000000000000000000001',
+    -         serviceDefinitionId: 'service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c'
+    -       },
+    -       revisionDigest: 'f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7',
+    -       revisionId: 'service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38',
+    -       selectionVersion: 1,
+    -       serviceDefinitionId: 'service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c',
+    -       tenantId: 'creation-test-tenant'
+    -     },
+    -     consensusSlotRequest: {
+    -       expectedOrdinal: 0,
+    -       nodeId: 'host-1',
+    -       operationId: 'operation-0',
+    -       replicaId: 'founder-1',
+    -       slot: 0
+    -     },
+    -     descriptor: {
+    -       replicaCount: 3,
+    -       replicaId: 'founder-1',
+    -       runtimeConfig: '{"definition":{"serviceName":"creation-test-service","handlerFunctionId":"creation-test-handler","readConsistency":"strong","writeConsistency":"strong","safetyIntervalMs":0}}',
+    -       runtimeKind: 'wasm_component',
+    -       runtimeRef: 'fixture/component@1.0.0',
+    -       serviceId: 'service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c',
+    -       serviceType: 'runtime_service',
+    -       tenantId: 'creation-test-tenant'
+    -     },
+    -     format: 1
+    -   },
+    -   operationId: 'operation-0',
+    -   outcome: 'ADMISSION_RETAINED',
+    -   phase: 'UNAVAILABLE',
+    -   token: {
+    -     bindingDigest: 'cdcd3a9e121a3177b3b3e618ffb2229683b9ad49bd1303e8acea10c2e8eeb8cf',
+    -     bodyDigest: '7c4a89464b8684baafbdb0a3fc809484c4050e821c88fd6ec5cf10d00f6c53e5',
+    -     operationId: 'operation-0',
+    -     ordinal: 1,
+    -     slot: 0
+    -   }
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    outcome: 'ADMISSION_RETAINED'
+    operationId: 'operation-0'
+    intent:
+      consensusBinding:
+        definitionDigest: '3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8'
+        format: 1
+        foundingPeers:
+          0:
+            nodeId: 'host-1'
+            replicaId: 'founder-1'
+          1:
+            nodeId: 'host-2'
+            replicaId: 'founder-2'
+          2:
+            nodeId: 'host-3'
+            replicaId: 'founder-3'
+        incarnation: '0dc6dc73122fc1996bb646966cf8d4fa93335e71b26cb7031aa67b2eade4cd11'
+        profileDigest: 'fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7'
+        requestDigest: 'a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d'
+        requestId:
+          expectedVersion: 0
+          nonce: '0000000000000000000000000000000000000000000000000000000000000001'
+          serviceDefinitionId: 'service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c'
+        revisionDigest: 'f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7'
+        revisionId: 'service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38'
+        selectionVersion: 1
+        serviceDefinitionId: 'service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c'
+        tenantId: 'creation-test-tenant'
+      consensusSlotRequest:
+        expectedOrdinal: 0
+        nodeId: 'host-1'
+        operationId: 'operation-0'
+        replicaId: 'founder-1'
+        slot: 0
+      descriptor:
+        replicaCount: 3
+        replicaId: 'founder-1'
+        runtimeConfig: '{"definition":{"serviceName":"creation-test-service","handlerFunctionId":"creation-test-handler","readConsistency":"strong","writeConsistency":"strong","safetyIntervalMs":0}}'
+        runtimeKind: 'wasm_component'
+        runtimeRef: 'fixture/component@1.0.0'
+        serviceId: 'service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c'
+        serviceType: 'runtime_service'
+        tenantId: 'creation-test-tenant'
+      format: 1
+    token:
+      bindingDigest: 'cdcd3a9e121a3177b3b3e618ffb2229683b9ad49bd1303e8acea10c2e8eeb8cf'
+      bodyDigest: '7c4a89464b8684baafbdb0a3fc809484c4050e821c88fd6ec5cf10d00f6c53e5'
+      operationId: 'operation-0'
+      ordinal: 1
+      slot: 0
+    phase: 'UNAVAILABLE'
+  actual:
+    outcome: 'UNKNOWN'
+    reason: 'UNAVAILABLE'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/service/service-consensus-creation-intent.test.js:307:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: ServiceLifecycleManager does not erase bound descriptor fields into legacy physical CREATE
+ok 27 - ServiceLifecycleManager does not erase bound descriptor fields into legacy physical CREATE
+  ---
+  duration_ms: 2.502087
+  type: 'test'
+  ...
+# Subtest: recovery R2-E the restart scan is total: a malformed row fails alone, the creation row after it is still inventoried
+ok 28 - recovery R2-E the restart scan is total: a malformed row fails alone, the creation row after it is still inventoried
+  ---
+  duration_ms: 3.186715
+  type: 'test'
+  ...
+# Subtest: recovery R1-D/R3-D the TERMINAL answer carries the row state
+ok 29 - recovery R1-D/R3-D the TERMINAL answer carries the row state
+  ---
+  duration_ms: 10.210519
+  type: 'test'
+  ...
+1..29
+# tests 29
+# suites 0
+# pass 28
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 162.612833
+# time=843ms
+# test-files total=1 pass=0 fail=1 assertions=29
+rc=1

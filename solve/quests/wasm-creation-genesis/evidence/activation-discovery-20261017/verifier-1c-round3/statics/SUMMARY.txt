@@ -1,0 +1,52 @@
+== decision boundaries ==
+rc=0
+{"total":0,"raw":0,"inherited":0,"baseline":806,"files":[]}
+== eslint ==
+rc=0 lines=0
+== complexity scoped ==
+rc=0
+Scoped complexity ratchet: 1 violation(s) in 6 target(s) (threshold: 12).
+src/node/runtime-service-handler.js:560:3 Async method 'handleRemoveReplica' has a complexity of 14. Maximum allowed is 12.
+== cognitive scoped ==
+rc=0
+Scoped cognitive complexity ratchet: 0 violation(s) in 6 target(s) (threshold: 20).
+== literals scoped ==
+rc=0
+Scanned 2 JavaScript files
+Found 0 new literal-guideline violations
+Matched 0 inherited literal-guideline baseline violations
+== silent-catch scoped ==
+rc=0
+Scanned 2 JavaScript files
+Found 0 silent catch violations
+Matched 0 inherited silent-catch baseline violations
+== runtime grammar ==
+rc=0
+Scanned 15 JavaScript files
+Found 0 runtime-grammar-contract violations
+State-machine pressure preflight: pass ready=true static=7 snapshots=0: issues=0
+== shards ==
+rc=0
+primary classification OK: 2409 tests (unit=2093 integration=104 bootstrap=205 convergence-probe=3 packaging=4)
+resource classification OK — 2409 tests, digest fnv1a32-8f7e78d2
+subsystem classification OK — 2409 tests, 22 subsystems, digest fnv1a32-4af5901f
+== impact-contracts ==
+rc=0
+impact-contracts: PASS (67 contracts, 38 coupled pairs, sha256:126f2c3f3efb00bdfbf18b5886fa2c129b6b4ee0de0f77d92cb9403e50f3ab0b)
+== file-size ==
+rc=0
+Source oversized-file ratchet: 26/27 over 800 lines.
+Test oversized-file ratchet: 21/21 over 1500 lines.
+
+== unused ==
+rc=1
+Unused-export ratchet FAILED: 1456 unused export(s) exceed the current baseline of 1416.
+== duplication ==
+rc=1
+2:[src+scripts] Duplication ratchet OK: 47/47 clone group(s), 1462/1462 duplicated line(s).
+5:[test] Duplication ratchet FAILED: 698 clone group(s) and 26458 duplicated line(s) exceed the current baseline of 697 clone group(s) and 26369 duplicated line(s).
+== fast-static --base b3793c7e5 ==
+rc=0
+proof range: b3793c7e5..HEAD (flag)
+fast-static: ok in 13048ms
+STATICS_DONE

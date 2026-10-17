@@ -292,6 +292,14 @@ describe('WasmComponentDriver contract conformance', () => {
         // Whole-node teardown chain (node-shutdown-cell-worker-teardown):
         // the driver terminates every live cell worker at node shutdown.
         'shutdown',
+        // Superseded by appending (design ACTIVATION-DISCOVERY-DESIGN-20261017 Revision 3
+        // RV2.3, RV3.4, stage 1c): the runtime's token-keyed PRESENT hop for a
+        // bound replica whose services row it projected; no metadata write.
+        'markServicesRowPresent',
+        // Superseded by appending (design RECOVERY-DESIGN-20261017 R1-A, R2-F):
+        // the by-path local reader of an inventoried bound creation, through
+        // the composition root's lifecycle; read-only, no metadata write.
+        'inspectRetainedCreation',
       ]);
       for (const name of proto) {
         assert.ok(

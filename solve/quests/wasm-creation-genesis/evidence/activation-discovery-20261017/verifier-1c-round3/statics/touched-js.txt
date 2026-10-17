@@ -1,0 +1,6 @@
+src/node/runtime-service-bound-creation-route.js
+src/node/runtime-service-handler.js
+test/node/runtime-service-bound-route.test.js
+test/wasm-service/bound-creation-handler-embedding-fixture.js
+test/wasm-service/bound-creation-handler-embedding.integration.test.js
+test/wasm-service/wasm-service-lifecycle.test.js

@@ -1,0 +1,74 @@
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: ok cpu 61C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+not ok test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js (4 assertions, 11513ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: worker consensus path and its replica base are deleted
+ok 1 - worker consensus path and its replica base are deleted
+  ---
+  duration_ms: 0.626071
+  type: 'test'
+  ...
+# Subtest: wasm service replica requires its own durable file
+ok 2 - wasm service replica requires its own durable file
+  ---
+  duration_ms: 24.561787
+  type: 'test'
+  ...
+# Subtest: wasm service group commits and applies kv writes through raft-rs
+not ok 3 - wasm service group commits and applies kv writes through raft-rs
+  ---
+  duration_ms: 419.664263
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/base-7696c3d8e/test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js:218:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + undefined
+    - true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/base-7696c3d8e/test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js:238:14)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: wasm service replica restart preserves kv and consensus state
+not ok 4 - wasm service replica restart preserves kv and consensus state
+  ---
+  duration_ms: 10254.818284
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/base-7696c3d8e/test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js:260:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/base-7696c3d8e/test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js:270:16)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 2
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 10702.603839
+# time=11513ms
+# test-files total=1 pass=0 fail=1 assertions=4

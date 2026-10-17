@@ -1,0 +1,1 @@
+Verifier round 3 (Fable, subagent a20413205d1d4bd1c) of stage 1c at snapshot 9f83c7be34e19e47feebe44a8daddee6030f4df1 (= refs/heads/wip/rs-raft-serving-publication-4; delta over 04f1a9112). Lab PENDING at hand-back (#161-#163, #167 WAITING_APPROVAL behind the owner lab reconciliation).

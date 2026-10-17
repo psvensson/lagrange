@@ -1,0 +1,75 @@
+{
+  "scannedFileCount": 2,
+  "totalViolationCount": 6,
+  "filesWithViolations": [
+    {
+      "filePath": "src/wasm-service/wasm-service-replica-lifecycle.js",
+      "violationCount": 4
+    },
+    {
+      "filePath": "src/wasm-service/wasm-creation-reconciliation.js",
+      "violationCount": 2
+    }
+  ],
+  "violations": [
+    {
+      "filePath": "src/wasm-service/wasm-creation-reconciliation.js",
+      "line": 82,
+      "column": 11,
+      "functionName": "unbind",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"failures\"",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/wasm-service/wasm-creation-reconciliation.js",
+      "line": 95,
+      "column": 9,
+      "functionName": "retire",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"failure\"",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/wasm-service/wasm-service-replica-lifecycle.js",
+      "line": 80,
+      "column": 1,
+      "functionName": "openReplica",
+      "independentIfCount": 6,
+      "target": "replica.lifecycleState",
+      "kind": "independent_if_semantic_assignment",
+      "reason": "multiple independent if statements assign the same semantic outcome target",
+      "ruleReference": "docs/steering/rules.md R07. A semantic outcome is a named state"
+    },
+    {
+      "filePath": "src/wasm-service/wasm-service-replica-lifecycle.js",
+      "line": 119,
+      "column": 5,
+      "functionName": "openReplica",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"replica.startupFailure\"",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/wasm-service/wasm-service-replica-lifecycle.js",
+      "line": 205,
+      "column": 3,
+      "functionName": "retireReplica",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"replica.startupFailure\"",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/wasm-service/wasm-service-replica-lifecycle.js",
+      "line": 238,
+      "column": 7,
+      "functionName": "shutdownWasmServiceReplica",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"activityFailure\"",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    }
+  ],
+  "rawViolationCount": 6,
+  "inheritedViolationCount": 0,
+  "baselineViolationCount": 806
+}

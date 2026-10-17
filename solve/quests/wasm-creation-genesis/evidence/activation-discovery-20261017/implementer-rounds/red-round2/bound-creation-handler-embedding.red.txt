@@ -1,0 +1,70 @@
+# test-files planned=1
+classified lane exclusive: 1 file(s), jobs=1
+thermal: ok cpu 53C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+not ok test/wasm-service/bound-creation-handler-embedding.integration.test.js (3 assertions, 1261ms)
+# TAP assertions failed; test process exited 1
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+TAP version 13
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: C6: real RuntimeServiceHandler + manager + runtime + native lifecycle on three hosts
+    # Subtest: C6-1 HELD, C6-3 duplicate, C6-2 PUBLISHED rows + one catalog group, (e) (f) (g) (h)
+    not ok 1 - C6-1 HELD, C6-3 duplicate, C6-2 PUBLISHED rows + one catalog group, (e) (f) (g) (h)
+      ---
+      duration_ms: 179.888502
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-handler-embedding.integration.test.js:107:3'
+      failureType: 'testCodeFailure'
+      error: 'founders held: did not settle within the declared rounds'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      operator: 'fail'
+      stack: |-
+        e.settle (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-handler-embedding-fixture.js:276:12)
+        async heldGroup (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-handler-embedding.integration.test.js:67:3)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-handler-embedding.integration.test.js:109:17)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Promise.all (index 0)
+        async Suite.run (node:internal/test_runner/test:1442:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    # Subtest: C6-7 REMOVE withdraws endpoint before CLOSED and the row after; C6-8 closed:false holds; C6-9 restart
+    not ok 2 - C6-7 REMOVE withdraws endpoint before CLOSED and the row after; C6-8 closed:false holds; C6-9 restart
+      ---
+      duration_ms: 158.93902
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-handler-embedding.integration.test.js:179:3'
+      failureType: 'testCodeFailure'
+      error: 'founders held: did not settle within the declared rounds'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      operator: 'fail'
+      stack: |-
+        e.settle (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-handler-embedding-fixture.js:276:12)
+        async heldGroup (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-handler-embedding.integration.test.js:67:3)
+        async publishedGroup (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-handler-embedding.integration.test.js:73:13)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-handler-embedding.integration.test.js:181:17)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    1..2
+not ok 1 - C6: real RuntimeServiceHandler + manager + runtime + native lifecycle on three hosts
+  ---
+  duration_ms: 339.435635
+  type: 'suite'
+  location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-handler-embedding.integration.test.js:106:1'
+  failureType: 'subtestsFailed'
+  error: '2 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+1..1
+# tests 2
+# suites 1
+# pass 0
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 342.05703
+# time=1261ms
+# test-files total=1 pass=0 fail=1 assertions=3
+rc=1

@@ -1125,7 +1125,7 @@
       ]
     },
     "service-consensus-retained-native-bootstrap": {
-      "description": "The original CREATE journal retains first-opening identity and hands one bound operation through manager, adapter and runtime to instance-qualified native WASM opening. Common B, exact local file and resource token are checked before native bootstrap; all results remain BOOTSTRAPPED_HELD with no serving, publication or journal completion. Cleanup retains errors and physical custody. Native RF3 evidence uses explicitly component-level metadata/journal adapters; it does not prove distributed metadata or the remaining grant/retirement interaction. Normal held lifecycle reentry constructs the exact binding-owned INIT through the existing writer completion owner; applied acceptance must be covered by a validated native committed founding membership observation. This is evidence only, never serving authority or an automatic progress wake.",
+      "description": "The original CREATE journal retains first-opening identity and hands one bound operation through manager, adapter and runtime to instance-qualified native WASM opening. Common B, exact local file and resource token are checked before native bootstrap. One per-replica OwnerKeyReconcileQueue continuation, entered by explicit START and by native role and applied-progress events, constructs the binding-owned INIT, requires a validated native committed founding membership observation, then grants the exact admitted slot through the ServiceDefinitionsOwner PUBLISHED CAS and records the grant durably in the receiver-local creation record before serving is enabled (serving = state AND READY, one fence for bound and unbound replicas). Retirement is keyed by the retained creation: it fences user admission at call, attempts metadata RELEASING without blocking, writes the local RETIRED tombstone durably and only then requests metadata CLOSED; an unresolved CLOSED keeps custody with the caller's retained creation. The lifecycle hands typed, enqueue-only wakes to the operation owner. Bound replicas still publish no endpoint, services row, ACTIVE projection or nested journal, and the creation row stays IN_PROGRESS. Native RF3 evidence uses explicitly component-level metadata/journal adapters; it does not prove distributed metadata, cross-node wake delivery or process-loss recovery.",
       "owners": [
         "src/service/service-consensus-bootstrap.js",
         "src/service/service-consensus-creation-intent.js",
@@ -1152,7 +1152,19 @@
         "src/wasm-service/wasm-creation-genesis.js",
         "src/wasm-service/wasm-writer-completion.js",
         "src/raft/raft-committed-membership-stamp.js",
-        "src/raft/raft-committed-membership-constants.js"
+        "src/raft/raft-committed-membership-constants.js",
+        "src/wasm-service/wasm-creation-reconciliation.js",
+        "src/workflow/owner-key-reconcile-queue.js",
+        "src/workflow/reconcile-queue-constants.js",
+        "src/wasm-service/wasm-creation-publication.js",
+        "src/wasm-service/wasm-creation-retirement.js",
+        "src/wasm-service/wasm-creation-wake.js",
+        "src/wasm-service/wasm-service-serving-state.js",
+        "src/wasm-service/wasm-service-constants.js",
+        "src/control-plane/owners/service-instance-state.js",
+        "src/runtime/wasm-component-driver-consensus.js",
+        "src/runtime/wasm-component-driver-vocabulary.js",
+        "src/service/service-lifecycle-operations.js"
       ],
       "tests": [
         "test/wasm-service/wasm-retained-bootstrap.integration.test.js",
@@ -1160,7 +1172,28 @@
         "test/service/service-consensus-creation-intent.test.js",
         "test/service/service-consensus-creation-recovery.integration.test.js",
         "test/wasm-service/wasm-writer-state-v1.test.js",
-        "test/wasm-service/wasm-creation-genesis.integration.test.js"
+        "test/wasm-service/wasm-creation-genesis.integration.test.js",
+        "test/wasm-service/wasm-creation-reconciliation.test.js",
+        "test/wasm-service/wasm-creation-reconciliation.integration.test.js",
+        "test/wasm-service/wasm-creation-publication.integration.test.js",
+        "test/wasm-service/wasm-creation-local-record.test.js",
+        "test/wasm-service/wasm-creation-bound-native.test.js",
+        "test/control-plane/service-instance-creation-cas.test.js"
+      ]
+    },
+    "runtime-service-bound-creation-route": {
+      "description": "A node's RuntimeServiceHandler routes a bound CREATE through the manager's one-pass resume of the retained creation (recover + continue) and a bound REMOVE through the journal-only read and the manager's bound STOP; the consensus bootstrap and its runtime publication answer the typed HELD / PUBLISHED_UNPROJECTED / PUBLISHED shapes the route maps, project the services and endpoint rows and mark PRESENT by exact token. A HELD re-entry resumes the memo's creation, never the request (design RV5.1). Recovery stage (design RECOVERY-DESIGN-20261017 R1-A, R1-E, R1-H): the handler's restart inventory applies the manager's one scan through the same route (memos first, then ready, then one re-entry per creation or a silent RETIRED re-drive).",
+      "owners": [
+        "src/node/runtime-service-bound-creation-route.js",
+        "src/node/runtime-service-restart-inventory.js",
+        "src/service/service-consensus-bootstrap.js",
+        "src/runtime/service-runtime-consensus-publication.js"
+      ],
+      "tests": [
+        "test/wasm-service/bound-creation-handler-embedding.integration.test.js",
+        "test/wasm-service/bound-creation-restart.integration.test.js",
+        "test/node/runtime-service-bound-route.test.js",
+        "test/runtime/service-runtime-consensus-publication.test.js"
       ]
     }
   },
@@ -2306,7 +2339,7 @@
       ]
     },
     "service-consensus-retained-native-bootstrap": {
-      "description": "Retained original intent, first-use identity, native common-root admission and exhaustive cleanup form one held bootstrap boundary; neither old metadata history, missing files nor native startup can manufacture serving permission. Applied INIT and committed founding-membership evidence are consumed from their existing owners on reentry, without promoting a proposal acknowledgement or stale observation into genesis completion.",
+      "description": "Retained original intent, first-use identity, native common-root admission and exhaustive cleanup form one bound creation boundary; neither old metadata history, missing files nor native startup can manufacture serving permission. Applied INIT and committed founding-membership evidence are consumed from their existing owners, and only the metadata owner's PUBLISHED grant, durably copied into the receiver-local record, opens serving; retirement records RETIRED locally before the metadata CLOSED it requests.",
       "contract": "service-consensus-retained-native-bootstrap",
       "endpoints": [
         {
@@ -2322,7 +2355,10 @@
             "src/runtime/wasm-component-driver-shutdown-methods.js",
             "src/wasm-service/operation-lifecycle.js",
             "src/wasm-service/wasm-meta-models-constants.js",
-            "src/bootstrap/system-table-runtime-schema-definitions.js"
+            "src/bootstrap/system-table-runtime-schema-definitions.js",
+            "src/service/service-lifecycle-operations.js",
+            "src/runtime/wasm-component-driver-consensus.js",
+            "src/runtime/wasm-component-driver-vocabulary.js"
           ]
         },
         {
@@ -2342,14 +2378,51 @@
             "src/wasm-service/wasm-creation-genesis.js",
             "src/wasm-service/wasm-writer-completion.js",
             "src/raft/raft-committed-membership-stamp.js",
-            "src/raft/raft-committed-membership-constants.js"
+            "src/raft/raft-committed-membership-constants.js",
+            "src/wasm-service/wasm-creation-reconciliation.js",
+            "src/workflow/owner-key-reconcile-queue.js",
+            "src/wasm-service/wasm-creation-publication.js",
+            "src/wasm-service/wasm-creation-retirement.js",
+            "src/wasm-service/wasm-creation-wake.js",
+            "src/wasm-service/wasm-service-serving-state.js",
+            "src/wasm-service/wasm-service-constants.js",
+            "src/control-plane/owners/service-instance-state.js",
+            "src/workflow/reconcile-queue-constants.js"
           ]
         }
       ],
       "witnessTests": [
         "test/wasm-service/wasm-retained-bootstrap.integration.test.js",
         "test/runtime/node-shutdown-cell-worker-teardown.test.js",
-        "test/wasm-service/wasm-creation-genesis.integration.test.js"
+        "test/wasm-service/wasm-creation-genesis.integration.test.js",
+        "test/wasm-service/wasm-creation-reconciliation.test.js",
+        "test/wasm-service/wasm-creation-reconciliation.integration.test.js",
+        "test/wasm-service/wasm-creation-publication.integration.test.js",
+        "test/wasm-service/wasm-creation-local-record.test.js"
+      ]
+    },
+    "runtime-service-bound-creation-route": {
+      "description": "The handler's bound route and the consensus bootstrap / runtime publication it consumes change together: the route's decision tables key on the bootstrap's answer shapes, and the C6 embedding (real handler, manager, runtime and native lifecycle on three hosts) is the paired witness (design RV5.6, HANDOFF C6).",
+      "endpoints": [
+        {
+          "id": "handler-bound-creation-route",
+          "owners": [
+            "src/node/runtime-service-bound-creation-route.js",
+            "src/node/runtime-service-restart-inventory.js"
+          ]
+        },
+        {
+          "id": "consensus-bootstrap-and-publication",
+          "owners": [
+            "src/service/service-consensus-bootstrap.js",
+            "src/runtime/service-runtime-consensus-publication.js"
+          ]
+        }
+      ],
+      "contract": "runtime-service-bound-creation-route",
+      "witnessTests": [
+        "test/wasm-service/bound-creation-handler-embedding.integration.test.js",
+        "test/wasm-service/bound-creation-restart.integration.test.js"
       ]
     }
   }

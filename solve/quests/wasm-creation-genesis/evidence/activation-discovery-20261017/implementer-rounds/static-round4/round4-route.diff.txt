@@ -1,0 +1,142 @@
+--- /tmp/claude-1000/-mnt-data-peter-projects-lagrange/52d74044-bacb-41c7-9eb9-7fdbcbd93317/scratchpad/r4-pristine/src/node/runtime-service-bound-creation-route.js	2026-10-17 18:00:11.830957520 +0200
++++ src/node/runtime-service-bound-creation-route.js	2026-10-17 18:31:58.964189597 +0200
+@@ -2,7 +2,8 @@
+ // ACTIVATION-DISCOVERY-DESIGN-20261017, Revision 3 governs: RV3.2 deferral
+ // carrier, RV3.3 result tables, RV3.5 re-entry guard; Revision 2: RV2.1 REMOVE,
+ // RV2.2 CREATE order, RV2.4 wake; Revision 5: RV5.1 the HELD re-entry resumes
+-// the creation, RV5.2 memo custody, RV5.3 wake corrections). Explicit-context functions over the
++// the creation, RV5.2 memo custody, RV5.3 wake corrections; Revision 6: RV6.1
++// one writer of the creation link, RV6.2-RV6.4 replies to a retained memo). Explicit-context functions over the
+ // handler. Routing keys on the manager's journal (a retained creation answers
+ // ADMISSION_RETAINED-class); only the refusal class of a CREATE that names no
+ // retained creation keys on the definition row. The handler memo is volatile;
+@@ -21,7 +22,8 @@
+   '../service/service-consensus-creation-intent.js';
+ import {WASM_CREATION_RETIREMENT as RETIREMENT} from '../wasm-service/wasm-creation-opening.js';
+ import {RECONCILE_REASON} from '../workflow/reconcile-queue-constants.js';
+-import {RUNTIME_SERVICE_CREATION_WAKE_OUTCOME as WAKE, RUNTIME_SERVICE_HANDLER_ERROR_MSG,
++import {RUNTIME_SERVICE_CREATION_WAKE_OUTCOME as WAKE,
++  RUNTIME_SERVICE_HANDLER_ERROR_MSG as HANDLER_ERROR,
+   RUNTIME_SERVICE_HANDLER_LOG_MSG as LOG} from './runtime-service-handler-constants.js';
+ 
+ // What one bound answer decides for the handler's memo and outcome.
+@@ -72,7 +74,7 @@
+ // a definitive absence refuses typed, an unavailable read defers.
+ function unroutedDecision(answer) {
+   return answer.outcome === CREATION.INTENT_NOT_FOUND ?
+-    {kind: DECISION.FAILED, errorCode: RUNTIME_SERVICE_HANDLER_ERROR_MSG.BOUND_ROUTE_REQUIRED} :
++    {kind: DECISION.FAILED, errorCode: HANDLER_ERROR.BOUND_ROUTE_REQUIRED} :
+     {kind: DECISION.DEFERRED, errorCode: OUTCOME.UNAVAILABLE};
+ }
+ 
+@@ -81,11 +83,21 @@
+     ...(decision.kind === DECISION.DEFERRED ? {deferRetry: true} : {})};
+ }
+ 
++/**
++ * Whether a handler memo names a retained creation (RV5.2, RV6.1): such a
++ * memo has one writer, the route's settle.
++ * @param {Object|undefined} memo
++ * @return {boolean}
++ */
++function namesCreation(memo) {
++  return typeof memo?.operationId === 'string';
++}
++
+ // RV5.2: a nameless settle writes the memo only when the current memo names
+ // no creation; a creation-naming memo is left as it is (the outcome is still
+ // emitted under the request's id).
+ function writesMemo(handler, replicaId, decision) {
+-  return decision.names || handler.localReplicas.get(replicaId)?.operationId === undefined;
++  return decision.names || !namesCreation(handler.localReplicas.get(replicaId));
+ }
+ 
+ function settleCreation(handler, {operationId, entityId, replicaId}, decision) {
+@@ -180,19 +192,31 @@
+   }
+ }
+ 
++function inProgressReply(handler, replicaId) {
++  return {status: ReplicaOperationResponseStatus.IN_PROGRESS, replicaId, nodeId: handler.nodeId};
++}
++
+ /**
+- * A CREATE for a HELD replica re-enters the memo's retained creation once
+- * (RV3.5, RV5.1): resumed, guarded and emitted under the creation's operation
+- * id (the key wakes use), skipped while a re-entry of it is in flight; the
+- * request's own id is only the log field requestOperationId. Answers
+- * IN_PROGRESS.
++ * A CREATE for a locally retained creation (a HELD memo, or a named deferral,
++ * RV6.2) re-enters the memo's creation once (RV3.5, RV5.1): resumed, guarded
++ * and emitted under the creation's operation id (the key wakes use), skipped
++ * while a re-entry of it is in flight; the request's own id is only the log
++ * field requestOperationId. Answers IN_PROGRESS. A memo that names no
++ * creation is corrupt (RV6.4): the typed ERROR reply, memo untouched,
++ * nothing emitted, never the request's id.
+  * @param {Object} handler
+- * @param {Object} existing - The HELD memo (its operationId names the creation).
++ * @param {Object} existing - The memo (its operationId names the creation).
+  * @param {Object} params - The request's {operationId, entityId, replicaId}.
+  * @return {Object} The reply.
+  */
+-function reenterHeldCreation(handler, existing, params) {
+-  const creation = {operationId: existing.operationId ?? params.operationId,
++function reenterRetainedCreation(handler, existing, params) {
++  if (!namesCreation(existing)) {
++    handler.logger.error(LOG.CREATE_FAILED, {replicaId: params.replicaId, nodeId: handler.nodeId,
++      requestOperationId: params.operationId, error: HANDLER_ERROR.CORRUPT_LOCAL_MEMO});
++    return {status: ReplicaOperationResponseStatus.ERROR, error: HANDLER_ERROR.CORRUPT_LOCAL_MEMO,
++      errorCode: HANDLER_ERROR.CORRUPT_LOCAL_MEMO, deferRetry: false, nodeId: handler.nodeId};
++  }
++  const creation = {operationId: existing.operationId,
+     entityId: params.entityId, replicaId: params.replicaId};
+   if (!handler.inProgressOperations.has(creation.operationId)) {
+     scheduleBoundReentry(handler, creation);
+@@ -200,8 +224,38 @@
+   handler.logger.info(LOG.CREATE_IN_PROGRESS, {replicaId: params.replicaId,
+     nodeId: handler.nodeId, operationId: creation.operationId,
+     requestOperationId: params.operationId});
+-  return {status: ReplicaOperationResponseStatus.IN_PROGRESS, replicaId: params.replicaId,
+-    nodeId: handler.nodeId};
++  return inProgressReply(handler, params.replicaId);
++}
++
++// RV6.3: a CREATE for a replica whose bound retirement is in progress is
++// deferred typed under the request's id; nothing is routed and the nameless
++// settle leaves the memo (RV5.2); the next REMOVE re-drives the retirement.
++function deferDuringRetirement(handler, existing, params) {
++  settleCreation(handler, params, {kind: DECISION.DEFERRED,
++    errorCode: HANDLER_ERROR.RETIREMENT_IN_PROGRESS, names: false});
++  return inProgressReply(handler, params.replicaId);
++}
++
++// The replies to a memo that names a retained creation, by its status.
++const NAMED_MEMO_REPLIES = new Map([[ReplicaStatus.FAILED, reenterRetainedCreation],
++  [ReplicaStatus.REMOVING, deferDuringRetirement]]);
++
++/**
++ * The reply a CREATE gets from a memo of a locally retained creation
++ * (RV3.5, RV6.2-RV6.4): HELD re-enters (a nameless HELD is refused corrupt);
++ * a named FAILED (deferral) re-enters; a named REMOVING is deferred typed.
++ * Any other memo, and every nameless FAILED or REMOVING memo, answers null.
++ * @param {Object} handler
++ * @param {Object|undefined} existing - The local replica memo.
++ * @param {Object} params - The request's {operationId, entityId, replicaId}.
++ * @return {Object|null} The reply, or null to proceed.
++ */
++function replyToRetainedMemo(handler, existing, params) {
++  if (existing?.status === ReplicaStatus.HELD) {
++    return reenterRetainedCreation(handler, existing, params);
++  }
++  const reply = namesCreation(existing) ? NAMED_MEMO_REPLIES.get(existing.status) : undefined;
++  return reply ? reply(handler, existing, params) : null;
+ }
+ 
+ // What one wake finds on this node (RV2.4, RV3.5), in decision order.
+@@ -339,5 +393,5 @@
+   return typeof token === 'string' && token.length > 0 ? {operationId: token} : {};
+ }
+ 
+-export {routeRuntimeServiceCreate, reenterHeldCreation,
++export {routeRuntimeServiceCreate, replyToRetainedMemo, namesCreation,
+   consumeCreationWake, routeBoundRemoval, rowCreationHint};

@@ -55,6 +55,14 @@ const RUNTIME_SERVICE_HANDLER_LOG_MSG = Object.freeze({
   UNREGISTERED_ROUTER:
     'Unregistered RuntimeServiceHandler from message router',
   SHUTTING_DOWN: 'Shutting down RuntimeServiceHandler',
+  CREATE_HELD: 'Runtime service bound creation held',
+  REMOVE_HELD: 'Runtime service bound retirement held',
+  CREATION_WAKE_NO_LOCAL_OPERATION:
+    'Runtime service creation wake names no local operation',
+  // Design RECOVERY-DESIGN-20261017 R1-A, R1-E, R3-F.
+  RESTART_INVENTORY_APPLIED: 'Runtime service restart inventory applied',
+  RESTART_ENTRY_UNREADABLE: 'Runtime service restart entry has an undecodable intent',
+  RESTART_RETIREMENT_REDRIVEN: 'Runtime service restart retirement re-driven',
 });
 
 const RUNTIME_SERVICE_HANDLER_ERROR_MSG = Object.freeze({
@@ -75,6 +83,21 @@ const RUNTIME_SERVICE_HANDLER_ERROR_MSG = Object.freeze({
     'RuntimeServiceHandler requires systemTableCache',
   DEFINITION_NOT_FOUND: (entityId) =>
     `Service definition not found: ${entityId}`,
+  // A bound-class definition whose CREATE names no retained creation (D0, RV2.2).
+  BOUND_ROUTE_REQUIRED: 'runtime_service_bound_route_required',
+  // A CREATE for a replica whose bound retirement is in progress (RV6.3).
+  RETIREMENT_IN_PROGRESS: 'runtime_service_retirement_in_progress',
+  // A HELD memo that names no creation: corrupt by construction (RV6.4).
+  CORRUPT_LOCAL_MEMO: 'runtime_service_corrupt_local_memo',
+  // A message before the restart inventory is applied (RECOVERY-DESIGN R1-H, R2-F).
+  NOT_READY: 'runtime_service_not_ready',
+});
+
+// The node-local creation wake consumer's answers (design RV2.4, RV3.5).
+const RUNTIME_SERVICE_CREATION_WAKE_OUTCOME = Object.freeze({
+  QUEUED: 'QUEUED',
+  RECORDED: 'RECORDED',
+  NO_LOCAL_OPERATION: 'NO_LOCAL_OPERATION',
 });
 
 const RUNTIME_SERVICE_HANDLER_WORKFLOW = Object.freeze({
@@ -82,6 +105,7 @@ const RUNTIME_SERVICE_HANDLER_WORKFLOW = Object.freeze({
 });
 
 export {
+  RUNTIME_SERVICE_CREATION_WAKE_OUTCOME,
   RUNTIME_SERVICE_HANDLER_ADDRESS,
   RUNTIME_SERVICE_HANDLER_ERROR_MSG,
   RUNTIME_SERVICE_HANDLER_LOG_MSG,

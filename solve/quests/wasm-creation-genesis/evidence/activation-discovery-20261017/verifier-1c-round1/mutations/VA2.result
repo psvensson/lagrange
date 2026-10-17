@@ -1,0 +1,10 @@
+mutated sha: dc21b631a24bad50c03e0e10cab615070fd54137d692637ff6ea2e6cd22fde67
+catcher test/runtime/service-runtime-consensus-publication.test.js rc=1
+not ok test/runtime/service-runtime-consensus-publication.test.js (16 assertions, 518ms)
+    not ok 1 - cell (e) endpointHost is the DERIVED host; advertised WS wins; never the raw host:port
+      name: 'AssertionError'
+catcher test/wasm-service/bound-creation-handler-embedding.integration.test.js rc=1
+not ok test/wasm-service/bound-creation-handler-embedding.integration.test.js (3 assertions, 985ms)
+    not ok 1 - C6-1 HELD, C6-3 duplicate, C6-2 PUBLISHED rows + one catalog group, (e) (f) (g) (h)
+      name: 'AssertionError'
+RESTORED_BYTE_IDENTICAL src/runtime/runtime-startup-wiring.js

@@ -1,0 +1,234 @@
+thermal: ok cpu 55C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+
+> lagrange-server@0.2.6 test:file
+> node scripts/run-classified-test-files.js test/wasm-service/wasm-creation-publication.integration.test.js
+
+# test-files planned=1
+classified lane exclusive: 1 file(s), jobs=1
+thermal: ok cpu 55C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+not ok test/wasm-service/wasm-creation-publication.integration.test.js (25 assertions, 3974ms)
+# TAP assertions failed; test process exited 1
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+TAP version 13
+# Subtest: 6prime: publication owned by the keyed continuation, retirement before CLOSED
+    # Subtest: P1 native events publish every founder: durable grant, one wake, served write, quiet adapter
+    ok 1 - P1 native events publish every founder: durable grant, one wake, served write, quiet adapter
+      ---
+      duration_ms: 270.059304
+      type: 'test'
+      ...
+    # Subtest: P2 predecessor outstanding holds the successor typed; P8 the last CLOSED wakes its owner
+    ok 2 - P2 predecessor outstanding holds the successor typed; P8 the last CLOSED wakes its owner
+      ---
+      duration_ms: 165.994635
+      type: 'test'
+      ...
+    # Subtest: P3a a selection before the grant answers STALE_BINDING and writes nothing local
+    ok 3 - P3a a selection before the grant answers STALE_BINDING and writes nothing local
+      ---
+      duration_ms: 140.28716
+      type: 'test'
+      ...
+    # Subtest: P3b a selection inside the held grant CAS window answers STALE_BINDING
+    ok 4 - P3b a selection inside the held grant CAS window answers STALE_BINDING
+      ---
+      duration_ms: 123.487679
+      type: 'test'
+      ...
+    # Subtest: P4 retirement fences user work at call, RELEASING precedes RETIRED, RETIRED precedes CLOSED
+    ok 5 - P4 retirement fences user work at call, RELEASING precedes RETIRED, RETIRED precedes CLOSED
+      ---
+      duration_ms: 137.18673
+      type: 'test'
+      ...
+    # Subtest: P5a a lost CLOSED reply is resolved by the metadata owner itself
+    ok 6 - P5a a lost CLOSED reply is resolved by the metadata owner itself
+      ---
+      duration_ms: 129.966798
+      type: 'test'
+      ...
+    # Subtest: P5b an unresolved CLOSED keeps custody; a re-stop by creation resolves with no new mutation
+    ok 7 - P5b an unresolved CLOSED keeps custody; a re-stop by creation resolves with no new mutation
+      ---
+      duration_ms: 138.834188
+      type: 'test'
+      ...
+    # Subtest: P5c a re-stop of the predecessor retires its file by creation and never touches a successor
+    ok 8 - P5c a re-stop of the predecessor retires its file by creation and never touches a successor
+      ---
+      duration_ms: 140.414946
+      type: 'test'
+      ...
+    # Subtest: P6a orderly shutdown keeps the grant; a reopen serves after the open-time metadata check
+    ok 9 - P6a orderly shutdown keeps the grant; a reopen serves after the open-time metadata check
+      ---
+      duration_ms: 148.788541
+      type: 'test'
+      ...
+    # Subtest: P6b a reopen after the slot was CLOSED is refused and the next retire tombstones the file
+    ok 10 - P6b a reopen after the slot was CLOSED is refused and the next retire tombstones the file
+      ---
+      duration_ms: 148.91381
+      type: 'test'
+      ...
+    # Subtest: P9 a retirement during an in-flight grant enables nothing and closes the slot
+    ok 11 - P9 a retirement during an in-flight grant enables nothing and closes the slot
+      ---
+      duration_ms: 123.809714
+      type: 'test'
+      ...
+    # Subtest: P10 a START re-entry while the retirement is in flight is refused typed
+    ok 12 - P10 a START re-entry while the retirement is in flight is refused typed
+      ---
+      duration_ms: 123.750444
+      type: 'test'
+      ...
+    # Subtest: P11 a forged PUBLISHED or RUNNING driver answer never becomes serving presentation
+    ok 13 - P11 a forged PUBLISHED or RUNNING driver answer never becomes serving presentation
+      ---
+      duration_ms: 31.935469
+      type: 'test'
+      ...
+    # Subtest: P11b a RUNNING claim carrying the exact binding and token is refused before any re-resolve
+    ok 14 - P11b a RUNNING claim carrying the exact binding and token is refused before any re-resolve
+      ---
+      duration_ms: 26.286033
+      type: 'test'
+      ...
+    # Subtest: P12 the first admitted user message finds the local grant already durable
+    ok 15 - P12 the first admitted user message finds the local grant already durable
+      ---
+      duration_ms: 118.80987
+      type: 'test'
+      ...
+    1..15
+ok 1 - 6prime: publication owned by the keyed continuation, retirement before CLOSED
+  ---
+  duration_ms: 1969.525602
+  type: 'suite'
+  ...
+# Subtest: 6double-prime: held grants, election changes, lost answers and absent consumers
+    # Subtest: P13 an unavailable grant wakes once per held run typed and is never retried by the lifecycle
+    ok 1 - P13 an unavailable grant wakes once per held run typed and is never retried by the lifecycle
+      ---
+      duration_ms: 136.845213
+      type: 'test'
+      ...
+    # Subtest: P14 leadership LEADER -> FOLLOWER -> LEADER across a held grant replays effects once
+    ok 2 - P14 leadership LEADER -> FOLLOWER -> LEADER across a held grant replays effects once
+      ---
+      duration_ms: 133.648124
+      type: 'test'
+      ...
+    # Subtest: P15 a lost grant reply resolves to PUBLISHED inside the owner: one write, one wake
+    ok 3 - P15 a lost grant reply resolves to PUBLISHED inside the owner: one write, one wake
+      ---
+      duration_ms: 123.301463
+      type: 'test'
+      ...
+    # Subtest: P16 a failed local RETIRED write blocks CLOSED while the handles stay open
+    ok 4 - P16 a failed local RETIRED write blocks CLOSED while the handles stay open
+      ---
+      duration_ms: 127.584915
+      type: 'test'
+      ...
+    # Subtest: P17 an explicit START that observes genesis publishes and fires no wake
+    ok 5 - P17 an explicit START that observes genesis publishes and fires no wake
+      ---
+      duration_ms: 115.95093
+      type: 'test'
+      ...
+    # Subtest: P18 an absent wake consumer is a typed CONSUMER_ABSENT outcome, never silence
+    ok 6 - P18 an absent wake consumer is a typed CONSUMER_ABSENT outcome, never silence
+      ---
+      duration_ms: 126.768872
+      type: 'test'
+      ...
+    # Subtest: P19 a concurrent retirement of every founder closes each slot in one pass
+    not ok 7 - P19 a concurrent retirement of every founder closes each slot in one pass
+      ---
+      duration_ms: 136.471518
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:887:3'
+      failureType: 'testCodeFailure'
+      error: |-
+        {"outcome":"CLOSE_UNRESOLVED","retired":true,"closed":false,"release":{"outcome":"STATE_CHANGED"},"tombstone":{"outcome":"ALREADY"},"close":{"outcome":"STATE_CHANGED"},"operationId":"operation-1"}
+        
+        false !== true
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: true
+      actual: false
+      operator: 'strictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:896:16)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: P20 a bound-exhausted grant holds typed STATE_CHANGED and an explicit START publishes
+    ok 8 - P20 a bound-exhausted grant holds typed STATE_CHANGED and an explicit START publishes
+      ---
+      duration_ms: 138.471078
+      type: 'test'
+      ...
+    1..8
+not ok 2 - 6double-prime: held grants, election changes, lost answers and absent consumers
+  ---
+  duration_ms: 1039.367343
+  type: 'suite'
+  location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:708:1'
+  failureType: 'subtestsFailed'
+  error: '1 subtest failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+1..2
+# tests 23
+# suites 2
+# pass 22
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3018.572228
+# time=3974ms
+# test-files total=1 pass=0 fail=1 assertions=25
+
+==== test/wasm-service/wasm-creation-publication.integration.test.js exit 1
+FAIL: P19 a concurrent retirement of every founder closes each slot in one pass
+    failureType: 'testCodeFailure'
+    error: |-
+    {"outcome":"CLOSE_UNRESOLVED","retired":true,"closed":false,"release":{"outcome":"STATE_CHANGED"},"tombstone":{"outcome":"ALREADY"},"close":{"outcome":"STATE_CHANGED"},"operationId":"operation-1"}
+    
+    expected: true
+    actual: false
+FAIL: 6double-prime: held grants, election changes, lost answers and absent consumers
+    failureType: 'subtestsFailed'
+    error: '1 subtest failed'
+    code: 'ERR_TEST_FAILURE'
+    ...
+
+
+RESTORED sha256 62cb2191b7168aa05c6c5faa0b70a0d7b1ecf3474f97fb5c6dd18a270d6d8793

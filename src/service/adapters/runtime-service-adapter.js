@@ -112,6 +112,18 @@ class RuntimeServiceAdapter extends ServiceTypeAdapter {
   async health(replicaHandle, _context) {
     return this._serviceRuntimeLifecycle.health(replicaHandle);
   }
+
+  /**
+   * The local half of one inventoried bound creation (design
+   * RECOVERY-DESIGN-20261017 R1-A): no physical effect.
+   * @param {Object} owned - {consensusCreation: {intent, token, opening}}.
+   * @return {Promise<{outcome: string}>}
+   */
+  async inspectRetainedCreation(owned) {
+    const runtime = this._serviceRuntimeLifecycle;
+    return typeof runtime.inspectRetainedCreation === 'function' ?
+      runtime.inspectRetainedCreation(owned) : super.inspectRetainedCreation(owned);
+  }
 }
 
 export {RuntimeServiceAdapter};

@@ -35,6 +35,19 @@ authorizes:
 
 # Raft-rs full cutover
 
+## Closeout plan and lane composition (2026-10-17)
+
+The owner asked for the steps from the current lanes to a main merge as a
+tracked document. [`closeout-plan-2026-10-17.md`](raft-rs-full-cutover/closeout-plan-2026-10-17.md)
+measures where the work is (four diverged rs-raft branches plus one local
+integration lane; main moved only by trend records since 2026-10-04), orders
+six steps (finish the creation lane; compose one candidate; close or park the
+open quests; prove the frozen head with three certification formations;
+closeout report with independent verification; merge, post-merge publish,
+land the parked governance quests) with the acceptance each must show, and
+carries an append-only tracking section. It is an ordering of the binding
+criteria below, not a new authority.
+
 ## Adversarial priorities and local continuation (2026-10-10)
 
 The operator requested an adversarial review of the codebase recommendations,

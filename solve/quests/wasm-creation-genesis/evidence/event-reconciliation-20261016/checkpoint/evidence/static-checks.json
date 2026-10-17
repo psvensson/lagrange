@@ -1,0 +1,130 @@
+{
+  "final-metadata-refresh": {
+    "command": [
+      "npm",
+      "run",
+      "test:metadata:refresh"
+    ],
+    "exitCode": 0,
+    "outputSha256": "a9d4dd97649fae1067b53a27e5a7713ef2373dd3932b039760e368d098ab14f0"
+  },
+  "final-lint": {
+    "command": [
+      "node_modules/.bin/eslint",
+      "src/wasm-service/wasm-creation-reconciliation.js",
+      "src/wasm-service/wasm-creation-genesis.js",
+      "src/wasm-service/wasm-service-lifecycle.js",
+      "src/wasm-service/wasm-service-replica-lifecycle.js",
+      "src/wasm-service/wasm-service-replica.js",
+      "test/wasm-service/wasm-creation-reconciliation.test.js",
+      "test/wasm-service/wasm-creation-reconciliation.integration.test.js",
+      "test/wasm-service/wasm-retained-bootstrap-fixture.js"
+    ],
+    "exitCode": 0,
+    "outputSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "final-new-complexity": {
+    "command": [
+      "node",
+      "scripts/check-complexity.js",
+      "--scoped",
+      "--strict",
+      "src/wasm-service/wasm-creation-reconciliation.js",
+      "test/wasm-service/wasm-creation-reconciliation.test.js",
+      "test/wasm-service/wasm-creation-reconciliation.integration.test.js"
+    ],
+    "exitCode": 0,
+    "outputSha256": "bb5445b6e1062efe06695d191f8a67894aa250bd135d7c0836d01705bfe571ea"
+  },
+  "final-new-cognitive": {
+    "command": [
+      "node",
+      "scripts/check-cognitive-complexity.js",
+      "--scoped",
+      "--strict",
+      "src/wasm-service/wasm-creation-reconciliation.js",
+      "test/wasm-service/wasm-creation-reconciliation.test.js",
+      "test/wasm-service/wasm-creation-reconciliation.integration.test.js"
+    ],
+    "exitCode": 0,
+    "outputSha256": "a543e43553a46dc97e309997c5afb8e566747bd2e8c887379ba0238e149b1a1b"
+  },
+  "final-literals": {
+    "command": [
+      "node",
+      "scripts/check-guideline-literals.js",
+      "src/wasm-service/wasm-creation-reconciliation.js",
+      "src/wasm-service/wasm-creation-genesis.js",
+      "src/wasm-service/wasm-service-lifecycle.js",
+      "src/wasm-service/wasm-service-replica-lifecycle.js",
+      "src/wasm-service/wasm-service-replica.js"
+    ],
+    "exitCode": 0,
+    "outputSha256": "e80919b6689f0980ac332a9e6b9738bb7aff94c38691a88f3e51e8e196b29371"
+  },
+  "final-decisions": {
+    "command": [
+      "node",
+      "scripts/check-guideline-decision-boundaries.js",
+      "src/wasm-service/wasm-creation-reconciliation.js",
+      "src/wasm-service/wasm-creation-genesis.js",
+      "src/wasm-service/wasm-service-lifecycle.js",
+      "src/wasm-service/wasm-service-replica-lifecycle.js",
+      "src/wasm-service/wasm-service-replica.js"
+    ],
+    "exitCode": 1,
+    "outputSha256": "45175dd6e1126143006fb328f23644e46c03696cafe5468ee8d4997d3c5ba08c"
+  },
+  "final-grammar": {
+    "command": [
+      "node",
+      "scripts/check-runtime-grammar-contracts.js",
+      "src/wasm-service/wasm-creation-reconciliation.js",
+      "src/wasm-service/wasm-creation-genesis.js",
+      "src/wasm-service/wasm-service-lifecycle.js",
+      "src/wasm-service/wasm-service-replica-lifecycle.js",
+      "src/wasm-service/wasm-service-replica.js"
+    ],
+    "exitCode": 0,
+    "outputSha256": "00ec1b85223c8d50f1fbba4bc307bdb78a77f0cccbce606454270e5663ea6169"
+  },
+  "final-silent-catch": {
+    "command": [
+      "node",
+      "scripts/check-guideline-silent-catch.js",
+      "src/wasm-service/wasm-creation-reconciliation.js",
+      "src/wasm-service/wasm-creation-genesis.js",
+      "src/wasm-service/wasm-service-lifecycle.js",
+      "src/wasm-service/wasm-service-replica-lifecycle.js",
+      "src/wasm-service/wasm-service-replica.js"
+    ],
+    "exitCode": 0,
+    "outputSha256": "4990e8d4f38728834efe7841265c6d98aff589fe7fc8fdc738acfde83f4ee10b"
+  },
+  "final-impact-contracts": {
+    "command": [
+      "node",
+      "scripts/checks/impact-contract-registry.js"
+    ],
+    "exitCode": 0,
+    "outputSha256": "f4ca4066a2cce67357e0fdb11c9891cf13cd3f381edf8103f75535f9c00e462a"
+  },
+  "final-shards": {
+    "command": [
+      "npm",
+      "run",
+      "audit:shards"
+    ],
+    "exitCode": 0,
+    "outputSha256": "8bfdd3adaf9c82453a02e6fcff4c28ee1a589e354c84f2de066a1b96fa673d31"
+  },
+  "final-whitespace": {
+    "command": [
+      "git",
+      "diff",
+      "--check"
+    ],
+    "exitCode": 0,
+    "outputSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

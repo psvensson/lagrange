@@ -1,0 +1,27 @@
+lab test: adam-laptop: ordinary, exclusive (8 files) cores=8 mem=15.5GiB speed x1.96
+[adam-laptop] placement-shell=2003413
+[adam-laptop] placement-head=8ec78a5e09cffa661acc249d576d25997adef9d1
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2 mode:local retry:0 timeout: lanecap:7
+[adam-laptop] placement-pid=2003840
+[adam-laptop] # test-files planned=8
+[adam-laptop] classified lane ordinary: 4 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 77C (coretemp/Package id 0) nvme 19C (nvme/Composite) - CPU package 77C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 41C (coretemp/Package id 0) nvme 19C (nvme/Composite)
+[adam-laptop] ok test/runtime/service-runtime-lifecycle.test.js (82 assertions, 571ms)
+[adam-laptop] ok test/runtime/wasm-component-driver.test.js (61 assertions, 945ms)
+[adam-laptop] ok test/wasm-service/wasm-service-lifecycle.test.js (60 assertions, 2854ms)
+[adam-laptop] ok test/wasm-service/wasm-creation-bound-native.test.js (3 assertions, 3019ms)
+[adam-laptop] # test-files total=4 pass=4 fail=0 assertions=206
+[adam-laptop] classified lane exclusive: 4 file(s), jobs=1
+[adam-laptop] thermal: ok cpu 66C (coretemp/Package id 0) nvme 24C (nvme/Composite)
+[adam-laptop] ok test/service/service-consensus-creation-recovery.integration.test.js (2 assertions, 1682ms)
+[adam-laptop] ok test/wasm-service/wasm-creation-genesis.integration.test.js (14 assertions, 5337ms)
+[adam-laptop] ok test/wasm-service/wasm-creation-reconciliation.integration.test.js (4 assertions, 2704ms)
+[adam-laptop] ok test/wasm-service/wasm-retained-bootstrap.integration.test.js (16 assertions, 3087ms)
+[adam-laptop] # test-files total=4 pass=4 fail=0 assertions=36
+lab test: adam-laptop: # test-files total=8 pass=8 fail=0 assertions=242
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=8 pass=8 fail=0 assertions=242

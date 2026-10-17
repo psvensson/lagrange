@@ -1,0 +1,43 @@
+diff --git a/src/node/runtime-service-handler.js b/src/node/runtime-service-handler.js
+index c640a6cbc..9d614bce6 100644
+--- a/src/node/runtime-service-handler.js
++++ b/src/node/runtime-service-handler.js
+@@ -33,6 +33,8 @@ import {
+ import {consumeCreationWake, namesCreation, refuseForeignCreation, replyToRetainedMemo,
+   routeBoundRemoval, routeRuntimeServiceCreate, rowCreationHint} from
+   './runtime-service-bound-creation-route.js';
++import {createRestartLatch, notReadyReply, recoverRetainedCreations} from
++  './runtime-service-restart-inventory.js';
+ import {
+   RUNTIME_SERVICE_HANDLER_ADDRESS,
+   RUNTIME_SERVICE_HANDLER_ERROR_MSG,
+@@ -158,6 +160,12 @@ class RuntimeServiceHandler extends EventEmitter {
+     this.inProgressOperations = new Map();
+     /** @type {Map<string, Object>} Local replica state by ID */
+     this.localReplicas = new Map();
++    // The restart ready latch (design RECOVERY-DESIGN-20261017 R1-H): a host
++    // that applies a restart inventory refuses every message NOT_READY until
++    // recoverRetainedCreations() wrote the memos.
++    this.restartLatch = createRestartLatch(options.awaitsRestartInventory === true);
++    /** @type {Promise<void>} Resolved once the restart inventory is applied. */
++    this.ready = this.restartLatch.ready;
+ 
+     const loggingService = LoggingService.getInstance();
+     this.logger = loggingService.isInitialized() ?
+@@ -406,6 +414,16 @@ class RuntimeServiceHandler extends EventEmitter {
+     return routeRuntimeServiceCreate(this, params);
+   }
+ 
++  /**
++   * Apply the restart inventory of bound creations (design
++   * RECOVERY-DESIGN-20261017 R1-A, R1-H): memos first, then `ready`, then
++   * one re-entry or re-drive per creation of this node.
++   * @return {Promise<Object[]>} The applied plans.
++   */
++  async recoverRetainedCreations() {
++    return recoverRetainedCreations(this);
++  }
++
+   /**
+    * The node-local creation wake consumer (enqueue-only, design RV2.4).
+    * @param {string} serviceDefinitionId

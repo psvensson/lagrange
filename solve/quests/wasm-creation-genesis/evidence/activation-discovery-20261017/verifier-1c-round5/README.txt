@@ -1,0 +1,1 @@
+Verifier round 5 (Fable, subagent a20413205d1d4bd1c) of stage 1c at snapshot 4bcf5f86dcfb3ffc539f4ef47fa470b76d562a8d (= refs/heads/wip/rs-raft-serving-publication-6; delta over 6b4208268; the custody table certified cell by cell). APPROVE on the node-side claim; lab PENDING at hand-back.

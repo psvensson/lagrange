@@ -1,0 +1,212 @@
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'constructor', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-b', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-b', hasSqlQueryEngine: true }
+TAP version 13
+# Subtest: fresh instance selection refuses mismatched immutable lineage: tenantId
+ok 1 - fresh instance selection refuses mismatched immutable lineage: tenantId
+  ---
+  duration_ms: 34.514718
+  type: 'test'
+  ...
+# Subtest: fresh instance selection refuses mismatched immutable lineage: revisionId
+ok 2 - fresh instance selection refuses mismatched immutable lineage: revisionId
+  ---
+  duration_ms: 2.965297
+  type: 'test'
+  ...
+# Subtest: fresh instance selection refuses mismatched immutable lineage: definition
+ok 3 - fresh instance selection refuses mismatched immutable lineage: definition
+  ---
+  duration_ms: 3.28213
+  type: 'test'
+  ...
+# Subtest: fresh instance selection refuses mismatched immutable lineage: profile
+ok 4 - fresh instance selection refuses mismatched immutable lineage: profile
+  ---
+  duration_ms: 2.852204
+  type: 'test'
+  ...
+# Subtest: selection refuses invalid request counter -1
+ok 5 - selection refuses invalid request counter -1
+  ---
+  duration_ms: 2.422918
+  type: 'test'
+  ...
+# Subtest: selection refuses invalid request counter 1.5
+ok 6 - selection refuses invalid request counter 1.5
+  ---
+  duration_ms: 2.078635
+  type: 'test'
+  ...
+# Subtest: selection refuses invalid request counter 9007199254740992
+ok 7 - selection refuses invalid request counter 9007199254740992
+  ---
+  duration_ms: 3.004778
+  type: 'test'
+  ...
+# Subtest: selection captures complete request before its first await
+ok 8 - selection captures complete request before its first await
+  ---
+  duration_ms: 4.307593
+  type: 'test'
+  ...
+# Subtest: selection binds expected incarnation as well as expected version
+ok 9 - selection binds expected incarnation as well as expected version
+  ---
+  duration_ms: 3.438999
+  type: 'test'
+  ...
+# Subtest: zero affected rows cannot manufacture a successful selection
+ok 10 - zero affected rows cannot manufacture a successful selection
+  ---
+  duration_ms: 2.44501
+  type: 'test'
+  ...
+# Subtest: uncertain selection without an authoritative record stays UNKNOWN
+ok 11 - uncertain selection without an authoritative record stays UNKNOWN
+  ---
+  duration_ms: 2.196767
+  type: 'test'
+  ...
+# Subtest: failed authoritative read is not never-created absence
+ok 12 - failed authoritative read is not never-created absence
+  ---
+  duration_ms: 1.801629
+  type: 'test'
+  ...
+# Subtest: malformed retained state is refused, not repaired into new authority
+ok 13 - malformed retained state is refused, not repaired into new authority
+  ---
+  duration_ms: 2.679102
+  type: 'test'
+  ...
+# Subtest: malformed retained state is refused, not repaired into new authority
+ok 14 - malformed retained state is refused, not repaired into new authority
+  ---
+  duration_ms: 2.34713
+  type: 'test'
+  ...
+# Subtest: malformed retained state is refused, not repaired into new authority
+ok 15 - malformed retained state is refused, not repaired into new authority
+  ---
+  duration_ms: 2.588574
+  type: 'test'
+  ...
+# Subtest: oversize and non-JSON requests allocate no instance row
+ok 16 - oversize and non-JSON requests allocate no instance row
+  ---
+  duration_ms: 1.575316
+  type: 'test'
+  ...
+# Subtest: uncertain submission plus failed resolution cannot become pre-admission UNAVAILABLE
+ok 17 - uncertain submission plus failed resolution cannot become pre-admission UNAVAILABLE
+  ---
+  duration_ms: 1.928286
+  type: 'test'
+  ...
+# Subtest: resource requests cannot change their content while awaiting the row owner
+ok 18 - resource requests cannot change their content while awaiting the row owner
+  ---
+  duration_ms: 3.620264
+  type: 'test'
+  ...
+# Subtest: forged binding and altered tokens cannot close or publish a resource
+ok 19 - forged binding and altered tokens cannot close or publish a resource
+  ---
+  duration_ms: 3.921989
+  type: 'test'
+  ...
+# Subtest: lost grant and closure replies resolve exact persisted resource phases
+ok 20 - lost grant and closure replies resolve exact persisted resource phases
+  ---
+  duration_ms: 6.986036
+  type: 'test'
+  ...
+# Subtest: command constructor captures immutable request without creating metadata or changing identity
+ok 21 - command constructor captures immutable request without creating metadata or changing identity
+  ---
+  duration_ms: 2.291887
+  type: 'test'
+  ...
+# Subtest: selection overtaking an in-flight grant defeats its exact whole-row predicate
+ok 22 - selection overtaking an in-flight grant defeats its exact whole-row predicate
+  ---
+  duration_ms: 4.899088
+  type: 'test'
+  ...
+# Subtest: closed-slot contention is re-decided and closes only the exact token in the same call
+not ok 23 - closed-slot contention is re-decided and closes only the exact token in the same call
+  ---
+  duration_ms: 4.982503
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/control-plane/service-instance-selection-admission.test.js:212:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+      {
+    +   outcome: 'STATE_CHANGED'
+    -   outcome: 'CLOSED',
+    -   phase: 'CLOSED',
+    -   token: {
+    -     bindingDigest: 'cdcd3a9e121a3177b3b3e618ffb2229683b9ad49bd1303e8acea10c2e8eeb8cf',
+    -     bodyDigest: '7c4a89464b8684baafbdb0a3fc809484c4050e821c88fd6ec5cf10d00f6c53e5',
+    -     operationId: 'operation-0',
+    -     ordinal: 1,
+    -     slot: 0
+    -   }
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    outcome: 'CLOSED'
+    phase: 'CLOSED'
+    token:
+      bindingDigest: 'cdcd3a9e121a3177b3b3e618ffb2229683b9ad49bd1303e8acea10c2e8eeb8cf'
+      slot: 0
+      ordinal: 1
+      operationId: 'operation-0'
+      bodyDigest: '7c4a89464b8684baafbdb0a3fc809484c4050e821c88fd6ec5cf10d00f6c53e5'
+  actual:
+    outcome: 'STATE_CHANGED'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/control-plane/service-instance-selection-admission.test.js:225:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..23
+# tests 23
+# suites 0
+# pass 22
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 114.601884
+# time=792ms

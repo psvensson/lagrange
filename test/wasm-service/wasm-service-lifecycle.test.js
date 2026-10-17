@@ -11,6 +11,8 @@ import {PortAllocator} from
   '../../src/wasm-service/port-allocator.js';
 import {ModuleMirror} from
   '../../src/wasm-service/module-mirror.js';
+import {ServiceInstanceContractError} from
+  '../../src/control-plane/owners/service-instance-contract.js';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from
@@ -24,6 +26,8 @@ import {DataDirectoryManager} from
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {WASM_SERVICE_LIFECYCLE_REFUSAL} from
   '../../src/wasm-service/wasm-service-constants.js';
+import {WASM_SERVICES_ROW_MARK} from
+  '../../src/wasm-service/wasm-service-serving-state.js';
 import {TEST_BOOT_INCARNATION} from
   '../test-helpers/boot-incarnation-fixture.js';
 
@@ -491,6 +495,22 @@ describe('WasmServiceLifecycle', () => {
         assert.equal(result.diagnostic.code, 'consensus_start_refused');
         assert.equal(pa.isAvailable(port), true);
       });
+
+    // Census N18 (design RECOVERY-DESIGN-20261017 R1-B, R4-D): the witness
+    // above stands (a generic error keeps consensus_start_refused); a typed
+    // contract refusal's outcome is now the diagnostic code.
+    it('a typed contract refusal of the consensus start is the diagnostic code itself',
+      async () => {
+        const pa = new PortAllocator();
+        const lifecycle = makeLifecycle({portAllocator: pa});
+        lifecycle.createReplica(makeServiceDef(), makeReplicaConfig());
+        lifecycle.getReplica('svc-1').initialize = async () => {
+          throw new ServiceInstanceContractError('CREATION_STORAGE_MISSING');
+        };
+        const result = await lifecycle.startReplica('svc-1');
+        assert.equal(result.started, false);
+        assert.equal(result.diagnostic.code, 'CREATION_STORAGE_MISSING');
+      });
   });
 
   describe('stopReplica', () => {
@@ -774,6 +794,29 @@ describe('WasmServiceLifecycle', () => {
           assert.equal(router.getRegisteredHandler(live.unifiedAddress),
             live.transportHandler);
         });
+    });
+  });
+
+  describe('enableServicesRowPublication (RV3.4, RV5.4)', () => {
+    it('after PRESENT a second mark for its own token answers ALREADY_PRESENT ' +
+      'and leaves pendingRoleUpdate untouched', () => {
+      const lifecycle = makeLifecycle();
+      const replica = lifecycle.createReplica(makeServiceDef(), makeReplicaConfig());
+      const token = {operationId: 'op-1', ordinal: 0};
+      // A stand-in bound creation: the mark reads only the creation's token.
+      replica.consensusCreation = {token};
+      try {
+        assert.equal(lifecycle.enableServicesRowPublication('svc-1', 'runtime_service',
+          token).outcome, WASM_SERVICES_ROW_MARK.PRESENT);
+        assert.deepEqual({...replica.servicesRow},
+          {state: 'PRESENT', serviceType: 'runtime_service'});
+        replica.pendingRoleUpdate = null;
+        assert.equal(lifecycle.enableServicesRowPublication('svc-1', 'runtime_service',
+          token).outcome, WASM_SERVICES_ROW_MARK.ALREADY_PRESENT);
+        assert.equal(replica.pendingRoleUpdate, null, 'PRESENT_LATCH_REPLAYED_THE_ROLE');
+      } finally {
+        replica.consensusCreation = null;
+      }
     });
   });
 

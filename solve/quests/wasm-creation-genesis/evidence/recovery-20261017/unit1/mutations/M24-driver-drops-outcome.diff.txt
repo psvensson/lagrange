@@ -1,0 +1,41 @@
+diff --git a/src/runtime/wasm-component-driver-consensus.js b/src/runtime/wasm-component-driver-consensus.js
+index 4a990e6b4..5e022771d 100644
+--- a/src/runtime/wasm-component-driver-consensus.js
++++ b/src/runtime/wasm-component-driver-consensus.js
+@@ -11,6 +11,7 @@
+ import {captureConsensusBootstrap, CONSENSUS_BOOTSTRAP} from
+   '../service/service-consensus-bootstrap.js';
+ import {instanceDigest} from '../control-plane/owners/service-instance-contract.js';
++import {SERVICE_INSTANCE_OUTCOME} from '../constants/service-instance.js';
+ import {START_STATUS} from './runtime-driver.js';
+ import {DriverLifecycleError} from './runtime-driver-errors.js';
+ import {WASM_COMPONENT_ERROR, DRIVER_ACTION, DRIVER_SEPARATOR, buildDriverStatusResult} from
+@@ -55,6 +56,8 @@ function projectBoundStart(driver, startResult, serviceId) {
+     return {status: CONSENSUS_BOOTSTRAP.PUBLISHED, started: true, bootstrapped: true,
+       port: startResult.port, host: startResult.host, ...bound};
+   default:
++    // The refusal's typed code is the FAILED result's outcome (design
++    // RECOVERY-DESIGN-20261017 R1-B); the manager's whitelist decides it.
+     return {...startFailure(startResult.error || WASM_COMPONENT_ERROR.UNKNOWN_LIFECYCLE_FAILURE),
+       ...(startResult.diagnostic ? {diagnostic: startResult.diagnostic} : {})};
+   }
+@@ -129,4 +132,18 @@ function markBoundServicesRowPresent(driver, serviceId, serviceType, consensusRe
+   return lifecycle.enableServicesRowPublication(serviceId, serviceType, consensusResourceToken);
+ }
+ 
+-export {startBoundReplica, retireBoundReplica, markBoundServicesRowPresent};
++/**
++ * The local half of one inventoried creation through the composition root's
++ * lifecycle (design RECOVERY-DESIGN-20261017 R1-A): no physical effect.
++ * @param {Object} driver - The WasmComponentDriver.
++ * @param {Object} owned - {consensusCreation: {intent, token, opening}}.
++ * @return {{outcome: string}} A WASM_CREATION_LOCAL_INSPECTION answer.
++ */
++function inspectBoundRetainedCreation(driver, owned) {
++  const lifecycle = driver._wasmServiceLifecycle;
++  if (!lifecycle) return {outcome: SERVICE_INSTANCE_OUTCOME.UNAVAILABLE};
++  return lifecycle.inspectLocalCreation(owned?.consensusCreation);
++}
++
++export {startBoundReplica, retireBoundReplica, markBoundServicesRowPresent,
++  inspectBoundRetainedCreation};

@@ -1,6 +1,9 @@
-import {progressWasmCreationGenesis} from './wasm-creation-genesis.js';
-import {captureWasmCreation} from './wasm-creation-opening.js';
-import {CONSENSUS_BOOTSTRAP} from '../service/service-consensus-bootstrap.js';
+import {WasmCreationReconciliation} from './wasm-creation-reconciliation.js';
+import {captureWasmCreation, inspectRetainedWasmCreation} from './wasm-creation-opening.js';
+import {boundStartResult} from './wasm-creation-publication.js';
+import {retireWasmCreation} from './wasm-creation-retirement.js';
+import {SERVICE_INSTANCE_OUTCOME} from '../constants/service-instance.js';
+import {markServicesRowPresent, WASM_SERVICES_ROW_MARK} from './wasm-service-serving-state.js';
 import {instanceDigest} from '../control-plane/owners/service-instance-contract.js';
 /**
  * WasmServiceLifecycle — manages creation, startup, and
@@ -34,6 +37,8 @@ const STOP_FAILED = 'WASM service shutdown has retained cleanup failures';
 const START_RESULT_FIELD = Object.freeze({
   STARTED: 'started',
   PORT: 'port',
+  // A bound PUBLISHED answer's endpoint host (design RV3.1).
+  HOST: 'host',
   ENDPOINT: 'endpoint',
   ERROR: 'error',
   DIAGNOSTIC: 'diagnostic',
@@ -177,6 +182,27 @@ class WasmServiceLifecycle {
   }
 
   /**
+   * @return {string|null} The node's endpoint host, derived by its owner
+   *   (resolveEndpointAddress); a bound PUBLISHED answer carries it (RV3.1).
+   */
+  get endpointHost() {
+    return this.dependencies.endpointHost ?? null;
+  }
+
+  /** @return {Object|null} The node's system table cache for its replicas. */
+  get systemTableCache() {
+    return this.dependencies.systemTableCache || null;
+  }
+
+  /**
+   * @return {Function|null} The enqueue-only wake consumer of the original
+   *   CREATE's operation owner (design D6'); absent is a typed outcome.
+   */
+  get creationWake() {
+    return this.dependencies.creationWake || null;
+  }
+
+  /**
    * Create a WasmServiceReplica from a service definition
    * and replica configuration. The replica is stored in the
    * active replicas map keyed by serviceId.
@@ -202,9 +228,12 @@ class WasmServiceLifecycle {
     }
     const current = this.activeReplicas.get(serviceId);
     if (sameLiveCreation(current, creation)) return current;
+    // Successor fence (design D4'): a bound creation opens only after every
+    // stop of an instance for this serviceId has settled, so no second
+    // instance can open a file a retirement is about to tombstone.
     const priorStop = [...this.retiringReplicas].some((replica) =>
       replica.serviceDefinitionId === serviceId &&
-      (replica !== current || replica.lifecycleState ===
+      (creation !== null || replica !== current || replica.lifecycleState ===
         WASM_SERVICE_REPLICA_STATE.CLEANUP_REQUIRED));
     if (current?.live || priorStop) {
       throw lifecycleRefusal(WASM_SERVICE_LIFECYCLE_REFUSAL.REPLICA_LIVE,
@@ -234,11 +263,12 @@ class WasmServiceLifecycle {
       readConsistency: serviceDefinition.readConsistency,
       writeConsistency: serviceDefinition.writeConsistency,
       safetyIntervalMs: serviceDefinition.safetyIntervalMs,
-      cdcIntegrationService: this.cdcIntegrationService,
-      roleUpdateWriter: this.roleUpdateWriter,
-      leaderNodeUpdateWriter: this.leaderNodeUpdateWriter,
+      ...this.replicaPublicationOwners(),
     });
 
+    if (creation !== null) {
+      replica.creationReconciliation = new WasmCreationReconciliation(this, replica);
+    }
     this.activeReplicas.set(serviceId, replica);
 
     this.logger.info(WASM_SERVICE_LOG_MSG.REPLICA_CREATED, {
@@ -248,6 +278,19 @@ class WasmServiceLifecycle {
     });
 
     return replica;
+  }
+
+  /**
+   * The node owners a replica publishes its role and leader through: its CDC
+   * owner, the node's cache (design RV2.6, RV3.6; the replica keeps its
+   * singleton fallback when absent) and any injected writers.
+   * @return {Object}
+   * @private
+   */
+  replicaPublicationOwners() {
+    return {cdcIntegrationService: this.cdcIntegrationService,
+      systemTableCache: this.systemTableCache, roleUpdateWriter: this.roleUpdateWriter,
+      leaderNodeUpdateWriter: this.leaderNodeUpdateWriter};
   }
 
   /**
@@ -332,8 +375,10 @@ class WasmServiceLifecycle {
       if (!this.successorHoldsPort(serviceId, replica)) {
         this.portAllocator.release(serviceId);
       }
+      // A contract refusal's typed outcome is its code (design
+      // RECOVERY-DESIGN-20261017 R1-B, R4-D N18).
       return this.refuseStart(serviceId, startOptions, {
-        code: cause.code || START_DIAGNOSTIC_CODE.CONSENSUS_START_REFUSED,
+        code: cause.outcome ?? cause.code ?? START_DIAGNOSTIC_CODE.CONSENSUS_START_REFUSED,
         error: cause.message,
       }, replica);
     }
@@ -348,16 +393,7 @@ class WasmServiceLifecycle {
 
     if (replica.consensusCreation !== null) {
       replica.portAllocation = port;
-      const genesis = await progressWasmCreationGenesis(replica);
-      if (!replica.initialized || this.activeReplicas.get(serviceId) !== replica) {
-        return this.refuseStart(serviceId, startOptions, {
-          code: WASM_SERVICE_LIFECYCLE_REFUSAL.STOPPED_DURING_START,
-          error: WASM_SERVICE_ERROR_MSG.STOPPED_DURING_START,
-        }, replica);
-      }
-      return {started: false, bootstrapped: true, status: CONSENSUS_BOOTSTRAP.HELD,
-        consensusBinding: replica.consensusCreation.intent.consensusBinding,
-        consensusResourceToken: replica.consensusCreation.token, genesis};
+      return this.continueBoundStart(serviceId, startOptions, replica);
     }
 
     const endpoint = this.registerEndpoint(serviceId, startOptions, port);
@@ -375,6 +411,88 @@ class WasmServiceLifecycle {
       [START_RESULT_FIELD.ENDPOINT]: endpoint,
       [START_RESULT_FIELD.DIAGNOSTIC]: null,
     };
+  }
+
+  /**
+   * The bound START continuation: one keyed run observes genesis and, when
+   * the metadata owner admits it, grants and publishes locally (D1'); the
+   * answer is PUBLISHED or the typed HELD shape.
+   * @param {string} serviceId
+   * @param {Object} startOptions
+   * @param {WasmServiceReplica} replica
+   * @return {Promise<Object>}
+   * @private
+   */
+  async continueBoundStart(serviceId, startOptions, replica) {
+    const run = await replica.creationReconciliation.request();
+    if (!replica.initialized || this.activeReplicas.get(serviceId) !== replica) {
+      return this.refuseStart(serviceId, startOptions, {
+        code: WASM_SERVICE_LIFECYCLE_REFUSAL.STOPPED_DURING_START,
+        error: WASM_SERVICE_ERROR_MSG.STOPPED_DURING_START,
+      }, replica);
+    }
+    return boundStartResult(replica, run, this.endpointHost);
+  }
+
+  /**
+   * Enable services-row publication for the registered bound replica whose
+   * creation token is exactly `consensusResourceToken` (design RV3.4): a
+   * successor under the same serviceId is never marked by its predecessor's
+   * projection; no match is the typed NOT_REGISTERED.
+   * @param {string} serviceId
+   * @param {string} serviceType - The projected row's service_type.
+   * @param {Object} consensusResourceToken
+   * @return {{outcome: string}}
+   */
+  enableServicesRowPublication(serviceId, serviceType, consensusResourceToken) {
+    const replica = this.activeReplicas.get(serviceId);
+    if (!replica || replica.consensusCreation === null ||
+        instanceDigest(replica.consensusCreation.token) !==
+          instanceDigest(consensusResourceToken ?? null)) {
+      return {outcome: WASM_SERVICES_ROW_MARK.NOT_REGISTERED};
+    }
+    return markServicesRowPresent(replica, serviceType);
+  }
+
+  /**
+   * Re-enter the publication continuation of the registered bound replica
+   * for its exact resource token (HANDOFF-INTERFACES). A different token
+   * runs nothing; the answer has the same shape as a bound START.
+   * @param {string} serviceId
+   * @param {Object} exactToken - The admitted resource token.
+   * @return {Promise<Object|null>}
+   */
+  async publishReplica(serviceId, exactToken) {
+    const replica = this.activeReplicas.get(serviceId);
+    if (!replica) return null;
+    if (replica.consensusCreation === null || instanceDigest(exactToken ?? null) !==
+        instanceDigest(replica.consensusCreation.token)) {
+      return this.refuseStart(serviceId, {}, {code: SERVICE_INSTANCE_OUTCOME.CONTENT_CONFLICT,
+        error: SERVICE_INSTANCE_OUTCOME.CONTENT_CONFLICT}, replica);
+    }
+    return this.continueBoundStart(serviceId, {}, replica);
+  }
+
+  /**
+   * Retire one exact bound resource by its retained creation, live replica or
+   * not (design D4', Revision 3 N4; wasm-creation-retirement.js). Orderly
+   * stops (stopReplica, shutdownAll) never retire.
+   * @param {Object} creation - The retained creation ({intent, token, ...}).
+   * @return {Promise<Object>} The typed retirement result.
+   */
+  retireReplica(creation) {
+    return retireWasmCreation(this, creation);
+  }
+
+  /**
+   * The local half of one inventoried creation, by path (design
+   * RECOVERY-DESIGN-20261017 R1-A, R2-C N13): this node's path and the seven
+   * identity fields derived from the retained creation; no physical effect.
+   * @param {Object} creation - {intent, token|null, opening|null}.
+   * @return {{outcome: string}} A WASM_CREATION_LOCAL_INSPECTION answer.
+   */
+  inspectLocalCreation(creation) {
+    return inspectRetainedWasmCreation(this, creation);
   }
 
   /**
@@ -516,15 +634,16 @@ class WasmServiceLifecycle {
   /** Release one snapshotted instance, never retargeting a successor after await.
    * @param {string} serviceId - Service allocation key.
    * @param {WasmServiceReplica} replica - Exact release obligation.
+   * @param {Object} [retirement] - The shutdown intent (orderly by default).
    * @return {Promise<void>} Rejected obligations stay with this host.
    */
-  async stopOwnedReplica(serviceId, replica) {
+  async stopOwnedReplica(serviceId, replica, retirement) {
     this.retiringReplicas.add(replica);
     if (this.activeReplicas.get(serviceId) === replica) {
       this.portAllocator?.release(serviceId);
       this.logger.info(WASM_SERVICE_LOG_MSG.PORT_RELEASED, {serviceId});
     }
-    await replica.shutdown();
+    await replica.shutdown(retirement);
     this.retiringReplicas.delete(replica);
     if (this.activeReplicas.get(serviceId) === replica) {
       this.activeReplicas.delete(serviceId);

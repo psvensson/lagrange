@@ -1,0 +1,139 @@
+diff --git a/test/wasm-service/bound-creation-handler-embedding-fixture.js b/test/wasm-service/bound-creation-handler-embedding-fixture.js
+index 84ffe1063..bb21cf065 100644
+--- a/test/wasm-service/bound-creation-handler-embedding-fixture.js
++++ b/test/wasm-service/bound-creation-handler-embedding-fixture.js
+@@ -17,6 +17,15 @@
+ // dispatch is the manager's prepareConsensusCreation, called by this fixture.
+ // Evidence ceiling: component SQLite metadata/journal/services/endpoints, a
+ // queued loopback transport, one process; not native metadata consensus.
++// Recovery stage (design RECOVERY-DESIGN-20261017 R1-F, R1-H, R1-I): every host
++// applies its restart inventory before it accepts a message (the handler's
++// ready latch; a dispatch before `ready` is answered NOT_READY), and
++// restartHost(host) models a `host` restart: handler, lifecycle, driver,
++// runtime and manager rebuilt over the SAME data directory and component
++// journal after the process owner was released and re-acquired, at a bumped
++// boot incarnation. It proves memo loss, record/journal survival and
++// re-acquisition; it cannot prove un-checkpointed WAL recovery, death
++// mid-CAS or raft-rs mid-Ready state (those are the child-process witness's).
+ import assert from 'node:assert/strict';
+ import {mkdtempSync, rmSync} from 'node:fs';
+ import {tmpdir} from 'node:os';
+@@ -56,6 +65,8 @@ const SETTLE_ROUNDS = 120;
+ const MODULE_VERSION = '1.0.0';
+ const QUIET = {debug() {}, info() {}, warn() {}, error() {}};
+ const BOOT_INCARNATION_BASE = 40;
++// A host restart mints a new boot incarnation (R1-F, R9): never the old one.
++const BOOT_INCARNATION_RESTART_STEP = 10;
+ const RETIRED_ADDRESS_ANSWER = Object.freeze({acknowledged: true, noHandler: true});
+ // The node address owners of the three hosts: the entrypoint's host:port
+ // NODE_ADDRESS (what nodes.node_address carries); host 3 also advertises a
+@@ -126,13 +137,20 @@ class EmbeddingCache {
+   }
+ }
+ 
+-function createHandler(host) {
++function createHandler(host, {awaitsRestartInventory = false} = {}) {
+   const handler = new RuntimeServiceHandler({nodeId: host.nodeId,
+     systemTableCache: host.cache, cdcIntegrationService: host.owners.cdc,
+     serviceLifecycleManager: host.manager, serviceRuntimeLifecycle: host.runtime,
+-    executorOutcomeEmitter: host.emitter});
++    executorOutcomeEmitter: host.emitter, awaitsRestartInventory});
+   handler.logger = QUIET;
+   handler.initialize();
++  // Every wake this handler consumes, with its answer (an observation only).
++  const consume = handler.onCreationWake.bind(handler);
++  handler.onCreationWake = (serviceDefinitionId, wake) => {
++    const answer = consume(serviceDefinitionId, wake);
++    host.wakes.push({serviceDefinitionId, wake, answer});
++    return answer;
++  };
+   host.node.runtimeServiceHandler = handler;
+   host.handler = handler;
+   return handler;
+@@ -155,6 +173,7 @@ async function embedding(t) {
+   t.after(async () => {
+     const failures = [];
+     for (const host of e.hosts) {
++      if (host.stopped) continue;
+       try {
+         host.handler.shutdown();
+         await host.lifecycle.shutdownAll();
+@@ -195,7 +214,17 @@ async function embedding(t) {
+     intent.descriptor.runtimeRef = definition.handlerFunctionId;
+     return intent;
+   };
+-  e.addHost = async (slot) => {
++  e.addHost = async (slot, options = {}) => {
++    const host = await e.composeHost(slot, options);
++    e.hosts.push(host);
++    e.clocks.push(host.timeSource);
++    return host;
++  };
++  // One host composition over the slot's directory: process owner, owners,
++  // lifecycle, driver, runtime, manager, handler; then (unless deferred) the
++  // restart inventory, before any message is accepted.
++  e.composeHost = async (slot, {bootIncarnation = BOOT_INCARNATION_BASE + slot,
++    inventory = true} = {}) => {
+     const intent = e.intentFor(slot);
+     const nodeId = intent.consensusSlotRequest.nodeId;
+     const definition = JSON.parse(intent.descriptor.runtimeConfig).definition;
+@@ -231,7 +260,7 @@ async function embedding(t) {
+     runtime.setOperationWriter(async () => {
+       throw new Error('BOUND_ROUTE_CREATED_NESTED_JOURNAL');
+     });
+-    wireRuntimeEndpointPublication({bootIncarnation: BOOT_INCARNATION_BASE + slot, nodeId,
++    wireRuntimeEndpointPublication({bootIncarnation, nodeId,
+       serviceEndpointsOwner: owners.endpoints, serviceRuntimeLifecycle: runtime,
+       systemTableCache: cache});
+     runtime.setStateProjectionWriter((serviceId, stateRow) =>
+@@ -240,13 +269,36 @@ async function embedding(t) {
+     manager.registerAdapter(new RuntimeServiceAdapter({serviceRuntimeLifecycle: runtime}));
+     const emitter = new ExecutorOutcomeEmitter({logger: QUIET});
+     const host = {slot, intent, nodeId, node, timeSource, processOwner, owners, cache, lifecycle,
+-      driver, runtime, manager, emitter, outcomes: [], dependencies};
++      driver, runtime, manager, emitter, outcomes: [], wakes: [], dependencies, bootIncarnation,
++      dataDirectoryManager};
+     emitter.on(OUTCOME_EVENT_NAME, (outcome) => host.outcomes.push(outcome));
+-    createHandler(host);
+-    e.hosts.push(host);
+-    e.clocks.push(timeSource);
++    createHandler(host, {awaitsRestartInventory: true});
++    if (inventory) host.inventory = await host.handler.recoverRetainedCreations();
+     return host;
+   };
++  // Tear one host down as its process would end: the memo is lost, every
++  // replica stops orderly (no tombstone), the process owner is released.
++  e.stopHost = async (host) => {
++    host.handler.shutdown();
++    await host.lifecycle.shutdownAll();
++    host.processOwner.release();
++    host.stopped = true;
++  };
++  // A `host` restart (R1-F, R1-I): teardown, then a new composition over the
++  // same directory and journal at a bumped boot incarnation; `beforeCompose`
++  // edits the durable state between the two (a labelled seam).
++  e.restartHost = async (host, {beforeCompose = null, inventory = true} = {}) => {
++    const index = e.hosts.indexOf(host);
++    assert.ok(index >= 0, 'restartHost: unknown host');
++    host.handler.shutdown();
++    host.stopped = true;
++    if (beforeCompose) await beforeCompose(host);
++    const next = await e.composeHost(host.slot, {inventory,
++      bootIncarnation: host.bootIncarnation + BOOT_INCARNATION_RESTART_STEP});
++    e.hosts[index] = next;
++    e.clocks[index] = next.timeSource;
++    return next;
++  };
+   e.restartHandler = (host) => {
+     host.handler.shutdown();
+     return createHandler(host);
+@@ -268,7 +320,8 @@ async function embedding(t) {
+       payload: e.request(host, type, operationId)});
+     return answer;
+   };
+-  e.idle = () => e.hosts.every((host) => host.handler.inProgressOperations.size === 0);
++  e.idle = () => e.hosts.every((host) => host.stopped ||
++    host.handler.inProgressOperations.size === 0);
+   // Deliver the queued native traffic and let the handlers' setImmediate work
+   // run, for a declared number of rounds, until `until()` holds and no handler
+   // has work in flight. No timer, no wall clock.

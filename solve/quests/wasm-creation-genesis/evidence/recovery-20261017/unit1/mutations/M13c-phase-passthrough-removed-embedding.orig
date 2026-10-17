@@ -1,0 +1,470 @@
+// ServiceLifecycleManager's original-intent handoff. This is not a second
+// execution orchestrator: it retains origin/first-use records and starts no resource.
+import {randomBytes} from 'node:crypto';
+import {runtimeServiceConsensusIdentity} from '../rebalancer/runtime-service-replica-identity.js';
+import {RUNTIME_KIND, UNIFIED_SERVICE_TYPE, SERVICE_LIFECYCLE_OPERATION,
+  SERVICE_OPERATION_STATE as OP_STATE} from '../constants/index.js';
+import {SERVICE_INSTANCE_LIMIT as LIMIT, SERVICE_INSTANCE_OUTCOME as OUTCOME,
+  SERVICE_INSTANCE_PHASE as PHASE} from '../constants/service-instance.js';
+import {WASM_OPERATION_COL as COL} from '../wasm-service/wasm-meta-models-constants.js';
+import {buildGetOperationSQL, buildRetainedCreationOperationSQL,
+  buildRetainedCreationAdmissionSQL, buildRetainedCreationOpeningSQL, transitionOperation} from
+  '../wasm-service/operation-lifecycle.js';
+import {HEX, captureInstanceJson, encodeInstanceJson, exactFields, instanceIdentifier,
+  instanceDigest, requireInstance, instanceFailure, ServiceInstanceContractError} from
+  '../control-plane/owners/service-instance-contract.js';
+import {validateBinding, validSlotRequest, matchesInstanceResourceToken} from
+  '../control-plane/owners/service-instance-state.js';
+import {validateServiceDescriptor} from './service-descriptor.js';
+
+const CONSENSUS_CREATION_OPENING = Object.freeze({
+  FRESH: 'FRESH_OPENING', RETAINED: 'RETAINED_OPENING',
+  STORAGE_MISSING: 'CREATION_STORAGE_MISSING',
+  BYTES: 8192, NONCE_BYTES: 32,
+});
+const OPENING_FIELDS = ['format', 'claimId', 'intentDigest', 'token', 'groupId', 'replicaId', 'nodeId'];
+const COMMAND_PREFIX = 'consensus-create:';
+const BOUND_DESCRIPTOR_FIELDS = [
+  'consensusBinding', 'consensusSlotRequest', 'consensusResourceToken',
+];
+const INTENT_FIELDS = ['format', 'descriptor', 'consensusBinding', 'consensusSlotRequest'];
+const INTENT_BYTES = LIMIT.REQUEST_BYTES + LIMIT.BINDING_BYTES + LIMIT.SLOT_BYTES;
+const RESULT = Object.freeze({
+  ADMISSION_RETAINED: 'ADMISSION_RETAINED', INTENT_NOT_FOUND: 'INTENT_NOT_FOUND',
+  TERMINAL_OPERATION: 'TERMINAL_OPERATION', HELD: 'held',
+  // A retained intent whose reservation answer never landed (PENDING row).
+  NOT_ADMITTED: 'NOT_ADMITTED',
+  // The restart scan's journal half of one consensus creation row (design
+  // RECOVERY-DESIGN-20261017 R1-A, R2-E, R3-F).
+  INVENTORIED: 'INVENTORIED',
+  // A PENDING row whose reservation the owner sealed against the request
+  // (R2-A, R3-E): the row is CANCELLED, never FAILED.
+  CANCELLED: 'RESERVATION_CANCELLED',
+  // The creation row completed at CLOSED (R1-D).
+  ROW_COMPLETED: 'CREATION_ROW_COMPLETED',
+});
+const TERMINAL = new Set([OP_STATE.COMPLETED, OP_STATE.FAILED, OP_STATE.CANCELLED]);
+const LIVE_PHASES = new Set([PHASE.ADMITTED, PHASE.PUBLISHED]);
+// Owner reservation answers that seal a request: no slot is or can be
+// admitted for it (reserveResourceState's refusals; R2-A, R3-E).
+const SEALED_RESERVATION_REFUSALS = new Set([OUTCOME.STALE_BINDING,
+  OUTCOME.HISTORY_UNAVAILABLE, OUTCOME.CONFLICT, OUTCOME.CONTENT_CONFLICT,
+  OUTCOME.CAPACITY_EXHAUSTED, OUTCOME.INVALID_EXPECTED_STATE, OUTCOME.TARGET_ALREADY_OWNED]);
+// A terminal row's answer carries its state (R1-D, R3-D): a REMOVE reads
+// COMPLETED and CANCELLED as done, FAILED as a typed failure.
+function terminalAnswer(row) {
+  return {outcome: RESULT.TERMINAL_OPERATION, rowState: row[COL.STATE]};
+}
+function commandOf(intent) {
+  return `${COMMAND_PREFIX}${intent.descriptor.serviceId}`;
+}
+function captureIntent(value) {
+  const intent = captureInstanceJson(value, INTENT_BYTES);
+  requireInstance(exactFields(intent, INTENT_FIELDS) && intent.format === LIMIT.FORMAT);
+  const descriptor = intent.descriptor;
+  requireInstance(validateServiceDescriptor(descriptor).valid);
+  requireInstance(descriptor.serviceType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE &&
+    descriptor.runtimeKind === RUNTIME_KIND.WASM_COMPONENT);
+  validateBinding(intent.consensusBinding,
+    {tenantId: descriptor.tenantId, serviceDefinitionId: descriptor.serviceId});
+  requireInstance(validSlotRequest(intent.consensusSlotRequest));
+  requireInstance(descriptor.replicaId === intent.consensusSlotRequest.replicaId &&
+    instanceDigest(captureInstanceJson(JSON.parse(descriptor.runtimeConfig))
+      ?.definition ?? null) ===
+      intent.consensusBinding.definitionDigest, OUTCOME.INVALID_LINEAGE);
+  encodeInstanceJson(descriptor, LIMIT.REQUEST_BYTES);
+  encodeInstanceJson(intent.consensusSlotRequest, LIMIT.SLOT_BYTES);
+  return intent;
+}
+function requireDependencies(manager) {
+  requireInstance(typeof manager._operationWriter === 'function' &&
+    typeof manager._idempotencyReader === 'function' &&
+    typeof manager._serviceDefinitionsOwner?.reserveInstanceResource === 'function' &&
+    typeof manager._serviceDefinitionsOwner?.resolveInstanceResource === 'function',
+  OUTCOME.UNAVAILABLE);
+}
+async function readJournal(manager, operationId) {
+  const query = buildGetOperationSQL(operationId);
+  const rows = await manager._idempotencyReader(query.sql, query.params);
+  requireInstance(Array.isArray(rows) && rows.length <= 1, OUTCOME.CORRUPT_STATE);
+  return rows[0] ?? null;
+}
+function journalIdentity(intent) {
+  return {operationId: intent.consensusSlotRequest.operationId,
+    tenantId: intent.descriptor.tenantId, command: commandOf(intent),
+    intentJson: encodeInstanceJson(intent, INTENT_BYTES)};
+}
+function confirmIntentRow(row, identity) {
+  requireInstance(row !== null, OUTCOME.UNKNOWN);
+  requireInstance(row[COL.OPERATION_ID] === identity.operationId &&
+    row[COL.TENANT_ID] === identity.tenantId && row[COL.COMMAND] === identity.command &&
+    row[COL.INTENT_JSON] === identity.intentJson && row[COL.IDEMPOTENCY_KEY] === null,
+  OUTCOME.CONTENT_CONFLICT);
+  requireInstance(TERMINAL.has(row[COL.STATE]) ||
+    row[COL.STATE] === OP_STATE.PENDING || row[COL.STATE] === OP_STATE.IN_PROGRESS,
+  OUTCOME.CORRUPT_STATE);
+}
+// The write callback's answer, named: an acknowledged callback and a thrown
+// callback are both observations, never proof of persisted state.
+const WRITE_ACKNOWLEDGED = Object.freeze({acknowledged: true});
+async function attemptWrite(manager, query) {
+  try {
+    await manager._operationWriter(query.sql, query.params);
+    return WRITE_ACKNOWLEDGED;
+  } catch (error) {
+    return {acknowledged: false, error};
+  }
+}
+async function writeAndObserve(manager, query, operationId) {
+  // Exactly one authoritative reread follows the write; no rewritten SQL retry.
+  // The write attempt is kept only as the cause of an UNKNOWN whose reread
+  // also failed: the reread, not the callback, decides the row.
+  const writeAttempt = await attemptWrite(manager, query);
+  try {
+    return await readJournal(manager, operationId);
+  } catch (readFailure) {
+    const unknown = new ServiceInstanceContractError(OUTCOME.UNKNOWN);
+    unknown.cause = {writeAttempt, readFailure};
+    throw unknown;
+  }
+}
+function requireObserved(row) {
+  requireInstance(row !== null, OUTCOME.UNKNOWN);
+}
+function retainedToken(row, intent) {
+  const encoded = row[COL.ADMISSION_JSON];
+  if (encoded === null) {
+    requireInstance(row[COL.STATE] === OP_STATE.PENDING, OUTCOME.CORRUPT_STATE);
+    return null;
+  }
+  try {
+    requireInstance(typeof encoded === 'string' && Buffer.byteLength(encoded) <= LIMIT.SLOT_BYTES);
+    const token = JSON.parse(encoded);
+    requireInstance(encodeInstanceJson(token, LIMIT.SLOT_BYTES) === encoded &&
+      row[COL.STATE] === OP_STATE.IN_PROGRESS &&
+      matchesInstanceResourceToken(intent.consensusBinding, intent.consensusSlotRequest, token));
+    return token;
+  } catch {
+    requireInstance(false, OUTCOME.CORRUPT_STATE);
+  }
+}
+function unresolvedResult(result) {
+  if (result?.outcome === OUTCOME.UNAVAILABLE) {
+    return {outcome: OUTCOME.UNKNOWN, reason: OUTCOME.UNAVAILABLE};
+  }
+  return result ?? {outcome: OUTCOME.UNKNOWN};
+}
+async function reserveAndRetain(manager, intent, identity) {
+  let reservation;
+  try {
+    reservation = await manager._serviceDefinitionsOwner.reserveInstanceResource(
+      intent.consensusBinding, intent.consensusSlotRequest);
+  } catch {
+    return {outcome: OUTCOME.UNKNOWN};
+  }
+  if (reservation?.outcome !== OUTCOME.ADMITTED) return unresolvedResult(reservation);
+  const token = captureInstanceJson(reservation.token, LIMIT.SLOT_BYTES);
+  requireInstance(matchesInstanceResourceToken(intent.consensusBinding,
+    intent.consensusSlotRequest, token), OUTCOME.CORRUPT_STATE);
+  const query = buildRetainedCreationAdmissionSQL({...identity,
+    admissionJson: encodeInstanceJson(token, LIMIT.SLOT_BYTES), now: manager._timeSource.now()});
+  const row = await writeAndObserve(manager, query, identity.operationId);
+  requireObserved(row);
+  confirmIntentRow(row, identity);
+  if (TERMINAL.has(row[COL.STATE])) return terminalAnswer(row);
+  const stored = retainedToken(row, intent);
+  requireInstance(stored !== null, OUTCOME.UNKNOWN);
+  return {outcome: OUTCOME.ADMITTED, token: stored};
+}
+// The owner read of a retained admission. The UNAVAILABLE class (the owner
+// answered UNAVAILABLE, or its read threw) passes through as
+// ADMISSION_RETAINED with phase UNAVAILABLE (design RECOVERY-DESIGN-20261017
+// R2-B): the manager decides nothing about the local record; the opening
+// module decides on its own owner read.
+async function resolveRetainedAdmission(manager, intent, identity, token) {
+  let resource;
+  try {
+    resource = await manager._serviceDefinitionsOwner.resolveInstanceResource(
+      intent.consensusBinding, token);
+  } catch {
+    resource = {outcome: OUTCOME.UNAVAILABLE};
+  }
+  const admitted = resource?.outcome === OUTCOME.ADMITTED;
+  if (admitted) {
+    requireInstance(matchesInstanceResourceToken(intent.consensusBinding,
+      intent.consensusSlotRequest, resource.token), OUTCOME.CORRUPT_STATE);
+  }
+  const retained = (phase) => ({outcome: RESULT.ADMISSION_RETAINED,
+    operationId: identity.operationId, intent, token, phase});
+  return [
+    [resource?.outcome === OUTCOME.UNAVAILABLE, () => retained(OUTCOME.UNAVAILABLE)],
+    [!admitted, () => unresolvedResult(resource)],
+    [!LIVE_PHASES.has(resource?.phase), () => ({outcome: OUTCOME.RESOURCE_CLOSED})],
+    [true, () => retained(resource.phase)],
+  ].find(([matches]) => matches)[1]();
+}
+async function continueIntent(manager, intent, row) {
+  const identity = journalIdentity(intent);
+  confirmIntentRow(row, identity);
+  if (TERMINAL.has(row[COL.STATE])) return terminalAnswer(row);
+  let token = retainedToken(row, intent);
+  if (token === null) {
+    const admission = await reserveAndRetain(manager, intent, identity);
+    if (admission.outcome !== OUTCOME.ADMITTED) return admission;
+    token = admission.token;
+  }
+  return resolveRetainedAdmission(manager, intent, identity, token);
+}
+async function prepareConsensusCreation(manager, value, context = {}) {
+  try {
+    const intent = captureIntent(value);
+    requireDependencies(manager);
+    await manager._enforceRuntimePolicy(
+      SERVICE_LIFECYCLE_OPERATION.CREATE, intent.descriptor, context);
+    const identity = journalIdentity(intent);
+    let row = await readJournal(manager, identity.operationId);
+    if (row === null) {
+      const query = buildRetainedCreationOperationSQL(
+        {...identity, now: manager._timeSource.now()});
+      row = await writeAndObserve(manager, query, identity.operationId);
+      requireObserved(row);
+    }
+    return await continueIntent(manager, intent, row);
+  } catch (error) {
+    return instanceFailure(error);
+  }
+}
+// The immutable intent a journal row retains for exactly this operation id.
+function journaledIntent(row, operationId) {
+  const encoded = row[COL.INTENT_JSON];
+  requireInstance(typeof encoded === 'string' && Buffer.byteLength(encoded) <= INTENT_BYTES,
+    OUTCOME.CORRUPT_STATE);
+  let intent;
+  try {
+    intent = captureIntent(JSON.parse(encoded));
+  } catch {
+    requireInstance(false, OUTCOME.CORRUPT_STATE);
+  }
+  requireInstance(intent.consensusSlotRequest.operationId === operationId,
+    OUTCOME.CONTENT_CONFLICT);
+  return intent;
+}
+async function recoverConsensusCreation(manager, operationId, context = {}) {
+  try {
+    requireInstance(instanceIdentifier(operationId));
+    requireDependencies(manager);
+    const row = await readJournal(manager, operationId);
+    if (row === null) return {outcome: RESULT.INTENT_NOT_FOUND};
+    const intent = journaledIntent(row, operationId);
+    await manager._enforceRuntimePolicy(
+      SERVICE_LIFECYCLE_OPERATION.CREATE, intent.descriptor, context);
+    return await continueIntent(manager, intent, row);
+  } catch (error) {
+    return instanceFailure(error);
+  }
+}
+/**
+ * The journal-only read of one retained creation (design
+ * ACTIVATION-DISCOVERY-DESIGN-20261017 RV2.1, RV3.3 N2): no runtime policy, no
+ * reservation and no metadata read, so a REMOVE resolves the creation it
+ * retires while the owner is unreachable or the slot is RELEASING. TERMINAL is
+ * decided before the admission token; a PENDING row is NOT_ADMITTED.
+ * @param {Object} manager - The ServiceLifecycleManager.
+ * @param {string} operationId - The creation's operation id.
+ * @return {Promise<Object>} ADMISSION_RETAINED {intent, token} or a typed outcome.
+ */
+async function readRetainedCreation(manager, operationId) {
+  try {
+    requireInstance(instanceIdentifier(operationId));
+    requireInstance(typeof manager._idempotencyReader === 'function', OUTCOME.UNAVAILABLE);
+    const row = await readJournal(manager, operationId);
+    return row === null ? {outcome: RESULT.INTENT_NOT_FOUND} :
+      retainedRowAnswer(row, operationId);
+  } catch (error) {
+    return instanceFailure(error);
+  }
+}
+// One present journal row's retained-creation answer: TERMINAL first, then
+// the admission token (absent on a PENDING row).
+function retainedRowAnswer(row, operationId) {
+  const intent = journaledIntent(row, operationId);
+  confirmIntentRow(row, journalIdentity(intent));
+  if (TERMINAL.has(row[COL.STATE])) return terminalAnswer(row);
+  const token = retainedToken(row, intent);
+  return token === null ? {outcome: RESULT.NOT_ADMITTED, operationId} :
+    {outcome: RESULT.ADMISSION_RETAINED, operationId, intent, token};
+}
+function isConsensusCreationRow(row) {
+  return (typeof row[COL.COMMAND] === 'string' && row[COL.COMMAND].startsWith(COMMAND_PREFIX)) ||
+    row[COL.INTENT_JSON] != null || row[COL.ADMISSION_JSON] != null;
+}
+/**
+ * The restart scan's journal half of one consensus creation row (design
+ * RECOVERY-DESIGN-20261017 R1-A, R2-E, R3-F): no metadata read, no
+ * reservation, no physical effect, no local file. An undecodable intent has
+ * no replica identity: a typed entry that is never re-entered. A decodable
+ * intent whose admission or opening is corrupt is re-entered and answers its
+ * permanent code.
+ * @param {Object} row - A PENDING or IN_PROGRESS wasm_operations row.
+ * @return {Object} {status: INVENTORIED, operationId, intent, token, rowState,
+ *   opening, nodeId} or a typed journal-side entry.
+ */
+function inventoryConsensusCreationRow(row) {
+  const operationId = row[COL.OPERATION_ID];
+  let intent;
+  try {
+    intent = journaledIntent(row, operationId);
+  } catch (error) {
+    return {status: RESULT.INVENTORIED, operationId, outcome: instanceFailure(error).outcome,
+      reentry: false};
+  }
+  const entry = {status: RESULT.INVENTORIED, operationId, intent, token: null,
+    rowState: row[COL.STATE], opening: null, nodeId: intent.consensusSlotRequest.nodeId};
+  try {
+    confirmIntentRow(row, journalIdentity(intent));
+    const token = retainedToken(row, intent);
+    return {...entry, token, opening: inventoryOpening(row, intent, token)};
+  } catch (error) {
+    return {...entry, outcome: instanceFailure(error).outcome, reentry: true};
+  }
+}
+// The retained first-opening record of an inventoried row, or null.
+function inventoryOpening(row, intent, token) {
+  if (row[COL.OPENING_JSON] === null) return null;
+  requireInstance(token !== null, OUTCOME.CORRUPT_STATE);
+  return confirmOpeningRecord(row, openingBody(intent, token));
+}
+// A sealed refusal of a PENDING row's reservation: PENDING -> CANCELLED in
+// one CAS (never PENDING -> FAILED), confirmed by the one reread.
+async function cancelPendingCreation(manager, identity, refusal) {
+  const query = transitionOperation(identity.operationId, OP_STATE.PENDING, OP_STATE.CANCELLED,
+    {reason: refusal.outcome});
+  const row = await writeAndObserve(manager, query, identity.operationId);
+  requireObserved(row);
+  confirmIntentRow(row, identity);
+  requireInstance(row[COL.STATE] === OP_STATE.CANCELLED, OUTCOME.UNKNOWN);
+  return {outcome: RESULT.CANCELLED, operationId: identity.operationId, reason: refusal.outcome};
+}
+/**
+ * A REMOVE-time resolution of a PENDING creation's reservation with the SAME
+ * request (design RECOVERY-DESIGN-20261017 R2-A, R3-E): a journal read and the
+ * idempotent reservation, without runtime policy. ADMITTED persists the token;
+ * a sealed refusal cancels the row in the same call; UNAVAILABLE/UNKNOWN pass
+ * through and the row stays PENDING.
+ * @param {Object} manager - The ServiceLifecycleManager.
+ * @param {string} operationId - The creation's operation id.
+ * @return {Promise<Object>} ADMISSION_RETAINED {intent, token}, CANCELLED, or
+ *   a typed outcome.
+ */
+async function resolveRetainedReservation(manager, operationId) {
+  try {
+    requireInstance(instanceIdentifier(operationId));
+    requireDependencies(manager);
+    const row = await readJournal(manager, operationId);
+    if (row === null) return {outcome: RESULT.INTENT_NOT_FOUND};
+    const intent = journaledIntent(row, operationId);
+    const identity = journalIdentity(intent);
+    confirmIntentRow(row, identity);
+    if (TERMINAL.has(row[COL.STATE])) return terminalAnswer(row);
+    let token = retainedToken(row, intent);
+    if (token === null) {
+      const admission = await reserveAndRetain(manager, intent, identity);
+      if (SEALED_RESERVATION_REFUSALS.has(admission.outcome)) {
+        return await cancelPendingCreation(manager, identity, admission);
+      }
+      if (admission.outcome !== OUTCOME.ADMITTED) return admission;
+      token = admission.token;
+    }
+    return {outcome: RESULT.ADMISSION_RETAINED, operationId, intent, token};
+  } catch (error) {
+    return instanceFailure(error);
+  }
+}
+/**
+ * The creation row completes at CLOSED (design RECOVERY-DESIGN-20261017
+ * R1-D): one CAS IN_PROGRESS -> COMPLETED after the retirement closed and its
+ * STOPPED projection returned; an already completed row answers the same.
+ * @param {Object} manager - The ServiceLifecycleManager.
+ * @param {Object} origin - The retained creation ({intent, token}).
+ * @return {Promise<{outcome: string}>} CREATION_ROW_COMPLETED or a typed outcome.
+ */
+async function completeConsensusCreation(manager, origin) {
+  try {
+    requireDependencies(manager);
+    const identity = journalIdentity(origin.intent);
+    const query = transitionOperation(identity.operationId, OP_STATE.IN_PROGRESS,
+      OP_STATE.COMPLETED, {closed: true});
+    const row = await writeAndObserve(manager, query, identity.operationId);
+    requireObserved(row);
+    confirmIntentRow(row, identity);
+    requireInstance(row[COL.STATE] === OP_STATE.COMPLETED, OUTCOME.UNKNOWN);
+    return {outcome: RESULT.ROW_COMPLETED};
+  } catch (error) {
+    return instanceFailure(error);
+  }
+}
+function isBoundConsensusDescriptor(value) {
+  return value !== null && typeof value === 'object' &&
+    BOUND_DESCRIPTOR_FIELDS.some((field) => Object.hasOwn(value, field));
+}
+function openingBody(intent, token) {
+  const physical = runtimeServiceConsensusIdentity(intent.consensusBinding,
+    intent.consensusSlotRequest);
+  return {format: LIMIT.FORMAT, intentDigest: instanceDigest(intent), token,
+    groupId: physical.groupId, replicaId: physical.replicaId, nodeId: physical.nodeId};
+}
+function confirmOpeningRecord(row, body) {
+  const encoded = row[COL.OPENING_JSON];
+  requireInstance(typeof encoded === 'string' &&
+    Buffer.byteLength(encoded) <= CONSENSUS_CREATION_OPENING.BYTES, OUTCOME.CORRUPT_STATE);
+  const record = captureInstanceJson(JSON.parse(encoded), CONSENSUS_CREATION_OPENING.BYTES);
+  requireInstance(exactFields(record, OPENING_FIELDS) && typeof record.claimId === 'string' &&
+    HEX.test(record.claimId) &&
+    encodeInstanceJson(record, CONSENSUS_CREATION_OPENING.BYTES) === encoded,
+  OUTCOME.CORRUPT_STATE);
+  requireInstance(instanceDigest({...body, claimId: record.claimId}) === instanceDigest(record),
+    OUTCOME.CONTENT_CONFLICT);
+  return record;
+}
+/** One first-use record within the original CREATE journal, not a new resource grant. */
+async function claimConsensusCreationOpening(manager, value) {
+  try {
+    const intent = captureIntent(value.intent);
+    const token = captureInstanceJson(value.token, LIMIT.SLOT_BYTES);
+    requireInstance(value.outcome === RESULT.ADMISSION_RETAINED &&
+      matchesInstanceResourceToken(intent.consensusBinding, intent.consensusSlotRequest, token) &&
+      value.operationId === token.operationId, OUTCOME.CONTENT_CONFLICT);
+    requireDependencies(manager);
+    const identity = journalIdentity(intent);
+    let row = await readJournal(manager, identity.operationId);
+    confirmIntentRow(row, identity);
+    requireInstance(row[COL.STATE] === OP_STATE.IN_PROGRESS &&
+      instanceDigest(retainedToken(row, intent)) === instanceDigest(token),
+    OUTCOME.CONTENT_CONFLICT);
+    const body = openingBody(intent, token);
+    if (row[COL.OPENING_JSON] !== null) {
+      return {outcome: CONSENSUS_CREATION_OPENING.RETAINED,
+        record: confirmOpeningRecord(row, body)};
+    }
+    const claimId = randomBytes(CONSENSUS_CREATION_OPENING.NONCE_BYTES).toString('hex');
+    const openingJson = encodeInstanceJson({...body, claimId}, CONSENSUS_CREATION_OPENING.BYTES);
+    row = await writeAndObserve(manager, buildRetainedCreationOpeningSQL({...identity,
+      admissionJson: encodeInstanceJson(token, LIMIT.SLOT_BYTES), openingJson,
+      now: manager._timeSource.now()}), identity.operationId);
+    confirmIntentRow(row, identity);
+    requireInstance(row[COL.STATE] === OP_STATE.IN_PROGRESS &&
+      instanceDigest(retainedToken(row, intent)) === instanceDigest(token),
+    OUTCOME.CONTENT_CONFLICT);
+    const record = confirmOpeningRecord(row, body);
+    return {outcome: record.claimId === claimId ? CONSENSUS_CREATION_OPENING.FRESH :
+      CONSENSUS_CREATION_OPENING.RETAINED, record};
+  } catch (error) {
+    return instanceFailure(error);
+  }
+}
+export {CONSENSUS_CREATION_OPENING, RESULT as CONSENSUS_CREATION_RESULT,
+  claimConsensusCreationOpening,
+  captureIntent as captureConsensusCreationIntent, isBoundConsensusDescriptor,
+  prepareConsensusCreation, recoverConsensusCreation, readRetainedCreation,
+  isConsensusCreationRow, inventoryConsensusCreationRow, resolveRetainedReservation,
+  completeConsensusCreation};

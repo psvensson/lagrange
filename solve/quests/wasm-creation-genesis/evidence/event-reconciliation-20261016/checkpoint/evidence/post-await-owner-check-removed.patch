@@ -1,0 +1,11 @@
+--- a/src/wasm-service/wasm-creation-reconciliation.js
++++ b/src/wasm-service/wasm-creation-reconciliation.js
+@@ -60,7 +60,7 @@
+   async reconcile(context) {
+     if (!this.current(context)) return this.stoppedResult();
+     const result = await progressWasmCreationGenesis(this.replica);
+-    return this.current(context) ? result : this.stoppedResult();
++    return result;
+   }
+ 
+   closeAdmission() {

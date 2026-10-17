@@ -109,6 +109,10 @@ class ServiceDefinitionsOwner {
     return instanceMetadata.closeInstanceResource(this, binding, token, options);
   }
 
+  releaseInstanceResource(binding, token, options) {
+    return instanceMetadata.releaseInstanceResource(this, binding, token, options);
+  }
+
   async getServiceDefinition(serviceDefinitionId, options = {}) {
     return rowOwnerFor(this).readByPrimaryKey(serviceDefinitionId, options);
   }

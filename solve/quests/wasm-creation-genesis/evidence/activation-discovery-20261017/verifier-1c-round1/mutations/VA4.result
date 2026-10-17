@@ -1,0 +1,6 @@
+mutated sha: a97a1f08ebb14753bc7ea9f8503b64675cbf8641c158d10e3a45321c3b1127f2
+catcher test/runtime/service-runtime-consensus-publication.test.js rc=1
+not ok test/runtime/service-runtime-consensus-publication.test.js (16 assertions, 955ms)
+    not ok 3 - cell (i) an absent endpoint or projection writer is typed PUBLISHED_UNPROJECTED, never PRESENT
+      name: 'AssertionError'
+RESTORED_BYTE_IDENTICAL src/runtime/service-runtime-consensus-publication.js

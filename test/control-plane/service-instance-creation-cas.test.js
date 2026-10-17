@@ -3,6 +3,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createCreationSqliteFixture} from './service-instance-creation-sqlite-fixture.js';
+import {SERVICE_INSTANCE_LIMIT} from '../../src/constants/service-instance.js';
 
 function selected(result) {
   assert.equal(result.outcome, 'SELECTED');
@@ -245,3 +246,321 @@ test('ServiceDefinitionsOwner successor waits for all old granted resources to c
   }
   evidence(t, f, 'all-old-resource barrier', {binding, tokens, next, nextToken, opened});
 });
+
+// Design SERVING-PUBLICATION-RETIREMENT-DESIGN-20261017 Revision 3 N3: the
+// resource phase machine has an explicit allowed-from table. RELEASING comes
+// only from ADMITTED or PUBLISHED; a CLOSED slot is monotonic and answers every
+// later transition CLOSED without a mutation; RELEASING still counts as
+// outstanding for the successor's grant.
+test('ServiceDefinitionsOwner resource phase table: guarded RELEASING, monotonic CLOSED slots',
+  async (t) => {
+    const f = await createCreationSqliteFixture(t);
+    const binding = selected(await f.primary.selectConsensusInstance(f.request()));
+    const admittedToken = admitted(await f.primary.reserveInstanceResource(binding,
+      f.slotRequest(0)));
+    const publishedToken = admitted(await f.primary.reserveInstanceResource(binding,
+      f.slotRequest(1)));
+    assert.equal((await f.primary.grantInstanceResource(binding, publishedToken)).outcome, 'PUBLISHED');
+    const releasedAdmitted = await f.primary.releaseInstanceResource(binding, admittedToken);
+    assert.deepEqual(releasedAdmitted,
+      {outcome: 'RELEASING', phase: 'RELEASING', token: admittedToken}, 'ADMITTED -> RELEASING');
+    assert.deepEqual(await f.primary.releaseInstanceResource(binding, admittedToken),
+      releasedAdmitted, 'RELEASING answers idempotently');
+    assert.equal((await f.primary.grantInstanceResource(binding, admittedToken)).outcome,
+      'RESOURCE_CLOSED', 'a RELEASING slot never re-publishes');
+    assert.equal((await f.primary.releaseInstanceResource(binding, publishedToken)).outcome,
+      'RELEASING', 'PUBLISHED -> RELEASING');
+    const next = selected(await f.primary.selectConsensusInstance(
+      f.request(1, 2, binding.incarnation)));
+    const nextToken = admitted(await f.primary.reserveInstanceResource(next, f.slotRequest()));
+    assert.equal((await f.primary.grantInstanceResource(next, nextToken)).outcome,
+      'PREDECESSOR_OUTSTANDING', 'RELEASING is outstanding for the successor');
+    assert.equal((await f.primary.closeInstanceResource(binding, admittedToken)).outcome, 'CLOSED',
+      'RELEASING -> CLOSED');
+    const before = f.row();
+    const writes = f.writes.length;
+    assert.deepEqual(await f.primary.releaseInstanceResource(binding, admittedToken),
+      {outcome: 'CLOSED', phase: 'CLOSED', token: admittedToken},
+      'RELEASING_REGRESSED_A_CLOSED_SLOT');
+    assert.deepEqual(f.row(), before, 'a CLOSED slot is never mutated');
+    assert.equal(f.writes.length, writes, 'no SQL is submitted for a CLOSED slot');
+    // The existing PUBLISHED rule order stands: a retiring instance answers
+    // STALE_BINDING before any slot phase is consulted.
+    assert.equal((await f.primary.grantInstanceResource(binding, admittedToken)).outcome,
+      'STALE_BINDING', 'the historical grant answer of a retiring instance stands');
+    assert.deepEqual(f.row(), before, 'a refused grant never mutates');
+    assert.equal((await f.primary.closeInstanceResource(binding, publishedToken)).outcome, 'CLOSED');
+    assert.equal((await f.primary.grantInstanceResource(next, nextToken)).outcome, 'PUBLISHED',
+      'the last CLOSED lifts the predecessor hold');
+    evidence(t, f, 'resource phase allowed-from table', {admittedToken, publishedToken, next,
+      nextToken, releasedAdmitted});
+  });
+
+// Design SERVING-PUBLICATION-RETIREMENT-DESIGN-20261017, amendment A2 as
+// revised by A2' (A2'.0, A2'.3, A2'.7): a slot transition whose exact
+// prior-state UPDATE answers a numeric zero affected-row count has
+// definitively not applied; the owner observes the row again, decides again on
+// that fresh observation and submits one new exact predicate, at most
+// SERVICE_INSTANCE_LIMIT.RESOURCES submissions in total. UNKNOWN (lost reply)
+// and selection stay single-shot.
+const UPDATE_SERVICE_INSTANCES = /^UPDATE service_instances\b/u;
+function updatesSince(f, writer, from) {
+  return f.writes.slice(from).filter((write) => write.writer === writer &&
+    UPDATE_SERVICE_INSTANCES.test(write.sql)).map((write) => write.changes);
+}
+// A held CAS must be entered by the operation under test; an operation that
+// settles without reaching it is a typed failure, never an unresolved wait.
+async function enteredBefore(gate, operation, label) {
+  const first = await Promise.race([gate.then(() => 'entered'),
+    Promise.resolve(operation).then(() => 'settled', () => 'settled')]);
+  assert.equal(first, 'entered', label);
+}
+async function reservedSlots(f, binding, count) {
+  const tokens = [];
+  for (let slot = 0; slot < count; slot += 1) {
+    tokens.push(admitted(await f.primary.reserveInstanceResource(binding, f.slotRequest(slot))));
+  }
+  return tokens;
+}
+
+test('CAS-A1 a grant that loses to a sibling slot grant is re-decided and answers PUBLISHED',
+  async (t) => {
+    const f = await createCreationSqliteFixture(t);
+    const binding = selected(await f.primary.selectConsensusInstance(f.request()));
+    const [mine, sibling] = await reservedSlots(f, binding, 2);
+    const from = f.writes.length;
+    const held = f.holdNext('owner-a');
+    t.after(held.release);
+    const pending = f.primary.grantInstanceResource(binding, mine);
+    await held.entered;
+    assert.equal((await f.owner('owner-b').definitions.grantInstanceResource(binding, sibling))
+      .outcome, 'PUBLISHED');
+    held.release();
+    const grant = await pending;
+    evidence(t, f, 'CAS-A1 sibling grants', {grant});
+    assert.deepEqual(grant, {outcome: 'PUBLISHED', phase: 'PUBLISHED', token: mine},
+      'A_SIBLING_GRANT_DEFEATED_THE_CALLERS_OWN_SLOT');
+    assert.deepEqual(updatesSince(f, 'owner-a', from), [0, 1],
+      'NOT_ONE_RE_DECIDED_SUBMISSION_AFTER_THE_DEFINITIVE_ZERO');
+    assert.equal(f.state().selected.resources[0].phase, 'PUBLISHED',
+      'CALLER_TOLD_PUBLISHED_WHILE_THE_ROW_IS_NOT');
+    assert.equal(f.state().selected.resources[1].phase, 'PUBLISHED');
+  });
+
+test('CAS-A1b two consecutive losses publish on the third submission', async (t) => {
+  const f = await createCreationSqliteFixture(t);
+  const binding = selected(await f.primary.selectConsensusInstance(f.request()));
+  const [mine, second, third] = await reservedSlots(f, binding, 3);
+  const from = f.writes.length;
+  const first = f.holdNext('owner-a');
+  const again = f.holdNext('owner-a');
+  t.after(first.release);
+  t.after(again.release);
+  const pending = f.primary.grantInstanceResource(binding, mine);
+  await first.entered;
+  assert.equal((await f.owner('owner-b').definitions.grantInstanceResource(binding, second))
+    .outcome, 'PUBLISHED');
+  first.release();
+  await enteredBefore(again.entered, pending, 'NO_RE_DECIDED_SUBMISSION_AFTER_THE_FIRST_LOSS');
+  assert.equal((await f.owner('owner-c').definitions.grantInstanceResource(binding, third))
+    .outcome, 'PUBLISHED');
+  again.release();
+  const grant = await pending;
+  evidence(t, f, 'CAS-A1b two consecutive losses', {grant});
+  assert.equal(grant.outcome, 'PUBLISHED', JSON.stringify(grant));
+  assert.deepEqual(updatesSince(f, 'owner-a', from), [0, 0, 1]);
+  assert.deepEqual(f.state().selected.resources.slice(0, 3).map((slot) => slot.phase),
+    ['PUBLISHED', 'PUBLISHED', 'PUBLISHED']);
+});
+
+test('CAS-A1c sibling reserves of different replicas on different slots both admit',
+  async (t) => {
+    const f = await createCreationSqliteFixture(t);
+    const binding = selected(await f.primary.selectConsensusInstance(f.request()));
+    const from = f.writes.length;
+    const held = f.holdNext('owner-a');
+    t.after(held.release);
+    const pending = f.primary.reserveInstanceResource(binding, f.slotRequest(0));
+    await held.entered;
+    admitted(await f.owner('owner-b').definitions.reserveInstanceResource(binding,
+      f.slotRequest(1)));
+    held.release();
+    const reserve = await pending;
+    evidence(t, f, 'CAS-A1c sibling reserves', {reserve});
+    admitted(reserve);
+    assert.equal(f.state().selected.resources.filter((slot) => slot.phase !== 'CLOSED').length, 2);
+    assert.deepEqual(updatesSince(f, 'owner-a', from), [0, 1]);
+  });
+
+test('CAS-A2 a close that loses to a sibling close answers CLOSED; the last CLOSED lifts the hold',
+  async (t) => {
+    const f = await createCreationSqliteFixture(t);
+    const binding = selected(await f.primary.selectConsensusInstance(f.request()));
+    const tokens = await reservedSlots(f, binding, 2);
+    for (const token of tokens) {
+      assert.equal((await f.primary.grantInstanceResource(binding, token)).outcome, 'PUBLISHED');
+    }
+    const next = selected(await f.primary.selectConsensusInstance(
+      f.request(1, 2, binding.incarnation)));
+    const nextToken = admitted(await f.primary.reserveInstanceResource(next, f.slotRequest()));
+    assert.equal((await f.primary.grantInstanceResource(next, nextToken)).outcome,
+      'PREDECESSOR_OUTSTANDING');
+    const from = f.writes.length;
+    const held = f.holdNext('owner-a');
+    t.after(held.release);
+    const pending = f.primary.closeInstanceResource(binding, tokens[0]);
+    await held.entered;
+    assert.equal((await f.owner('owner-b').definitions.closeInstanceResource(binding, tokens[1]))
+      .outcome, 'CLOSED');
+    held.release();
+    const close = await pending;
+    evidence(t, f, 'CAS-A2 sibling close race', {close});
+    assert.deepEqual(close, {outcome: 'CLOSED', phase: 'CLOSED', token: tokens[0]},
+      'A_SIBLING_CLOSE_LEFT_THE_CALLERS_SLOT_UNRESOLVED');
+    assert.deepEqual(updatesSince(f, 'owner-a', from), [0, 1]);
+    assert.deepEqual(f.state().retiring.resources.slice(0, 2).map((slot) => slot.phase),
+      ['CLOSED', 'CLOSED']);
+    assert.equal((await f.primary.grantInstanceResource(next, nextToken)).outcome, 'PUBLISHED',
+      'the last CLOSED lifts the predecessor hold');
+  });
+
+test('CAS-A3 a bound-exhausted grant answers STATE_CHANGED after exactly RESOURCES submissions',
+  async (t) => {
+    const f = await createCreationSqliteFixture(t);
+    const binding = selected(await f.primary.selectConsensusInstance(f.request()));
+    const [token] = await reservedSlots(f, binding, 1);
+    const before = f.row();
+    let submissions = 0;
+    f.primary.getGateway().updateSystemTableRow = async () => {
+      submissions += 1;
+      return {success: true, affectedRows: 0};
+    };
+    const grant = await f.primary.grantInstanceResource(binding, token);
+    assert.deepEqual(grant, {outcome: 'STATE_CHANGED'});
+    assert.equal(submissions, SERVICE_INSTANCE_LIMIT.RESOURCES, 'NOT_THE_DECLARED_SUBMISSION_BOUND');
+    assert.deepEqual(f.row(), before);
+  });
+
+test('CAS-A4 a lost grant reply is resolved once and never resubmitted', async (t) => {
+  const f = await createCreationSqliteFixture(t);
+  const binding = selected(await f.primary.selectConsensusInstance(f.request()));
+  const [token] = await reservedSlots(f, binding, 1);
+  const from = f.writes.length;
+  f.loseReply('owner-a');
+  const grant = await f.primary.grantInstanceResource(binding, token);
+  assert.equal(grant.outcome, 'PUBLISHED', JSON.stringify(grant));
+  assert.equal(f.appliedLostReplies.length, 1);
+  assert.deepEqual(updatesSince(f, 'owner-a', from), [1], 'AN_UNKNOWN_ANSWER_WAS_RESUBMITTED');
+});
+
+test('CAS-A5a a selection inside the held grant re-decides to STALE_BINDING without resubmission',
+  async (t) => {
+    const f = await createCreationSqliteFixture(t);
+    const binding = selected(await f.primary.selectConsensusInstance(f.request()));
+    const [token] = await reservedSlots(f, binding, 1);
+    const from = f.writes.length;
+    const held = f.holdNext('owner-a');
+    t.after(held.release);
+    const pending = f.primary.grantInstanceResource(binding, token);
+    await held.entered;
+    selected(await f.owner('owner-b').definitions.selectConsensusInstance(
+      f.request(1, 2, binding.incarnation)));
+    held.release();
+    assert.deepEqual(await pending, {outcome: 'STALE_BINDING'});
+    assert.deepEqual(updatesSince(f, 'owner-a', from), [0]);
+  });
+
+test('CAS-A5b same-slot races re-decide to the sealed answer without resubmission',
+  async (t) => {
+    const f = await createCreationSqliteFixture(t);
+    const binding = selected(await f.primary.selectConsensusInstance(f.request()));
+    const [granting, releasing] = await reservedSlots(f, binding, 2);
+    const other = f.owner('owner-b').definitions;
+    let from = f.writes.length;
+    let held = f.holdNext('owner-a');
+    t.after(held.release);
+    const grant = f.primary.grantInstanceResource(binding, granting);
+    await held.entered;
+    assert.equal((await other.releaseInstanceResource(binding, granting)).outcome, 'RELEASING');
+    held.release();
+    assert.deepEqual(await grant, {outcome: 'RESOURCE_CLOSED'}, 'the sealed N3 order stands');
+    assert.deepEqual(updatesSince(f, 'owner-a', from), [0]);
+    from = f.writes.length;
+    held = f.holdNext('owner-a');
+    t.after(held.release);
+    const release = f.primary.releaseInstanceResource(binding, releasing);
+    await held.entered;
+    assert.equal((await other.closeInstanceResource(binding, releasing)).outcome, 'CLOSED');
+    held.release();
+    assert.deepEqual(await release, {outcome: 'CLOSED', phase: 'CLOSED', token: releasing},
+      'RELEASING_REGRESSED_A_CLOSED_SLOT');
+    assert.deepEqual(updatesSince(f, 'owner-a', from), [0]);
+    assert.equal(f.state().selected.resources[1].phase, 'CLOSED');
+  });
+
+test('CAS-A6 a selection UPDATE that loses to a slot mutation stays single-shot STATE_CHANGED',
+  async (t) => {
+    const f = await createCreationSqliteFixture(t);
+    const binding = selected(await f.primary.selectConsensusInstance(f.request()));
+    const [token] = await reservedSlots(f, binding, 1);
+    const request = f.request(1, 2, binding.incarnation);
+    const from = f.writes.length;
+    const held = f.holdNext('owner-a');
+    t.after(held.release);
+    const pending = f.primary.selectConsensusInstance(request);
+    await held.entered;
+    assert.equal((await f.owner('owner-b').definitions.grantInstanceResource(binding, token))
+      .outcome, 'PUBLISHED');
+    held.release();
+    assert.deepEqual(await pending, {outcome: 'STATE_CHANGED'}, 'A_SELECTION_WAS_RE_DECIDED');
+    assert.deepEqual(updatesSince(f, 'owner-a', from), [0]);
+    assert.equal(f.state().version, 1);
+    assert.equal(f.state().selected.resources[0].phase, 'PUBLISHED');
+    selected(await f.primary.selectConsensusInstance(request));
+  });
+
+test('CAS-A7 a failed re-observation after a definitive zero answers UNAVAILABLE, never UNKNOWN',
+  async (t) => {
+    const f = await createCreationSqliteFixture(t);
+    const binding = selected(await f.primary.selectConsensusInstance(f.request()));
+    const [token] = await reservedSlots(f, binding, 1);
+    const gateway = f.primary.getGateway();
+    const update = gateway.updateSystemTableRow.bind(gateway);
+    let submissions = 0;
+    gateway.updateSystemTableRow = async (...args) => {
+      submissions += 1;
+      if (submissions > 1) return update(...args);
+      f.setGatewayReadFault('owner-a', new Error('COMPONENT_AUTHORITATIVE_READ_UNAVAILABLE'));
+      return {success: true, affectedRows: 0};
+    };
+    const before = f.row();
+    assert.deepEqual(await f.primary.grantInstanceResource(binding, token),
+      {outcome: 'UNAVAILABLE'}, 'A_DEFINITIVE_ZERO_WAS_REPORTED_AS_UNKNOWN');
+    assert.equal(submissions, 1);
+    assert.deepEqual(f.row(), before);
+  });
+
+// CAS-A8 (added by the lead from the stage-1b verifier's probe PX2, finding
+// F-2; design amendment A2'.0 "UNKNOWN (lost reply, thrown or failed envelope,
+// ABSENT count) stays single-shot"): a successful envelope WITHOUT a numeric
+// affected-row count is not a definitive zero; the owner resolves once and
+// never re-decides or resubmits.
+test('CAS-A8 an absent affected-row count is UNKNOWN after one submission, never re-decided',
+  async (t) => {
+    const f = await createCreationSqliteFixture(t);
+    const binding = selected(await f.primary.selectConsensusInstance(f.request()));
+    const [token] = await reservedSlots(f, binding, 1);
+    const gateway = f.primary.getGateway();
+    const update = gateway.updateSystemTableRow.bind(gateway);
+    let submissions = 0;
+    gateway.updateSystemTableRow = async (...args) => {
+      submissions += 1;
+      if (submissions > 1) return update(...args);
+      return {success: true};
+    };
+    const before = f.row();
+    assert.deepEqual(await f.primary.grantInstanceResource(binding, token), {outcome: 'UNKNOWN'},
+      'AN_ABSENT_COUNT_WAS_NOT_UNKNOWN');
+    assert.equal(submissions, 1, 'AN_ABSENT_COUNT_WAS_RESUBMITTED');
+    assert.deepEqual(f.row(), before);
+  });
