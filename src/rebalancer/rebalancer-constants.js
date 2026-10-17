@@ -288,6 +288,8 @@ const REBALANCE_COORDINATOR_LOG_MSG = Object.freeze({
   MEMBERSHIP_DEBT_SWEEP_UNAVAILABLE:
     'Message-group membership debt census unavailable; debt retained until the next trigger',
   MEMBERSHIP_DEBT_RECORDED: 'Message-group learner outcome recorded from durable debt',
+  MEMBERSHIP_DEBT_SUCCESSOR_ISSUED:
+    'Message-group learner attempt definitively noncommitted; ordered successor attempt issued',
   MEMBERSHIP_DEBT_RETAINED:
     'Message-group membership debt retained; recovery waits for its named prerequisite',
   MEMBERSHIP_DEBT_REFUSED:

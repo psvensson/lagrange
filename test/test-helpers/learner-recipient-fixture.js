@@ -199,6 +199,6 @@ function reconstructedOwner(fx, {realLane = false} = {}) {
     messageRouter: fx.source, realLane, timeSource: fx.f.clock});
 }
 
-export {address, payload, workflowOwner, receiverFixture, record, heldNativeRead,
+export {address, payload, workflowOwner, connectRouters, receiverFixture, record, heldNativeRead,
   assertNativeReadEntered, withoutReceipt, assertExactReceipt, holdReceiptWrite, expireClaim,
   assertReceiptWriteEntered, recoverReceipt, reconstructedOwner};

@@ -5,7 +5,10 @@
 //     gains a member no case names turns this red;
 //   - the timing relationships the design relies on (challenger B, section
 //     B, I1-I9) are written as inequalities over production constants and
-//     the production tuning derivation, never as literals.
+//     the production tuning derivation, never as literals;
+//   - a member an owner gains deliberately is classified here with its
+//     reason and commit recorded beside the table (R09), never by rereading
+//     a class to fit it.
 
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
@@ -87,10 +90,26 @@ test('enumerations: the stamp kinds and bootstrap sources are the two ' +
     // A retirement read is a bootstrap read that also refuses a pending
     // configuration change (a retiring group's frozen member set).
     leaderOnly: ['BOOTSTRAP', 'RETIREMENT'], anyReplica: ['WITNESS'],
+    // Superseded (R09, 2026-10-11) for 6255634c7 "recover exact committed
+    // learner origin through existing native and checkpoint owners"
+    // (2026-10-09, user-approved continuation, PR111 review): a learner-action
+    // read is answered by whichever replica is asked, in its queued turn, from
+    // its own registry's recorded ADD_LEARNER origin
+    // (answerCommittedLearnerAction has no leader gate) and carries a WITNESS
+    // membership answer; it grants nothing a leader read grants.
+    anyReplicaQueued: ['LEARNER_ACTION'],
   });
   assertClassifies('ANSWER_FIELD', COMMITTED_MEMBERSHIP_ANSWER_FIELD, {
-    configuration: ['VOTERS', 'VOTERS_OUTGOING', 'LEARNERS', 'IDENTITIES'],
+    // Superseded (R09, 2026-10-11) for 0d60f1ac4 "Advance raft-rs membership
+    // generation slice" (2026-10-07, independently approved 12:24Z, merged at
+    // b98722cab): the answer names the joint configuration's incoming
+    // learners beside its outgoing voters (LEARNERS_NEXT), and labels the
+    // configuration with the applied-state owner's generation (the index of
+    // the ConfChange that produced it) and its comparable key.
+    configuration: ['VOTERS', 'VOTERS_OUTGOING', 'LEARNERS', 'LEARNERS_NEXT',
+      'IDENTITIES'],
     label: ['APPLIED_INDEX', 'COMMIT_INDEX', 'TERM', 'LEADER_ID'],
+    generation: ['CONFIGURATION_KEY', 'MEMBERSHIP_GENERATION_INDEX'],
     gate: ['GATE_OPEN'],
     kind: ['KIND'],
   });
@@ -100,8 +119,13 @@ test('enumerations: every refusal of the boundary is decided at one named ' +
   'place, and every stamp defect and gate name is classified', () => {
   assertClassifies('REFUSAL', COMMITTED_MEMBERSHIP_REFUSAL, {
     // Answered by the read (the port, from its recorded observation).
+    // CONFIGURATION_GENERATION_UNAVAILABLE superseded in (R09, 2026-10-11)
+    // for 0d60f1ac4: an observation whose configuration generation is unknown
+    // (an unbound native snapshot) is refused fail-closed by the read itself
+    // (unavailableMembershipRefusal), before any role or transition check.
     portRead: ['NOT_LEADER', 'JOINT', 'IDENTITY_UNRESOLVED', 'HELD',
-      'NOT_HOSTED', 'CONF_CHANGE_PENDING'],
+      'NOT_HOSTED', 'CONF_CHANGE_PENDING',
+      'CONFIGURATION_GENERATION_UNAVAILABLE'],
     // Thrown by the creation owner before anything is persisted.
     creationOwner: ['MEMBERSHIP_UNREADABLE'],
     // Thrown by the target's handler on arrival.

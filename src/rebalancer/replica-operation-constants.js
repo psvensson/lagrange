@@ -74,6 +74,9 @@ const ReplicaOperationField = Object.freeze({
     'createAdmissionWorkflowUpdatedAt',
   CREATE_ADMISSION_ATTEMPT_TOKEN: 'createAdmissionAttemptToken',
   CREATE_ADMISSION_ATTEMPT_SEQ: 'createAdmissionAttemptSeq',
+  // A message-group CREATE's join route (kind, group, target, peer). The
+  // handler binds it to the recorded learner identity; it is never evidence.
+  MESSAGE_GROUP_JOIN_PACKAGE: 'messageGroupJoinPackage',
   // A REPLACE handoff attempt's sequence, echoed by the handler so a late
   // answer of an earlier attempt is dropped.
   ATTEMPT_SEQ: 'attemptSeq',

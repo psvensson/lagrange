@@ -48,7 +48,14 @@ import {printRatchetTighteningHint} from './metric-check-helpers.js';
 // 2026-10-05: replay and hysteresis tightened 1422 -> 1416: the participant
 // failure builder retired the executor's duplicate helpers and hysteresis
 // de-exported its managed-split metrics helpers on the combined tree.
-const BASELINE_UNUSED_EXPORT_COUNT = 1416;
+// 2026-10-11: tightened 1416 -> 1415 per checker hint (gate long-tail ledger
+// R2): eight exports used only in their own module de-exported - the
+// message-group membership column names, the CREATE process owner's
+// claim/evidence/commit steps, the processed source-START requirement and
+// the participant-transaction fixture's session/elsewhere/rowid-ceiling
+// values; the committed-membership context error text stays for the
+// FreshMG slice that edits its owner.
+const BASELINE_UNUSED_EXPORT_COUNT = 1415;
 const EXIT_FAILURE = 1;
 const TOP_OFFENDER_COUNT = 10;
 const SELF_REFERENCE = 'scripts/check-unused-exports.js';

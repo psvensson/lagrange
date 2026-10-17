@@ -6,6 +6,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {
   createService,
   initEnv,
+  projectDispatchRowFromRow,
 } from './replica-dispatch-node-state-update-test-support.js';
 import {
   ControlPlaneField,
@@ -786,23 +787,8 @@ async (t) => {
       payload: {
         type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
         [ControlPlaneField.OPERATION_ID]: 'op-ready-retry-remote',
-        [ControlPlaneField.OPERATION_ROW]: {
-          operation_id: 'op-ready-retry-remote',
-          type: 'ADD',
-          partition_id: READY_RETRY_PARTITION_ID,
-          replica_id: `${READY_RETRY_PARTITION_ID}-r4`,
-          source_node_id: 'node-remote-owner',
-          target_node_id: 'node-2',
-          status: undefined,
-          workflow_step: WORKFLOW_STEP.PENDING,
-          created_at: undefined,
-          updated_at: undefined,
-          completed_at: undefined,
-          error_message: undefined,
-          steps_history: '[]',
-          entity_type: 'partition',
-          entity_id: READY_RETRY_PARTITION_ID,
-        },
+        [ControlPlaneField.OPERATION_ROW]:
+          projectDispatchRowFromRow(service, remoteOwnedPendingRow),
       },
     }],
     'ready-node retry should wake the remote owner directly when the ready target only sees a remote-owned pending operation',
@@ -1126,7 +1112,7 @@ async (t) => {
     },
   };
 
-  service.handleCacheNodeChange('replica_operations', 'INSERT', {
+  const remoteCacheRow = {
     operation_id: 'replace-op-remote-cache-1',
     partition_id: 'sql_write_operations-p1',
     source_node_id: 'node-1',
@@ -1135,7 +1121,8 @@ async (t) => {
     type: OperationType.REPLACE,
     entity_type: 'partition',
     entity_id: 'sql_write_operations-p1',
-  });
+  };
+  service.handleCacheNodeChange('replica_operations', 'INSERT', remoteCacheRow);
 
   await new Promise((resolve) => {
     setTimeout(resolve, 0);
@@ -1153,27 +1140,8 @@ async (t) => {
       payload: {
         type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
         [ControlPlaneField.OPERATION_ID]: 'replace-op-remote-cache-1',
-        [ControlPlaneField.OPERATION_ROW]: {
-          operation_id: 'replace-op-remote-cache-1',
-          type: OperationType.REPLACE,
-          partition_id: 'sql_write_operations-p1',
-          replica_id: undefined,
-          source_node_id: 'node-1',
-          target_node_id: 'node-2',
-          status: undefined,
-          workflow_step: WORKFLOW_STEP.PENDING,
-          created_at:
-            deliveries[0]?.payload?.[ControlPlaneField.OPERATION_ROW]
-              ?.created_at,
-          updated_at:
-            deliveries[0]?.payload?.[ControlPlaneField.OPERATION_ROW]
-              ?.updated_at,
-          completed_at: undefined,
-          error_message: undefined,
-          steps_history: '[]',
-          entity_type: 'partition',
-          entity_id: 'sql_write_operations-p1',
-        },
+        [ControlPlaneField.OPERATION_ROW]:
+          projectDispatchRowFromRow(service, remoteCacheRow),
       },
     }],
     'cache replay should wake the canonical remote owner for dispatchable rows',
@@ -1223,18 +1191,19 @@ async (t) => {
     },
   };
 
+  const remoteCdcRow = {
+    operation_id: 'replace-op-remote-cdc-1',
+    partition_id: 'sql_write_operations-p1',
+    source_node_id: 'node-1',
+    target_node_id: 'node-2',
+    workflow_step: WORKFLOW_STEP.PENDING,
+    type: OperationType.REPLACE,
+    entity_type: 'partition',
+    entity_id: 'sql_write_operations-p1',
+  };
   await service.handleCdcApplied(null, {
     tableName: 'replica_operations',
-    data: {
-      operation_id: 'replace-op-remote-cdc-1',
-      partition_id: 'sql_write_operations-p1',
-      source_node_id: 'node-1',
-      target_node_id: 'node-2',
-      workflow_step: WORKFLOW_STEP.PENDING,
-      type: OperationType.REPLACE,
-      entity_type: 'partition',
-      entity_id: 'sql_write_operations-p1',
-    },
+    data: remoteCdcRow,
   });
 
   t.same(
@@ -1249,27 +1218,8 @@ async (t) => {
       payload: {
         type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
         [ControlPlaneField.OPERATION_ID]: 'replace-op-remote-cdc-1',
-        [ControlPlaneField.OPERATION_ROW]: {
-          operation_id: 'replace-op-remote-cdc-1',
-          type: OperationType.REPLACE,
-          partition_id: 'sql_write_operations-p1',
-          replica_id: undefined,
-          source_node_id: 'node-1',
-          target_node_id: 'node-2',
-          status: undefined,
-          workflow_step: WORKFLOW_STEP.PENDING,
-          created_at:
-            deliveries[0]?.payload?.[ControlPlaneField.OPERATION_ROW]
-              ?.created_at,
-          updated_at:
-            deliveries[0]?.payload?.[ControlPlaneField.OPERATION_ROW]
-              ?.updated_at,
-          completed_at: undefined,
-          error_message: undefined,
-          steps_history: '[]',
-          entity_type: 'partition',
-          entity_id: 'sql_write_operations-p1',
-        },
+        [ControlPlaneField.OPERATION_ROW]:
+          projectDispatchRowFromRow(service, remoteCdcRow),
       },
     }],
     'CDC replay should wake the canonical remote owner for dispatchable rows',

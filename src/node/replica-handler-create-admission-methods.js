@@ -711,7 +711,7 @@ function assignReplicaHandlerCreateAdmissionMethods(ReplicaHandler) {
     async recoverRetainedReplicaCreateAdmissions() {
       this.throwIfShuttingDown();
       const owner = this.getReplicaCreateAdmissionOwner();
-      const rows = await owner.snapshotTargetAdmissions();
+      const rows = await owner.snapshotTargetAdmissions(SERVICE_TYPE.PARTITION);
       const deferredOperationIds = [];
       for (const row of rows) {
         this.throwIfShuttingDown();

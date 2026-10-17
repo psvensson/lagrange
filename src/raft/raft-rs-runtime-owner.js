@@ -118,6 +118,10 @@ let runtimeGeneration = 0;
 // One failed replacement owns one clock and retry window, regardless of the
 // next caller's group, timing or lifetime. Cleared on success or final close.
 let runtimeRecovery = null;
+// Named empty states: a group with no shaped status observation yet, and a
+// replacement attempt that has recorded no failure yet.
+const NO_STATUS_OBSERVATION = null;
+const NO_RUNTIME_REPLACEMENT_FAILURE = null;
 let nextGroupKey = 1;
 let actualCoreEntries = 0;
 let actualCoreEntryObserver = null;
@@ -588,7 +592,7 @@ function runtimeRecoveryOutcome(group) {
 function invalidateRuntimeGroups() {
   for (const group of groups.values()) {
     group.handle = null;
-    group.statusObservation = null;
+    group.statusObservation = NO_STATUS_OBSERVATION;
     group.pendingRuntimeResume = null;
     cancelRuntimeResumption(group);
     group.health = RECOVERY_REQUIRED;
@@ -730,9 +734,9 @@ function replaceRuntime(trigger) {
   }
   runtimeRecovery ??= {clock: trigger.timers,
     windowMs: recoveryRetryWindowMsOf(trigger.timing),
-    retryNotBefore: 0, failure: null, attempts: 0};
+    retryNotBefore: 0, failure: NO_RUNTIME_REPLACEMENT_FAILURE, attempts: 0};
   runtimeRecovery.attempts += 1;
-  runtimeRecovery.failure = null;
+  runtimeRecovery.failure = NO_RUNTIME_REPLACEMENT_FAILURE;
   runtimeHealth = REPLACING;
   invalidateRuntimeGroups();
   core = null;
@@ -758,7 +762,7 @@ function replaceRuntime(trigger) {
       } catch (error) {
         containUnexpectedThrow(group, error);
       }
-      if (runtimeRecovery.failure !== null) {
+      if (runtimeRecovery.failure !== NO_RUNTIME_REPLACEMENT_FAILURE) {
         return failedRuntimeReplacement(trigger, runtimeRecovery.failure);
       }
     }
@@ -1025,11 +1029,6 @@ function resolveCommittedEntryConfState(group, expectedGeneration, entry) {
       return {...invokeCoreAt(group, expectedGeneration, CORE_OPERATION.CONF_STATE),
         membershipContext};
     }
-    const before = invokeCoreAt(
-      group, expectedGeneration, CORE_OPERATION.CONF_STATE);
-    if (!before.ok) {
-      return before;
-    }
     const applied = invokeCoreAt(
       group, expectedGeneration, 'apply_conf_change', decoded.value);
     if (!applied.ok) {
@@ -1040,8 +1039,7 @@ function resolveCommittedEntryConfState(group, expectedGeneration, entry) {
     if (!set.ok) {
       return set;
     }
-    return {...applied, decoded: decoded.value, membershipContext,
-      membershipBeforeConfState: before.value};
+    return {...applied, decoded: decoded.value, membershipContext};
   }
   return invokeCoreAt(
     group, expectedGeneration, CORE_OPERATION.CONF_STATE);
@@ -1083,13 +1081,6 @@ function applyEntryDurablyOrFailure({group, entry, resolvedConfState,
       applyCommittedEntry: group.applyCommittedEntry,
       admitted,
       committedMembershipContext: resolvedConfState.membershipContext || null,
-      committedMembershipApplication:
-        resolvedConfState.membershipBeforeConfState === undefined ? null : Object.freeze({
-          beforeConfState: resolvedConfState.membershipBeforeConfState,
-          beforeMembershipGenerationIndex: String(group.membershipGenerationIndex),
-          afterConfState: resolvedConfState.value,
-          afterMembershipGenerationIndex: String(nextMembershipGeneration),
-        }),
       applyCommittedMembershipContext:
         group.applyCommittedMembershipContext,
       runApplySlice: group.runApplySlice,
@@ -1437,7 +1428,7 @@ function readStatusNow(group) {
 
 function readStatusObserved(group) {
   if ((group.tail === null && group.inbound.length === 0) ||
-      group.statusObservation === null) {
+      group.statusObservation === NO_STATUS_OBSERVATION) {
     return readStatusUndrained(group);
   }
   if (group.inbound.length > 0) {
@@ -1895,7 +1886,6 @@ function createRuntimeDispatcher(request) {
     applyCommittedEntry: request.applyCommittedEntry,
     applyCommittedMembershipContext: request.applyCommittedMembershipContext,
     readLearnerOriginEvidence: request.readLearnerOriginEvidence,
-    readPromotionAdmission: request.readPromotionAdmission,
     applyTransactionRolledBack: request.applyTransactionRolledBack,
     runApplySlice: request.runApplySlice,
     admitScheduledEntry: request.admitScheduledEntry,
@@ -1908,7 +1898,7 @@ function createRuntimeDispatcher(request) {
     reseedHoldRecorded: false,
     reseedHoldWriteFailures: 0,
     lastStatus: null,
-    statusObservation: null,
+    statusObservation: NO_STATUS_OBSERVATION,
     announcedConfStateKey: CONF_STATE_NOT_ANNOUNCED,
     announcedAppliedRuntimeGeneration: null,
     announcedAppliedIndex: null,

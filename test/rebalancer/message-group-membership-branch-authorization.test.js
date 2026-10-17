@@ -20,6 +20,8 @@ import {deriveRaftRsPeerId} from '../../src/raft/raft-rs-peer-identity.js';
 import {raftRsConfStateKey} from '../../src/raft/raft-rs-conf-state-key.js';
 import {committedStampOfAnswer} from '../../src/raft/raft-committed-membership-stamp.js';
 import {COMMITTED_MEMBERSHIP_STAMP_KIND} from '../../src/raft/raft-committed-membership-constants.js';
+import {recordedLearnerFactIsValid} from
+  '../../src/rebalancer/replica-operation-message-group-membership-authorization.js';
 
 const NOW = 1000000;
 const O = 'branch-operation';
@@ -43,13 +45,11 @@ const CLAIM = JSON.stringify({replicaId: S, createdAt: 30,
 const peerOf = deriveRaftRsPeerId;
 const conf = (learners) => ({voters: [peerOf(S)], votersOutgoing: [],
   learners, learnersNext: [], autoLeave: false});
-const learnerStamp = committedStampOfAnswer(Object.freeze({
-  kind: COMMITTED_MEMBERSHIP_STAMP_KIND.COMMITTED,
+const learnerStamp = Object.freeze({kind: COMMITTED_MEMBERSHIP_STAMP_KIND.COMMITTED,
   voters: [peerOf(S)], votersOutgoing: [], learners: [peerOf(T)], learnersNext: [],
   appliedIndex: 6, commitIndex: 6, membershipGenerationIndex: 5, term: 3,
   configurationKey: raftRsConfStateKey(conf([peerOf(T)])), leaderId: S,
-  gateOpen: true, identities: {[peerOf(S)]: S, [peerOf(T)]: T},
-}));
+  gateOpen: true, identities: {[peerOf(S)]: S, [peerOf(T)]: T}});
 const prior = Object.freeze({version: 2, transitionIdentity: 'branch-transition',
   permitSequence: 1, permitStage: 'add-learner', permitState: 'committed',
   workflowOwnerNodeId: OWNER, workflowOwnerFence: `${OWNER}:1:1`,
@@ -58,6 +58,8 @@ const prior = Object.freeze({version: 2, transitionIdentity: 'branch-transition'
   replicaLifecycleIncarnation: 'runtime-incarnation', runtimeGeneration: 1,
   leaderTerm: 3, leaderConfigurationStamp: {configurationKey: raftRsConfStateKey(conf([])),
     membershipGenerationIndex: 1}, proposalIndex: 5, replicaIdentity: T, peerId: peerOf(T)});
+// The recorder writes the decoded stamp's own encoding; the fixture seeds that.
+const CANONICAL_LEARNER_STAMP = JSON.stringify(committedStampOfAnswer(learnerStamp));
 function request(branch = 'promote', changes = {}) {
   const next = {...prior, permitSequence: 2,
     permitStage: branch === 'promote' ? 'promote' : 'remove',
@@ -186,7 +188,7 @@ async function setup(t, {initial = false} = {}) {
   let repository = repo();
   assert.equal(typeof repository.selectMessageGroupMembershipBranch, 'function',
     'existing repository must own the durable promotion/abort CAS');
-  assert.ok(learnerStamp, 'typed committed learner fixture validates');
+  assert.ok(committedStampOfAnswer(learnerStamp), 'typed committed learner fixture validates');
   if (!cachedFixture) {
     const operation = {operationId: O, type: OperationType.REPLACE, partitionId: GROUP,
       entityType: SERVICE_TYPE.MESSAGE_GROUP, entityId: GROUP, replicaId: T, sourceReplicaId: S,
@@ -206,7 +208,7 @@ async function setup(t, {initial = false} = {}) {
       message_group_membership_obligation_state = ?, message_group_membership_permit = ?,
       message_group_learner_stamp = ?, lease_expires_at = ?,
       message_group_membership_owner_claim = ? WHERE operation_id = ?`,
-      ['learner_committed', 'unknown', JSON.stringify(prior), JSON.stringify(learnerStamp), LEASE, OWNER_CLAIM, O]);
+      ['learner_committed', 'unknown', JSON.stringify(prior), CANONICAL_LEARNER_STAMP, LEASE, OWNER_CLAIM, O]);
       assert.equal(seeded.affectedRows, 1, JSON.stringify(seeded));
     }
     // Last-connection close checkpoints committed setup before copying. No
@@ -1106,4 +1108,176 @@ test('initial intent competitors record only one exact permit; all other phases 
   assert.equal(attempts.filter((r) => r.outcome === 'recorded').length, 1);
   assert.ok([first.permit, other.permit].includes(f.row().message_group_membership_permit));
   assert.equal(f.row().message_group_membership_lane_key, `message-group:${GROUP}`);
+});
+
+// O1: new-branch selection consumes the recorder's one recorded-fact predicate
+// before settlement, prior permit, holder, boot and CAS. The selected-branch
+// readback is a later phase and keeps its own holder/boot replay logic.
+function seedLearnerRow(f, columns) {
+  const names = Object.keys(columns);
+  const answer = f.run(`UPDATE replica_operations SET ${names.map((name) => `${name} = ?`).join(', ')}
+    WHERE operation_id = ?`, [...names.map((name) => columns[name]), O]);
+  assert.equal(answer.changes, 1);
+}
+async function refusedBeforeBranchCas(f, inputs, outcome = 'conflict', gate = 'recorded fact') {
+  const before = f.row();
+  const writes = f.writes;
+  for (const input of inputs) {
+    assert.equal((await f.repository.selectMessageGroupMembershipBranch(input)).outcome, outcome,
+      `${gate} refuses ${input.branch} as ${outcome}`);
+  }
+  assert.equal(f.writes, writes, `${gate}: no branch CAS is attempted`);
+  assert.deepEqual(f.row(), before);
+}
+test('O1 a non-canonical learner stamp encoding is refused before any branch CAS', async (t) => {
+  for (const [name, encoded] of [['key order', JSON.stringify(learnerStamp)],
+    ['whitespace', JSON.stringify(JSON.parse(CANONICAL_LEARNER_STAMP), null, 1)]]) {
+    assert.notEqual(encoded, CANONICAL_LEARNER_STAMP);
+    assert.deepEqual(committedStampOfAnswer(JSON.parse(encoded)),
+      committedStampOfAnswer(JSON.parse(CANONICAL_LEARNER_STAMP)), 'semantically equal');
+    await t.test(name, async (t) => {
+      const f = await setup(t);
+      seedLearnerRow(f, {message_group_learner_stamp: encoded});
+      await refusedBeforeBranchCas(f, [request(), request('abort_learner')]);
+    });
+  }
+});
+test('O1 a non-canonical recorded permit is refused even when the request repeats it', async (t) => {
+  const f = await setup(t);
+  const encoded = JSON.stringify(prior, null, 1);
+  seedLearnerRow(f, {message_group_membership_permit: encoded});
+  await refusedBeforeBranchCas(f, [{...request(), priorPermit: encoded},
+    {...request('abort_learner'), priorPermit: encoded}]);
+});
+// Supersedes 'O1 an initial learner permit whose sequence is not 1 is refused
+// before any branch CAS' (branch-selection change 3259d3d5f), retained in history.
+// That pin stood for "the learner action" while sequence 1 was its only attempt.
+// The ordered successor (runbook 6.C slice C1, design-successor-c1-2026-10-10.md)
+// issues the next ADD_LEARNER attempt of the same transition only over an exact,
+// definitively noncommitted one, and records the committed attempt with its own
+// sequence. Discovery and selection keep consuming the one shared predicate;
+// selection still requires the next permit to follow the recorded attempt.
+test('O1 (superseded by C1) a recorded ordered-successor learner fact selects either branch ' +
+  'once, only with the next sequence after it; a recorded non-learner stage is refused', async (t) => {
+  const successor = JSON.stringify({...prior, permitSequence: 2});
+  for (const [branch, phase] of [['promote', 'promotion_proposal_in_flight'],
+    ['abort_learner', 'target_removal_proposal_in_flight']]) {
+    await t.test(branch, async (t) => {
+      const f = await setup(t);
+      seedLearnerRow(f, {message_group_membership_permit: successor});
+      await refusedBeforeBranchCas(f, [{...request(branch, {permitSequence: 2}),
+        priorPermit: successor}], 'invalid', 'a next permit not after the recorded attempt');
+      const input = {...request(branch, {permitSequence: 3}), priorPermit: successor};
+      assert.equal((await f.repository.selectMessageGroupMembershipBranch(input)).outcome,
+        'recorded');
+      assert.equal(f.row().message_group_membership_phase, phase);
+      assert.equal(f.row().message_group_membership_permit, input.nextPermit);
+      assert.equal(f.writes, 1);
+    });
+  }
+  await t.test('a recorded promote-stage permit is no learner fact: the shared predicate ' +
+    'refuses it, and a request naming it as prior is refused at its shape', async (t) => {
+    const f = await setup(t);
+    const promoted = JSON.stringify({...prior, permitSequence: 2, permitStage: 'promote'});
+    seedLearnerRow(f, {message_group_membership_permit: promoted});
+    const identity = JSON.parse(ENCODED_IDENTITY);
+    assert.equal(recordedLearnerFactIsValid(f.repository.rowToOperation(f.row()), identity,
+      ENCODED_IDENTITY), false, 'the predecessor stage is part of the shared predicate');
+    seedLearnerRow(f, {message_group_membership_permit: successor});
+    assert.equal(recordedLearnerFactIsValid(f.repository.rowToOperation(f.row()), identity,
+      ENCODED_IDENTITY), true, 'positive control: the learner attempt of sequence 2 is a fact');
+    seedLearnerRow(f, {message_group_membership_permit: promoted});
+    const sequenced = (branch) => ({...request(branch, {permitSequence: 3}),
+      priorPermit: promoted});
+    await refusedBeforeBranchCas(f, [sequenced('promote'), sequenced('abort_learner')], 'invalid',
+      'a non-learner prior at the request shape');
+  });
+});
+test('O1 a recorded voter or removal stamp is refused before any branch CAS', async (t) => {
+  for (const column of ['message_group_voter_stamp', 'message_group_removal_stamp']) {
+    await t.test(column, async (t) => {
+      const f = await setup(t);
+      seedLearnerRow(f, {[column]: CANONICAL_LEARNER_STAMP});
+      await refusedBeforeBranchCas(f, [request(), request('abort_learner')]);
+    });
+  }
+});
+test('O1 a valid recorded learner fact still selects either branch once', async (t) => {
+  for (const [branch, phase] of [['promote', 'promotion_proposal_in_flight'],
+    ['abort_learner', 'target_removal_proposal_in_flight']]) {
+    await t.test(branch, async (t) => {
+      const f = await setup(t);
+      const input = request(branch);
+      assert.equal((await f.repository.selectMessageGroupMembershipBranch(input)).outcome, 'recorded');
+      assert.equal(f.row().message_group_membership_phase, phase);
+      assert.equal(f.row().message_group_membership_permit, input.nextPermit);
+      assert.equal(f.writes, 1);
+    });
+  }
+});
+test('O1 selected-branch readback stays separate: exact replay records, foreign or expired holder is stale', async (t) => {
+  const f = await setup(t);
+  const input = request();
+  assert.equal((await f.repository.selectMessageGroupMembershipBranch(input)).outcome, 'recorded');
+  assert.equal((await f.repository.selectMessageGroupMembershipBranch(input)).outcome, 'recorded');
+  assert.equal((await f.repo(TARGET_NODE).selectMessageGroupMembershipBranch(input)).outcome, 'stale_owner');
+  f.clock.advance(30000);
+  assert.equal((await f.repository.selectMessageGroupMembershipBranch(input)).outcome, 'stale_owner');
+  assert.equal(f.row().message_group_membership_permit, input.nextPermit);
+  assert.equal(f.writes, 1);
+});
+// Retained gates after the predicate, each witnessed at its own outcome.
+// A selected row is seeded directly: the readback path never writes.
+function seedSelectedRow(f, input, obligation = 'unknown') {
+  seedLearnerRow(f, {message_group_membership_phase: input.branch === 'promote' ?
+    'promotion_proposal_in_flight' : 'target_removal_proposal_in_flight',
+  message_group_membership_permit: input.nextPermit,
+  message_group_membership_obligation_state: obligation});
+}
+const BRANCHES = Object.freeze(['promote', 'abort_learner']);
+test('O1 a next permit behind the learner term is INVALID on new selection and on readback', async (t) => {
+  const stale = (branch) => request(branch, {leaderTerm: prior.leaderTerm - 1});
+  assert.ok(prior.leaderTerm - 1 < learnerStamp.term);
+  await t.test('new selection', async (t) => {
+    const f = await setup(t);
+    await refusedBeforeBranchCas(f, BRANCHES.map(stale), 'invalid', 'next-follows-learner term');
+  });
+  for (const branch of BRANCHES) {
+    await t.test(`readback ${branch}`, async (t) => {
+      const f = await setup(t);
+      seedSelectedRow(f, stale(branch));
+      await refusedBeforeBranchCas(f, [stale(branch)], 'invalid', 'readback next-follows-learner term');
+    });
+  }
+});
+test('O1 a request prior other than the stored permit is CONFLICT before any branch CAS', async (t) => {
+  const f = await setup(t);
+  const otherPrior = JSON.stringify({...prior, proposalIndex: prior.proposalIndex + 1});
+  assert.notEqual(otherPrior, JSON.stringify(prior));
+  await refusedBeforeBranchCas(f, BRANCHES.map((branch) =>
+    ({...request(branch), priorPermit: otherPrior})), 'conflict', 'exact prior permit');
+});
+test('O1 a recorded learner fact whose obligation is not UNKNOWN is CONFLICT before any branch CAS', async (t) => {
+  const f = await setup(t);
+  seedLearnerRow(f, {message_group_membership_obligation_state: 'intent_recorded'});
+  await refusedBeforeBranchCas(f, BRANCHES.map((branch) => request(branch)), 'conflict',
+    'new-branch obligation');
+});
+test('O1 a selected-phase row whose obligation is not UNKNOWN is not an idempotent readback', async (t) => {
+  for (const branch of BRANCHES) {
+    await t.test(branch, async (t) => {
+      const f = await setup(t);
+      seedSelectedRow(f, request(branch), 'intent_recorded');
+      await refusedBeforeBranchCas(f, [request(branch)], 'conflict', 'readback obligation');
+    });
+  }
+});
+test('O1 readback replay with a prior past the learner applied index is INVALID', async (t) => {
+  const f = await setup(t);
+  const input = request();
+  assert.equal((await f.repository.selectMessageGroupMembershipBranch(input)).outcome, 'recorded');
+  assert.equal(f.writes, 1);
+  const pastApplied = JSON.stringify({...prior, proposalIndex: learnerStamp.appliedIndex + 1});
+  await refusedBeforeBranchCas(f, [{...input, priorPermit: pastApplied}], 'invalid',
+    'readback prior-to-learner coherence');
 });

@@ -1,6 +1,0 @@
-
-> lagrange-server@0.2.6 audit:guideline:deferred-outcomes
-> node scripts/check-guideline-deferred-outcomes.js
-
-Scanned 2 JavaScript files
-Found 0 structured deferred-outcome hotspot violations

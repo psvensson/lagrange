@@ -49,10 +49,12 @@ Do not just delete the park assertions and accept arbitrary cache-driven ADD.
 
 ## Next bounded source interaction
 
-The operator-approved J1 decision is in the C0 packet. Its concrete durable
-boundary is specified in exact-promotion-authorization-contract.md on the
-classification branch. Independent review has not yet approved that revised
-packet; no approval is inferred from the user's policy selection.
+The operator-approved J1 decision is in the C0 packet. **2026-10-11 supersession:**
+independent review round 3 approved the historical 82b54ef9 classification at
+`e708f80d7`. The [retained C0 receipt](../cutover-transition-authority-review/evidence/receipt.json)
+binds the immutable archive and review. The proposed boundary remains in archive
+member `quest-before-closure/exact-promotion-authorization-contract.md`.
+Historical classification approval certifies no FreshMG implementation.
 
 The first product interaction remains within ReplicaOperationRepository /
 OperationWorkflowOwner and the existing raft-rs semantic port:

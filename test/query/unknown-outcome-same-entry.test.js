@@ -29,10 +29,8 @@ import {test} from 'node:test';
 import {TABLES} from '../../src/constants/index.js';
 import {ERRORS} from '../../src/constants/errors.js';
 import * as writeKernel from '../../src/partition/partition-write-kernel.js';
-import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {RAFT_RS_MESSAGE_TYPE} from
   '../../src/raft/raft-rs-ingress-constants.js';
-import {tuningOf} from '../../src/raft/raft-rs-runtime-tuning.js';
 import {
   NODE_REGISTRATION_OUTCOME,
   writeNodeRegistrationAtIncarnation,
@@ -60,8 +58,10 @@ import {
   SURFACE_INSERT,
   USER_TABLE,
   appliedRow,
+  driveNativeR2Election,
   lastLogIndexOf,
   logEntriesOf,
+  loseFirstAnswerFromR1,
   nodeRow,
   rowsOf,
   releaseTrapOnAuthoritativeRead,
@@ -84,54 +84,8 @@ const CDC_ROUTED_BUDGET_MS = 4000;
 const BOOT_INCARNATION = 7;
 const MSG_APPEND = 3;
 const MSG_HEARTBEAT = 8;
-const ROUTER_CONNECTION_CLOSED = 'ROUTER_CONNECTION_CLOSED';
 
 const unavailableAuthority = async () => ({available: false, row: null});
-
-
-function loseFirstAnswerFromR1({interceptors, services, members, dbFileOf,
-  afterProposed}) {
-  const lost = {entryId: null, done: false};
-  interceptors.push(async (entry, message) => {
-    if (lost.done || entry.index !== 0) {
-      return undefined;
-    }
-    lost.done = true;
-    lost.entryId = message.entryId;
-    services[0].handleRemoteQuery(message).catch(() => undefined);
-    assert.equal(await waitFor(() =>
-      logEntriesOf(dbFileOf(members[0]), message.entryId).length === 1),
-    true, 'setup: the first delivery is on r1\'s log');
-    await afterProposed();
-    const error = new Error(`connection to ${members[0][1]} closed`);
-    error.code = ROUTER_CONNECTION_CLOSED;
-    throw error;
-  });
-  return lost;
-}
-
-async function driveNativeR2Election(services) {
-  for (const service of services.slice(1)) {
-    service.raft.stopScheduling();
-  }
-  const rounds = 2 * Math.max(...services.slice(1).map((service) =>
-    tuningOf({
-      heartbeatMs: service.raftTimingConfig.heartbeatMs,
-      electionMinMs: service.raftTimingConfig.electionMinMs,
-      tickIntervalMs: service.raftTimingConfig.tickIntervalMs,
-    }).electionTick)) + 1;
-  for (let round = 0; round < rounds; round += 1) {
-    await services[1].raft.tick();
-    await services[2].raft.tick();
-    if (services[1].raft.readStatus().role === RAFT_ROLE.LEADER) {
-      for (const service of services.slice(1)) {
-        service.raft.startScheduling();
-      }
-      return;
-    }
-  }
-  assert.fail('setup: r2 did not lead after the native lease/election bound');
-}
 
 
 // ---------------------------------------------------------------------------

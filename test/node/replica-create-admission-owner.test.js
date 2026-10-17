@@ -99,6 +99,59 @@ function fixture(options = {}) {
   };
 }
 
+// The commit's boot reads: the claim revalidation's, then its own boot fence.
+const COMMIT_FENCE_BOOT_READ = 2;
+
+async function claimedInstall(f, {materialized = false} = {}) {
+  const owner = new ReplicaCreateAdmissionOwner({gateway: f.gateway,
+    nodeId: 'node-1', ownerIncarnation: 101, now: () => 20});
+  const admitted = await owner.claim(f.request);
+  const evidence = materialized ? await owner.markMaterialized(admitted) :
+    admitted;
+  const physicalClaim = await owner.claimPhysicalWorker(evidence);
+  assert.ok(physicalClaim);
+  return {owner, physicalClaim, evidence};
+}
+
+/** Boot 102 starts while the old boot's commit row read is in flight:
+ * `act(newOwner)` runs before that read executes; result() answers it. */
+function newBootDuringRowRead(f, oldOwner, act) {
+  const owner = new ReplicaCreateAdmissionOwner({gateway: f.gateway,
+    nodeId: 'node-1', ownerIncarnation: 102, now: () => 30});
+  const originalRead = oldOwner.readOperation.bind(oldOwner);
+  let started = false;
+  let result;
+  oldOwner.readOperation = async (operationId) => {
+    if (!started) {
+      started = true;
+      f.setBootIncarnation(102);
+      result = await act(owner);
+    }
+    return {...await originalRead(operationId)};
+  };
+  return {owner, result: () => result};
+}
+
+/** Records the commit's durable reads in order; each row read returns a copy
+ * (a real read's snapshot), and onBoot(n) runs as the n-th boot read starts. */
+function traceCommitReads(owner, onBoot = () => {}) {
+  const trace = [];
+  const originalRead = owner.readOperation.bind(owner);
+  const originalRequire = owner.requireCurrentBootIncarnation.bind(owner);
+  owner.readOperation = async (operationId) => {
+    const row = {...await originalRead(operationId)};
+    trace.push('row');
+    return row;
+  };
+  owner.requireCurrentBootIncarnation = async () => {
+    onBoot(trace.filter((read) => read === 'boot').length + 1);
+    const current = await originalRequire();
+    trace.push('boot');
+    return current;
+  };
+  return trace;
+}
+
 describe('ReplicaCreateAdmissionOwner', () => {
   it('settles a rejected lane tail and admits the next same-operation work', async () => {
     const owner = new ReplicaCreateAdmissionOwner();
@@ -473,20 +526,20 @@ describe('ReplicaCreateAdmissionOwner', () => {
       assert.equal(rotating.admissionState, CREATE_ADMISSION_STATE.ROTATING);
     });
 
-  it('cannot commit after boot ownership changes during durable reread',
+  // The install commit reads its boot fence BEFORE the durable row, so that
+  // row read is the last await before the effect (FreshMG CREATE B2, 2026-10-11;
+  // it superseded the boot-after-row order): a boot replaced at the fence read
+  // still refuses. A newer boot acts on the admission only after its takeover
+  // rewrites the row's owner incarnation, which that row read requires; so a
+  // takeover during it refuses, and a bare boot change leaves the old effect
+  // the sole worker.
+  it('cannot commit after boot ownership changes before durable reread',
     async () => {
       const f = fixture();
-      const owner = new ReplicaCreateAdmissionOwner({gateway: f.gateway,
-        nodeId: 'node-1', ownerIncarnation: 101, now: () => 20});
-      const evidence = await owner.claim(f.request);
-      const physicalClaim = await owner.claimPhysicalWorker(evidence);
-      assert.ok(physicalClaim);
-      const originalRead = owner.readOperation.bind(owner);
-      owner.readOperation = async (operationId) => {
-        const row = await originalRead(operationId);
-        f.setBootIncarnation(102);
-        return row;
-      };
+      const {owner, physicalClaim} = await claimedInstall(f);
+      traceCommitReads(owner, (bootRead) => {
+        if (bootRead === COMMIT_FENCE_BOOT_READ) f.setBootIncarnation(102);
+      });
       let mutated = false;
       await assert.rejects(
         owner.commitSnapshotInstall(physicalClaim, () => {
@@ -496,8 +549,82 @@ describe('ReplicaCreateAdmissionOwner', () => {
         {code: CREATE_ADMISSION_ERROR_CODE.DEFERRED},
       );
       assert.equal(mutated, false,
-        'old boot performs no filesystem effect after the durable reread');
+        'old boot performs no filesystem effect after its boot fence');
     });
+
+  it('reads the durable row last, after the boot fence, before the effect',
+    async () => {
+      const f = fixture();
+      const {owner, physicalClaim} = await claimedInstall(f);
+      const trace = traceCommitReads(owner);
+      assert.equal(await owner.commitSnapshotInstall(physicalClaim, () => {
+        trace.push('effect');
+        return true;
+      }), true);
+      assert.deepEqual(trace.slice(-3), ['boot', 'row', 'effect'],
+        'no await separates the authoritative row read from the effect');
+    });
+
+  it('sees an operation change recorded while its boot fence read is in flight',
+    async () => {
+      const f = fixture();
+      const {owner, physicalClaim} = await claimedInstall(f);
+      traceCommitReads(owner, (bootRead) => {
+        if (bootRead === COMMIT_FENCE_BOOT_READ) {
+          f.row.create_admission_token = 'admission-superseded';
+        }
+      });
+      let mutated = false;
+      assert.equal(await owner.commitSnapshotInstall(physicalClaim, () => {
+        mutated = true;
+        return true;
+      }), false);
+      assert.equal(mutated, false,
+        'a change recorded before the last pre-effect read defeats the effect');
+    });
+
+  it('refuses the effect when a newer boot takes the admission over during ' +
+    'the durable reread; the newer boot\'s worker is the sole one', async () => {
+    const f = fixture();
+    const {owner, physicalClaim} = await claimedInstall(f, {materialized: true});
+    const newBoot = newBootDuringRowRead(f, owner, async (newOwner) => {
+      const adopted = await newOwner.takeoverRetained({...f.row});
+      assert.ok(adopted, 'the newer boot takes the retained admission over');
+      return newOwner.claimPhysicalWorker(adopted);
+    });
+    let oldEffect = false;
+    assert.equal(await owner.commitSnapshotInstall(physicalClaim, () => {
+      oldEffect = true;
+      return true;
+    }), false, 'a takeover recorded during the durable reread refuses the old commit');
+    assert.equal(oldEffect, false, 'the old boot performs no effect');
+    assert.equal(f.row.create_admission_owner_incarnation, 102);
+    assert.ok(newBoot.result(), 'the newer boot holds the worker');
+    let newEffect = false;
+    assert.equal(await newBoot.owner.commitSnapshotInstall(newBoot.result(), () => {
+      newEffect = true;
+      return true;
+    }), true);
+    assert.equal(newEffect, true, 'the newer boot\'s worker is the one that commits');
+  });
+
+  it('keeps the old effect the sole worker when the boot changes without a ' +
+    'takeover during the durable reread', async () => {
+    const f = fixture();
+    const {owner, physicalClaim, evidence} =
+      await claimedInstall(f, {materialized: true});
+    const newBoot = newBootDuringRowRead(f, owner, (newOwner) =>
+      newOwner.claimPhysicalWorker(evidence));
+    let oldEffect = false;
+    assert.equal(await owner.commitSnapshotInstall(physicalClaim, () => {
+      oldEffect = true;
+      return true;
+    }), true, 'without a takeover the old boot still owns the admission');
+    assert.equal(oldEffect, true);
+    assert.equal(newBoot.result(), false,
+      'a newer boot without the takeover gets no worker for it');
+    assert.equal(f.row.create_admission_owner_incarnation, 101);
+  });
 
   it('fences a claimed old boot before physical grant and durable progress',
     async () => {

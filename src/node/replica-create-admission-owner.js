@@ -19,11 +19,11 @@ import {
   adoptReplicaCreateAdmissionGeneration,
   reserveReplicaCreateAdmissionGeneration,
 } from './replica-create-admission-evidence.js';
-import {claimReplicaCreateDurablePhysicalWorker,
+import {NO_ADMISSION_BASIS, claimReplicaCreateDurablePhysicalWorker,
   commitReplicaCreateSnapshotInstall, releaseReplicaCreatePhysicalWorker,
   requireReplicaCreateRotationWorkerClaim,
-  revalidateReplicaCreatePhysicalWorker, runReplicaCreateExclusive,
-  advanceReplicaCreatePhysicalWorker,
+  revalidateReplicaCreatePhysicalWorker, rowMatchesAdmissionBasis,
+  runReplicaCreateExclusive, advanceReplicaCreatePhysicalWorker,
   snapshotReplicaCreateInstallAuthority} from
   './replica-create-process-owner.js';
 import {closeReplicaCreateAdmissionForLifecycle} from
@@ -48,9 +48,11 @@ const READ_OPERATION_SQL =
 const READ_REPLICA_ADMISSIONS_SQL =
   'SELECT * FROM replica_operations WHERE replica_id = ? ' +
   'AND target_node_id = ? AND create_admission_state IS NOT NULL';
+// Scoped to the recovering handler's own entity type: a partition handler
+// never reads, takes over, advances or closes a message-group admission.
 const READ_TARGET_ADMISSIONS_SQL =
   'SELECT * FROM replica_operations WHERE target_node_id = ? ' +
-  'AND create_admission_state IS NOT NULL';
+  'AND entity_type = ? AND create_admission_state IS NOT NULL';
 const READ_CURRENT_BOOT_SQL =
   'SELECT node_id, boot_incarnation FROM nodes WHERE node_id = ?';
 const CRITICAL_OPTIONS = Object.freeze({
@@ -148,8 +150,8 @@ function rowMatchesRequest(row, request) {
     row.target_node_id === request.targetNodeId;
 }
 
-function rowMatchesAdmission(row, request) {
-  return rowMatchesRequest(row, request) &&
+function rowMatchesAdmission(row, request, basis = NO_ADMISSION_BASIS) {
+  return rowMatchesRequest(row, request) && rowMatchesAdmissionBasis(row, basis) &&
     row.create_admission_token === request.admissionToken &&
     row.create_admission_attempt_token === request.attemptToken &&
     nullableSafeInteger(row.create_admission_attempt_seq) ===
@@ -332,8 +334,10 @@ class ReplicaCreateAdmissionOwner {
       this, claim, expectedEvidence);
   }
 
-  async commitSnapshotInstall(claim, mutation) {
-    return commitReplicaCreateSnapshotInstall(this, claim, mutation);
+  async commitSnapshotInstall(claim, mutation,
+    admissionBasis = NO_ADMISSION_BASIS) {
+    return commitReplicaCreateSnapshotInstall(
+      this, claim, mutation, admissionBasis);
   }
 
   releasePhysicalWorker(claim) {
@@ -423,7 +427,7 @@ class ReplicaCreateAdmissionOwner {
     return observation.rows;
   }
 
-  async snapshotTargetAdmissions() {
+  async snapshotTargetAdmissions(entityType) {
     if (!this.gateway) {
       throw admissionError(
         CREATE_ADMISSION_ERROR_CODE.DEFERRED,
@@ -431,11 +435,18 @@ class ReplicaCreateAdmissionOwner {
         `CREATE admission recovery authority unavailable for ${this.nodeId}`,
       );
     }
+    if (typeof entityType !== 'string' || entityType.length === 0) {
+      throw admissionError(
+        CREATE_ADMISSION_ERROR_CODE.INVALID,
+        this.nodeId,
+        `CREATE admission recovery needs its entity type on ${this.nodeId}`,
+      );
+    }
     const observation = await readAuthoritativeControlPlaneRows(
       this.gateway,
       SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       READ_TARGET_ADMISSIONS_SQL,
-      [this.nodeId],
+      [this.nodeId, entityType],
       CRITICAL_OPTIONS,
     );
     if (observation?.success !== true || !Array.isArray(observation.rows)) {
@@ -531,7 +542,7 @@ class ReplicaCreateAdmissionOwner {
     return admissionEvidenceFromRow(current, requestFromAdmissionRow(current));
   }
 
-  async claim(requestInput) {
+  async claim(requestInput, admissionBasis = NO_ADMISSION_BASIS) {
     const request = normalizeRequest(requestInput, this.nodeId);
     if (!isValidRequest(request)) {
       throw admissionError(
@@ -557,6 +568,8 @@ class ReplicaCreateAdmissionOwner {
       mutation = await this.gateway.updateSystemTableRow(
         SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
         {
+          // The caller's basis joins the CAS; this owner's keys always win.
+          ...admissionBasis,
           operation_id: request.operationId,
           type: request.operationType,
           entity_type: request.entityType,
@@ -589,7 +602,7 @@ class ReplicaCreateAdmissionOwner {
     }
     const row = await this.readOperation(request.operationId);
     await this.requireCurrentBootIncarnation();
-    if (rowMatchesAdmission(row, request)) {
+    if (rowMatchesAdmission(row, request, admissionBasis)) {
       if (isClosedAdmission(row)) {
         throw admissionError(
           CREATE_ADMISSION_ERROR_CODE.STALE,
@@ -664,11 +677,13 @@ class ReplicaCreateAdmissionOwner {
     return admissionEvidenceFromRow(row, requestFromAdmissionRow(row));
   }
 
-  async markMaterialized(evidence) {
+  async markMaterialized(evidence, admissionBasis = NO_ADMISSION_BASIS) {
     return this.advance(
       evidence,
       CREATE_ADMISSION_STATE.ADMITTED,
       CREATE_ADMISSION_STATE.MATERIALIZED,
+      {},
+      admissionBasis,
     );
   }
 

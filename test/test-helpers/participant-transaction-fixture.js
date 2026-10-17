@@ -62,7 +62,7 @@ const REPLICAS = Object.freeze(['tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3']);
 const TABLE = 'test_table';
 const SESSION = 'tx1-v3-session';
 const EPOCH = 7;
-const ELSEWHERE = 'tx1-v3-elsewhere';
+export const ELSEWHERE = 'tx1-v3-elsewhere';
 const INSERT_SQL = 'INSERT INTO test_table (id, value) VALUES (?, ?)';
 const ROW = Object.freeze({id: 'row-1', value: 'value-1'});
 const ROW_2 = Object.freeze({id: 'row-2', value: 'value-2'});
@@ -1097,7 +1097,6 @@ export {
   kindRefusalCases,
   plantRowid,
   rowidsOf,
-  ROWID_CEILING,
   SCRATCH_TABLE,
   committedQueryOf,
   connectionFlag,
@@ -1108,7 +1107,6 @@ export {
   alterCommandOf,
   classifierRefusalCases,
   columnsOf,
-  ELSEWHERE,
   GENERATION_SQL,
   PREPARED,
   UNKNOWN_ANSWER,
@@ -1120,7 +1118,6 @@ export {
   REPLICAS,
   ROW,
   ROW_2,
-  SESSION,
   TABLE,
   V3,
   applyCommitted,

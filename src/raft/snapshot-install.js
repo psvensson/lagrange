@@ -81,6 +81,9 @@ const SELECT_INSTALL_BINDING_TABLE_SQL =
 const NO_CREATE_AUTHORITY = Object.freeze({});
 const NO_CREATE_AUTHORITY_JSON = '{}';
 const ABSENT_PREINSTALL_DIGEST = 'absent';
+// Named empty state: a non-raft-rs image install inspects no receiver lifecycle;
+// only the raft-rs image branch reads the inspection.
+const NO_RECEIVER_LIFECYCLE_INSPECTION = null;
 const MARKER_KIND_FIELD = 'kind';
 const INSTALL_MARKER_KINDS = new Set(
   Object.values(RAFT_SNAPSHOT_INSTALL_MARKER_KIND));
@@ -498,12 +501,17 @@ function swapPreparedInstall(checkpointsRoot, replicaDbPath, marker,
   return true;
 }
 
+// A fresh-create image commits only through the CREATE admission owner: the
+// swap runs on that owner's authoritative operation-row read, which also
+// re-requires the caller's admission basis (options.createAdmissionBasis, the
+// columns a message-group learner's recorded fact and open admission hold).
 async function commitPreparedInstall(options, marker, raftRsImage) {
   const swap = (authority = null) => swapPreparedInstall(
     options.checkpointsRoot, options.replicaDbPath, marker, raftRsImage,
     authority);
   return raftRsImage ? options.createAdmissionOwner.commitSnapshotInstall(
-    options.createPhysicalWorkerClaim, swap) : swap();
+    options.createPhysicalWorkerClaim, swap, options.createAdmissionBasis) :
+    swap();
 }
 
 /**
@@ -559,7 +567,7 @@ async function requestSnapshotInstall(options) {
       reason: REJECTION.CREATE_ADMISSION_REQUIRED,
     });
   }
-  let receiverLifecycle = null;
+  let receiverLifecycle = NO_RECEIVER_LIFECYCLE_INSPECTION;
   if (raftRsImage) {
     receiverLifecycle = inspectSnapshotReceiver({replicaDbPath,
       descriptor: validation.descriptor, replicaIdentity: options.expectedReplicaIdentity});

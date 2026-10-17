@@ -5,13 +5,16 @@
  * hint census: no round trip while nothing owes), and the replicated-row
  * observer. Each turn re-reads the authoritative row, holds the operation lane
  * for one turn, keeps or adopts the membership claim through the repository's
- * existing claim CAS only while an initial learner action is still unrecorded,
+ * existing claim CAS only while a learner attempt is still unrecorded,
  * selects an explicitly HOSTED witness from the service census (never the
  * target the operation has not created; rotating past an unreachable one),
  * and asks the existing recorder to recover the exact learner outcome by
  * operation ID. RECORDED is a historical fact: no CREATE, promotion, removal,
- * cleanup, successor attempt or lane release follows from here. Unresolved
- * outcomes keep the debt and name the trigger that reconsiders them.
+ * cleanup or lane release follows from here. When the recorder's exact read
+ * proves the attempt can never commit (NONCOMMITTED), the same turn has the
+ * repository issue its ordered successor (the next permit sequence) through its
+ * own exact read; issuing is not proposing. Unresolved outcomes keep the debt
+ * and name the trigger that reconsiders them.
  */
 import {SERVICE_TYPE} from '../constants/service.js';
 import {SERVICE_STATUS} from '../constants/service-status.js';
@@ -29,12 +32,12 @@ import {operationCarriesMessageGroupMembership} from
   './replica-operation-message-group-membership-fields.js';
 import {REBALANCE_COORDINATOR_LOG_MSG as LOG} from './rebalancer-constants.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
-import {recoverMessageGroupLearnerInline} from
+import {recoverMessageGroupLearnerInline, issueMessageGroupLearnerSuccessorInline} from
   './operation-workflow-message-group-native-read.js';
 
 const {OPERATION_WORKFLOW_OWNER_LITERAL} = OPERATION_WORKFLOW_OWNER_SHARED;
 const CLAIM_HELD = 'held';
-// The initial action's phases and the one permit state each admits.
+// The learner action's phases and the one permit state each admits.
 const LEARNER_PERMIT_STATE_OF_PHASE = Object.freeze(new Map([
   [PHASE.LEARNER_IN_FLIGHT, MEMBERSHIP_PERMIT_STATE.IN_FLIGHT],
   [PHASE.LEARNER_COMMITTED, MEMBERSHIP_PERMIT_STATE.COMMITTED]]));
@@ -46,6 +49,9 @@ const WAKE = Object.freeze({
   HOSTED_WITNESS: 'an active services row of another replica of the group',
   NEXT_TRIGGER: 'the next restart scan, periodic sweep or replicated-row change',
   CLAIM_EXPIRY: 'expiry of the live holder claim',
+  SUCCESSOR_PROPOSAL: 'the runtime consumer proposing the issued successor attempt',
+  SETTLEMENT_OWNER: 'the membership settlement of a settled operation whose learner ' +
+    'attempt is definitively noncommitted (not built yet)',
 });
 /** Row fields a refusal names; the operation row owner spells them. */
 const DEBT_ROW_FIELD = Object.freeze({
@@ -95,13 +101,13 @@ function carriesMembershipDebt(operation) {
     operation.entityType === SERVICE_TYPE.MESSAGE_GROUP &&
     operation.messageGroupMembershipObligationState === MEMBERSHIP_OBLIGATION.UNKNOWN;
 }
-// This owner recovers the initial learner action only; promotion and removal
-// debt keep their later owners and are reported, not touched.
-function initialLearnerPermit(operation) {
+// This owner recovers the learner action only (its initial attempt or an
+// ordered successor); promotion and removal debt keep their later owners and
+// are reported, not touched.
+function learnerActionPermit(operation) {
   const permit = decodeMembershipPermit(operation.messageGroupMembershipPermit);
   return permit !== null &&
     permit.permitStage === RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER &&
-    permit.permitSequence === 1 &&
     LEARNER_PERMIT_STATE_OF_PHASE.has(operation.messageGroupMembershipPhase) ? permit : null;
 }
 // In flight with an in-flight permit owes a turn; committed with a committed
@@ -111,17 +117,17 @@ function learnerPhaseMatchesPermit(operation, permit) {
   return LEARNER_PERMIT_STATE_OF_PHASE.get(operation.messageGroupMembershipPhase) ===
     permit.permitState;
 }
-// An initial action whose outcome is already recorded owes this owner nothing
+// A learner attempt whose outcome is already recorded owes this owner nothing
 // more once the record is coherent: no claim is touched and no witness asked.
 // A committed phase whose record is not coherent is surfaced, never settled.
 function learnerOutcomeRecorded(operation, permit) {
   return operation.messageGroupMembershipPhase === PHASE.LEARNER_COMMITTED &&
     permit.permitState === MEMBERSHIP_PERMIT_STATE.COMMITTED;
 }
-// What the hint stage can tell from a cached row without any round trip: an
-// initial learner action still unrecorded owes this owner a turn.
-function owesInitialLearnerTurn(operation) {
-  const permit = initialLearnerPermit(operation);
+// What the hint stage can tell from a cached row without any round trip: a
+// learner attempt (initial or ordered successor) still unrecorded owes a turn.
+function owesLearnerAttemptTurn(operation) {
+  const permit = learnerActionPermit(operation);
   return permit !== null && learnerPhaseMatchesPermit(operation, permit) &&
     !learnerOutcomeRecorded(operation, permit);
 }
@@ -168,6 +174,33 @@ function classifyRecorderAnswer(owner, operationId, recovered, witness) {
   }
   return answer(DEBT.CONFLICT, {witness, recorder: recovered.outcome});
 }
+// The issuance's answer in the debt vocabulary. Only RECORDED is an issued
+// successor; a CONFLICT on an ordinarily settled operation is the expected
+// refusal (no successor after settlement) and keeps the debt for its own
+// settlement owner rather than being surfaced as a corrupt row. The row the
+// issuance read last decides that, so a settlement landing inside the turn is
+// diagnosed the same way.
+function classifySuccessorAnswer(repository, operation, issued, witness) {
+  const successor = issued.outcome;
+  if (successor === RECORDER.RECORDED) {
+    return answer(DEBT.SUCCESSOR_ISSUED, {witness, wake: WAKE.SUCCESSOR_PROPOSAL});
+  }
+  if (successor === RECORDER.INVALID) return answer(DEBT.INVALID_INPUT, {witness, successor});
+  if (successor === RECORDER.CONFLICT &&
+    repository.isOperationTerminal(issued.operation ?? operation)) {
+    return answer(DEBT.RETAINED, {witness, recorder: RECORDER.NONCOMMITTED, successor,
+      wake: WAKE.SETTLEMENT_OWNER});
+  }
+  return RETAINED_RECORDER_OUTCOMES.has(successor) ?
+    answer(DEBT.RETAINED, {witness, successor, wake: WAKE.NEXT_TRIGGER}) :
+    answer(DEBT.CONFLICT, {witness, successor});
+}
+async function issueSuccessorInTurn(owner, operation, witness, laneTurn) {
+  witnessRotation(owner).delete(operation.operationId);
+  const issued = await issueMessageGroupLearnerSuccessorInline(
+    owner, operation.operationId, witness, laneTurn);
+  return classifySuccessorAnswer(owner.repository, operation, issued, witness);
+}
 /** One reconciliation turn on the authoritative row. The caller MUST hold this
  * operation's lane and pass its lane turn; the inline recorder refuses otherwise. */
 async function recoverMessageGroupMembershipDebtInline(owner, operation, laneTurn) {
@@ -179,7 +212,7 @@ async function recoverMessageGroupMembershipDebtInline(owner, operation, laneTur
   if (!identity || identity.operationId !== operation.operationId) {
     return answer(DEBT.INVALID_ROW, {field: DEBT_ROW_FIELD.IDENTITY});
   }
-  const permit = initialLearnerPermit(operation);
+  const permit = learnerActionPermit(operation);
   if (!permit) return answer(DEBT.PHASE_NOT_OWNED, {phase: operation.messageGroupMembershipPhase});
   if (!learnerPhaseMatchesPermit(operation, permit)) {
     return answer(DEBT.INVALID_ROW, {field: DEBT_ROW_FIELD.PERMIT});
@@ -197,7 +230,9 @@ async function recoverMessageGroupMembershipDebtInline(owner, operation, laneTur
   if (!witness) return answer(DEBT.NO_HOSTED_WITNESS, {wake: WAKE.HOSTED_WITNESS});
   const recovered = await recoverMessageGroupLearnerInline(
     owner, operation.operationId, witness, laneTurn);
-  return classifyRecorderAnswer(owner, operation.operationId, recovered, witness);
+  return recovered.outcome === RECORDER.NONCOMMITTED ?
+    issueSuccessorInTurn(owner, operation, witness, laneTurn) :
+    classifyRecorderAnswer(owner, operation.operationId, recovered, witness);
 }
 /** Take the operation lane for one turn. A turn already in flight for this
  * operation is not inherited: the debt stays and the next trigger retries. */
@@ -215,6 +250,8 @@ function logDebtOutcome(owner, operation, result) {
     groupId: operation.entityId, ...result};
   if (result.outcome === DEBT.RECORDED && result.settled !== true) {
     owner.logger.info(LOG.MEMBERSHIP_DEBT_RECORDED, event);
+  } else if (result.outcome === DEBT.SUCCESSOR_ISSUED) {
+    owner.logger.info(LOG.MEMBERSHIP_DEBT_SUCCESSOR_ISSUED, event);
   } else if (REFUSED_OUTCOMES.has(result.outcome)) {
     owner.logger.warn(LOG.MEMBERSHIP_DEBT_REFUSED, event);
   } else if (result.outcome !== DEBT.RECORDED) {
@@ -228,21 +265,21 @@ async function recoverAndLog(owner, operation) {
 }
 // The one hint filter every replicated-row trigger shares (periodic sweep,
 // operation-row wake, services-row wake): a replicated row owing this owner an
-// initial learner turn. Recorded, invalid and later-phase rows are not hints,
+// learner turn. Recorded, invalid and later-phase rows are not hints,
 // so they cost no read per sweep or per change; the restart scan's
 // authoritative census still reaches them.
-function replicatedRowOwesInitialLearnerTurn(repository, row) {
+function replicatedRowOwesLearnerTurn(repository, row) {
   if (row?.entity_type !== SERVICE_TYPE.MESSAGE_GROUP ||
     row.message_group_membership_obligation_state !== MEMBERSHIP_OBLIGATION.UNKNOWN ||
     typeof row.operation_id !== OPERATION_WORKFLOW_OWNER_LITERAL.STRING) return false;
   const operation = repository.rowToOperation(row);
-  return Boolean(operation) && owesInitialLearnerTurn(operation);
+  return Boolean(operation) && owesLearnerAttemptTurn(operation);
 }
 // The replicated cache as a hint of which operations may owe this owner a turn:
 // no round trip, and the turn re-reads every candidate's row authoritatively.
 function cacheHintCandidateIds(repository) {
   const rows = repository.filterReplicaOperationRowsFromCache((row) =>
-    replicatedRowOwesInitialLearnerTurn(repository, row)) || [];
+    replicatedRowOwesLearnerTurn(repository, row)) || [];
   return {available: true, ids: rows.map((row) => row.operation_id)};
 }
 // The authoritative census; an unreadable census is reported, never guessed.
@@ -297,7 +334,7 @@ async function reconcileMessageGroupMembershipDebt(owner, census = DEBT_CENSUS.C
 function debtWakeRoute(repository, tableName, cacheOperation, record) {
   if (!record || cacheOperation === OPERATION_WORKFLOW_OWNER_LITERAL.DELETE) return null;
   if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
-    replicatedRowOwesInitialLearnerTurn(repository, record)) {
+    replicatedRowOwesLearnerTurn(repository, record)) {
     return Object.freeze({operationId: record.operation_id});
   }
   if (tableName === SYSTEM_TABLE_NAME.SERVICES &&
@@ -305,18 +342,18 @@ function debtWakeRoute(repository, tableName, cacheOperation, record) {
     record.status === SERVICE_STATUS.ACTIVE &&
     typeof record.group_id === OPERATION_WORKFLOW_OWNER_LITERAL.STRING) {
     const laneKey = messageGroupMembershipLaneKey(record.group_id);
-    return laneOwesInitialLearnerTurn(repository, laneKey) ? Object.freeze({laneKey}) : null;
+    return laneOwesLearnerTurn(repository, laneKey) ? Object.freeze({laneKey}) : null;
   }
   return null;
 }
 // A hosted replica wakes its group's lane only when the replicated cache lists
 // an operation on that lane passing the shared hint filter. Without a cache
 // boundary the authoritative lane read decides, as the sweep's census does.
-function laneOwesInitialLearnerTurn(repository, laneKey) {
+function laneOwesLearnerTurn(repository, laneKey) {
   if (!repository.hasReplicaOperationCacheObservationBoundary()) return true;
   const rows = repository.filterReplicaOperationRowsFromCache((row) =>
     row?.message_group_membership_lane_key === laneKey &&
-    replicatedRowOwesInitialLearnerTurn(repository, row)) || [];
+    replicatedRowOwesLearnerTurn(repository, row)) || [];
   return rows.length > 0;
 }
 async function observeDebtWakeRoute(repository, route) {

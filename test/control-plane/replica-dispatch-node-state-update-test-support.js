@@ -202,3 +202,41 @@ export function createService(options = {}) {
   service.initialize();
   return service;
 }
+
+/**
+ * The row a dispatch wake or queue re-entry carries has one owner: the
+ * dispatch projection (`ReplicaDispatchReadinessCapture
+ * .buildOperationRowFromCoordinator`, mirroring the replica_operations row
+ * owner's column list). The suites here assert WHICH operation reached WHICH
+ * owner, so they project their own fixture through that owner instead of
+ * restating its column list (R03/R08).
+ *
+ * Supersedes (R09, 2026-10-11) the literal expected rows these suites held
+ * from before a8686b37c "preserve reservation identity in dispatch
+ * projection" (independently verified
+ * 2026-10-07T11:44Z, witness
+ * test/control-plane/replica-dispatch-reservation-identity.test.js) added
+ * `target_claim_key` and `membership_publication_epoch` to the projection.
+ * The routing each case proves (remote-owner wake address, operation id,
+ * canonical per-operation queue re-entry) is unchanged.
+ *
+ * @param {ReplicaDispatchService} service - The service under test.
+ * @param {Object} operation - A coordinator-shaped operation fixture.
+ * @return {Object} The row the service dispatches for it.
+ */
+export function projectDispatchRow(service, operation) {
+  return service.buildOperationRowFromCoordinator(operation);
+}
+
+/**
+ * A cached, CDC-replayed or rediscovered row re-enters dispatch as an
+ * operation first (`buildOperationFromRow`) and is projected back to the row
+ * shape when it is forwarded; both hops are the owner's.
+ *
+ * @param {ReplicaDispatchService} service - The service under test.
+ * @param {Object} row - A replica_operations row fixture.
+ * @return {Object} The row the service dispatches for it.
+ */
+export function projectDispatchRowFromRow(service, row) {
+  return projectDispatchRow(service, service.buildOperationFromRow(row));
+}

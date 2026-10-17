@@ -11,6 +11,7 @@ import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {
   createService,
   initEnv,
+  projectDispatchRow,
 } from './replica-dispatch-node-state-update-test-support.js';
 
 const DIRECT_WAKEUP_RETRY_TEST_NAME =
@@ -97,7 +98,7 @@ test('ReplicaDispatchService sends direct remote wake-up for target-owned ' +
   });
 
   try {
-    await service.handleCoordinatorOperationCreated({
+    const createdOperation = {
       operationId: 'op-remote-owned-create-1',
       partitionId: 'control_plane_publications-p1',
       type: OperationType.REPLACE,
@@ -107,7 +108,8 @@ test('ReplicaDispatchService sends direct remote wake-up for target-owned ' +
       createdAt: Date.now(),
       updatedAt: Date.now(),
       stepsHistory: [],
-    });
+    };
+    await service.handleCoordinatorOperationCreated(createdOperation);
 
     t.same(
       deliveries,
@@ -116,25 +118,8 @@ test('ReplicaDispatchService sends direct remote wake-up for target-owned ' +
         payload: {
           type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
           [ControlPlaneField.OPERATION_ID]: 'op-remote-owned-create-1',
-          [ControlPlaneField.OPERATION_ROW]: {
-            operation_id: 'op-remote-owned-create-1',
-            type: OperationType.REPLACE,
-            partition_id: 'control_plane_publications-p1',
-            replica_id: undefined,
-            source_node_id: 'node-1',
-            target_node_id: 'node-2',
-            status: undefined,
-            workflow_step: WORKFLOW_STEP.PENDING,
-            created_at: deliveries[0]?.payload?.[ControlPlaneField.OPERATION_ROW]
-              ?.created_at,
-            updated_at: deliveries[0]?.payload?.[ControlPlaneField.OPERATION_ROW]
-              ?.updated_at,
-            completed_at: undefined,
-            error_message: undefined,
-            steps_history: '[]',
-            entity_type: undefined,
-            entity_id: undefined,
-          },
+          [ControlPlaneField.OPERATION_ROW]:
+            projectDispatchRow(service, createdOperation),
         },
       }],
       'remote-owned coordinator creates should wake the target owner directly',
@@ -594,7 +579,7 @@ test(DIRECT_WAKEUP_RETRY_TEST_NAME, async (t) => {
   });
 
   try {
-    await service.handleCoordinatorOperationCreated({
+    const retryOperation = {
       operationId: DIRECT_WAKEUP_RETRY_OPERATION_ID,
       partitionId: DIRECT_WAKEUP_RETRY_PARTITION_ID,
       entityType: 'partition',
@@ -607,7 +592,8 @@ test(DIRECT_WAKEUP_RETRY_TEST_NAME, async (t) => {
       createdAt: DIRECT_WAKEUP_RETRY_CREATED_AT,
       updatedAt: DIRECT_WAKEUP_RETRY_UPDATED_AT,
       stepsHistory: [],
-    });
+    };
+    await service.handleCoordinatorOperationCreated(retryOperation);
 
     t.equal(
       deliveries.length,
@@ -621,23 +607,8 @@ test(DIRECT_WAKEUP_RETRY_TEST_NAME, async (t) => {
         payload: {
           type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
           [ControlPlaneField.OPERATION_ID]: DIRECT_WAKEUP_RETRY_OPERATION_ID,
-          [ControlPlaneField.OPERATION_ROW]: {
-            operation_id: DIRECT_WAKEUP_RETRY_OPERATION_ID,
-            type: OperationType.REPLACE,
-            partition_id: DIRECT_WAKEUP_RETRY_PARTITION_ID,
-            replica_id: DIRECT_WAKEUP_RETRY_REPLICA_ID,
-            source_node_id: DIRECT_WAKEUP_RETRY_SOURCE_NODE_ID,
-            target_node_id: DIRECT_WAKEUP_RETRY_TARGET_NODE_ID,
-            status: undefined,
-            workflow_step: WORKFLOW_STEP.PENDING,
-            created_at: DIRECT_WAKEUP_RETRY_CREATED_AT,
-            updated_at: DIRECT_WAKEUP_RETRY_UPDATED_AT,
-            completed_at: undefined,
-            error_message: undefined,
-            steps_history: DIRECT_WAKEUP_RETRY_STEPS_HISTORY_JSON,
-            entity_type: 'partition',
-            entity_id: DIRECT_WAKEUP_RETRY_PARTITION_ID,
-          },
+          [ControlPlaneField.OPERATION_ROW]:
+            projectDispatchRow(service, retryOperation),
         },
         options: {
           targetNodeId: DIRECT_WAKEUP_RETRY_TARGET_NODE_ID,

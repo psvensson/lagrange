@@ -6,7 +6,9 @@
 // owns:
 //
 //   stable across process restart - the registry is reopened from its file;
-//   independent of address        - derived structurally from the module;
+//   independent of address        - derived structurally from the module's
+//                                   code: comments are prose, not a reader
+//                                   of placement;
 //   never list position           - the same identities registered in the
 //                                   opposite order, in a different database,
 //                                   produce the same ids, with the existing
@@ -18,6 +20,16 @@
 //                                   the registry's decimal string, character
 //                                   for character, while the same value
 //                                   through a JavaScript Number is not.
+//
+// Superseded (R09, 2026-10-11): the two source searches below run over the
+// owner's code with comments removed (as the committed-membership census
+// does), not over its raw text. d22c39192 "Propagate committed raft-rs peer
+// identities" (quest message-group-fresh-identity-membership, independently
+// approved 2026-10-07T13:54Z, merged at b98722cab) documented
+// reserveCommittedReplica with the very refusal this receipt is about
+// ("committed context cannot authorize address-as-identity"), and a raw-text
+// search read that prose as an address reaching the identity owner. The
+// property is unchanged: no address, and no Number(), in the identity path.
 
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -71,8 +83,12 @@ function registerAll(registry, replicas) {
   return replicas.map((replica) => registry.registerReplica(replica));
 }
 
-function sourceOf(relative) {
-  return fs.readFileSync(path.join(REPOSITORY_ROOT, relative), UTF8);
+// The module's code without its comments, so a mention in prose is not a
+// reader (the same two strippers as committed-membership-census.test.js).
+function codeOf(relative) {
+  return fs.readFileSync(path.join(REPOSITORY_ROOT, relative), UTF8)
+    .replace(/\/\*[\s\S]*?\*\//gu, '')
+    .replace(/(^|[^:'"`])\/\/.*$/gmu, '$1');
 }
 
 test('a raft peer id survives restart, ignores address and is never reassigned',
@@ -97,16 +113,16 @@ test('a raft peer id survives restart, ignores address and is never reassigned',
           'what the decimal-string boundary exists to prevent');
       }
       // The module itself cannot round one: nothing on its path coerces.
-      assert.ok(!NUMBER_COERCION.test(sourceOf(IDENTITY_MODULE)),
+      assert.ok(!NUMBER_COERCION.test(codeOf(IDENTITY_MODULE)),
         'a Number() anywhere on the identity path would round a u64');
       assert.ok(NUMBER_COERCION.test('Number(roundedPeerId)'),
         'control: the same search rejects a narrowing mutation');
 
       // ---- independent of address -----------------------------------------
-      assert.ok(!ADDRESSY.test(sourceOf(IDENTITY_MODULE)),
+      assert.ok(!ADDRESSY.test(codeOf(IDENTITY_MODULE)),
         'an address anywhere in the identity owner would make identity ' +
         'follow placement');
-      assert.ok(ADDRESSY.test(sourceOf(CONTROL_MODULE)),
+      assert.ok(ADDRESSY.test(codeOf(CONTROL_MODULE)),
         'control: the same search finds addresses where they are');
 
       // ---- stable across process restart ----------------------------------
