@@ -909,3 +909,322 @@ the coverage model are traced but unwitnessed; F-A2 `resolveGrant` issues a
 second authoritative read on UNKNOWN after the owner's own (harmless);
 F-R1 the by-path tombstone identity carries five fields (adds `storage` when
 the recovery stage defines restart-scan retirement).
+
+## Revision 3 amendment A2: bounded owner-side re-decide for slot transitions (owner decision 2026-10-17)
+
+Owner decision (2026-10-17, after the stage-1 landing and finding F0): option 2
+of the alternatives presented. Appended by the lead (R09/R21). Independent vet
+and implementation follow the stage process; nothing below is implemented yet.
+
+### A2.0 Claim
+
+A resource-slot transition request (reserve, grant to PUBLISHED, release to
+RELEASING, close to CLOSED) that loses the single-row compare-and-set to a
+concurrent transition of a DIFFERENT slot of the same row is decided again by
+the metadata owner from the fresh authoritative observation and resubmitted,
+at most `SERVICE_INSTANCE_LIMIT.RESOURCES` (9) times, each attempt one exact
+prior-state predicate. The caller receives the typed decision for its own slot
+(PUBLISHED, RELEASING, CLOSED, ADMITTED, or a sealed refusal), not
+STATE_CHANGED, whenever the row's decision for that slot is unchanged by the
+sibling's mutation. STATE_CHANGED remains the typed answer only when the bound
+is exhausted. Selection (`selectConsensusInstance`) and the UNKNOWN path are
+unchanged.
+
+### A2.1 Why this is sound (and why UNKNOWN stays single-shot)
+
+A conditional UPDATE that returns a successful envelope with zero affected rows
+is a definitive fact: the mutation did not apply at the apply point. Re-deciding
+from a fresh read and resubmitting therefore cannot double-apply anything; it is
+a new decision on observed state, each attempt attributable. The sealed rule
+("no semantic CAS loop reconstructs a new request after an unknown answer",
+INSTANCE-CAS-STAGE-ACCEPTANCE-20261016, review line 15; header comment of
+`service-instance-metadata.js` line 2 and the comment at its line 63) protects
+the UNKNOWN case, where the reply was lost and the mutation MAY have applied:
+there, one authoritative resolution and never a resubmission remains the rule.
+Slot decisions are deterministic per token (`reserveResourceState`,
+`changeResourceState`), so a re-decision after a definitive zero-row answer
+yields the caller's recorded outcome when the sibling's change already covers
+it (idempotent SAME, CLOSED monotonic, TARGET_ALREADY_OWNED, STALE_BINDING,
+PREDECESSOR_OUTSTANDING) or applies the caller's own slot change when it does
+not. Selection is a true single-winner race whose loser must learn the winner
+from history (`selectionHistory`), so it keeps STATE_CHANGED and is excluded.
+
+### A2.2 Superseded clauses (named, not rewritten)
+
+- `service-instance-metadata.js` header "no semantic CAS loop" and the line-63
+  comment "never another rewritten mutation" now read: "no resubmission after
+  an UNKNOWN answer; a definitive zero-row answer to a slot transition is
+  re-decided from a fresh observation, bounded by RESOURCES".
+- INSTANCE-CAS-STAGE-ACCEPTANCE-20261016 and -REVIEW-20261016 statements of the
+  rule stand as records of that stage; this amendment supersedes them for slot
+  transitions only.
+- 7' F0 and the stage-1 finding "losers answer STATE_CHANGED and are re-driven
+  by the operation owner" are superseded: the owner resolves the sibling race.
+  The `CREATION_GRANT_HELD` wake keeps its other reasons (PREDECESSOR_OUTSTANDING,
+  UNAVAILABLE, UNKNOWN, STALE_BINDING, RESOURCE_CLOSED).
+- Witness supersessions (append with a citation of A2): CAS/selection-admission
+  "closed-slot contention reports STATE_CHANGED and caller replay closes only
+  its exact token" (`service-instance-selection-admission.test.js:206-225`): the
+  held close now answers CLOSED in the same call after one re-decide; slot 1
+  stays ADMITTED. Publication P1/P15/P18 and the retained fixture consumer
+  `reenterOnWake` (`wasm-retained-bootstrap-fixture.js:55-70`): the
+  STATE_CHANGED re-drive branch is removed; every founder publishes from native
+  events in one pass (`reentries === 0`, exactly one OBSERVED wake per host, no
+  GRANT_HELD wake with STATE_CHANGED anywhere); P18 asserts every replica
+  serving with `CONSUMER_ABSENT` and no typed hold.
+- `wasm-creation-publication.integration.test.js:189-198 assertOneOwnerWake`
+  tightens to "exactly one wake per host and it is OBSERVED" (this also
+  resolves verifier finding F-W2 for the STATE_CHANGED case).
+
+### A2.3 Mechanism (owner module only)
+
+In `service-instance-metadata.js`, `mutateResource` becomes the bounded loop:
+observe, decide; if the decision has no `next`, return its result; submit the
+exact-predicate UPDATE; on one affected row return the decision's result; on a
+definitive zero-row envelope, re-observe and loop (at most RESOURCES attempts);
+on any other answer (exception, missing affectedRows) take the existing UNKNOWN
+path: one authoritative resolution, no resubmission. `commitState` keeps the
+insert path and the UNKNOWN resolution; `selectConsensusInstance` keeps the
+single-shot `commitState` call. No new state, timer, lock or cache; the bound
+is the existing `SERVICE_INSTANCE_LIMIT.RESOURCES`. Attempt count is returned
+in the typed result as `attempts` only where a result object already exists
+(R11: observable, never only logged), or recorded by the component fixture's
+write log; the vet decides which.
+
+### A2.4 Witnesses (component CAS table + native)
+
+- CAS-A1 sibling grants: `holdNext('owner-a')` on owner-a's grant UPDATE (slot 0)
+  while owner-b grants slot 1; release; owner-a answers PUBLISHED in the same
+  call; `f.writes` shows exactly two owner-a UPDATEs, the first with
+  `changes === 0`; slot 1 stays PUBLISHED.
+- CAS-A2 sibling close race (the stage-1 retirement cost): slots 0 and 1
+  PUBLISHED; hold owner-a's CLOSED while owner-b closes slot 1; owner-a
+  answers CLOSED; both slots CLOSED; the successor's grant then answers
+  PUBLISHED (last CLOSED lifts the hold).
+- CAS-A3 bound exhaustion: a fixture gateway `updateSystemTableRow` override
+  answering `{success: true, affectedRows: 0}` forever; the grant answers
+  STATE_CHANGED after exactly RESOURCES submissions; the row is unchanged.
+- CAS-A4 UNKNOWN never resubmits: `loseReply('owner-a')` on the grant; the
+  result is PUBLISHED through the owner's own resolution; exactly one owner-a
+  UPDATE in `f.writes` (`appliedLostReplies.length === 1`).
+- CAS-A5 re-decision yields the sealed refusal, not a resubmission: hold
+  owner-a's grant while owner-b selects J (STALE_BINDING, one zero-row UPDATE,
+  no second submission) and while owner-b closes the same slot (CLOSED
+  monotonic answer, no resubmission).
+- Native P19 (publication file): the three founders of a PUBLISHED group are
+  retired concurrently by creation; every retirement answers CLOSED in one
+  pass; no CLOSE_UNRESOLVED; three CREATION_RESOURCE_CLOSED wakes.
+- P1/P15/P18 tightened as A2.2 says; P13 gains the F-M1 assertion (after the
+  held runs every host's `creationReconciliation.subscriptions.length > 0`).
+
+### A2.5 Mutations
+
+MA1 remove the re-decide (single-shot restored): CAS-A1/A2 red, P1 tightened
+red. MA2 resubmit after UNKNOWN: CAS-A4 red (two owner-a UPDATEs). MA3 bound
+removed or off by one: CAS-A3 red (attempt count). MA4 resubmit the stale
+bytes instead of re-deciding (same predicate): CAS-A1 red (STATE_CHANGED
+after RESOURCES identical attempts). MA5 re-decide applied to selection:
+selection-admission "zero affected rows cannot manufacture a successful
+selection" red (`attempts === 1`).
+
+### A2.6 Out of scope (unchanged owners)
+
+Per-slot rows (option 3), leader-grants-the-group (option 4), lifecycle-side
+retry (option 5), the production wake consumer and the log level of
+`CONSUMER_ABSENT` (F-W1, discovery stage), `storage` in the by-path tombstone
+(F-R1, recovery stage).
+
+## Amendment A2, Revision 1 (A2'): resolutions of vet findings F1-F14 (2026-10-17)
+
+Appended by the lead after the independent vet of A2 (verdict REVISE, no
+blocking finding, no mechanism defect; report
+`evidence/design-vets-20261017/design-vet-A2-20261017.md`). Where A2' and A2
+disagree, A2' wins. The mechanism of A2.3 stands; every item below is a
+precision of its text, its typed states or its proof plan. The implementation
+is verified against A2 as revised here, not against a further vet round.
+
+### A2'.0 Claim, reworded (F2, F5)
+
+A resource-slot transition (reserve, grant to PUBLISHED, release to RELEASING,
+close to CLOSED) whose exact prior-state UPDATE returns a successful envelope
+with a NUMERIC zero affected-row count has definitively not applied. The owner
+then observes the row again, decides again from that fresh observation, and
+submits one new exact-predicate UPDATE, for at most
+`SERVICE_INSTANCE_LIMIT.RESOURCES` submissions IN TOTAL per call (the first
+plus at most RESOURCES-1 re-decisions). The cause of the lost compare-and-set
+is never classified: a concurrent mutation of ANY kind (a sibling slot, the
+same slot by another caller, a selection) is answered by the fresh decision,
+which yields the caller's own-slot result or a sealed refusal. STATE_CHANGED
+is the typed answer only when the bound is exhausted. UNKNOWN (lost reply,
+thrown or failed envelope, absent count) stays single-shot: one authoritative
+resolution, never a resubmission. Selection is excluded structurally: it never
+calls `mutateResource`, so the loop lives in `mutateResource` and nowhere else.
+
+### A2'.1 Evidence that a numeric zero is definitive (F1)
+
+An applied mutation whose reply is replayed or whose count is not retained is
+reported with an ABSENT count, never 0: `partition-committed-statement-outcome.js:155-163`
+(retained count or `{settledReplay: OUTCOME_NOT_RETAINED}` without `changes`),
+`distributed-write-coordinator.js:341-348`, `application-database-result.js:164-171, 180-184`
+(any absent participant count makes the field absent),
+`cdc-integration-service-authoritative-read-flow.js:385-401` (affectedRows only
+from a numeric `changes`), classifier `control-plane-mutation-outcome-classifier.js:26-32`.
+A failed participant or readiness refusal is `success: false` and throws
+(`system-metadata-owner-base.js:441-446`). Transport retry reuses one write
+identity (`control-plane-write-identity.js:9-14`) and never reports a replay as
+0. Coalescing keys on content, so two different predicates never join. The
+whole canonical state is the predicate and every component of it is
+monotonic, so no later state equals an earlier one (no ABA). The only producer
+of a numeric 0 is an evaluated predicate miss. Safety does not rest on this
+word alone: each resubmission carries a new predicate, and `decide` on the
+fresh state answers SAME or the recorded result when the caller's own effect
+already landed, so the loop can never re-apply its own change. Component
+boundary (stage-1 verifier F-H1 (i)): the fixture's `affectedRows` is
+better-sqlite3's `changes`; the production absent-versus-zero distinction is
+not witnessed by the component files and stays a recorded limit.
+
+### A2'.2 Bound rationale (F5)
+
+RESOURCES is the sealed cap of founders per instance
+(`service-instance-contract.js:100-105`). One instance's founders racing is
+the decided case: a caller loses at most once per other concurrent winner, so
+nine founders need at most nine submissions. Two would starve the third
+founder of a three-host group. The two-instance overlap (I's nine retirements
+racing J's nine reserves) can exceed the bound; that caller answers
+STATE_CHANGED with the owned consequence of A2'.4. The bound is fixed, not
+derived from an unobservable sibling count, so every call stays attributable.
+
+### A2'.3 Typed states inside the loop (F3, section 10)
+
+- Re-observation after a definitive zero fails: `{outcome: UNAVAILABLE}` when
+  the authoritative read is unavailable, `{outcome: CORRUPT_STATE}` when the
+  row decodes invalid; never UNKNOWN (nothing about the mutation is unknown).
+- A re-observation answering NEVER_CREATED is unreachable (rows are never
+  deleted); if observed, answer CORRUPT_STATE.
+- `CAPACITY_EXHAUSTED` from encoding `change.next` is a pre-submission sealed
+  refusal that ends the loop.
+- Each attempt decides on the state object of the NEW observation and submits
+  that observation's `row.state` bytes as the predicate; the previous
+  decision's object is discarded (`decide` mutates its argument in place, F4).
+- The re-observation is the same `readByPrimaryKeyObservation` as the first.
+
+### A2'.4 The owned consequence of STATE_CHANGED at the bound (F6, F8)
+
+N7 is unchanged: a run that reaches OBSERVED but cannot grant fires one
+`CREATION_GRANT_HELD` wake carrying the typed grant outcome, STATE_CHANGED at
+bound exhaustion included; the earlier list of reasons was illustrative, not
+exhaustive (it also includes HISTORY_UNAVAILABLE, CONTENT_CONFLICT and
+LOCAL_GRANT_NOT_RECORDED). Re-driver per verb: grant -> the N7 consumer (the
+desired-state reconcile in production; the fixture consumer records it and a
+test re-enters explicitly); close -> `CLOSE_UNRESOLVED` with retained custody
+and an explicit re-stop (D4'); release -> the recorded `release.outcome`,
+retirement continues (D5'/A1); reserve -> the producer's typed non-ADMITTED
+answer and an idempotent re-reserve on re-START. After A2 the owner outcomes
+behind `CLOSE_UNRESOLVED` are UNKNOWN (lost reply, exception), UNAVAILABLE
+(read failure before the first attempt or after a definitive zero),
+STATE_CHANGED (bound exhausted), HISTORY_UNAVAILABLE and CONTENT_CONFLICT
+(token mismatch). The claim "no CLOSE_UNRESOLVED on group retirement" holds
+for at most RESOURCES concurrent retirements of one row.
+
+### A2'.5 Observability decision (section 7)
+
+No `attempts` field in the typed result (R08: one canonical `{outcome, phase,
+token}` shape shared with `resolveInstanceResource` and deep-equalled by sealed
+witnesses), no new log line, no logger dependency for the owner. Bound
+exhaustion is the explicit typed STATE_CHANGED the lifecycle already surfaces.
+The proof of the bound is the component fixture's write log and a counting
+gateway override. Operator visibility of attempts belongs to the gateway's
+operation ledger, which already records every attempt with its count.
+
+### A2'.6 Superseded clauses added (F9, F13, F14)
+
+- CONTRACT-R2 lines 49-53, "Existing transport retry may replay identical
+  mutation bytes; it cannot recompute a new expected state": superseded for
+  slot transitions after a definitive zero-row answer; the UNKNOWN clause and
+  the selection paragraph stand.
+- Amendment A1's "bounded by the metadata owner's own routed-mutation budget"
+  now reads "bounded by RESOURCES x (one authoritative read + one routed
+  write)"; this is the accepted cost of D5' visibility; P4's order is unchanged.
+- This design's section 1 text "commitState ... UNKNOWN / STATE_CHANGED
+  otherwise", the stage-1 lab acceptance record finding 5 and its verification
+  section's F0 judgment, and 7' F0: records of their stage, superseded by A2
+  for slot transitions.
+
+### A2'.7 Proof plan, corrected and completed (F4, F7, F10, F11, F12, cells 1-8)
+
+Component CAS table (`service-instance-creation-cas.test.js`, fixture seams
+`holdNext`, `holdNext {afterApply}`, `loseReply`, `setGatewayReadFault`,
+`getGateway().updateSystemTableRow` override, `f.writes` with `changes`):
+- CAS-A1 sibling grants: hold owner-a's grant UPDATE (slot 0) while owner-b
+  grants slot 1; release; owner-a answers PUBLISHED; `f.writes` shows exactly
+  two owner-a UPDATEs, the first `changes === 0`; `f.state().selected.resources[0].phase === 'PUBLISHED'`
+  and slot 1 PUBLISHED.
+- CAS-A1b two consecutive losses: two holds for owner-a; owner-b then owner-c
+  win between them; owner-a answers PUBLISHED on the third submission
+  (three owner-a UPDATEs, 0/0/1).
+- CAS-A1c sibling reserves of different replicas on different slots: hold
+  owner-a's reserve of slot 0 while owner-b reserves slot 1; both ADMITTED,
+  two non-CLOSED slots, owner-a two UPDATEs (0/1).
+- CAS-A2 sibling close race: slots 0 and 1 PUBLISHED; J selected; hold owner-a's
+  CLOSED on slot 0 while owner-b closes slot 1; release; owner-a answers
+  CLOSED; both CLOSED; J's grant answers PUBLISHED (last CLOSED lifts the hold).
+- CAS-A3 bound exhaustion: `updateSystemTableRow` override answering
+  `{success: true, affectedRows: 0}` forever and counting calls; the grant
+  answers STATE_CHANGED after exactly RESOURCES submissions; the row is unchanged.
+- CAS-A4 UNKNOWN never resubmits: `loseReply('owner-a')` on the grant; PUBLISHED
+  through the owner's own resolution; `appliedLostReplies.length === 1`;
+  exactly one owner-a UPDATE.
+- CAS-A5a selection of J inside the held grant: STALE_BINDING, one zero-change
+  UPDATE, no second submission.
+- CAS-A5b grant versus the same slot's RELEASING/CLOSED by another caller:
+  the grant answers `RESOURCE_CLOSED` (sealed N3 order), one zero-change
+  UPDATE, no resubmission. CLOSED-monotonic under the re-decide: hold owner-a's
+  RELEASE (or CLOSE) of slot 0 while owner-b CLOSES slot 0; owner-a answers
+  `{outcome: 'CLOSED', phase: 'CLOSED', token}` with one zero-change UPDATE and
+  no resubmission.
+- CAS-A6 selection UPDATE path is single-shot: select V=0; reserve slot 0;
+  hold owner-a's selection V=1 UPDATE; after `entered`, owner-b grants slot 0;
+  release; the selection answers STATE_CHANGED; exactly one owner-a UPDATE
+  (`changes === 0`); `f.state().version === 1` and slot 0 PUBLISHED; a repeat of
+  the same K answers SELECTED.
+- CAS-A7 zero then re-read fails: override answers `{success: true, affectedRows: 0}`
+  once and `setGatewayReadFault` is set; the grant answers UNAVAILABLE; exactly
+  one UPDATE; no resubmission.
+- Selection-admission `:206-223` superseded by appending (A2 citation): the
+  held close answers CLOSED in the same call; slot 1 stays ADMITTED. Its `:53-63`
+  INSERT witness stands.
+
+Native (publication file, retained-bootstrap fixture):
+- P1/P15: exactly one wake per host and it is OBSERVED (`assertOneOwnerWake`
+  tightened); `reentries === 1` (the consumer's OBSERVED re-entry collects
+  PUBLISHED; the STATE_CHANGED branch of `reenterOnWake` is removed); no
+  GRANT_HELD(STATE_CHANGED) wake anywhere.
+- P18 (no consumer): every host SERVING; `wake.outcome === CONSUMER_ABSENT` on
+  every decisive run; `host.result.status === STATUS_HELD`; the STATE_CHANGED
+  assertion at `:871-873` is dropped.
+- P13: after the held runs and before the fault clears,
+  `host.replica.creationReconciliation.subscriptions.length > 0` on every host
+  (F-M1).
+- P19 concurrent group retirement: `Promise.all` of `f.retire(host)` on a
+  published group; every result `closed === true`, `release.outcome` RELEASING
+  or CLOSED, `tombstone.outcome === 'RETIRED'`; no CLOSE_UNRESOLVED; three
+  CREATION_RESOURCE_CLOSED wakes; the race ENGAGED (`f.metadata.writes` has a
+  zero-change `UPDATE service_instances`). If the leader's native shutdown
+  stalls its followers, retire followers first and the leader last inside the
+  same `Promise.all`, and record it.
+- P20 bound exhaustion through the lifecycle: the metadata gateway's
+  `updateSystemTableRow` answers zero rows for the forming group; every host
+  HELD with `grant.outcome === 'STATE_CHANGED'`, one GRANT_HELD wake per held
+  run carrying STATE_CHANGED, `reentries === 0`, no local write; after the
+  override is removed an explicit START publishes.
+
+### A2'.8 Mutations
+
+MA1 single-shot restored: CAS-A1, CAS-A2, P1, P19 red. MA2 resubmit after
+UNKNOWN: CAS-A4 red (two owner-a UPDATEs). MA3 bound off by one or removed:
+CAS-A3 red (submission count). MA4 resubmit the stale bytes instead of
+re-deciding: CAS-A1 red (identical zero-change UPDATEs). MA5 loop placed in
+`commitState` (selection reachable): CAS-A6 red, INSERT witness green. MA6
+re-decide on the retained, already-mutated state object: CAS-A1 red (one
+UPDATE, row ADMITTED while the caller is told PUBLISHED). MA7 re-read failure
+after a zero answered UNKNOWN: CAS-A7 red.

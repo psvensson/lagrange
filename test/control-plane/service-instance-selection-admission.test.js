@@ -203,7 +203,13 @@ test('selection overtaking an in-flight grant defeats its exact whole-row predic
     write.changes === 0));
 });
 
-test('closed-slot contention reports STATE_CHANGED and caller replay closes only its exact token',
+// Superseded by design SERVING-PUBLICATION-RETIREMENT-DESIGN-20261017 amendment
+// A2 as revised by A2' (A2'.0, A2'.7): this witness was sealed as "closed-slot
+// contention reports STATE_CHANGED and caller replay closes only its exact
+// token". A close whose exact predicate loses to a sibling slot's reservation
+// is now re-decided by the owner from a fresh observation: the held close
+// answers CLOSED in the same call, closing only its exact token.
+test('closed-slot contention is re-decided and closes only the exact token in the same call',
   async (t) => {
     const f = await createCreationSqliteFixture(t);
     const {binding} = await f.primary.selectConsensusInstance(f.request());
@@ -216,8 +222,9 @@ test('closed-slot contention reports STATE_CHANGED and caller replay closes only
     const second = await other.reserveInstanceResource(binding, f.slotRequest(1));
     assert.equal(second.outcome, 'ADMITTED');
     held.release();
-    assert.equal((await closing).outcome, 'STATE_CHANGED');
-    assert.equal(f.state().selected.resources[0].phase, 'ADMITTED');
-    assert.equal((await f.primary.closeInstanceResource(binding, token)).outcome, 'CLOSED');
+    assert.deepEqual(await closing, {outcome: 'CLOSED', phase: 'CLOSED', token});
+    assert.equal(f.state().selected.resources[0].phase, 'CLOSED');
     assert.equal(f.state().selected.resources[1].phase, 'ADMITTED');
+    assert.deepEqual(await f.primary.closeInstanceResource(binding, token),
+      {outcome: 'CLOSED', phase: 'CLOSED', token});
   });

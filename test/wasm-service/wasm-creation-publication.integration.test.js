@@ -18,6 +18,7 @@ import {CONSENSUS_CREATION_OPENING as OPENING} from
 import {WASM_SERVICE_COMMAND_TYPE} from '../../src/wasm-service/wasm-service-constants.js';
 import {RAFT_LEADERSHIP_TRANSFER_SUCCESSOR} from
   '../../src/raft/raft-operation-port-constants.js';
+import {SERVICE_INSTANCE_LIMIT} from '../../src/constants/service-instance.js';
 
 const SERVICE_ID_KEY = 'serviceDefinitionId';
 const PREFIX = {type: 'WASM_WRITER_V1', profile: 'wasm-writer-v1/1'};
@@ -33,6 +34,7 @@ const REFUSED_SHUTDOWN = {status: 'REFUSED', reason: 'WRITER_SHUTDOWN', identity
 const HELD_REFUSAL = {status: 'REFUSED', reason: 'WRITER_NOT_READY', identity: null};
 const FAULT = 'COMPONENT_AUTHORITATIVE_READ_UNAVAILABLE';
 const ELECTION_ROUNDS = 40;
+const ENGAGED_ZERO_ROW_UPDATE = /^UPDATE service_instances\b/u;
 
 // Passive observation of the production continuation: run results with their
 // queue reasons, leader-effect replays, accepted enqueues and genesis reads.
@@ -183,18 +185,17 @@ async function enrollAndWrite(f, key) {
   return {request, response};
 }
 
-// Exactly one wake of the operation owner per published replica: either the
-// genesis wake of the event run that flipped it to SERVING (never a second
-// one: the latch), or the typed grant-held wake of a run whose single-row
-// metadata CAS lost to a sibling slot's concurrent grant (STATE_CHANGED),
-// which the consumer re-drove through START (a waited run fires no wake).
+// Exactly one wake of the operation owner per published replica, and it is
+// the genesis wake of the event run that flipped it to SERVING (never a second
+// one: the latch). Superseded by design amendment A2 as revised by A2'
+// (A2'.7; also resolves stage-1 verifier finding F-W2 for this case): "or the
+// typed grant-held wake of a run whose single-row metadata CAS lost to a
+// sibling slot's concurrent grant (STATE_CHANGED), which the consumer re-drove
+// through START" - the metadata owner re-decides a lost slot CAS itself, so
+// no founder of one group is held STATE_CHANGED by its siblings.
 function assertOneOwnerWake(host) {
-  const observed = host.wakes.filter((wake) => wake.reason === WAKE_OBSERVED);
-  const raced = host.wakes.filter((wake) => wake.reason === WAKE_GRANT_HELD &&
-    wake.grant.outcome === 'STATE_CHANGED');
-  assert.ok(observed.length <= 1, 'A_SECOND_GENESIS_WAKE_FOR_ONE_REPLICA');
-  assert.equal(observed.length + raced.length, 1, JSON.stringify(host.wakes));
   assert.equal(host.wakes.length, 1, JSON.stringify(host.wakes));
+  assert.equal(host.wakes[0].reason, WAKE_OBSERVED, JSON.stringify(host.wakes));
 }
 
 function retirementHandleWake(host, binding) {
@@ -259,15 +260,11 @@ describe('6prime: publication owned by the keyed continuation, retirement before
         assert.equal(host.replica.heldCreationRefusal(), null);
         assert.equal(host.replica.creationReconciliation.subscriptions.length, 0,
           'PUBLISHED_ADAPTER_KEPT_NATIVE_SUBSCRIPTIONS');
-        if (host.wakes[0].reason === WAKE_OBSERVED) {
-          assert.ok(runs.some((run) => run.replica === host.replica &&
-            run.result.outcome === 'GENESIS_PUBLISHED' &&
-            !run.reasons.includes('progress_reconcile')),
-          'PUBLICATION_DID_NOT_HAPPEN_INSIDE_AN_EVENT_RUN');
-        }
+        assert.ok(runs.some((run) => run.replica === host.replica &&
+          run.result.outcome === 'GENESIS_PUBLISHED' &&
+          !run.reasons.includes('progress_reconcile')),
+        'PUBLICATION_DID_NOT_HAPPEN_INSIDE_AN_EVENT_RUN');
       }
-      assert.ok(f.hosts.some((host) => host.wakes[0].reason === WAKE_OBSERVED),
-        'NO_REPLICA_PUBLISHED_FROM_NATIVE_EVENTS');
       assertNoProjection(f);
       assert.equal(f.leader.observed.reconstructs, 1, 'LEADER_EFFECTS_NOT_REPLAYED_ONCE');
       assert.notEqual(f.leader._safetyBroadcastTimer, null);
@@ -738,6 +735,10 @@ describe('6double-prime: held grants, election changes, lost answers and absent 
         assert.ok(host.wakes.every((wake) => wake.reason === WAKE_GRANT_HELD &&
           wake.grant.outcome === 'UNAVAILABLE'));
         assert.equal(slotPhase(f, host), 'ADMITTED');
+        // Stage-1 verifier finding F-M1 (design D6'): a HELD replica keeps its
+        // native subscriptions until the local grant lands.
+        assert.ok(host.replica.creationReconciliation.subscriptions.length > 0,
+          'A_HELD_REPLICA_RETIRED_ITS_NATIVE_SUBSCRIPTIONS');
       }
       const attempted = grants;
       await settle(f);
@@ -795,6 +796,7 @@ describe('6double-prime: held grants, election changes, lost answers and absent 
         assert.equal(host.replica.servingState, SERVED);
         assert.equal(localRecord(host.replica.dbPath).phase, 'PUBLISHED');
         assertOneOwnerWake(host);
+        assert.equal(host.reentries, 1);
       }
     });
 
@@ -860,22 +862,110 @@ describe('6double-prime: held grants, election changes, lost answers and absent 
     await settle(f);
     for (const host of f.hosts) {
       // Every event run that published, or held its grant, answered the
-      // absent consumer typed; with no consumer nothing re-entered START, so
-      // a grant that lost its CAS to a sibling stays typed-held (N7).
+      // absent consumer typed; with no consumer nothing re-entered START.
+      // Superseded by design amendment A2 as revised by A2' (A2'.7): "a grant
+      // that lost its CAS to a sibling stays typed-held (N7)" - the owner
+      // re-decides the lost CAS, so every founder serves from native events.
       const decisive = runs.filter((run) => run.replica === host.replica &&
         (run.result.outcome === 'GENESIS_PUBLISHED' || run.result.grant !== undefined));
       assert.ok(decisive.length > 0, `${host.nodeId} never attempted publication`);
       assert.ok(decisive.every((run) => run.result.wake?.outcome === 'CONSUMER_ABSENT'),
         JSON.stringify(decisive.map((run) => run.result.wake)));
       assert.equal(host.result.status, STATUS_HELD, 'without a consumer nothing re-entered START');
-      if (host.replica.servingState !== SERVED) {
-        assert.equal(decisive.at(-1).result.grant.outcome, 'STATE_CHANGED');
-      }
+      assert.equal(host.replica.servingState, SERVED, `${host.nodeId} was held by a sibling`);
+      assert.equal(host.replica.heldCreationRefusal(), null);
     }
-    const serving = f.hosts.find((host) => host.replica.servingState === SERVED);
-    assert.ok(serving, 'NO_REPLICA_PUBLISHED_FROM_NATIVE_EVENTS');
-    const retired = await f.retire(serving);
+    const retired = await f.retire(f.hosts[0]);
     assert.equal(retired.closed, true);
     assert.deepEqual(retired.wake, {outcome: 'CONSUMER_ABSENT'});
   });
+
+  // Design amendment A2 as revised by A2' (A2'.4, A2'.7): the founders of one
+  // published group retire concurrently through one metadata owner; each lost
+  // RELEASING/CLOSED CAS is re-decided by the owner, so every retirement closes
+  // in one pass (bounded claim: at most RESOURCES concurrent retirements).
+  test('P19 a concurrent retirement of every founder closes each slot in one pass',
+    async (t) => {
+      const {f} = await publishedGroup(t);
+      const binding = f.hosts[0].intent.consensusBinding;
+      const paths = f.hosts.map((host) => host.replica.dbPath);
+      const from = f.metadata.writes.length;
+      const results = await Promise.all(f.hosts.map((host) => f.retire(host)));
+      for (const [index, retired] of results.entries()) {
+        const host = f.hosts[index];
+        assert.equal(retired.closed, true, JSON.stringify(retired));
+        assert.equal(retired.outcome, 'CLOSED', 'A_CONCURRENT_RETIREMENT_LEFT_CLOSE_UNRESOLVED');
+        assert.ok(['RELEASING', 'CLOSED'].includes(retired.release.outcome),
+          JSON.stringify(retired.release));
+        // A live replica is tombstoned on its open connection inside the
+        // shutdown (N15, A1), so the by-path step after it answers ALREADY;
+        // the durable oracle is the local record read by a second connection.
+        assert.equal(retired.tombstone.outcome, 'ALREADY', JSON.stringify(retired.tombstone));
+        assert.equal(localRecord(paths[index]).phase, 'RETIRED');
+        assert.equal(slotPhase(f, host), 'CLOSED');
+        assert.equal(retirementHandleWake(host, binding).length, 1,
+          'NOT_ONE_RESOURCE_CLOSED_WAKE_PER_FOUNDER');
+      }
+      assert.ok(f.metadata.writes.slice(from).some((write) =>
+        ENGAGED_ZERO_ROW_UPDATE.test(write.sql) && write.changes === 0),
+      'THE_CONCURRENT_RETIREMENT_RACE_NEVER_ENGAGED');
+      for (const host of f.hosts) await Promise.all(host.reentryResults.splice(0));
+      assertNoProjection(f);
+    });
+
+  // A2'.4/A2'.7: bound exhaustion through the lifecycle is the explicit typed
+  // STATE_CHANGED, carried by one CREATION_GRANT_HELD wake per held run (N7
+  // unchanged) and re-driven by an explicit START, never by the lifecycle.
+  test('P20 a bound-exhausted grant holds typed STATE_CHANGED and an explicit START publishes',
+    async (t) => {
+      const f = await fixture(t, {automaticReconciliation: true, creationWake: reenterOnWake});
+      const runs = observe(f);
+      for (let slot = 0; slot < 3; slot += 1) {
+        const host = await f.addHost(slot);
+        assert.equal((await f.bootstrap(host)).status, STATUS_HELD);
+        f.replicas.push(host.replica);
+        f.clocks.push(host.timeSource);
+      }
+      const owner = f.metadata.primary;
+      let grants = 0;
+      const grant = owner.grantInstanceResource.bind(owner);
+      owner.grantInstanceResource = (...args) => {
+        grants += 1;
+        return grant(...args);
+      };
+      const gateway = owner.getGateway();
+      const update = gateway.updateSystemTableRow.bind(gateway);
+      let exhausting = true;
+      let zeroRowAnswers = 0;
+      gateway.updateSystemTableRow = async (table, ...rest) => {
+        if (exhausting && table === 'service_instances') {
+          zeroRowAnswers += 1;
+          return {success: true, affectedRows: 0};
+        }
+        return update(table, ...rest);
+      };
+      await formGroup(f);
+      await settle(f);
+      assert.ok(grants > 0, 'NO_GRANT_WAS_ATTEMPTED');
+      assert.equal(zeroRowAnswers, grants * SERVICE_INSTANCE_LIMIT.RESOURCES,
+        'NOT_THE_DECLARED_SUBMISSION_BOUND_PER_GRANT');
+      for (const host of f.hosts) {
+        assert.equal(host.replica.servingState, HELD);
+        const heldRuns = runs.filter((run) => run.replica === host.replica &&
+          run.result.grant?.outcome === 'STATE_CHANGED');
+        assert.ok(heldRuns.length > 0, `${host.nodeId} never exhausted the bound`);
+        assert.equal(host.wakes.length, heldRuns.length, 'NOT_ONE_WAKE_PER_HELD_RUN');
+        assert.ok(host.wakes.every((wake) => wake.reason === WAKE_GRANT_HELD &&
+          wake.grant.outcome === 'STATE_CHANGED'), JSON.stringify(host.wakes));
+        assert.equal(host.reentries, 0, 'A_GRANT_HELD_WAKE_WAS_RETRIED_BY_THE_CONSUMER');
+        assert.equal(slotPhase(f, host), 'ADMITTED');
+        assert.equal(localRecord(host.replica.dbPath).phase, 'ADMITTED', 'HELD_GRANT_WROTE_LOCAL');
+      }
+      exhausting = false;
+      for (const host of f.hosts) {
+        assert.equal((await startAndDeliver(f, host)).status, STATUS_PUBLISHED);
+        assert.equal(host.replica.servingState, SERVED);
+      }
+      assertNoProjection(f);
+    });
 });
