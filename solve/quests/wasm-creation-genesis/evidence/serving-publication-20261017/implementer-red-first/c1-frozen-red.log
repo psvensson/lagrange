@@ -1,0 +1,252 @@
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: ok cpu 62C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+not ok test/wasm-service/wasm-creation-bound-native.test.js (3 assertions, 1053ms)
+# TAP assertions failed; test process exited 1
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+TAP version 13
+# Subtest: creation-bound C1 refuses actual old INIT before fresh writer materialization
+not ok 1 - creation-bound C1 refuses actual old INIT before fresh writer materialization
+  ---
+  duration_ms: 54.246931
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-bound-native.test.js:13:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+    + undefined
+    - {
+    -   definitionDigest: '3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8',
+    -   format: 1,
+    -   foundingPeers: [
+    -     {
+    -       nodeId: 'host-1',
+    -       replicaId: 'founder-1'
+    -     },
+    -     {
+    -       nodeId: 'host-2',
+    -       replicaId: 'founder-2'
+    -     },
+    -     {
+    -       nodeId: 'host-3',
+    -       replicaId: 'founder-3'
+    -     }
+    -   ],
+    -   incarnation: '0dc6dc73122fc1996bb646966cf8d4fa93335e71b26cb7031aa67b2eade4cd11',
+    -   profileDigest: 'fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7',
+    -   requestDigest: 'a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d',
+    -   requestId: {
+    -     expectedVersion: 0,
+    -     nonce: '0000000000000000000000000000000000000000000000000000000000000001',
+    -     serviceDefinitionId: 'service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c'
+    -   },
+    -   revisionDigest: 'f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7',
+    -   revisionId: 'service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38',
+    -   selectionVersion: 1,
+    -   serviceDefinitionId: 'service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c',
+    -   tenantId: 'creation-test-tenant'
+    - }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    format: 1
+    tenantId: 'creation-test-tenant'
+    serviceDefinitionId: 'service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c'
+    requestId:
+      expectedVersion: 0
+      nonce: '0000000000000000000000000000000000000000000000000000000000000001'
+      serviceDefinitionId: 'service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c'
+    selectionVersion: 1
+    incarnation: '0dc6dc73122fc1996bb646966cf8d4fa93335e71b26cb7031aa67b2eade4cd11'
+    requestDigest: 'a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d'
+    revisionId: 'service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38'
+    revisionDigest: 'f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7'
+    definitionDigest: '3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8'
+    profileDigest: 'fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7'
+    foundingPeers:
+      0:
+        nodeId: 'host-1'
+        replicaId: 'founder-1'
+      1:
+        nodeId: 'host-2'
+        replicaId: 'founder-2'
+      2:
+        nodeId: 'host-3'
+        replicaId: 'founder-3'
+  operator: 'deepStrictEqual'
+  stack: |-
+    createGroup (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-bound-native-fixture.js:237:12)
+    async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-bound-native.test.js:15:20)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: creation-bound strong caller waits for actual application and survives held quorum acknowledgements
+not ok 2 - creation-bound strong caller waits for actual application and survives held quorum acknowledgements
+  ---
+  duration_ms: 20.560009
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-bound-native.test.js:45:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+    + undefined
+    - {
+    -   definitionDigest: '3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8',
+    -   format: 1,
+    -   foundingPeers: [
+    -     {
+    -       nodeId: 'host-1',
+    -       replicaId: 'founder-1'
+    -     },
+    -     {
+    -       nodeId: 'host-2',
+    -       replicaId: 'founder-2'
+    -     },
+    -     {
+    -       nodeId: 'host-3',
+    -       replicaId: 'founder-3'
+    -     }
+    -   ],
+    -   incarnation: '0dc6dc73122fc1996bb646966cf8d4fa93335e71b26cb7031aa67b2eade4cd11',
+    -   profileDigest: 'fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7',
+    -   requestDigest: 'a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d',
+    -   requestId: {
+    -     expectedVersion: 0,
+    -     nonce: '0000000000000000000000000000000000000000000000000000000000000001',
+    -     serviceDefinitionId: 'service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c'
+    -   },
+    -   revisionDigest: 'f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7',
+    -   revisionId: 'service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38',
+    -   selectionVersion: 1,
+    -   serviceDefinitionId: 'service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c',
+    -   tenantId: 'creation-test-tenant'
+    - }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    format: 1
+    tenantId: 'creation-test-tenant'
+    serviceDefinitionId: 'service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c'
+    requestId:
+      expectedVersion: 0
+      nonce: '0000000000000000000000000000000000000000000000000000000000000001'
+      serviceDefinitionId: 'service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c'
+    selectionVersion: 1
+    incarnation: '0dc6dc73122fc1996bb646966cf8d4fa93335e71b26cb7031aa67b2eade4cd11'
+    requestDigest: 'a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d'
+    revisionId: 'service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38'
+    revisionDigest: 'f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7'
+    definitionDigest: '3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8'
+    profileDigest: 'fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7'
+    foundingPeers:
+      0:
+        nodeId: 'host-1'
+        replicaId: 'founder-1'
+      1:
+        nodeId: 'host-2'
+        replicaId: 'founder-2'
+      2:
+        nodeId: 'host-3'
+        replicaId: 'founder-3'
+  operator: 'deepStrictEqual'
+  stack: |-
+    createGroup (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-bound-native-fixture.js:237:12)
+    async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-bound-native.test.js:48:15)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: creation-bound healthy delivery has an exact applied receipt on RF3
+not ok 3 - creation-bound healthy delivery has an exact applied receipt on RF3
+  ---
+  duration_ms: 20.16615
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-bound-native.test.js:81:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+    + undefined
+    - {
+    -   definitionDigest: '3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8',
+    -   format: 1,
+    -   foundingPeers: [
+    -     {
+    -       nodeId: 'host-1',
+    -       replicaId: 'founder-1'
+    -     },
+    -     {
+    -       nodeId: 'host-2',
+    -       replicaId: 'founder-2'
+    -     },
+    -     {
+    -       nodeId: 'host-3',
+    -       replicaId: 'founder-3'
+    -     }
+    -   ],
+    -   incarnation: '0dc6dc73122fc1996bb646966cf8d4fa93335e71b26cb7031aa67b2eade4cd11',
+    -   profileDigest: 'fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7',
+    -   requestDigest: 'a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d',
+    -   requestId: {
+    -     expectedVersion: 0,
+    -     nonce: '0000000000000000000000000000000000000000000000000000000000000001',
+    -     serviceDefinitionId: 'service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c'
+    -   },
+    -   revisionDigest: 'f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7',
+    -   revisionId: 'service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38',
+    -   selectionVersion: 1,
+    -   serviceDefinitionId: 'service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c',
+    -   tenantId: 'creation-test-tenant'
+    - }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    format: 1
+    tenantId: 'creation-test-tenant'
+    serviceDefinitionId: 'service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c'
+    requestId:
+      expectedVersion: 0
+      nonce: '0000000000000000000000000000000000000000000000000000000000000001'
+      serviceDefinitionId: 'service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c'
+    selectionVersion: 1
+    incarnation: '0dc6dc73122fc1996bb646966cf8d4fa93335e71b26cb7031aa67b2eade4cd11'
+    requestDigest: 'a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d'
+    revisionId: 'service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38'
+    revisionDigest: 'f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7'
+    definitionDigest: '3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8'
+    profileDigest: 'fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7'
+    foundingPeers:
+      0:
+        nodeId: 'host-1'
+        replicaId: 'founder-1'
+      1:
+        nodeId: 'host-2'
+        replicaId: 'founder-2'
+      2:
+        nodeId: 'host-3'
+        replicaId: 'founder-3'
+  operator: 'deepStrictEqual'
+  stack: |-
+    createGroup (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-bound-native-fixture.js:237:12)
+    async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-bound-native.test.js:83:13)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 0
+# fail 3
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 105.964235
+# time=1053ms
+# test-files total=1 pass=0 fail=1 assertions=3

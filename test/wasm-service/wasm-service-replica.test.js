@@ -95,6 +95,12 @@ function defaultOpts(overrides = {}) {
 function createReplica(options) {
   const replica = new WasmServiceReplica(options);
   replica.kvStore = new SessionKVStore(new Database(':memory:'));
+  // Design SERVING-PUBLICATION-RETIREMENT-DESIGN-20261017 Revision 3 N5: user
+  // paths are admitted only while the instance is READY (the serving fence
+  // D3'). These unit cases drive them without opening a consensus port, so
+  // the helper states the lifecycle fact an opened replica would have, as the
+  // writer-completion component already does.
+  replica.lifecycleState = WASM_SERVICE_REPLICA_STATE.READY;
   return replica;
 }
 
@@ -688,6 +694,11 @@ describe('WasmServiceReplica', () => {
       assert.equal(replica.kvStore, null);
       assert.equal(replica._safetyBroadcastTimer, null);
       assert.equal(replica.timerManager.activeTimers.size, 0);
+      // Revision 3 N5: a stopped unbound instance refuses user work with the
+      // existing not-ready shape, so this case cannot pass vacuously.
+      assert.equal(replica.serving, false);
+      assert.deepEqual(await replica.handleMessage({payload: {operation: MESSAGE_OP.READ,
+        sessionId: 's', key: 'k'}}), {error: WASM_SERVICE_ERROR_MSG.SERVICE_NOT_READY});
     });
 
     // Owner decision N2: a replica retires only the exact handler it

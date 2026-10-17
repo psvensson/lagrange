@@ -1,0 +1,92 @@
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: ok cpu 68C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+not ok test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js (3 assertions, 1286ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: partition replica: the persist path syncs, the application does not
+not ok 1 - partition replica: the persist path syncs, the application does not
+  ---
+  duration_ms: 67.351473
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/base-7696c3d8e/test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js:127:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    {"success":false,"error":"The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried","failureCode":"partition_write_cutover_paused","deferRetry":true,"retryAfterMs":100,"partitionId":"durable-kinds-partition"}
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/base-7696c3d8e/test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js:155:14)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: message-group replica: the persist path syncs, the application does not
+not ok 2 - message-group replica: the persist path syncs, the application does not
+  ---
+  duration_ms: 29.31725
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/base-7696c3d8e/test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js:174:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    message group: application transactions keep NORMAL
+    + actual - expected
+    
+      [
+        1,
+    +   2
+      ]
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    0: 1
+  actual:
+    0: 1
+    1: 2
+  operator: 'deepStrictEqual'
+  stack: |-
+    assertKindDurability (file:///mnt/data/peter/projects/.worktrees/base-7696c3d8e/test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js:122:10)
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/base-7696c3d8e/test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js:206:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: WASM-service replica: the persist path syncs, the application does not
+not ok 3 - WASM-service replica: the persist path syncs, the application does not
+  ---
+  duration_ms: 286.369827
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/base-7696c3d8e/test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js:216:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    {"status":"REFUSED","reason":"INVALID_WRITER_COMMAND","identity":null}
+    + actual - expected
+    
+    + undefined
+    - true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/base-7696c3d8e/test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js:247:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 0
+# fail 3
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 387.279706
+# time=1286ms
+# test-files total=1 pass=0 fail=1 assertions=3

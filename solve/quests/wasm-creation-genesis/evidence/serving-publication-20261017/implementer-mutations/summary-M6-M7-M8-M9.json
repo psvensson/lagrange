@@ -1,0 +1,90 @@
+{
+ "M6": {
+  "exit": 1,
+  "failures": [
+   [
+    "P1 native events publish every founder: durable grant, one w",
+    "error: |- {\"status\":\"BOOTSTRAPPED_HELD\",\"consensusBinding\":{\"definitionDigest\":\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\",\"format\":1,\"foundingPeers\":[{\"nodeId\":\"host-1\",\"replicaId\":\"founder-1\"},{\"nodeId\":\"host-2\",\"re"
+   ],
+   [
+    "P4 retirement fences user work at call, RELEASING precedes R",
+    "error: |- {\"status\":\"BOOTSTRAPPED_HELD\",\"consensusBinding\":{\"definitionDigest\":\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\",\"format\":1,\"foundingPeers\":[{\"nodeId\":\"host-1\",\"replicaId\":\"founder-1\"},{\"nodeId\":\"host-2\",\"re"
+   ],
+   [
+    "P5a a lost CLOSED reply is resolved by the metadata owner it",
+    "error: |- {\"status\":\"BOOTSTRAPPED_HELD\",\"consensusBinding\":{\"definitionDigest\":\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\",\"format\":1,\"foundingPeers\":[{\"nodeId\":\"host-1\",\"replicaId\":\"founder-1\"},{\"nodeId\":\"host-2\",\"re"
+   ],
+   [
+    "P5b an unresolved CLOSED keeps custody; a re-stop by creatio",
+    "error: |- {\"status\":\"BOOTSTRAPPED_HELD\",\"consensusBinding\":{\"definitionDigest\":\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\",\"format\":1,\"foundingPeers\":[{\"nodeId\":\"host-1\",\"replicaId\":\"founder-1\"},{\"nodeId\":\"host-2\",\"re"
+   ],
+   [
+    "P5c a re-stop of the predecessor retires its file by creatio",
+    "error: |- {\"status\":\"BOOTSTRAPPED_HELD\",\"consensusBinding\":{\"definitionDigest\":\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\",\"format\":1,\"foundingPeers\":[{\"nodeId\":\"host-1\",\"replicaId\":\"founder-1\"},{\"nodeId\":\"host-2\",\"re"
+   ],
+   [
+    "P6a orderly shutdown keeps the grant; a reopen serves after ",
+    "error: |- {\"status\":\"BOOTSTRAPPED_HELD\",\"consensusBinding\":{\"definitionDigest\":\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\",\"format\":1,\"foundingPeers\":[{\"nodeId\":\"host-1\",\"replicaId\":\"founder-1\"},{\"nodeId\":\"host-2\",\"re"
+   ],
+   [
+    "P6b a reopen after the slot was CLOSED is refused and the ne",
+    "error: |- {\"status\":\"BOOTSTRAPPED_HELD\",\"consensusBinding\":{\"definitionDigest\":\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\",\"format\":1,\"foundingPeers\":[{\"nodeId\":\"host-1\",\"replicaId\":\"founder-1\"},{\"nodeId\":\"host-2\",\"re"
+   ],
+   [
+    "P10 a START re-entry while the retirement is in flight is re",
+    "error: |- {\"status\":\"BOOTSTRAPPED_HELD\",\"consensusBinding\":{\"definitionDigest\":\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\",\"format\":1,\"foundingPeers\":[{\"nodeId\":\"host-1\",\"replicaId\":\"founder-1\"},{\"nodeId\":\"host-2\",\"re"
+   ],
+   [
+    "P15 a lost grant reply resolves to PUBLISHED inside the owne",
+    "error: |- []  0 !== 1 "
+   ],
+   [
+    "P16 a failed local RETIRED write blocks CLOSED while the han",
+    "error: |- {\"status\":\"BOOTSTRAPPED_HELD\",\"consensusBinding\":{\"definitionDigest\":\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\",\"format\":1,\"foundingPeers\":[{\"nodeId\":\"host-1\",\"replicaId\":\"founder-1\"},{\"nodeId\":\"host-2\",\"re"
+   ],
+   [
+    "P18 an absent wake consumer is a typed CONSUMER_ABSENT outco",
+    "error: '[null]' code: 'ERR_ASSERTION' name: 'AssertionError' expected: true actual: false"
+   ]
+  ]
+ },
+ "M7": {
+  "exit": 1,
+  "failures": [
+   [
+    "P1 native events publish every founder: durable grant, one w",
+    "error: |- [{\"serviceDefinitionId\":\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\",\"reason\":\"creation_grant_held\",\"binding\":{\"definitionDigest\":\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc"
+   ],
+   [
+    "P2 predecessor outstanding holds the successor typed; P8 the",
+    "error: |- Expected values to be strictly equal:  2 !== 1 "
+   ],
+   [
+    "P15 a lost grant reply resolves to PUBLISHED inside the owne",
+    "error: |- [{\"serviceDefinitionId\":\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\",\"reason\":\"creation_grant_held\",\"binding\":{\"definitionDigest\":\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc"
+   ],
+   [
+    "P17 an explicit START that observes genesis publishes and fi",
+    "error: |- A_WAITED_START_ALSO_WOKE_ITS_OWNER + actual - expected  + ["
+   ]
+  ]
+ },
+ "M8": {
+  "exit": 1,
+  "failures": [
+   [
+    "P9 a retirement during an in-flight grant enables nothing an",
+    "error: |- A_GRANT_LANDED_LOCALLY_AFTER_THE_STOP_FENCE + actual - expected  + {"
+   ]
+  ]
+ },
+ "M9": {
+  "exit": 1,
+  "failures": [
+   [
+    "P11 a forged PUBLISHED or RUNNING driver answer never become",
+    "error: |- {\"status\":\"PUBLISHED\",\"started\":true,\"bootstrapped\":true,\"port\":1,\"consensusBinding\":{\"definitionDigest\":\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\",\"format\":1,\"foundingPeers\":[{\"nodeId\":\"host-1\",\"replicaId\""
+   ]
+  ]
+ }
+}

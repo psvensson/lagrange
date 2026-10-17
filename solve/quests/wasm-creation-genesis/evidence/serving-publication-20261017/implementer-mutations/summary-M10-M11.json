@@ -1,0 +1,24 @@
+{
+ "M10": {
+  "exit": 1,
+  "failures": [
+   [
+    "ServiceDefinitionsOwner resource phase table: RELEASING is g",
+    "error: |- RELEASING_REGRESSED_A_CLOSED_SLOT + actual - expected  {"
+   ]
+  ]
+ },
+ "M11": {
+  "exit": 1,
+  "failures": [
+   [
+    "P2 predecessor outstanding holds the successor typed; P8 the",
+    "error: |- {\"outcome\":\"UNKNOWN\",\"reason\":\"CONSENSUS_SERVING_NOT_IMPLEMENTED\",\"operationId\":\"successor-operation-0\"} + actual - expected  + undefined"
+   ],
+   [
+    "P5c a re-stop of the predecessor retires its file by creatio",
+    "error: |- PREDECESSOR_RETIREMENT_TOUCHED_THE_SUCCESSOR + actual - expected  + null"
+   ]
+  ]
+ }
+}

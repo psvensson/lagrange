@@ -1,6 +1,7 @@
 // Native WASM RF3 with COMPONENT metadata selection/CAS. The metadata fixture
 // uses production owner/gateway/CDC over SQLite, not native metadata consensus.
-// No fabricated ACTIVE routing rows, writer root, serving grant or closure.
+// No fabricated ACTIVE routing rows, writer root, serving grant or closure:
+// the grant and the closure are the production owners' (Revision 3 N6).
 import assert from 'node:assert/strict';
 import {mkdtempSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
@@ -19,7 +20,6 @@ import {RuntimeDriverRegistry} from '../../src/runtime/runtime-driver-registry.j
 import {SYSTEM_TABLE_SCHEMAS, generateCreateTableSQL} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {WasmComponentDriver} from '../../src/runtime/wasm-component-driver.js';
-import {normalizeServiceDescriptor} from '../../src/service/service-descriptor.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {setActualCoreEntryObserver} from '../../src/raft/raft-rs-runtime-owner.js';
@@ -131,19 +131,39 @@ async function form(f) {
   assert.fail('setup seam: creation-bound RF3 did not form in declared rounds');
 }
 
-function journalIntent(f, host) {
-  const row = f.world.metadata.db.prepare('SELECT * FROM wasm_operations WHERE idempotency_key=?')
-    .get(host.options.idempotencyKey);
-  assert.ok(row, 'real operation journal exists before owner handoff');
-  const intent = JSON.parse(row.intent_json);
-  assert.equal(intent.format, 1);
-  assert.deepEqual(intent.descriptor.consensusBinding, f.binding);
-  assert.deepEqual(intent.descriptor.consensusSlotRequest, host.definition.consensusSlotRequest);
-  return {intent, admission: row.admission_json === null ? null : JSON.parse(row.admission_json),
-    row};
+// Superseded by design SERVING-PUBLICATION-RETIREMENT-DESIGN-20261017
+// Revision 3 N6 (recorded supersession; the frozen bytes stay in 45293b471).
+// Measured first failure of the frozen fixture at 7696c3d8e: createGroup:237,
+// the normalized descriptor no longer carries consensusBinding, and the
+// manager refuses a bound descriptor through createReplica (R2 retained
+// creation route). Superseded here: (1) creation runs the production route,
+// ServiceLifecycleManager.bootstrapConsensusCreation of a retained K-bearing
+// intent; (2) INIT is never issued manually (the frozen nonce '22'*32 is not
+// the binding's): the keyed continuation authors it and grants the slot;
+// (3) ENROLL runs after publication; (4) retire() retires each resource by
+// its retained creation (WasmServiceLifecycle.retireReplica). The C1
+// discriminator is unchanged: the old instance's actual INIT/ENROLL/WRITE are
+// refused on the recreated service, and its own valid path completes.
+const OPERATION_ROW = 'SELECT * FROM wasm_operations WHERE operation_id=?';
+
+function originIntent(f, slot, peer, request) {
+  return {format: 1, descriptor: {serviceId: f.world.metadata.serviceId,
+    tenantId: request.tenantId, serviceType: 'runtime_service', replicaId: peer.replicaId,
+    replicaCount: f.binding.foundingPeers.length, runtimeKind: 'wasm_component',
+    runtimeRef: request.definition.handlerFunctionId,
+    runtimeConfig: JSON.stringify({definition: request.definition})},
+  consensusBinding: f.binding, consensusSlotRequest: {slot, expectedOrdinal: 0,
+    operationId: `${request.requestId.nonce}-${slot}`, ...peer}};
 }
 
-function bindManager(f, host, peer) {
+function journalRow(f, host) {
+  const row = f.world.metadata.db.prepare(OPERATION_ROW)
+    .get(host.intent.consensusSlotRequest.operationId);
+  assert.ok(row, 'real operation journal exists before owner handoff');
+  return row;
+}
+
+function bindManager(f, host) {
   const db = f.world.metadata.db;
   // Component SQL backing for the existing production journal SQL generator.
   // This is distinct from native metadata/operation-log replication proof.
@@ -157,9 +177,11 @@ function bindManager(f, host, peer) {
   const registry = new RuntimeDriverRegistry();
   registry.register(host.driver);
   const runtime = new ServiceRuntimeLifecycle(registry);
-  runtime.setOperationWriter(writer);
-  runtime.setIdempotencyReader(reader);
   host.publications = [];
+  runtime.setOperationWriter(async (...args) => {
+    host.publications.push({kind: 'nested-journal', args});
+    throw new Error('BOUND_BOOTSTRAP_CREATED_NESTED_JOURNAL');
+  });
   runtime.setEndpointWriter(async (...args) => {
     host.publications.push({kind: 'endpoint', args});
     throw new Error('BOOTSTRAP_ENDPOINT_PUBLICATION');
@@ -172,23 +194,20 @@ function bindManager(f, host, peer) {
   host.manager.setOperationWriter(writer);
   host.manager.setIdempotencyReader(reader);
   host.manager.registerAdapter(new RuntimeServiceAdapter({serviceRuntimeLifecycle: runtime}));
-  host.options = {idempotencyKey: `${f.binding.requestId.nonce}-${peer.replicaId}`};
   const realReserve = f.world.metadata.primary.reserveInstanceResource;
   f.world.metadata.primary.reserveInstanceResource = async function(...args) {
-    const {intent, admission, row} = journalIntent(f, host);
-    assert.equal(admission, null);
-    assert.equal(Object.hasOwn(intent.descriptor, 'consensusResourceToken'), false);
-    assert.equal(row.operation_id, host.definition.consensusSlotRequest.operationId);
+    const row = journalRow(f, host);
+    assert.equal(row.admission_json, null);
+    assert.deepEqual(JSON.parse(row.intent_json), host.intent);
     host.originalIntentBytes = row.intent_json;
-    record(f, 'reservation-entered', {intent, admission});
+    record(f, 'reservation-entered', {intent: host.intent, admission: null});
     return Reflect.apply(realReserve, this, args);
   };
   const realPrepare = host.driver.prepare;
   host.driver.prepare = async function(...args) {
-    const {admission, row} = journalIntent(f, host);
+    const row = journalRow(f, host);
     assert.equal(row.intent_json, host.originalIntentBytes);
-    assert.deepEqual(admission, args[0].consensusResourceToken);
-    assert.ok(admission);
+    assert.deepEqual(JSON.parse(row.admission_json), args[0].consensusResourceToken);
     // Restore observation wrapper before another host installs its own.
     f.world.metadata.primary.reserveInstanceResource = realReserve;
     return Reflect.apply(realPrepare, this, args);
@@ -218,70 +237,35 @@ async function createGroup(t, w, request) {
     return Promise.resolve({delivered: true});
   };
   setActualCoreEntryObserver((event) => record(f, 'native-entry', event));
+  const priorRows = w.metadata.db.prepare('SELECT count(*) AS n FROM wasm_operations').get().n;
   for (let slot = 0; slot < f.binding.foundingPeers.length; slot += 1) {
     const peer = f.binding.foundingPeers[slot];
-    const lifecycle = new WasmServiceLifecycle({nodeId: peer.nodeId,
+    const timeSource = new VirtualTimeSource({startMs: 1000});
+    const lifecycle = new WasmServiceLifecycle({nodeId: peer.nodeId, timeSource,
       messageRouter: f.transport, serviceDefinitionsOwner: w.metadata.primary,
       dataDirectoryManager: ownedDirectory(join(w.directory, peer.nodeId), peer.nodeId),
       moduleMirror: await moduleMirror(request.definition.handlerFunctionId),
       portAllocator: new PortAllocator()});
-    const host = {lifecycle, token: null};
+    const host = {lifecycle, token: null, intent: originIntent(f, slot, peer, request)};
     f.hosts.push(host);
     host.driver = new WasmComponentDriver({wasmServiceLifecycle: lifecycle});
-    host.definition = normalizeServiceDescriptor({...request.definition,
-      serviceId: w.metadata.serviceId, tenantId: request.tenantId, serviceType: 'runtime_service',
-      runtimeKind: 'wasm_component', runtimeRef: request.definition.handlerFunctionId,
-      consensusBinding: f.binding,
-      consensusSlotRequest: {slot, expectedOrdinal: 0,
-        operationId: `${request.requestId.nonce}-${slot}`, ...peer}});
-    assert.deepEqual(host.definition.consensusBinding, f.binding);
-    assert.deepEqual(host.definition.consensusSlotRequest.replicaId, peer.replicaId);
-    bindManager(f, host, peer);
-    const created = await host.manager.createReplica(host.definition,
-      {nodeId: peer.nodeId}, host.options);
-    host.creationOperationId = created.operationId;
-    assert.equal(host.creationOperationId, host.definition.consensusSlotRequest.operationId);
-    const persisted = journalIntent(f, host);
-    host.token = persisted.admission;
-    assert.ok(host.token);
-    assert.equal(persisted.row.state, 'in_progress');
+    bindManager(f, host);
+    const started = await host.manager.bootstrapConsensusCreation(host.intent);
+    assert.equal(started.status, 'BOOTSTRAPPED_HELD', JSON.stringify(started));
+    const row = journalRow(f, host);
+    assert.equal(started.operationId, row.operation_id, 'START continues original CREATE row');
+    assert.equal(row.state, 'in_progress');
+    host.token = JSON.parse(row.admission_json);
+    assert.deepEqual(started.consensusResourceToken, host.token);
     assert.equal(w.metadata.db.prepare('SELECT count(*) AS n FROM wasm_operations').get().n,
-      slot + 1 + w.groups.slice(0, -1).reduce((sum, group) => sum + group.hosts.length, 0),
-      'only one manager-owned journal row per creation, no nested prepare journal');
-    host.definition = {...persisted.intent.descriptor, consensusResourceToken: host.token};
+      priorRows + slot + 1, 'one manager-owned journal row per creation, no nested journal');
     writeFileSync(join(w.directory, `token-${request.requestId.nonce}-${slot}.json`),
       json(host.token), {flag: 'wx'});
     host.replica = lifecycle.activeReplicas.get(w.metadata.serviceId);
     assert.ok(host.replica, 'the real lifecycle creates the replica');
-    host.replica.providedTimeSource = new VirtualTimeSource({startMs: 1000});
     f.replicas.push(host.replica);
-    f.clocks.push(host.replica.providedTimeSource);
-    host.context = {serviceId: w.metadata.serviceId, startOptions: {
-      handlerFunctionId: request.definition.handlerFunctionId, moduleVersion: MODULE_VERSION,
-      serviceDefinition: host.definition}};
-    // Observe the real callee result while preserving this, args, value/error.
-    const original = lifecycle.startReplica;
-    lifecycle.startReplica = async function(...args) {
-      const result = await Reflect.apply(original, this, args);
-      host.bootstrap = result;
-      return result;
-    };
-    host.startOptions = host.options;
-    const started = await host.manager.startReplica({...host.definition, ...host.context},
-      {nodeId: peer.nodeId}, host.startOptions);
-    assert.equal(host.bootstrap.bootstrapped, true);
-    assert.equal(host.bootstrap.started, false);
-    assert.equal(host.bootstrap.endpoint ?? null, null);
-    assert.equal(started.status, 'BOOTSTRAPPED_HELD');
-    assert.equal(started.operationId, host.creationOperationId, 'START continues original CREATE row');
-    assert.equal(w.metadata.db.prepare('SELECT count(*) AS n FROM wasm_operations').get().n,
-      slot + 1 + w.groups.slice(0, -1).reduce((sum, group) => sum + group.hosts.length, 0),
-      'no independent START or nested runtime journal');
-    const pending = w.metadata.db.prepare('SELECT * FROM wasm_operations WHERE operation_id=?')
-      .get(started.operationId);
-    assert.equal(pending.state, 'in_progress');
+    f.clocks.push(timeSource);
     assert.equal(host.publications.length, 0, 'held operation cannot publish serving or endpoint');
-    host.heldOperationId = started.operationId;
   }
   await form(f);
   f.phase = 'measured';
@@ -302,23 +286,43 @@ async function administer(f, command) {
   return result.value;
 }
 
+async function publish(f, host) {
+  let result = null;
+  const pending = host.lifecycle.publishReplica(f.world.metadata.serviceId, host.token);
+  Promise.resolve(pending).then((value) => {
+    result = value;
+  });
+  await deliverScheduled(f);
+  assert.ok(result, 'publication settled in the declared delivery schedule');
+  return result;
+}
+
 async function initializeAndPublish(t, f) {
   const serviceId = f.binding.serviceDefinitionId;
   const incarnation = f.binding.incarnation;
-  f.init = {...PREFIX, action: 'INIT', serviceId, incarnation, nonce: '22'.repeat(32)};
+  // The production-authored INIT of this binding (never a test nonce).
+  f.init = {...PREFIX, action: 'INIT', serviceId, incarnation, nonce: f.binding.requestId.nonce};
   f.enroll = {...PREFIX, action: 'ENROLL', serviceId, incarnation, slot: 0,
     expectedGeneration: 0, expectedCompletedSequence: 0, expectedReceiptDigest: null,
     newGeneration: 1, nonce: '33'.repeat(32)};
-  assert.equal((await administer(f, f.init)).status, 'RECORDED');
-  assert.equal((await administer(f, f.enroll)).status, 'RECORDED');
+  // Native events drive the same keyed continuation (no delayed wakes in
+  // this fixture): the leader's run authors and commits INIT, and each run
+  // that observes covered genesis grants its slot. The explicit, token-bound
+  // publishReplica then answers PUBLISHED for every founder: idempotently for
+  // one already serving, or as the grant of one whose event-run CAS lost to
+  // a sibling slot's concurrent grant.
+  await deliverScheduled(f);
   for (const host of f.hosts) {
-    const published = await host.lifecycle.publishReplica(serviceId, host.token);
+    const published = await publish(f, host);
+    assert.equal(published.status, 'PUBLISHED', JSON.stringify(published));
     assert.equal(published.started, true);
     const current = await f.world.metadata.primary.resolveInstanceResource(f.binding, host.token);
     assert.equal(current.phase, 'PUBLISHED');
-    // Positive ACTIVE/endpoint projection belongs to the separate actual
-    // publication-wiring integration. This native proof stops at local grant.
+    // Positive ACTIVE/endpoint projection belongs to the deferred discovery
+    // stage. This native proof stops at the durable local grant.
   }
+  assert.deepEqual(f.leader.writerState.meta().initialization.command, f.init);
+  assert.equal((await administer(f, f.enroll)).status, 'RECORDED');
   f.request = {...f.request, requestId: {serviceId, incarnation, slot: 0,
     generation: 1, sequence: 1}, ack: null};
   evidence(t, f, 'initialized-and-published');
@@ -340,7 +344,11 @@ function startWrite(f, request = f.request) {
 
 async function retire(f) {
   for (const host of f.hosts) {
-    await host.lifecycle.stopReplica(f.world.metadata.serviceId);
+    const row = journalRow(f, host);
+    const retired = await host.lifecycle.retireReplica({intent: JSON.parse(row.intent_json),
+      token: JSON.parse(row.admission_json), operationId: row.operation_id,
+      outcome: 'ADMISSION_RETAINED'});
+    assert.equal(retired.closed, true, JSON.stringify(retired));
     const resource = await f.world.metadata.primary.resolveInstanceResource(f.binding, host.token);
     assert.equal(resource.phase, 'CLOSED');
   }

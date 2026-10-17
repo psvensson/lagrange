@@ -1,0 +1,145 @@
+{
+  "M0-clean": {
+    "description": "No mutation: green baseline of the publication file in the verify worktree",
+    "testFile": "test/wasm-service/wasm-creation-publication.integration.test.js",
+    "edits": []
+  },
+  "V1-pending-event-not-processed": {
+    "description": "Native events never enqueue (admitsNativeWake false): pending event not processed",
+    "testFile": "test/wasm-service/wasm-creation-publication.integration.test.js",
+    "edits": [{"file": "src/wasm-service/wasm-creation-reconciliation.js",
+      "from": "    return this.current(context) && this.replica.servingState !== SERVING.SERVING;",
+      "to": "    return false;"}]
+  },
+  "V1b-unbind-before-grant": {
+    "description": "Subscriptions retired at the start of publish() (before the grant), so a held replica loses its native re-drive",
+    "testFile": "test/wasm-service/wasm-creation-publication.integration.test.js",
+    "edits": [{"file": "src/wasm-service/wasm-creation-reconciliation.js",
+      "from": "    const published = await publishWasmCreation(this.replica, () => this.current(context));",
+      "to": "    this.retireNativeWakes();\n    const published = await publishWasmCreation(this.replica, () => this.current(context));"}]
+  },
+  "V2-open-serving-ignores-metadata": {
+    "description": "Open-time SERVING decided from the local record alone (cached pre-event state; metadata phase ignored)",
+    "testFile": "test/wasm-service/wasm-creation-publication.integration.test.js",
+    "edits": [{"file": "src/wasm-service/wasm-service-serving-state.js",
+      "from": "  replica.servingState = localPhase === LOCAL_PHASE.PUBLISHED &&\n    metadataPhase === PHASE.PUBLISHED ? SERVING.SERVING : SERVING.HELD;",
+      "to": "  replica.servingState = localPhase === LOCAL_PHASE.PUBLISHED ? SERVING.SERVING : SERVING.HELD;"}]
+  },
+  "V3-membership-coverage-ignored": {
+    "description": "Genesis ignores whether the committed membership stamp covers the INIT receipt (membership ignored)",
+    "testFile": "test/wasm-service/wasm-creation-publication.integration.test.js",
+    "edits": [{"file": "src/wasm-service/wasm-creation-genesis.js",
+      "from": "  if (BigInt(stamp.appliedIndex) < BigInt(receipt.index) ||\n      BigInt(stamp.term) < BigInt(receipt.term)) {\n    return held(WASM_CREATION_GENESIS.APPLICATION_NOT_COVERED);\n  }\n",
+      "to": ""}]
+  },
+  "V4-local-phase-not-written": {
+    "description": "Local phase CAS answers RECORDED without the UPDATE (success without the durable effect)",
+    "testFile": "test/wasm-service/wasm-creation-publication.integration.test.js",
+    "edits": [{"file": "src/wasm-service/wasm-creation-opening.js",
+      "from": "  db.prepare(SQL.UPDATE_LOCAL).run(encodeLocal(record));\n  return record;",
+      "to": "  encodeLocal(record);\n  return record;"}]
+  },
+  "V4b-commitDurably-bypassed": {
+    "description": "Local phase CAS commits in a plain transaction, not through commitDurably (durability pragma not raised)",
+    "testFile": "test/wasm-service/wasm-creation-local-record.test.js",
+    "edits": [{"file": "src/wasm-service/wasm-creation-opening.js",
+      "from": "function recordWasmCreationLocalPhase(db, {from, to, detail}) {\n  return commitDurably(db, () => {",
+      "to": "function recordWasmCreationLocalPhase(db, {from, to, detail}) {\n  return ((_db, work) => db.transaction(work)())(db, () => {"}]
+  },
+  "V5-recheck-after-genesis-removed": {
+    "description": "The recheck after the genesis await is removed (decision taken between two processing steps; the post-grant recheck stays)",
+    "testFile": "test/wasm-service/wasm-creation-publication.integration.test.js",
+    "edits": [{"file": "src/wasm-service/wasm-creation-reconciliation.js",
+      "from": "    const genesis = await progressWasmCreationGenesis(this.replica);\n    if (!this.current(context)) return this.stoppedResult();\n",
+      "to": "    const genesis = await progressWasmCreationGenesis(this.replica);\n"}]
+  },
+  "V6-tombstone-identity-dropped": {
+    "description": "Tombstone identity check always matches (identity check dropped)",
+    "testFile": "test/wasm-service/wasm-creation-local-record.test.js",
+    "edits": [{"file": "src/wasm-service/wasm-creation-opening.js",
+      "from": "function identityMatches(record, identity) {\n  const fields = Object.keys(identity);",
+      "to": "function identityMatches(record, identity) {\n  if (record) return true;\n  const fields = Object.keys(identity);"}]
+  },
+  "V7-successor-fence-removed": {
+    "description": "createReplica admits a bound successor while the predecessor instance is still retiring (successor fence removed)",
+    "testFile": "test/wasm-service/wasm-creation-publication.integration.test.js",
+    "edits": [{"file": "src/wasm-service/wasm-service-lifecycle.js",
+      "from": "      (creation !== null || replica !== current || replica.lifecycleState ===",
+      "to": "      (replica !== current || replica.lifecycleState ==="}]
+  },
+  "V8-latch-replays-twice": {
+    "description": "enableServing applies leader effects on every call, not only on the HELD -> SERVING edge (latch replaying twice)",
+    "testFile": "test/wasm-service/wasm-creation-publication.integration.test.js",
+    "edits": [{"file": "src/wasm-service/wasm-service-serving-state.js",
+      "from": "  if (replica.servingState !== SERVING.HELD || replica.lifecycleState !== STATE.READY) {\n    return false;\n  }",
+      "to": "  if (replica.lifecycleState !== STATE.READY) {\n    return false;\n  }"}]
+  },
+  "V10-releasing-after-local-stop": {
+    "description": "RELEASING is attempted only after the local stop settled (ordering RELEASING -> RETIRED inverted)",
+    "testFile": "test/wasm-service/wasm-creation-publication.integration.test.js",
+    "edits": [{"file": "src/wasm-service/wasm-creation-retirement.js",
+      "from": "  const release = await settleOwner(() => owner.releaseInstanceResource(binding, retired.token));\n  released.resolve(release);\n  const failure = await fenced;",
+      "to": "  released.resolve(NO_FAILURE);\n  const failure = await fenced;\n  const release = await settleOwner(() => owner.releaseInstanceResource(binding, retired.token));"}]
+  },
+  "V11-fence-refusal-reason-shape": {
+    "description": "A stopping bound replica refuses with WRITER_NOT_READY instead of WRITER_SHUTDOWN (reason-shape fidelity)",
+    "testFile": "test/wasm-service/wasm-creation-publication.integration.test.js",
+    "edits": [{"file": "src/wasm-service/wasm-service-serving-state.js",
+      "from": "  return STOPPED_LIFECYCLE_STATES.has(replica.lifecycleState) ?\n    WRITER_REASON.SHUTDOWN : WRITER_REASON.NOT_READY;",
+      "to": "  return WRITER_REASON.NOT_READY;"}]
+  },
+  "M1-rerun-skip-local-published-write": {
+    "description": "Re-run of implementer M1: skip the local PUBLISHED write before enableServing",
+    "testFile": "test/wasm-service/wasm-creation-publication.integration.test.js",
+    "edits": [{"file": "src/wasm-service/wasm-creation-publication.js",
+      "from": "    recordLocalGrant(replica, creation.token);",
+      "to": "    void 0;"}]
+  },
+  "M3-rerun-closed-before-tombstone": {
+    "description": "Re-run of implementer M3: CLOSED requested without the tombstone (in-path tombstone skipped, by-path verification forged)",
+    "testFile": "test/wasm-service/wasm-creation-publication.integration.test.js",
+    "edits": [
+      {"file": "src/wasm-service/wasm-service-replica-lifecycle.js",
+        "from": "  await retirement.metadataRelease;\n  if (replica.db?.open !== true) return;",
+        "to": "  await retirement.metadataRelease;\n  return;"},
+      {"file": "src/wasm-service/wasm-creation-retirement.js",
+        "from": "  const tombstone = tombstoneByPath(lifecycle, retired);",
+        "to": "  const tombstone = {outcome: RETIREMENT.RETIRED};"}
+    ]
+  },
+  "M4-rerun-serving-without-READY": {
+    "description": "Re-run of implementer M4: remove the READY term from the serving fence",
+    "testFile": "test/wasm-service/wasm-creation-publication.integration.test.js",
+    "edits": [{"file": "src/wasm-service/wasm-service-serving-state.js",
+      "from": "  return ADMITTING_STATES.has(replica.servingState) && replica.lifecycleState === STATE.READY;",
+      "to": "  return ADMITTING_STATES.has(replica.servingState);"}]
+  },
+  "M7-rerun-drop-waiter-term": {
+    "description": "Re-run of implementer M7: drop the waiter term of the wake predicate",
+    "testFile": "test/wasm-service/wasm-creation-publication.integration.test.js",
+    "edits": [{"file": "src/wasm-service/wasm-creation-reconciliation.js",
+      "from": "    const waited = reasons.includes(RECONCILE_REASON.PROGRESS_RECONCILE);",
+      "to": "    const waited = false;"}]
+  },
+  "M8-rerun-remove-post-grant-recheck": {
+    "description": "Re-run of implementer M8: remove the recheck after the grant await",
+    "testFile": "test/wasm-service/wasm-creation-publication.integration.test.js",
+    "edits": [{"file": "src/wasm-service/wasm-creation-publication.js",
+      "from": "  if (!current()) return {publication: PUBLICATION.STOPPED};",
+      "to": "  void current;"}]
+  },
+  "M10-rerun-remove-releasing-closed-guards": {
+    "description": "Re-run of implementer M10: remove the CLOSED-monotonic and allowed-from rows of the resource transition table",
+    "testFile": "test/control-plane/service-instance-creation-cas.test.js",
+    "edits": [{"file": "src/control-plane/owners/service-instance-state.js",
+      "from": "    [resource.phase === PHASE.CLOSED, OUTCOME.CLOSED],\n    [!allowed.includes(resource.phase), OUTCOME.INVALID_EXPECTED_STATE],\n",
+      "to": ""}]
+  },
+  "M11-rerun-retire-target-by-serviceId": {
+    "description": "Re-run of implementer M11: match the retire target by serviceId instead of creation digest",
+    "testFile": "test/wasm-service/wasm-creation-publication.integration.test.js",
+    "edits": [{"file": "src/wasm-service/wasm-creation-retirement.js",
+      "from": "  return candidates.find((replica) => sameCreation(replica, retired)) ?? null;",
+      "to": "  return lifecycle.activeReplicas.get(retired.serviceId) ?? null;"}]
+  }
+}

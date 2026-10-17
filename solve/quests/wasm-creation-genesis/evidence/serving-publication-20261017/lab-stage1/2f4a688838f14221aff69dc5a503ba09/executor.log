@@ -1,0 +1,185 @@
+lab test: tv-dator: ordinary (10 files) cores=12 mem=15.4GiB speed x1.53
+[tv-dator] placement-shell=653048
+[tv-dator] placement-head=300c360baac383cf016be7929788a8cb47860336
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.6 mode:local retry:0 timeout: lanecap:11
+[tv-dator] placement-pid=653473
+[tv-dator] # test-files planned=10
+[tv-dator] classified lane ordinary: 10 file(s), jobs=4
+[tv-dator] thermal: ok cpu 68C (coretemp/Package id 0) nvme 51C (nvme/Sensor 1)
+[tv-dator] ok test/workflow/reconcile-queue-retry-wait-bound-spent.test.js (10 assertions, 600ms)
+[tv-dator] not ok test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js (3 assertions, 1561ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 13
+[tv-dator] # Subtest: partition replica: the persist path syncs, the application does not
+[tv-dator] not ok 1 - partition replica: the persist path syncs, the application does not
+[tv-dator]   ---
+[tv-dator]   duration_ms: 113.630087
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/300c360baac3-mvc8olfi-300638/test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js:127:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     {"success":false,"error":"The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried","failureCode":"partition_write_cutover_paused","deferRetry":true,"retryAfterMs":100,"partitionId":"durable-kinds-partition"}
+[tv-dator]     
+[tv-dator]     false !== true
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: true
+[tv-dator]   actual: false
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/300c360baac3-mvc8olfi-300638/test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js:155:14)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[tv-dator]   ...
+[tv-dator] # Subtest: message-group replica: the persist path syncs, the application does not
+[tv-dator] not ok 2 - message-group replica: the persist path syncs, the application does not
+[tv-dator]   ---
+[tv-dator]   duration_ms: 90.169723
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/300c360baac3-mvc8olfi-300638/test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js:174:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     message group: application transactions keep NORMAL
+[tv-dator]     + actual - expected
+[tv-dator]     
+[tv-dator]       [
+[tv-dator]         1,
+[tv-dator]     +   2
+[tv-dator]       ]
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected:
+[tv-dator]     0: 1
+[tv-dator]   actual:
+[tv-dator]     0: 1
+[tv-dator]     1: 2
+[tv-dator]   operator: 'deepStrictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     assertKindDurability (file:///home/peter/projects/lagrange/test-output/placement-worktrees/300c360baac3-mvc8olfi-300638/test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js:122:10)
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/300c360baac3-mvc8olfi-300638/test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js:206:5)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: WASM-service replica: the persist path syncs, the application does not
+[tv-dator] not ok 3 - WASM-service replica: the persist path syncs, the application does not
+[tv-dator]   ---
+[tv-dator]   duration_ms: 274.923576
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/300c360baac3-mvc8olfi-300638/test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js:216:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     {"status":"REFUSED","reason":"INVALID_WRITER_COMMAND","identity":null}
+[tv-dator]     + actual - expected
+[tv-dator]     
+[tv-dator]     + undefined
+[tv-dator]     - true
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: true
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/300c360baac3-mvc8olfi-300638/test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js:247:12)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] 1..3
+[tv-dator] # tests 3
+[tv-dator] # suites 0
+[tv-dator] # pass 0
+[tv-dator] # fail 3
+[tv-dator] # cancelled 0
+[tv-dator] # skipped 0
+[tv-dator] # todo 0
+[tv-dator] # duration_ms 483.024059
+[tv-dator] # time=1561ms
+[tv-dator] ok test/wasm-service/wasm-strong-write-v1-native-completion.test.js (2 assertions, 1580ms)
+[tv-dator] ok test/runtime/service-runtime-lifecycle-idempotency.test.js (33 assertions, 512ms)
+[tv-dator] ok test/runtime/wasm-component-driver.test.js (61 assertions, 592ms)
+[tv-dator] ok test/runtime/service-runtime-lifecycle.test.js (82 assertions, 361ms)
+[tv-dator] ok test/runtime/service-runtime-lifecycle-journal.test.js (34 assertions, 506ms)
+[tv-dator] ok test/wasm-service/wasm-service-lifecycle.test.js (60 assertions, 2232ms)
+[tv-dator] ok test/workflow/owner-key-reconcile-queue-failure-atomicity.test.js (11 assertions, 395ms)
+[tv-dator] not ok test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js (4 assertions, 11686ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 13
+[tv-dator] # Subtest: worker consensus path and its replica base are deleted
+[tv-dator] ok 1 - worker consensus path and its replica base are deleted
+[tv-dator]   ---
+[tv-dator]   duration_ms: 1.978099
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: wasm service replica requires its own durable file
+[tv-dator] ok 2 - wasm service replica requires its own durable file
+[tv-dator]   ---
+[tv-dator]   duration_ms: 61.15869
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: wasm service group commits and applies kv writes through raft-rs
+[tv-dator] not ok 3 - wasm service group commits and applies kv writes through raft-rs
+[tv-dator]   ---
+[tv-dator]   duration_ms: 399.803366
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/300c360baac3-mvc8olfi-300638/test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js:218:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     Expected values to be strictly equal:
+[tv-dator]     + actual - expected
+[tv-dator]     
+[tv-dator]     + undefined
+[tv-dator]     - true
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: true
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/300c360baac3-mvc8olfi-300638/test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js:238:14)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: wasm service replica restart preserves kv and consensus state
+[tv-dator] not ok 4 - wasm service replica restart preserves kv and consensus state
+[tv-dator]   ---
+[tv-dator]   duration_ms: 10395.584923
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/300c360baac3-mvc8olfi-300638/test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js:260:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     Expected values to be strictly equal:
+[tv-dator]     
+[tv-dator]     false !== true
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: true
+[tv-dator]   actual: false
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/300c360baac3-mvc8olfi-300638/test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js:270:16)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] 1..4
+[tv-dator] # tests 4
+[tv-dator] # suites 0
+[tv-dator] # pass 2
+[tv-dator] # fail 2
+[tv-dator] # cancelled 0
+[tv-dator] # skipped 0
+[tv-dator] # todo 0
+[tv-dator] # duration_ms 10867.072865
+[tv-dator] # time=11686ms
+[tv-dator] # test-files total=10 pass=8 fail=2 assertions=300
+lab test: tv-dator: # test-files total=10 pass=8 fail=2 assertions=300
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=10 pass=8 fail=2 assertions=300

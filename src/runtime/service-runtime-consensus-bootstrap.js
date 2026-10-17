@@ -19,8 +19,24 @@ async function startConsensusBootstrap(owner, definition, context) {
   const driver = owner._resolveDriver(descriptor.runtimeKind);
   const result = await driver.start({definition: descriptor,
     serviceId: descriptor.serviceId, consensusCreation: origin});
-  // In this increment there is no bound serving/publication implementation.
-  // Unknown/nonfailed/RUNNING results cannot accidentally reach the old sinks.
+  // HELD or PUBLISHED only, never a widened non-failed acceptance. A bound
+  // replica has no endpoint row, state projection or nested journal in this
+  // stage: those rows need the deferred discovery stage's identity design.
   return confirmConsensusBootstrapResult(result, origin);
 }
-export {prepareConsensusBootstrap, startConsensusBootstrap};
+/**
+ * Retire the exact retained resource through the registered driver. The
+ * typed retirement result flows back unchanged; nothing published the bound
+ * replica's endpoint or state, so nothing is removed or projected here.
+ * @param {Object} owner - The ServiceRuntimeLifecycle.
+ * @param {Object} definition - The bound descriptor.
+ * @param {Object} context - Carries the retained consensusCreation.
+ * @return {Promise<Object>}
+ */
+async function retireConsensusBootstrap(owner, definition, context) {
+  const {origin, descriptor} = captureConsensusBootstrap(definition, context);
+  const driver = owner._resolveDriver(descriptor.runtimeKind);
+  return driver.stop({definition: descriptor, serviceId: descriptor.serviceId,
+    consensusCreation: origin});
+}
+export {prepareConsensusBootstrap, startConsensusBootstrap, retireConsensusBootstrap};

@@ -1,5 +1,5 @@
-import {hasConsensusCreation, CONSENSUS_BOOTSTRAP} from '../service/service-consensus-bootstrap.js';
-import {prepareConsensusBootstrap, startConsensusBootstrap} from
+import {hasConsensusCreation} from '../service/service-consensus-bootstrap.js';
+import {prepareConsensusBootstrap, startConsensusBootstrap, retireConsensusBootstrap} from
   './service-runtime-consensus-bootstrap.js';
 import {PREPARE_STATUS} from './runtime-driver.js';
 import {RequestCellRoutingError} from
@@ -483,7 +483,7 @@ function createServiceRuntimeLifecycleOperationMethods(deps) {
       );
 
       if (hasConsensusCreation(definition)) {
-        throw new Error(CONSENSUS_BOOTSTRAP.SERVING_UNAVAILABLE);
+        return retireConsensusBootstrap(this, definition, replicaContext);
       }
       this.emit(LIFECYCLE_EVENT.STOP_START, {
         runtimeKind, serviceId,

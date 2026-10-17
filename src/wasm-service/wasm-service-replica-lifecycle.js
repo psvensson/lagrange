@@ -1,4 +1,10 @@
-import {resolveWasmCreationAdmission, openWasmCreationRecords} from './wasm-creation-opening.js';
+import {resolveWasmCreationAdmission, openWasmCreationRecords, tombstoneWasmCreationLocal,
+  wasmCreationLocalIdentity, WASM_CREATION_RETIREMENT as RETIREMENT} from
+  './wasm-creation-opening.js';
+import {openServingState, retireServingState, WASM_SERVICE_SERVING_STATE as SERVING} from
+  './wasm-service-serving-state.js';
+import {requireInstance} from '../control-plane/owners/service-instance-contract.js';
+import {resolveTimeSource} from '../time/time-source.js';
 // The lifecycle of one WasmServiceReplica instance as a named state machine
 // (R07): CREATED -> STARTING -> READY -> STOPPING -> STOPPED. An instance is
 // single-use, as partition and message-group replica instances are used:
@@ -28,10 +34,35 @@ import {
   WASM_SERVICE_ERROR_MSG,
   WASM_SERVICE_LIFECYCLE_REFUSAL,
   WASM_SERVICE_LOG_MSG,
+  WASM_SERVICE_NO_FAILURE,
   WASM_SERVICE_REPLICA_STATE,
+  WASM_SERVICE_SHUTDOWN_INTENT,
 } from './wasm-service-constants.js';
 
 const STATE = WASM_SERVICE_REPLICA_STATE;
+const NO_FAILURE = WASM_SERVICE_NO_FAILURE;
+// How one open attempt settled, and the lifecycle state each settlement
+// owns when no concurrent shutdown took the instance meanwhile (R07: one
+// named outcome resolution instead of independent state assignments).
+const OPEN_SETTLEMENT = Object.freeze({
+  OPENED: 'opened', RELEASED: 'released', CLEANUP_REQUIRED: 'cleanup-required',
+});
+const OPEN_SETTLEMENT_STATE = Object.freeze({
+  [OPEN_SETTLEMENT.OPENED]: STATE.READY,
+  [OPEN_SETTLEMENT.RELEASED]: STATE.CREATED,
+  [OPEN_SETTLEMENT.CLEANUP_REQUIRED]: STATE.CLEANUP_REQUIRED,
+});
+const RETIRED_LOCALLY = new Set([RETIREMENT.RETIRED, RETIREMENT.ALREADY]);
+
+/**
+ * Join a later failure to the failure custody already owed.
+ * @param {Object} prior - A failure, or the named no-failure state.
+ * @param {Error} error
+ * @return {Error}
+ */
+function joinFailure(prior, error) {
+  return prior === NO_FAILURE ? error : withRaftOpeningCleanupFailure(prior, error);
+}
 
 /**
  * The typed refusal of initializing an instance whose shutdown has begun.
@@ -69,62 +100,95 @@ async function releaseWasmServiceReplicaConsensus(replica) {
 }
 
 /**
- * Bound opening first awaits its existing metadata and journal owners,
- * then rechecks STARTING before synchronously constructing native resources.
+ * Construct the native resources synchronously (no await: an unbound open
+ * stays synchronous up to READY). A bound replica's serving state is decided
+ * here from the verified local record and the metadata phase its open
+ * resolved (D2'); a replica that opens SERVING never binds native events
+ * (Revision 3 N16).
+ * @param {Object} replica - The WasmServiceReplica.
+ * @param {string|undefined} metadataPhase - The bound open's metadata phase.
+ */
+function openReplicaResources(replica, metadataPhase) {
+  openWasmServiceDatabase(replica);
+  let localPhase;
+  replica.db.transaction(() => {
+    localPhase = openWasmCreationRecords(replica);
+    replica.writerState = new WasmWriterState(replica.db, replica.serviceDefinitionId);
+    replica.kvStore = new SessionKVStore(replica.db);
+  })();
+  openWasmServiceConsensusPort(replica);
+  wireReplicaLifecycleEvents(replica, {
+    events: RAFT_EVENT,
+    roles: RAFT_ROLE,
+    getCurrentTerm: () => replica.resolveCurrentTermSafe(),
+    onLeader: () => replica.onBecameLeader(),
+    onFollower: () => replica.onBecameFollower(),
+    onCandidate: () => replica.onBecameFollower(),
+  });
+  openServingState(replica, localPhase, metadataPhase);
+  if (replica.servingState !== SERVING.SERVING) replica.creationReconciliation?.bind();
+  if (replica.transport) {
+    // The exact handler identity is kept so retirement removes only it
+    // (owner decision N2). Registration is the open's last step.
+    const handler = (message) => replica.handleMessage(message);
+    replica.transport.register(replica.unifiedAddress, handler);
+    replica.transportHandler = handler;
+  }
+}
+
+/**
+ * Release what a failed open acquired; a failed release retains cleanup custody.
+ * @param {Object} replica - The WasmServiceReplica.
+ * @param {Error} error - The open failure.
+ * @return {Promise<{outcome: string, error: Error}>} RELEASED or CLEANUP_REQUIRED.
+ */
+async function releaseFailedOpen(replica, error) {
+  replica.startupFailure = error;
+  try {
+    await releaseWasmServiceReplicaConsensus(replica);
+  } catch (cleanup) {
+    replica.startupFailure = withRaftOpeningCleanupFailure(error, cleanup);
+    return {outcome: OPEN_SETTLEMENT.CLEANUP_REQUIRED, error: replica.startupFailure};
+  }
+  replica.startupFailure = NO_FAILURE;
+  return {outcome: OPEN_SETTLEMENT.RELEASED, error};
+}
+
+/**
+ * Settle one open: the instance takes the settlement's state only while
+ * still STARTING; a shutdown that began meanwhile owns the state from here
+ * on and the open answers REPLICA_RETIRED.
+ * @param {Object} replica - The WasmServiceReplica.
+ * @param {{outcome: string, error?: Error}} opening
+ */
+function settleOpening(replica, opening) {
+  const owned = replica.lifecycleState === STATE.STARTING;
+  if (owned) replica.lifecycleState = OPEN_SETTLEMENT_STATE[opening.outcome];
+  if (opening.outcome !== OPEN_SETTLEMENT.OPENED) throw opening.error;
+  if (!owned) throw replicaRetiredError(replica);
+}
+
+/**
+ * Bound opening first awaits its existing metadata and journal owners, then
+ * rechecks STARTING before synchronously constructing native resources.
  * Failure releases acquired resources; failed release retains cleanup custody.
  * @param {Object} replica - The WasmServiceReplica.
  * @return {Promise<void>}
  */
 async function openReplica(replica) {
+  let opening;
   try {
+    let metadataPhase;
     if (replica.consensusCreation !== null) {
-      await resolveWasmCreationAdmission(replica);
+      metadataPhase = await resolveWasmCreationAdmission(replica);
       if (replica.lifecycleState !== STATE.STARTING) throw replicaRetiredError(replica);
     }
-    openWasmServiceDatabase(replica);
-    replica.db.transaction(() => {
-      openWasmCreationRecords(replica);
-      replica.writerState = new WasmWriterState(replica.db, replica.serviceDefinitionId);
-      replica.kvStore = new SessionKVStore(replica.db);
-    })();
-    openWasmServiceConsensusPort(replica);
-    wireReplicaLifecycleEvents(replica, {
-      events: RAFT_EVENT,
-      roles: RAFT_ROLE,
-      getCurrentTerm: () => replica.resolveCurrentTermSafe(),
-      onLeader: () => replica.onBecameLeader(),
-      onFollower: () => replica.onBecameFollower(),
-      onCandidate: () => replica.onBecameFollower(),
-    });
-    replica.creationReconciliation?.bind();
-    if (replica.transport) {
-      // The exact handler identity is kept so retirement removes only it
-      // (owner decision N2). Registration is the open's last step.
-      const handler = (message) => replica.handleMessage(message);
-      replica.transport.register(replica.unifiedAddress, handler);
-      replica.transportHandler = handler;
-    }
+    openReplicaResources(replica, metadataPhase);
+    opening = {outcome: OPEN_SETTLEMENT.OPENED};
   } catch (error) {
-    replica.startupFailure = error;
-    try {
-      await releaseWasmServiceReplicaConsensus(replica);
-    } catch (cleanup) {
-      replica.startupFailure = withRaftOpeningCleanupFailure(error, cleanup);
-      // A concurrent shutdown retains its existing settlement/ownership.
-      if (replica.lifecycleState === STATE.STARTING) {
-        replica.lifecycleState = STATE.CLEANUP_REQUIRED;
-      }
-      throw replica.startupFailure;
-    }
-    replica.startupFailure = null;
-    // A shutdown that began meanwhile owns the state from here on.
-    if (replica.lifecycleState === STATE.STARTING) {
-      replica.lifecycleState = STATE.CREATED;
-    }
-    throw error;
+    opening = await releaseFailedOpen(replica, error);
   }
-  if (replica.lifecycleState !== STATE.STARTING) throw replicaRetiredError(replica);
-  replica.lifecycleState = STATE.READY;
+  settleOpening(replica, opening);
 }
 
 /**
@@ -140,7 +204,8 @@ async function initializeWasmServiceReplica(replica) {
   case STATE.STARTING:
     return replica.lifecycleSettlement;
   case STATE.CLEANUP_REQUIRED:
-    throw replica.startupFailure ?? replicaRetiredError(replica);
+    throw replica.startupFailure === NO_FAILURE ? replicaRetiredError(replica) :
+      replica.startupFailure;
   case STATE.STOPPING:
   case STATE.STOPPED:
     throw replicaRetiredError(replica);
@@ -155,14 +220,44 @@ async function initializeWasmServiceReplica(replica) {
 }
 
 /**
+ * A retirement's receiver-local tombstone (design D4' step 4, Revision 3
+ * N15): written on the replica's still-open connection after its handler is
+ * retired and before its port and database close, once the metadata
+ * RELEASING attempt has settled (whatever it answered). A replica with no
+ * open connection is retired by path by the lifecycle after the shutdown.
+ * A tombstone that cannot be written fails the shutdown with the handles
+ * still open, so no CLOSED can follow it.
+ * @param {Object} replica - The WasmServiceReplica.
+ * @param {Object} retirement - The shutdown's captured intent.
+ * @return {Promise<void>}
+ */
+async function tombstoneRetiringReplica(replica, retirement) {
+  if (retirement.intent !== WASM_SERVICE_SHUTDOWN_INTENT.RETIRE_RESOURCE ||
+      replica.consensusCreation === null) {
+    return;
+  }
+  await retirement.metadataRelease;
+  if (replica.db?.open !== true) return;
+  const at = resolveTimeSource({timeSource: replica.providedTimeSource}).now();
+  const result = tombstoneWasmCreationLocal({db: replica.db}, wasmCreationLocalIdentity(replica),
+    {reason: retirement.intent, at});
+  requireInstance(RETIRED_LOCALLY.has(result.outcome), result.outcome);
+  retireServingState(replica);
+  replica.logger.info(WASM_SERVICE_LOG_MSG.CREATION_RETIRED, {
+    replicaId: replica.replicaId, outcome: result.outcome,
+  });
+}
+
+/**
  * Retire the snapshotted handler and release the port and database.
  * @param {Object} replica - The WasmServiceReplica.
  * @param {Function|null} handler - The handler this instance registered.
  * @param {Promise|null} starting - A failing open still releasing.
- * @param {Error|null} activityFailure - An activity stop still owed.
+ * @param {Object} activityFailure - An activity stop still owed, or NO_FAILURE.
+ * @param {Object} shutdownIntent - The shutdown's captured retirement intent.
  * @return {Promise<void>}
  */
-async function retireReplica(replica, handler, starting, activityFailure) {
+async function retireReplica(replica, handler, starting, activityFailure, shutdownIntent) {
   try {
     if (starting) {
       // The failed open releases its own handles first; its error belongs
@@ -172,8 +267,7 @@ async function retireReplica(replica, handler, starting, activityFailure) {
     try {
       await replica.creationReconciliation?.shutdown();
     } catch (error) {
-      activityFailure = activityFailure === null ? error :
-        withRaftOpeningCleanupFailure(activityFailure, error);
+      activityFailure = joinFailure(activityFailure, error);
     }
     // Exact-identity retirement (owner decision N2): a successor's handler
     // at the same address is never removed. No replica-lifecycle activation
@@ -193,16 +287,16 @@ async function retireReplica(replica, handler, starting, activityFailure) {
     if (replica.transportHandler === handler) {
       replica.transportHandler = null;
     }
+    await tombstoneRetiringReplica(replica, shutdownIntent);
     await releaseWasmServiceReplicaConsensus(replica);
-    if (activityFailure !== null) {
+    if (activityFailure !== NO_FAILURE) {
       throw activityFailure;
     }
   } catch (error) {
     replica.lifecycleState = STATE.CLEANUP_REQUIRED;
-    throw activityFailure !== null && error !== activityFailure ?
-      withRaftOpeningCleanupFailure(activityFailure, error) : error;
+    throw error === activityFailure ? error : joinFailure(activityFailure, error);
   }
-  replica.startupFailure = null;
+  replica.startupFailure = NO_FAILURE;
   replica.lifecycleState = STATE.STOPPED;
   replica.logger.info(WASM_SERVICE_LOG_MSG.REPLICA_STOPPED, {
     replicaId: replica.replicaId,
@@ -212,14 +306,17 @@ async function retireReplica(replica, handler, starting, activityFailure) {
 
 /**
  * Shut the replica down: the transition to STOPPING, the snapshot of the
- * handler it retires and the replica's own activity stop happen at call,
- * before any await; a repeated shutdown joins the one in flight.
+ * handler it retires, the shutdown's retirement intent and the replica's own
+ * activity stop happen at call, before any await; a repeated shutdown joins
+ * the one in flight (and its intent: a joiner never assumes a tombstone).
  * @param {Object} replica - The WasmServiceReplica.
  * @param {Function} stopActivity - Stops the replica's timers and
  *   publication helpers (synchronous).
+ * @param {Object} retirement - {intent: WASM_SERVICE_SHUTDOWN_INTENT,
+ *   metadataRelease?: Promise}.
  * @return {Promise<void>}
  */
-async function shutdownWasmServiceReplica(replica, stopActivity) {
+async function shutdownWasmServiceReplica(replica, stopActivity, retirement) {
   switch (replica.lifecycleState) {
   case STATE.STOPPING:
     return replica.lifecycleSettlement;
@@ -235,7 +332,7 @@ async function shutdownWasmServiceReplica(replica, stopActivity) {
   replica.creationReconciliation?.closeAdmission();
   replica.lifecycleSettlement = promise;
   const handler = replica.transportHandler;
-  let activityFailure = null;
+  let activityFailure = NO_FAILURE;
   try {
     stopActivity();
   } catch (error) {
@@ -243,7 +340,7 @@ async function shutdownWasmServiceReplica(replica, stopActivity) {
   }
   // Joiners already see this settlement. Retirement proceeds even if an
   // activity stop failed, but cannot then claim every obligation completed.
-  retireReplica(replica, handler, starting, activityFailure).then(resolve, reject);
+  retireReplica(replica, handler, starting, activityFailure, retirement).then(resolve, reject);
   return promise;
 }
 

@@ -9,6 +9,8 @@
  */
 
 import {initializeWasmCreationContext} from './wasm-creation-opening.js';
+import {boundProposalAdmission, initializeServingState, isServing, publishesServicesRow,
+  servingRefusal} from './wasm-service-serving-state.js';
 import {EventEmitter} from 'node:events';
 import {AddressManager} from '../address/address-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
@@ -43,7 +45,9 @@ import {
   WASM_SERVICE_DEFAULT,
   WRITE_CONSISTENCY_MODE,
   WASM_SERVICE_COMMAND_TYPE,
+  WASM_SERVICE_NO_FAILURE,
   WASM_SERVICE_REPLICA_STATE,
+  WASM_SERVICE_SHUTDOWN_INTENT,
 } from './wasm-service-constants.js';
 import {
   initializeWasmServiceReplica,
@@ -51,8 +55,7 @@ import {
   shutdownWasmServiceReplica,
 } from './wasm-service-replica-lifecycle.js';
 import {
-  admitWasmServiceCommand, admitWasmBootstrapCommand,
-  wasmServiceCommandRefusalError,
+  admitWasmServiceCommand, wasmServiceCommandRefusalError,
 } from './wasm-service-committed-command-admission.js';
 import {
   applyCommittedCommand,
@@ -115,6 +118,7 @@ class WasmServiceReplica extends EventEmitter {
     this.transport = options.transport || null;
     this.dbPath = options.dbPath;
     initializeWasmCreationContext(this, options);
+    initializeServingState(this);
     this.providedTimeSource = options.timeSource;
     this.entityType = SERVICE_TYPE.WASM_SERVICE;
     this.addressManager = AddressManager.getInstance();
@@ -133,7 +137,7 @@ class WasmServiceReplica extends EventEmitter {
     // of its in-flight start or shutdown is what a concurrent caller joins.
     this.lifecycleState = WASM_SERVICE_REPLICA_STATE.CREATED;
     this.lifecycleSettlement = null;
-    this.startupFailure = null;
+    this.startupFailure = WASM_SERVICE_NO_FAILURE;
     this.consensusCloseSettlement = null;
     this.transportHandler = null;
     this.creationReconciliation = null;
@@ -281,10 +285,17 @@ class WasmServiceReplica extends EventEmitter {
     }
   }
 
-  /** @return {Object|null} Explicit user refusal while creation is only bootstrapped. */
+  /**
+   * @return {Object|null} The typed refusal of user work unless this instance
+   *   serves (wasm-service-serving-state.js): held, not READY, or stopping.
+   */
   heldCreationRefusal() {
-    return this.consensusCreation === null ? null :
-      {status: WRITER_STATUS.REFUSED, reason: WRITER_REASON.NOT_READY, identity: null};
+    return servingRefusal(this);
+  }
+
+  /** @return {boolean} The one serving fence: serving state AND READY. */
+  get serving() {
+    return isServing(this);
   }
 
   /** @return {boolean} Whether native opening is READY, independently of serving. */
@@ -460,8 +471,11 @@ class WasmServiceReplica extends EventEmitter {
    * @return {Promise<Object>} The port's CORE_OK answer.
    */
   async proposeEntry(entry) {
+    if (this.consensusCreation === null && !this.serving) {
+      throw new Error(WASM_SERVICE_ERROR_MSG.SERVICE_NOT_READY);
+    }
     const admission = this.consensusCreation === null ?
-      admitWasmServiceCommand(entry) : admitWasmBootstrapCommand(entry);
+      admitWasmServiceCommand(entry) : boundProposalAdmission(this, entry);
     if (!admission.admitted) {
       throw wasmServiceCommandRefusalError(admission);
     }
@@ -487,7 +501,7 @@ class WasmServiceReplica extends EventEmitter {
    * @param {string} role - The role the port announced.
    */
   queueRoleUpdate(role) {
-    if (this.consensusCreation !== null) return;
+    if (!publishesServicesRow(this)) return;
     if (!role || role === this.persistedRole) {
       return;
     }
@@ -509,7 +523,7 @@ class WasmServiceReplica extends EventEmitter {
    * @param {string} leaderNodeId - The leading node.
    */
   queueLeaderNodeUpdate(leaderNodeId) {
-    if (this.consensusCreation !== null) return;
+    if (!publishesServicesRow(this)) return;
     if (!leaderNodeId || leaderNodeId === this.persistedLeaderNodeId) {
       return;
     }
@@ -542,12 +556,20 @@ class WasmServiceReplica extends EventEmitter {
    * Reconstructs timers and starts safety interval broadcasts.
    */
   onBecameLeader() {
-    if (this.consensusCreation !== null) return;
+    if (!this.serving) return;
     this.logger.info(WASM_SERVICE_LOG_MSG.BECAME_LEADER, {
       replicaId: this.replicaId,
       serviceDefinitionId: this.serviceDefinitionId,
     });
+    this.applyLeaderEffects();
+  }
 
+  /**
+   * The leader's admission-independent effects: timer reconstruction and
+   * safety broadcasts. Run on a leader edge while serving, or once by the
+   * held -> serving edge of a bound replica that already leads.
+   */
+  applyLeaderEffects() {
     this.timerManager.reconstructTimers().then((count) => {
       this.logger.info(
         WASM_SERVICE_LOG_MSG.TIMER_RECONSTRUCTED, {
@@ -581,7 +603,7 @@ class WasmServiceReplica extends EventEmitter {
    * @return {Promise<void>}
    */
   async flushRoleUpdate() {
-    if (this.consensusCreation !== null) return;
+    if (!publishesServicesRow(this)) return;
     return this.roleMutationHelper.flush();
   }
 
@@ -591,7 +613,7 @@ class WasmServiceReplica extends EventEmitter {
    * @return {Promise<void>}
    */
   async flushLeaderNodeUpdate() {
-    if (this.consensusCreation !== null) return;
+    if (!publishesServicesRow(this)) return;
     return this.leaderNodeMutationHelper.flush();
   }
 
@@ -738,17 +760,21 @@ class WasmServiceReplica extends EventEmitter {
    * to STOPPING and the snapshot of the handler it retires happen at call,
    * before any await (wasm-service-replica-lifecycle.js), so nothing a later
    * call opens is retired or released here; a repeated shutdown joins the
-   * one in flight.
+   * one in flight. The shutdown's intent is captured at the same fence: an
+   * orderly stop never retires the resource; RETIRE_RESOURCE writes the
+   * receiver-local tombstone before the database closes.
+   * @param {Object} [retirement] - {intent: WASM_SERVICE_SHUTDOWN_INTENT,
+   *   metadataRelease?: Promise} (orderly by default).
    * @return {Promise<void>}
    */
-  shutdown() {
+  shutdown(retirement = {intent: WASM_SERVICE_SHUTDOWN_INTENT.ORDERLY_STOP}) {
     return shutdownWasmServiceReplica(this, () => {
       this.writerCompletion.abort(WRITER_REASON.SHUTDOWN);
       this.timerManager.stopAll();
       this._stopSafetyBroadcasts();
       this.roleMutationHelper.shutdown();
       this.leaderNodeMutationHelper.shutdown();
-    });
+    }, retirement);
   }
 }
 

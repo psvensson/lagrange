@@ -1,0 +1,100 @@
+# test-files planned=1
+classified lane exclusive: 1 file(s), jobs=1
+thermal: ok cpu 67C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+not ok test/wasm-service/wasm-creation-reconciliation.integration.test.js (4 assertions, 1720ms)
+# TAP assertions failed; test process exited 1
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+TAP version 13
+# Subtest: native leadership and applied progress autonomously reconcile the original held creation
+not ok 1 - native leadership and applied progress autonomously reconcile the original held creation
+  ---
+  duration_ms: 239.956723
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-reconciliation.integration.test.js:63:1'
+  failureType: 'testCodeFailure'
+  error: 'APPLIED_EVENT_DID_NOT_RECONCILE_COVERING_MEMBERSHIP'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-reconciliation.integration.test.js:77:14)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: native applied wake survives an in-flight no-quorum INIT and resolves after replies return
+not ok 2 - native applied wake survives an in-flight no-quorum INIT and resolves after replies return
+  ---
+  duration_ms: 166.729948
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-reconciliation.integration.test.js:90:1'
+  failureType: 'testCodeFailure'
+  error: 'IN_FLIGHT_APPLIED_WAKE_WAS_LOST'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-reconciliation.integration.test.js:109:14)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: an expired writer interest resumes from actual applied progress, not a poll or new intent
+not ok 3 - an expired writer interest resumes from actual applied progress, not a poll or new intent
+  ---
+  duration_ms: 259.588226
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-reconciliation.integration.test.js:118:1'
+  failureType: 'testCodeFailure'
+  error: 'APPLIED_PROGRESS_DID_NOT_RESUME_UNKNOWN'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-reconciliation.integration.test.js:135:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: shutdown aborts event-owned INIT, joins the queue, and leaves no native handle or late success
+not ok 4 - shutdown aborts event-owned INIT, joins the queue, and leaves no native handle or late success
+  ---
+  duration_ms: 126.665674
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-reconciliation.integration.test.js:142:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'WRITER_NOT_READY'
+    - 'WRITER_SHUTDOWN'
+              ^
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'WRITER_SHUTDOWN'
+  actual: 'WRITER_NOT_READY'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-reconciliation.integration.test.js:171:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 0
+# fail 4
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 807.408964
+# time=1720ms
+# test-files total=1 pass=0 fail=1 assertions=4

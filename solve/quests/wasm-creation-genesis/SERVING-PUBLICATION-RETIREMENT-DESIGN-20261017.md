@@ -865,3 +865,47 @@ and performs no `_assertTransition`/row transition when `closed === false`
 Still uncovered and recorded: cell 29 (committed user writes applied between
 the tombstone and `port.close` are benign: the local record is not touched by
 apply); cross-node wake delivery (7').
+
+## Revision 3 amendment A1 (recorded after independent verification, 2026-10-17)
+
+Appended by the lead (R09/R21: the earlier text stands as written; this
+clause supersedes one sentence of it). Independent verification of the
+stage-1 implementation (verifier verdict APPROVE, finding F-A1;
+`evidence/serving-publication-20261017/verifier/verifier-verdict-stage1.md`)
+found a tension inside D4'/D5': D4' step 3 and D5' say the metadata RELEASING
+attempt "never blocks the local stop", while 6' P4 demands RELEASING observed
+on the slot before the local RETIRED tombstone, which only a wait can satisfy.
+The implementation resolves it as follows, and this is now the design:
+
+- The RELEASING attempt is never a precondition of the fence. The STOPPING
+  transition, the synchronous close of user admission, the activity stop and
+  the exact-handler retirement happen at `shutdown()` call, before any await
+  (`wasm-service-replica-lifecycle.js shutdownWasmServiceReplica`).
+- The in-path tombstone (N15) waits for the RELEASING attempt to settle with
+  any answer (RELEASING, CLOSED, STALE_BINDING, UNKNOWN, UNAVAILABLE), so the
+  handle release (tombstone, port close, database close) and the shutdown
+  settlement depend on the attempt terminating, bounded by the metadata
+  owner's own routed-mutation budget. It never depends on the attempt
+  succeeding (`wasm-creation-retirement.js retireLocally`, `tombstoneRetiringReplica`).
+- Superseded sentence: D4' step 3 "never blocks the local stop" and D5''s
+  "non-blocking" now read "never a precondition of the fence; the handle
+  release waits for the attempt to settle, whatever it answered". P4's order
+  (RELEASING before RETIRED before CLOSED) stands and is witnessed
+  (`TOMBSTONE_PRECEDED_RELEASING`, `CLOSED_REQUESTED_BEFORE_LOCAL_RETIRED`;
+  mutation V10).
+
+Non-blocking findings of the same verification, recorded for the next stages
+(owners in 7'): F-W1 an event run's `CONSUMER_ABSENT` wake outcome is typed
+in the run result but logged only at debug while production wires no
+consumer (discovery stage owns the consumer; raise the log level or record it
+in queue diagnostics there); F-M1 the designed property "a HELD replica keeps
+its native subscriptions until the local grant lands" has no witness (add one
+assertion in P13 or P2); F-W2 `assertOneOwnerWake` and REC `reentries === 1`
+over-constrain a legal two-wake interleaving (GRANT_HELD then OBSERVED from a
+native event that runs before the consumer's re-entry): relax to "at most one
+OBSERVED, every wake OBSERVED or GRANT_HELD(STATE_CHANGED)"; typed edges
+`LOCAL_GRANT_NOT_RECORDED` and `SERVING_ENABLE_FAILED` and cells 21/22 of
+the coverage model are traced but unwitnessed; F-A2 `resolveGrant` issues a
+second authoritative read on UNKNOWN after the owner's own (harmless);
+F-R1 the by-path tombstone identity carries five fields (adds `storage` when
+the recovery stage defines restart-scan retirement).

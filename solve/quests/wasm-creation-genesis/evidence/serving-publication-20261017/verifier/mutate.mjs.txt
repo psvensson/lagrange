@@ -1,0 +1,84 @@
+// Verifier mutation runner: one mutation at a time in the VERIFY worktree only.
+// Each mutation: exact string replacement(s) that must each match exactly once,
+// thermal gate, one classified single-file run, then `git restore --worktree`
+// of the touched file(s) and a `git diff --quiet` proof of byte identity.
+// Usage: node mutate.mjs <plan.json> <out-dir>
+import {execFileSync, spawnSync} from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+
+const WT = '/mnt/data/peter/projects/.worktrees/verify-serving-publication-1';
+const [planPath, outDir] = process.argv.slice(2);
+const plan = JSON.parse(fs.readFileSync(planPath, 'utf8'));
+fs.mkdirSync(outDir, {recursive: true});
+const summary = {};
+
+function git(args) {
+  return execFileSync('git', args, {cwd: WT, encoding: 'utf8'});
+}
+function expectedStatus() {
+  const status = git(['status', '--short']).trim();
+  if (status !== 'M test/shards/impact-graph-seal.json') {
+    throw new Error(`UNEXPECTED_WORKTREE_STATE:\n${status}`);
+  }
+}
+function firstFailures(log) {
+  const lines = log.split('\n');
+  const failures = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const m = /^\s*not ok \d+ - (.*)$/.exec(lines[i]);
+    if (!m) continue;
+    let detail = '';
+    for (let j = i + 1; j < Math.min(lines.length, i + 40); j += 1) {
+      const d = /^\s*error: (.*)$/.exec(lines[j]);
+      if (d) {
+        detail = d[1].trim() === '|-' ? (lines[j + 1] ?? '').trim() : d[1].trim();
+        break;
+      }
+    }
+    failures.push({subtest: m[1].trim(), detail: detail.slice(0, 220)});
+  }
+  return failures;
+}
+
+for (const [id, mutation] of Object.entries(plan)) {
+  expectedStatus();
+  const touched = [];
+  try {
+    for (const edit of mutation.edits) {
+      const file = path.join(WT, edit.file);
+      const source = fs.readFileSync(file, 'utf8');
+      const count = source.split(edit.from).length - 1;
+      if (count !== 1) throw new Error(`${id}: pattern in ${edit.file} matched ${count} times`);
+      fs.writeFileSync(file, source.replace(edit.from, edit.to));
+      touched.push(edit.file);
+    }
+    const thermal = spawnSync('node', ['scripts/checks/wait-for-thermal-headroom.js'],
+      {cwd: WT, encoding: 'utf8'});
+    const started = Date.now();
+    const run = spawnSync('npm', ['run', '-s', 'test:file', '--', mutation.testFile],
+      {cwd: WT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: 900000});
+    const log = `${thermal.stdout}\n${run.stdout}\n${run.stderr}`;
+    fs.writeFileSync(path.join(outDir, `${id}.log`), log);
+    const failures = firstFailures(log);
+    const passLine = /# test-files total=(\d+) pass=(\d+) fail=(\d+)/.exec(log);
+    summary[id] = {description: mutation.description, testFile: mutation.testFile,
+      exit: run.status, elapsedMs: Date.now() - started,
+      files: passLine ? {total: +passLine[1], pass: +passLine[2], fail: +passLine[3]} : null,
+      engaged: run.status !== 0, failures: failures.slice(0, 8)};
+  } catch (error) {
+    summary[id] = {description: mutation.description, error: error.message};
+  } finally {
+    for (const file of touched) git(['restore', '--worktree', '--', file]);
+    for (const file of touched) {
+      const same = spawnSync('git', ['diff', '--quiet', '--', file], {cwd: WT});
+      summary[id] = {...summary[id], restored: {...(summary[id].restored ?? {}),
+        [file]: same.status === 0 ? 'byte-identical' : 'DIFFERS'}};
+      if (same.status !== 0) throw new Error(`RESTORE_FAILED ${file}`);
+    }
+    expectedStatus();
+    fs.writeFileSync(path.join(outDir, 'summary.json'), JSON.stringify(summary, null, 1));
+    console.log(id, JSON.stringify(summary[id]).slice(0, 400));
+  }
+}
+console.log('MUTATION_BATCH_DONE');
