@@ -11,6 +11,8 @@ doneWhen:
 quests: []
 authorizes:
   - solve/epics/transport-independent-cluster-networking
+  - test/raft/raft-rs-backend/n0-raft-timing-measurement.test.js
+  - test/shards
 ---
 
 # Transport-independent cluster networking
@@ -152,7 +154,14 @@ semantics.
 
 ## Current state
 
-- Research and plan only; not a deployed feature.
+- N0 has a **review-branch measurement candidate**, not terminal acceptance:
+  `test/raft/raft-rs-backend/n0-raft-timing-measurement.test.js` invokes the
+  real rs-raft operation port and native outgoing envelopes in a three-voter
+  fixture, measures scheduled wall-clock sends on the physical test host,
+  and characterizes live configuration/election behavior without changing
+  production source. Lab execution and independent review are separate proof
+  requirements; this is **not** a physical three-host cluster proof.
+- Research and plan remain provisional; not a deployed feature.
 - No Quest created or started by this planning change.
 - No test, simulated cluster or bandwidth benchmark has been executed here.
 - The eventual proof path intentionally does not yet exist.
