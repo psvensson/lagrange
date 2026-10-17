@@ -139,32 +139,65 @@ test('N0 native heartbeat cadence is observed at the operation-port send boundar
     }
   });
 
-test('N0 new proposal emits native append without waiting for slow overlay heartbeat',
-  {timeout: 25000}, async (t) => {
+test('N0 a caught-up leader emits native append before the next overlay heartbeat',
+  {timeout: 30000}, async (t) => {
     const fixture = makeFixture(OVERLAY);
     try {
       const leader = elect(fixture);
+      const afterElection = fixture.cluster.node(leader).readStatus();
+      // A newly elected leader starts with an uncommitted no-op and
+      // follower progress zero. Raft's Probe state is permitted to pause
+      // further Append until its first response. Measuring a new proposal
+      // at that point confused replication flow control with heartbeat
+      // cadence in the original red lab receipt (#104, #106).
+      let stabilized = false;
+      let stabilizationRounds = 0;
+      for (; stabilizationRounds < 160; stabilizationRounds += 1) {
+        for (const replicaId of REPLICAS) {
+          await fixture.cluster.node(replicaId).tick();
+        }
+        fixture.cluster.deliverAll();
+        await new Promise((resolve) => setImmediate(resolve));
+        const status = fixture.cluster.node(leader).readStatus();
+        const progress = Object.values(status.followerProgress || {});
+        if (status.role === 'leader' &&
+            Number(status.commitIndex) >= 1 && progress.length === 2 &&
+            progress.every((value) => Number(value) >= 1)) {
+          stabilized = true;
+          break;
+        }
+      }
+      const atStability = fixture.cluster.node(leader).readStatus();
+      report(t, {sample: 'leader-probe-to-steady-state',
+        afterElection: {term: afterElection.term, role: afterElection.role,
+          commitIndex: afterElection.commitIndex,
+          followerProgress: afterElection.followerProgress},
+        stabilizationRounds, stabilized,
+        stableObservation: {term: atStability.term, role: atStability.role,
+          commitIndex: atStability.commitIndex,
+          followerProgress: atStability.followerProgress}});
+      assert.ok(stabilized,
+        'leader must commit the founding no-op and catch up both followers');
+
       fixture.trace.phase = 'proposal';
       fixture.trace.tick = 0;
       const first = fixture.packets.length;
-      const beforeProposalStatus = fixture.cluster.node(leader).readStatus();
       const proposed = await fixture.cluster.node(leader).propose({
         n0: 'proposal-no-tick'});
-      const afterProposalStatus = fixture.cluster.node(leader).readStatus();
       const emitted = fixture.packets.slice(first).filter((packet) =>
         packet.phase === 'proposal' && packet.fromReplicaId === leader);
       const append = emitted.filter((packet) =>
         packet.kind === messageType('MsgAppend'));
-      report(t, {sample: 'proposal-boundary-diagnostic',
-        leader, beforeProposalStatus, proposed, afterProposalStatus,
-        emitted, appendCount: append.length});
-      assert.ok(append.length >= 2,
-        'propose must send to both peers without any scheduled tick');
       report(t, {sample: 'proposal-before-next-heartbeat',
         requestedHeartbeatMs: OVERLAY.heartbeatMs,
+        result: proposed,
         messagesWithoutTick: emitted.length,
         appendWithoutTick: append.length,
         encodedBytes: append.reduce((sum, p) => sum + p.bytes, 0)});
+      assert.equal(proposed?.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
+        'the steady-state leader must accept the proposal');
+      assert.ok(append.length >= 2,
+        'caught-up leader must append to both peers without a heartbeat tick');
     } finally {
       fixture.cluster.dispose();
     }
