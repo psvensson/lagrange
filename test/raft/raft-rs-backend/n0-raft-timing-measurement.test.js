@@ -147,11 +147,17 @@ test('N0 new proposal emits native append without waiting for slow overlay heart
       fixture.trace.phase = 'proposal';
       fixture.trace.tick = 0;
       const first = fixture.packets.length;
-      await fixture.cluster.node(leader).propose({n0: 'proposal-no-tick'});
+      const beforeProposalStatus = fixture.cluster.node(leader).readStatus();
+      const proposed = await fixture.cluster.node(leader).propose({
+        n0: 'proposal-no-tick'});
+      const afterProposalStatus = fixture.cluster.node(leader).readStatus();
       const emitted = fixture.packets.slice(first).filter((packet) =>
         packet.phase === 'proposal' && packet.fromReplicaId === leader);
       const append = emitted.filter((packet) =>
         packet.kind === messageType('MsgAppend'));
+      report(t, {sample: 'proposal-boundary-diagnostic',
+        leader, beforeProposalStatus, proposed, afterProposalStatus,
+        emitted, appendCount: append.length});
       assert.ok(append.length >= 2,
         'propose must send to both peers without any scheduled tick');
       report(t, {sample: 'proposal-before-next-heartbeat',
