@@ -30,10 +30,11 @@ function dev(rx, tx) {
 
 function fakeCluster(opts = {}) {
   const reads = Array(3).fill(0);
-  const nodes = Array.from({length: 3}, (_, i) => ({
+  const nodes = Array.from({length: opts.extraNode ? 4 : 3}, (_, i) => ({
     id: 'n0-' + i,
     role: i === 0 ? 'seed' : 'joiner',
-    hostIdentity: opts.sameHost ? HOSTS[0] : HOSTS[i],
+    hostIdentity: opts.missingHostIdentity && i === 1 ? null :
+      opts.sameHost ? HOSTS[0] : HOSTS[i] || 'host:d',
     containerId: 'container-' + i,
   }));
   const providers = Array.from({length: 3}, (_, i) => ({
@@ -53,14 +54,16 @@ function fakeCluster(opts = {}) {
       const sample = reads[i]++;
       const first = sample === 0;
       const before = BigInt(200 + i * 20);
-      const after = opts.counterRegression ? before - 1n : before + 200n;
+      const after = opts.counterRegression ? before - 1n :
+        opts.zeroTraffic ? before : before + 200n;
       return {exitCode: 0, stdout: dev(first ? before : after,
-        first ? before * 2n : before * 2n + 400n)};
+        first ? before * 2n : opts.zeroTraffic ?
+          before * 2n : before * 2n + 400n)};
     },
   }));
   return {
     _providers: providers,
-    _hostAssignment: [0, 1, 2],
+    _hostAssignment: opts.duplicateProvider ? [0, 0, 2] : [0, 1, 2],
     _config: {docker: {hostInfo: IPS.map((internalIp) => ({internalIp}))}},
     getNodes: () => nodes,
     waitForConvergence: async ({settleTimeoutMs, quietWindowMs,
@@ -132,4 +135,29 @@ test('N0 refuses counter regressions rather than clamping them to zero',
   async () => {
     await assert.rejects(run(fakeCluster({counterRegression: true}),
       testClock()), /counter regressed/u);
+  });
+
+
+test('N0 refuses four nodes on only three hosts before starting measurement',
+  async () => {
+    await assert.rejects(run(fakeCluster({extraNode: true}), testClock()),
+      /exactly three running nodes/u);
+  });
+
+test('N0 refuses duplicate Docker providers even with distinct claimed hosts',
+  async () => {
+    await assert.rejects(run(fakeCluster({duplicateProvider: true}), testClock()),
+      /duplicate Docker provider assignments/u);
+  });
+
+test('N0 refuses a node without harness-proven host identity',
+  async () => {
+    await assert.rejects(run(fakeCluster({missingHostIdentity: true}),
+      testClock()), /harness must have proved physical host identity/u);
+  });
+
+test('N0 refuses zero measured network traffic instead of asserting baseline',
+  async () => {
+    await assert.rejects(run(fakeCluster({zeroTraffic: true}), testClock()),
+      /zero routed host bytes/u);
   });
