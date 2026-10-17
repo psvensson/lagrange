@@ -718,3 +718,164 @@ re-drive that finds PRESENT writes nothing; (i) absent writer -> typed
 (`recoverConsensusCreation` used for a REMOVE); UNAVAILABLE deferral applied to
 a non-bound-class CREATE; remover parses S; address literal; absent writer
 treated as PRESENT.
+
+---
+
+# Revision 3 (2026-10-17, after the focused re-vet of Revision 2: REVISE, F2 blocking, F1/F3-F10 required, N1-N8)
+
+Re-vet report: `evidence/design-vets-20261017/design-revet-activation-discovery-r2-20261017.md`.
+It confirmed RB1 (REMOVE route), RB3 (remover), RB5 (C6 prerequisites), RR2,
+RR4-RR11 as resolved and the CREATE order as removing the native_js regression.
+This revision resolves F1-F10 and records N1-N8; where it and Revision 2
+disagree, this revision wins. Implementation proceeds from Revisions 1-3 with
+the three vet reports binding; the independent verifier judges the result.
+
+## RV3.1 Address (F2, F10; blocking)
+
+- `nodeAddress` on both dependency-owner hosts is the entrypoint's
+  `host:port` (or URL) string, the same value written to `nodes.node_address`;
+  `service_endpoints.address` and the services row `address` are a bare HOST
+  paired with `port`. The existing owner that derives that host from the
+  node's two address fields is `resolveEndpointAddress({nodeAddress,
+  advertisedNodeWsAddress, nodeId})` (`meta-service-definition-registration.js:140-192`,
+  advertised WS host first via `resolveAdvertisedEndpointHost`, else the URL
+  hostname, else `[v6]`, else the trailing `:port` stripped), the owner that
+  already writes the built-ins' endpoint rows.
+- `createWasmServiceNodeDependencies` exposes a lazy `endpointHost` =
+  `resolveEndpointAddress({nodeAddress: node.nodeAddress,
+  advertisedNodeWsAddress: node.advertisedNodeWsAddress, nodeId: node.nodeId})`
+  (both fields exist on both hosts: `bootstrap-service.js:199-200`,
+  `node-joining-owner-construction.js:83-84`). Never raw `nodeAddress`, never
+  `'localhost'`, never a context literal.
+- Hops (F10): lifecycle `continueBoundStart` passes
+  `this.dependencies.endpointHost` into `boundStartResult(replica, run, host)`;
+  `START_RESULT_FIELD.HOST` is owned by the lifecycle's result vocabulary
+  (`wasm-service-lifecycle.js:36-42`); the driver's `projectBoundStart`
+  forwards `host` beside `port`; the runtime composes the endpoint intent
+  `{host, port, protocol, consensusBinding, consensusResourceToken}` and the
+  services-row `address` from it. The remover takes a third argument
+  `{consensusBinding}` (the bound descriptor's binding) so writer and remover
+  share one binding-first resolution.
+- The embedding supplies the two node fields per host (or `endpointHost` built
+  by the same owner) and cell (e) asserts the DERIVED host for a configured
+  `host:port` NODE_ADDRESS and the advertised-WS precedence. Mutation added:
+  "raw `nodeAddress` written as host".
+
+## RV3.2 Deferral carrier and the honest statement (F1)
+
+- There is no new deferral outcome type. A handler-typed deferral is the
+  existing `RUNTIME_SERVICE_CREATE_FAILED` / `RUNTIME_SERVICE_REMOVE_FAILED`
+  with `errorCode` and `deferRetry: true` (the only fields `buildExecutorOutcome`
+  keeps, `executor-outcome-emitter.js:59-76`). After a deferral the memo is
+  FAILED (re-enterable: `handleCreateReplica` proceeds for any status other
+  than ACTIVE/CREATING), never CREATING.
+- Honest statement, replacing "never FAILED": the deferral is typed at the
+  handler; the coordinator FAILs runtime-service deferrals today, because its
+  DEFER_RETRY row and the synchronous deferral channel both require a system
+  partition (`operation-workflow-executor-outcome-reconcile-methods.js:36-48`,
+  `operation-workflow-dispatch-rearm-evidence.js:394-401`). Honouring a
+  deferral for a bound CREATE whose slot is live is the activation quest's,
+  folded into B9 (held or deferred bound CREATE budget). For a bound-class
+  production CREATE today this yields the same terminal state as before
+  (FAILED) with a typed code instead of `REPLICA_SET_REQUIRED`. Cell (a)
+  asserts the emitted payload, not a coordinator deferral.
+- HELD outcomes (`RUNTIME_SERVICE_CREATE_HELD` / `REMOVE_HELD`, UPDATE_STEP)
+  name the operation's CURRENT step (CREATING / STOPPING) so a same-step
+  update stays a no-op (N5); they are observation only until B9's owner exists.
+
+## RV3.3 Result shape tables (F4, F5, N2, N7)
+
+`resumeConsensusCreation(operationId, context)` answers, mapped by the handler:
+
+| Answer | Handler |
+| --- | --- |
+| `status HELD` | memo HELD; CREATE_HELD; INITIATED/IN_PROGRESS reply |
+| `status PUBLISHED` | memo ACTIVE; CREATE_ACTIVE |
+| `status PUBLISHED_UNPROJECTED` | memo HELD; CREATE_HELD (serving open, discovery closed; re-drive re-projects UPDATE-first) |
+| `outcome INTENT_NOT_FOUND` (definitive read) / `UNAVAILABLE` | step 3: classify the row; bound-class -> `BOUND_ROUTE_REQUIRED` -> CREATE_FAILED, or CREATE_FAILED + `deferRetry` (unavailable); other class -> generic path |
+| `outcome TERMINAL_OPERATION`, `RESOURCE_CLOSED`, `CONTENT_CONFLICT` (recover phase), `CORRUPT_STATE`, `INVALID_REQUEST` | CREATE_FAILED with the code (slot not live or request invalid) |
+| `outcome UNKNOWN {reason}` for any reason: `CONSENSUS_SERVING_NOT_IMPLEMENTED` (a driver FAILED start: port allocator, module mirror, REPLICA_LIVE, consensus refusal), `CONTENT_CONFLICT` with `retirement` (CONTRADICTED authority; the resource already retired), `UNRESOLVED` authority (owner unreachable), reader failure | memo FAILED; CREATE_FAILED + `deferRetry: true` + code (handler-typed deferral, RV3.2); CONTRADICTED's next resume answers RESOURCE_CLOSED -> FAILED: convergence |
+
+`readRetainedCreation(operationId)` (N2): the TERMINAL check (`TERMINAL.has(row.state)`)
+runs before `retainedToken`, so a COMPLETED/FAILED row with an admission
+answers TERMINAL_OPERATION, not CORRUPT_STATE; the intent/operation-id
+mismatch answers CONTENT_CONFLICT beside CORRUPT_STATE.
+
+REMOVE results (`retireWasmCreation`, `wasm-creation-retirement.js:145-159`,
+and the manager's `UNKNOWN` on a throw), mapped by the handler (F4):
+
+| Answer | Handler |
+| --- | --- |
+| `closed === true` | endpoint removed, STOPPED projected, REMOVE_COMPLETED |
+| `CLOSE_UNRESOLVED` with `retired: true` and `close.outcome === HISTORY_UNAVAILABLE` | REMOVE_COMPLETED (the slot was reused at a later ordinal; nothing of this creation can be live; recorded) |
+| `INVALID_REQUEST`, `CONTENT_CONFLICT`, `INVALID_LINEAGE` (permanent) | REMOVE_FAILED with the code |
+| `CLOSE_UNRESOLVED` (other close outcomes), `RETIREMENT_BLOCKED_CLEANUP_REQUIRED`, tombstone refusals, `UNAVAILABLE`, manager `UNKNOWN` | REMOVE_HELD; memo stays REMOVING; the next REMOVE re-drives |
+| `readRetainedCreation` -> `NOT_ADMITTED` (PENDING row) | REMOVE_COMPLETED: the handler cannot resolve an ordinal; a PENDING row MAY hide an applied reservation whose reply was lost (F3); the recovery stage's restart scan re-reserves idempotently and the planner's RELEASING row then retires the outstanding slot (owner recorded) |
+| `readRetainedCreation` -> `TERMINAL_OPERATION` / `CORRUPT_STATE` | REMOVE_FAILED with the code |
+| no memo, no row, no creation | NOT_FOUND (N6: a founder HELD before a handler restart, with no row yet, answers NOT_FOUND and the coordinator treats the stop phase as satisfied while the slot stays ADMITTED until the restart scan; typed edge, recovery-stage owner) |
+
+Writer answers mapped to `PUBLISHED_UNPROJECTED` (N7): `REFUSED_STALE_INCARNATION`,
+`REFUSED_INCARNATION_REQUIRED`, `AUTHORITY_UNAVAILABLE`, `NOT_APPLIED`, absent writer.
+
+## RV3.4 PRESENT mark keyed by token (F8)
+
+`markServicesRowPresent(serviceId, serviceType, consensusResourceToken)`; the
+lifecycle marks only the registered replica whose `consensusCreation.token`
+digest equals the token, else a typed no-op that the runtime maps to
+`PUBLISHED_UNPROJECTED` (a successor J under the same S can never be marked
+by I's projection). Mutation added: "mark keyed by S".
+
+## RV3.5 HELD re-entry concurrency (F9)
+
+Both the HELD re-entry (`existing.status === HELD`) and the wake re-entry
+register an `inProgressOperations` entry for the operation and are skipped
+when one exists (the CREATE answers IN_PROGRESS; the wake is recorded). The
+memo check order (HELD before in-progress) stands; the guard lives inside the
+re-entry.
+
+## RV3.6 Shared vocabulary and the replica's cache (F6, F7, R16)
+
+- `ReplicaStatus.HELD`: the completeness witness
+  `test/rebalancer/replica-status-completeness.property.test.js:42-67` (seven
+  values, `REQUIRED_STATUS_VALUES`) is superseded by appending: eight values,
+  `'held'` required; `isValidStatus('held')` becomes true for every consumer.
+- The replica's cache source: the singleton fallback stays
+  (`options.systemTableCache ?? NodeService.getInstance().getSystemTableCache()`);
+  the lifecycle injects its `systemTableCache` dependency; production is
+  unchanged for unbound replicas and for the eight test construction sites.
+  The production injected value is the host's `peekSystemTableCache()`; no
+  equivalence to the singleton's cache is claimed.
+- `recoverLocalReplicaForRemoval` (N3): the `get` by `service_id` stays first;
+  `find` by `replica_id` is the miss path; the recovered memo copies
+  `create_attempt_token` as `operationId`.
+
+## RV3.7 Production behaviour changes outside the bound route, named (R16)
+
+1. `ReplicaStatus` gains HELD (shared enum; witness superseded, RV3.6).
+2. `createWasmServiceNodeDependencies` gains `endpointHost`, `systemTableCache`,
+   `creationWake` getters: inert for unbound replicas.
+3. `recoverLocalReplicaForRemoval` adds an O(rows) `find` on a `get` miss;
+   unbound semantics unchanged.
+4. Every CREATE calls `resumeConsensusCreation` first: one synchronous
+   UNAVAILABLE today before the generic path; once the activation quest wires
+   the journal, one authoritative `wasm_operations` read per native_js/Cell
+   CREATE (that quest's accepted cost of the order).
+5. Endpoint writer and remover gain a binding-first branch; without a binding
+   they parse as today.
+6. `confirmConsensusBootstrapResult` admits PUBLISHED_UNPROJECTED (bound only).
+7. A bound-class production CREATE answers CREATE_FAILED + `deferRetry` + code
+   instead of REPLICA_SET_REQUIRED: same terminal state, typed code.
+None alters the unbound route's outputs.
+
+## RV3.8 Owners of the new names (R06/R07)
+
+`servicesRow {state, serviceType}` and the token-keyed mark: serving-state
+module; memo HELD + `operationId`: handler; `NOT_ADMITTED`: RESULT in
+`service-consensus-creation-intent.js`; `RUNTIME_SERVICE_CREATE_HELD` /
+`REMOVE_HELD` + action-map rows: `executor-outcome-constants.js`;
+`NO_LOCAL_OPERATION`, `BOUND_ROUTE_REQUIRED`: handler constants;
+`PUBLISHED_UNPROJECTED`: `CONSENSUS_BOOTSTRAP`; EP_META `binding_digest` /
+`resource_token`: `service-endpoint-builder.js`; `START_RESULT_FIELD.HOST`:
+the lifecycle; `endpointHost`: the node dependency owner over
+`resolveEndpointAddress`; the deferral: the existing FAILED outcome with
+`deferRetry` and `errorCode`.

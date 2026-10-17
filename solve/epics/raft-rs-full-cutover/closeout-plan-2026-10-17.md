@@ -272,3 +272,30 @@ called known.
   prerequisites listed (handler cache + CDC, replica cache + CDC, no injected
   role writers, real emitter, request-literal owner), cells (a)-(i) and five
   mutations. Focused re-vet of Revision 2 launched.
+- 2026-10-17 stage-1c focused re-vet of Revision 2: REVISE (F2 blocking: the
+  address owner's value is a `host:port` string, the endpoint/services address
+  is a host; F1/F3-F10 required). Revision 3 appended: `endpointHost` derived
+  by the existing `resolveEndpointAddress` owner, deferral = existing FAILED +
+  `deferRetry` + code with the honest coordinator statement, result-shape
+  tables for resume and REMOVE, token-keyed PRESENT mark, HELD re-entry guard,
+  shared-enum witness superseded, singleton cache fallback kept. Implementation
+  proceeds from Revisions 1-3 with the three vet reports binding; the verifier
+  judges. D0's "deleted in stage 1c" superseded by a lead decision entry under
+  the owner's unattended directive (decision (c) still open to the owner).
+- 2026-10-17 composition (step 2) hand-back: merges i (#73) and ii
+  (contract-first) committed on `integration/rs-raft-candidate-20261017`
+  (HEAD d5fdaa312); merge iii (candidate 10c2f0610) resolved per option A and
+  STAGED, refused by the pre-commit hook on six guideline hits inherited from
+  the parents (literal + two silent catches in the membership owner-claim
+  module; three decision boundaries in the raft runtime owner and snapshot
+  install). Lead ruling: repair at the owner inside the merge, no bypass, no
+  baseline raise. Also found: the candidate closes the C0 quest
+  (`cutover-transition-authority-review` solved 2026-10-11; the plan's "last
+  stood REJECT" is stale for the composed tree); the orphan-removal quest's
+  terminal SUPERSEDED entry plus the closed-quest-shape deletion of 95 files
+  causes two `documentation-current` reds in another quest's evidence (owner
+  to settle); the committed-membership census is red at both parents (union);
+  `participant-release-native-application-order` hung once in 8 composed runs
+  (lab repeat batch owed); unused-export 1447/1415 (all lane entries),
+  duplication 26393/26345, complexity 1798/1755 inherited; five both-touched
+  src files unreviewed semantically; the analysis' R01 risk unchecked.
