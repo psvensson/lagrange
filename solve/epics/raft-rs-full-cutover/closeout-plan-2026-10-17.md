@@ -259,3 +259,16 @@ called known.
   time budget (recommended: a real HELD workflow step with its own owner timeout
   constant); (c) B8: delete the unbound replica shape as its own unit after
   activation (recommended) or keep it for tests.
+- 2026-10-17 stage-1c re-vet of Revision 1: REVISE (RB1-RB5 blocking, RR1-RR11
+  required; scope split CONFIRMED sound). Revision 2 appended resolving each:
+  journal-only `readRetainedCreation` for REMOVE recovery (never the reserving
+  recover), `resumeConsensusCreation` = recover + bootstrap, CREATE route order
+  recover -> bound / classify the row -> generic path untouched for native_js,
+  Cells and built-ins, bound-class = wasm_component AND not Cell AND not
+  META_SERVICE_ID, binding-first remover deriving the physical endpoint id,
+  address from the node's `nodeAddress` through the WASM dependency owner,
+  PRESENT hop named (driver `markServicesRowPresent`), `ReplicaStatus.HELD`
+  fail-closed, writer answers mapped to PUBLISHED_UNPROJECTED, C6 fixture
+  prerequisites listed (handler cache + CDC, replica cache + CDC, no injected
+  role writers, real emitter, request-literal owner), cells (a)-(i) and five
+  mutations. Focused re-vet of Revision 2 launched.

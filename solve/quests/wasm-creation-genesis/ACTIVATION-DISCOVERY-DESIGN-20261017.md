@@ -528,3 +528,193 @@ the count/nodes/node-gone/definition-deleted edges, the planner's cache view
 and the `calculateMoves` bypass are the activation quest's and are listed in
 its charter with the vet's evidence lines. Line drift (N1) is corrected by
 citing the current tree in the next revision after stage 1b's A2 lines.
+
+---
+
+# Revision 2 (2026-10-17, after the re-vet of Revision 1: REVISE, RB1-RB5, RR1-RR11)
+
+Re-vet report: `evidence/design-vets-20261017/design-revet-activation-discovery-r1-20261017.md`.
+The re-vet confirmed the scope split (RV1.0), the services-column reuse, the
+endpoint row shape, `bootstrapConsensusCreation(retained.intent)`, the PRESENT
+latch, the `PUBLISHED_UNPROJECTED` owner and the lazy wake getter. This
+revision resolves every RB and RR by id; where it and Revision 1 disagree,
+this revision wins. Every `file:line` is from `7e184b8aa`.
+
+## RV2.1 REMOVE route (RB1, RR6)
+
+- A new journal-only manager read, owner `service-consensus-creation-intent.js`:
+  `readRetainedCreation(manager, operationId)` = `readJournal` +
+  `captureIntent(intent_json)` + `retainedToken`; no `_enforceRuntimePolicy`,
+  no reserve, no metadata read. Answers `{outcome: ADMISSION_RETAINED, intent,
+  token, operationId}` for an IN_PROGRESS row with an admission; typed
+  `INTENT_NOT_FOUND` (definitive absence), `NOT_ADMITTED` (PENDING row, no
+  admission), `TERMINAL_OPERATION`, `CORRUPT_STATE`, `UNAVAILABLE`. Exposed on
+  `ServiceLifecycleManager` beside `recoverConsensusCreation`.
+- The handler's REMOVE for a replica whose memo, or whose services row
+  (`replica_id = S-rN`, `create_attempt_token` = the creation's operation id,
+  a cache HINT that only supplies the id; authority is the journal read),
+  names a creation: `readRetainedCreation(operationId)` -> on
+  ADMISSION_RETAINED build `{definition: consensusBootstrapDescriptor(retained),
+  consensusCreation: retained, consensusOpeningOwner: manager}` and call
+  `manager.stopReplica(handle)`: the EXISTING bound branch
+  (`service-lifecycle-operations.js:423-429` -> `retireConsensusCreation`,
+  `service-consensus-bootstrap.js:85-103`), exactly as the retained fixture
+  does (`wasm-retained-bootstrap-fixture.js:211-221`). `recoverConsensusCreation`
+  is never used for a REMOVE (it reserves on a PENDING row, enforces CREATE
+  policy, needs the metadata owner and refuses a RELEASING slot).
+- Outcomes: `closed === true` -> `_removeEndpoint` by physical id (RV2.3) and
+  the STOPPED projection under the bound STOP branch, then
+  `RUNTIME_SERVICE_REMOVE_COMPLETED`; `closed === false` ->
+  `RUNTIME_SERVICE_REMOVE_HELD` (new `EXECUTOR_OUTCOME_TYPE`, action
+  UPDATE_STEP in `EXECUTOR_OUTCOME_ACTION_MAP`), the memo stays `REMOVING` so
+  the existing REMOVING branch (`runtime-service-handler.js:562-580`)
+  re-drives on the next REMOVE (today's catch sets FAILED at `:676-678`; the
+  bound branch does not); `NOT_ADMITTED` -> no slot and no physical effect:
+  REMOVE_COMPLETED, the PENDING row left to the recovery stage (recorded);
+  a slot already CLOSED (owner, sibling path or restart scan) -> the local
+  retirement by token still runs (`retireWasmCreation` answers CLOSED without
+  a mutation, `service-instance-state.js:277, 295`) -> REMOVE_COMPLETED;
+  `TERMINAL_OPERATION`/`CORRUPT_STATE` -> FAILED with the code; `UNAVAILABLE`
+  -> `deferRetry`. NOT_FOUND is answered only when neither the memo nor the
+  row names a creation (no journal-by-replica read exists; the clause is
+  dropped). `recoverLocalReplicaForRemoval` (`:484-508`) finds the row with
+  the cache's `find(table, predicate)` on `replica_id === replicaId` and the
+  guard at `:494` accepts `row.replica_id === replicaId`.
+
+## RV2.2 CREATE route (RB2, RR1, RR3, RR8)
+
+- Order: (1) `manager.resumeConsensusCreation(operationId, context)`, one new
+  manager method = recover + bootstrap (the manager's own continuation, as
+  `recoverConsensusCreationRow` is for the restart scan), so the journal, the
+  policy and the metadata resolve run once; (2) `ADMISSION_RETAINED`-class
+  result (HELD / PUBLISHED / PUBLISHED_UNPROJECTED) -> the bound route
+  regardless of the cache row; (3) `INTENT_NOT_FOUND` or `UNAVAILABLE` ->
+  classify the definition row: bound-class -> `BOUND_ROUTE_REQUIRED`
+  (not found) or `deferRetry: true` (unavailable); any other class (native_js,
+  request Cells, built-in meta services) -> the existing generic path,
+  untouched. A production-shaped manager without a journal answers
+  UNAVAILABLE for every operation id, which therefore routes every non-bound
+  definition to the generic path exactly as today (witness RV2.6 a).
+- Bound-class (handler side, RR8): `runtime_kind === wasm_component` AND NOT
+  `isRequestCellDefinition(row)` (`request-cell-runtime-contract.js:220-224`
+  on the `binding_*` columns) AND `service_id` not a built-in meta service
+  (`META_SERVICE_ID`, `constants/wasm-meta.js:54-55`; `sys-wasm-meta` is the
+  only `wasm_component` built-in). Installed-package is the complement by
+  construction; the handler has no catalog owner and needs none. Routing keys
+  on the journal; only the refusal class keys on the row.
+- Recover outcomes mapped (RR1): `TERMINAL_OPERATION`, `RESOURCE_CLOSED` ->
+  typed FAILED (the slot is not live, so the invariant permits it);
+  `CONTENT_CONFLICT`, `CORRUPT_STATE` -> FAILED with the code; `UNKNOWN` ->
+  `deferRetry`. HELD -> local status HELD and `RUNTIME_SERVICE_CREATE_HELD`
+  (UPDATE_STEP); duplicate CREATE while HELD -> re-enter (resume) and answer
+  IN_PROGRESS; PUBLISHED -> ACTIVE + CREATE_ACTIVE.
+- `ReplicaStatus.HELD` (RR3) joins the shared vocabulary fail-closed: it is
+  added to `PEER_ROW_EXCLUDED_STATUSES` (`replica-status.js:232-242`) and is
+  never projected to a row (ACTIVE/STOPPED only).
+- HELD outcomes carry nothing beyond what `buildExecutorOutcome` keeps
+  (`executor-outcome-emitter.js:41-79`); the "carries genesis/grant/retirement
+  outcome" claims of Revision 1 are withdrawn (RR2). Same-step updates change
+  no row (`operation-workflow-transition-orchestration.js:382-386`): the held
+  outcomes are observation only until the activation quest's B9 owner exists.
+
+## RV2.3 Discovery rows, address, remover (RB3, RB4, RR4, RR5, RR11)
+
+- Endpoint remover (RB3): the bound STOP branch calls the remover with the
+  physical id and the binding; for a bound removal the remover derives
+  `${physical}-ep-${nodeId}` with NO logical resolution (the writer and the
+  remover share one binding-first resolution: binding present -> S from
+  `consensusBinding.serviceDefinitionId`, id from the physical replica id;
+  binding absent -> today's parse); predicate unchanged
+  (`mutateEndpointAtIncarnation :195-219`).
+- Address (RB4): the advertised address owner is the node itself,
+  `nodeAddress` (`node-service.js:81, 149, 539`; `bootstrap-service.js:199`),
+  the value it publishes as `nodes.node_address`. `createWasmServiceNodeDependencies`
+  (`runtime-startup-wiring.js:37-49`) gains lazy getters `nodeAddress`,
+  `systemTableCache` and keeps `cdcIntegrationService`; `boundStartResult`
+  (`wasm-creation-publication.js:104-114`) carries `host` from the lifecycle's
+  dependency; the runtime composes the endpoint intent and the services-row
+  `address` from it. Never `'localhost'` or a context literal. The embedding
+  supplies `nodeAddress` per host in its dependency object (the production
+  owner's shape), and the witness asserts the row equals that owner's value.
+- Services row (RR4): bound rows never carry `cleanup_token`;
+  `create_attempt_token` = the retained creation's operation id, stable per
+  creation (the partition meaning rotates per attempt, schema comment
+  `system-table-core-schema-definitions.js:246-249`); every decision consumer
+  of `create_attempt_token` also requires a failed-create `cleanup_token`, so
+  they stay inert; `replica_id != service_id` is read as `replica_id ||
+  service_id` by every consumer. The PRESENT hop is named: runtime
+  `startConsensusBootstrap` -> driver `markServicesRowPresent(serviceId,
+  serviceType)` (new, `wasm-component-driver-consensus.js`) ->
+  `lifecycle.enableServicesRowPublication(replica, serviceType)` ->
+  serving-state record `servicesRow: {state: PRESENT, serviceType}`; the
+  replica's `writeRoleUpdate`/`writeLeaderNodeUpdate` CAS predicate takes
+  `service_type` from that record (one value flows projection -> record ->
+  writer); the unbound predicate defect (`'wasm_service'` against rows
+  projected as `runtime_service`) is recorded for the deletion unit (R17).
+- Projection order (RR5, option a): the runtime projects on the lifecycle's
+  PUBLISHED, which already carries the owner's CAS and the durable local
+  grant; the manager's `confirmPublishedAuthority` runs after the runtime
+  returned; its CONTRADICTED branch retires through the bound STOP branch,
+  which removes the endpoint and deletes the row, so a forged PUBLISHED driver
+  result projects rows transiently and withdraws them (trusted-host threat
+  model, `authority-and-recovery.md`). For `PUBLISHED_UNPROJECTED` the manager
+  returns before any re-resolve and keeps `_replicaStateById` STARTING.
+- Writer answers (RR11): the endpoint writer returns `{success: false,
+  outcome}` for `REFUSED_STALE_INCARNATION`, `AUTHORITY_UNAVAILABLE`,
+  `NOT_APPLIED` without throwing; the bound branch inspects the return and
+  maps all three to `PUBLISHED_UNPROJECTED`; an absent endpoint writer or
+  projection writer is a typed `PUBLISHED_UNPROJECTED` reason, never PRESENT.
+  Cached view: with ADMISSION_RETAINED first, a lagging service_definitions
+  cache cannot FAIL a bound CREATE. Identities: the driver's S-keyed
+  `_prepared`/`_lifecycles`/`_running` (`wasm-component-driver.js:171-186,
+  362-363`; cleared by token at `wasm-component-driver-consensus.js:82-91`).
+
+## RV2.4 Wake consumer (RR7)
+
+Enqueue-only: `onCreationWake` records the wake and schedules the re-entry
+with `setImmediate` (as `createReplicaAsync` does, `runtime-service-handler.js:336-348`);
+it never awaits bootstrap inside the wake, since the wake is delivered
+synchronously from inside the continuation run. The mapping
+`wake.token.operationId` -> entry is a scan over `localReplicas` (keyed by
+replica id; after HELD only `localReplicas` holds the operation id, `:442-444`).
+`NO_LOCAL_OPERATION` lives in `runtime-service-handler-constants.js`.
+
+## RV2.5 Owner decisions pending (RR10)
+
+The D0 quest-log entry says "deleted in stage 1c"; its supersession (deletion
+as a separate unit after activation) is appended to the quest log once the
+owner rules decision (c) of the closeout plan; stage-1c implementation does
+not start before that entry exists. RB2 and RB4 are the two stage-1c items
+decided on the production shape and resolved inside 1c without production
+wiring changes beyond the node dependency getters.
+
+## RV2.6 Proof plan additions (RB5, RR9)
+
+C6 embedding prerequisites (listed, not invented): the handler's
+`systemTableCache` (service_definitions and services rows, fed from the
+fixture's SQLite tables after each projection) and `cdcIntegrationService`
+(`RuntimeServiceHandler.initialize :175-189`); the replica's
+`cdcIntegrationService` and `systemTableCache` (new lifecycle dependency
+`systemTableCache`, production value the node's cache, replacing the
+singleton read at `wasm-service-replica.js:144-145`) holding the write-ready
+rows (`isSystemTableWriteReady`, `leader-readiness-gate.js:232-252`), a
+LABELLED fixture seam under the "no fabricated routing rows" rule; NO
+`roleUpdateWriter`/`leaderNodeUpdateWriter` injected, so the production CAS
+predicate is exercised and the role write is asserted by reading the SQLite
+services row's `raft_role`; a real `ExecutorOutcomeEmitter`; the CREATE_REPLICA
+/ REMOVE_REPLICA request literal at
+`operation-workflow-dispatch-response-reconcile.js:636-647` extracted into an
+owner function the fixture calls (or the fixture authors the payload from
+`ReplicaOperationField` keys and says so). Cells added: (a) production-shaped
+manager (no journal) x native_js or Cell CREATE -> generic path; x bound-class
+-> deferral; (b) REMOVE after `closed:false` recovers through the journal-only
+read and resolves; (c) REMOVE on a PENDING row reserves nothing; (d) the
+remover deletes the physical-id endpoint without logical resolution; (e)
+`address` equals the node owner's value on every host; (f) role CAS APPLIED
+read from the row; (g) a leader change after PRESENT re-publishes through
+`applyReplicaLeadership`; (h) the first role write happens at PRESENT and a
+re-drive that finds PRESENT writes nothing; (i) absent writer -> typed
+`PUBLISHED_UNPROJECTED`, never PRESENT. Mutations added: recover-for-REMOVE
+(`recoverConsensusCreation` used for a REMOVE); UNAVAILABLE deferral applied to
+a non-bound-class CREATE; remover parses S; address literal; absent writer
+treated as PRESENT.
