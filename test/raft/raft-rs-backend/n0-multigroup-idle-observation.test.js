@@ -48,13 +48,18 @@ test('N0 bounded multi-group idle heartbeat profile on a physical lab CPU',
     const observations = [];
     try {
       for (const count of SIZES) {
+        // Each size is a fresh, independent three-voter group population.
+        // Reusing old leaders across size windows without delivering their
+        // responses triggered check_quorum stepdown in the rejected fixture.
+        for (const {cluster} of groups) cluster.dispose();
+        groups.length = 0;
         const constructStart = performance.now();
-        for (let index = groups.length; index < count; index += 1) {
+        for (let index = 0; index < count; index += 1) {
           const ids = ['a', 'b', 'c'].map((suffix) =>
-            'n0-mg-' + index + '-' + suffix);
+            'n0-mg-' + count + '-' + index + '-' + suffix);
           const messages = [];
           const cluster = new PartitionNodeCluster({
-            partitionId: 'n0-idle-scale-' + index,
+            partitionId: 'n0-idle-scale-' + count + '-' + index,
             replicaIds: ids,
             timingFor: () => BASE,
             sendFor: (from, address, envelope) => {
@@ -82,10 +87,20 @@ test('N0 bounded multi-group idle heartbeat profile on a physical lab CPU',
             'each real native port must admit scheduled ticks');
         }
         try {
-          await new Promise((resolve) => setTimeout(resolve, WINDOW_MS));
+          // Connected peers must process heartbeats and send their
+          // responses. The previous red test withheld all follower
+          // deliveries; check_quorum correctly demoted those leaders.
+          // Pump only the fixture's existing sendToPeer queue, never a
+          // new transport or an alternate consensus entry point.
+          const end = performance.now() + WINDOW_MS;
+          while (performance.now() < end) {
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            for (const {cluster} of groups) cluster.deliverAll();
+          }
         } finally {
           for (const {cluster, leader} of groups) {
             cluster.node(leader).stopScheduling();
+            cluster.deliverAll();
           }
         }
         const endedAt = performance.now();
