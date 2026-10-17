@@ -13,7 +13,7 @@
  */
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {PARTITION_SERVICE_ERROR_MSG} from '../../src/partition/partition-service-constants.js';
+import {ERRORS} from '../../src/constants/errors.js';
 import {RAFT_OPERATION_OUTCOME} from '../../src/raft/raft-operation-port-constants.js';
 import {COMMITTED_LEARNER_ACTION_KIND as KIND, COMMITTED_LEARNER_ACTION_REASON as ACTION} from
   '../../src/raft/raft-committed-membership-constants.js';
@@ -299,7 +299,9 @@ for (const mode of ['lifetime-after-row-read', 'lifetime-after-boot-read', 'leas
       if (!sql.includes(BRANCH_CAS)) return execute(sql, ...args);
       branchSubmissions += 1;
       if (mode.endsWith('-retry') && branchSubmissions === 1) {
-        return {success: false, error: PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE};
+        // Composition 2026-10-17 (integration/rs-raft-candidate-20261017): lane commit d35d8828c deleted
+        // TRANSACTION_ALREADY_ACTIVE; supersede with an error in RETRYABLE_OPERATION_PERSIST_ERROR_FRAGMENTS.
+        return {success: false, error: ERRORS.NO_HANDLER_FOR_ADDRESS};
       }
       const result = await execute(sql, ...args);
       branchApplied += result.affectedRows;
