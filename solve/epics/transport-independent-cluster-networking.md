@@ -19,7 +19,7 @@ authorizes:
 
 # Transport-independent cluster networking
 
-**Planning epic — research and owner proposal, 2026-10-17. NOT IMPLEMENTED OR CERTIFIED.**
+**Open research epic. N0 test-only instrumentation measured on lab hardware; transport-neutral production networking is NOT implemented or certified.**
 
 The detailed, preserved research, decisions, implementation boundaries, and falsifiers are in
 [research-and-plan.md](transport-independent-cluster-networking/research-and-plan.md).
@@ -154,27 +154,40 @@ semantics.
 - `docs/security.md`: current plain WebSocket node transport is not
   zero-trust hardened; node authentication is a separate acceptance gate.
 
-## Current state — measured N0 slice, not terminal certification
+## Current state — N0 implementation measured, certification still open
 
-- The N0 test-only observation fixture has been **implemented and measured**
-  on two physical lab machines, `lenovo-laptop` and `tv-dator`, at the
-  exact same source SHA `ed63060f0ed781be35cd12fe9a12fe9b390785d7`.
-  Both were **COMPLETE PASS (5/5 tests)** with source placement confirmed.
-- [N0 exact-head measurement report](transport-independent-cluster-networking/n0-baseline-2026-10-17.md)
-  preserves source/base identity, the first red and diagnostic evidence,
-  numeric native heartbeat/election observations, the corrected steady-state
-  Append witness, two green lab receipts and outstanding acceptance gaps.
-- The three Raft voters ran within one host per lab execution; **no
-  multi-host network packet trace** or 100-node bandwidth proof exists yet.
-  Native outgoing envelope byte counts do not measure physical wire traffic.
-- Source changes consist solely of this bounded test, the two generated test
-  classifications, and planning/evidence documentation. **No production
-  Raft, networking, timeouts, placement or controller configuration changed.**
-- The original `main`-derived N0 planning branch was refused by the lab's
-  dependency-lock guard; a distinct lab-aligned proof branch based on a
-  previously lab-tested rs-raft source SHA was used instead. This is not a
-  merge-approved rs-raft baseline. The branches remain unmerged.
-- An independently sealed N0 Quest and the declared `doneWhen` projector are
-  **not implemented or certified**. N0 still needs a real physical network
-  boundary and telemetry provenance before advancing to transport-integration
-  frontiers. Nothing here certifies NATS-only or Veilid-only operation.
+- **Three N0 test-only measurements were implemented**: real native
+  rs-raft heartbeat/election/proposal timing; actual loopback
+  `MessageRouter` TCP stream framing/ACKs; and 1/8/16-group
+  native sender-only idle heartbeat scheduling.
+- **Exact tested SHA:**
+  [`a721da6b7216491dded515e9991dfdb6daff8a04`](https://github.com/psvensson/lagrange/commit/a721da6b7216491dded515e9991dfdb6daff8a04)
+  under `proof/n0-multigroup-sender-only-20261017`.
+  Both `lenovo-laptop` ([#120](https://github.com/psvensson/lagrange-lab/issues/120))
+  and `tv-dator` ([#121](https://github.com/psvensson/lagrange-lab/issues/121))
+  returned **COMPLETE PASS: all 3 test files, 7 cases, 0 failures**.
+- The [N0 evidence report](transport-independent-cluster-networking/n0-baseline-2026-10-17.md)
+  retains exact source identities, measured native tick/heartbeat/election
+  behavior, two-host green proof, and explicitly *unresolved* connected
+  16-group scheduling observations.
+- **Connected multi-group remains red:** the observed 16-group
+  in-process response-delivery fixture emitted one heartbeat wave per
+  group in ~820 ms despite retained leader status (lab #117).
+  The independent sender-only 16-group PASS does **not** close this.
+- No physical inter-host traffic or 100-node Veilid-bandwidth
+  certification has occurred. Real socket measurements here are
+  loopback TCP-stream counters; no IP headers, relay bytes or LAN RTT.
+- This project's `main`-derived `work/n0-raft-timing-measurement-20261017`
+  branch mirrors all three tests and the planning/evidence documents,
+  **but was not lab-executed** because the commissioned lab's dependency
+  lock matched a different rs-raft branch. Exact green proofs belong
+  only to their pinned proof commit, never to the untested mirror.
+- **No production `src/` changes**, no Raft timing/config changes, no
+  alternate network transports, no lab-controller policy changes,
+  no merge to `main`, and no claim that the future terminal
+  projector, independent owner review or N0 certification is done.
+- **Next scope:** commission a reviewed, fixed multi-host N0 measurement
+  operation under the existing shared lab/harness owner (no ad-hoc SSH
+  through `test-files`); characterize the connected 16-group red and
+  desired-versus-effective Raft timing without changing rs-raft until
+  its separate cutover gate has an approved baseline.
