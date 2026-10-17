@@ -152,18 +152,27 @@ semantics.
 - `docs/security.md`: current plain WebSocket node transport is not
   zero-trust hardened; node authentication is a separate acceptance gate.
 
-## Current state
+## Current state — measured N0 slice, not terminal certification
 
-- N0 has a **review-branch measurement candidate**, not terminal acceptance:
-  `test/raft/raft-rs-backend/n0-raft-timing-measurement.test.js` invokes the
-  real rs-raft operation port and native outgoing envelopes in a three-voter
-  fixture, measures scheduled wall-clock sends on the physical test host,
-  and characterizes live configuration/election behavior without changing
-  production source. Lab execution and independent review are separate proof
-  requirements; this is **not** a physical three-host cluster proof.
-- Research and plan remain provisional; not a deployed feature.
-- No Quest created or started by this planning change.
-- No test, simulated cluster or bandwidth benchmark has been executed here.
-- The eventual proof path intentionally does not yet exist.
-- No deployment, code, manifest, current architecture, or rs-raft
-  production source is changed by this epic.
+- The N0 test-only observation fixture has been **implemented and measured**
+  on two physical lab machines, \`lenovo-laptop\` and \`tv-dator\`, at the
+  exact same source SHA \`ed63060f0ed781be35cd12fe9a12fe9b390785d7\`.
+  Both were **COMPLETE PASS (5/5 tests)** with source placement confirmed.
+- [N0 exact-head measurement report](transport-independent-cluster-networking/n0-baseline-2026-10-17.md)
+  preserves source/base identity, the first red and diagnostic evidence,
+  numeric native heartbeat/election observations, the corrected steady-state
+  Append witness, two green lab receipts and outstanding acceptance gaps.
+- The three Raft voters ran within one host per lab execution; **no
+  multi-host network packet trace** or 100-node bandwidth proof exists yet.
+  Native outgoing envelope byte counts do not measure physical wire traffic.
+- Source changes consist solely of this bounded test, the two generated test
+  classifications, and planning/evidence documentation. **No production
+  Raft, networking, timeouts, placement or controller configuration changed.**
+- The original \`main\`-derived N0 planning branch was refused by the lab's
+  dependency-lock guard; a distinct lab-aligned proof branch based on a
+  previously lab-tested rs-raft source SHA was used instead. This is not a
+  merge-approved rs-raft baseline. The branches remain unmerged.
+- An independently sealed N0 Quest and the declared \`doneWhen\` projector are
+  **not implemented or certified**. N0 still needs a real physical network
+  boundary and telemetry provenance before advancing to transport-integration
+  frontiers. Nothing here certifies NATS-only or Veilid-only operation.
