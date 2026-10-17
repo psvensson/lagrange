@@ -47,6 +47,10 @@ const REQUIRED_STATUS_VALUES = [
   'removing',
   'removed',
   'failed',
+  // Superseded by appending (design ACTIVATION-DISCOVERY-DESIGN-20261017 Revision 3 RV3.6,
+  // stage 1c): a retained bound creation that is not yet serving or projected is
+  // HELD; it is peer-excluded (fail-closed) and never projected to a row.
+  'held',
 ];
 
 test('Property: ReplicaStatus enum contains all required values', async (t) => {

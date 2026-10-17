@@ -10,7 +10,7 @@
 
 import {initializeWasmCreationContext} from './wasm-creation-opening.js';
 import {boundProposalAdmission, initializeServingState, isServing, publishesServicesRow,
-  servingRefusal} from './wasm-service-serving-state.js';
+  servicesRowServiceType, servingRefusal} from './wasm-service-serving-state.js';
 import {EventEmitter} from 'node:events';
 import {AddressManager} from '../address/address-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
@@ -647,7 +647,7 @@ class WasmServiceReplica extends EventEmitter {
       tableName: TABLES.SERVICES,
       whereClause: {
         [COLUMN.SERVICE_ID]: this.replicaId,
-        [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.WASM_SERVICE,
+        [COLUMN.SERVICE_TYPE]: servicesRowServiceType(this),
         [COLUMN.NODE_ID]: this.nodeId,
       },
       data: {
@@ -693,7 +693,7 @@ class WasmServiceReplica extends EventEmitter {
       tableName: TABLES.SERVICES,
       whereClause: {
         [COLUMN.SERVICE_ID]: this.replicaId,
-        [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.WASM_SERVICE,
+        [COLUMN.SERVICE_TYPE]: servicesRowServiceType(this),
         [COLUMN.NODE_ID]: this.nodeId,
       },
       data: {

@@ -38,6 +38,7 @@ const REQUEST_CELL_CONTRACT_FIELD = Object.freeze({
   BINDING_CAPABILITIES: 'Binding capabilities',
   BINDING_DIGEST: 'binding_digest',
   BINDING_PROJECTION: 'binding_projection',
+  BINDING_VERSION_ID: 'binding_version_id',
   EXPORT_NAME: 'target.export_name',
   PACKAGE_ID: 'target.package_id',
   PAYLOAD_DIGEST: 'payload_digest',
@@ -217,10 +218,18 @@ function resolvePinnedArtifactDigest(definition) {
   return parsed.digest;
 }
 
+// A request Cell carries its Binding lineage. A serialized service_definitions
+// row carries these columns for every definition, null for a non-Cell, so a
+// null or absent value is absence (design ACTIVATION-DISCOVERY-DESIGN-20261017
+// stage 1c, finding F-3): never classified by key presence.
+const REQUEST_CELL_LINEAGE_FIELDS = Object.freeze([
+  REQUEST_CELL_CONTRACT_FIELD.BINDING_PROJECTION,
+  REQUEST_CELL_CONTRACT_FIELD.BINDING_VERSION_ID,
+  REQUEST_CELL_CONTRACT_FIELD.BINDING_DIGEST,
+]);
 function isRequestCellDefinition(definition) {
-  return definition?.binding_projection !== undefined ||
-    definition?.binding_version_id !== undefined ||
-    definition?.binding_digest !== undefined;
+  return REQUEST_CELL_LINEAGE_FIELDS.some((field) =>
+    definition?.[field] !== null && definition?.[field] !== undefined);
 }
 
 function projectRequestCellRuntime(definition) {

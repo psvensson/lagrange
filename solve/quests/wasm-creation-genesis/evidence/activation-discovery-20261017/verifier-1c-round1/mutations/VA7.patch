@@ -1,0 +1,13 @@
+--- a/src/node/runtime-service-bound-creation-route.js	2026-10-17 17:28:09.285794337 +0200
++++ b/src/node/runtime-service-bound-creation-route.js	2026-10-17 17:28:09.289794369 +0200
+@@ -171,9 +171,7 @@
+  * @return {Object} The reply.
+  */
+ function reenterHeldCreation(handler, params) {
+-  if (!handler.inProgressOperations.has(params.operationId)) {
+-    scheduleBoundReentry(handler, params);
+-  }
++  scheduleBoundReentry(handler, params);
+   handler.logger.info(LOG.CREATE_IN_PROGRESS, {replicaId: params.replicaId,
+     nodeId: handler.nodeId});
+   return {status: ReplicaOperationResponseStatus.IN_PROGRESS, replicaId: params.replicaId,

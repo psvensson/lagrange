@@ -1,0 +1,17 @@
+r04-embedding rc=0 RC=0 ELAPSED=1s FILES=test/wasm-service/bound-creation-handler-embedding.integration.test.js
+r05-publication-int rc=0 RC=0 ELAPSED=4s FILES=test/wasm-service/wasm-creation-publication.integration.test.js
+r06-genesis rc=0 RC=0 ELAPSED=3s FILES=test/wasm-service/wasm-creation-genesis.integration.test.js
+r07-reconciliation rc=0 RC=0 ELAPSED=1s FILES=test/wasm-service/wasm-creation-reconciliation.integration.test.js
+r08-retained rc=0 RC=0 ELAPSED=2s FILES=test/wasm-service/wasm-retained-bootstrap.integration.test.js
+r09-handler rc=0 RC=0 ELAPSED=1s FILES=test/node/runtime-service-handler.test.js
+r10-completeness rc=0 RC=0 ELAPSED=0s FILES=test/rebalancer/replica-status-completeness.property.test.js
+r11-replace-handoff rc=0 RC=0 ELAPSED=1s FILES=test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js
+r12-classification rc=0 RC=0 ELAPSED=1s FILES=test/runtime/request-cell-definition-classification.test.js
+r13-conformance rc=1 RC=1 ELAPSED=1s FILES=test/runtime/wasm-driver-contract-conformance.test.js
+r14-bound-native rc=0 RC=0 ELAPSED=1s FILES=test/wasm-service/wasm-creation-bound-native.test.js
+r15-driver rc=0 RC=0 ELAPSED=1s FILES=test/runtime/wasm-component-driver.test.js
+r16-lifecycle rc=0 RC=0 ELAPSED=2s FILES=test/wasm-service/wasm-service-lifecycle.test.js
+r17-startup-wiring rc=0 RC=0 ELAPSED=2s FILES=test/runtime/runtime-startup-wiring.test.js
+r18-state-delegation rc=0 RC=0 ELAPSED=0s FILES=test/node/replica-state-delegation.test.js
+r19-terminal-sql rc=0 RC=0 ELAPSED=0s FILES=test/rebalancer/terminal-status-sql-clause-consistency.property.test.js
+CHAIN_DONE

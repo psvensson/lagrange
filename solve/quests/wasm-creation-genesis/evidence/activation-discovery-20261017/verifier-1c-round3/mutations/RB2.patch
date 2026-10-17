@@ -1,0 +1,11 @@
+--- a/src/node/runtime-service-bound-creation-route.js	2026-10-17 18:19:02.893632245 +0200
++++ b/src/node/runtime-service-bound-creation-route.js	2026-10-17 18:19:02.905632357 +0200
+@@ -174,7 +174,7 @@
+     settleCreation(handler, params, {...unroutedDecision(answer), names: false});
+   } catch (error) {
+     settleCreation(handler, params, {kind: DECISION.DEFERRED,
+-      errorCode: error?.code ?? OUTCOME.UNKNOWN, names: retainedAnswer});
++      errorCode: error?.code ?? OUTCOME.UNKNOWN, names: true});
+   } finally {
+     if (!generic) releaseBoundCreation(handler, params);
+   }

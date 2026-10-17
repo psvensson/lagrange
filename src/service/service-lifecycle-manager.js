@@ -41,9 +41,11 @@ import {
 } from './service-lifecycle-operations.js';
 import {recoverPendingOperations as recoverLifecyclePendingOperations} from './service-lifecycle-recovery.js';
 import {resolveTimeSource} from '../time/time-source.js';
-import {claimConsensusCreationOpening, prepareConsensusCreation, recoverConsensusCreation} from './service-consensus-creation-intent.js';
+import {claimConsensusCreationOpening, prepareConsensusCreation, readRetainedCreation,
+  recoverConsensusCreation} from './service-consensus-creation-intent.js';
 
-import {bootstrapConsensusCreation} from './service-consensus-bootstrap.js';
+import {bootstrapConsensusCreation, resumeConsensusCreation} from
+  './service-consensus-bootstrap.js';
 
 const DEFAULT_DIAGNOSTICS_LIMIT = 100;
 const MAX_DIAGNOSTICS_LIMIT = 500;
@@ -556,6 +558,14 @@ const MAX_DIAGNOSTICS_LIMIT = 500;
   /** Resume only the original journaled intent, never a current-definition reconstruction. */
   async recoverConsensusCreation(operationId, context = {}) {
     return recoverConsensusCreation(this, operationId, context);
+  }
+  /** Journal-only read of one retained creation: no policy, reservation or metadata read. */
+  async readRetainedCreation(operationId) {
+    return readRetainedCreation(this, operationId);
+  }
+  /** Recover one retained creation by operation id and continue it, in one pass. */
+  async resumeConsensusCreation(operationId, context = {}) {
+    return resumeConsensusCreation(this, operationId, context);
   }
   /**
    * Create a service replica via the matching adapter.
