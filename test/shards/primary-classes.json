@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2091,
+    "unit": 2092,
     "integration": 102,
     "bootstrap": 205,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2405,
-  "digest": "fnv1a32-88cc5406",
+  "censusSize": 2406,
+  "digest": "fnv1a32-33f008d9",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1593,6 +1593,7 @@
     "test/raft/raft-rs-backend/message-group-membership-semantic-port.test.js": "unit",
     "test/raft/raft-rs-backend/message-group-on-raft-rs.test.js": "unit",
     "test/raft/raft-rs-backend/multi-replica-runtime-prerequisites.test.js": "unit",
+    "test/raft/raft-rs-backend/n0-multigroup-sender-only.test.js": "unit",
     "test/raft/raft-rs-backend/n0-raft-timing-measurement.test.js": "unit",
     "test/raft/raft-rs-backend/native-election-liveness.test.js": "unit",
     "test/raft/raft-rs-backend/native-election-randomized.test.js": "unit",
