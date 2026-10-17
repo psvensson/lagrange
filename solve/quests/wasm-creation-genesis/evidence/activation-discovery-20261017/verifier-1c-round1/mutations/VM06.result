@@ -1,0 +1,6 @@
+mutated sha: 389b2ddb39cfa708ea5d8059ce1d5d0889abd98fe3ab15bf09619c6eae1fb4c6
+catcher test/runtime/service-runtime-consensus-publication.test.js rc=1
+not ok test/runtime/service-runtime-consensus-publication.test.js (16 assertions, 912ms)
+    not ok 1 - PUBLISHED projects the services row and the endpoint row, then marks PRESENT by token
+      name: 'AssertionError'
+RESTORED_BYTE_IDENTICAL src/runtime/runtime-endpoint-publication-wiring.js

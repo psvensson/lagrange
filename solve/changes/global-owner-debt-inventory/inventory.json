@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2969770,
-        "sha256": "490fd57556f6ff570950c20a6d15130d3cb44f5c4857e9a7e0821766a56754ba"
+        "bytes": 2977101,
+        "sha256": "4f3f95ed6e1f682571281658c8f80f169a3cce24be0658a6210ca113bc388789"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -30,7 +30,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "a0ed279902e4143605f6ffb93c4f061f1778e0bfe59df19d0b268278b02b095b"
+        "sha256": "92bd048c5dcc60909a7aa3fe6f97325259cdd53c0db374e97e4b995fd7cc60a6"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "629de3dab5c6b32c2dbb81e129a55ef7007ce436d0f609a2dc1ff3b42a72c398"
+        "sha256": "9e2d3d77a6f953d67320186873d0fbbcd3cc3aa159721c9ab38aa047a99d3192"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,7 +62,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "096c40c9537232036d36b7c5042c074511cdc0e53558967661052e5f81c69807"
+    "inputDigest": "809c43b2c95e6ac3b44b3e9f84fd00e8316b821bd3bbfc9caeca9f7a1931fcf2"
   },
   "reconciliation": {
     "complexity": {
@@ -112,7 +112,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "a0ed279902e4143605f6ffb93c4f061f1778e0bfe59df19d0b268278b02b095b"
+          "sha256": "92bd048c5dcc60909a7aa3fe6f97325259cdd53c0db374e97e4b995fd7cc60a6"
         },
         "cloneGroups": 47,
         "duplicatedLines": 1462,
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "629de3dab5c6b32c2dbb81e129a55ef7007ce436d0f609a2dc1ff3b42a72c398"
+          "sha256": "9e2d3d77a6f953d67320186873d0fbbcd3cc3aa159721c9ab38aa047a99d3192"
         },
         "cloneGroups": 698,
         "duplicatedLines": 26458,
@@ -167,17 +167,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2969770,
-        "sha256": "490fd57556f6ff570950c20a6d15130d3cb44f5c4857e9a7e0821766a56754ba"
+        "bytes": 2977101,
+        "sha256": "4f3f95ed6e1f682571281658c8f80f169a3cce24be0658a6210ca113bc388789"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "d491ea098889ddce285828d1fdbf8ed3d2abc6c19e2eee4bd6fa0ecda70892e2",
-      "moduleCount": 5488,
-      "edgeCount": 28402,
+      "sourceDigest": "7c7b1dc6645e18dea565d2641af3f5917fa3e8da6f28cb1fa7004a5c2f91e319",
+      "moduleCount": 5495,
+      "edgeCount": 28500,
       "unresolvedCount": 36
     }
   },
@@ -185,7 +185,7 @@
     "sourceSignalCount": 2542,
     "assignedSignalCount": 2542,
     "uniqueAssignmentCount": 2542,
-    "digest": "6bbb45bb5e7f40fee90339546f642a1ce5e0936216273fee91c5fe7006f8181c"
+    "digest": "eda7906c717f36e489d6b325527635a12c76fab7ac230504dc0e7c1896c6a7e6"
   },
   "signalCounts": {
     "cognitive": 152,
@@ -331,7 +331,7 @@
       "cloneTouches": 2,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 354,
+      "importIn": 356,
       "importOut": 466,
       "score": 666.4,
       "topPaths": [
@@ -779,7 +779,7 @@
       "cloneTouches": 45,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 55,
+      "importIn": 56,
       "importOut": 170,
       "score": 151.3,
       "topPaths": [
@@ -1226,8 +1226,8 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 228,
-      "importOut": 109,
+      "importIn": 230,
+      "importOut": 110,
       "score": 60,
       "topPaths": [
         "src/node/runtime-service-handler.js",
@@ -1254,7 +1254,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 675,
+      "importIn": 678,
       "importOut": 44,
       "score": 56,
       "topPaths": [
@@ -1337,7 +1337,7 @@
       "cloneTouches": 1,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 57,
+      "importIn": 60,
       "importOut": 52,
       "score": 52.1,
       "topPaths": [
@@ -1447,7 +1447,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 52,
+      "importIn": 54,
       "importOut": 57,
       "score": 44,
       "topPaths": [
@@ -1475,7 +1475,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 28,
+      "importIn": 29,
       "importOut": 40,
       "score": 44,
       "topPaths": [

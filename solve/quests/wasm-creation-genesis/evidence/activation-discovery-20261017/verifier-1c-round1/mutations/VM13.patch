@@ -1,0 +1,14 @@
+--- a/src/runtime/runtime-endpoint-publication-wiring.js	2026-10-17 17:28:09.225793867 +0200
++++ b/src/runtime/runtime-endpoint-publication-wiring.js	2026-10-17 17:28:09.237793961 +0200
+@@ -151,9 +151,8 @@
+     _runtimeNodeId,
+     removal = {},
+   ) => {
+-    const {consensusBinding = null, ...mutationContext} = removal;
+-    const identity = resolveRuntimeEndpointIdentity(systemTableCache, replicaId,
+-      consensusBinding);
++    const {consensusBinding: _ignored = null, ...mutationContext} = removal;
++    const identity = resolveRuntimeEndpointIdentity(systemTableCache, replicaId, null);
+     // Remove only this incarnation's endpoint: the predicate carries the
+     // exact boot incarnation, so a replacement boot's endpoint (same
+     // deterministic id) is never deleted by delayed teardown.

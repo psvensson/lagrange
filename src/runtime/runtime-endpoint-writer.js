@@ -24,6 +24,15 @@ import {
 import {
   ENDPOINT_INTENT_FIELD,
 } from '../constants/runtime.js';
+import {instanceDigest} from '../control-plane/owners/service-instance-contract.js';
+
+// The creation a bound endpoint intent carries, as endpoint metadata.
+function boundEndpointMetadata(endpointIntent) {
+  const binding = endpointIntent.consensusBinding;
+  return binding ? {[EP_META.BINDING_DIGEST]: instanceDigest(binding),
+    [EP_META.RESOURCE_TOKEN]: instanceDigest(endpointIntent.consensusResourceToken ?? null)} :
+    {};
+}
 
 /**
  * Build a `service_endpoints` row from a validated endpoint intent.
@@ -36,9 +45,12 @@ import {
  * @param {string} nodeId - The hosting node identifier.
  * @param {Object} endpointIntent - Validated endpoint intent with
  *   host, port, and optional protocol fields.
+ * @param {string} [endpointKey] - The row key's replica part: the logical
+ *   service for an unbound replica, the physical replica id for a bound one.
  * @return {Object} A `service_endpoints` table row object.
  */
-function buildRuntimeEndpointRow(serviceId, nodeId, endpointIntent) {
+function buildRuntimeEndpointRow(serviceId, nodeId, endpointIntent,
+  endpointKey = serviceId) {
   const port = endpointIntent[ENDPOINT_INTENT_FIELD.PORT];
   const host = endpointIntent[ENDPOINT_INTENT_FIELD.HOST] || nodeId;
   const protocol = endpointIntent[ENDPOINT_INTENT_FIELD.PROTOCOL] ||
@@ -49,10 +61,11 @@ function buildRuntimeEndpointRow(serviceId, nodeId, endpointIntent) {
     [EP_META.SERVICE_NAME]: serviceId,
     [EP_META.VERSION]: DEFAULT_VERSION,
     [EP_META.PROTOCOL]: protocol,
+    ...boundEndpointMetadata(endpointIntent),
   };
 
   return {
-    [EP_COL.ENDPOINT_ID]: `${serviceId}${EP_ID_SEPARATOR}${nodeId}`,
+    [EP_COL.ENDPOINT_ID]: deriveEndpointId(endpointKey, nodeId),
     [EP_COL.SERVICE_ID]: serviceId,
     [EP_COL.NODE_ID]: nodeId,
     [EP_COL.PROTOCOL]: protocol,

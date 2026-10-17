@@ -1,0 +1,4 @@
+M18-skip-authority-for-unprojected src/service/service-consensus-bootstrap.js ['rc=1'] restored-sha-ok | not ok 13 - P11 a forged PUBLISHED or RUNNING driver answer never becomes serving presentation
+M18b-skip-authority-for-unprojected src/service/service-consensus-bootstrap.js ['rc=1'] restored-sha-ok | not ok 3 - Revision 4: a PUBLISHED_UNPROJECTED answer for an ungranted slot is contradicted and retired
+M19a-cell-by-key-presence src/runtime/request-cell-runtime-contract.js ['rc=1'] restored-sha-ok | 
+M19b-cell-by-key-presence src/runtime/request-cell-runtime-contract.js ['rc=1'] restored-sha-ok | not ok 6 - C6-4 a definitive INTENT_NOT_FOUND for a bound-class definition is BOUND_ROUTE_REQUIRED || not ok 7 - C6-5 an unavailable journal read defers a bound-class CREATE; never NOT_FOUND || not ok 9 - cell (a) production-shaped manager (no journal): native_js and Cell generic, bound-class deferred

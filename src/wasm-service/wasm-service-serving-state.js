@@ -15,6 +15,7 @@ import {WASM_SERVICE_ERROR_MSG, WASM_SERVICE_REPLICA_STATE as STATE} from
 import {admitWasmBootstrapCommand, admitWasmServiceCommand} from
   './wasm-service-committed-command-admission.js';
 import {WRITER_REASON, WRITER_STATUS} from './wasm-writer-profile.js';
+import {SERVICE_TYPE} from '../constants/service.js';
 
 const WASM_SERVICE_SERVING_STATE = Object.freeze({
   OPEN: 'OPEN', HELD: 'HELD', SERVING: 'SERVING', RETIRED: 'RETIRED',
@@ -26,10 +27,20 @@ const ADMITTING_STATES = new Set([SERVING.OPEN, SERVING.SERVING]);
 const STOPPED_LIFECYCLE_STATES = new Set([STATE.STOPPING, STATE.STOPPED,
   STATE.CLEANUP_REQUIRED]);
 const UNBOUND_REFUSAL = Object.freeze({error: WASM_SERVICE_ERROR_MSG.SERVICE_NOT_READY});
+// Whether a bound replica's services row exists for its role/leader CAS
+// (design ACTIVATION-DISCOVERY-DESIGN-20261017 RV1.3, RV2.3, RV3.4).
+const WASM_SERVICES_ROW_STATE = Object.freeze({ABSENT: 'ABSENT', PRESENT: 'PRESENT'});
+const SERVICES_ROW = WASM_SERVICES_ROW_STATE;
+// The answers of the token-keyed PRESENT mark.
+const WASM_SERVICES_ROW_MARK = Object.freeze({
+  PRESENT: 'PRESENT', ALREADY_PRESENT: 'ALREADY_PRESENT', NOT_REGISTERED: 'NOT_REGISTERED',
+});
+const ABSENT_SERVICES_ROW = Object.freeze({state: SERVICES_ROW.ABSENT, serviceType: null});
 
 /** @param {Object} replica - Set the constructed instance's serving state. */
 function initializeServingState(replica) {
   replica.servingState = replica.consensusCreation === null ? SERVING.OPEN : SERVING.HELD;
+  replica.servicesRow = ABSENT_SERVICES_ROW;
 }
 
 /**
@@ -55,13 +66,44 @@ function isServing(replica) {
 }
 
 /**
- * Role/leader services-row publication: unbound replicas only. The row a
- * bound replica would CAS is owned by the deferred discovery stage (D3').
+ * Role/leader services-row publication: an unbound replica always; a bound
+ * replica only once the runtime projected its row and marked it PRESENT.
  * @param {Object} replica
  * @return {boolean}
  */
 function publishesServicesRow(replica) {
-  return replica.consensusCreation === null;
+  return replica.consensusCreation === null ||
+    replica.servicesRow.state === SERVICES_ROW.PRESENT;
+}
+
+/**
+ * The service_type the role/leader CAS predicate names: the projected row's,
+ * carried by the PRESENT record (one value from projection to writer). The
+ * unbound predicate is unchanged (its defect is the deletion unit's, R17).
+ * @param {Object} replica
+ * @return {string}
+ */
+function servicesRowServiceType(replica) {
+  return replica.consensusCreation === null ? SERVICE_TYPE.WASM_SERVICE :
+    replica.servicesRow.serviceType;
+}
+
+/**
+ * The ABSENT -> PRESENT edge of a bound replica's services row, taken once:
+ * records the projected service_type, then replays the current role (and the
+ * leader node, when leading) once through the existing publication helpers.
+ * @param {Object} replica - A bound replica whose services row was projected.
+ * @param {string} serviceType - The projected row's service_type.
+ * @return {{outcome: string}} PRESENT or ALREADY_PRESENT.
+ */
+function markServicesRowPresent(replica, serviceType) {
+  if (replica.servicesRow.state === SERVICES_ROW.PRESENT) {
+    return {outcome: WASM_SERVICES_ROW_MARK.ALREADY_PRESENT};
+  }
+  replica.servicesRow = Object.freeze({state: SERVICES_ROW.PRESENT, serviceType});
+  replica.queueRoleUpdate(replica.role);
+  if (replica.isLeader) replica.queueLeaderNodeUpdate(replica.nodeId);
+  return {outcome: WASM_SERVICES_ROW_MARK.PRESENT};
 }
 
 function boundRefusalReason(replica) {
@@ -115,6 +157,7 @@ function retireServingState(replica) {
   replica.servingState = SERVING.RETIRED;
 }
 
-export {WASM_SERVICE_SERVING_STATE, initializeServingState, openServingState, isServing,
-  publishesServicesRow, servingRefusal, boundProposalAdmission, enableServing,
+export {WASM_SERVICE_SERVING_STATE, WASM_SERVICES_ROW_MARK, initializeServingState,
+  openServingState, isServing, publishesServicesRow, servicesRowServiceType,
+  markServicesRowPresent, servingRefusal, boundProposalAdmission, enableServing,
   retireServingState};

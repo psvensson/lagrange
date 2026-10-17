@@ -99,16 +99,17 @@ async function publishWasmCreation(replica, current) {
  * otherwise the existing HELD shape, carrying any typed grant outcome.
  * @param {Object} replica
  * @param {Object} run - The continuation result.
+ * @param {string|null} host - The node's endpoint host (design RV3.1).
  * @return {Object}
  */
-function boundStartResult(replica, run) {
+function boundStartResult(replica, run, host) {
   const creation = replica.consensusCreation;
   const shared = {bootstrapped: true, consensusBinding: creation.intent.consensusBinding,
     consensusResourceToken: creation.token, genesis: run,
     ...(run.grant === undefined ? {} : {grant: run.grant})};
   if (run.outcome === WASM_CREATION_GENESIS.PUBLISHED && isServing(replica)) {
     return {started: true, status: CONSENSUS_BOOTSTRAP.PUBLISHED,
-      port: replica.portAllocation, ...shared};
+      port: replica.portAllocation, host, ...shared};
   }
   return {started: false, status: CONSENSUS_BOOTSTRAP.HELD, ...shared};
 }

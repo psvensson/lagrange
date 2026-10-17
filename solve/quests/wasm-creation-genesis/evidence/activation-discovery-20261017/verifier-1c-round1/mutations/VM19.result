@@ -1,0 +1,10 @@
+mutated sha: 8172fc76b7ddb99bc527d67bf5661f6cd3f43056dcb3a4e4ab7dec0f0cd9193b
+catcher test/runtime/request-cell-definition-classification.test.js rc=1
+not ok test/runtime/request-cell-definition-classification.test.js (2 assertions, 161ms)
+not ok 1 - a serialized installed-package row (binding_* keys present, null) is not a request Cell
+  name: 'AssertionError'
+catcher test/node/runtime-service-bound-route.test.js rc=1
+not ok test/node/runtime-service-bound-route.test.js (26 assertions, 900ms)
+    # Subtest: UNKNOWN after retention is the handler-typed deferral: CREATE_FAILED + deferRetry, memo FAILED
+    ok 4 - UNKNOWN after retention is the handler-typed deferral: CREATE_FAILED + deferRetry, memo FAILED
+RESTORED_BYTE_IDENTICAL src/runtime/request-cell-runtime-contract.js

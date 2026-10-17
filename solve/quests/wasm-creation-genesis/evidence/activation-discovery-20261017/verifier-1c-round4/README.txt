@@ -1,0 +1,1 @@
+Verifier round 4 (Fable, subagent a20413205d1d4bd1c) of stage 1c at snapshot 6b420826829d49d39191efe46da0f4b5f005c27b (= refs/heads/wip/rs-raft-serving-publication-5; delta over 9f83c7be3). Lab PENDING at hand-back.
