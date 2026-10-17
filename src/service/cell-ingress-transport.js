@@ -11,7 +11,7 @@
 
 import {TRANSPORT_EVENT} from '../constants/transport.js';
 
-const DEFAULT_DEADLINE_MS = 5_000;
+const DEFAULT_DEADLINE_MS = 5_000; // ends-on: the cell dispatch response arrives
 const DEFAULT_MAX_ATTEMPTS = 2;
 const DEFAULT_MAX_IN_FLIGHT = 128;
 const DEFAULT_MAX_IN_FLIGHT_PER_TARGET = 32;

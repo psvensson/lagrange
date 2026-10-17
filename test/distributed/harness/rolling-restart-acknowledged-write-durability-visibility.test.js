@@ -13,8 +13,6 @@ import {DistributedWriteCoordinator} from
 import {createAdminQueryResultMessageEnvelope} from
   '../../../src/admin/admin-query-result-message-envelope.js';
 import {buildAdminWriteReceipt} from '../../../src/admin/admin-write-receipt.js';
-import LifeRaft from '../../../src/raft/liferaft.js';
-import {InMemoryLogAdapter} from '../../../src/raft/in-memory-log-adapter.js';
 import {buildDurableCommitWitness} from
   '../../../src/partition/partition-write-kernel.js';
 import {createMockSystemCache} from
@@ -22,7 +20,7 @@ import {createMockSystemCache} from
 import {createVirtualNetwork} from './virtual-network.js';
 import {applyCommandThroughApplicationOwner} from
   '../../partition/partition-service-test-support.js';
-import {connectRaftCluster, driveNetwork} from './raft-network-host.js';
+import {connectRaftRsNetwork} from '../../test-helpers/raft-rs-network-host.js';
 import {LoadGenerator} from './load-generator.js';
 import {
   assertAcknowledgedWritesVisibleOnReachableNodes,
@@ -52,12 +50,9 @@ const FAST = Object.freeze({
 const RUN13_PARTITION_ID = 'benchmark_events-p1';
 const RUN13_NODE_IDS = Object.freeze([FAILED_READ_NODE_ID, ...OTHER_NODE_IDS]);
 const RUN13_RECOVERY_SEED = 13;
-const RUN13_RAFT_OPTIONS = Object.freeze({
-  'election min': '100000 ms',
-  'election max': '100000 ms',
-  'heartbeat': '30 ms',
-  'Log': InMemoryLogAdapter,
-});
+// One election window no replica reaches: the accepting node's port campaigns
+// explicitly, so leadership is deterministic.
+const RUN13_ELECTION_WINDOW_MS = 100000;
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayFind = Function.call.bind(Array.prototype.find);
 const arrayMap = Function.call.bind(Array.prototype.map);
@@ -181,13 +176,6 @@ function createRun13Receipt(id, command, entry, acknowledgedAtMs) {
   };
 }
 
-function run13RaftOptions() {
-  return {
-    ...RUN13_RAFT_OPTIONS,
-    write: (_packet, callback) => callback?.(null),
-  };
-}
-
 async function initializeRun13Partitions(tempDir) {
   const partitions = new Map();
   for (const nodeId of RUN13_NODE_IDS) {
@@ -206,18 +194,23 @@ async function initializeRun13Partitions(tempDir) {
 // they never touch the applied state of the partition's own consensus group.
 const RUN13_SIMULATED_GROUP_ID = 'run13-simulated-quorum';
 
-function wireRun13CommitApplication(rafts, partitions, dropAppliedNodeId) {
+// The leader's own empty entry for its term carries no write.
+function isRun13Write(command) {
+  return typeof command?.entryId === 'string';
+}
+
+function wireRun13CommitApplication(host, partitions, dropAppliedNodeId) {
   for (const nodeId of RUN13_NODE_IDS) {
     let appliedIndex = 0;
-    rafts.get(nodeId).on('commit', (command) => {
+    host.onCommitted(nodeId, ({term, command}) => {
       const partition = partitions.get(nodeId);
-      if (partition && nodeId !== dropAppliedNodeId) {
+      if (partition && nodeId !== dropAppliedNodeId && isRun13Write(command)) {
         appliedIndex += 1;
         applyCommandThroughApplicationOwner({
           database: partition.db,
           groupId: RUN13_SIMULATED_GROUP_ID,
           index: appliedIndex,
-          term: rafts.get(nodeId).term,
+          term,
           command,
           applyCommittedEntry: (committed) =>
             partition.applyCommittedEntry(committed),
@@ -227,33 +220,40 @@ function wireRun13CommitApplication(rafts, partitions, dropAppliedNodeId) {
   }
 }
 
-async function assertRun13RecoveryBarrier(rafts, expectedIndex) {
+// Every replica's commit index reaches the last accepted entry, and its
+// application committed every accepted entry at the leader's index.
+function assertRun13RecoveryBarrier(host, acceptedEntries) {
+  const expectedIndex = acceptedEntries[acceptedEntries.length - 1].index;
   for (const nodeId of RUN13_NODE_IDS) {
-    const raft = rafts.get(nodeId);
     assert.equal(
-      raft.log.committedIndex,
+      host.commitIndex(nodeId),
       expectedIndex,
       `${nodeId} crossed the committed-log recovery barrier`,
     );
-    for (let index = 1; index <= expectedIndex; index++) {
+    const committed = new Map(arrayMap(host.committedEntries(nodeId),
+      (entry) => [entry.index, entry]));
+    for (const accepted of acceptedEntries) {
       assert.equal(
-        (await raft.log.get(index))?.committed,
-        true,
-        `${nodeId} has durable committed entry ${index}`,
+        committed.get(accepted.index)?.command?.entryId,
+        accepted.command.entryId,
+        `${nodeId} has durable committed entry ${accepted.index}`,
       );
     }
   }
 }
 
-async function acceptRun13Writes(rafts, net) {
-  const leader = rafts.get(ACCEPTING_NODE_ID);
+async function acceptRun13Writes(host, net) {
   const commands = arrayMap(FAILED_RUN_IDS, buildRun13Command);
-  for (const command of commands) await leader.command(command);
-  await driveNetwork(net, {untilMs: net.now() + 300, stepMs: 5});
+  for (const command of commands) host.propose(ACCEPTING_NODE_ID, command);
+  await host.runUntil(net.now() + 300);
+  const leaderCommitted = host.committedEntries(ACCEPTING_NODE_ID);
   const receipts = [];
+  const acceptedEntries = [];
   for (let index = 0; index < commands.length; index++) {
-    const entry = await leader.log.get(index + 1);
-    assert.equal(entry?.committed, true, `accepted entry ${index + 1} committed`);
+    const entry = arrayFind(leaderCommitted, (committed) =>
+      committed.command?.entryId === commands[index].entryId);
+    assert.ok(entry, `accepted entry ${index + 1} committed`);
+    acceptedEntries.push(entry);
     receipts.push(createRun13Receipt(
       FAILED_RUN_IDS[index],
       commands[index],
@@ -261,34 +261,34 @@ async function acceptRun13Writes(rafts, net) {
       net.now() + index,
     ));
   }
-  return receipts;
+  return {receipts, acceptedEntries};
 }
 
-async function cleanupRun13Resources(partitions, rafts, tempDir) {
+async function cleanupRun13Resources(partitions, host, tempDir) {
   for (const partition of partitions.values()) await partition.shutdown();
-  rafts.forEach((raft) => raft.end());
+  host.dispose();
   fs.rmSync(tempDir, {recursive: true, force: true});
 }
 
 async function runRealRaftRun13({dropAppliedNodeId = null} = {}) {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lagrange-run13-'));
   const net = createVirtualNetwork({seed: RUN13_RECOVERY_SEED});
-  const rafts = connectRaftCluster(
-    net,
-    RUN13_NODE_IDS,
-    run13RaftOptions,
-  );
+  const host = connectRaftRsNetwork(net, RUN13_NODE_IDS, {
+    partitionId: RUN13_PARTITION_ID,
+    electionMinMs: RUN13_ELECTION_WINDOW_MS,
+  });
   const partitions = await initializeRun13Partitions(tempDir);
-  wireRun13CommitApplication(rafts, partitions, dropAppliedNodeId);
+  wireRun13CommitApplication(host, partitions, dropAppliedNodeId);
   try {
-    rafts.get(ACCEPTING_NODE_ID).promote();
-    await driveNetwork(net, {untilMs: 200, stepMs: 5});
-    assert.equal(rafts.get(ACCEPTING_NODE_ID).state, LifeRaft.LEADER);
+    host.start();
+    host.campaign(ACCEPTING_NODE_ID);
+    await host.runUntil(200);
+    assert.equal(host.isLeader(ACCEPTING_NODE_ID), true);
 
     await partitions.get(RESTARTING_NODE_ID).shutdown();
     partitions.delete(RESTARTING_NODE_ID);
-    net.killNode(RESTARTING_NODE_ID);
-    const receipts = await acceptRun13Writes(rafts, net);
+    host.stop(RESTARTING_NODE_ID);
+    const {receipts, acceptedEntries} = await acceptRun13Writes(host, net);
 
     const restartedPartition = createRun13Partition(
       RESTARTING_NODE_ID,
@@ -296,9 +296,9 @@ async function runRealRaftRun13({dropAppliedNodeId = null} = {}) {
     );
     await restartedPartition.initialize();
     partitions.set(RESTARTING_NODE_ID, restartedPartition);
-    net.startNode(RESTARTING_NODE_ID);
-    await driveNetwork(net, {untilMs: net.now() + 500, stepMs: 5});
-    await assertRun13RecoveryBarrier(rafts, FAILED_RUN_IDS.length);
+    host.restart(RESTARTING_NODE_ID);
+    await host.runUntil(net.now() + 500);
+    assertRun13RecoveryBarrier(host, acceptedEntries);
 
     return {
       acknowledgedWrites: {
@@ -309,10 +309,10 @@ async function runRealRaftRun13({dropAppliedNodeId = null} = {}) {
       },
       nodes: arrayMap(RUN13_NODE_IDS, (nodeId) =>
         createLocalPartitionReadNode(partitions.get(nodeId))),
-      cleanup: () => cleanupRun13Resources(partitions, rafts, tempDir),
+      cleanup: () => cleanupRun13Resources(partitions, host, tempDir),
     };
   } catch (error) {
-    await cleanupRun13Resources(partitions, rafts, tempDir);
+    await cleanupRun13Resources(partitions, host, tempDir);
     throw error;
   }
 }

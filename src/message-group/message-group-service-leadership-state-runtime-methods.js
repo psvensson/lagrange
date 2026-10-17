@@ -1,10 +1,18 @@
+import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
+
 const MESSAGE_GROUP_SERVICE_LEADERSHIP_STATE_RUNTIME_LITERAL = {
   CONSTRUCTOR: 'constructor',
 };
 
+// The core's own status through this replica's port; null without a port or
+// while the port does not answer CORE_OK.
+function readCoreStatus(service) {
+  const status = service.raft?.readStatus();
+  return status?.outcome === RAFT_OPERATION_OUTCOME.CORE_OK ? status : null;
+}
+
 function createMessageGroupServiceLeadershipStateRuntimeMethods(deps = {}) {
   const {
-    LifeRaft,
     MESSAGE_GROUP_SERVICE_LITERAL,
     MESSAGE_GROUP_SERVICE_LOG_MSG,
     RaftRole,
@@ -15,23 +23,21 @@ function createMessageGroupServiceLeadershipStateRuntimeMethods(deps = {}) {
     normalizeLeaderReplicaId(candidate) {
       return this.forwardingOwner.normalizeLeaderReplicaId(candidate);
     }
-    resolveLivePeerAddressFromRaftNodes(peerId) {
-      return this.forwardingOwner.resolveLivePeerAddressFromRaftNodes(peerId);
+    resolveLivePeerAddressFromConsensus(peerId) {
+      return this.forwardingOwner.resolveLivePeerAddressFromConsensus(peerId);
     }
     resolveCDCForwardSelection(logContext = {}) {
       return this.forwardingOwner.resolveCDCForwardSelection(logContext);
     }
     /**
-     * Determine whether this replica is currently the active Raft leader.
+     * Determine whether this replica is currently the active Raft leader:
+     * it published leadership and its core still leads.
      * @return {boolean}
      * @private
      */
     isCurrentRaftLeader() {
-      return Boolean(
-        this.raft &&
-        this.raft.state === LifeRaft.LEADER &&
-        this.isLeaderReplica(),
-      );
+      return this.isLeaderReplica() &&
+        readCoreStatus(this)?.role === RaftRole.LEADER;
     }
     cancelLeaderOwnedActivation() {
       this.leaderActivationGate.cancel({clearActivatedTerm: true});
@@ -148,13 +154,13 @@ function createMessageGroupServiceLeadershipStateRuntimeMethods(deps = {}) {
       return this.role;
     }
     /**
-     * Get the current term.
+     * Get the current term: the core's own, or the last term this replica
+     * published while it has no readable core.
      * @return {number} Current term.
      */
     getCurrentTerm() {
-      return this.raft ?
-        this.raftProvider.getCurrentTerm(this.raft) :
-        this.operationLedger.currentTerm;
+      const term = readCoreStatus(this)?.term;
+      return Number.isFinite(term) ? term : this.operationLedger.currentTerm;
     }
   }
 

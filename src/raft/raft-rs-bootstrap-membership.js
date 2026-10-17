@@ -5,7 +5,8 @@
 // gate's bootstrap index.
 //
 //   GENESIS (a founder: the founding provisioner, a seed partition) - the
-//     founding set, bootstrap index 0;
+//     founding set, bootstrap index 0; a replica that says it joins an
+//     existing group carries that, and is refused when it holds no record;
 //   COMMITTED (a join) - the group's committed configuration as its leader
 //     answered it at applied index j, plus this replica (owner decision O2),
 //     learners passed through, bootstrap index j;
@@ -79,15 +80,17 @@ function committedBootstrap(membership, registry, peerId) {
 
 /**
  * The bootstrap the runtime owner opens a group from when it holds no record.
- * @param {Object} options - {membership, registry, peerId}: the request's
- *   bootstrap membership (a stamp, or the durable-record bootstrap), this
- *   replica's identity registry and its raft peer id.
+ * @param {Object} options - {membership, registry, peerId,
+ *   joiningExistingGroup}: the request's bootstrap membership (a stamp, or
+ *   the durable-record bootstrap), this replica's identity registry, its
+ *   raft peer id, and whether it joins a group that already exists.
  * @return {Object} Frozen {source, voters, learners, bootstrapIndex,
- *   selfCommittedVoter}.
+ *   selfCommittedVoter, joiningExistingGroup}.
  * @throws {Error} The typed STAMP_INVALID refusal (`consensus`) of an absent
  *   or invalid stamp.
  */
-function bootstrapOfRequest({membership, registry, peerId}) {
+function bootstrapOfRequest({membership, registry, peerId,
+  joiningExistingGroup}) {
   const durableRecord = validateDurableRecordBootstrap(membership);
   if (durableRecord.valid) {
     return Object.freeze({source: durableRecord.stamp.kind,
@@ -109,6 +112,7 @@ function bootstrapOfRequest({membership, registry, peerId}) {
     learners: [],
     bootstrapIndex: GENESIS_BOOTSTRAP_INDEX,
     selfCommittedVoter: false,
+    joiningExistingGroup: joiningExistingGroup === true,
   });
 }
 

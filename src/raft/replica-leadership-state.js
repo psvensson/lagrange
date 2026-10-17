@@ -105,7 +105,6 @@ function wireReplicaLifecycleEvents(replica, options = {}) {
   const onLeader = optionFunction(options, 'onLeader');
   const onFollower = optionFunction(options, 'onFollower');
   const onCandidate = optionFunction(options, 'onCandidate');
-  const onCommit = optionFunction(options, 'onCommit');
   const onLeaderChange = optionFunction(options, 'onLeaderChange');
   const onTermChange = optionFunction(options, 'onTermChange');
   const normalizeLeaderId = optionFunction(
@@ -136,10 +135,6 @@ function wireReplicaLifecycleEvents(replica, options = {}) {
     }
     applyReplicaDemotion(replica, roles.CANDIDATE);
     onCandidate({term: getCurrentTerm()});
-  });
-
-  subscribe(events.COMMIT, (command) => {
-    onCommit(command);
   });
 
   subscribe(events.LEADER_CHANGE, (nextLeaderId) => {
@@ -173,7 +168,5 @@ function wireReplicaLifecycleEvents(replica, options = {}) {
 export {
   applyReplicaLeadership,
   applyReplicaDemotion,
-  clearReplicaLeaderUpdateState,
-  reconcileReplicaLeaderChange,
   wireReplicaLifecycleEvents,
 };

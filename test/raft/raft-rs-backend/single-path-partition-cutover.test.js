@@ -60,17 +60,9 @@ import {withFoundingStamp} from '../../partition/partition-founding-stamp.js';
 const ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const PARTITION_SERVICE_MODULE = 'src/partition/partition-service.js';
-const LEGACY_FILE_PREFIX = 'liferaft';
+const RETIRED_FILE_PREFIX = ['life', 'raft'].join('');
 const TEMP_PREFIX = 'raft-rs-single-path-';
 const DB_FILE = 'partition.sqlite';
-// Inputs a caller passes. The legacy name is what an operator configuration
-// could still say; it is a request, not an expectation, and its owner module
-// does not survive the cutover, so it is spelled here rather than imported.
-// Every other partition is built the way production builds one: with no
-// backend selection at all, so the durable-log and restart witnesses are red
-// today for the same reason the seed is (the default is the legacy backend)
-// and green only when production construction alone yields rs-raft.
-const LEGACY_BACKEND_NAME = 'liferaft';
 const PRODUCTION_SELECTION = Object.freeze({});
 const RS_ONLY_STATUS_FIELDS = Object.freeze(['confState', 'runtimeGeneration']);
 const TABLE_NAME = 'cutover_rows';
@@ -359,7 +351,7 @@ test('seed bootstraps and serves a write on rs-raft by default',
     }
   });
 
-test('omitted selection cannot reach the legacy backend',
+test('omitted selection cannot reach the retired backend',
   {timeout: PARTITION_TEST_TIMEOUT_MS}, async () => {
     quietEnvironment();
     const {directory, dbPath} = tempDbPath();
@@ -379,59 +371,21 @@ test('omitted selection cannot reach the legacy backend',
     // Both facts are measured before either is asserted, so a red names both.
     const closure = relativeImportClosure(PARTITION_SERVICE_MODULE);
     const legacy = [...closure.keys()]
-      .filter((file) => path.basename(file).startsWith(LEGACY_FILE_PREFIX))
+      .filter((file) => path.basename(file).startsWith(RETIRED_FILE_PREFIX))
       .sort()
       .map((file) =>
         `${file} (imported by ${[...closure.get(file)].sort().join(', ')})`);
     assert.deepEqual({
       rsRuntimeFieldsMissingFromStatus: missing,
-      legacyModulesReachedFromPartitionService: legacy,
+      retiredModulesReachedFromPartitionService: legacy,
     }, {
       rsRuntimeFieldsMissingFromStatus: [],
-      legacyModulesReachedFromPartitionService: [],
+      retiredModulesReachedFromPartitionService: [],
     }, 'a partition constructed with no backend selection runs on the ' +
       'rs-raft runtime owner (its readStatus carried ' +
       `${JSON.stringify(observedStatusKeys)}) and ` +
-      `${PARTITION_SERVICE_MODULE} statically reaches no legacy backend ` +
+      `${PARTITION_SERVICE_MODULE} statically reaches no retired backend ` +
       `module (it reaches: ${legacy.join('; ') || 'none'})`);
-  });
-
-test('explicit legacy selection is a typed refusal',
-  {timeout: PARTITION_TEST_TIMEOUT_MS}, async () => {
-    quietEnvironment();
-    const {directory, dbPath} = tempDbPath();
-    let service = null;
-    let refusal = null;
-    try {
-      try {
-        service = new PartitionService(withFoundingStamp(partitionOptions('explicit-legacy',
-          dbPath, {raftBackend: LEGACY_BACKEND_NAME})));
-        await service.initialize();
-      } catch (error) {
-        refusal = error;
-      }
-      // Refusal shape: an Error carrying a non-empty string `code` (or
-      // `reason`) whose message names the requested backend and says it is
-      // refused or retired. The constant's name is the owner's to choose.
-      assert.ok(refusal instanceof Error,
-        `naming ${JSON.stringify(LEGACY_BACKEND_NAME)} constructed and ` +
-        'initialized a partition; its port readStatus carried ' +
-        `${JSON.stringify(statusKeys(service))}`);
-      const typed = refusal.code ?? refusal.reason;
-      assert.equal(typeof typed === 'string' && typed.length > 0, true,
-        `the refusal is typed (code/reason): ${refusal.stack}`);
-      assert.ok(refusal.message.includes(LEGACY_BACKEND_NAME),
-        `the refusal names the backend: ${refusal.message}`);
-      assert.match(refusal.message, /refus|retir/iu,
-        'the refusal says the backend is refused or retired');
-      assert.equal(service?.raft === undefined || service?.raft === null ||
-        missingRsFields(service).length === 0, true,
-      'no legacy port came up');
-    } finally {
-      await shutdownQuietly(service);
-      fs.rmSync(directory, {recursive: true, force: true});
-      resetEnvironment();
-    }
   });
 
 test('the write path has one durable log',

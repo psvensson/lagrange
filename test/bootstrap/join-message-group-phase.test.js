@@ -1,84 +1,55 @@
+// W8 (identity-reuse safety fix, A3): the joiner has no path that starts a
+// message-group replica moved to it. A message-group replica's raft id
+// derives from its name, so a move re-opened a committed identity on an
+// empty log with no conf change. This file once pinned that path (the
+// runtime owner queued the moved replica as joining an existing group); it
+// now pins its absence: the runtime owner exposes no join-existing phase and
+// refuses to start a replica another node actively owns, whatever the
+// bootstrap response says.
+
 import {test} from '../../src/test-helpers/tap.js';
 import {
   JoinMessageGroupRuntimeOwner,
 } from '../../src/bootstrap/owners/join-message-group-runtime-owner.js';
-import {
-  MESSAGE_GROUP_ASSIGNMENT_STRATEGY as AssignmentStrategy,
-} from '../../src/bootstrap/message-group-assignment.js';
+import {NodeService} from '../../src/node/node-service.js';
+import {initializeTestEnvironment} from
+  './node-joining-service-test-support.js';
 
-const silentLogger = {
-  debug: () => {},
-  info: () => {},
-  warn: () => {},
-  error: () => {},
-};
+test('JoinMessageGroupRuntimeOwner has no join-existing phase and refuses ' +
+  'to start a replica another node owns', async (t) => {
+  initializeTestEnvironment();
+  const owner = new JoinMessageGroupRuntimeOwner({
+    nodeId: 'joining-node-1',
+    delegates: {
+      getBootstrapResponse: () => ({
+        messageGroupAssignment: {
+          strategy: 'MOVE_REPLICA',
+          groupId: 'mg-1',
+          replicaToMove: 'mg-1-r2',
+          sourceNodeId: 'seed-node-1',
+          assignmentId: 'assignment-1',
+        },
+      }),
+    },
+  });
+  t.equal(typeof owner.phaseJoinExistingMessageGroup, 'undefined',
+    'no join-existing message-group phase exists');
 
-test(
-  'JoinMessageGroupRuntimeOwner queues join replicas with deferred elections',
-  async (t) => {
-    const queuedReplicas = [];
-    const messageGroupServices = new Map();
-    const registerCalls = [];
-    const owner = new JoinMessageGroupRuntimeOwner({
-      nodeId: 'joining-node-1',
-      delegates: {
-        getBootstrapResponse: () => ({
-          messageGroupAssignment: {
-            strategy: AssignmentStrategy.MOVE_REPLICA,
-            assignmentId: 'assignment-1',
-          },
-        }),
-        getLogger: () => silentLogger,
-        getMessageRouter: () => ({}),
-        getMessageGroupServices: () => messageGroupServices,
-        queueJoinServiceReplica: (descriptor, options) => {
-          queuedReplicas.push({descriptor, options});
-        },
-        createJoinServiceDescriptor: (serviceType, serviceId) => ({
-          serviceType,
-          serviceId,
-        }),
-        triggerJoinReconciler: async () => {
-          messageGroupServices.set('mg-1-r2', {
-            role: 'follower',
-            isLeader: false,
-            raft: {state: 'follower', term: 1},
-          });
-        },
-        registerMessageGroupService: async (groupId, replicaId, service, options) => {
-          registerCalls.push({groupId, replicaId, service, options});
-        },
-      },
+  const nodeService = NodeService.getInstance();
+  nodeService.initialize({nodeId: 'joining-node-1'});
+  nodeService.getSystemTableCache().applySystemTableChange('services',
+    'INSERT', {
+      service_id: 'mg-1-r2',
+      service_type: 'message_group',
+      node_id: 'seed-node-1',
+      group_id: 'mg-1',
+      replica_id: 'mg-1-r2',
+      status: 'active',
+      address: 'seed-node-1/message-group/mg-1-r2',
     });
-
-    await owner.phaseJoinExistingMessageGroup({
-      groupId: 'mg-1',
-      strategy: AssignmentStrategy.MOVE_REPLICA,
-      replicaToMove: 'mg-1-r2',
-      existingPeerIds: ['mg-1-r1', 'mg-1-r2', 'mg-1-r3'],
-      peerAddresses: [
-        'seed-node-1/message-group/mg-1-r1',
-        'seed-node-2/message-group/mg-1-r3',
-      ],
-    });
-
-    t.equal(queuedReplicas.length, 1, 'phase should queue exactly one join replica');
-    t.equal(
-      queuedReplicas[0].options.deferElection,
-      true,
-      'join-time message-group replicas should defer elections',
-    );
-    t.equal(
-      queuedReplicas[0].options.isJoiningExistingGroup,
-      true,
-      'join-time message-group replicas should be marked as joining existing groups',
-    );
-    t.equal(registerCalls.length, 1,
-      'initialized MOVE runtime should transfer canonical row ownership once');
-    t.match(registerCalls[0], {
-      groupId: 'mg-1',
-      replicaId: 'mg-1-r2',
-      options: {status: 'stopped'},
-    }, 'handoff stages STOPPED before the separate exact activation CAS');
-  },
-);
+  t.throws(() => owner.assertReplicaStartupOwnership('mg-1-r2'),
+    /replica_owner_conflict/i,
+    'a MOVE_REPLICA assignment authorizes no takeover');
+  t.doesNotThrow(() => owner.assertReplicaStartupOwnership('mg-joining-r0'),
+    'a replica no row names may start');
+});

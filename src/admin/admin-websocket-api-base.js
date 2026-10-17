@@ -54,8 +54,6 @@ const {
 } = ADMIN_WEBSOCKET_API_SHARED;
 
 const ADMIN_FIELD = Object.freeze({
-  CONFIG_DUMP_TIMEOUT: 'CACHE_DUMP_TIMEOUT_MS',
-  DUMP_TIMEOUT_MS: 'cacheDumpTimeoutMs',
   LOCAL_DUMP_HANDLER: 'executeLocalCacheDumpEnvelope',
   LIVE_MAP: 'liveQueryMap',
   MUTATION_TARGET: 'cacheMutationTarget',
@@ -195,9 +193,6 @@ class AdminWebSocketAPIBase {
     this.queryTimeoutMs =
       config.get(ADMIN_CONFIG_KEY.QUERY_TIMEOUT_MS) ||
       ADMIN_DEFAULT.QUERY_TIMEOUT_MS;
-    this[ADMIN_FIELD.DUMP_TIMEOUT_MS] =
-      config.get(ADMIN_CONFIG_KEY[ADMIN_FIELD.CONFIG_DUMP_TIMEOUT]) ||
-      ADMIN_DEFAULT[ADMIN_FIELD.CONFIG_DUMP_TIMEOUT];
     this.logger = this.initLogger();
     this.fastify = null;
     this.initialized = false;
@@ -231,6 +226,7 @@ class AdminWebSocketAPIBase {
     this.preflightSnapshot = new AdminPreflightSnapshot({
       [ADMIN_FIELD.STORAGE_VIEW]: this[ADMIN_FIELD.STORAGE_VIEW],
       nodeId: this.nodeId,
+      logger: this.logger,
       messageRouter: this.messageRouter,
       [ADMIN_FIELD.MUTATION_TARGET]: this[ADMIN_FIELD.MUTATION_TARGET],
       sqlQueryEngine: this.sqlQueryEngine,

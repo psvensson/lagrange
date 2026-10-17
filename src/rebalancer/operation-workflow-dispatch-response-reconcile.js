@@ -18,6 +18,7 @@ import {
 import {
   isBoundMembershipPublicationEpoch,
 } from './replica-operation-membership-epoch-binding.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 const {
   DISPATCH_RETRY_DELAY_MS,
   FAILURE_LOG_LEVEL,
@@ -44,6 +45,47 @@ const {
   isDeliveredTransportDeliveryOutcome,
   resolveOperationHandlerType,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
+const REPLICA_OPERATION_DISPATCH_WAIT = Object.freeze({
+  wait: 'REPLICA_OPERATION_DISPATCH_TIMEOUT_MS',
+  awaited: 'replica operation dispatch response from the target node',
+});
+const DISPATCH_OBSERVED_FIELDS = Object.freeze([
+  'workflowStep', 'type', 'targetNodeId', 'sourceNodeId',
+]);
+const DISPATCH_SCOPE_FIELDS = Object.freeze(['partitionId', 'operationId']);
+
+/**
+ * The bounded critical dispatch spent its deadline without a response: one
+ * wait_bound_spent ERROR (the deferred retry that follows is unchanged).
+ * @param {Object} owner
+ * @param {Object} operation
+ * @param {number} boundMs
+ * @param {number} startedAtMs - Date.now() when the deadline was armed (the
+ *   deadline timer is the platform setTimeout).
+ * @return {void}
+ */
+function reportReplicaOperationDispatchSpent(
+  owner, operation, boundMs, startedAtMs) {
+  reportWaitBoundSpent(owner.logger, {
+    ...REPLICA_OPERATION_DISPATCH_WAIT,
+    boundMs,
+    elapsedMs: Date.now() - startedAtMs,
+    lastObserved: () => pickDispatchFields(operation, DISPATCH_OBSERVED_FIELDS),
+    scope: () => ({
+      nodeId: owner.nodeId ?? null,
+      ...pickDispatchFields(operation, DISPATCH_SCOPE_FIELDS),
+    }),
+  });
+}
+
+function pickDispatchFields(operation, fieldNames) {
+  const picked = {};
+  for (const fieldName of fieldNames) {
+    picked[fieldName] = operation?.[fieldName] ?? null;
+  }
+  return picked;
+}
+
 // Bounded memory for the first-attempt dispatch log discrimination; clearing
 // on overflow only means one extra info line per live operation step.
 const SEND_OPERATION_LOG_KEY_CAP = 2048;
@@ -210,8 +252,15 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
     deliveryPromise,
   ) {
     let timeoutHandle;
+    const startedAtMs = Date.now();
     const timeoutPromise = new Promise((_, reject) => {
       timeoutHandle = setTimeout(() => {
+        reportReplicaOperationDispatchSpent(
+          this,
+          operation,
+          this.replicaOperationDispatchTimeoutMs,
+          startedAtMs,
+        );
         reject(this.buildReplicaOperationDispatchTimeoutError(operation));
       }, this.replicaOperationDispatchTimeoutMs);
     });

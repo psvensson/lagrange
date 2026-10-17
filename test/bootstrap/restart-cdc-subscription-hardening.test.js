@@ -129,6 +129,7 @@ function createServiceWithCapturingLogger(overrides = {}) {
   // Capture structured log output by wrapping the logger
   const originalWarn = service.logger.warn.bind(service.logger);
   const originalInfo = service.logger.info.bind(service.logger);
+  const originalError = service.logger.error.bind(service.logger);
   service.logger.warn = (msg, payload) => {
     logs.push({level: 'warn', msg, payload});
     return originalWarn(msg, payload);
@@ -136,6 +137,10 @@ function createServiceWithCapturingLogger(overrides = {}) {
   service.logger.info = (msg, payload) => {
     logs.push({level: 'info', msg, payload});
     return originalInfo(msg, payload);
+  };
+  service.logger.error = (msg, payload) => {
+    logs.push({level: 'error', msg, payload});
+    return originalError(msg, payload);
   };
 
   return {service, logs};
@@ -265,15 +270,14 @@ test('success after retries sets cdcSubscriptionsActive ' +
   );
   t.ok(payload.subscriptionStatus, 'completion log includes subscriptionStatus');
 
-  // No exhaustion log should be emitted on success
+  // No spent-wait log should be emitted on success
   const exhaustedLogs = logs.filter(
-    (l) => l.msg ===
-      JOINING_LOG_MSG.CDC_SUBSCRIPTION_RETRY_EXHAUSTED,
+    (l) => l.payload?.event === 'wait_bound_spent',
   );
   t.equal(
     exhaustedLogs.length,
     0,
-    'no exhaustion log on successful retry',
+    'no wait_bound_spent log on successful retry',
   );
 });
 
@@ -308,44 +312,40 @@ test('timeout path emits diagnostic summary when ' +
 
   await service.subscribeToCDCEvents();
 
-  // Verify timeout log was emitted
-  const timeoutLogs = logs.filter(
-    (l) => l.msg ===
-      JOINING_LOG_MSG.CDC_REESTABLISHMENT_TIMEOUT,
+  // The spent budget is reported once, as an ERROR wait_bound_spent line
+  // that carries the former timeout and exhaustion diagnostics.
+  const spentLogs = logs.filter(
+    (l) => l.payload?.event === 'wait_bound_spent',
   );
-  t.ok(
-    timeoutLogs.length > 0,
-    'timeout diagnostic emitted when budget expires',
+  t.equal(spentLogs.length, 1, 'exactly one wait_bound_spent line');
+  t.equal(spentLogs[0].level, 'error', 'spent wait logs at ERROR');
+  const payload = spentLogs[0].payload;
+  t.equal(
+    payload.wait,
+    'CDC_REESTABLISHMENT.TIMEOUT_MS',
+    'names the spent time budget',
   );
-
-  // Verify timeout payload has required fields
-  const payload = timeoutLogs[0].payload;
-  t.ok(payload.nodeId, 'timeout log includes nodeId');
-  t.ok(payload.tables, 'timeout log includes tables');
+  t.equal(payload.scope.nodeId, TEST_NODE_ID, 'scope includes nodeId');
+  t.ok(payload.lastObserved.tables, 'lastObserved includes tables');
   t.ok(
-    typeof payload.attempt === 'number',
-    'timeout log includes attempt number',
+    typeof payload.lastObserved.budgetSpentAtAttempt === 'number',
+    'lastObserved includes the attempt the budget was spent at',
   );
   t.ok(
     typeof payload.elapsedMs === 'number',
-    'timeout log includes elapsedMs',
-  );
-
-  // Verify exhaustion log was also emitted (retries exhausted
-  // because timeout cut them short)
-  const exhaustedLogs = logs.filter(
-    (l) => l.msg ===
-      JOINING_LOG_MSG.CDC_SUBSCRIPTION_RETRY_EXHAUSTED,
+    'spent log includes elapsedMs',
   );
   t.ok(
-    exhaustedLogs.length > 0,
-    'exhaustion summary emitted after timeout',
+    payload.lastObserved.subscriptionStatus,
+    'lastObserved includes subscriptionStatus',
   );
-  const exhaustedPayload = exhaustedLogs[0].payload;
-  t.ok(
-    exhaustedPayload.subscriptionStatus,
-    'exhaustion log includes subscriptionStatus',
+  t.equal(
+    payload.lastObserved.lastError,
+    'Persistent subscription failure',
+    'lastObserved includes the last subscription error',
   );
+  t.equal(service.cdcSubscriptionsActive, true,
+    'post-expiry behaviour unchanged: subscriptions still marked active');
 });
 
 test('partial listener cleanup on retry removes ' +

@@ -278,11 +278,13 @@ describe('runtime access policy owner', () => {
           {operation: 'read', table: 'table:global.secret'},
         ],
       );
-      assert.equal(
-        statementAccesses(new SQLParser(
+      // INSERT ... SELECT never reaches the policy: the parser refuses it
+      // (its source query cannot be carried, so it is not executed).
+      assert.throws(
+        () => new SQLParser(
           'INSERT INTO orders (id) SELECT id FROM secret',
-        ).parse()).allowedStatement,
-        false,
+        ).parse(),
+        {code: 'UNSUPPORTED_SQL_FEATURE'},
       );
     });
 

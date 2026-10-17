@@ -121,6 +121,14 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
     const runtimeRoutingRepairState = {
       awaited: false,
     };
+    let lastAttempt = 0;
+    attemptBudget.observeSpent(() => ({
+      attempts: lastAttempt,
+      lastError,
+      lastErrorCode: lastFailureDetails?.errorCode ?? null,
+      lastParticipantNodeId: lastFailureDetails?.participantNodeId ?? null,
+      awaitedRoutingRepair,
+    }));
     const {
       buildRequest,
       buildSuccessResult,
@@ -140,10 +148,16 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
     const waitForLeaderRetryBudget = async () => waitForRetryBudget(
       resolvePartitionRetryDelayMs(this.leaderRetryDelayMs, lastFailureDetails),
     );
+    const returnReadAttemptsSpent = () => {
+      attemptBudget.reportReadAttemptsSpent(maxAttempts);
+      return buildLastFailureResult();
+    };
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      lastAttempt = attempt;
       this.throwIfCancelled(cancellationToken);
       const attemptBudgetMs = getRemainingExecutionBudgetMs();
       if (attemptBudgetMs !== null && attemptBudgetMs <= 0) {
+        attemptBudget.reportDeadlineSpentBeforeAttempt();
         return {
           ...buildFailureResult(
             lastError || ERRORS.QUERY_FAILED,
@@ -772,7 +786,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           }
           continue;
         }
-        return buildLastFailureResult();
+        return returnReadAttemptsSpent();
       }
       if (candidateState.shouldDeferPartitionRetry()) {
         if (attempt < maxAttempts) {
@@ -781,7 +795,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           }
           continue;
         }
-        return buildLastFailureResult();
+        return returnReadAttemptsSpent();
       }
       if (attempt < maxAttempts) {
         if (!(await waitForLeaderRetryBudget())) {
@@ -789,12 +803,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
         }
       }
     }
-    return {
-      ...buildFailureResult(
-        lastError || ERRORS.QUERY_FAILED,
-        lastFailureDetails,
-      ),
-    };
+    return returnReadAttemptsSpent();
   }
 
   /**

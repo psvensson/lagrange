@@ -161,9 +161,9 @@ test('truncation at or below the boundary is witness-silent and lossless',
         'committed-truncation raft-safety witness');
       t.equal(adapter.has(liveEntry.index), true,
         'the committed live entry above the boundary survives');
-      adapter.removeEntriesAfter(fixture.boundaryIndex);
+      adapter.removeFrom(fixture.boundaryIndex);
       t.equal(adapter.has(liveEntry.index), true,
-        'removeEntriesAfter at the boundary cannot reach committed entries');
+        'removeFrom at the boundary cannot reach committed entries');
     } finally {
       fixture.close();
     }

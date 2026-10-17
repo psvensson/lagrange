@@ -5,11 +5,16 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  createControllableMessageGroupService,
   createTestTransport,
   createTrafficReadinessState,
   registerMessageGroupServiceLifecycleHooks,
+  reportingConsensusPort,
   setTestPortBase,
 } from './message-group-service-test-support.js';
+import {
+  ControllableConsensusPort,
+} from '../test-helpers/controllable-consensus-port.js';
 import {
   MessageGroupService,
   RaftRole,
@@ -42,10 +47,11 @@ import {
   STATE,
   TABLES,
 } from '../../src/constants/index.js';
-import LifeRaft from '@markwylde/liferaft';
 import {
-  RAFT_EVENT,
-} from '../../src/raft/constants.js';
+  RAFT_MEMBERSHIP_OPERATION,
+} from '../../src/raft/raft-operation-port-constants.js';
+import {RAFT_OPERATION_PORT_REQUEST} from
+  '../../src/raft/raft-operation-port-request.js';
 import {
 } from '../../src/control-plane/control-plane-constants.js';
 import {
@@ -54,6 +60,7 @@ import {
 } from '../../src/control-plane/control-plane-workload-profile.js';
 import {
 } from '../../src/control-plane/pressure-governor.js';
+import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
 
 const TEST_DELIVERY_PRIORITY = Object.freeze({
   BACKGROUND: 'background',
@@ -131,7 +138,7 @@ test(
       setServiceNodeResolver() {},
     };
 
-    const service = new MessageGroupService({
+    const service = new MessageGroupService(withTestDbPath({
       groupId: TEST_STRICT_RECOVERY_FORWARD_GROUP_ID,
       replicaId: TEST_STRICT_RECOVERY_FORWARD_LOCAL_REPLICA_ID,
       nodeId: TEST_STRICT_RECOVERY_FORWARD_LOCAL_NODE_ID,
@@ -141,12 +148,10 @@ test(
         TEST_STRICT_RECOVERY_FORWARD_LOCAL_REPLICA_ID,
       ],
       transport,
-    });
+    }));
 
     service.initialized = true;
-    service.raft = {
-      state: LifeRaft.FOLLOWER,
-    };
+    service.raft = reportingConsensusPort({role: RaftRole.FOLLOWER});
     service.leaderId = TEST_STRICT_RECOVERY_FORWARD_LEADER_REPLICA_ID;
     service.cdcIntegrationService = {
       canWriteSystemTableLocally() {
@@ -246,7 +251,7 @@ test(
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
-      const service = new MessageGroupService({
+      const service = new MessageGroupService(withTestDbPath({
         groupId: 'mg-strict-recovery-local',
         replicaId: 'mg-strict-recovery-local-r3',
         nodeId,
@@ -256,12 +261,10 @@ test(
           'mg-strict-recovery-local-r3',
         ],
         transport: router,
-      });
+      }));
 
       service.initialized = true;
-      service.raft = {
-        state: LifeRaft.FOLLOWER,
-      };
+      service.raft = reportingConsensusPort({role: RaftRole.FOLLOWER});
       service.cdcIntegrationService = {
         canWriteSystemTableLocally(tableName) {
           return tableName === TABLES.NODES;
@@ -381,7 +384,7 @@ test(
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
-      const service = new MessageGroupService({
+      const service = new MessageGroupService(withTestDbPath({
         groupId: 'mg-strict-decision-defer',
         replicaId: 'mg-strict-decision-defer-r3',
         nodeId,
@@ -391,12 +394,10 @@ test(
           'mg-strict-decision-defer-r3',
         ],
         transport: router,
-      });
+      }));
 
       service.initialized = true;
-      service.raft = {
-        state: LifeRaft.FOLLOWER,
-      };
+      service.raft = reportingConsensusPort({role: RaftRole.FOLLOWER});
       service.forwardCDCEventToLeader = async () => {
         throw new Error(
           'strict leader-unknown defer should not attempt an immediate forward',
@@ -508,12 +509,12 @@ test(
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
-      const service = new MessageGroupService({
+      const service = new MessageGroupService(withTestDbPath({
         groupId: 'mg-forward-repair',
         replicaId: 'mg-forward-repair-r3',
         nodeId,
         transport: router,
-      });
+      }));
 
       let selectionCalls = 0;
       let repairCalls = 0;
@@ -596,12 +597,12 @@ test(
       async shutdown() {},
       setServiceNodeResolver() {},
     };
-    const service = new MessageGroupService({
+    const service = new MessageGroupService(withTestDbPath({
       groupId: TEST_CDC_VISIBILITY_REPLACE_GROUP_ID,
       replicaId: TEST_CDC_VISIBILITY_REPLACE_REPLICA_ID,
       nodeId: TEST_CDC_VISIBILITY_REPLACE_NODE_ID,
       transport,
-    });
+    }));
     service.resolveCDCForwardSelection = () => ({
       strictForwarding: true,
       strictForwardRetryAfterMs: TEST_CDC_VISIBILITY_REPLACE_RETRY_AFTER_MS,
@@ -647,7 +648,7 @@ test(
     const {router, nodeId, cleanup} = await createTestTransport();
     const readinessState = createTrafficReadinessState();
     try {
-      const service = new MessageGroupService({
+      const service = new MessageGroupService(withTestDbPath({
         groupId: TEST_ADDRESSED_STRICT_CONVERGENCE_GROUP_ID,
         replicaId: TEST_ADDRESSED_STRICT_CONVERGENCE_LOCAL_REPLICA_ID,
         nodeId,
@@ -658,16 +659,14 @@ test(
         ],
         transport: router,
         bootstrapReadinessState: readinessState,
-      });
+      }));
 
       readinessState.transitionTo(LIFECYCLE_PHASE.CONTROL_READY, {
         ready: false,
         reasons: [LIFECYCLE_REASON.LEADER_METADATA_INCOMPLETE],
       });
       service.initialized = true;
-      service.raft = {
-        state: LifeRaft.FOLLOWER,
-      };
+      service.raft = reportingConsensusPort({role: RaftRole.FOLLOWER});
       service.leaderId =
         TEST_ADDRESSED_STRICT_CONVERGENCE_REMOTE_REPLICA_ID;
       service.transport.getConnectionState = (candidateNodeId) => {
@@ -786,7 +785,7 @@ test(
     const {router, nodeId, cleanup} = await createTestTransport();
     const readinessState = createTrafficReadinessState();
     try {
-      const service = new MessageGroupService({
+      const service = new MessageGroupService(withTestDbPath({
         groupId: TEST_ADDRESSED_STRICT_CONVERGENCE_GROUP_ID,
         replicaId: TEST_ADDRESSED_STRICT_CONVERGENCE_LOCAL_REPLICA_ID,
         nodeId,
@@ -797,27 +796,16 @@ test(
         ],
         transport: router,
         bootstrapReadinessState: readinessState,
-      });
+      }));
 
       readinessState.transitionTo(LIFECYCLE_PHASE.CONTROL_READY, {
         ready: false,
         reasons: [LIFECYCLE_REASON.LEADER_METADATA_INCOMPLETE],
       });
       service.initialized = true;
-      service.raft = {
-        state: LifeRaft.FOLLOWER,
-      };
+      service.raft = reportingConsensusPort({role: RaftRole.FOLLOWER});
       service.leaderId =
         TEST_ADDRESSED_STRICT_CONVERGENCE_REMOTE_REPLICA_ID;
-      service.raftProvider = {
-        async proposeWithLeaderRouting(_raft, command, options) {
-          await options.forwardToLeader(command, {
-            attempt: 1,
-            mode: 'forward',
-          });
-        },
-        joinPeer() {},
-      };
       service.transport.getConnectionState = (candidateNodeId) => {
         return candidateNodeId ===
           TEST_ADDRESSED_STRICT_CONVERGENCE_REMOTE_NODE_ID ?
@@ -920,12 +908,13 @@ test(
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
-      const service = new MessageGroupService({
+      const port = new ControllableConsensusPort();
+      const service = createControllableMessageGroupService({
         groupId: 'mg-leader-change-demotion',
         replicaId: 'mg-leader-change-demotion-r1',
         nodeId,
         transport: router,
-      });
+      }, port);
 
       await service.initialize();
       t.equal(service.role, RaftRole.LEADER, 'single replica should start as leader');
@@ -933,19 +922,17 @@ test(
       const retryTimer = setTimeout(() => {}, 10000);
       service.leaderNodeMutationHelper.retryTimer = retryTimer;
 
-      // Regression: liferaft may emit a leader-change notification without a
-      // separate follower event when leadership moves away from the local replica.
-      service.raft.emit(
-        RAFT_EVENT.LEADER_CHANGE,
-        'node-2/message-group/mg-leader-change-demotion-r2',
-      );
+      // The core no longer leads, and only the leader change (naming the new
+      // leader's replica identity) reaches the replica: no follower event.
+      port.role = RaftRole.FOLLOWER;
+      port.emitLeaderChange('mg-leader-change-demotion-r2');
 
       t.equal(service.role, RaftRole.FOLLOWER, 'leader-change should demote local role');
       t.equal(service.isLeader, false, 'leader-change should clear leader flag');
       t.equal(
         service.leaderId,
         'mg-leader-change-demotion-r2',
-        'leader-change should normalize the new leader to a replica id',
+        'leader-change should publish the new leader replica id',
       );
       t.equal(
         service.leaderNodeUpdateRetryTimer,
@@ -977,12 +964,12 @@ test('MessageGroupService - forward rejection logs bounded leader diagnostics',
     };
 
     const warningLogs = [];
-    const service = new MessageGroupService({
+    const service = new MessageGroupService(withTestDbPath({
       groupId: 'mg-forward-diag',
       replicaId: 'mg-forward-diag-r1',
       nodeId: 'node-forward-diag',
       transport,
-    });
+    }));
     service.logger.warn = (msg, fields) => {
       warningLogs.push({msg, fields});
     };
@@ -1040,14 +1027,14 @@ test('MessageGroupService - buildPeerAddress follows cache updates after relocat
     const initialAddress = 'peer-node-a/message-group/mg-1-r2';
     const relocatedAddress = 'peer-node-b/message-group/mg-1-r2';
 
-    const service = new MessageGroupService({
+    const service = new MessageGroupService(withTestDbPath({
       groupId: 'mg-1',
       replicaId: 'mg-1-r1',
       nodeId,
       replicaIds: ['mg-1-r1', 'mg-1-r2'],
       peerAddresses: [`stale-node/message-group/${peerId}`],
       transport: router,
-    });
+    }));
 
     service.systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, {
       service_id: peerId,
@@ -1091,14 +1078,14 @@ test('MessageGroupService - buildPeerAddress logs structured diagnostics ' +
     const hintAddress = `seed-node/message-group/${peerId}`;
     const warningLogs = [];
 
-    const service = new MessageGroupService({
+    const service = new MessageGroupService(withTestDbPath({
       groupId: 'mg-1',
       replicaId: 'mg-1-r1',
       nodeId,
       replicaIds: ['mg-1-r1', 'mg-1-r2'],
       peerAddresses: [hintAddress],
       transport: router,
-    });
+    }));
 
     const originalWarn = service.logger.warn?.bind(service.logger);
     service.logger.warn = (msg, fields) => {
@@ -1135,7 +1122,7 @@ test('MessageGroupService - buildPeerAddress logs structured diagnostics ' +
 });
 
 test(
-  'MessageGroupService - buildPeerAddress prefers live raft peer addresses before bootstrap hints',
+  'MessageGroupService - buildPeerAddress prefers the consensus configuration peer address before bootstrap hints',
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
@@ -1144,18 +1131,18 @@ test(
       const hintAddress = `seed-node/message-group/${peerId}`;
       const warningLogs = [];
 
-      const service = new MessageGroupService({
+      const service = new MessageGroupService(withTestDbPath({
         groupId: 'mg-1',
         replicaId: 'mg-1-r1',
         nodeId,
         replicaIds: ['mg-1-r1', 'mg-1-r2'],
         peerAddresses: [hintAddress],
         transport: router,
-      });
+      }));
 
-      service.raft = {
-        nodes: [{address: liveAddress}],
-      };
+      service.raft = reportingConsensusPort({
+        peers: [{address: liveAddress, replicaIdentity: peerId}],
+      });
 
       const originalWarn = service.logger.warn?.bind(service.logger);
       service.logger.warn = (msg, fields) => {
@@ -1182,7 +1169,7 @@ test(
 );
 
 test(
-  'MessageGroupService - cache reconciliation refreshes moved peers and joins new replicas',
+  'MessageGroupService - cache reconciliation re-addresses a moved peer by identity and admits new replicas',
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
@@ -1204,30 +1191,17 @@ test(
         status: SERVICE_STATUS.ACTIVE,
       });
 
-      const joinedAddresses = [];
-      const leftAddresses = [];
-      const service = new MessageGroupService({
+      const port = new ControllableConsensusPort();
+      const service = createControllableMessageGroupService({
         groupId: 'mg-1',
         replicaId: 'mg-1-r1',
         nodeId,
         replicaIds: ['mg-1-r1', 'mg-1-r2'],
         peerAddresses: ['node-old/message-group/mg-1-r2'],
         transport: router,
-      });
-
-      service.raft = {
-        nodes: [{address: 'node-old/message-group/mg-1-r2'}],
-        leave(address) {
-          leftAddresses.push(address);
-          this.nodes = this.nodes.filter((node) => node?.address !== address);
-        },
-      };
-      service.raftProvider = {
-        joinPeer(_raft, address) {
-          joinedAddresses.push(address);
-          service.raft.nodes.push({address});
-        },
-      };
+      }, port);
+      await service.initialize();
+      port.setRole(RaftRole.LEADER);
 
       service.systemTableCache = systemTableCache;
       await new Promise((resolve) => setImmediate(resolve));
@@ -1237,15 +1211,16 @@ test(
         'node-new/message-group/mg-1-r2',
         'cache-backed ownership should override stale bootstrap peer hints',
       );
-      t.same(
-        leftAddresses,
-        ['node-old/message-group/mg-1-r2'],
-        'stale raft peer address should be replaced when ownership moves',
+      t.equal(
+        port.request[RAFT_OPERATION_PORT_REQUEST.RESOLVE_PEER_ADDRESS](
+          'mg-1-r2'),
+        'node-new/message-group/mg-1-r2',
+        'consensus deliveries to the moved peer resolve its new address by identity',
       );
       t.same(
-        joinedAddresses,
-        ['node-new/message-group/mg-1-r2'],
-        'reconciliation should join the moved peer from cache rows',
+        port.confChanges,
+        [],
+        'a moved peer keeps its identity in the configuration: it is neither removed nor admitted again',
       );
 
       systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
@@ -1260,17 +1235,19 @@ test(
       await new Promise((resolve) => setImmediate(resolve));
 
       t.same(
-        joinedAddresses,
-        [
-          'node-new/message-group/mg-1-r2',
-          'node-3/message-group/mg-1-r3',
-        ],
-        'newly visible peers should be joined from later cache rows',
+        port.confChanges,
+        [{
+          type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER,
+          replicaIdentity: 'mg-1-r3',
+          peerAddress: 'node-3/message-group/mg-1-r3',
+        }],
+        'newly visible replicas should be admitted by identity from later cache rows',
       );
       t.ok(
         service.replicaIds.includes('mg-1-r3'),
         'replicaIds should expand to include cache-discovered peers',
       );
+      await service.shutdown();
     } finally {
       await cleanup();
     }

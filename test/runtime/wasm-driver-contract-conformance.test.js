@@ -41,11 +41,33 @@ const CONTRACT_METHODS = [
   'invoke',
 ];
 
+function makeConsensusLifecycle() {
+  const replicas = new Map();
+  return {
+    createReplica(definition) {
+      replicas.set(definition.serviceId, {serviceId: definition.serviceId});
+    },
+    async startReplica(serviceId) {
+      return replicas.has(serviceId) ? {started: true} : null;
+    },
+    async stopReplica(serviceId) {
+      replicas.delete(serviceId);
+    },
+    getReplica(serviceId) {
+      return replicas.get(serviceId) ?? null;
+    },
+  };
+}
+
+function makeDriver() {
+  return new WasmComponentDriver({wasmServiceLifecycle: makeConsensusLifecycle()});
+}
+
 describe('WasmComponentDriver contract conformance', () => {
   let driver;
 
   beforeEach(() => {
-    driver = new WasmComponentDriver();
+    driver = makeDriver();
   });
 
   // -------------------------------------------------------
@@ -335,7 +357,7 @@ describe('WasmComponentDriver contract conformance', () => {
       await fc.assert(fc.asyncProperty(
         fc.string({minLength: 1}).filter((s) => s.trim().length > 0),
         async (ref) => {
-          const freshDriver = new WasmComponentDriver();
+          const freshDriver = makeDriver();
           const def = {serviceId: 'svc-pbt', runtime_ref: ref};
           const result = await freshDriver.prepare(def, {});
           assert.equal(result.status, PREPARE_STATUS.READY);
@@ -347,7 +369,7 @@ describe('WasmComponentDriver contract conformance', () => {
       await fc.assert(fc.asyncProperty(
         fc.string({minLength: 1}).filter((s) => s.trim().length > 0),
         async (ref) => {
-          const freshDriver = new WasmComponentDriver();
+          const freshDriver = makeDriver();
           const def = {serviceId: 'svc-pbt', runtime_ref: ref};
           await freshDriver.prepare(def, {});
           const result = await freshDriver.start(

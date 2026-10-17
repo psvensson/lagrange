@@ -1,4 +1,37 @@
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
+const REPLICA_CONTEXT_METADATA_WAIT = Object.freeze({
+  wait: 'REPLICA_HANDLER_DEFAULT.SYNC_TIMEOUT_MS',
+  awaited: 'partition/table metadata visible to resolve the replica context',
+});
+
+/**
+ * The replica-context metadata wait spent its bound: one wait_bound_spent
+ * ERROR with the last transient resolution error and the hydration the
+ * handler attempted.
+ * @param {Object} handler - The ReplicaHandler.
+ * @param {Object} spent - {partitionId, replicaId, startedAtMs, lastError,
+ *   metadataHydrationCount, polls}.
+ * @return {void}
+ */
+function reportReplicaContextMetadataSpent(handler, spent) {
+  reportWaitBoundSpent(handler.logger, {
+    ...REPLICA_CONTEXT_METADATA_WAIT,
+    boundMs: handler.syncTimeoutMs,
+    elapsedMs: Date.now() - spent.startedAtMs,
+    lastObserved: {
+      lastError: spent.lastError?.message ?? null,
+      metadataHydratedRows: spent.metadataHydrationCount,
+      polls: spent.polls,
+    },
+    scope: {
+      nodeId: handler.nodeId,
+      partitionId: spent.partitionId,
+      replicaId: spent.replicaId,
+    },
+  });
+}
 
 function assignReplicaHandlerRuntimeMetadataMethods(
   ReplicaHandler,
@@ -29,12 +62,15 @@ function assignReplicaHandlerRuntimeMetadataMethods(
   class ReplicaHandlerRuntimeMetadataMethods {
     async resolveReplicaContextWithRetry(partitionId, replicaId, options = {}) {
       this.throwIfShuttingDown();
-      const deadline = Date.now() + this.syncTimeoutMs;
+      const startedAtMs = Date.now();
+      const deadline = startedAtMs + this.syncTimeoutMs;
       let metadataWaitLogged = false;
       let lastError = null;
       let metadataHydrationCount = 0;
+      let polls = 0;
       while (Date.now() <= deadline) {
         this.throwIfShuttingDown();
+        polls += 1;
         try {
           const context = this.resolveReplicaContext(
             partitionId,
@@ -69,6 +105,14 @@ function assignReplicaHandlerRuntimeMetadataMethods(
           setTimeout(resolve, METADATA_RESOLUTION_POLL_INTERVAL_MS);
         });
       }
+      reportReplicaContextMetadataSpent(this, {
+        partitionId,
+        replicaId,
+        startedAtMs,
+        lastError,
+        metadataHydrationCount,
+        polls,
+      });
       this.clearHydratedMetadataSnapshot(partitionId);
       throw lastError || new Error(partitionMetadataMissingError(partitionId));
     }

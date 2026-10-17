@@ -24,6 +24,7 @@ const TRANSACTION_CONFIG_KEY = Object.freeze({
 });
 
 const TRANSACTION_DEFAULT = Object.freeze({
+  // ends-on: n/a dead (TRANSACTION_DEFAULT is never imported)
   TIMEOUT_MS: 30000,
   MAX_CONCURRENT: 100,
   CLEANUP_INTERVAL_MS: 5000,

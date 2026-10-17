@@ -3,7 +3,7 @@ import {
   TRANSPORT_TYPEOF,
 } from '../constants/transport.js';
 import {buildTransportDeliveryOutcome} from './transport-semantic-outcome.js';
-import {DELIVERY_SOURCE_MESSAGE_UNWRAP_LIMIT, EMPTY_DELIVERY_SOURCE, LOCAL_NUM_ONE, MESSAGE_ROUTER_LITERAL, OUTBOUND_QUEUE_TARGET_FALLBACK_IN_FLIGHT_SOURCE_LIMIT_DIVISOR, OutboundDeliveryPriority, QUERY_DATA_PLANE_MESSAGE_TYPE, RETIRED_PENDING_RESPONSE_REASON, SERVICE_RESPONSE_DISPOSITION_KIND, buildTypelessCdcDeliverySource, buildTypelessQueryDeliverySource, extractSqlOperationKind, extractSqlTableName, isSupersedableRaftHeartbeatAppend, normalizeIdentifier, summarizeRaftAppendCommand} from './message-router-shared-vocabulary.js';
+import {DELIVERY_SOURCE_MESSAGE_UNWRAP_LIMIT, EMPTY_DELIVERY_SOURCE, LOCAL_NUM_ONE, MESSAGE_ROUTER_LITERAL, OUTBOUND_QUEUE_TARGET_FALLBACK_IN_FLIGHT_SOURCE_LIMIT_DIVISOR, OutboundDeliveryPriority, QUERY_DATA_PLANE_MESSAGE_TYPE, RETIRED_PENDING_RESPONSE_REASON, SERVICE_RESPONSE_DISPOSITION_KIND, buildTypelessCdcDeliverySource, buildTypelessQueryDeliverySource, extractSqlOperationKind, extractSqlTableName, normalizeIdentifier} from './message-router-shared-vocabulary.js';
 import {isCriticalTransportTargetAddress} from '../bootstrap/system-partition-classification.js';
 import {buildPendingSourceAdmission, buildPendingSourceLimitEvidence, countCriticalPendingByAdmissionSource, countCriticalPendingBySource, countPendingBySource, normalizeQueueMaxPending, normalizeQueuedDeliverySource, resolveBoundedCriticalReserve, resolveBoundedReadinessReserve, resolveCriticalPendingSourceLimit, resolveDeliverySourceAdmissionKey, resolvePendingSourceLimit, resolveProportionalPendingSourceLimit, resolveQueuedDeliverySourceAdmissionKey} from './message-router-delivery-source-admission.js';
 
@@ -36,15 +36,6 @@ function resolveSemanticDeliverySourceMessage(message) {
 function buildDerivedDeliverySource(targetAddress, message) {
   const semanticMessage = resolveSemanticDeliverySourceMessage(message);
   const messageType = normalizeIdentifier(semanticMessage?.type)?.toLowerCase();
-  if (messageType === MESSAGE_ROUTER_LITERAL.STRING_APPEND) {
-    if (isSupersedableRaftHeartbeatAppend(semanticMessage)) {
-      return MESSAGE_ROUTER_LITERAL.STRING_RAFT_APPEND_HEARTBEAT;
-    }
-    const entry = Array.isArray(semanticMessage?.data) ?
-      semanticMessage.data[0] :
-      null;
-    return summarizeRaftAppendCommand(entry?.command);
-  }
   if (messageType === QUERY_DATA_PLANE_MESSAGE_TYPE.toLowerCase()) {
     const tableName = extractSqlTableName(semanticMessage?.sql);
     const operationKind = extractSqlOperationKind(semanticMessage?.sql);

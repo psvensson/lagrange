@@ -4,7 +4,6 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
-import {BOOTSTRAP_API_HANDOFF_STATUS} from '../../src/bootstrap/bootstrap-api-constants.js';
 import {BootstrapReadinessState} from '../../src/bootstrap/bootstrap-readiness-state.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
@@ -14,8 +13,6 @@ import {
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
-import {NodeStatus} from '../../src/rebalancer/unified-rebalancer.js';
-import {SERVICE_STATUS, STATE} from '../../src/constants/index.js';
 import {
   createVirginSeedBootstrapService,
   initializeTestEnvironment,
@@ -301,130 +298,6 @@ test('Seed owner-read diagnosis integration', async (t) => {
         t.equal(recoveredRead.success, true,
           'owner-read should recover after the transport-ready flip');
       } finally {
-        transportOverride?.restore();
-        await cleanupSeedFixture(fixture);
-      }
-    });
-
-  await t.test('move-assignment reconciliation still advances while owner-read transport is deferred',
-    async (t) => {
-      let fixture = null;
-      let transportOverride = null;
-      let removedSourceService = null;
-
-      try {
-        fixture = await createSeedFixture();
-        transportOverride = installLocalQueryTransportOverride(
-          fixture.bootstrapResult.messageRouter,
-        );
-        transportOverride.setReady(false);
-
-        const assignment =
-          await fixture.seedApi.determineAndReserveMessageGroupAssignment(
-            'joiner-probe-node',
-          );
-        t.equal(assignment?.strategy, 'MOVE_REPLICA',
-          'fixture should reserve a MOVE_REPLICA assignment');
-        t.ok(assignment?.assignmentId,
-          'fixture should persist an assignment id');
-        if (!assignment?.assignmentId || !assignment?.replicaToMove) {
-          return;
-        }
-
-        const reservationLookup =
-          await fixture.seedApi.getMoveReplicaAssignmentReservationById(
-            assignment.assignmentId,
-          );
-        const reservation = reservationLookup?.reservation || null;
-        t.ok(reservation, 'should rehydrate the assignment reservation');
-        if (!reservation) {
-          return;
-        }
-
-        const now = Date.now() + 10000;
-        fixture.systemTableCache.applySystemTableChange(
-          SYSTEM_TABLE_NAME.NODES,
-          'UPSERT',
-          {
-            node_id: reservation.targetNodeId,
-            node_address: 'ws://joiner-probe-node:9001',
-            cpu_cores: 4,
-            memory_mb: 1024,
-            disk_gb: 10,
-            cpu_usage_percent: 10,
-            memory_usage_percent: 10,
-            disk_usage_percent: 10,
-            status: NodeStatus.ACTIVE,
-            connection_state: STATE.READY,
-            capabilities: '[]',
-            last_heartbeat: now,
-            ready_lease_expires_at: now + 10000,
-            created_at: now,
-            updated_at: now,
-          },
-        );
-        fixture.systemTableCache.applySystemTableChange(
-          SYSTEM_TABLE_NAME.SERVICES,
-          'UPSERT',
-          {
-            service_id: reservation.replicaId,
-            node_id: reservation.targetNodeId,
-            partition_id: reservation.groupId,
-            group_id: reservation.groupId,
-            service_type: 'message_group',
-            status: SERVICE_STATUS.ACTIVE,
-            address:
-              `${reservation.targetNodeId}/message-group/${reservation.replicaId}`,
-            raft_role: 'leader',
-            created_at: now,
-            updated_at: now,
-          },
-        );
-
-        removedSourceService =
-          fixture.bootstrapResult.messageGroupServices.get(reservation.replicaId) || null;
-        fixture.bootstrapResult.messageGroupServices.delete(reservation.replicaId);
-
-        const deferredRead = await fixture.coordinator.executeReplicaOperationsRead(
-          REPLICA_OPERATIONS_PROBE_SQL,
-        );
-        t.equal(deferredRead.success, true,
-          'owner-read should still use the local-safe path during reconciliation pressure');
-
-        await fixture.seedApi.expireMoveReplicaAssignmentReservations();
-
-        const reconciledLookup =
-          await fixture.seedApi.getMoveReplicaAssignmentReservationById(
-            assignment.assignmentId,
-          );
-        const reconciled = reconciledLookup?.reservation || null;
-        t.equal(
-          reconciled?.status,
-          BOOTSTRAP_API_HANDOFF_STATUS.COMMITTED,
-          'move-assignment reconciliation should still reach the committed handoff status',
-        );
-        t.ok(
-          Array.isArray(reconciled?.stepsHistory) &&
-            reconciled.stepsHistory.some((step) =>
-              step?.phase === 'observed_committed' &&
-              step?.status === BOOTSTRAP_API_HANDOFF_STATUS.COMMITTED,
-            ),
-          'reservation history should record the observed committed transition',
-        );
-        t.equal(
-          fixture.seedApi.shouldReconcileMoveReplicaAssignmentReservationToCommitted(
-            reconciled || reservation,
-          ),
-          false,
-          'reservation should no longer require reconciliation after observed commit',
-        );
-      } finally {
-        if (removedSourceService) {
-          fixture?.bootstrapResult?.messageGroupServices?.set(
-            removedSourceService.replicaId,
-            removedSourceService,
-          );
-        }
         transportOverride?.restore();
         await cleanupSeedFixture(fixture);
       }

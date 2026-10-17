@@ -322,14 +322,6 @@ const CATALOGUE = Object.freeze({
       build: (run) => craft(run, {to: A, from: B, msgType: 18,
         term: run.driver.status(A).term + 1, reject: true})},
   ],
-  MsgReadIndex: [
-    {predicate: 'leader (crafted; the port never reads by index)',
-      requester: A, decisions: ['D1'],
-      control: 'a read-index request moves no decision input; it is ' +
-        'answered',
-      build: (run) => craft(run, {to: A, from: B, msgType: 15,
-        entries: [proposalEntry({readIndexContext: B})]})},
-  ],
 });
 
 // Types with no cell, and why (the census requires one or the other).
@@ -337,6 +329,9 @@ const NO_CELL = Object.freeze({
   MsgSnapshot: 'no production sender: a leader sends it only for compacted ' +
     'entries, and the binding exports no compaction; a crafted snapshot ' +
     'fabricates a log prefix and a configuration no peer holds',
+  MsgReadIndex: 'no production sender (the port never reads by index); ' +
+    'the ingress refuses it before the guard and the core ' +
+    '(message-type-without-producer), so no envelope of it is pending',
   MsgReadIndexResp: 'no production sender (the port never reads by index); ' +
     'a crafted response fabricates a commit index (raft.rs step_follower ' +
     'MsgReadIndexResp calls maybe_commit on the message\'s own index)',

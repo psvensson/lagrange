@@ -23,8 +23,8 @@ const {
   buildPriorityRecoveryOperationContextFromRecord,
   buildPriorityRecoveryPartitionAssessment,
   classifySystemPartition,
+  doesPriorityRecoveryOperationHoldAddBudget,
   resolvePriorityRecoveryActiveNodeCohort,
-  shouldPriorityRecoveryOperationBlockPlanning,
 } = REBALANCE_COORDINATOR_SHARED;
 
 async function getConcurrentAddCount(coordinator, options = {}) {
@@ -125,7 +125,7 @@ async function appendConcurrentPriorityPartitionOperations(
     );
   if (
     partitionAssessment &&
-    !shouldPriorityRecoveryOperationBlockPlanning(partitionAssessment)
+    !doesPriorityRecoveryOperationHoldAddBudget(partitionAssessment)
   ) {
     return;
   }

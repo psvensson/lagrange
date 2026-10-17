@@ -20,6 +20,7 @@
  */
 
 import {RUNTIME_KIND, RUNTIME_FIELD} from '../constants/runtime.js';
+import {FIELD} from '../constants/fields.js';
 import {CancellationToken} from '../query/cancellation-token.js';
 import {
   RuntimeDriver,
@@ -68,9 +69,9 @@ const WASM_COMPONENT_ERROR = Object.freeze({
   NOT_PREPARED:
     'driver has not been prepared for this service',
   NOT_STARTED: 'service is not running',
-  LIFECYCLE_NOT_OBJECT:
-    'wasmLifecycle must be a non-null object',
   CREATE_REPLICA_FAILED: 'failed to create WASM replica',
+  CONSENSUS_LIFECYCLE_REQUIRED:
+    'WASM consensus replica lifecycle is unavailable',
   START_REPLICA_FAILED: 'failed to start WASM replica',
   START_REPLICA_NO_RESULT:
     'failed to start WASM replica: lifecycle returned no startup result',
@@ -217,9 +218,9 @@ async function resolveRuntimeAccessTables(replicaContext) {
  * unified RuntimeDriver contract.
  *
  * Usage:
- *   const driver = new WasmComponentDriver();
+ *   const driver = new WasmComponentDriver({wasmServiceLifecycle});
  *   const validation = driver.validateDescriptor(definition);
- *   await driver.prepare(definition, {wasmLifecycle, replicaConfig});
+ *   await driver.prepare(definition, context);
  *   await driver.start(replicaContext);
  *   const health = await driver.health(replicaContext);
  *   await driver.stop(replicaContext);
@@ -245,13 +246,17 @@ class WasmComponentDriver extends RuntimeDriver {
     this._running = new Set();
 
     /**
-     * WasmServiceLifecycle reference keyed by serviceId.
-     * Stored per-service so different services can use
-     * different lifecycle instances if needed.
+     * The WasmServiceLifecycle of each service whose consensus replica
+     * this driver created.
      * @type {Map<string, Object>}
      * @private
      */
     this._lifecycles = new Map();
+
+    // The runtime composition root's lifecycle: it alone creates consensus
+    // replicas, on the storage its data directory owns. A prepare context
+    // cannot supply another.
+    this._wasmServiceLifecycle = options.wasmServiceLifecycle || null;
 
     this._artifactLoader = options.artifactLoader || null;
     this._componentRuntime =
@@ -315,14 +320,14 @@ class WasmComponentDriver extends RuntimeDriver {
   /**
    * Prepare runtime artifacts for a wasm_component service.
    *
-   * Optionally delegates to WasmServiceLifecycle.createReplica
-   * when a lifecycle instance is provided in context.
+   * Delegates to the composition root's WasmServiceLifecycle,
+   * when one is wired, to create the placed consensus replica.
    *
    * Idempotent: re-preparing an already-prepared service
    * updates the stored definition.
    *
    * @param {Object} definition - The service definition.
-   * @param {Object} context - Optional {wasmLifecycle, replicaConfig}.
+   * @param {Object} context - Optional prepare context.
    * @return {Promise<{status: string, error?: string}>}
    */
   async prepare(definition, context) {
@@ -350,7 +355,7 @@ class WasmComponentDriver extends RuntimeDriver {
       return this.#prepareRequestCell(definition, serviceId);
     }
 
-    return this.#prepareLegacyReplica(definition, context, serviceId);
+    return this.#prepareConsensusReplica(definition, serviceId);
   }
 
   async #prepareRequestCell(definition, serviceId) {
@@ -388,29 +393,27 @@ class WasmComponentDriver extends RuntimeDriver {
     }
   }
 
-  #prepareLegacyReplica(definition, context, serviceId) {
-    const wasmLifecycle = context?.wasmLifecycle;
-    if (wasmLifecycle) {
-      if (typeof wasmLifecycle !== 'object') {
-        throw new DriverLifecycleError(
-          this.kind, DRIVER_ACTION.PREPARE,
-          WASM_COMPONENT_ERROR.LIFECYCLE_NOT_OBJECT,
-        );
-      }
-
-      const replicaConfig = context.replicaConfig;
-      try {
-        wasmLifecycle.createReplica(definition, replicaConfig);
-      } catch (cause) {
-        return buildDriverStatusResult(
-          PREPARE_STATUS.FAILED,
-          `${WASM_COMPONENT_ERROR.CREATE_REPLICA_FAILED}` +
-            `${DRIVER_SEPARATOR.DETAIL}${cause.message}`,
-        );
-      }
-      this._lifecycles.set(serviceId, wasmLifecycle);
+  #prepareConsensusReplica(definition, serviceId) {
+    const lifecycle = this._wasmServiceLifecycle;
+    if (!lifecycle) {
+      return buildDriverStatusResult(
+        PREPARE_STATUS.FAILED,
+        WASM_COMPONENT_ERROR.CONSENSUS_LIFECYCLE_REQUIRED,
+      );
     }
-
+    try {
+      lifecycle.createReplica(definition, {
+        replicaId: definition[FIELD.REPLICA_ID],
+        replicaIds: definition[FIELD.REPLICA_IDS],
+      });
+    } catch (cause) {
+      return buildDriverStatusResult(
+        PREPARE_STATUS.FAILED,
+        `${cause.code || WASM_COMPONENT_ERROR.CREATE_REPLICA_FAILED}` +
+          `${DRIVER_SEPARATOR.DETAIL}${cause.message}`,
+      );
+    }
+    this._lifecycles.set(serviceId, lifecycle);
     this._prepared.set(serviceId, definition);
     return {status: PREPARE_STATUS.READY};
   }
@@ -418,10 +421,10 @@ class WasmComponentDriver extends RuntimeDriver {
   /**
    * Start a wasm_component service replica.
    *
-   * Optionally delegates to WasmServiceLifecycle.startReplica
-   * when a lifecycle instance was provided during prepare.
-   * Returns an endpoint intent if the lifecycle returns port
-   * and endpoint information.
+   * A request Cell starts on its Component runtime; a consensus replica
+   * starts through the WasmServiceLifecycle that prepared it, which opens
+   * its raft-rs consensus. Returns an endpoint intent if the lifecycle
+   * returns port and endpoint information.
    *
    * Idempotent: starting an already-running replica is a no-op.
    *
@@ -466,15 +469,17 @@ class WasmComponentDriver extends RuntimeDriver {
     }
 
     const lifecycle = this._lifecycles.get(serviceId);
-    if (lifecycle) {
-      return this.#startLegacyReplica(
-        lifecycle,
-        replicaContext,
-        serviceId,
+    if (!lifecycle) {
+      return buildDriverStatusResult(
+        START_STATUS.FAILED,
+        WASM_COMPONENT_ERROR.CONSENSUS_LIFECYCLE_REQUIRED,
       );
     }
-
-    return this.#startStandaloneReplica(replicaContext, serviceId);
+    return this.#startConsensusReplica(
+      lifecycle,
+      replicaContext,
+      serviceId,
+    );
   }
 
   async #startRequestCell(requestCell, replicaContext, serviceId) {
@@ -500,12 +505,12 @@ class WasmComponentDriver extends RuntimeDriver {
     }
   }
 
-  #startLegacyReplica(lifecycle, replicaContext, serviceId) {
+  async #startConsensusReplica(lifecycle, replicaContext, serviceId) {
     try {
-      const startResult = lifecycle.startReplica(
+      const startResult = await lifecycle.startReplica(
         serviceId, replicaContext.startOptions,
       );
-      return this.#projectLegacyStartResult(
+      return this.#projectConsensusStartResult(
         startResult,
         replicaContext,
         serviceId,
@@ -519,7 +524,7 @@ class WasmComponentDriver extends RuntimeDriver {
     }
   }
 
-  #projectLegacyStartResult(startResult, replicaContext, serviceId) {
+  #projectConsensusStartResult(startResult, replicaContext, serviceId) {
     if (!startResult) {
       return buildDriverStatusResult(
         START_STATUS.FAILED,
@@ -545,23 +550,6 @@ class WasmComponentDriver extends RuntimeDriver {
           replicaContext.address ??
           DRIVER_ENDPOINT_DEFAULT.HOST,
         port: startResult.port,
-        protocol: replicaContext.endpointProtocol ??
-          DRIVER_ENDPOINT_DEFAULT.PROTOCOL,
-      };
-    }
-    return result;
-  }
-
-  #startStandaloneReplica(replicaContext, serviceId) {
-    // No lifecycle — standalone/test mode
-    this._running.add(serviceId);
-
-    const result = {status: START_STATUS.RUNNING};
-    if (replicaContext.endpointHost &&
-        replicaContext.endpointPort) {
-      result.endpointIntent = {
-        host: replicaContext.endpointHost,
-        port: replicaContext.endpointPort,
         protocol: replicaContext.endpointProtocol ??
           DRIVER_ENDPOINT_DEFAULT.PROTOCOL,
       };

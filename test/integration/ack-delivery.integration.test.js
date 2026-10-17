@@ -31,6 +31,7 @@ import {
 import {createLifecycleCdcServiceForCache} from
   '../test-helpers/lifecycle-state-store.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
 
 let portCounter = 33000;
 
@@ -96,14 +97,14 @@ test('ACK delivery via real WebSocket', {timeout: 5000}, async (t) => {
     res.router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId, wsPort: port});
     await res.router.initialize({startServer: true});
 
-    res.mg = new MessageGroupService({
+    res.mg = new MessageGroupService(withTestDbPath({
       groupId: 'mg-ack',
       replicaId: 'mg-ack-r1',
       nodeId,
       replicaIds: ['mg-ack-r1'],
       peerAddresses: [`${nodeId}/message-group/mg-ack-r1`],
       transport: res.router,
-    });
+    }));
     res.router.register(`${nodeId}/message-group/mg-ack-r1`, (e) => res.mg.receiveMessage(e));
     await res.mg.initialize();
     await wait(() => res.mg.isLeaderReplica());

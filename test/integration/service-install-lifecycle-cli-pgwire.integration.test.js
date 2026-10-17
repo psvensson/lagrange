@@ -15,6 +15,8 @@ import {
   META_SERVICE_RUNTIME_REF,
 } from '../../src/constants/wasm-meta.js';
 import {isSqlRequest} from '../../src/query/sql-request.js';
+import {withExecutedStatementType} from '../../src/query/application-database-result.js';
+import {classifyServiceLifecycleSql} from '../../src/query/service-lifecycle-sql-contract.js';
 import {createRuntimeStartupWiring} from
   '../../src/runtime/runtime-startup-wiring.js';
 
@@ -220,7 +222,9 @@ describe('shipped service lifecycle CLI over production PG-wire', () => {
       async executeRequest(request) {
         assert.equal(isSqlRequest(request), true);
         requests.push(request);
-        return responseFor(request);
+        const response = responseFor(request);
+        const classification = classifyServiceLifecycleSql(request.statement);
+        return withExecutedStatementType(response, classification.command);
       },
     }));
     assert.equal(

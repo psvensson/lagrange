@@ -26,10 +26,37 @@ const DURABLE_REJOIN_NODE_ID = 'joiner-node';
 const DURABLE_REJOIN_SESSION_ID = 'join-session-2';
 const DURABLE_REJOIN_STARTED_AT_MS = 100;
 const REPOSITORY_ROOT_URL = new URL('../../../', import.meta.url);
+// Superseded config binding (R09: superseded, never edited in place). Sealed
+// in 30df68a23 for the live A/B of
+// transaction-recovery-poison-row-final-sql-handoff-live-ab: at least two
+// clean live passes with the final-SQL handoff in src against at least two
+// clean failures with it source-reverted. The A/B's two arms are those src
+// fingerprints; the vehicle itself selects no arm.
+//
+// Superseded at the zero-legacy consensus cutover (327acab50, epic
+// raft-rs-full-cutover): the config lost exactly two keys, both
+// naming the retired consensus runtime - the process-level consensus
+// selection and the disabled benchmark gate's baseline selection. Nothing
+// else in the file changed, and the probe, scenario and runner below are
+// byte-identical to their sealed identities. The harness now has no
+// consensus selection at all, so both arms run the one remaining runtime and
+// keep their meaning (fix present vs source-reverted).
+//
+// What is NOT superseded: the sealed live A/B result was measured on the
+// predecessor bytes under the retired runtime. No live A/B has been run on
+// the superseding vehicle; until its owner re-runs it, that result is
+// historical evidence for the predecessor vehicle, and this binding claims
+// only that the current vehicle is the predecessor with those two keys gone.
+const SUPERSEDED_LIVE_AB_CONFIG = Object.freeze({
+  sha256: '82ded6a20e5932f38b1767d06d56f234340ce97b1d0af223db6d89e16d9dd0a0',
+  sealedIn: '30df68a23',
+  supersededIn: '327acab50',
+});
 const SEALED_LIVE_AB_VEHICLE = Object.freeze({
   config: Object.freeze({
     path: 'test/distributed/config/local-poison-row-ab.json',
-    sha256: '82ded6a20e5932f38b1767d06d56f234340ce97b1d0af223db6d89e16d9dd0a0',
+    sha256: '4f5b7e516006766e9df3347d43f7c90f6b300cd2e59a2dbcbaaf57da1fb8d150',
+    supersedes: SUPERSEDED_LIVE_AB_CONFIG.sha256,
   }),
   probe: Object.freeze({
     path: 'test/distributed/harness/startup-runtime-handoff-probe.js',
@@ -86,7 +113,8 @@ function sha256File(relativePath) {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
-test('sealed durable poison-row A/B binds the current live vehicle', (t) => {
+test('sealed durable poison-row A/B vehicle binding (config superseded at ' +
+  'the consensus cutover) binds the current live vehicle', (t) => {
   for (const [vehiclePart, identity] of
     Object.entries(SEALED_LIVE_AB_VEHICLE)) {
     t.equal(
@@ -95,6 +123,11 @@ test('sealed durable poison-row A/B binds the current live vehicle', (t) => {
       `${vehiclePart} evidence is byte-identical to the current vehicle`,
     );
   }
+  t.equal(SEALED_LIVE_AB_VEHICLE.config.supersedes,
+    SUPERSEDED_LIVE_AB_CONFIG.sha256,
+    'the config binding names the sealed identity it supersedes');
+  t.not(SUPERSEDED_LIVE_AB_CONFIG.sha256, SEALED_LIVE_AB_VEHICLE.config.sha256,
+    'the superseded identity is retained beside its successor, not rewritten');
   t.end();
 });
 

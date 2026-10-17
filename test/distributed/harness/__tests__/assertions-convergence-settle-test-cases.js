@@ -7,6 +7,7 @@ import {
   buildConvergedMockNode,
   buildPartitionReplicaRow,
   buildSequencedConvergenceNode,
+  withPolicyTargets,
 } from './assertions-test-helpers.js';
 
 const DEFAULT_CONVERGED_PARTITION_IDS = ['p1'];
@@ -92,7 +93,8 @@ test('waitForConvergence — custom targetVoterCount of 5 converges with 5 voter
   };
 
   // With custom targetVoterCount=5, 5 voters should converge
-  const result = await waitForConvergence([node], {
+  // Its partitions row declares replica_count 5: the policy target.
+  const result = await waitForConvergence([withPolicyTargets(node, ['p1'], 5)], {
     settleTimeoutMs: 500,
     finalAdjudicationDrainTimeoutMs: 0,
     quietWindowMs: 0,
@@ -544,7 +546,7 @@ test('waitForConvergence — escalates to forceRepair snapshots after threshold'
     },
   };
 
-  const result = await waitForConvergence([node], {
+  const result = await waitForConvergence([withPolicyTargets(node, ['p1'])], {
     settleTimeoutMs: 120,
     finalAdjudicationDrainTimeoutMs: 0,
     quietWindowMs: 0,

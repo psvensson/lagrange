@@ -214,7 +214,7 @@ test('creation fails closed on every applied-watermark divergence', async (t) =>
   await t.test('multi-entry commit batch with a lost tail apply (MF-1)',
     async (t) => {
       // The adapter's committed watermark reaches the BATCH END before the
-      // first apply runs (liferaft commitEntries), so a checkpoint gate that
+      // first apply runs, so a checkpoint gate that
       // copied committedIndex would seal a payload missing the batch tail.
       // The dense advance keeps the applied watermark at the truth.
       const fixture = createFixture();

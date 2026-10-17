@@ -51,7 +51,10 @@ import {
 import {HEARTBEAT_STATE} from '../control-plane/heartbeat-service-constants.js';
 import {DEFAULT_NODE_CAPABILITIES} from '../control-plane/control-plane-constants.js';
 import {LEASE_STATE} from '../control-plane/lease-service-constants.js';
-import {createRuntimeStartupWiring} from '../runtime/runtime-startup-wiring.js';
+import {
+  createRuntimeStartupWiring,
+  createWasmServiceNodeDependencies,
+} from '../runtime/runtime-startup-wiring.js';
 import {
   WorkClassScheduler,
 } from '../runtime/work-class-scheduler.js';
@@ -123,6 +126,8 @@ const LOCAL_STR_TRIGGERREBALANCINGONALLPARTITIONS = 'triggerRebalancingOnAllPart
 const LOCAL_STR_RETRYING_SEED_STEADY_STATE_CONTROL_PLANE = 'Retrying seed steady-state control-plane writers until ';
 const LOCAL_STR_LIFECYCLE_METADATA_PUBLICATION_READINESS = 'lifecycle metadata publication readiness is satisfied';
 const LOCAL_STR_DEFERRING_SEED_STEADY_STATE_CONTROL_PLAN = 'Deferring seed steady-state control-plane writers until ';
+const SEED_STEADY_STATE_METADATA_PUBLICATION_SPENT_SUBJECT =
+  'seed_steady_state_control_plane_writers';
 
 const BootstrapPhase = BOOTSTRAP_PHASE;
 const BootstrapLog = BOOTSTRAP_LOG_MSG;
@@ -183,7 +188,7 @@ class BootstrapService extends EventEmitter {
         options.routerFactory :
         undefined;
     // The node's randomness, when it owns one. Consensus draws its election
-    // timing from here; unsupplied, liferaft keeps Math.random exactly as
+    // timing from here; unsupplied, production consensus keeps its platform randomness as
     // production does.
     this.randomSource =
       options.randomSource &&
@@ -282,6 +287,7 @@ class BootstrapService extends EventEmitter {
     // Unified runtime ownership wiring.
     const runtimeWiring = createRuntimeStartupWiring({
       ociFeatureGateEnabled: Boolean(options.ociFeatureGateEnabled),
+      wasmServiceDependencies: createWasmServiceNodeDependencies(this),
     });
     const self = this;
     this.runtimeDependencyOwner = {
@@ -446,6 +452,9 @@ class BootstrapService extends EventEmitter {
         getMetadataPublicationReadinessOptions: () => ({
           readinessState: this.bootstrapReadinessState,
           sleep: (delayMs) => this.sleep(delayMs),
+          logger: this.logger,
+          scope: {nodeId: this.nodeId},
+          spentSubject: SEED_STEADY_STATE_METADATA_PUBLICATION_SPENT_SUBJECT,
           onRetry: ({attempt, maxAttempts, delayMs, snapshot}) => {
             this.logger.warn(
               LOCAL_STR_RETRYING_SEED_STEADY_STATE_CONTROL_PLANE +

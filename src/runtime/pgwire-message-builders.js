@@ -105,6 +105,26 @@ function buildReadyForQuery(txState) {
  * @return {Buffer}
  */
 function buildErrorResponse(severity, code, message, detail = null) {
+  return buildFieldMessage(
+    PG_BACKEND_MSG.ERROR_RESPONSE, severity, code, message, detail,
+  );
+}
+
+/**
+ * Build a NoticeResponse message (a WARNING or NOTICE the session continues
+ * after; same fields as an ErrorResponse).
+ * @param {string} severity - PG_SEVERITY value (WARNING, NOTICE).
+ * @param {string} code - SQLSTATE.
+ * @param {string} message - Notice message.
+ * @return {Buffer}
+ */
+function buildNoticeResponse(severity, code, message) {
+  return buildFieldMessage(
+    PG_BACKEND_MSG.NOTICE_RESPONSE, severity, code, message, null,
+  );
+}
+
+function buildFieldMessage(type, severity, code, message, detail) {
   const fields = [
     {id: PG_ERROR_FIELD.SEVERITY, val: severity},
     {id: PG_ERROR_FIELD.CODE, val: code},
@@ -128,7 +148,7 @@ function buildErrorResponse(severity, code, message, detail = null) {
     off = writeCString(payload, f.val, off);
   }
   payload[off] = 0;
-  return buildMessage(PG_BACKEND_MSG.ERROR_RESPONSE, payload);
+  return buildMessage(type, payload);
 }
 
 /**
@@ -250,6 +270,7 @@ export {
   buildBackendKeyData,
   buildReadyForQuery,
   buildErrorResponse,
+  buildNoticeResponse,
   buildRowDescription,
   buildDataRow,
   buildCommandComplete,

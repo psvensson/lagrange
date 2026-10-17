@@ -56,9 +56,12 @@ function successfulExecutor(label, requests) {
   return async (request) => {
     assert.equal(isSqlRequest(request), true);
     requests.push(request);
+    // Stands in for SqlCore answering the test's SELECT, stamped with the
+    // executed statement kind as SqlCore does.
     return {
       columns: ['executor'],
       rows: [{executor: label}],
+      statementType: 'SELECT',
       success: true,
     };
   };

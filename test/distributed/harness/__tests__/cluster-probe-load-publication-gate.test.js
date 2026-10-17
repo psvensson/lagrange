@@ -13,6 +13,9 @@ import {
   createCluster,
   NODE_ROLES,
 } from './cluster-test-helpers.js';
+import {
+  evaluatePriorityRecoveryCrossServiceInvariants,
+} from '../cluster-active-wait-publication-gate.js';
 
 const LOAD_GATE_PROJECTION_TEST_CLUSTER_SIZE = 2;
 const LOAD_GATE_PROJECTION_TEST_NODE_A = 'node-a';
@@ -740,5 +743,92 @@ test(
       2,
       'deferred timeout fallback should count as blocked during load-mode recovery gating',
     );
+  },
+);
+
+const CLUSTER_ACTIVE_REQUIRES_CONVERGENCE_INVARIANT_ID =
+  'priority_recovery_cluster_active_requires_publication_convergence_and_priority_spread';
+const PUBLICATION_CONVERGENCE_EVIDENCE_ABSENT =
+  'publication_convergence_evidence_absent';
+const PUBLICATION_CONVERGENCE_EVIDENCE_PRESENT =
+  'publication_convergence_evidence_present';
+
+function selectClusterActiveRequiresConvergenceInvariant(result) {
+  for (const invariant of result.invariants) {
+    if (invariant.id === CLUSTER_ACTIVE_REQUIRES_CONVERGENCE_INVARIANT_ID) {
+      return invariant;
+    }
+  }
+  return null;
+}
+
+test(
+  'Unit: cluster-active invariant fails when allActive is claimed without ' +
+    'publication convergence evidence',
+  async () => {
+    const result = evaluatePriorityRecoveryCrossServiceInvariants({
+      readinessMode: 'load',
+      allActive: true,
+      nodeDiagnostics: [],
+    });
+    const invariant = selectClusterActiveRequiresConvergenceInvariant(result);
+    assert.equal(
+      invariant?.passed,
+      false,
+      'an absent publication convergence gate must not read as ready',
+    );
+    assert.equal(result.passed, false);
+    assert.equal(
+      invariant?.details?.publicationConvergenceEvidenceState,
+      PUBLICATION_CONVERGENCE_EVIDENCE_ABSENT,
+    );
+  },
+);
+
+test(
+  'Unit: cluster-active invariant passes on a present ready publication ' +
+    'convergence gate',
+  async () => {
+    const result = evaluatePriorityRecoveryCrossServiceInvariants({
+      readinessMode: 'load',
+      allActive: true,
+      nodeDiagnostics: [],
+      publicationConvergenceGate: {ready: true, reasons: []},
+    });
+    const invariant = selectClusterActiveRequiresConvergenceInvariant(result);
+    assert.equal(invariant?.passed, true);
+    assert.equal(
+      invariant?.details?.publicationConvergenceEvidenceState,
+      PUBLICATION_CONVERGENCE_EVIDENCE_PRESENT,
+    );
+  },
+);
+
+test(
+  'Unit: a startup active claim names that it does not claim publication ' +
+    'convergence; an unconverged load gate still fails',
+  async () => {
+    const startup = evaluatePriorityRecoveryCrossServiceInvariants({
+      readinessMode: 'startup',
+      allActive: true,
+      nodeDiagnostics: [],
+      publicationConvergenceGate: {ready: false, reasons: ['pending'],
+        claimState: 'publication_convergence_not_claimed_startup'},
+    });
+    const startupInvariant =
+      selectClusterActiveRequiresConvergenceInvariant(startup);
+    assert.equal(startupInvariant?.passed, true);
+    assert.equal(startupInvariant?.details?.publicationConvergenceClaimState,
+      'publication_convergence_not_claimed_startup');
+    assert.equal(startupInvariant?.details?.publicationConvergenceReady, false);
+    const load = evaluatePriorityRecoveryCrossServiceInvariants({
+      readinessMode: 'load',
+      allActive: true,
+      nodeDiagnostics: [],
+      publicationConvergenceGate: {ready: false, reasons: ['pending'],
+        claimState: 'publication_convergence_claimed_load'},
+    });
+    assert.equal(
+      selectClusterActiveRequiresConvergenceInvariant(load)?.passed, false);
   },
 );

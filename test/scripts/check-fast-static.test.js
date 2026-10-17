@@ -26,6 +26,7 @@ import {
 import {
   changedCandidatePaths,
   javaScriptPaths,
+  withoutWorkspaceInjections,
 } from '../../scripts/checks/changed-paths.js';
 
 const root = process.cwd();
@@ -103,10 +104,12 @@ test('untracked files are candidates, not invisible until staged', () => {
   // exactly when a human is least likely to look. Asserted against git's own
   // untracked list rather than by writing a probe file, so this test is itself
   // read-only - a test for a read-only contract should not dirty the tree.
-  const untracked = execFileSync('git',
+  // What the assembling layer declared it injected (a lab placement's linked
+  // tools/alloy-* directory) is workspace, not repository content.
+  const untracked = withoutWorkspaceInjections(execFileSync('git',
     ['ls-files', '--others', '--exclude-standard'],
     {cwd: root, encoding: UTF8, maxBuffer: MAX_BUFFER})
-    .split('\n').map((line) => line.trim()).filter(Boolean);
+    .split('\n').map((line) => line.trim()).filter(Boolean));
   const changed = changedCandidatePaths({root});
   for (const candidate of untracked) {
     assert.ok(changed.includes(candidate),

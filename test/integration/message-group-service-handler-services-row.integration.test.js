@@ -134,20 +134,16 @@ test('MessageGroupServiceHandler services-row integration', async (t) => {
       handler.initialize();
       t.teardown(() => handler.shutdown());
 
-      const createResponse = await handler.handleCreateReplica({
-        [ReplicaOperationField.OPERATION_ID]: 'op-create',
-        [ReplicaOperationField.ENTITY_ID]: groupId,
-        [ReplicaOperationField.REPLICA_ID]: replicaId,
+      // A message-group CREATE_REPLICA is refused at the handler's admission
+      // (owner decision 2026-10-04, until the fresh-identity ADD path
+      // exists); the services-row path below is the executor half that path
+      // reuses, driven directly as the N2/D8 witnesses drive it.
+      await handler.createReplicaAsync({
+        operationId: 'op-create',
+        groupId,
+        replicaId,
+        replicaOptions: {groupId, replicaId},
       });
-
-      t.equal(
-        createResponse.status,
-        ReplicaOperationResponseStatus.INITIATED,
-        'create request should be acknowledged immediately',
-      );
-
-      await flushImmediate();
-      await flushImmediate();
 
       const createdRow = cache.get(
         SYSTEM_TABLE_NAME.SERVICES,

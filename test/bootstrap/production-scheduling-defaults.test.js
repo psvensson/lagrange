@@ -16,11 +16,9 @@
 // The consensus witness asks that port to start scheduling
 // (`raft.startScheduling()`) and reads the primitive it arms; which timer
 // manager the backend chose is the field, not the primitive, and is not
-// read. The commit-apply yield witness this file once carried read liferaft's
-// timer manager, which the operation port does not expose and rs-raft has no
-// counterpart of (it applies a Ready's committed entries inside one ready
-// cycle); it is gone with that subject. Message-group replicas still run
-// liferaft, and their hop witnesses are unchanged.
+// read. rs-raft has no separate commit-apply yield to witness: it applies a
+// Ready's committed entries inside one ready cycle. Message-group replicas
+// run on the same operation port, and their hop witnesses are unchanged.
 //
 // The reconciler's witness lives here rather than under test/service
 // because what it proves is the same seam on the same composition, and one
@@ -48,6 +46,7 @@ import {
   ServiceReconciler,
 } from '../../src/service/index.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
 
 // The host primitives, captured before any recorder replaces them, so a
 // supplied clock's own delegation is never counted as production reaching
@@ -272,7 +271,7 @@ const messageGroupTransport = () => ({
  * @return {Promise<MessageGroupService>}
  */
 async function messageGroupReplica(open, label, authorities) {
-  const group = new MessageGroupService({
+  const group = new MessageGroupService(withTestDbPath({
     groupId: `${GROUP_ID}-${label}`,
     replicaId: `${GROUP_ID}-${label}-r1`,
     replicaIds: [`${GROUP_ID}-${label}-r1`],
@@ -281,7 +280,7 @@ async function messageGroupReplica(open, label, authorities) {
     transport: messageGroupTransport(),
     deferElection: true,
     ...authorities,
-  });
+  }));
   open.push(group);
   await settle(CONSTRUCTOR_HOP_SETTLE_MS);
   assert.equal(group.peerReconciliationScheduled, false,

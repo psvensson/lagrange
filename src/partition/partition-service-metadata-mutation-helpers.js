@@ -8,6 +8,7 @@ import {
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
 import {resolveTimeSource} from '../time/time-source.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 const {
   AuthoritativeRowMutationHelper,
@@ -27,6 +28,10 @@ const {
 // through silently) the typed budget-exhausted event fires once; retry
 // ownership continues at the capped cadence.
 const LEADER_PUBLICATION_RETRY_BUDGET_ATTEMPTS = 8;
+const LEADER_PUBLICATION_RETRY_BUDGET_WAIT = Object.freeze({
+  wait: 'LEADER_PUBLICATION_RETRY_BUDGET_ATTEMPTS',
+  awaited: 'durable partitions.leader_node_id publication accepted',
+});
 
 function hasAuthoritativeReadOwner(gateway) {
   if (
@@ -389,17 +394,25 @@ function createLeaderNodeMutationHelper(owner) {
         },
       );
     },
+    // Fires once per exhaustion episode (the helper's own latch), so no
+    // flood subject; retry ownership continues at the capped cadence.
     onRetryBudgetExhausted: (context = {}) => {
-      owner.logger.error(
-        PARTITION_SERVICE_ERROR_MSG.LEADER_PUBLICATION_RETRY_BUDGET_EXHAUSTED,
-        {
-          partitionId: owner.partitionId,
-          replicaId: owner.replicaId,
-          leaderNodeId: context.value,
+      reportWaitBoundSpent(owner.logger, {
+        ...LEADER_PUBLICATION_RETRY_BUDGET_WAIT,
+        boundMs: null,
+        lastObserved: {
+          typedEvent:
+            PARTITION_SERVICE_ERROR_MSG.LEADER_PUBLICATION_RETRY_BUDGET_EXHAUSTED,
+          leaderNodeId: context.value ?? null,
           attempts: context.attempts,
           nextDelayMs: context.nextDelayMs,
         },
-      );
+        scope: {
+          nodeId: owner.nodeId ?? null,
+          partitionId: owner.partitionId,
+          replicaId: owner.replicaId,
+        },
+      });
     },
     retryBudgetAttempts: LEADER_PUBLICATION_RETRY_BUDGET_ATTEMPTS,
   });

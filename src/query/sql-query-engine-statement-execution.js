@@ -8,6 +8,15 @@ import {
   enforceApplicationDatabaseExplainPolicy,
   enforceApplicationDatabaseStatementPolicy,
 } from './application-database-statement-policy.js';
+import {
+  STATEMENT_ADMISSION,
+  admitParsedStatement,
+  withSessionTransactionState,
+} from './sql-query-engine-statement-admission.js';
+import {
+  readAffectedRowCount,
+  withExecutedStatementType,
+} from './application-database-result.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_STRING = 'string';
@@ -49,6 +58,43 @@ const {
   parseCallbackModuleArtifact,
   reorderParams,
 } = SQL_QUERY_ENGINE_SHARED;
+
+// Typed parser refusals (statement count, unsupported statement form,
+// malformed transaction control) keep their own code; every other parse
+// failure is a syntax error.
+const TYPED_PARSE_FAILURE_CODES = new Set([
+  QUERY_ERROR_CODE.EMPTY_STATEMENT,
+  QUERY_ERROR_CODE.MULTIPLE_STATEMENTS_UNSUPPORTED,
+  QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE,
+  QUERY_ERROR_CODE.TRANSACTION_CONTROL_SYNTAX_ERROR,
+]);
+
+function resolveParseFailureCode(parseError) {
+  return TYPED_PARSE_FAILURE_CODES.has(parseError?.code) ?
+    parseError.code :
+    QUERY_ERROR_CODE.SYNTAX_ERROR;
+}
+
+const COUNTED_WRITE_TYPES = new Set([
+  QUERY_AST_TYPE.INSERT,
+  QUERY_AST_TYPE.UPDATE,
+  QUERY_AST_TYPE.DELETE,
+]);
+
+/**
+ * The row count the query-lifecycle metric records: a write's
+ * engine-reported affected-row count (null when it has none; never logged as
+ * zero rows), else the number of rows returned.
+ * @param {Object} result - SqlCore result.
+ * @param {string} statementType - The executed statement kind.
+ * @return {?number}
+ */
+function resolveLoggedRowCount(result, statementType) {
+  if (COUNTED_WRITE_TYPES.has(statementType)) {
+    return readAffectedRowCount(result);
+  }
+  return Array.isArray(result?.rows) ? result.rows.length : null;
+}
 
 class SQLQueryEngineStatementExecution extends
   SQLQueryEngineServiceLifecycleExecution {
@@ -392,7 +438,7 @@ class SQLQueryEngineStatementExecution extends
       return {
         success: false,
         error: parseError.message,
-        errorCode: QUERY_ERROR_CODE.SYNTAX_ERROR,
+        errorCode: resolveParseFailureCode(parseError),
       };
     }
 
@@ -403,6 +449,11 @@ class SQLQueryEngineStatementExecution extends
       enforceApplicationDatabaseStatementPolicy(ast, options);
     if (applicationStatementDecision.allowed !== true) {
       return applicationStatementDecision.failure;
+    }
+    const admission = admitParsedStatement(this.transactionCoordinator,
+      sessionId, ast, options.expectedTransactionId);
+    if (admission.state === STATEMENT_ADMISSION.REFUSED) {
+      return admission.failure;
     }
 
     try {
@@ -475,13 +526,20 @@ class SQLQueryEngineStatementExecution extends
         break;
 
       case QUERY_AST_TYPE.BEGIN_TRANSACTION:
-        return this.handleBeginTransaction(sessionId);
+        return withExecutedStatementType(
+          await this.handleAdmittedBegin(sessionId, options),
+          ast.type,
+        );
 
       case QUERY_AST_TYPE.COMMIT:
-        return this.handleCommit(sessionId);
-
       case QUERY_AST_TYPE.ROLLBACK:
-        return this.handleRollback(sessionId);
+        return withExecutedStatementType(withSessionTransactionState(
+          ast.type === QUERY_AST_TYPE.COMMIT ?
+            await this.handleCommit(sessionId, options) :
+            await this.handleRollback(sessionId),
+          this.transactionCoordinator,
+          sessionId,
+        ), ast.type);
 
       default:
         throw new Error(
@@ -498,7 +556,7 @@ class SQLQueryEngineStatementExecution extends
           executionDurationMs: queryEndMs - parseEndMs,
           totalDurationMs: queryEndMs - queryStartMs,
           partitionCount: result?.partitions?.length ?? 0,
-          rowCount: result?.count ?? result?.changes ?? 0,
+          rowCount: resolveLoggedRowCount(result, ast.type),
           success: result?.success ?? false,
         });
       } catch (_metricsErr) {
@@ -506,7 +564,10 @@ class SQLQueryEngineStatementExecution extends
       }
 
       // Strip partition details from results (Requirement 20.10)
-      return this.tableCreationService.stripPartitionDetails(result);
+      return withExecutedStatementType(
+        this.tableCreationService.stripPartitionDetails(result),
+        ast.type,
+      );
     } catch (error) {
       const queryEndMs = Date.now();
       try {
@@ -640,7 +701,7 @@ class SQLQueryEngineStatementExecution extends
       return {
         success: false,
         error: error.message,
-        errorCode: QUERY_ERROR_CODE.SYNTAX_ERROR,
+        errorCode: resolveParseFailureCode(error),
       };
     }
 
@@ -660,7 +721,7 @@ class SQLQueryEngineStatementExecution extends
       };
     }
 
-    return {
+    return withExecutedStatementType({
       success: true,
       operation: QUERY_OPERATION.EXPLAIN_DISTRIBUTED,
       rows: [
@@ -676,7 +737,7 @@ class SQLQueryEngineStatementExecution extends
       ],
       distributedPlan,
       distributedDiagnostics: distributedPlan.diagnostics,
-    };
+    }, QUERY_OPERATION.EXPLAIN_DISTRIBUTED);
   }
 
   /**

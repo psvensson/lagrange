@@ -1,6 +1,29 @@
 import {ADMIN_WEBSOCKET_API_SHARED} from './admin-websocket-api-shared.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 const LOCAL_NESTED_OPERATION_ADMIN_SQL_QUERY = 'admin_sql_query';
+const ADMIN_SQL_QUERY_WAIT = Object.freeze({
+  wait: 'ADMIN_DEFAULT.QUERY_TIMEOUT_MS',
+  awaited: 'SQL query engine answer to an admin query',
+  queryStateInFlight: 'in_flight',
+});
+
+// The engine did not answer within the admin query timeout; the query is
+// cancelled and the caller gets the timeout failure.
+function reportAdminSqlQueryWaitSpent(owner, sqlRequest, timeoutBudget, boundMs) {
+  const now = typeof owner.nowFn === 'function' ? owner.nowFn : Date.now;
+  reportWaitBoundSpent(owner.logger, {
+    wait: ADMIN_SQL_QUERY_WAIT.wait,
+    awaited: ADMIN_SQL_QUERY_WAIT.awaited,
+    boundMs,
+    elapsedMs: now() - timeoutBudget.startedAtMs,
+    lastObserved: {
+      queryState: ADMIN_SQL_QUERY_WAIT.queryStateInFlight,
+      executionMode: sqlRequest?.executionMode ?? null,
+    },
+    scope: {nodeId: owner.nodeId ?? null, sessionId: sqlRequest?.sessionId ?? null},
+  });
+}
 
 const {
   ADMIN_ENFORCEMENT_MODE,
@@ -345,6 +368,8 @@ const ADMIN_WEBSOCKET_QUERY_EXECUTION_METHODS = {
     try {
       const timeoutPromise = new Promise((resolve, reject) => {
         timeoutId = setTimeout(() => {
+          reportAdminSqlQueryWaitSpent(
+            this, sqlRequest, timeoutBudget, timeoutMs);
           cancellationToken.cancel(
             ADMIN_ERROR_MESSAGE.queryTimeout(timeoutMs),
           );

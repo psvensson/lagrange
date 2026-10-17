@@ -19,6 +19,11 @@ import {
   OWNER_CONTRACT_STATE,
 } from '../../control-plane/owner-contract-outcome.js';
 import {JOINING_LOG_MSG} from '../node-joining-constants.js';
+
+const JOIN_ADMISSION_WRITE_WAIT = Object.freeze({
+  wait: 'joinAdmissionWriteRetryTimeoutMs',
+  awaited: 'join-admission control-plane system-table write accepted',
+});
 import {
   ENDPOINT_INCARNATION_OUTCOME,
   isEndpointIncarnationOutcomeCompleted,
@@ -476,6 +481,9 @@ class NodeRegistrationOwnerPublicationMethods {
           options.admissionTarget || null,
         ),
         sleep: (delayMs) => this.sleep(delayMs),
+        logger: this.delegates.getLogger?.() ?? null,
+        spentWait: JOIN_ADMISSION_WRITE_WAIT,
+        scope: {nodeId: this.nodeId, tableName: TABLES.SERVICES},
       },
     );
   }
@@ -518,6 +526,9 @@ class NodeRegistrationOwnerPublicationMethods {
           options.admissionTarget || null,
         ),
         sleep: (delayMs) => this.sleep(delayMs),
+        logger: this.delegates.getLogger?.() ?? null,
+        spentWait: JOIN_ADMISSION_WRITE_WAIT,
+        scope: {nodeId: this.nodeId, tableName: tableName},
       },
     );
   }

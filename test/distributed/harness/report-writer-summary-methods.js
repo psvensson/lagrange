@@ -1,3 +1,5 @@
+import {SCENARIO_OUTCOME, scenarioOutcomeOf} from './scenario-outcome.js';
+
 function createReportWriterSummaryMethods(options = {}) {
   const {
     CLUSTER_SIZE_PATH_REGEX,
@@ -52,6 +54,7 @@ function createReportWriterSummaryMethods(options = {}) {
       null;
     return {
       passed: entry?.passed === true,
+      outcome: scenarioOutcomeOf(entry),
       verdict: entry?.verdict || null,
       verdictReason: entry?.verdictReason || null,
       clusterSize,
@@ -652,19 +655,27 @@ function createReportWriterSummaryMethods(options = {}) {
 
   /**
  * Compute the summary from accumulated scenario entries.
+ * `failed` counts every scenario that did not pass - refused ones included,
+ * so a reader that knows only pass/fail never reads a refusal as a pass -
+ * and `refused` names the refused (not run) subset.
  * @param {Array<Object>} scenarios
- * @returns {Object} Summary with total, passed, failed, duration
+ * @returns {Object} Summary with total, passed, failed, refused, duration
  */
   function computeSummary(scenarios) {
     let passed = 0;
     let failed = 0;
+    let refused = 0;
     let duration = 0;
 
     for (const s of scenarios) {
-      if (s.passed) {
+      const outcome = scenarioOutcomeOf(s);
+      if (outcome === SCENARIO_OUTCOME.PASSED) {
         passed++;
       } else {
         failed++;
+      }
+      if (outcome === SCENARIO_OUTCOME.REFUSED) {
+        refused++;
       }
       duration += s.duration;
     }
@@ -673,6 +684,7 @@ function createReportWriterSummaryMethods(options = {}) {
       total: passed + failed,
       passed,
       failed,
+      refused,
       duration,
     };
   }

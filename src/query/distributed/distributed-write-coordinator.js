@@ -1,6 +1,10 @@
 import {createHash, randomUUID} from 'node:crypto';
 import {LoggingService} from '../../logging/logging-service.js';
 import {
+  affectedRowsField,
+  sumAffectedRowCounts,
+} from '../application-database-result.js';
+import {
   QUERY_AST_NODE,
   QUERY_AST_TYPE,
   QUERY_ERROR_CODE,
@@ -245,7 +249,12 @@ class DistributedWriteCoordinator {
       .map((result) => result.partitionId)
       .filter(Boolean);
     const rows = [];
-    let affectedRows = 0;
+    // The primary participants' counts; one without a count leaves the
+    // statement's count unknown (absent), never summed as zero rows.
+    const affectedRows = sumAffectedRowCounts(participantResults
+      .filter((result) =>
+        result.success && result.role !== PARTICIPANT_ROLE_MIRROR)
+      .map((result) => result.affectedRows));
     const retryCount = participantResults.reduce((sum, result) => {
       const attempts = Number.isInteger(result.attempts) ?
         result.attempts : 1;
@@ -263,7 +272,6 @@ class DistributedWriteCoordinator {
       if (result.role === PARTICIPANT_ROLE_MIRROR) {
         continue;
       }
-      affectedRows += result.affectedRows || 0;
       if (Array.isArray(result.rows) && result.rows.length > 0) {
         rows.push(...result.rows);
       }
@@ -327,7 +335,7 @@ class DistributedWriteCoordinator {
       return {
         success: false,
         operation: plan.statementType,
-        affectedRows,
+        ...affectedRowsField(affectedRows),
         rows,
         partitions: primaryPartitions,
         mirrorPartitions,
@@ -350,7 +358,7 @@ class DistributedWriteCoordinator {
     return {
       success: true,
       operation: plan.statementType,
-      affectedRows,
+      ...affectedRowsField(affectedRows),
       rows,
       partitions: primaryPartitions,
       mirrorPartitions,

@@ -1,3 +1,4 @@
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
 
 const {
@@ -26,6 +27,43 @@ const {
   resolveRequestIdFromMessage,
   uuidv4,
 } = MESSAGE_ROUTER_SHARED;
+
+const DELIVERY_ACK_WAIT = Object.freeze({
+  wait: 'MESSAGE_TIMEOUT_MS (delivery ACK)',
+  awaited: 'ACK from the target node for a sent SERVICE_MESSAGE',
+});
+
+/**
+ * A sent message spent its ACK bound: one wait_bound_spent ERROR per
+ * target, folded while the target's connection state is unchanged (ACK
+ * timeouts re-fire per message under load).
+ * @param {Object} router - The message router.
+ * @param {Object} spent - {targetNodeId, messageId, connection,
+ *   recoveryOwner, deliveryTimeoutMs, sentAt}.
+ * @return {void}
+ */
+function reportDeliveryAckSpent(router, spent) {
+  const active = router.nodeConnections.get(spent.targetNodeId) || null;
+  reportWaitBoundSpent(router.logger, {
+    ...DELIVERY_ACK_WAIT,
+    boundMs: spent.deliveryTimeoutMs,
+    elapsedMs: router.timeSource.now() - spent.sentAt,
+    lastObserved: {
+      connectionId: spent.connection?.connectionId ?? null,
+      activeConnectionId: active?.connectionId ?? null,
+      activeConnectionState: active?.state ?? null,
+      sameConnection: active === spent.connection,
+      quarantineOwnerChanged: Boolean(spent.recoveryOwner) &&
+        spent.recoveryOwner !== spent.connection,
+    },
+    scope: {
+      nodeId: router.nodeId ?? null,
+      targetNodeId: spent.targetNodeId,
+      messageId: spent.messageId,
+    },
+    subject: spent.targetNodeId,
+  });
+}
 
 function deliveryAbortReason(signal) {
   return signal?.reason instanceof Error ?
@@ -613,6 +651,7 @@ export function sendMessage(
       failBeforeSend();
       return;
     }
+    const sentAt = router.timeSource.now();
     const timeout = router.timeSource.setTimeout(() => {
       router.pendingMessages.delete(messageId);
       const recoveryOwner = router.quarantineConnectionAfterAckTimeout(
@@ -621,6 +660,8 @@ export function sendMessage(
         messageId,
         targetAddress,
       );
+      reportDeliveryAckSpent(router, {targetNodeId, messageId, connection,
+        recoveryOwner, deliveryTimeoutMs, sentAt});
       resolve(
         router.buildDeferredDeliveryFailure(
           messageId,
@@ -640,7 +681,7 @@ export function sendMessage(
       resolve,
       reject,
       timeout,
-      sentAt: router.timeSource.now(),
+      sentAt,
       targetNodeId,
     });
     try {

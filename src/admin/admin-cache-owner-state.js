@@ -1,4 +1,10 @@
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+
 const ADMIN_CACHE_OWNER_SNAPSHOT_MAX_ATTEMPTS = 2;
+const ADMIN_CACHE_OWNER_SNAPSHOT_WAIT = Object.freeze({
+  wait: 'ADMIN_CACHE_OWNER_SNAPSHOT_MAX_ATTEMPTS',
+  awaited: 'a snapshot built under one unchanged cache owner',
+});
 const ADMIN_CACHE_OWNER_CHANGED_DURING_SNAPSHOT_ERROR =
   'Admin cache owner changed repeatedly while building a snapshot';
 
@@ -51,6 +57,7 @@ async function resolveAdminCacheOwnerSnapshot(
   buildSnapshotAttempt,
   staleOwnerMessage,
 ) {
+  const startedAtMs = Date.now();
   for (
     let attempt = 0;
     attempt < ADMIN_CACHE_OWNER_SNAPSHOT_MAX_ATTEMPTS;
@@ -70,6 +77,16 @@ async function resolveAdminCacheOwnerSnapshot(
       return snapshot;
     }
   }
+  reportWaitBoundSpent(owner.logger, {
+    ...ADMIN_CACHE_OWNER_SNAPSHOT_WAIT,
+    boundMs: null,
+    startedAtMs,
+    lastObserved: {
+      attempts: ADMIN_CACHE_OWNER_SNAPSHOT_MAX_ATTEMPTS,
+      cacheOwnerGeneration: owner.cacheOwnerGeneration,
+    },
+    scope: {nodeId: owner.nodeId ?? null},
+  });
   throw new Error(staleOwnerMessage);
 }
 

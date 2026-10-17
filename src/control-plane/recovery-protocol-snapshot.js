@@ -13,8 +13,10 @@ import {
 } from './membership-lifecycle-constants.js';
 import {
   buildPriorityRecoveryClosureWitness,
-  hasPriorityRecoverySpreadGap,
 } from './priority-recovery-snapshot.js';
+import {
+  resolvePrioritySpreadPending,
+} from './publication-recovery-priority-spread.js';
 import {
   buildMembershipPublicationActiveSnapshot,
 } from './active-node-projection.js';
@@ -232,7 +234,6 @@ function buildContext(options = {}) {
       options.priorityRecoveryClosureWitness :
       buildPriorityRecoveryClosureWitness({
         decisionSnapshots: options.priorityRecoveryDecisionSnapshots,
-        priorityPartitionSummary: options.priorityPartitionSummary,
       });
   return {
     publicationEpoch: Number.isFinite(options.publicationEpoch) ?
@@ -281,14 +282,13 @@ function buildContext(options = {}) {
   };
 }
 
+// The one priority-spread rule: census gap OR a PENDING closure witness; the
+// witness never overrides the census toward "spread".
 function resolvePriorityRecoverySpreadPending(context) {
-  if (
-    typeof context?.priorityRecoveryClosureWitness?.prioritySpreadPending ===
-    'boolean'
-  ) {
-    return context.priorityRecoveryClosureWitness.prioritySpreadPending;
-  }
-  return hasPriorityRecoverySpreadGap(context?.priorityPartitionSummary);
+  return resolvePrioritySpreadPending({
+    priorityPartitionSummary: context?.priorityPartitionSummary,
+    priorityRecoveryClosureWitness: context?.priorityRecoveryClosureWitness,
+  });
 }
 
 function isTargetNodeExcludedFromPublishedMembership(context = {}) {
@@ -659,8 +659,6 @@ function buildRecoveryProtocolSnapshot(options = {}) {
     publicationPending: publicationRecoveryGate.publicationPending,
     publicationExcludesTargetNode,
     publishedMembershipIncludesTargetNode,
-    closureRecordId: publicationRecoveryGate.closureRecordId || null,
-    closureWitnessClass: publicationRecoveryGate.closureWitnessClass || null,
     publishedPlanningEpoch:
       context.publicationStatusNormalized ===
         CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED &&

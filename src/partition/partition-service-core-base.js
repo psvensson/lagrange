@@ -9,10 +9,7 @@ import {
   retireRaftPeerFromAuthoritativeServiceChange,
   resolveLiveRaftLeaderAddressForPeer,
 } from './partition-service-raft-peer-cache-reconciliation.js';
-import {RaftRsWasmProvider} from '../raft/raft-rs-provider.js';
-import {
-  PARTITION_CONSENSUS_STARTUP_OUTCOME,
-} from './partition-service-constants.js';
+import {createRaftRsOperationPort} from '../raft/raft-rs-operation-port.js';
 import {resolveOwnedTimeSource} from '../time/time-source.js';
 import {resolveOwnedRandomSource} from '../random/random-source.js';
 import {isLivePartitionServiceRow} from '../constants/service.js';
@@ -51,31 +48,6 @@ const {
   isMetadataPublicationLifecycleReady,
   normalizePublishedRaftRole,
 } = PARTITION_SERVICE_SHARED;
-// The one consensus backend a partition runs on. Stateless and frozen, so
-// one instance serves every partition in the process.
-const RAFT_RS_PROVIDER = Object.freeze(new RaftRsWasmProvider());
-// Construction options that once selected or injected a consensus backend.
-// Naming either is refused: there is no selection and no alternate backend.
-const RETIRED_BACKEND_SELECTION_OPTIONS = Object.freeze([
-  'raftBackend', 'raftProvider',
-]);
-
-function refuseBackendSelection(options) {
-  const option = RETIRED_BACKEND_SELECTION_OPTIONS.find((name) =>
-    options[name] !== undefined);
-  if (option === undefined) {
-    return;
-  }
-  const requested = options[option];
-  const error = new Error(PARTITION_SERVICE_ERROR_MSG.backendSelectionRefused(
-    option,
-    typeof requested === 'string' ? requested :
-      requested?.constructor?.name ?? String(requested),
-  ));
-  error.code = PARTITION_CONSENSUS_STARTUP_OUTCOME.BACKEND_SELECTION_REFUSED;
-  throw error;
-}
-
 // COPY, never the caller's array: this list is mutated in place by raft peer
 // reconciliation, and callers hand in the shared system-table declaration.
 // Taking it by reference made a minted replacement replica append to the
@@ -96,15 +68,14 @@ class PartitionServiceCoreBase extends EventEmitter {
     if (!options.replicaId) {
       throw new Error(PARTITION_SERVICE_ERROR_MSG.REQUIRE_REPLICA_ID);
     }
-    refuseBackendSelection(options);
     // One clock for this replica, on the node hosting it. Held in two parts
     // for the reason resolveOwnedTimeSource states: stamps read the resolved
     // source, and only a clock that was actually GIVEN may take over a
     // collaborator that would otherwise schedule for itself.
     const clocks = resolveOwnedTimeSource(options);
     this.providedTimeSource = clocks.providedTimeSource;
-    // The node's randomness, when it owns one. Election timing is drawn from
-    // it; unsupplied, liferaft keeps Math.random.
+    // The node's randomness, when it owns one, handed to the consensus port;
+    // unsupplied, the port resolves its own.
     this.providedRandomSource = resolveOwnedRandomSource(options);
     this.timeSource = clocks.timeSource;
     this.partitionId = options.partitionId;
@@ -466,11 +437,11 @@ class PartitionServiceCoreBase extends EventEmitter {
    * Build this replica's consensus operation port. The partition states its
    * own requirements in the request and the rs-raft backend builds the port;
    * there is no selection and no injected provider.
-   * @param {Object} request - The partition's RAFT_PARTITION_NODE_REQUEST.
+   * @param {Object} request - The partition's RAFT_OPERATION_PORT_REQUEST.
    * @return {Object} The frozen operation port.
    */
   createOperationPort(request) {
-    return RAFT_RS_PROVIDER.createPartitionPort(request);
+    return createRaftRsOperationPort(request);
   }
   isMetadataPublicationReady() {
     if (!this.metadataPublicationReadinessState) {
@@ -770,8 +741,8 @@ class PartitionServiceCoreBase extends EventEmitter {
   }
   /**
    * Normalize one raw leader identifier into the canonical replica ID.
-   * Liferaft leader-change notifications use peer addresses, while partition
-   * runtime state should track replica IDs.
+   * Leader identities can arrive as peer addresses, while partition runtime
+   * state should track replica IDs.
    * @param {*} candidate
    * @return {string|null}
    * @private

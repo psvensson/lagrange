@@ -27,18 +27,9 @@ const MESSAGE_ROUTER_LITERAL = Object.freeze({
   STRING_INSERT: 'insert',
   STRING_UPDATE: 'update',
   STRING_DELETE: 'delete',
-  STRING_RAFT_APPEND_UNKNOWN: 'raft:append:unknown',
-  STRING_CDC: 'cdc',
   STRING_CDC_BATCH: 'cdc_batch',
-  STRING_RAFT_APPEND_CDC_BATCH_UNKNOWN: 'raft:append:cdc_batch:unknown',
   STRING_MESSAGE: 'message',
   STRING_NODE_STATE_UPDATE: 'node_state_update',
-  STRING_ACK: 'ack',
-  STRING_RAFT_APPEND_ACK: 'raft:append:ack',
-  STRING_APPEND: 'append',
-  STRING_APPEND_FAIL: 'append fail',
-  STRING_RAFT_APPEND_HEARTBEAT: 'raft:append:heartbeat',
-  STRING_RAFT_APPEND_FAIL: 'raft:append:fail',
   STRING_LATE_AFTER_TIMEOUT: 'late_after_timeout',
   STRING_LATE_AFTER_NODE_FAILURE: 'late_after_node_failure',
   STRING_LATE_AFTER_DEFERRED_DELIVERY: 'late_after_deferred_delivery',
@@ -441,45 +432,6 @@ function extractSqlTableName(sql) {
   return null;
 }
 
-function summarizeRaftAppendCommand(command) {
-  const commandType = normalizeIdentifier(command?.type)?.toLowerCase();
-  if (!commandType) {
-    return MESSAGE_ROUTER_LITERAL.STRING_RAFT_APPEND_UNKNOWN;
-  }
-  if (commandType === MESSAGE_ROUTER_LITERAL.STRING_CDC) {
-    const tableName = normalizeIdentifier(command?.tableName)?.toLowerCase();
-    return `raft:append:cdc:${tableName || MESSAGE_ROUTER_LITERAL.STRING_UNKNOWN}`;
-  }
-  if (commandType === MESSAGE_ROUTER_LITERAL.STRING_CDC_BATCH) {
-    const events = Array.isArray(command?.events) ? command.events : [];
-    const eventCount = events.length;
-    const distinctTableNames = [
-      ...new Set(
-        events
-          .map((event) => normalizeIdentifier(event?.tableName)?.toLowerCase())
-          .filter(Boolean),
-      ),
-    ];
-    if (distinctTableNames.length === TRANSPORT_NUM.ONE) {
-      return `raft:append:cdc_batch:${distinctTableNames[TRANSPORT_NUM.ZERO]}:${eventCount}`;
-    }
-    if (distinctTableNames.length > TRANSPORT_NUM.ONE) {
-      return `raft:append:cdc_batch:mixed:${eventCount}`;
-    }
-    return MESSAGE_ROUTER_LITERAL.STRING_RAFT_APPEND_CDC_BATCH_UNKNOWN;
-  }
-  if (commandType === MESSAGE_ROUTER_LITERAL.STRING_MESSAGE) {
-    const payloadType = normalizeIdentifier(
-      command?.message?.payload?.type,
-    )?.toLowerCase();
-    return `raft:append:message:${payloadType || MESSAGE_ROUTER_LITERAL.STRING_UNKNOWN}`;
-  }
-  if (commandType === MESSAGE_ROUTER_LITERAL.STRING_ACK) {
-    return MESSAGE_ROUTER_LITERAL.STRING_RAFT_APPEND_ACK;
-  }
-  return `raft:append:${commandType}`;
-}
-
 function buildTypelessQueryDeliverySource(message) {
   const tableName = extractSqlTableName(message?.sql);
   const operationKind = extractSqlOperationKind(message?.sql);
@@ -515,21 +467,6 @@ function buildTypelessCdcDeliverySource(message) {
   return MESSAGE_ROUTER_LITERAL.STRING_CDC_BATCH;
 }
 
-function isSupersedableRaftHeartbeatAppend(message) {
-  const messageType = normalizeIdentifier(message?.type)?.toLowerCase();
-  if (messageType !== MESSAGE_ROUTER_LITERAL.STRING_APPEND) {
-    return false;
-  }
-  return (
-    !Array.isArray(message?.data) || message.data.length === TRANSPORT_NUM.ZERO
-  );
-}
-
-function isSupersedableRaftAppendFail(message) {
-  const messageType = normalizeIdentifier(message?.type)?.toLowerCase();
-  return messageType === MESSAGE_ROUTER_LITERAL.STRING_APPEND_FAIL;
-}
-
 function isSupersedableHeartbeatNodeStateUpdate(message) {
   const messageType = normalizeIdentifier(message?.type)?.toLowerCase();
   if (messageType !== MESSAGE_ROUTER_LITERAL.STRING_NODE_STATE_UPDATE) {
@@ -562,19 +499,7 @@ function resolvePendingReplacementKey(targetAddress, message, options = {}) {
     }
     return `node_state_update:${normalizedTargetAddress}:${replacementNodeId}`;
   }
-  if (isSupersedableRaftAppendFail(message)) {
-    if (!normalizedTargetAddress) {
-      return MESSAGE_ROUTER_LITERAL.STRING_RAFT_APPEND_FAIL;
-    }
-    return `raft:append:fail:${normalizedTargetAddress}`;
-  }
-  if (!isSupersedableRaftHeartbeatAppend(message)) {
-    return null;
-  }
-  if (!normalizedTargetAddress) {
-    return MESSAGE_ROUTER_LITERAL.STRING_RAFT_APPEND_HEARTBEAT;
-  }
-  return `raft:append:heartbeat:${normalizedTargetAddress}`;
+  return null;
 }
 
 export {
@@ -627,8 +552,6 @@ export {
   extractSqlOperationKind,
   extractSqlTableName,
   isSupersedableHeartbeatNodeStateUpdate,
-  isSupersedableRaftAppendFail,
-  isSupersedableRaftHeartbeatAppend,
   normalizeIdentifier,
   queueMicrotaskFn,
   recordQueueWaitDuration,
@@ -637,5 +560,4 @@ export {
   resolvePendingReplacementKey,
   resolveQueueWaitBucket,
   resolveRequestIdFromMessage,
-  summarizeRaftAppendCommand,
 };

@@ -12,8 +12,13 @@
 
 import {createHash} from 'node:crypto';
 import {computePercentile} from '../harness/performance-diagnostics.js';
+import {
+  SPREAD_UNIT,
+  requireSpreadUnit,
+} from '../harness/scenario-host-topology.js';
 
-const REPORT_DETAIL_SCHEMA_VERSION = 1;
+// v2: the topology and local-read evidence carry their spread unit.
+const REPORT_DETAIL_SCHEMA_VERSION = 2;
 const PARITY_ORACLE_KIND = 'independent-recompute';
 const SHA256_ALGORITHM = 'sha256';
 const HEX_ENCODING = 'hex';
@@ -209,8 +214,14 @@ function assertWasmFidelity({manifest, buildDigest, runtimeKindRows}) {
 }
 
 // Red-on-revert gate: the data must genuinely span >=2 partitions whose
-// leaders live on >=2 distinct hosts.
-function assertPartitionSpread(partitionRows) {
+// leaders live on >=2 distinct HOSTS. `hostOf` is the harness's node ->
+// host authority (scenario-ground-truth buildNodeHostIndex); a leader
+// whose host is unknown fails closed, and a node id is never a host.
+function assertPartitionSpread(partitionRows, hostOf) {
+  if (typeof hostOf !== 'function') {
+    throw new Error(
+      'partition spread violated: no node -> host authority supplied');
+  }
   const partitions = partitionRows
     .map((row) => ({
       leaderNodeId: row?.leader_node_id,
@@ -220,17 +231,23 @@ function assertPartitionSpread(partitionRows) {
       typeof entry.partitionId === 'string' &&
       entry.partitionId.length > ZERO,
     );
+  const leaderNodeIds = partitions
+    .map((entry) => entry.leaderNodeId)
+    .filter((nodeId) => typeof nodeId === 'string' && nodeId.length > ZERO);
+  const unknownHostLeaders =
+    leaderNodeIds.filter((nodeId) => !hostOf(nodeId));
   const distinctHosts = new Set(
-    partitions
-      .map((entry) => entry.leaderNodeId)
-      .filter((nodeId) =>
-        typeof nodeId === 'string' && nodeId.length > ZERO,
-      ),
-  );
+    leaderNodeIds.map((nodeId) => hostOf(nodeId)).filter(Boolean));
   if (partitions.length < MIN_PARTITION_COUNT) {
     throw new Error(
       'partition spread violated: ' +
       `${partitions.length} partition(s), need >= ${MIN_PARTITION_COUNT}`,
+    );
+  }
+  if (unknownHostLeaders.length > ZERO) {
+    throw new Error(
+      'partition spread violated: no host identity for leader node(s) ' +
+      unknownHostLeaders.join(', '),
     );
   }
   if (distinctHosts.size < MIN_DISTINCT_PARTITION_HOSTS) {
@@ -243,6 +260,7 @@ function assertPartitionSpread(partitionRows) {
   return {
     distinctPartitionHosts: distinctHosts.size,
     partitions,
+    spreadUnit: SPREAD_UNIT.HOST,
   };
 }
 
@@ -342,9 +360,11 @@ function collectLocalSelectSamples(logEntries, partitionIdSet) {
 }
 
 // Red-on-revert gate: shard rows must be proven read locally on >=2
-// distinct partition-host nodes, with enough SELECT samples to account
-// for the measured invocations. Fabricating metrics cannot satisfy this:
-// the samples come from the nodes' own metrics log rows.
+// distinct NODES (spread unit 'node': node ids from the nodes' own
+// metrics log rows - this proof does not measure hosts), with enough
+// SELECT samples to account for the measured invocations. Fabricating
+// metrics cannot satisfy this: the samples come from the nodes' own
+// metrics log rows.
 function buildLocalReadProof({logEntries, partitionIds, invocationCount}) {
   const samples = collectLocalSelectSamples(
     logEntries, new Set(partitionIds),
@@ -361,8 +381,9 @@ function buildLocalReadProof({logEntries, partitionIds, invocationCount}) {
     .sort((left, right) => left.nodeId.localeCompare(right.nodeId));
   if (perNode.length < MIN_LOCAL_READ_NODES) {
     throw new Error(
-      'local-read proof violated: partition-local SELECT metrics on ' +
-      `${perNode.length} node(s), need >= ${MIN_LOCAL_READ_NODES}`,
+      'local-read proof violated (unit: node): partition-local SELECT ' +
+      `metrics on ${perNode.length} distinct node(s), need >= ` +
+      String(MIN_LOCAL_READ_NODES),
     );
   }
   const totalSelects = perNode
@@ -377,6 +398,7 @@ function buildLocalReadProof({logEntries, partitionIds, invocationCount}) {
   return {
     distinctNodes: perNode.length,
     perNode,
+    spreadUnit: SPREAD_UNIT.NODE,
   };
 }
 
@@ -487,6 +509,11 @@ function composeReportDetail({
   invokerTelemetry,
   sentinelRowCount,
 }) {
+  // A spread count without its unit is invalid evidence, never defaulted.
+  requireSpreadUnit(topology, SPREAD_UNIT.HOST,
+    'public-path report topology');
+  requireSpreadUnit(localReadProof, SPREAD_UNIT.NODE,
+    'public-path report local-read proof');
   const unavailableReasons = {
     memoryPeakBytes: UNAVAILABLE_MEMORY_PEAK_REASON,
   };
@@ -517,6 +544,7 @@ function composeReportDetail({
       distinctPartitionHosts: topology.distinctPartitionHosts,
       nodeCount,
       partitions: topology.partitions,
+      spreadUnit: topology.spreadUnit,
     },
     unavailableReasons,
   };

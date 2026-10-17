@@ -1095,3 +1095,67 @@ test('SQLParser - SQLite INSERT OR IGNORE unchanged in default mode',
     t.equal(ast.orIgnore, true);
     t.equal(ast.orReplace, false);
   });
+
+// One query text is one statement: more than one is refused whole (code
+// MULTIPLE_STATEMENTS_UNSUPPORTED, nothing to execute), never truncated to
+// the first; terminators, comments and `;` inside literals stay one
+// statement; a text with no statement is EMPTY_STATEMENT.
+const MULTIPLE_STATEMENTS = [
+  'UPDATE t SET a = 1; DELETE FROM t',
+  'INSERT INTO t (id) VALUES (1); INSERT INTO t (id) VALUES (2)',
+  'SELECT 1; SELECT 2',
+  'SELECT a FROM t; ; DELETE FROM t',
+  'BEGIN; INSERT INTO t (id) VALUES (1); COMMIT',
+  'BEGIN ; DELETE FROM t',
+  'COMMIT; DELETE FROM t',
+];
+const SINGLE_STATEMENTS = [
+  ['UPDATE t SET a = 1;', 'UPDATE'],
+  ['UPDATE t SET a = 1; ;', 'UPDATE'],
+  ['UPDATE t SET a = \'x;y\' WHERE id = 1; -- done; really', 'UPDATE'],
+  ['-- lead\nDELETE FROM t WHERE id = 1', 'DELETE'],
+  ['/* lead */ INSERT INTO t (id) VALUES (1)', 'INSERT'],
+  ['BEGIN;', 'BEGIN_TRANSACTION'],
+  ['COMMIT ;', 'COMMIT'],
+  ['ROLLBACK;', 'ROLLBACK'],
+];
+
+test('SQLParser - refuses a multi-statement text whole', async (t) => {
+  // The SQLite grammar (the facade's default dialect) has no transaction
+  // statements, so it is checked on the DML forms.
+  const cases = [
+    ...MULTIPLE_STATEMENTS.map((sql) => [PARSER_DIALECT.POSTGRESQL, sql]),
+    ...MULTIPLE_STATEMENTS.slice(0, 4).map((sql) => [undefined, sql]),
+  ];
+  for (const [dialect, sql] of cases) {
+    let caught = null;
+    try {
+      new SQLParser(sql, {dialect}).parse();
+    } catch (error) {
+      caught = error;
+    }
+    t.equal(caught?.code, 'MULTIPLE_STATEMENTS_UNSUPPORTED',
+      `${dialect}: ${sql}`);
+    t.match(caught?.message,
+      /multiple statements in one query are not supported/u);
+  }
+});
+
+test('SQLParser - one statement with terminators and comments', async (t) => {
+  for (const [sql, type] of SINGLE_STATEMENTS) {
+    t.equal(new SQLParser(sql, {dialect: PARSER_DIALECT.POSTGRESQL})
+      .parse().type, type, sql);
+  }
+});
+
+test('SQLParser - a text with no statement is EMPTY_STATEMENT', async (t) => {
+  for (const sql of [';', '; ;', '-- nothing', '/* nothing */']) {
+    let caught = null;
+    try {
+      new SQLParser(sql, {dialect: PARSER_DIALECT.POSTGRESQL}).parse();
+    } catch (error) {
+      caught = error;
+    }
+    t.equal(caught?.code, 'EMPTY_STATEMENT', sql);
+  }
+});

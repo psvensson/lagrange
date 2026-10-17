@@ -6,6 +6,7 @@ import {
 import {
   isRetryableControlPlaneError,
 } from '../../../src/control-plane/control-plane-error-classification.js';
+import {captureLogger} from '../../test-helpers/wait-bound-spent-capture.js';
 
 // A join-time leadership-establishment timeout is transient under load (the
 // cluster is SAFE and still converging during a rolling restart). It must be
@@ -73,5 +74,23 @@ test(
       true,
       'the join resume gate must classify the leadership timeout retryable',
     );
+  },
+);
+
+test(
+  'phaseWaitForLeadership timeout is one resume iteration, not a spent ' +
+    'wait: it reports no wait_bound_spent (the join resume loop owns the ' +
+    'budget and reports its exhaustion)',
+  async () => {
+    const capture = captureLogger();
+    const delegates = createTimeoutDrivingDelegates();
+    delegates.getLogger = () => capture.logger;
+    const phase = new WaitForLeadershipPhase({nodeId: 'joiner-1', delegates});
+
+    await assert.rejects(phase.phaseWaitForLeadership(),
+      /failed to establish leadership within/);
+
+    assert.equal(capture.spent().length, 0, 'no wait_bound_spent');
+    assert.equal(capture.errors().length, 0, 'no ERROR (as at base)');
   },
 );

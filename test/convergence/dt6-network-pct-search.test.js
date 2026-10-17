@@ -35,7 +35,8 @@ import {createVirtualNetwork} from '../distributed/harness/virtual-network.js';
 // proof over all interleavings (structural unreachability is argued separately above). Here
 // every handler is SYNCHRONOUS (C's handler mutates state and calls netApi.send inline; no
 // awaits or microtask-spawned continuations), so the coarse-vs-fine drive-granularity caveat
-// (dt6-fine-drive-midchurn-safety.test.js) is moot for this scenario.
+// (a stepMs-batched drive drains a co-due batch before flushing microtasks, so a sample can land
+// between deliveries and their async continuations) is moot for this scenario.
 
 function networkRaceScenario({scheduler, random}) {
   const net = createVirtualNetwork({scheduler, random});

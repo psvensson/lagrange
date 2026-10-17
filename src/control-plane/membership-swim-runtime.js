@@ -30,6 +30,7 @@ class MembershipSwimRuntime {
       randomSource: options.randomSource,
       localNodeId: this._nodeId,
       config: options.config,
+      logger: this._logger,
     });
     this._transport = buildSwimMessageRouterTransport({
       messageRouter: this._messageRouter,

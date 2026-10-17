@@ -79,7 +79,7 @@ test('a declared change skips only the audits that do not govern it', () => {
 });
 
 test('a source change still owes the source audits', () => {
-  const source = owedFor(['src/raft/liferaft.js']);
+  const source = owedFor(['src/raft/raft-rs-operation-port.js']);
   for (const command of ['npm run audit:file-size', 'npm run test:complexity',
     'npm run test:deps', 'npm run audit:guidelines']) {
     assert.ok(source.owed.includes(command), `${command} governs src/`);

@@ -37,7 +37,6 @@ import {
 const arrayEvery = Function.call.bind(Array.prototype.every);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const arraySome = Function.call.bind(Array.prototype.some);
-const stringIncludes = Function.call.bind(String.prototype.includes);
 
 const COORDINATOR_NODE_ID = 'coordinator-node';
 const REMOTE_OWNER_NODE_ID = 'remote-owner-node';
@@ -57,7 +56,9 @@ const BUDGET_REMAINING_MS = 3000;
 const PAST_BUDGET_WAIT_MS = 3200;
 const STEP_AGE_MS = 5000;
 const SETTLE_MS = 5;
-const STOP_LOG_FRAGMENT = 'stopped at its operation budget';
+// The stop at the spent budget is a spent wait: one wait_bound_spent ERROR
+// (src/logging/wait-bound-spent.js) naming the handoff retry's bound.
+const STOP_WAIT = 'COORDINATOR_HANDOFF_RETRY_STEP_TIMEOUT';
 
 /**
  * The real owner, constructed the way the RebalanceCoordinator constructs it,
@@ -190,8 +191,10 @@ async () => {
   await timers[1].fn();
   await settle(SETTLE_MS);
   const stop = arraySome(warnings, (entry) =>
-    stringIncludes(String(entry.message), STOP_LOG_FRAGMENT));
-  assert.ok(stop, `the owner stops at its budget: ${arrayMap(warnings, (w) => w.message).join(' | ')}`);
+    entry.fields?.event === 'wait_bound_spent' &&
+    entry.fields?.wait === STOP_WAIT);
+  assert.ok(stop, `the owner stops at its budget: ${arrayMap(warnings,
+    (w) => w.fields?.wait || w.message).join(' | ')}`);
   assert.equal(owner.hasActiveCreatedOperationHandoffRetry(OPERATION_ID), false,
     'the retry is cleared, not re-armed');
   assert.equal(timers.length, deferralsBefore, 'nothing was armed after the stop');

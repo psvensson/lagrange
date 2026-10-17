@@ -1,9 +1,7 @@
 import t from 'tap';
-import LifeRaft from '../../src/raft/liferaft.js';
 import {createVirtualNetwork} from '../distributed/harness/virtual-network.js';
-import {connectRaftCluster, driveNetwork} from
-  '../distributed/harness/raft-network-host.js';
-import {SeededRandomSource} from '../../src/random/random-source.js';
+import {connectRaftRsNetwork} from
+  '../test-helpers/raft-rs-network-host.js';
 import {TABLES} from '../../src/constants/index.js';
 import {
   assertMembershipPublicationOwnerDriverHostsHealthy,
@@ -11,7 +9,7 @@ import {
 } from './membership-publication-owner-driver-host.js';
 
 // DT6 step 5 — the first REAL CONTROL-PLANE subsystem hosted alongside the real raft cluster
-// on the VirtualNetwork. Steps 2–4 built the consensus layer (a real liferaft cluster electing
+// on the VirtualNetwork. Steps 2–4 built the consensus layer (real raft-rs ports electing
 // and migrating leadership over the network); step 5 closes the loop to the layer where CL-039
 // actually lived: it hosts the REAL owner-membership publication driver on every node, gated on
 // THAT node's live raft leadership through the production Tier-0 path
@@ -19,7 +17,7 @@ import {
 // and lets a REAL raft leadership migration drive the control-plane owner handoff.
 //
 // This is the multi-node, real-migration-driven generalisation of the DT4 full-chain scenario
-// (dt4-full-chain-scenario.test.js), which composed the same real owner driver with ONE raft
+// (the DT4 full-chain scenario, retired with the legacy consensus runtime), which composed the same real owner driver with ONE raft
 // node on ONE clock and faked the leadership loss with change({state}). Here the leadership loss
 // is a REAL partition-induced migration across THREE nodes on the network, and an owner driver
 // runs on EACH node's network clock.
@@ -29,24 +27,13 @@ import {
 // the publish path (readPublicationPlanningSnapshot). We do NOT materialise a published epoch;
 // the publish internals downstream of the gate are exercised by their own tests. The signal here
 // is WHICH node acts as the publication owner over time, and that it tracks real raft leadership.
+// That signal is also all the determinism witness compares (see ownerHandoff below).
 
 const IDS = Object.freeze(['N1', 'N2', 'N3']);
-function clusterOptions(seed) {
-  return (id) => ({
-    'election min': '100 ms',
-    'election max': '200 ms',
-    'heartbeat': '30 ms',
-    'write': (_packet, callback) => {
-      if (typeof callback === 'function') {
-        callback(null);
-      }
-    },
-    'randomSource': new SeededRandomSource({seed: seed * IDS.length + IDS.indexOf(id)}),
-  });
-}
+const CONSENSUS_PARTITION_ID = 'control-plane-migration-p1';
 
-function leaderOf(rafts) {
-  return IDS.find((id) => rafts.get(id).state === LifeRaft.LEADER) || null;
+function leaderOf(consensus) {
+  return IDS.find((id) => consensus.isLeader(id)) || null;
 }
 
 // Host the REAL owner-membership driver on one node, gated on its live raft leadership. The
@@ -54,14 +41,15 @@ function leaderOf(rafts) {
 // resolveControlPlanePublicationsLeadership onto cdcIntegrationService.canWriteSystemTableLocally,
 // which here reflects the node's real raft role. gatePasses counts ticks that reach the publish
 // path (past the leadership gate) — the "this node is acting as the publication owner" signal.
-function hostOwnerDriver(net, raft, nodeId) {
+function hostOwnerDriver(net, consensus, nodeId) {
   const counters = {gatePasses: 0};
   const coordinator = createMembershipPublicationOwnerDriverHost({
     nodeId,
     systemTableCache: {get: () => null, find: () => null},
     cdcIntegrationService: {
       canWriteSystemTableLocally: (table) =>
-        table === TABLES.CONTROL_PLANE_PUBLICATIONS && raft.state === LifeRaft.LEADER,
+        table === TABLES.CONTROL_PLANE_PUBLICATIONS &&
+        consensus.isLeader(nodeId),
     },
     ownerMembershipReconcileInFlight: false,
     assertSingleMembershipPartition: () => {},
@@ -86,15 +74,20 @@ function hostOwnerDriver(net, raft, nodeId) {
 // node is acting as the publication owner (its cumulative gatePasses).
 async function runControlPlaneMigration(seed) {
   const net = createVirtualNetwork();
-  const rafts = connectRaftCluster(net, IDS, clusterOptions(seed));
-  const owners = new Map(IDS.map((id) => [id, hostOwnerDriver(net, rafts.get(id), id)]));
+  const consensus = connectRaftRsNetwork(net, IDS, {
+    partitionId: CONSENSUS_PARTITION_ID,
+    seed,
+  });
+  consensus.start();
+  const owners = new Map(IDS.map((id) =>
+    [id, hostOwnerDriver(net, consensus, id)]));
   const snapshot = () => Object.fromEntries(
     IDS.map((id) => [id, owners.get(id).counters.gatePasses]),
   );
 
   // Phase A — natural election; the owner gate should settle on the elected leader.
-  await driveNetwork(net, {untilMs: 400, stepMs: 5});
-  const leaderA = leaderOf(rafts);
+  await consensus.runUntil(400, {stepMs: 5});
+  const leaderA = leaderOf(consensus);
   const afterElection = snapshot();
 
   // Phase B — partition the leader; leadership migrates and a new owner emerges.
@@ -102,8 +95,8 @@ async function runControlPlaneMigration(seed) {
   for (const other of followers) {
     net.partition(leaderA, other);
   }
-  await driveNetwork(net, {untilMs: 1000, stepMs: 5});
-  const leaderB = followers.find((id) => rafts.get(id).state === LifeRaft.LEADER) || null;
+  await consensus.runUntil(1000, {stepMs: 5});
+  const leaderB = followers.find((id) => consensus.isLeader(id)) || null;
   const afterPartition = snapshot();
 
   // Phase C — heal; the old leader steps down and stops acting as owner. Two snapshots after
@@ -111,9 +104,9 @@ async function runControlPlaneMigration(seed) {
   for (const other of followers) {
     net.heal(leaderA, other);
   }
-  await driveNetwork(net, {untilMs: 1300, stepMs: 5});
+  await consensus.runUntil(1300, {stepMs: 5});
   const healMid = snapshot();
-  await driveNetwork(net, {untilMs: 1700, stepMs: 5});
+  await consensus.runUntil(1700, {stepMs: 5});
   const healEnd = snapshot();
 
   assertMembershipPublicationOwnerDriverHostsHealthy(
@@ -121,8 +114,8 @@ async function runControlPlaneMigration(seed) {
   );
   IDS.forEach((id) => {
     owners.get(id).coordinator.stopOwnerMembershipDriver();
-    rafts.get(id).end();
   });
+  consensus.dispose();
   return {leaderA, leaderB, afterElection, afterPartition, healMid, healEnd};
 }
 
@@ -165,16 +158,36 @@ t.test('Phase C: heal resolves to a single stable owner (old leader steps down, 
     t.same(stillActing, [m.leaderB], 'exactly one node is still acting as owner after heal');
   });
 
-t.test('the whole-system handoff is deterministic and seed-determined', async (t) => {
+// Which nodes acted as the publication owner in each settled phase: the handoff's structure,
+// without the tick counts the core's election timing moves. The first ticks after heal are left
+// out: whether the old leader passes its gate once more before it hears the higher term is
+// election timing too.
+function ownerHandoff(m) {
+  const actedBetween = (from, to) => IDS.filter((id) => (to[id] - (from?.[id] ?? 0)) > 0);
+  return {
+    leaderA: m.leaderA,
+    leaderB: m.leaderB,
+    election: actedBetween(null, m.afterElection),
+    partition: actedBetween(m.afterElection, m.afterPartition),
+    healed: actedBetween(m.healMid, m.healEnd),
+  };
+}
+
+// DETERMINISM IS NARROWED TO THE HANDOFF (owner decision O2, closed 2026-10-04: the raft-rs
+// binding is not seeded), the same shape as dt6-publication-failback-pct-search's Phase J
+// narrowing. raft-rs draws each randomized election timeout from the platform RNG, which no seed
+// can choose, so the virtual instant a node becomes candidate - and with it every owner-gate tick
+// count - varies run to run. A replayed seed must reach the same leaders and the same owner in
+// every phase; this test does NOT claim identical gate-pass counts.
+t.test('the whole-system handoff is seed-determined (same leaders and owners per phase; ' +
+  'gate-pass counts not claimed)', async (t) => {
   const a = await runControlPlaneMigration(5);
   const b = await runControlPlaneMigration(5);
-  t.same(
-    {leaderA: a.leaderA, leaderB: a.leaderB, afterElection: a.afterElection,
-      afterPartition: a.afterPartition, healEnd: a.healEnd},
-    {leaderA: b.leaderA, leaderB: b.leaderB, afterElection: b.afterElection,
-      afterPartition: b.afterPartition, healEnd: b.healEnd},
-    'same seed -> identical leadership, migration, and owner-gate handoff',
-  );
+  t.same(ownerHandoff(b), ownerHandoff(a),
+    'same seed -> same leaders and the same owner in election, partition and after heal');
+  t.same(ownerHandoff(a).partition,
+    IDS.filter((id) => id === a.leaderA || id === a.leaderB),
+    'the replayed seed shows the dual-owner window: both leaders act while partitioned');
 
   // Across seeds the owner gate always follows real raft leadership: exactly the elected leader
   // owns after election, and exactly the migrated leader is the sole stable owner after heal.

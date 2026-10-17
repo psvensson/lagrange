@@ -13,8 +13,6 @@
 import {EventEmitter} from 'events';
 import path from 'path';
 import {LoggingService} from '../logging/logging-service.js';
-import {ConfigurationManager} from '../config/configuration-manager.js';
-import {CONFIG_KEY} from '../config/config-constants.js';
 import {STORAGE_DEFAULT} from '../storage/storage-constants.js';
 import {assertCritical} from '../utils/assert.js';
 import {createControlPlaneRuntimeBundle} from
@@ -120,13 +118,6 @@ class ReplicaLifecycleManager extends EventEmitter {
     this.localReplicas = this.replicaHandler.localReplicas ||
       this.replicaHandler.localServices ||
       new Map();
-
-    // Configuration
-    const config = ConfigurationManager.getInstance();
-    this.operationTimeoutMs = config.get(CONFIG_KEY.LIFECYCLE_OPERATION_TIMEOUT_MS) ||
-      REPLICA_LIFECYCLE_DEFAULT.OPERATION_TIMEOUT_MS;
-    this.syncTimeoutMs = config.get(CONFIG_KEY.LIFECYCLE_SYNC_TIMEOUT_MS) ||
-      REPLICA_LIFECYCLE_DEFAULT.SYNC_TIMEOUT_MS;
 
     // Logging
     const loggingService = LoggingService.getInstance();

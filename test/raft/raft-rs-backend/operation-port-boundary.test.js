@@ -175,9 +175,12 @@ test('retirement has one production writer and no provider control accessor',
     assert.deepEqual(writers, [
       'src/raft/raft-rs-replica-lifecycle-owner.js',
     ]);
-    const provider = sourceOf(path.join(SRC_RAFT, 'raft-rs-provider.js'));
-    assert.equal(provider.includes('partitionControlOf'), false);
-    assert.equal(provider.includes('partitionControls'), false);
+    // The provider facade that once could have exposed a control accessor
+    // is deleted; its absence is owned by zero-legacy-consensus-runtime.
+    for (const {file, source} of sources) {
+      assert.equal(/partitionControlOf|partitionControls/u.test(source), false,
+        `${file} exposes no partition control accessor`);
+    }
   });
 
 test('the private owner instruments actual core entry rather than gate checks',
@@ -193,21 +196,6 @@ test('the private owner instruments actual core entry rather than gate checks',
 
 test('the operation boundary removes public capability instead of renaming it',
   () => {
-    const provider = sourceOf(path.join(SRC_RAFT, 'raft-rs-provider.js'));
-    assert.doesNotMatch(provider,
-      /RaftRsGroupHandle|raftRsGroupOf|partitionControlOf|retireFromScheduling/u);
-    assert.match(provider, /createPartitionPort/u);
-    const providerCluster = new PartitionNodeCluster({
-      partitionId: 'stateless-provider-red',
-      replicaIds: ['stateless-provider-replica'],
-    });
-    try {
-      assert.equal(Object.isFrozen(providerCluster.provider), true);
-      assert.deepEqual(Reflect.ownKeys(providerCluster.provider), [],
-        'the provider retains no options, runtime or per-group values');
-    } finally {
-      providerCluster.dispose();
-    }
     const after = generateCurrentLedger();
     const categories = [
       'publicMethods', 'publicDataProperties', 'mutablePublicValues',

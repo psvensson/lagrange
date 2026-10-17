@@ -5,7 +5,6 @@ import {
   RECOVERY_PROTOCOL_STATE,
 } from './membership-lifecycle-constants.js';
 import {
-  PRIORITY_CLOSURE_WITNESS_SUMMARY_STATE,
   PUBLICATION_PRIORITY_SPREAD_DECISION_SOURCE,
   PUBLICATION_RECOVERY_OWNER_REASON_CODE_SET,
 } from './publication-recovery-gate-constants.js';
@@ -41,64 +40,6 @@ function readPriorityRecoveryDecisionClosureWitness(
   return normalizePriorityRecoveryClosureWitness(
     priorityRecoveryDecisionSnapshots?.closureWitness,
   );
-}
-
-function resolvePriorityClosureWitnessSummaryState(
-  priorityRecoveryClosureWitness = null,
-  durablePriorityPartitionSummary = null,
-) {
-  const summarySpreadPending =
-    durablePriorityPartitionSummary ?
-      resolvePrioritySpreadPendingFromSummary(durablePriorityPartitionSummary) :
-      null;
-  const closureWitnessSatisfied =
-    priorityRecoveryClosureWitness?.prioritySpreadPending === false;
-  const stalePublicationWitness =
-    priorityRecoveryClosureWitness?.publicationRefreshRequired === true ||
-    priorityRecoveryClosureWitness?.state ===
-      PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE.SATISFIED_STALE_PUBLICATION;
-  const durableSummaryRefreshed =
-    closureWitnessSatisfied &&
-    stalePublicationWitness &&
-    summarySpreadPending === false;
-  return durableSummaryRefreshed ?
-    PRIORITY_CLOSURE_WITNESS_SUMMARY_STATE.DURABLE_SUMMARY_REFRESHED :
-    PRIORITY_CLOSURE_WITNESS_SUMMARY_STATE.RETAINED;
-}
-
-function normalizePriorityClosureWitnessForDurableSummary(
-  priorityRecoveryClosureWitness = null,
-  durablePriorityPartitionSummary = null,
-) {
-  const normalizedPriorityRecoveryClosureWitness =
-    normalizePriorityRecoveryClosureWitness(priorityRecoveryClosureWitness);
-  if (!normalizedPriorityRecoveryClosureWitness) {
-    return null;
-  }
-  const closureWitnessSummaryState =
-    resolvePriorityClosureWitnessSummaryState(
-      normalizedPriorityRecoveryClosureWitness,
-      durablePriorityPartitionSummary,
-    );
-  if (
-    closureWitnessSummaryState !==
-      PRIORITY_CLOSURE_WITNESS_SUMMARY_STATE.DURABLE_SUMMARY_REFRESHED
-  ) {
-    return normalizedPriorityRecoveryClosureWitness;
-  }
-  return Object.freeze({
-    ...normalizedPriorityRecoveryClosureWitness,
-    state: PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE.SATISFIED_FRESH,
-    publicationRefreshRequired: false,
-    closureRecordId: null,
-    closureWitnessClass: null,
-    refreshedPriorityPartitionSummary:
-      normalizePriorityPartitionSummary(
-        normalizedPriorityRecoveryClosureWitness
-          .refreshedPriorityPartitionSummary,
-      ) || durablePriorityPartitionSummary,
-    summarySpreadPending: false,
-  });
 }
 
 function hasPrioritySpreadMetricEvidence(priorityPartitionSummary = null) {
@@ -150,69 +91,70 @@ function requiresPrioritySpreadOwnerEvidence(options = {}) {
   );
 }
 
-function buildPrioritySpreadDecision(options = {}) {
-  const durablePriorityPartitionSummary = normalizePriorityPartitionSummary(
+function isPriorityRecoveryClosureWitnessPending(priorityRecoveryClosureWitness) {
+  return priorityRecoveryClosureWitness?.state ===
+    PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE.PENDING;
+}
+
+// THE rule (owner decision 2026-10-04, "delete the second authority"):
+// priority spread is pending iff the census shows a gap, or the closure
+// witness is PENDING. The census is the one owner of "is it spread?"; the
+// witness may only add a blocker, and a non-pending witness never clears a
+// census gap. Every reader of priority-spread-pending consumes this answer.
+function resolvePrioritySpreadPending(options = {}) {
+  const priorityPartitionSummary = normalizePriorityPartitionSummary(
     options.priorityPartitionSummary,
   );
-  const decisionSnapshotClosureWitness =
-    readPriorityRecoveryDecisionClosureWitness(
-      options.priorityRecoveryDecisionSnapshots,
+  const censusGap = priorityPartitionSummary ?
+    resolvePrioritySpreadPendingFromSummary(priorityPartitionSummary) :
+    false;
+  return censusGap === true ||
+    isPriorityRecoveryClosureWitnessPending(
+      options.priorityRecoveryClosureWitness,
     );
-  const rawPriorityRecoveryClosureWitness = normalizePriorityRecoveryClosureWitness(
-    options.priorityRecoveryClosureWitness,
-  ) || decisionSnapshotClosureWitness;
-  const priorityRecoveryClosureWitness =
-    normalizePriorityClosureWitnessForDurableSummary(
-      rawPriorityRecoveryClosureWitness,
-      durablePriorityPartitionSummary,
-    );
-  const priorityPartitionSummary =
-    normalizePriorityPartitionSummary(
-      priorityRecoveryClosureWitness?.refreshedPriorityPartitionSummary,
-    ) || durablePriorityPartitionSummary;
-  const recoveryProtocolState = normalizeOptionalString(
-    options.recoveryProtocolState,
+}
+
+function buildPrioritySpreadDecision(options = {}) {
+  const priorityPartitionSummary = normalizePriorityPartitionSummary(
+    options.priorityPartitionSummary,
   );
-  const reasonCodes = Array.isArray(options.reasonCodes) ?
-    options.reasonCodes :
-    [];
+  const priorityRecoveryClosureWitness = normalizePriorityRecoveryClosureWitness(
+    options.priorityRecoveryClosureWitness,
+  ) || readPriorityRecoveryDecisionClosureWitness(
+    options.priorityRecoveryDecisionSnapshots,
+  );
   const prioritySpreadOwnerEvidenceRequired =
     requiresPrioritySpreadOwnerEvidence({
-      recoveryProtocolState,
-      reasonCodes,
+      recoveryProtocolState: normalizeOptionalString(
+        options.recoveryProtocolState,
+      ),
+      reasonCodes: Array.isArray(options.reasonCodes) ?
+        options.reasonCodes :
+        [],
     });
-  const closureWitnessPrioritySpreadPending =
-    typeof priorityRecoveryClosureWitness?.prioritySpreadPending === 'boolean' ?
-      priorityRecoveryClosureWitness.prioritySpreadPending :
-      null;
-  const summaryPrioritySpreadPending =
-    priorityPartitionSummary ?
-      hasZeroPrioritySpreadGapSummary(priorityPartitionSummary) ?
-        false :
-        hasPriorityRecoverySpreadGap(priorityPartitionSummary) :
-      null;
+  // Evidence is unavailable only when neither the census summary nor a
+  // closure witness is present. A non-pending witness without any summary
+  // has no census gap to clear: it is evidence, not an override.
   const prioritySpreadEvidenceUnavailable =
-    !priorityRecoveryClosureWitness &&
     !priorityPartitionSummary &&
+    !priorityRecoveryClosureWitness &&
     prioritySpreadOwnerEvidenceRequired === true;
-  const decisionSource = priorityRecoveryClosureWitness ?
-    PUBLICATION_PRIORITY_SPREAD_DECISION_SOURCE.CLOSURE_WITNESS :
-    priorityPartitionSummary ?
-      PUBLICATION_PRIORITY_SPREAD_DECISION_SOURCE.PRIORITY_PARTITION_SUMMARY :
+  const decisionSource = priorityPartitionSummary ?
+    PUBLICATION_PRIORITY_SPREAD_DECISION_SOURCE.PRIORITY_PARTITION_SUMMARY :
+    priorityRecoveryClosureWitness ?
+      PUBLICATION_PRIORITY_SPREAD_DECISION_SOURCE.CLOSURE_WITNESS :
       PUBLICATION_PRIORITY_SPREAD_DECISION_SOURCE.OWNER_EVIDENCE_UNAVAILABLE;
 
   return Object.freeze({
     decisionSource,
     priorityPartitionSummary,
-    durablePriorityPartitionSummary,
+    durablePriorityPartitionSummary: priorityPartitionSummary,
     priorityRecoveryClosureWitness,
     prioritySpreadEvidenceUnavailable,
-    prioritySpreadPending:
-      priorityRecoveryClosureWitness ?
-        closureWitnessPrioritySpreadPending :
-        priorityPartitionSummary ?
-          summaryPrioritySpreadPending :
-          false,
+    prioritySpreadPending: resolvePrioritySpreadPending({
+      priorityPartitionSummary,
+      priorityRecoveryClosureWitness,
+    }),
   });
 }
 
@@ -267,4 +209,6 @@ function filterProvidedPriorityRecoveryReasonCodes(
 export {
   buildPrioritySpreadDecision,
   filterProvidedPriorityRecoveryReasonCodes,
+  isPriorityRecoveryClosureWitnessPending,
+  resolvePrioritySpreadPending,
 };

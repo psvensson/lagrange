@@ -281,6 +281,12 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
         cancellationToken: waitOptions.cancellationToken || null,
         classification: TIMEOUT_BUDGET_CLASSIFICATION.CACHE_VISIBILITY_TIMEOUT,
         nestedOperation: LOCAL_STR_TABLE_PARTITION_METADATA_WAIT,
+        scope: {partitionId, tableId},
+        observe: () => ({
+          hasPartitionRecord:
+            this.queryExecutor?.hasPartitionRecord?.(partitionId) === true,
+          hasTableRecord: tableId ? this.hasTableMetadata(tableId) : true,
+        }),
       },
     );
   }
@@ -372,6 +378,8 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
         cancellationToken: waitOptions.cancellationToken || null,
         classification: TIMEOUT_BUDGET_CLASSIFICATION.CACHE_VISIBILITY_TIMEOUT,
         nestedOperation,
+        scope: {replicaId},
+        observe: () => ({usedCacheRepairWait: Boolean(usesCacheRepairWaits)}),
       },
     );
   }
@@ -484,6 +492,15 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
         cancellationToken: waitOptions.cancellationToken || null,
         classification: TIMEOUT_BUDGET_CLASSIFICATION.PUBLICATION_WAIT_TIMEOUT,
         nestedOperation: LOCAL_STR_PARTITION_ROUTING_WAIT,
+        scope: {partitionId},
+        observe: () => ({
+          requiredCount,
+          routableCount: this.getRoutablePartitionServiceNodeIds(
+            partitionId,
+            routingReadinessDimension,
+          ).length,
+          routingReadinessDimension,
+        }),
       },
     );
   }
@@ -583,6 +600,15 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
         cancellationToken: options.cancellationToken || null,
         classification: TIMEOUT_BUDGET_CLASSIFICATION.PUBLICATION_WAIT_TIMEOUT,
         nestedOperation: LOCAL_STR_PARTITION_LEADER_WAIT,
+        scope: {partitionId},
+        observe: () => ({
+          leaderRouteFound: false,
+          routableCount: this.getRoutablePartitionServiceNodeIds(
+            partitionId,
+            routingReadinessDimension,
+          ).length,
+          routingReadinessDimension,
+        }),
       },
     );
   }

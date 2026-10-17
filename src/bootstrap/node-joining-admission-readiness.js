@@ -15,6 +15,18 @@ import {
   resolveRetryableJoinMinimumMaxElapsedMs,
   resolveRetryableJoinResumeAttemptBudgetMode,
 } from './retryable-join-resume-policy.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+
+const JOIN_RESUME_SPENT_WAIT = Object.freeze({
+  ELAPSED: Object.freeze({
+    wait: 'retryableJoinResumePolicy.maxElapsedMs',
+    awaited: 'join pipeline completion across retryable resumes',
+  }),
+  ATTEMPTS: Object.freeze({
+    wait: 'retryableJoinResumePolicy.maxAttempts',
+    awaited: 'join pipeline completion across retryable resumes',
+  }),
+});
 const {
   JOINING_DEFAULT,
   JOINING_ERROR_MSG,
@@ -624,6 +636,28 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
     }
     return RETRYABLE_JOIN_RESUME_FAILURE_PROFILE.DEFAULT;
   }
+  /**
+   * Report an exhausted retryable-join resume budget.
+   * @param {Object} spentWait - One JOIN_RESUME_SPENT_WAIT entry.
+   * @param {Object} observed - Resume decision state at exhaustion.
+   */
+  reportJoinResumeSpent(spentWait, observed) {
+    reportWaitBoundSpent(this.logger, {
+      ...spentWait,
+      boundMs: observed.maxElapsedMs,
+      elapsedMs: observed.elapsedMs,
+      lastObserved: {
+        attempts: observed.attempt,
+        maxAttempts: observed.maxAttempts,
+        attemptBudgetMode: observed.attemptBudgetMode,
+        failureProfile: observed.failureProfile,
+        exhaustionReason: observed.exhaustionReason,
+        phase: observed.phase,
+        lastError: observed.error,
+      },
+      scope: {nodeId: this.nodeId, joinSessionId: this.joinSessionId},
+    });
+  }
   resolveRetryableJoinResumeDecision(error, failureResult, attempt, policy) {
     const failureProfile = this.resolveRetryableJoinResumeFailureProfile(
       error,
@@ -663,9 +697,7 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
         stopReason: RETRYABLE_JOIN_RESUME_STOP_REASON.NON_RETRYABLE,
       };
     } else if (elapsedMs >= policy.maxElapsedMs) {
-      this.logger.warn(JOINING_LOG_MSG.RETRYABLE_FAILURE_RESUME_EXHAUSTED, {
-        nodeId: this.nodeId,
-        joinSessionId: this.joinSessionId,
+      this.reportJoinResumeSpent(JOIN_RESUME_SPENT_WAIT.ELAPSED, {
         attempt,
         maxAttempts: limitedAttemptBudget,
         elapsedMs,
@@ -689,9 +721,7 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
       attemptBudgetMode === RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE.LIMITED &&
       attempt >= policy.maxAttempts
     ) {
-      this.logger.warn(JOINING_LOG_MSG.RETRYABLE_FAILURE_RESUME_EXHAUSTED, {
-        nodeId: this.nodeId,
-        joinSessionId: this.joinSessionId,
+      this.reportJoinResumeSpent(JOIN_RESUME_SPENT_WAIT.ATTEMPTS, {
         attempt,
         maxAttempts: policy.maxAttempts,
         elapsedMs,

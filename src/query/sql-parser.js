@@ -21,7 +21,11 @@ const {Parser: PostgreSQLParser} = postgresqlNodeSqlParser;
 import {LoggingService} from '../logging/logging-service.js';
 import {AST_TYPE, EXPR_TYPE} from './parser-constants.js';
 import {PARSER_DIALECT} from './pg/pg-compat-constants.js';
-import {QUERY_ERROR_MSG} from './query-constants.js';
+import {QUERY_ERROR_CODE, QUERY_ERROR_MSG} from './query-constants.js';
+import {
+  TRANSACTION_CONTROL_KIND,
+  resolveTransactionControlStatement,
+} from './sql-transaction-control-grammar.js';
 import {
   translateOnConflict,
 } from './pg/pg-translate.js';
@@ -122,12 +126,67 @@ const EXT_EXPR_TYPE = Object.freeze({
  */
 const STAR_VALUE = '*';
 
-const SQL_KEYWORD = Object.freeze({
-  BEGIN: 'BEGIN',
-  BEGIN_PREFIX: 'BEGIN ',
-  COMMIT: 'COMMIT',
-  ROLLBACK: 'ROLLBACK',
-});
+function createTypedParseError(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
+/**
+ * The one statement of a parsed statement list. node-sql-parser returns a
+ * list for any text with a `;`; an empty statement (`;`, a comment) is an
+ * empty list inside it. Only executable statement nodes count.
+ * @param {Array} statements - node-sql-parser statement list.
+ * @return {Object} The single statement node.
+ * @throws {Error} code EMPTY_STATEMENT when the text holds no statement;
+ *   code MULTIPLE_STATEMENTS_UNSUPPORTED when it holds more than one (the
+ *   whole text is refused: no statement of it may execute).
+ */
+function requireSingleStatement(statements) {
+  const executable = statements.flat(Infinity).filter(
+    (node) => node !== null && typeof node === 'object',
+  );
+  if (executable.length === 0) {
+    throw createTypedParseError(
+      QUERY_ERROR_CODE.EMPTY_STATEMENT,
+      PARSER_ERROR_MSG.EMPTY_SQL_STATEMENT,
+    );
+  }
+  if (executable.length > 1) {
+    throw createTypedParseError(
+      QUERY_ERROR_CODE.MULTIPLE_STATEMENTS_UNSUPPORTED,
+      QUERY_ERROR_MSG.MULTIPLE_STATEMENTS_UNSUPPORTED,
+    );
+  }
+  return executable[0];
+}
+
+/**
+ * The transaction-control statement the text is, by the engine's grammar.
+ * @param {string} sql - Statement text.
+ * @return {?Object} {type} for a transaction-control statement; null when
+ *   the text is not one.
+ * @throws {Error} code TRANSACTION_CONTROL_SYNTAX_ERROR for a malformed one;
+ *   code UNSUPPORTED_SQL_FEATURE for a transaction mode the engine does not
+ *   provide (named in the message).
+ */
+function parseTransactionControl(sql) {
+  const {kind, unsupportedMode} = resolveTransactionControlStatement(sql);
+  if (kind === TRANSACTION_CONTROL_KIND.MALFORMED) {
+    throw createTypedParseError(
+      QUERY_ERROR_CODE.TRANSACTION_CONTROL_SYNTAX_ERROR,
+      QUERY_ERROR_MSG.TRANSACTION_CONTROL_SYNTAX_ERROR,
+    );
+  }
+  if (kind === TRANSACTION_CONTROL_KIND.UNSUPPORTED_MODE) {
+    throw createTypedParseError(
+      QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE,
+      QUERY_ERROR_MSG.TRANSACTION_MODE_UNSUPPORTED_PREFIX + unsupportedMode +
+        QUERY_ERROR_MSG.TRANSACTION_MODE_UNSUPPORTED_SUFFIX,
+    );
+  }
+  return kind === TRANSACTION_CONTROL_KIND.NONE ? null : {type: kind};
+}
 
 function extractCreateTableStorageOptions(sql) {
   if (
@@ -233,17 +292,8 @@ class SQLParser {
   parse() {
     this.positionalParams = [];
     this.parameterCounter = 0;
-    const trimmedSql = this.sql.trim().toUpperCase();
-    if (trimmedSql === SQL_KEYWORD.BEGIN ||
-        trimmedSql.startsWith(SQL_KEYWORD.BEGIN_PREFIX)) {
-      return {type: AST_TYPE.BEGIN_TRANSACTION};
-    }
-    if (trimmedSql === SQL_KEYWORD.COMMIT) {
-      return {type: AST_TYPE.COMMIT};
-    }
-    if (trimmedSql === SQL_KEYWORD.ROLLBACK) {
-      return {type: AST_TYPE.ROLLBACK};
-    }
+    const transactionControl = parseTransactionControl(this.sql);
+    if (transactionControl) return transactionControl;
 
     try {
       const dbMode = this.dialect === PARSER_DIALECT.POSTGRESQL ?
@@ -268,7 +318,15 @@ class SQLParser {
       const errorMsg =
         PARSER_ERROR_MSG.SQL_PARSE_ERROR_PREFIX + error.message;
       this.logger.error(errorMsg, {sql: this.sql});
-      throw new Error(errorMsg);
+      if (error.code === QUERY_ERROR_CODE.MULTIPLE_STATEMENTS_UNSUPPORTED ||
+          error.code === QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE) {
+        throw error;
+      }
+      const parseError = new Error(errorMsg);
+      if (error.code === QUERY_ERROR_CODE.EMPTY_STATEMENT) {
+        parseError.code = error.code;
+      }
+      throw parseError;
     }
   }
 
@@ -285,12 +343,10 @@ class SQLParser {
   }
 
   convertAst(ast) {
-    // Handle array result (e.g., when SQL ends with semicolon)
+    // A statement list (any text with a `;`) must hold exactly one
+    // statement; more than one is refused whole, never truncated.
     if (Array.isArray(ast)) {
-      if (ast.length === 0) {
-        throw new Error(PARSER_ERROR_MSG.EMPTY_SQL_STATEMENT);
-      }
-      return this.convertAst(ast[0]);
+      return this.convertAst(requireSingleStatement(ast));
     }
 
     switch (ast.type) {
@@ -392,7 +448,15 @@ class SQLParser {
     const values = [];
     const insertMode = this.getInsertMode(ast);
 
-    // node-sql-parser wraps values in {type: 'values', values: [...]}
+    // node-sql-parser wraps values in {type: 'values', values: [...]}; an
+    // INSERT ... SELECT has a select there, which this AST cannot carry:
+    // refused, never executed as an insert of no rows.
+    if (ast.values?.type === EXTERNAL_TYPE.SELECT) {
+      throw createTypedParseError(
+        QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE,
+        QUERY_ERROR_MSG.INSERT_SELECT_UNSUPPORTED,
+      );
+    }
     const valueRows = ast.values?.values || [];
     for (const row of valueRows) {
       const rowValues = [];
@@ -670,4 +734,8 @@ class SQLParser {
 Object.assign(SQLParser.prototype, sqlParserExpressionMethods);
 Object.assign(SQLParser.prototype, sqlParserSchemaMutationMethods);
 
-export {SQLParser, AST_TYPE, EXPR_TYPE};
+export {
+  SQLParser,
+  AST_TYPE,
+  EXPR_TYPE,
+};

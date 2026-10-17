@@ -84,7 +84,6 @@ function stubDurableRejoin(service, calls, options = {}) {
       completeJoinConvergence() {},
     });
   };
-  service.phaseJoinExistingMessageGroup = async () => {};
   service.phaseWaitForLeadership = async () => {};
   service.initializeJoinInfrastructure = async () => {
     calls.infrastructure.push(attempt);

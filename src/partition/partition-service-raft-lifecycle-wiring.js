@@ -43,14 +43,12 @@ function wirePartitionRaftLifecycleEvents(
   const observeConsensusHold = createConsensusHoldLog(service);
   // The term is the consensus core's own (readStatus().term); nothing here
   // copies it. Committed entries are applied only by the port's
-  // committed-entry application, so COMMIT carries no handler; it stays in
-  // the map because the lifecycle owner subscribes to every named event.
+  // committed-entry application, which is why no commit event is wired.
   wireReplicaLifecycleEvents(service, {
     events: {
       LEADER: PARTITION_SERVICE_ROLE.LEADER,
       FOLLOWER: PARTITION_SERVICE_ROLE.FOLLOWER,
       CANDIDATE: PARTITION_SERVICE_ROLE.CANDIDATE,
-      COMMIT: PARTITION_SERVICE_REASON.COMMIT,
       LEADER_CHANGE: PARTITION_SERVICE_REASON.LEADER_CHANGE,
       TERM_CHANGE: PARTITION_SERVICE_REASON.TERM_CHANGE,
     },

@@ -1,6 +1,7 @@
 import {CLUSTER_CLASS_SHARED_CONTEXT} from './cluster-class-shared-context.js';
 import {acquireReusableClusterLease, isReusableClusterLeaseTimeoutError, registerClusterCleanup} from './cluster-runtime-helpers.js';
 import {waitForState} from './wait-for-state.js';
+import {observeConvergenceWait} from './scenario-certification.js';
 import {SOURCE_FINGERPRINT_ENV_VAR} from '../../../src/diagnostics/source-fingerprint.js';
 import {
   createNodeLogStreamer,
@@ -10,6 +11,7 @@ import {
   nodeLogHostDir,
   nodeLogHostFile,
   nodeLogContainerFilePath,
+  resetScenarioFullLogs,
   INCARNATION_BOUNDARY_EVENT,
   NODE_LOG_FILE_ENV_VAR,
   NODE_LOG_DIR_CONTAINER,
@@ -114,8 +116,6 @@ const {
   PLAYBACK_SCOPE_NODE,
   PORTS,
   PlaybackRecorder,
-  RAFT_PROVIDER_DEFAULTS,
-  RAFT_PROVIDER_ENV_KEY,
   REQUEST_CELL_AUTH,
   REUSE_CONTAINER_NAME_PREFIX,
   REUSE_DATA_DIRNAME,
@@ -552,9 +552,6 @@ class ClusterLifecycleBase {
       // which forces the reuse recreate so the matching bind is picked up.
       env[NODE_LOG_FILE_ENV_VAR] = nodeLogContainerFilePath();
     }
-    env[RAFT_PROVIDER_ENV_KEY] = String(
-      this._config.raftProvider || RAFT_PROVIDER_DEFAULTS.provider,
-    );
     if (this._config?.memoryLeak?.captureHeapArtifacts === true) {
       const nearLimitCount =
         Number.isInteger(
@@ -896,6 +893,22 @@ class ClusterLifecycleBase {
     this._networkId = net.id;
   }
 
+  // This run owns the scenario's artifact directory from here on: an
+  // earlier run's curated and full node logs must not be read as its
+  // evidence (the directory is shared per scenario, node ids are not), and
+  // must never be destroyed either: they move, with that run's failure
+  // bundle, into the earlier run's archive dir (log-collector.js
+  // archivePreviousScenarioRun owns the layout, the bound and the bundle
+  // path rewrite; resetScenarioFullLogs moves the full logs into it).
+  async _resetScenarioRunArtifacts() {
+    const outputDir = this._config?.outputDir;
+    const scenarioName = this._scenarioName;
+    await this._logCollector.archivePreviousScenarioRun(scenarioName, {
+      archiveFullLogs: (archiveDir) =>
+        resetScenarioFullLogs(outputDir, scenarioName, archiveDir),
+    });
+  }
+
   async start() {
     if (!this._cleanupUnregister) {
       this._cleanupUnregister = registerClusterCleanup(
@@ -904,6 +917,7 @@ class ClusterLifecycleBase {
       );
     }
     await this._prepareReusableClusterLeaseForStart();
+    await this._resetScenarioRunArtifacts();
 
     try {
       await this._playbackRecorder.start({
@@ -946,6 +960,7 @@ class ClusterLifecycleBase {
         role: NODE_ROLES.SEED,
         ip: seedNode.ip,
         containerId: seedNode.containerId,
+        host: seedNode.hostIdentity,
       },
     );
     this._recordPlaybackEvent(
@@ -996,6 +1011,7 @@ class ClusterLifecycleBase {
           role: NODE_ROLES.JOINER,
           ip: joinerNode.ip,
           containerId: joinerNode.containerId,
+          host: joinerNode.hostIdentity,
         },
       );
       this._recordPlaybackEvent(
@@ -1663,6 +1679,7 @@ class ClusterLifecycleBase {
         role: NODE_ROLES.JOINER,
         ip: joinerNode.ip,
         containerId: joinerNode.containerId,
+        host: joinerNode.hostIdentity,
       },
     );
     this._recordPlaybackEvent(
@@ -1705,12 +1722,13 @@ class ClusterLifecycleBase {
       Number.isInteger(controlQueryTimeoutMs) && controlQueryTimeoutMs > 0 ?
         controlQueryTimeoutMs :
         undefined;
-    return waitForConvergence(nodes, {
-      ignoreStaleInFlightReplicaOperations: true,
-      noProgressTimeoutMs: TIMEOUTS.CONVERGENCE_NO_PROGRESS,
-      ...(snapshotTimeoutMs !== undefined ? {snapshotTimeoutMs} : {}),
-      ...(options || {}),
-    });
+    return observeConvergenceWait(this, options, () =>
+      waitForConvergence(nodes, {
+        ignoreStaleInFlightReplicaOperations: true,
+        noProgressTimeoutMs: TIMEOUTS.CONVERGENCE_NO_PROGRESS,
+        ...(snapshotTimeoutMs !== undefined ? {snapshotTimeoutMs} : {}),
+        ...(options || {}),
+      }));
   }
 
   async waitForAllActive(options = {}) {

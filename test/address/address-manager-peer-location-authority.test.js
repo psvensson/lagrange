@@ -24,6 +24,8 @@
 // (epic raft-rs-full-cutover finding F18: the rs-raft probe was inert - it
 // reported progress-observed for the unacknowledged peer and sent nothing -
 // so these witnesses are red until the runtime owner makes the probe honest).
+// A message group runs on the same operation port: its real write is the
+// vote request its campaign sends to its founding peer.
 import {test} from '../../src/test-helpers/tap.js';
 import {readdirSync, readFileSync} from 'node:fs';
 
@@ -47,13 +49,11 @@ import {
 } from '../../src/partition/partition-service-constants.js';
 import {assertRaftOperationSucceeded} from
   '../../src/raft/raft-operation-port.js';
-import {
-  RemotePeerRepresentation,
-} from '../../src/raft/remote-peer-representation.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {waitForCondition} from '../partition/partition-service-test-support.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
 
 const ZERO = 0;
 const ONE = 1;
@@ -346,7 +346,7 @@ test('a poisoned process registry cannot move a message-group peer destination',
       bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: NODE_ID, wsPort: nextPort++});
     await router.initialize({startServer: false});
-    const group = new MessageGroupService({
+    const group = new MessageGroupService(withTestDbPath({
       groupId: GROUP_ID,
       replicaId: GROUP_SELF,
       nodeId: NODE_ID,
@@ -354,7 +354,7 @@ test('a poisoned process registry cannot move a message-group peer destination',
       peerAddresses: [GROUP_A],
       transport: router,
       deferElection: true,
-    });
+    }));
     group.systemTableCache = cacheSaying([
       serviceRow(GROUP_SELF,
         `${NODE_ID}/${ENTITY_TYPE.MESSAGE_GROUP}/${GROUP_SELF}`,
@@ -368,17 +368,23 @@ test('a poisoned process registry cannot move a message-group peer destination',
     t.equal(group.buildPeerAddress(GROUP_A), GROUP_A,
       'an already-unified address is returned as given');
 
+    // The group opens its operation port from its two founders without
+    // scheduling; its one campaign sends the vote request to the peer at the
+    // address the port resolves at send time.
     await group.initialize();
     poisonTowardB(GROUP_B);
-    const peer = group.raft.nodes[ZERO];
-    t.ok(peer instanceof RemotePeerRepresentation,
-      'the peer slot holds a representation here too');
+    const status = group.raft.readStatus();
+    t.equal(status.peers.length, ONE,
+      'the operation-port snapshot exposes exactly the one remote peer');
+    t.equal(status.peers[ZERO].address, GROUP_A,
+      'the peer projection carries the authoritative address');
     const before = sent.length;
-    await new Promise((resolve) => {
-      peer.write({type: 'append', address: group.unifiedAddress}, resolve);
-    });
+    assertRaftOperationSucceeded(await group.raft.campaign());
+    await waitForCondition(() => sent.length > before, ADMISSION_BUDGET_MS);
     t.same(sent.slice(before), [GROUP_A],
-      'and the packet the production write actually sent went there');
+      'and the vote request the port actually sent went there');
+    t.same([...AddressManager.getInstance().serviceAddresses], [GROUP_B],
+      'resolution neither consulted nor mutated the registry');
     await group.shutdown();
     await router.shutdown();
   });
@@ -390,14 +396,14 @@ test('with no authoritative location a message group refuses rather than using t
       bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: NODE_ID, wsPort: nextPort++});
     await router.initialize({startServer: false});
-    const group = new MessageGroupService({
+    const group = new MessageGroupService(withTestDbPath({
       groupId: GROUP_ID,
       replicaId: GROUP_SELF,
       nodeId: NODE_ID,
       replicaIds: [GROUP_SELF, GROUP_PEER],
       transport: router,
       deferElection: true,
-    });
+    }));
     poisonTowardB(GROUP_B);
     t.throws(() => group.buildPeerAddress(GROUP_PEER),
       /Unable to resolve unified peer address/u,

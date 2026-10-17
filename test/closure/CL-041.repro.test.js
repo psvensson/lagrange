@@ -1,69 +1,70 @@
 import t from 'tap';
-import LifeRaft from '../../src/raft/liferaft.js';
-import {InMemoryLogAdapter} from '../../src/raft/in-memory-log-adapter.js';
+import {createVirtualNetwork} from '../distributed/harness/virtual-network.js';
+import {connectRaftRsNetwork} from '../test-helpers/raft-rs-network-host.js';
 
-// CL-041 — deterministic unit repro of the @markwylde/liferaft vote-handler double-vote TOCTOU
-// (record: solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-041.md).
+// CL-041 — one vote per term, on real raft-rs operation ports
+// (solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-041.md).
 //
-// First violated invariant (Raft §5.2 — one vote per term): a server grants its vote to AT MOST
-// ONE candidate in a given term. liferaft's `vote` handler races: the `await raft.log.getLastInfo()`
-// (only present when a log adapter is configured — the production message-group raft) sits BETWEEN
-// the "have I already voted?" check (`if (raft.votes.for && ...)`) and the assignment
-// (`raft.votes.for = packet.address`). Two concurrent same-term vote requests both pass the check
-// before either records the vote → the follower grants BOTH → both candidates can reach quorum →
-// two leaders in one term → split-brain / committed-log divergence.
+// Invariant (Raft §5.2): a server grants its vote to AT MOST ONE candidate in a given term, so at
+// most one leader can be elected per term (Election Safety). The retired runtime broke it with an
+// asynchronous gap between its "already voted?" check and the vote record: two concurrent
+// same-term requests both passed the check and both candidates could lead the same term.
 //
-// This is a unit repro: no VirtualNetwork, no driveNetwork — just one real follower (with a log)
-// receiving two real vote packets concurrently (two synchronous `emit('data')` calls, exactly what
-// a real event loop does when two packets arrive close together). It asserts the follower grants at
-// most one. Red without the fix; green with src/raft/liferaft.js vote serialization. Red-on-revert.
+// Here two real candidates stand at the same virtual instant, so they campaign for the SAME term
+// and the third replica receives both vote requests in one delivery window. No replica times out by
+// itself (one long shared election window); candidacy is the port's explicit campaign. Every
+// replica's port status is sampled on each millisecond of virtual time: both candidacies must be
+// observed in one term, no term may ever have two leaders, and the race resolves to one leader.
 
-function flush(turns = 80) {
-  let p = Promise.resolve();
-  for (let i = 0; i < turns; i += 1) {
-    p = p.then(() => undefined);
+const IDS = Object.freeze(['A', 'B', 'F']);
+const PARTITION_ID = 'cl-041-one-vote-per-term';
+const ELECTION_WINDOW_MS = 100000;
+const RUN_MS = 300;
+const LEADER_ROLE = 'leader';
+const CANDIDATE_ROLE = 'candidate';
+
+function record(byTerm, term, id) {
+  if (!byTerm.has(term)) {
+    byTerm.set(term, new Set());
   }
-  return p;
+  byTerm.get(term).add(id);
 }
 
-function makeNode(address) {
-  return new LifeRaft(address, {
-    'election min': '100000 ms',
-    'election max': '100000 ms',
-    'heartbeat': '100000 ms',
-    'write': (_packet, callback) => {
-      if (typeof callback === 'function') {
-        callback(null);
-      }
-    },
-    'Log': InMemoryLogAdapter, // a real log => the vote handler takes the await path (the race)
-  });
-}
-
-t.test('a follower with a log grants at most one candidate per term (no double-vote)',
+t.test('a voter grants at most one candidate per term (no two leaders in a term)',
   async (t) => {
-    const candidateA = makeNode('A');
-    const candidateB = makeNode('B');
-    const follower = makeNode('F');
-    t.teardown(() => [candidateA, candidateB, follower].forEach((n) => n.end()));
+    const net = createVirtualNetwork();
+    const host = connectRaftRsNetwork(net, IDS,
+      {partitionId: PARTITION_ID, electionMinMs: ELECTION_WINDOW_MS});
+    t.teardown(() => host.dispose());
+    host.start();
 
-    const grantedTo = [];
-    follower.on('vote', (packet, granted) => {
-      if (granted) {
-        grantedTo.push(packet.address);
+    host.campaign('A');
+    host.campaign('B');
+    const leadersByTerm = new Map();
+    const candidatesByTerm = new Map();
+    for (let now = 1; now <= RUN_MS; now += 1) {
+      await host.runUntil(now);
+      for (const id of IDS) {
+        const {role, term} = host.status(id);
+        if (role === LEADER_ROLE) {
+          record(leadersByTerm, Number(term), id);
+        } else if (role === CANDIDATE_ROLE) {
+          record(candidatesByTerm, Number(term), id);
+        }
       }
-    });
-    // Two real candidates stand in the SAME term; build their real vote packets.
-    candidateA.term = 5;
-    candidateB.term = 5;
-    const voteFromA = await candidateA.packet('vote');
-    const voteFromB = await candidateB.packet('vote');
+    }
 
-    // Concurrent delivery: emit both before either's async handler settles.
-    follower.emit('data', voteFromA, () => {});
-    follower.emit('data', voteFromB, () => {});
-    await flush();
-
-    t.equal(grantedTo.length, 1,
-      `the follower granted its vote to exactly one candidate in term 5 (granted: ${grantedTo})`);
+    const contestedTerms = [...candidatesByTerm.entries()]
+      .filter(([, ids]) => ids.has('A') && ids.has('B'))
+      .map(([term]) => term);
+    t.ok(contestedTerms.length > 0,
+      `both candidates stood for the same term (candidates by term: ${
+        JSON.stringify([...candidatesByTerm].map(([term, ids]) => [term, [...ids]]))})`);
+    const doubleLedTerms = [...leadersByTerm.entries()]
+      .filter(([, ids]) => ids.size > 1)
+      .map(([term, ids]) => ({term, leaders: [...ids]}));
+    t.same(doubleLedTerms, [],
+      'no term ever had two leaders: the contested voter granted exactly one candidate');
+    t.equal(IDS.filter((id) => host.isLeader(id)).length, 1,
+      'the same-term race resolves to exactly one leader');
   });

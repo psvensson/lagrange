@@ -38,8 +38,8 @@ import {
   RAFT_MEMBERSHIP_OPERATION,
   RAFT_OPERATION_OUTCOME,
 } from '../../../src/raft/raft-operation-port-constants.js';
-import {RAFT_PARTITION_NODE_REQUEST} from
-  '../../../src/raft/raft-provider-contract-constants.js';
+import {RAFT_OPERATION_PORT_REQUEST} from
+  '../../../src/raft/raft-operation-port-request.js';
 
 const PARTITION_ID = 'v1a-seed';
 const FOUNDER = 'v1a-seed-a';
@@ -94,7 +94,7 @@ test('V1a: a founder rebuilt with no stamp and no record is refused typed, ' +
         .appliedIndex > 0, {rounds: ROUNDS}), 'setup: the founder leads');
     const genesis = [String(cluster.raftPeerIdOf(FOUNDER))];
     cluster.addReplica(JOINER, [FOUNDER, JOINER],
-      {[RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_MEMBERSHIP]:
+      {[RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]:
         oracleStamp(cluster, FOUNDER, genesis)});
     const joinerPeerId = String(cluster.raftPeerIdOf(JOINER));
     const joinerHoldsBoth = () => {
@@ -126,7 +126,7 @@ test('V1a: a founder rebuilt with no stamp and no record is refused typed, ' +
     let refusal = null;
     try {
       opened = cluster.buildReplica(FOUNDER, [FOUNDER],
-        {[RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_MEMBERSHIP]: undefined});
+        {[RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]: undefined});
     } catch (error) {
       refusal = error;
     }

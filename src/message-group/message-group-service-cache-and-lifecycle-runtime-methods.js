@@ -1,3 +1,5 @@
+import {closeMessageGroupConsensus} from './message-group-consensus-port.js';
+
 const MESSAGE_GROUP_SERVICE_CACHE_AND_LIFECYCLE_RUNTIME_LITERAL = {
   CONSTRUCTOR: 'constructor',
 };
@@ -119,9 +121,7 @@ function createMessageGroupServiceCacheAndLifecycleRuntimeMethods(deps = {}) {
         role: this.role,
         isLeader: this.isLeader,
         leaderId: this.leaderId,
-        term: this.raft ?
-          this.raftProvider.getCurrentTerm(this.raft) :
-          this.operationLedger.currentTerm,
+        term: this.getCurrentTerm(),
         logLength: this.operationLedger.getLogLength(),
         pendingMessages: this.pendingMessages.size,
         acknowledgedMessages: this.acknowledgedMessages.size,
@@ -161,12 +161,7 @@ function createMessageGroupServiceCacheAndLifecycleRuntimeMethods(deps = {}) {
           this.systemTableCacheChangeListener,
         );
       }
-      if (this.raftRuntime) {
-        await this.raftRuntime.shutdown();
-        this.raftRuntime = null;
-      }
-      this.raft = null;
-      this.joinSuppressedHeartbeat = null;
+      await closeMessageGroupConsensus(this);
       if (
         typeof this.releaseMetadataPublicationReadinessListener ===
         'function'

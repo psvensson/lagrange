@@ -21,6 +21,7 @@
 import assert from 'node:assert/strict';
 
 import {PartitionNodeCluster} from './partition-node-cluster.js';
+import {coreTrappingAppend} from './core-trap-envelope.js';
 import {
   bindingWireNumbers,
   durableAppliedState,
@@ -37,8 +38,8 @@ import {
 } from '../../../src/raft/raft-operation-port-constants.js';
 import {COMMITTED_MEMBERSHIP_STAMP_KIND} from
   '../../../src/raft/raft-committed-membership-constants.js';
-import {RAFT_PARTITION_NODE_REQUEST} from
-  '../../../src/raft/raft-provider-contract-constants.js';
+import {RAFT_OPERATION_PORT_REQUEST} from
+  '../../../src/raft/raft-operation-port-request.js';
 import {RaftRsPeerIdentityRegistry} from
   '../../../src/raft/raft-rs-peer-identity.js';
 
@@ -255,7 +256,7 @@ function oracleStamp(cluster, leader, genesisPeerIds) {
 function joinFromStamp(cluster, replicaId, stamp) {
   return cluster.addReplica(replicaId,
     [...Object.values(stamp.identities), replicaId],
-    {[RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_MEMBERSHIP]: stamp});
+    {[RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]: stamp});
 }
 
 /**
@@ -493,8 +494,8 @@ function recordGateOpenings(cluster, replicaId) {
 }
 
 /**
- * Trap the shared core through one port: a heartbeat whose commit index lies
- * beyond any log, then a tick. Every group is then reconstructed from its
+ * Trap the shared core through one port (core-trap-envelope.js), then a
+ * tick. Every group is then reconstructed from its
  * durable record on its next operation (the runtime-reconstruction restart
  * class).
  * @param {Object} cluster - The cluster.
@@ -503,19 +504,13 @@ function recordGateOpenings(cluster, replicaId) {
  */
 function trapSharedCore(cluster, replicaId) {
   const status = cluster.node(replicaId).readStatus();
-  cluster.node(replicaId).step({
+  cluster.node(replicaId).step(coreTrappingAppend({
+    dbFile: cluster.replica(replicaId).dbFile,
     groupId: cluster.partitionId,
-    to: status.peerId,
-    message: {
-      from: String(Number(status.peerId) + 1000),
-      to: status.peerId,
-      msgType: WIRE.messageType.MsgHeartbeat,
-      term: String(Number(status.term) + 1),
-      logTerm: '0',
-      index: '0',
-      commit: '999999',
-    },
-  });
+    status,
+    from: String(Number(status.peerId) + 1000),
+    term: String(Number(status.term) + 1),
+  }));
   const consoleError = console.error;
   try {
     console.error = () => undefined;
@@ -536,7 +531,7 @@ function trapSharedCore(cluster, replicaId) {
  */
 function restartWith(cluster, replicaId, extraRequest) {
   const replica = cluster.replica(replicaId);
-  const hints = replica.request[RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_PEER_IDS];
+  const hints = replica.request[RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_PEER_IDS];
   replica.node.close();
   replica.db.close();
   try {

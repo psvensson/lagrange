@@ -2,7 +2,8 @@
  * Message Group Service - construction and persisted-state accessors.
  * Holds the public class declaration: constructor wiring plus the role and
  * leader-node mutation-helper backed property accessors.
- * Implements 3-replica Raft groups using liferaft library for consensus.
+ * Each replica's consensus is a raft-rs semantic operation port over its own
+ * durable replica database (design R3).
  * Requirements: 1.4, 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 6.2, 6.4, 6.5
  */
 import {EventEmitter} from 'events';
@@ -21,11 +22,9 @@ import {HLCClockService} from '../hlc/hlc-clock-service.js';
 import {
   attachTrafficReadinessListener,
 } from '../bootstrap/traffic-readiness-utils.js';
-import {InMemoryLogAdapter} from '../raft/in-memory-log-adapter.js';
 import {LeaderActivationGate} from '../raft/leader-activation-gate.js';
-import {assertRaftProviderContract} from '../raft/raft-provider-contract.js';
-import {LiferaftProvider} from '../raft/liferaft-provider.js';
 import {normalizePublishedRaftRole} from '../raft/published-raft-role.js';
+import {createRaftRsOperationPort} from '../raft/raft-rs-operation-port.js';
 import {AddressManager} from '../address/address-manager.js';
 import {
   MESSAGE_GROUP_SERVICE_DEFAULT,
@@ -36,6 +35,7 @@ import {
 import {CDCHandler} from './cdc-handler.js';
 import {MessageGroupForwardingOwner} from './message-group-forwarding-owner.js';
 import {MessageGroupOperationLedger} from './message-group-operation-ledger.js';
+import {MessageRetryHandler} from './message-retry-handler.js';
 import {
   FORWARD_TOPOLOGY_REPAIR_DEFAULT,
   MESSAGE_GROUP_SERVICE_LITERAL,
@@ -45,10 +45,6 @@ import {
 import {resolveOwnedTimeSource} from '../time/time-source.js';
 import {resolveOwnedRandomSource} from '../random/random-source.js';
 
-/**
- * MessageGroupService provides reliable inter-service communication.
- * Implements a 3-replica Raft group using liferaft library.
- */
 // Five timings with one rule: an explicit positive override wins, otherwise
 // the owner's default. Stated once here rather than five times in a
 // constructor that already carries the replica's whole shape.
@@ -82,6 +78,22 @@ function resolveReplicaNodeService(options) {
   return options.nodeService || NodeService.getInstance();
 }
 
+// The replica's durable consensus database: required, and never in memory -
+// its term, vote and configuration must survive a restart.
+function requireDurableDbPath(dbPath) {
+  if (typeof dbPath !== 'string' || dbPath.length === 0) {
+    throw new Error(MESSAGE_GROUP_SERVICE_ERROR_MSG.MISSING_DB_PATH);
+  }
+  if (dbPath === MESSAGE_GROUP_SERVICE_DEFAULT.MEMORY_DB_PATH) {
+    throw new Error(MESSAGE_GROUP_SERVICE_ERROR_MSG.IN_MEMORY_DB_PATH_REFUSED);
+  }
+  return dbPath;
+}
+
+/**
+ * MessageGroupService provides reliable inter-service communication over a
+ * raft-rs replicated group.
+ */
 class MessageGroupService extends EventEmitter {
   /**
    * Create a new MessageGroupService.
@@ -91,6 +103,7 @@ class MessageGroupService extends EventEmitter {
    * @param {string} options.nodeId - Node ID hosting this replica.
    * @param {Array<string>} options.replicaIds - All replica IDs in the group.
    * @param {Object} options.transport - WebSocket-based transport for communication.
+   * @param {string} options.dbPath - This replica's durable consensus database.
    */
   constructor(options = {}) {
     super();
@@ -108,6 +121,8 @@ class MessageGroupService extends EventEmitter {
     if (!this.isWebSocketBasedTransport(options.transport)) {
       throw new Error(MESSAGE_GROUP_SERVICE_ERROR_MSG.INVALID_TRANSPORT);
     }
+    this.dbPath = requireDurableDbPath(options.dbPath);
+    this.db = null;
     this.groupId = options.groupId;
     this.replicaId = options.replicaId;
     // One clock for this replica: the ledger's stamps and the turns its
@@ -115,11 +130,11 @@ class MessageGroupService extends EventEmitter {
     // Unsupplied, it is the host clock exactly as before.
     const clocks = resolveOwnedTimeSource(options);
     // Held separately from the resolved source: a replica that was GIVEN a
-    // clock hosts its consensus timers on it, and one that was not leaves
-    // liferaft on its own tick-tock exactly as production does.
+    // clock hosts its consensus port's timers on it, and one that was not
+    // leaves the port on the host clock exactly as production does.
     this.providedTimeSource = clocks.providedTimeSource;
-    // The node's randomness, when it owns one. Election timing is drawn from
-    // it; unsupplied, liferaft keeps Math.random.
+    // The node's randomness, when it owns one, handed to the consensus port
+    // with the clock.
     this.providedRandomSource = resolveOwnedRandomSource(options);
     this.timeSource = clocks.timeSource;
     this.now =
@@ -127,15 +142,13 @@ class MessageGroupService extends EventEmitter {
         options.now :
         () => this.timeSource.now();
     this.nodeId = options.nodeId || STRING.UNKNOWN;
-    // COPY, for the same reason as the partition sibling: this list is
-    // mutated in place by raft lifecycle, and callers hand in the shared
-    // INITIAL_MESSAGE_GROUP_REPLICA_IDS declaration.
+    // COPY, for the same reason as the partition sibling: callers hand in
+    // the shared INITIAL_MESSAGE_GROUP_REPLICA_IDS declaration. The group's
+    // membership is its committed configuration, never this hint list.
     this.replicaIds = Array.isArray(options.replicaIds) ?
       [...options.replicaIds] :
       [this.replicaId];
     this.transport = options.transport;
-    this.raftProvider = options.raftProvider || new LiferaftProvider();
-    assertRaftProviderContract(this.raftProvider);
     // Peer addresses for cross-node communication
     // Map of replicaId -> unified address (e.g., 'nodeId/message-group/replicaId')
     // Used when joining an existing message group on a different node
@@ -187,12 +200,9 @@ class MessageGroupService extends EventEmitter {
       suppressionCeilingMs: Math.min(
         this.retryMaxDelayMs, TIME_MS.SECOND * NUM.FIVE),
     }));
-    // Raft state - using liferaft library
+    // The replica's raft-rs operation port, opened in initialize().
     // Requirements: 5.1, 5.2, 5.3, 5.4, 5.5
     this.raft = null;
-    // Initialized in initialize()
-    this.raftRuntime = null;
-    this.logAdapter = InMemoryLogAdapter;
     // Requirements: 3.1, 3.2, 3.3, 3.4, 4.1, 4.2, 4.3, 4.4
     this.operationLedger = new MessageGroupOperationLedger({
       now: this.now,
@@ -243,6 +253,13 @@ class MessageGroupService extends EventEmitter {
     // Logging
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.forSubsystem(MESSAGE_GROUP_SUBSYSTEM.NAME);
+    // The owner a routed command's attempts run under: its retry delays and
+    // stamps read this replica's clock, and it logs as this replica.
+    this.commandRetryHandler = new MessageRetryHandler({
+      timeSource: this.timeSource,
+      randomSource: this.providedRandomSource,
+      logger: this.logger,
+    });
     this.forwardingOwner = new MessageGroupForwardingOwner({
       service: this,
       buildDeferredCdcForwardError,
@@ -289,7 +306,14 @@ class MessageGroupService extends EventEmitter {
       options.deferElection || this.isJoiningExistingGroup || false;
     this.electionStarted = false;
     this.raftTimingConfig = null;
-    this.joinSuppressedHeartbeat = null;
+  }
+  /**
+   * Build this replica's raft-rs operation port.
+   * @param {Object} request - Its RAFT_OPERATION_PORT_REQUEST.
+   * @return {Object} The frozen operation port.
+   */
+  createOperationPort(request) {
+    return createRaftRsOperationPort(request);
   }
   get systemTableCache() {
     return this._systemTableCache || null;

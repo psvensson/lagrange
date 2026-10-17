@@ -239,16 +239,20 @@ function durableRecordIncompatible() {
 
 /**
  * Whether opening a group with no durable record must be refused: a rejoin
- * (the record is the only source), or a COMMITTED stamp whose configuration
+ * (the record is the only source), a COMMITTED stamp whose configuration
  * already names this replica a voter (its earlier incarnation voted; its
- * record is gone).
+ * record is gone), or a GENESIS stamp on a replica that joins a group which
+ * already exists (its identity's history is held elsewhere: opened as a
+ * founder of an empty log it would vote and lead without it).
  * @param {Object} bootstrap - The port's bootstrap.
  * @return {boolean}
  */
 function requiresDurableRecord(bootstrap) {
   return bootstrap.source === BOOTSTRAP_MEMBERSHIP_SOURCE.DURABLE_RECORD ||
     (bootstrap.source === BOOTSTRAP_MEMBERSHIP_SOURCE.COMMITTED &&
-      bootstrap.selfCommittedVoter === true);
+      bootstrap.selfCommittedVoter === true) ||
+    (bootstrap.source === BOOTSTRAP_MEMBERSHIP_SOURCE.GENESIS &&
+      bootstrap.joiningExistingGroup === true);
 }
 
 export {

@@ -5,6 +5,7 @@
 const RUNTIME_INTROSPECTOR_DEFAULT = Object.freeze({
   MAX_MEMORY_READ_BYTES: 4096,
   MAX_VARIABLES_PER_SCOPE: 256,
+  // ends-on: the runtime adapter answers the inspect call (unreachable: RuntimeIntrospector is never instantiated in src/)
   REQUEST_TIMEOUT_MS: 250,
   DEFAULT_FRAME_ID: 0,
 });

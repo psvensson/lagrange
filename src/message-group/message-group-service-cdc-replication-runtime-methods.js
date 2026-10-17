@@ -1,3 +1,8 @@
+import {MESSAGE_GROUP_COMMAND_TYPE} from './constants.js';
+import {
+  assertMessageGroupCommandAdmitted,
+  routeMessageGroupCommand,
+} from './message-group-proposal-routing.js';
 import {
   applyCDCEvent as runApplyCDCEvent,
   emitCDCAppliedEvents as runEmitCDCAppliedEvents,
@@ -6,11 +11,12 @@ import {
 
 const MESSAGE_GROUP_SERVICE_CDC_REPLICATION_RUNTIME_LITERAL = {
   CONSTRUCTOR: 'constructor',
+  // A non-leader routes a CDC command to the leader over the forward path.
+  LEADER_TARGET_SOURCE: 'forward_to_leader',
 };
 
 function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
   const {
-    CDC_BATCH_COMMAND_TYPE,
     CDC_FORWARD_MAX_RELAY_DEPTH,
     MESSAGE_GROUP_APPLICATION_ERROR_MSG,
     MESSAGE_GROUP_APPLICATION_STATUS,
@@ -214,7 +220,7 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
         const cdcCommand =
           normalizedEvents.length === 1 ?
             {
-              type: 'CDC',
+              type: MESSAGE_GROUP_COMMAND_TYPE.CDC,
               tableName: normalizedEvents[0].tableName,
               operation: normalizedEvents[0].operation,
               data: normalizedEvents[0].data,
@@ -223,7 +229,7 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
               replayOnly: normalizedEvents[0].replayOnly === true,
             } :
             {
-              type: CDC_BATCH_COMMAND_TYPE,
+              type: MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH,
               events: normalizedEvents,
             };
         // Replicate via Raft so all message group replicas (and their
@@ -268,7 +274,7 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
         const entry = this.operationLedger.appendEntry({
           ...(normalizedEvents.length === 1 ?
             {
-              type: 'CDC',
+              type: MESSAGE_GROUP_COMMAND_TYPE.CDC,
               tableName: normalizedEvents[0].tableName,
               operation: normalizedEvents[0].operation,
               data: normalizedEvents[0].data,
@@ -277,7 +283,7 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
               replayOnly: normalizedEvents[0].replayOnly === true,
             } :
             {
-              type: CDC_BATCH_COMMAND_TYPE,
+              type: MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH,
               events: normalizedEvents,
             }),
         });
@@ -295,6 +301,9 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
      * @private
      */
     async proposeCDCCommand(cdcCommand) {
+      // A command the committed-command owner refuses is never proposed,
+      // forwarded or retried.
+      assertMessageGroupCommandAdmitted(cdcCommand);
       const configuredRetryBudget =
         Number.isInteger(this.retryMaxAttempts) &&
         this.retryMaxAttempts > 0 ?
@@ -303,80 +312,29 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
       const proposeTimeoutMs = this.computeCdcProposeTimeoutMs(
         configuredRetryBudget,
       );
-      const leaderTargetSource =
-        typeof this.raftProvider?.proposeWithLeaderRouting === 'function' ?
-          'forward_to_leader' :
-          'local_raft_propose';
       try {
-        if (
-          typeof this.raftProvider.proposeWithLeaderRouting === 'function'
-        ) {
-          await this.raftProvider.proposeWithLeaderRouting(
-            this.raft,
-            cdcCommand,
-            {
-              maxAttempts: configuredRetryBudget,
-              proposeTimeoutMs,
-              // Proposal deadlines are this node's.
-              timeSource: this.providedTimeSource || undefined,
-              shouldProposeLocally: () => this.isCurrentRaftLeader(),
-              forwardToLeader: async (command, routeContext = {}) => {
-                const relayDepth =
-                  Number.isInteger(routeContext?.attempt) &&
-                  routeContext.attempt >= 1 ?
-                    routeContext.attempt :
-                    1;
-                if (command?.type === CDC_BATCH_COMMAND_TYPE) {
-                  await this.forwardCDCBatchToLeader(
-                    Array.isArray(command?.events) ? command.events : [],
-                    {
-                      relayDepth,
-                      replayOnly: command?.replayOnly === true,
-                    },
-                  );
-                  return;
-                }
-                await this.forwardCDCEventToLeader(
-                  command.tableName,
-                  command.operation,
-                  command.data,
-                  {
-                    timestamp: command.timestamp,
-                    causeId: command.causeId,
-                    replayOnly: command.replayOnly === true,
-                    relayDepth,
-                  },
-                );
+        await routeMessageGroupCommand(this, cdcCommand, {
+          maxAttempts: configuredRetryBudget,
+          proposeTimeoutMs,
+          forwardToLeader: (command, routeContext) =>
+            this.forwardCDCCommandToLeader(command, routeContext.attempt),
+          computeRetryDelayMs: (attempt) =>
+            this.computeCdcForwardRetryDelayMs(attempt),
+          onRetry: ({attempt, mode, retryDelayMs, error}) => {
+            this.logger.warn(
+              MESSAGE_GROUP_SERVICE_LITERAL.RETRYING_RAFT_CDC_COMMAND,
+              {
+                groupId: this.groupId,
+                replicaId: this.replicaId,
+                tableName: cdcCommand.tableName,
+                causeId: normalizeCauseId(cdcCommand.causeId),
+                attempt,
+                mode,
+                retryDelayMs,
+                error: error?.message || null,
               },
-              computeRetryDelayMs: (attempt) =>
-                this.computeCdcForwardRetryDelayMs(attempt),
-              onRetry: ({attempt, mode, retryDelayMs, error}) => {
-                this.logger.warn(
-                  MESSAGE_GROUP_SERVICE_LITERAL.RETRYING_RAFT_CDC_COMMAND,
-                  {
-                    groupId: this.groupId,
-                    replicaId: this.replicaId,
-                    tableName: cdcCommand.tableName,
-                    causeId: normalizeCauseId(cdcCommand.causeId),
-                    attempt,
-                    mode,
-                    retryDelayMs,
-                    error: error?.message || null,
-                  },
-                );
-              },
-            },
-          );
-          return;
-        }
-        await new Promise((resolve, reject) => {
-          this.raftProvider.propose(this.raft, cdcCommand, (error) => {
-            if (error) {
-              reject(error);
-              return;
-            }
-            resolve();
-          });
+            );
+          },
         });
       } catch (error) {
         this.logger.error(
@@ -390,8 +348,10 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
             configuredRetryBudget,
             proposeTimeoutMs,
             isCurrentRaftLeader: this.isCurrentRaftLeader(),
-            raftState: this.raft?.state || null,
-            leaderTargetSource,
+            raftState: this.getRole(),
+            leaderTargetSource:
+              MESSAGE_GROUP_SERVICE_CDC_REPLICATION_RUNTIME_LITERAL
+                .LEADER_TARGET_SOURCE,
             error: error?.message || null,
           },
         );
@@ -401,6 +361,39 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
           error,
         );
       }
+    }
+    /**
+     * Forward one CDC command to the group's leader over the application
+     * forward (a follower's route to the log).
+     * @param {Object} command - A CDC or CDC_BATCH command.
+     * @param {number} attempt - The routing attempt (its relay depth).
+     * @return {Promise<void>}
+     * @private
+     */
+    async forwardCDCCommandToLeader(command, attempt) {
+      const relayDepth =
+        Number.isInteger(attempt) && attempt >= 1 ? attempt : 1;
+      if (command?.type === MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH) {
+        await this.forwardCDCBatchToLeader(
+          Array.isArray(command?.events) ? command.events : [],
+          {
+            relayDepth,
+            replayOnly: command?.replayOnly === true,
+          },
+        );
+        return;
+      }
+      await this.forwardCDCEventToLeader(
+        command.tableName,
+        command.operation,
+        command.data,
+        {
+          timestamp: command.timestamp,
+          causeId: command.causeId,
+          replayOnly: command.replayOnly === true,
+          relayDepth,
+        },
+      );
     }
     /**
      * Compute retry delay for CDC forward attempts.

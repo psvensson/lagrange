@@ -6,7 +6,8 @@
  * when enabled the account-summary WASI service is deployed through the
  * shared service-pipeline mechanism public-path-multinode-baseline uses
  * on docker nodes (local OCI layout under the scenario-artifacts bind
- * mount), and its call Binding is invoked with CALL BINDING through the
+ * mount; lifecycle SQL over an authenticated PostgreSQL-wire session to the
+ * listener the public-client step provisioned), and its call Binding is invoked with CALL BINDING through the
  * public PostgreSQL-wire client before the outage and after the restart.
  */
 
@@ -53,8 +54,16 @@ async function defaultDeployBinding(ctx) {
   const build = await pipeline.runBuild({
     projectDirectory: paths.projectDirectory, writeOutput,
   });
-  const deployed = await deployThroughPipeline(ctx.writer,
-    {pipeline, runId: ctx.deps.runId, writeOutput}, paths, build.layoutPath);
+  const deployed = await deployThroughPipeline({
+    adminNode: ctx.writer,
+    nodes: ctx.nodes,
+    options: {
+      discoverEndpoints: ctx.deps.discoverEndpoints,
+      openClient: ctx.deps.openPublicClient,
+      sleep: ctx.deps.sleep,
+      timeoutMs: ctx.config.publicClient.endpointTimeoutMs,
+    },
+  }, {pipeline, runId: ctx.deps.runId, writeOutput}, paths, build.layoutPath);
   const callBindingName = (deployed.bindings || []).find((name) =>
     name.includes(PUBLIC_SEAM_BINDING.CALL_BINDING_MARKER));
   if (!callBindingName) {

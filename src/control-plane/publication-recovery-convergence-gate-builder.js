@@ -53,23 +53,6 @@ import {
 import {normalizeDistinctStringArray} from
   './publication-recovery-evidence-values.js';
 
-function resolveCanonicalPriorityPartitionSummary(context) {
-  if (
-    context.rawPublicationConvergenceGate
-      ?.durablePriorityPartitionSummary
-  ) {
-    return context.rawPublicationConvergenceGate
-      .durablePriorityPartitionSummary;
-  }
-  if (context.rawPublicationConvergenceGate?.priorityPartitionSummary) {
-    return context.rawPublicationConvergenceGate.priorityPartitionSummary;
-  }
-  if (context.publicationConvergence?.priorityPartitionSummary) {
-    return context.publicationConvergence.priorityPartitionSummary;
-  }
-  return context.priorityRecoveryObservation?.priorityPartitionSummary || null;
-}
-
 function resolveCanonicalPriorityRecoveryClosureWitness(context) {
   const {
     providedPriorityRecoveryClosureWitness,
@@ -80,7 +63,6 @@ function resolveCanonicalPriorityRecoveryClosureWitness(context) {
   }
   return buildPriorityRecoveryClosureWitness({
     decisionSnapshots: priorityRecoveryDecisionSnapshots,
-    priorityPartitionSummary: resolveCanonicalPriorityPartitionSummary(context),
   });
 }
 

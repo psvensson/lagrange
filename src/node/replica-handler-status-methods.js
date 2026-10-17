@@ -22,6 +22,10 @@ import {isReplicaServiceHandlerBound} from
   './replica-transport-handler-identity.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
+const REPLICA_STATUS_WRITE_WAIT = Object.freeze({
+  wait: 'REPLICA_HANDLER_DEFAULT.STATUS_WRITE_RETRY_TIMEOUT_MS',
+  awaited: 'replica status write accepted by the services-table owner',
+});
 
 function assignReplicaHandlerStatusMethods(ReplicaHandler) {
   class ReplicaHandlerStatusMethods {
@@ -64,6 +68,16 @@ function assignReplicaHandlerStatusMethods(ReplicaHandler) {
               error: resultOrError?.error || resultOrError?.message || null,
               nodeId: this.nodeId,
             });
+          },
+          logger: this.logger,
+          spentWait: REPLICA_STATUS_WRITE_WAIT,
+          scope: {
+            nodeId: this.nodeId,
+            replicaId,
+            partitionId: additionalData.partitionId !== undefined ?
+              additionalData.partitionId :
+              null,
+            newStatus,
           },
         },
       );

@@ -426,3 +426,126 @@ async (t) => {
     stabilizer.shutdown();
   }
 });
+
+// Witness (m') (owner decision 2026-10-04): a non-priority system rebalancer
+// deferred on local mutation readiness (published convergence pending) used
+// to back off up to 2x the periodic interval with no wake on readiness
+// change, so a deferral outlived spread completion by a timer. The wake now
+// rides the system-table cache seam: the first publication/operation change
+// that leaves no local mutation-readiness blocker resets the interval and
+// enqueues one check through the owner reconcile queue.
+function createListenableSystemTableCache() {
+  const listeners = new Set();
+  return {
+    get: () => undefined,
+    filter: () => [],
+    getAll: () => [],
+    onCacheChange(listener) {
+      listeners.add(listener);
+    },
+    offCacheChange(listener) {
+      listeners.delete(listener);
+    },
+    emit(tableName) {
+      for (const listener of [...listeners]) {
+        listener(tableName, 'update', {});
+      }
+    },
+    listenerCount: () => listeners.size,
+  };
+}
+
+test('(m\') a local-mutation-readiness deferral is ended by the readiness ' +
+  'change event, not the backed-off timer', async (t) => {
+  initializeTestEnvironment();
+  const cache = createListenableSystemTableCache();
+  const rebalancer = createFenceTestRebalancer({
+    entityId: PARKED_BACKGROUND_ENTITY_ID,
+    readinessOwner: {},
+    nowFn: () => 1_000,
+  });
+  rebalancer.systemTableCache = cache;
+  rebalancer.isLeader = true;
+  let blocker = {
+    failedDimensions: ['published_convergence_pending'],
+    reasonCodes: [],
+  };
+  rebalancer.getLocalControlPlaneMutationReadinessBlocker = () => blocker;
+  const wakeReasons = [];
+  rebalancer.enqueueRebalanceCheck = (reason) => {
+    wakeReasons.push(reason);
+    return true;
+  };
+  try {
+    const decision = rebalancer.resolveLocalMutationPlanningGateDecision();
+    t.equal(decision?.gate, REBALANCE_PLANNING_GATE.LOCAL_MUTATION_READINESS,
+      'the system partition defers on local mutation readiness');
+    t.ok(rebalancer.currentInterval > rebalancer.periodicCheckIntervalMs,
+      'the deferral backs the interval off');
+    t.equal(cache.listenerCount(), 1, 'the readiness wake is armed');
+
+    cache.emit('control_plane_publications');
+    await Promise.resolve();
+    t.same(wakeReasons, [], 'still blocked: no wake');
+
+    cache.emit('nodes');
+    blocker = null;
+    await Promise.resolve();
+    t.same(wakeReasons, [],
+      'a table that cannot end the deferral never evaluates readiness');
+
+    cache.emit('control_plane_publications');
+    cache.emit('replica_operations');
+    await Promise.resolve();
+    t.same(wakeReasons, [RECONCILE_REASON.LOCAL_MUTATION_READINESS_WAKE],
+      'the readiness change enqueues exactly one check');
+    t.equal(rebalancer.currentInterval, rebalancer.periodicCheckIntervalMs,
+      'the backed-off interval is reset');
+    t.equal(cache.listenerCount(), 0, 'the wake disarms once fired');
+  } finally {
+    rebalancer.shutdown();
+  }
+});
+
+test('(m) a priority partition\'s terminal ADD enqueues the next check by ' +
+  'event', async (t) => {
+  initializeTestEnvironment();
+  const listeners = new Map();
+  const coordinator = {
+    on(eventName, listener) {
+      listeners.set(eventName, listener);
+    },
+    off(eventName) {
+      listeners.delete(eventName);
+    },
+    getMoveSafetyError: () => null,
+  };
+  const rebalancer = createFenceTestRebalancer({
+    entityId: PRIORITY_RESOLVER_ENTITY_ID,
+    readinessOwner: {},
+    nowFn: () => 1_000,
+  });
+  rebalancer.isLeader = true;
+  const wakeReasons = [];
+  rebalancer.enqueueRebalanceCheck = (reason) => {
+    wakeReasons.push(reason);
+    return true;
+  };
+  try {
+    rebalancer.bindCoordinatorProgressListeners(coordinator);
+    listeners.get('operationCompleted')({
+      operation: {
+        operationId: 'op-r5',
+        type: 'ADD',
+        partitionId: PRIORITY_RESOLVER_ENTITY_ID,
+        workflowStep: 'COMPLETED',
+      },
+    });
+    t.same(wakeReasons, [RECONCILE_REASON.PRIORITY_RECOVERY_PROGRESS],
+      'the terminal event enqueues the check immediately, well inside the ' +
+        'priority retry delay');
+  } finally {
+    rebalancer.unbindCoordinatorProgressListeners();
+    rebalancer.shutdown();
+  }
+});

@@ -17,8 +17,8 @@
 //     inside the calibrated bound, twice over. The rs-raft core randomizes
 //     its own election timeouts (owner decision O2; see
 //     networkTranscriptStructure), so the instants, the network schedule and
-//     the charge ledger's amounts are not repeatable today; when O2 is funded
-//     the exact transcript, ledger and instant assertions come back;
+//     the charge ledger's amounts are not repeatable, and O2 was closed on
+//     2026-10-04 without seeding, so they are not asserted;
 //   charging changes WHEN production runs and never WHO owns it - the
 //     provenance snapshot is identical charged and uncharged;
 //   charging is off unless a calibration is supplied, and the uncharged run

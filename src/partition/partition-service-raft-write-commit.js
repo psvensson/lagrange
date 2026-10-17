@@ -34,6 +34,10 @@ const WRITE_PROPOSAL = Object.freeze({
   NOT_MADE: 'not-made',
 });
 const PROPOSAL_ACCEPTED = Object.freeze({state: WRITE_PROPOSAL.ACCEPTED});
+const WRITE_DEFERRAL_BUDGET_WAIT = Object.freeze({
+  wait: 'PARTITION_SERVICE_DEFAULT.USER_TRANSACTION_WRITE_DEFER_BUDGET_MS',
+  awaited: 'the consensus port admits the deferred proposal',
+});
 const PROPOSAL_NOT_MADE = Object.freeze({state: WRITE_PROPOSAL.NOT_MADE});
 
 // The port's typed deferrals of a proposal - retryable host failures that
@@ -94,6 +98,9 @@ function proposeWithinDeferralBudget(service, entry) {
       now: () => service.timeSource.now(),
       sleep: (delayMs) => new Promise(
         (resolve) => service.timeSource.setTimeout(resolve, delayMs)),
+      logger: service.logger,
+      spentWait: WRITE_DEFERRAL_BUDGET_WAIT,
+      scope: {partitionId: service.partitionId, entryId: entry.entryId},
     });
 }
 

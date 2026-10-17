@@ -248,10 +248,10 @@ function resolveTimeSource(options = {}) {
  * Two different questions hide behind "what time is it here". Everything an
  * owner STAMPS can read a resolved source, because a real one answers exactly
  * as the host clock did. But whether an owner may hand its clock to a
- * collaborator that would otherwise run its own timers - liferaft's tick-tock
- * is the case that matters - depends on whether the owner was GIVEN a clock,
- * because substituting a real TimeSource there would change which mechanism
- * schedules, not just which clock it reads.
+ * collaborator that would otherwise run its own timers - the consensus port's
+ * tick scheduling is the case that matters - depends on whether the owner was
+ * GIVEN a clock, because substituting a real TimeSource there would change
+ * which mechanism schedules, not just which clock it reads.
  *
  * @param {Object} [options] - Owner options.
  * @return {{providedTimeSource: Object|null, timeSource: Object}}

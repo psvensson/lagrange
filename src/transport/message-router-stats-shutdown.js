@@ -1,3 +1,4 @@
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
 import {BULK_CHANNEL_EMPTY_STATS} from '../constants/transport.js';
 
@@ -19,6 +20,46 @@ const {
   resolveBackgroundPendingLimit,
   resolveReadinessReserveInFlightLimit,
 } = MESSAGE_ROUTER_SHARED;
+
+const SHUTDOWN_SOCKET_CLOSE_WAIT = Object.freeze({
+  wait: 'TRANSPORT_DEFAULT.SHUTDOWN_WAIT_MS',
+  awaited: 'every terminated peer socket emitted close at shutdown',
+});
+
+/**
+ * Await the terminated sockets' close events within the shutdown bound;
+ * when the bound wins, one wait_bound_spent ERROR counting the sockets
+ * still open. Shutdown continues either way.
+ * @param {Object} router - The message router.
+ * @param {Array<Promise>} closePromises - One per terminated socket.
+ * @return {Promise<void>}
+ */
+async function awaitSocketsClosedWithinShutdownBound(router, closePromises) {
+  let closed = 0;
+  let timeoutId;
+  const allClosed = Promise.all(closePromises.map((closing) =>
+    closing.then(() => {
+      closed += TRANSPORT_NUM.ONE;
+    }))).then(() => true);
+  const spent = await Promise.race([allClosed, new Promise((resolve) => {
+    timeoutId = router.timeSource.setTimeout(() => resolve(false),
+      TRANSPORT_DEFAULT.SHUTDOWN_WAIT_MS);
+  })]).finally(() => {
+    router.timeSource.clearTimeout(timeoutId);
+  }) === false;
+  if (spent) {
+    reportWaitBoundSpent(router.logger, {
+      ...SHUTDOWN_SOCKET_CLOSE_WAIT,
+      boundMs: TRANSPORT_DEFAULT.SHUTDOWN_WAIT_MS,
+      elapsedMs: TRANSPORT_DEFAULT.SHUTDOWN_WAIT_MS,
+      lastObserved: {
+        socketsTerminated: closePromises.length,
+        socketsClosed: closed,
+      },
+      scope: {nodeId: router.nodeId ?? null},
+    });
+  }
+}
 
 function countPendingCriticalReserveEligible(queue) {
   if (!queue || !Array.isArray(queue.pending)) {
@@ -176,12 +217,7 @@ class MessageRouterStatsShutdown {
       }
     }
     if (closePromises.length > TRANSPORT_NUM.ZERO) {
-      let timeoutId;
-      await Promise.race([Promise.all(closePromises), new Promise((resolve) => {
-        timeoutId = this.timeSource.setTimeout(resolve, TRANSPORT_DEFAULT.SHUTDOWN_WAIT_MS);
-      })]).finally(() => {
-        this.timeSource.clearTimeout(timeoutId);
-      });
+      await awaitSocketsClosedWithinShutdownBound(this, closePromises);
     }
     if (this.server) {
       if (this.inProcessTransport) {

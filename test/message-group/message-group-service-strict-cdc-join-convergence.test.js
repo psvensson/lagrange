@@ -5,11 +5,17 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  createControllableMessageGroupService,
   createTestTransport,
   createTrafficReadinessState,
   registerMessageGroupServiceLifecycleHooks,
+  reportingConsensusPort,
   setTestPortBase,
 } from './message-group-service-test-support.js';
+import {ControllableConsensusPort} from
+  '../test-helpers/controllable-consensus-port.js';
+import {RAFT_MEMBERSHIP_OPERATION} from
+  '../../src/raft/raft-operation-port-constants.js';
 import {
   MessageGroupService,
   RaftRole,
@@ -34,7 +40,6 @@ import {
   STATE,
   TABLES,
 } from '../../src/constants/index.js';
-import LifeRaft from '@markwylde/liferaft';
 import {
 } from '../../src/raft/constants.js';
 import {
@@ -45,6 +50,7 @@ import {
 } from '../../src/control-plane/control-plane-workload-profile.js';
 import {
 } from '../../src/control-plane/pressure-governor.js';
+import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
 
 const TEST_RELAYED_STRICT_STALE_COMPETING_GROUP_ID =
   'mg-relayed-strict-stale-competing';
@@ -64,75 +70,22 @@ setTestPortBase(24200);
 registerMessageGroupServiceLifecycleHooks();
 
 test(
-  'MessageGroupService - joinPeerNodes keeps authoritative remote same-id peer during move convergence',
+  'MessageGroupService - reconcileRaftPeersFromCache admits only other replica identities, never its own identity at another address',
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
-      const service = new MessageGroupService({
-        groupId: 'mg-move-peer-join',
-        replicaId: 'mg-move-peer-join-r1',
-        nodeId,
-        replicaIds: [
-          'mg-move-peer-join-r1',
-          'mg-move-peer-join-r2',
-          'mg-move-peer-join-r3',
-        ],
-        peerAddresses: [
-          'seed-node/message-group/mg-move-peer-join-r1',
-          'seed-node/message-group/mg-move-peer-join-r2',
-          'seed-node/message-group/mg-move-peer-join-r3',
-        ],
-        transport: router,
-      });
-
-      const joinedPeers = [];
-      service.raft = {};
-      service.raftProvider = {
-        joinPeer: (_raft, address) => {
-          joinedPeers.push(address);
-        },
-      };
-
-      service.joinPeerNodes();
-
-      t.same(
-        joinedPeers,
-        [
-          'seed-node/message-group/mg-move-peer-join-r1',
-          'seed-node/message-group/mg-move-peer-join-r2',
-          'seed-node/message-group/mg-move-peer-join-r3',
-        ],
-        'move convergence should join the authoritative remote same-id peer alongside the other canonical peers',
-      );
-    } finally {
-      await cleanup();
-    }
-  },
-);
-
-test(
-  'MessageGroupService - reconcileRaftPeersFromCache keeps authoritative remote same-id peer during move convergence',
-  async (t) => {
-    const {router, nodeId, cleanup} = await createTestTransport();
-    try {
-      const service = new MessageGroupService({
+      const port = new ControllableConsensusPort();
+      const service = createControllableMessageGroupService({
         groupId: 'mg-move-peer-reconcile',
         replicaId: 'mg-move-peer-reconcile-r1',
         nodeId,
         transport: router,
-      });
+      }, port);
+      await service.initialize();
+      t.equal(port.role, RaftRole.LEADER, 'the lone replica leads its group');
 
-      const joinedPeers = [];
-      service.raft = {
-        nodes: [],
-        leave: () => {},
-      };
-      service.raftProvider = {
-        joinPeer: (_raft, address) => {
-          joinedPeers.push(address);
-        },
-      };
-
+      // A services row naming this replica's own identity on another node
+      // (a move convergence) and a row naming a second replica.
       service.systemTableCache.applySystemTableChange(
         TABLES.SERVICES,
         CDC_OPERATION.UPSERT,
@@ -161,13 +114,15 @@ test(
       service.reconcileRaftPeersFromCache();
 
       t.same(
-        joinedPeers,
-        [
-          'seed-node/message-group/mg-move-peer-reconcile-r1',
-          'seed-node/message-group/mg-move-peer-reconcile-r2',
-        ],
-        'cache reconciliation should retain the authoritative remote same-id peer until the local handoff is canonical',
+        port.confChanges,
+        [{
+          type: RAFT_MEMBERSHIP_OPERATION.ADD_PEER,
+          replicaIdentity: 'mg-move-peer-reconcile-r2',
+          peerAddress: 'seed-node/message-group/mg-move-peer-reconcile-r2',
+        }],
+        'the leader admits the second replica once, by identity, and never proposes its own identity as a peer',
       );
+      await service.shutdown();
     } finally {
       await cleanup();
     }
@@ -179,12 +134,12 @@ test(
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
-      const service = new MessageGroupService({
+      const service = new MessageGroupService(withTestDbPath({
         groupId: 'mg-strict-join-defer',
         replicaId: 'mg-strict-join-defer-r1',
         nodeId,
         transport: router,
-      });
+      }));
 
       service.resolveCdcIngressDecision = () => ({
         action: MESSAGE_GROUP_CDC_INGRESS_ACTION.DEFER,
@@ -196,9 +151,7 @@ test(
       service.forwardCDCEventToLeader = async () => {
         throw new Error('should not forward while strict readiness is deferred');
       };
-      service.raft = {
-        state: LifeRaft.FOLLOWER,
-      };
+      service.raft = reportingConsensusPort({role: RaftRole.FOLLOWER});
 
       const result = await service.handleLatencyCdcPropagationMessage(
         'msg-strict-join-defer',
@@ -226,7 +179,7 @@ test(
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
-      const service = new MessageGroupService({
+      const service = new MessageGroupService(withTestDbPath({
         groupId: 'mg-strict-local-join-ingress',
         replicaId: 'mg-strict-local-join-ingress-r1',
         nodeId,
@@ -236,12 +189,10 @@ test(
           'mg-strict-local-join-ingress-r3',
         ],
         transport: router,
-      });
+      }));
 
       service.isJoiningExistingGroup = true;
-      service.raft = {
-        state: LifeRaft.FOLLOWER,
-      };
+      service.raft = reportingConsensusPort({role: RaftRole.FOLLOWER});
       service.forwardCDCEventToLeader = async () => {
         throw new Error(
           'canonical local join ingress should not forward strict CDC again',
@@ -340,7 +291,7 @@ test(
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
-      const service = new MessageGroupService({
+      const service = new MessageGroupService(withTestDbPath({
         groupId: 'mg-strict-local-live-hint',
         replicaId: 'mg-strict-local-live-hint-r1',
         nodeId,
@@ -350,12 +301,10 @@ test(
           'mg-strict-local-live-hint-r3',
         ],
         transport: router,
-      });
+      }));
 
       service.isJoiningExistingGroup = true;
-      service.raft = {
-        state: LifeRaft.FOLLOWER,
-      };
+      service.raft = reportingConsensusPort({role: RaftRole.FOLLOWER});
       service.leaderId = 'mg-strict-local-live-hint-r1';
       service.forwardCDCEventToLeader = async () => {
         throw new Error(
@@ -435,7 +384,7 @@ test(
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
-      const service = new MessageGroupService({
+      const service = new MessageGroupService(withTestDbPath({
         groupId: 'mg-strict-local-addressed-fallback',
         replicaId: 'mg-strict-local-addressed-fallback-r1',
         nodeId,
@@ -445,12 +394,10 @@ test(
           'mg-strict-local-addressed-fallback-r3',
         ],
         transport: router,
-      });
+      }));
 
       service.isJoiningExistingGroup = true;
-      service.raft = {
-        state: LifeRaft.FOLLOWER,
-      };
+      service.raft = reportingConsensusPort({role: RaftRole.FOLLOWER});
       service.leaderId = 'mg-strict-local-addressed-fallback-r3';
       service.forwardCDCEventToLeader = async () => {
         throw new Error(
@@ -531,7 +478,7 @@ test(
     const {router, nodeId, cleanup} = await createTestTransport();
     const readinessState = createTrafficReadinessState();
     try {
-      const service = new MessageGroupService({
+      const service = new MessageGroupService(withTestDbPath({
         groupId: 'mg-strict-local-bootstrap-fallback',
         replicaId: 'mg-strict-local-bootstrap-fallback-r1',
         nodeId,
@@ -542,15 +489,13 @@ test(
         ],
         transport: router,
         bootstrapReadinessState: readinessState,
-      });
+      }));
 
       readinessState.transitionTo(LIFECYCLE_PHASE.CONTROL_READY, {
         ready: false,
         reasons: [LIFECYCLE_REASON.LEADER_METADATA_INCOMPLETE],
       });
-      service.raft = {
-        state: LifeRaft.FOLLOWER,
-      };
+      service.raft = reportingConsensusPort({role: RaftRole.FOLLOWER});
       service.leaderId = 'mg-strict-local-bootstrap-fallback-r3';
       service.forwardCDCEventToLeader = async () => {
         throw new Error(
@@ -635,7 +580,7 @@ test(
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
-      const service = new MessageGroupService({
+      const service = new MessageGroupService(withTestDbPath({
         groupId: 'mg-strict-relayed-local-fallback',
         replicaId: 'mg-strict-relayed-local-fallback-r1',
         nodeId,
@@ -645,11 +590,9 @@ test(
           'mg-strict-relayed-local-fallback-r3',
         ],
         transport: router,
-      });
+      }));
 
-      service.raft = {
-        state: LifeRaft.FOLLOWER,
-      };
+      service.raft = reportingConsensusPort({role: RaftRole.FOLLOWER});
       service.leaderId = 'mg-strict-relayed-local-fallback-r3';
       service.forwardCDCEventToLeader = async () => {
         throw new Error(
@@ -745,7 +688,7 @@ test(
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
-      const service = new MessageGroupService({
+      const service = new MessageGroupService(withTestDbPath({
         groupId: 'mg-strict-relayed-local-batch-fallback',
         replicaId: 'mg-strict-relayed-local-batch-fallback-r1',
         nodeId,
@@ -755,11 +698,9 @@ test(
           'mg-strict-relayed-local-batch-fallback-r3',
         ],
         transport: router,
-      });
+      }));
 
-      service.raft = {
-        state: LifeRaft.FOLLOWER,
-      };
+      service.raft = reportingConsensusPort({role: RaftRole.FOLLOWER});
       service.leaderId = 'mg-strict-relayed-local-batch-fallback-r3';
       service.forwardCDCBatchToLeader = async () => {
         throw new Error(
@@ -852,7 +793,7 @@ test(
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
-      const service = new MessageGroupService({
+      const service = new MessageGroupService(withTestDbPath({
         groupId: TEST_RELAYED_STRICT_STALE_COMPETING_GROUP_ID,
         replicaId: TEST_RELAYED_STRICT_STALE_COMPETING_LOCAL_REPLICA_ID,
         nodeId,
@@ -862,11 +803,9 @@ test(
           'mg-relayed-strict-stale-competing-r3',
         ],
         transport: router,
-      });
+      }));
 
-      service.raft = {
-        state: LifeRaft.FOLLOWER,
-      };
+      service.raft = reportingConsensusPort({role: RaftRole.FOLLOWER});
       service.leaderId =
         TEST_RELAYED_STRICT_STALE_COMPETING_REMOTE_REPLICA_ID;
       service.transport.getConnectionState = (candidateNodeId) => {
@@ -976,7 +915,7 @@ test(
     const {router, nodeId, cleanup} = await createTestTransport();
     const readinessState = createTrafficReadinessState();
     try {
-      const service = new MessageGroupService({
+      const service = new MessageGroupService(withTestDbPath({
         groupId: 'mg-strict-decision-local',
         replicaId: 'mg-strict-decision-local-r1',
         nodeId,
@@ -987,15 +926,13 @@ test(
         ],
         transport: router,
         bootstrapReadinessState: readinessState,
-      });
+      }));
 
       readinessState.transitionTo(LIFECYCLE_PHASE.CONTROL_READY, {
         ready: false,
         reasons: [LIFECYCLE_REASON.LEADER_METADATA_INCOMPLETE],
       });
-      service.raft = {
-        state: LifeRaft.FOLLOWER,
-      };
+      service.raft = reportingConsensusPort({role: RaftRole.FOLLOWER});
       service.initialized = true;
       service.leaderId = 'mg-strict-decision-local-r3';
       service.forwardCDCEventToLeader = async () => {

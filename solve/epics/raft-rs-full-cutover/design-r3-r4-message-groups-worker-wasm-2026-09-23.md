@@ -436,7 +436,9 @@ O1 Log growth without compaction. A message group's `_raft_rs_log` grows one row
 O2 Seeded randomness (q10): the DT5 seam cannot reach rs-raft election timing without a binding
    change (a seed on `create_node` or a `seed_rng` primitive in the fork,
    `vendor/raft-rs-wasm/src/lib.rs`, rebuilt with a new `artifact-digest.json`). Carry inert, or fund
-   the fork change.
+   the fork change. CLOSED 2026-10-04 (owner): not seeded. A verified implementation that vendored a
+   patched raft 0.7.0 (branch `quest/raft-rs-seedable-election`, d62c2701f) was rejected; repeatability
+   witnesses are narrowed to semantic outcomes (zero-liferaft-active-runtime log, decision note).
 O3 WASM composition root: which owner supplies `replicaIds`/placement for a wasm_component group and
    where the lifecycle factory is constructed (2(b)); this touches the placement authority R2 is
    about to redefine.
