@@ -1,0 +1,11 @@
+--- a/src/node/runtime-service-bound-creation-route.js	2026-10-17 18:42:43.084196814 +0200
++++ b/src/node/runtime-service-bound-creation-route.js	2026-10-17 18:42:43.088196844 +0200
+@@ -216,7 +216,7 @@
+     return {status: ReplicaOperationResponseStatus.ERROR, error: HANDLER_ERROR.CORRUPT_LOCAL_MEMO,
+       errorCode: HANDLER_ERROR.CORRUPT_LOCAL_MEMO, deferRetry: false, nodeId: handler.nodeId};
+   }
+-  const creation = {operationId: existing.operationId,
++  const creation = {operationId: params.operationId,
+     entityId: params.entityId, replicaId: params.replicaId};
+   if (!handler.inProgressOperations.has(creation.operationId)) {
+     scheduleBoundReentry(handler, creation);

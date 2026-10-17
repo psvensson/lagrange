@@ -1,0 +1,11 @@
+test/integration/minimal-deployment-call-cell-invocation-live.integration.test.js
+test/node/runtime-service-bound-route.test.js
+test/node/runtime-service-call-cell-handler.test.js
+test/node/runtime-service-handler.test.js
+test/rebalancer/replica-operations-single-writer.test.js
+test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js
+test/runtime/minimal-deployment-request-cell-runtime-readiness.test.js
+test/runtime/service-runtime-consensus-publication.test.js
+test/service/minimal-deployment-request-cell-routing.test.js
+test/wasm-service/bound-creation-handler-embedding.integration.test.js
+test/wasm-service/wasm-service-lifecycle.test.js

@@ -1,0 +1,7 @@
+r5-01-U rc=0 RC=0 ELAPSED=1s FILES=test/node/runtime-service-bound-route.test.js
+r5-02-N rc=0 RC=0 ELAPSED=2s FILES=test/wasm-service/bound-creation-handler-embedding.integration.test.js
+r5-03-H rc=0 RC=0 ELAPSED=1s FILES=test/node/runtime-service-handler.test.js
+r5-04-publication-int rc=0 RC=0 ELAPSED=6s FILES=test/wasm-service/wasm-creation-publication.integration.test.js
+r5-05-lifecycle rc=0 RC=0 ELAPSED=2s FILES=test/wasm-service/wasm-service-lifecycle.test.js
+r5-06-probe rc=0 RC=0 ELAPSED=1s FILES=test/node/verify-1c-r5-probe.test.js
+ALL_DONE

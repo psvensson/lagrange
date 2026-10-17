@@ -1,0 +1,14 @@
+--- a/src/runtime/request-cell-runtime-contract.js	2026-10-17 17:28:09.137793177 +0200
++++ b/src/runtime/request-cell-runtime-contract.js	2026-10-17 17:28:09.149793271 +0200
+@@ -228,8 +228,9 @@
+   REQUEST_CELL_CONTRACT_FIELD.BINDING_DIGEST,
+ ]);
+ function isRequestCellDefinition(definition) {
+-  return REQUEST_CELL_LINEAGE_FIELDS.some((field) =>
+-    definition?.[field] !== null && definition?.[field] !== undefined);
++  return definition?.binding_projection !== undefined ||
++    definition?.binding_version_id !== undefined ||
++    definition?.binding_digest !== undefined;
+ }
+ 
+ function projectRequestCellRuntime(definition) {

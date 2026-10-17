@@ -47,11 +47,20 @@ function assertNoServing(f) {
 // observes genesis. Still no endpoint, state or nested journal publication,
 // no services-row leader publication, no timer, and the slot is PUBLISHED.
 const GENESIS_PUBLISHED = 'GENESIS_PUBLISHED';
+// Superseded by design ACTIVATION-DISCOVERY-DESIGN-20261017 Revision 3 (stage 1c, RV1.3;
+// recorded supersession, R09/R21): a PUBLISHED replica whose services row the
+// runtime projected is PRESENT and replays its role and, when it leads, its
+// leader node once; this fixture has no CDC owner, so the leader's value stays
+// queued. Nothing is queued for a follower or for a replica not PRESENT.
+function expectedLeaderPublication(replica) {
+  return replica.servicesRow.state === 'PRESENT' && replica.isLeader ? replica.nodeId : null;
+}
 function assertServed(f) {
   for (const host of f.hosts) {
     assert.deepEqual(host.publications, []);
     assert.equal(host.replica.heldCreationRefusal(), null);
-    assert.equal(host.replica.pendingLeaderNodeUpdate, null);
+    assert.equal(host.replica.pendingLeaderNodeUpdate,
+      expectedLeaderPublication(host.replica));
     assert.equal(host.replica.timerManager.activeTimers.size, 0);
     const slot = host.intent.consensusSlotRequest.slot;
     assert.equal(f.metadata.state().selected.resources[slot].phase, 'PUBLISHED');

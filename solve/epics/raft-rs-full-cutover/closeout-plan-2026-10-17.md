@@ -299,3 +299,280 @@ called known.
   (lab repeat batch owed); unused-export 1447/1415 (all lane entries),
   duplication 26393/26345, complexity 1798/1755 inherited; five both-touched
   src files unreviewed semantically; the analysis' R01 risk unchecked.
+- 2026-10-17 composition COMMITTED: `integration/rs-raft-candidate-20261017`
+  @ `99d145ace64c5725a9777fe136a3dab8d8bedb84` (merge iii of 10c2f0610 on
+  d5fdaa312; hooks enabled; nothing bypassed; pushed by the lead). Six
+  inherited guideline hits repaired at their owners inside the merge
+  (`ROW_PREDICATE_CONJUNCTION`; two empty catches record through the existing
+  `noteUncertainMembershipWrite`, recorder moved into owner-claim and
+  re-exported by authorization to avoid a cycle; named empty states
+  `NO_STATUS_OBSERVATION`, `NO_RUNTIME_REPLACEMENT_FAILURE`,
+  `NO_RECEIVER_LIFECYCLE_INSPECTION` keeping the value null). Post-commit:
+  quest-log append-only clean against both parents, fast-static ok, shards OK,
+  impact contracts PASS, option-D grep 0. Owning witnesses 24/27 green; the
+  three reds (`partition-write-leadership-transfer-committed`,
+  `settled-replay-preserves-result`, `operation-port-boundary` subtest 2) are
+  lane-inherited (green or differently red at the candidate). C0
+  (`cutover-transition-authority-review`) is SOLVED in the composed tree
+  (candidate 2026-10-11); the earlier "last stood REJECT" line is superseded.
+  Report retained: `composition-report-2026-10-17.md`. Open: the
+  `documentation-current` conflict (two evidence files of
+  `participant-release-held-recovery-continuation` cite the deleted
+  `message-group-c2-orphan-removal-alpha/evidence/independent-implementation-review.md`
+  by sha256; the blob survives at c6006c745; owner of that quest to add a
+  preservation pointer); the census red (union of both parents); R01 learner
+  CREATE path vs host cleanup custody; five both-touched src files unreviewed
+  semantically. Next: lab (108 files, four hosts) + repeat batch of the
+  once-hanging `participant-release-native-application-order`, then an
+  independent verifier of the composition.
+- 2026-10-17 proposal for the `documentation-current` conflict (owner to rule;
+  no edit made): the `documentation-current` audit refuses any backticked
+  repository path that no longer exists (`scripts/check-documentation-current-state.js:300`),
+  and `closed-quest-shape` refuses non-minimal files in the closed
+  orphan-removal quest, so neither restoring the file there nor keeping the
+  citation can satisfy both. The C2 independent review is evidence of the
+  superseding quest: move
+  `solve/quests/message-group-c2-orphan-removal-alpha/evidence/independent-implementation-review.md`
+  (blob preserved at c6006c745, sha256 `0429ae58...`) to
+  `solve/quests/message-group-fresh-identity-membership/evidence/` unchanged,
+  and repoint the two citations in
+  `participant-release-held-recovery-continuation/evidence/integrated-composition-content-review-v1.md:17`
+  and `integrated-composition-evidence-review-v2.md:21` to the new path with
+  the same digest (a path change only; the cited bytes and digest stand).
+  Lab on the candidate (#145-#150) and the independent composition verifier
+  are in flight.
+- 2026-10-17 candidate lab (99d145ace, 108 files, four hosts, #145-#148):
+  91/108 green; 17 red files; the once-hanging
+  `participant-release-native-application-order` passed both repeat runs
+  (#149, #150). Ten of the reds were already classified lane-inherited by the
+  composer or the stage-1 record (replica unit, durable-commit-replica-kinds,
+  wasm-service-group-on-raft-rs, settled-replay-preserves-result,
+  partition-write-leadership-transfer-committed, operation-port-boundary,
+  committed-membership-census, replica-create-admission-recovery,
+  native-custody-handoff, evidence-o1-static). Seven are unclassified and
+  under parent controls (#151 lane tip, #152 candidate-20261011 tip):
+  `fresh-join-registration-runtime-replacement.integration` and
+  `leader-metadata-validation.integration` ("seed bootstrap should succeed"),
+  `node-bootstrap-consistency.property` (timeout), `write-exactly-once-schedules`
+  (c1), `unknown-outcome-same-entry` (W1), `message-group-learner-promotion-selection-guards.integration`
+  (subtest 12), `message-group-membership-claim-cache.integration`. Any of
+  these green at both parents is composition-caused and blocks step 2.
+- 2026-10-17 independent verification of the composition at 99d145ace
+  (Fable; `composition-verifier-verdict-2026-10-17.md`): PROVISIONAL REJECT,
+  narrow. Byte-faithful on every conflicted path (keep-theirs blobs equal the
+  candidate's; the two combined files reproduced by an independent three-way
+  merge; impact-contracts a true union; FreshMG and C0 quest logs unions with
+  nothing dropped; append-only clean against all parents), the five
+  both-touched files judged compatible with their owning witnesses green, the
+  six guideline repairs behaviour-preserving with no baseline change, the
+  orphan-removal terminal entry and shape audit correct, every lab red
+  classified: 16 lane-inherited (13 confirmed by own runs at c6006c745), the
+  census inherited from both parents, and ONE composition-caused red (F1):
+  `message-group-learner-promotion-selection-guards.integration` subtests
+  12-14, whose fixture injects `PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE`,
+  a constant the lane deleted (d35d8828c) with its retryable class; a variant
+  with a currently retryable error passes 22/22, so the pinned property holds.
+  Fix (test-only, two lines) sent to the composer. F2 = the
+  documentation-current conflict (owner item, proposal above). F3 = R01: the
+  learner CREATE path's failure cleanup runs outside the host custody owner
+  (inert today: no production root composes the join host; owner check before
+  one does). Parent controls #151/#152 pending; APPROVE expected after the F1
+  fix is re-verified.
+- 2026-10-17 F1 fixed by the composer as a separate commit `1efdfc723` on
+  `integration/rs-raft-candidate-20261017` (pushed by the lead): the
+  promotion-selection-guards fixture now injects `ERRORS.NO_HANDLER_FOR_ADDRESS`
+  (the only entry of `RETRYABLE_OPERATION_PERSIST_ERROR_FRAGMENTS` on the
+  composed tree) with a supersession comment citing lane commit d35d8828c;
+  19/22 -> 22/22 locally; lab confirmation of the two composition-touched
+  witnesses submitted at 1efdfc723. Parent controls #151/#152 still running.
+- 2026-10-17 F1 confirmed on the lab at 1efdfc723 (#153: promotion-selection-guards
+  22/22, membership-branch-authorization 115/115). The first parent controls
+  (#151/#152) were REFUSED by the bridge with SOURCE_FILE_UNAVAILABLE because
+  the 17-file red list mixed files that exist at only one parent (the
+  promotion-selection-guards file is absent at the lane; native-custody-handoff
+  is absent at the candidate); resubmitted filtered per parent as #154 (16 files,
+  lane tip) and #155 (16 files, candidate tip). Lesson for the bridge recipe:
+  a control request must contain only files present at its exact SHA.
+- 2026-10-17 parent controls landed (#154 lane tip b3793c7e5 on tv-dator, #155
+  candidate 10c2f0610 on adam-laptop; records retained): at the lane ALL 16
+  red files are red; at the candidate 14 of 16 are GREEN (red only the
+  committed-membership census and operation-port-boundary, which are red at
+  both). No red at the composed head is green at both parents: the
+  composition is faithful and F1 was its only own red. SYSTEMIC FINDING for
+  step 3: the creation lane carries 14 files that the reviewed 2026-10-11
+  candidate has green, i.e. regressions introduced in the lane's own history
+  after the common base e7c89f4b5 (2026-10-12; 293 first-parent commits):
+  `fresh-join-registration-runtime-replacement.integration`,
+  `leader-metadata-validation.integration`,
+  `message-group-membership-claim-cache.integration` (all three: "Seed
+  participant release failed" in the seed's partition phase),
+  `node-bootstrap-consistency.property` (timeout), `settled-replay-preserves-result`
+  (W1 setup write), `partition-write-leadership-transfer-committed`,
+  `unknown-outcome-same-entry` (W1), `write-exactly-once-schedules` (c1),
+  `replica-create-admission-recovery`, `message-group-native-custody-handoff`,
+  `evidence-o1-static`, `durable-commit-replica-kinds`,
+  `wasm-service-group-on-raft-rs`, `wasm-service-replica` unit. Prime suspect
+  by size and subject: lane commit d35d8828c (2026-10-13, "remove legacy
+  transaction engine; retain rs-raft recovery HOLD", 239 files). Localization
+  probes submitted: the 16 files at d35d8828c^ (`probe/lane-red-before-d35d8828c`)
+  and at d35d8828c (`probe/lane-red-at-d35d8828c`). Repair belongs to the
+  owners of each failing path (seed participant release, writer codec, replica
+  unit effects, exactly-once write schedule), on the composed candidate.
+- 2026-10-17 STEP 2 COMPOSED AND VERIFIED: final independent verdict on
+  `integration/rs-raft-candidate-20261017` @ `1efdfc723a41b81209ba62e72c625f2b96b5b23a`
+  = APPROVE (`composition-verifier-verdict-2026-10-17.md`, three dated
+  sections: the narrow REJECT on 99d145ace, the F1 re-verification, the final
+  verdict). Faithful composition on every conflicted path; every red at the
+  head inherited from a parent (16 lane-inherited confirmed at the exact lane
+  tip with identical failing subtests and first errors; the census from both);
+  F1 resolved by the test-only supersession; F2 (documentation-current) and F3
+  (learner CREATE cleanup custody) recorded as owner items. The candidate is
+  the head on which step 3 proceeds; the lane's 14 regressions versus the
+  reviewed 2026-10-11 candidate are step 3's first work item (probes #156/#157
+  localizing the introducing commit).
+- 2026-10-17 OWNER RULINGS on the seven decisions presented ("i go with your
+  recommendations"): (1) scope split confirmed; (2) HELD workflow step with its
+  own owner timeout (activation quest); (3) deletion of the unbound shape as
+  its own reviewed unit after activation; (4) move the C2 review file into the
+  FreshMG quest's evidence and repoint the two citations (applied on the
+  candidate by the lead); (5) justify the two lane readers in the
+  committed-membership census (step 3, on the candidate); (6) learner CREATE
+  cleanup custody = activation-quest precondition; (7) repair the 14 lane
+  regressions at their owners on the composed candidate after the probes
+  localize the introducing commits.
+- 2026-10-17 lane-regression probes (#156 at d35d8828c^ = e6d43bc1a on
+  tv-dator, #157 at d35d8828c on lenovo-laptop; 15 files each, identical
+  results): 12 of the 16 are ALREADY red at both, so the legacy-engine removal
+  is not their introducer; they entered between the common base e7c89f4b5
+  (2026-10-12) and e6d43bc1a (150 first-parent commits). Three are green at
+  both and red at the lane tip (`operation-port-boundary`,
+  `wasm-service-group-on-raft-rs`, `wasm-service-replica`): introduced between
+  d35d8828c and c6006c745 (142 commits). Two lab-driven first-parent
+  bisections launched (scratchpad `bisect/bisect-lab.sh`; probe branches
+  `probe/bisect-setA-<n>` on lenovo-laptop, `probe/bisect-setB-<n>` on
+  tv-dator); results to `bisect/setA.result`, `bisect/setB.result`. Decision 5
+  (census readers) delegated to an Opus agent on the candidate (brief
+  `briefs/census-readers-20261017.md`). Decision 4 applied and pushed on the
+  candidate as 68de6d1f6.
+- 2026-10-17 decision 5 applied on the candidate: `e7a3525a5` (pushed; test-only
+  + regenerated metadata) makes `committed-membership-census` green 9/9 by
+  justifying, with records, the readers the census did not know: the bound
+  WASM genesis WITNESS read (`wasm-creation-genesis.js`; GENESIS-CONNECTION
+  acceptance, design section 1, D6'/N16), the participant release facts'
+  WITNESS/RETIREMENT reads (`partition-participant-transaction-pause.js`;
+  cutover-interaction proposal rows accepted 2026-10-11, owner-cycle-removal
+  design 19f3f09c9; caveat: the source first appeared in the ephemeral snapshot
+  4151a3ab4), the candidate's registered-learner read
+  (`message-group-membership-recipient.js`; contract
+  `message-group-registered-learner-read.md`); ST4 stamp origins gain the
+  learner recorder and the genesis validator; ST5/V1a follow the
+  `partition-reopen-options.js` extraction. Every list stays an exact
+  `deepEqual` of named files. Commits 68de6d1f6 and e7a3525a5 are docs/test-only
+  after the APPROVED 1efdfc723 and are covered by the next independent
+  verification of the candidate (with the lane-regression repairs).
+- 2026-10-17 stage 1c round-1 verification (Fable, verify-1c at 04f1a9112):
+  PROVISIONAL / REJECT narrow. Required V-F1: a CREATE under a different
+  operation id for a HELD replica re-entered the request's id and its refusal
+  overwrote the creation-naming memo, so the next REMOVE orderly-stopped the
+  bound replica generically while its slot stayed ADMITTED (the orphan vet's
+  B4). Nine notes V-N2..V-N10 (wake-token honesty, CLOSED-wake re-entry,
+  PRESENT latch unwitnessed, fixture leftovers, stale literal baseline outside
+  the diff, REMOVE journal dependency, no coupled pair). Lead ruling: in scope;
+  design Revision 5 (RV5.1-RV5.7) appended; quest log carries attempt (round
+  2), verification reject (subagent:a20413205d1d4bd1c) and the decision;
+  round-1 evidence retained under
+  `evidence/activation-discovery-20261017/verifier-1c-round1/` (184 files).
+  Round 3 (corrective) delegated to the Opus implementer (brief
+  `briefs/implementer-stage1c-r3.md`); then narrow re-verification + a
+  changed-cone lab run at the round-3 snapshot; the round-2 85-file lab run
+  (#161-#163) stands as the classification of the unchanged files.
+- 2026-10-17 ~16:05Z LAB BLOCKED (owner action needed): lab job #159 (the
+  owner's Harnessd PR proof) is UNCERTAIN (v0.1.6 TAP count classification, lab
+  issue #165); the bridge holds every later source job in WAITING_APPROVAL
+  (`LOCAL_PAUSE_OR_UNCERTAIN_PRIOR_EXECUTION`): stage-1c #161-#163, bisection
+  good-end jobs #164 (set B) and #166 (set A). Requests expire 3 h after
+  submission. Bisection B's waiter timed out (script exit 2); relaunch with
+  `bisect/bisect-lab-v3.sh` and `REUSE_good=<request_id>` once the lab resumes.
+- 2026-10-17 stage 1c round 3 (corrective, Opus) handed back: RV5.1-RV5.6
+  applied in the lane worktree (uncommitted); six new unit witnesses red first
+  on the round-2 source; nine mutations killed (VM01, VM11, VA7, VA8 + four by
+  mechanism); statics 0 new vs base; U 33 / N 3 / lifecycle 62 / handler 38 /
+  publication 25 green locally. Snapshot `9f83c7be34e19e47feebe44a8daddee6030f4df1`
+  = `wip/rs-raft-serving-publication-4` (pushed). Changed-cone lab job #167
+  (request 9ea4b1bffc92426389ab5c9124248dcb, 18 files, lenovo-laptop, 12 h
+  expiry) queued behind the owner's reconciliation. Narrow re-verification
+  requested from the round-1 Fable verifier (same agent, context intact;
+  verdict -> scratchpad `verify-1c/verdict-r3.md`). Implementer F-items for the
+  verifier to judge: F-r3-1 `events` kept (shared helper writes it), F-r3-2
+  HELD memo without operationId falls back to the request id (reachability?),
+  F-r3-4 new contract `runtime-service-bound-creation-route` rather than
+  widening the retained-bootstrap one, F-r3-5 lifecycle witness uses a stand-in
+  consensusCreation; F-r3-3 was a path typo in the brief.
+- 2026-10-17 stage 1c round-3 verification (same Fable verifier, verify-1c at
+  9f83c7be3): REJECT narrow. RV5.1, RV5.3-RV5.6 hold; V-F1 closed for HELD.
+  V-F2: the handler's unconditional CREATING tracking write is a second writer
+  of the memo and drops the creation link of a named deferral (FAILED +
+  operationId) or a REMOVING memo (closed:false); the next REMOVE goes generic
+  (P6: REMOVE_COMPLETED with the slot ADMITTED; P5: REMOVE_FAILED forever on a
+  half-retired replica). Notes V-N11 (nameless-HELD fallback should fail
+  closed), V-N12 (`events` stays), V-N13-15 accepted shapes. Lead ruling: root =
+  two writers of one link; design Revision 6 (RV6.1 single writer, RV6.2 named
+  deferral re-enters like HELD, RV6.3 named REMOVING -> typed deferral
+  RETIREMENT_IN_PROGRESS, RV6.4 nameless HELD fails closed CORRUPT_LOCAL_MEMO,
+  RV6.5, RV6.6 proof). Quest log: attempt r3, verification reject, decision.
+  Evidence retained under `evidence/activation-discovery-20261017/verifier-1c-round3/`
+  (115 files). Round 4 sent to the same Opus implementer (context intact).
+- 2026-10-17 stage 1c round 4 (corrective, Revision 6) handed back: RV6.1-RV6.4
+  applied (handler `trackCreateRequest` + `replyToRetainedMemo`, route
+  `namesCreation`/`reenterRetainedCreation`/`deferDuringRetirement`, two new
+  codes at the constants owner); five U witnesses + one handler regression
+  guard red first; seven mutations killed; statics 0 new vs base; no metadata
+  drift. Snapshot `6b420826829d49d39191efe46da0f4b5f005c27b` =
+  `wip/rs-raft-serving-publication-5` (pushed). Lab #169 (request
+  1f0c4fa649564f9d9fd824aa38d61c2e, 18 files, lenovo-laptop, 12 h) queued;
+  #167 withdrawn (superseded). Round-4 re-verification requested from the same
+  verifier (verdict -> `verify-1c/verdict-r4.md`). F-items to judge: F-r4-1
+  (RV6.1 witness uses the REMOVED named memo), F-r4-2 (`createGenericReplicaAsync`
+  third nameless writer), F-r4-3 (deferral emitted before the reply),
+  F-r4-4 (existing log message reused).
+- 2026-10-17 stage 1c round-4 verification (same verifier, verify-1c at
+  6b4208268): REJECT narrow. RV6.1, RV6.3-RV6.5 hold; V-F2 closed. V-F3:
+  permanent failures are memoed named like deferrals and RV6.2 re-enters every
+  named FAILED memo, so a dead creation captures later CREATEs for its
+  canonical replica (P14), including J's founder after I's retirement plus a
+  late duplicate of I's CREATE (P15: J's operation gets no outcome, J's slot
+  orphaned). Census of all nine memo writers recorded; notes V-N16-V-N20.
+  THIRD narrow finding on one root (the memo conflates operation status with
+  creation custody). Lead ruling: Revision 7 = RV7.1 deferral flag on the
+  memo, RV7.2 only live retained creations re-enter, RV7.3 a named ACTIVE memo
+  never earns CREATE_ACTIVE for a different request (CONTENT_CONFLICT
+  instead), the full memo-state x request-id custody table binding (verifier
+  certifies cell by cell), RV7.4 journal-first custody routed to the recovery
+  stage, RV7.5 notes recorded, RV7.6 proof. Quest log: attempt r4, verification
+  reject, decision. Evidence retained under `verifier-1c-round4/` (105 files).
+  Round 5 sent to the same Opus implementer. Lab #169 (round-4 cone) stays
+  queued until the round-5 snapshot supersedes it.
+- 2026-10-17 stage 1c round 5 (corrective, Revision 7) handed back: RV7.1
+  deferral flag on the memo, RV7.2 `reenterDeferredCreation` (only live
+  retained creations re-enter), RV7.3 `refuseForeignCreation` (named ACTIVE +
+  foreign id -> CONTENT_CONFLICT under the request); four witnesses red first
+  (P14, P15 full I-then-J sequence, flag, foreign ACTIVE); six mutations
+  killed; statics 0 new; seal refreshed (V-N19). Custody table: every cell
+  witnessed or shared (two same-id cells share their different-id code path).
+  Snapshot `4bcf5f86dcfb3ffc539f4ef47fa470b76d562a8d` =
+  `wip/rs-raft-serving-publication-6` (pushed). Lab #170 (request
+  c2c8e379100f441283bdc418e9842a65, 18 files, lenovo-laptop, 12 h) queued;
+  #169 withdrawn. Certification round requested from the same verifier
+  (cell-by-cell table + the I-then-J transitions; verdict ->
+  `verify-1c/verdict-r5.md`). F-items: F-r5-1 flag also on nameless deferred
+  memos (lead: keep, one vocabulary; verifier judges), F-r5-2 emission order
+  as the re-announce, F-r5-3 two unwitnessed same-id cells (verifier probes).
+- 2026-10-17 stage 1c round-5 verification: APPROVE on the node-side custody
+  claim at 4bcf5f86d (lab PENDING); Revision 7's table certified cell by cell;
+  the I-then-J sequence end to end; V-F1/V-F2/V-F3 class CLOSED for every memo
+  state. Landing: evidence retained (`evidence/activation-discovery-20261017/`:
+  implementer rounds 2-5, verifier rounds 1/3/4/5), acceptance record
+  `ACTIVATION-DISCOVERY-STAGE1C-ACCEPTANCE-20261017.md` (lab section pending),
+  quest log attempt r5 + landing decision (every superseded line) +
+  verification approve. Committed on the lane; lab classification to follow as
+  an addendum + evidence entry when #161-#163/#170 run.

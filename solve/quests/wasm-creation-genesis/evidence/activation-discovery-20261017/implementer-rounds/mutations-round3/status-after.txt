@@ -1,0 +1,49 @@
+ M solve/epics/raft-rs-full-cutover/activation-quest-charter-2026-10-17.md
+ M solve/epics/raft-rs-full-cutover/closeout-plan-2026-10-17.md
+ M solve/quests/wasm-creation-genesis/ACTIVATION-DISCOVERY-DESIGN-20261017.md
+ M solve/quests/wasm-creation-genesis/log.ndjson
+ M src/bootstrap/shared/meta-service-definition-registration.js
+ M src/node/runtime-service-handler-constants.js
+ M src/node/runtime-service-handler.js
+ M src/rebalancer/executor-outcome-constants.js
+ M src/rebalancer/replica-operation-progress.js
+ M src/rebalancer/replica-status.js
+ M src/runtime/request-cell-runtime-contract.js
+ M src/runtime/runtime-endpoint-publication-wiring.js
+ M src/runtime/runtime-endpoint-writer.js
+ M src/runtime/runtime-startup-wiring.js
+ M src/runtime/service-runtime-consensus-bootstrap.js
+ M src/runtime/service-runtime-lifecycle.js
+ M src/runtime/wasm-component-driver-consensus.js
+ M src/runtime/wasm-component-driver.js
+ M src/service/service-consensus-bootstrap.js
+ M src/service/service-consensus-creation-intent.js
+ M src/service/service-lifecycle-manager.js
+ M src/wasm-service/service-endpoint-builder.js
+ M src/wasm-service/wasm-creation-publication.js
+ M src/wasm-service/wasm-service-lifecycle.js
+ M src/wasm-service/wasm-service-replica.js
+ M src/wasm-service/wasm-service-serving-state.js
+ M test/control-plane/service-instance-creation-sqlite-fixture.js
+ M test/node/runtime-service-handler.test.js
+ M test/rebalancer/replica-status-completeness.property.test.js
+ M test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js
+ M test/runtime/wasm-driver-contract-conformance.test.js
+ M test/shards/impact-contracts.json
+ M test/shards/primary-classes.json
+ M test/shards/resource-classes.json
+ M test/shards/subsystem-classes.json
+ M test/wasm-service/wasm-creation-genesis.integration.test.js
+ M test/wasm-service/wasm-creation-reconciliation.integration.test.js
+ M test/wasm-service/wasm-retained-bootstrap-fixture.js
+ M test/wasm-service/wasm-service-lifecycle.test.js
+?? solve/epics/raft-rs-full-cutover/composition-report-2026-10-17.md
+?? solve/epics/raft-rs-full-cutover/composition-verifier-verdict-2026-10-17.md
+?? solve/quests/wasm-creation-genesis/evidence/activation-discovery-20261017/
+?? src/node/runtime-service-bound-creation-route.js
+?? src/runtime/service-runtime-consensus-publication.js
+?? test/node/runtime-service-bound-route.test.js
+?? test/runtime/request-cell-definition-classification.test.js
+?? test/runtime/service-runtime-consensus-publication.test.js
+?? test/wasm-service/bound-creation-handler-embedding-fixture.js
+?? test/wasm-service/bound-creation-handler-embedding.integration.test.js

@@ -1,0 +1,82 @@
+--- /tmp/claude-1000/-mnt-data-peter-projects-lagrange/52d74044-bacb-41c7-9eb9-7fdbcbd93317/scratchpad/r5-pristine/src/node/runtime-service-bound-creation-route.js	2026-10-17 18:31:58.964189597 +0200
++++ src/node/runtime-service-bound-creation-route.js	2026-10-17 18:57:06.979152605 +0200
+@@ -3,7 +3,9 @@
+ // carrier, RV3.3 result tables, RV3.5 re-entry guard; Revision 2: RV2.1 REMOVE,
+ // RV2.2 CREATE order, RV2.4 wake; Revision 5: RV5.1 the HELD re-entry resumes
+ // the creation, RV5.2 memo custody, RV5.3 wake corrections; Revision 6: RV6.1
+-// one writer of the creation link, RV6.2-RV6.4 replies to a retained memo). Explicit-context functions over the
++// one writer of the creation link, RV6.2-RV6.4 replies to a retained memo;
++// Revision 7: RV7.1 the deferral flag, RV7.2 only a live creation re-enters,
++// RV7.3 a named ACTIVE memo answers a foreign request CONTENT_CONFLICT). Explicit-context functions over the
+ // handler. Routing keys on the manager's journal (a retained creation answers
+ // ADMISSION_RETAINED-class); only the refusal class of a CREATE that names no
+ // retained creation keys on the definition row. The handler memo is volatile;
+@@ -102,9 +104,12 @@
+ 
+ function settleCreation(handler, {operationId, entityId, replicaId}, decision) {
+   const named = decision.names ? {operationId} : {};
++  // RV7.1: a deferral is recorded on the memo with the outcome's own flag; a
++  // permanent failure records none.
++  const deferral = decision.kind === DECISION.DEFERRED ? {deferRetry: true} : {};
+   const writes = writesMemo(handler, replicaId, decision);
+   const memo = (status) => writes && handler.localReplicas.set(replicaId,
+-    {replicaId, entityId, status, ...named});
++    {replicaId, entityId, status, ...named, ...deferral});
+   const fields = {operationId, replicaId, entityId, nodeId: handler.nodeId};
+   if (decision.kind === DECISION.ACTIVE) {
+     memo(ReplicaStatus.ACTIVE);
+@@ -236,15 +241,43 @@
+   return inProgressReply(handler, params.replicaId);
+ }
+ 
++// RV7.2: only a deferral is a live retained creation; a permanently failed
++// named memo answers null (the CREATE proceeds under its own id, RV6.1).
++function reenterDeferredCreation(handler, existing, params) {
++  return existing.deferRetry === true ? reenterRetainedCreation(handler, existing, params) : null;
++}
++
+ // The replies to a memo that names a retained creation, by its status.
+-const NAMED_MEMO_REPLIES = new Map([[ReplicaStatus.FAILED, reenterRetainedCreation],
++const NAMED_MEMO_REPLIES = new Map([[ReplicaStatus.FAILED, reenterDeferredCreation],
+   [ReplicaStatus.REMOVING, deferDuringRetirement]]);
+ 
+ /**
++ * RV7.3: a named ACTIVE memo never earns an outcome for a different request.
++ * For a request whose id differs from the memo's creation, CREATE_FAILED with
++ * CONTENT_CONFLICT is emitted under the request's id and true is answered; a
++ * same-id duplicate or a nameless memo answers false (the caller's
++ * CREATE_ACTIVE re-announce, unchanged). The memo is never written.
++ * @param {Object} handler
++ * @param {Object} existing - The ACTIVE memo.
++ * @param {Object} params - The request's {operationId, replicaId}.
++ * @return {boolean}
++ */
++function refuseForeignCreation(handler, existing, {operationId, replicaId}) {
++  if (!namesCreation(existing) || existing.operationId === operationId) return false;
++  const decision = {kind: DECISION.FAILED, errorCode: OUTCOME.CONTENT_CONFLICT};
++  handler.emitExecutorOutcome(EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_FAILED,
++    operationId, WORKFLOW_STEP.FAILED, failureOptions(replicaId, decision));
++  handler.logger.error(LOG.CREATE_FAILED, {operationId, replicaId, nodeId: handler.nodeId,
++    creationOperationId: existing.operationId, error: decision.errorCode});
++  return true;
++}
++
++/**
+  * The reply a CREATE gets from a memo of a locally retained creation
+- * (RV3.5, RV6.2-RV6.4): HELD re-enters (a nameless HELD is refused corrupt);
+- * a named FAILED (deferral) re-enters; a named REMOVING is deferred typed.
+- * Any other memo, and every nameless FAILED or REMOVING memo, answers null.
++ * (RV3.5, RV6.2-RV6.4, RV7.2): HELD re-enters (a nameless HELD is refused
++ * corrupt); a named FAILED deferral (deferRetry) re-enters; a named REMOVING
++ * is deferred typed. Any other memo, a permanently failed named memo, and
++ * every nameless FAILED or REMOVING memo answers null.
+  * @param {Object} handler
+  * @param {Object|undefined} existing - The local replica memo.
+  * @param {Object} params - The request's {operationId, entityId, replicaId}.
+@@ -393,5 +426,5 @@
+   return typeof token === 'string' && token.length > 0 ? {operationId: token} : {};
+ }
+ 
+-export {routeRuntimeServiceCreate, replyToRetainedMemo, namesCreation,
++export {routeRuntimeServiceCreate, replyToRetainedMemo, refuseForeignCreation, namesCreation,
+   consumeCreationWake, routeBoundRemoval, rowCreationHint};

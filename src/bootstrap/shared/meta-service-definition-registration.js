@@ -249,4 +249,5 @@ export {
   META_SERVICE_DEFINITION_REGISTRATION_ERROR,
   registerBuiltInMetaServiceDefinitions,
   registerBuiltInMetaServiceEndpoints,
+  resolveEndpointAddress,
 };
