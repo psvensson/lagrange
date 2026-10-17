@@ -1,0 +1,87 @@
+import hashlib, subprocess, sys, json, os
+ROOT = '/mnt/data/peter/projects/.worktrees/verify-a2'
+SCRATCH = '/tmp/claude-1000/-mnt-data-peter-projects-lagrange/52d74044-bacb-41c7-9eb9-7fdbcbd93317/scratchpad'
+OUT = SCRATCH + '/verify-a2/mutations'
+TAPFAIL = SCRATCH + '/tools/tapfail.py'
+SRC = 'src/control-plane/owners/service-instance-metadata.js'
+CAS = 'test/control-plane/service-instance-creation-cas.test.js'
+SEL = 'test/control-plane/service-instance-selection-admission.test.js'
+PUB = 'test/wasm-service/wasm-creation-publication.integration.test.js'
+LOOP_TAIL = "    observation = await observeAgain(owner, id, options);\n"
+LOOP_IF = "    if (submission !== SUBMISSION.NOT_APPLIED) {\n"
+BOUND = "  return change.next && submissions === LIMIT.RESOURCES ?"
+
+PROBES = open(SCRATCH + '/verify-a2/tools/probes.js').read()
+
+# name: (edits, files). edit = (path, old, new) replace exactly once; (path, None, text) appends.
+M = {
+ # --- implementer's mutations, verbatim edits (re-run) ---
+ 'MA1-single-shot-restored': ([(SRC, LOOP_IF, "    if (submission !== SUBMISSION.NOT_APPLIED || submissions >= 0) {\n")], [CAS, SEL, PUB]),
+ 'MA1r-single-shot-for-release-and-close-only': ([(SRC, LOOP_IF, "    if (submission !== SUBMISSION.NOT_APPLIED ||\n        change.result.outcome === PHASE.RELEASING || change.result.outcome === PHASE.CLOSED) {\n")], [PUB]),
+ 'MA2-resubmit-after-unknown': ([(SRC, "    const submission = await submitState(owner, id, observation, change, options);\n", "    let submission = await submitState(owner, id, observation, change, options);\n    if (submission === SUBMISSION.UNKNOWN) {\n      submission = await submitState(owner, id, observation, change, options);\n    }\n")], [CAS, SEL, PUB]),
+ 'MA3a-bound-off-by-one-low': ([(SRC, BOUND, "  return change.next && submissions === LIMIT.RESOURCES - 1 ?")], [CAS, SEL, PUB]),
+ 'MA3b-bound-off-by-one-high': ([(SRC, BOUND, "  return change.next && submissions === LIMIT.RESOURCES + 1 ?")], [CAS, SEL, PUB]),
+ 'MA4-resubmit-stale-bytes': ([(SRC, LOOP_TAIL, "    observation = {...observation, state: JSON.parse(observation.row.state)};\n")], [CAS, SEL, PUB]),
+ 'MA5-redecide-reaches-selection': ([(SRC, "    return await commitState(owner, id, observation, change, options,\n      (current) => {", "    const committed = await commitState(owner, id, observation, change, options,\n      (current) => {"),
+   (SRC, "        return history.outcome === DECISION.UNDECIDED ? null : history;\n      });\n", "        return history.outcome === DECISION.UNDECIDED ? null : history;\n      });\n    if (committed.outcome === OUTCOME.STATE_CHANGED && observation.row !== null) {\n      return selectConsensusInstance(owner, value, options);\n    }\n    return committed;\n")], [CAS, SEL, PUB]),
+ 'MA6-redecide-on-retained-mutated-state': ([(SRC, LOOP_TAIL, "    observation = {...(await observeAgain(owner, id, options)), state: observation.state};\n")], [CAS, SEL, PUB]),
+ 'MA7-reread-failure-answered-unknown': ([(SRC, LOOP_TAIL, "    try {\n      observation = await observeAgain(owner, id, options);\n    } catch (error) {\n      return {outcome: OUTCOME.UNKNOWN, reason: instanceFailure(error).outcome};\n    }\n")], [CAS, SEL, PUB]),
+ # --- verifier's additional semantic classes ---
+ 'VA1-unknown-redecided-in-loop': ([(SRC, LOOP_IF, "    if (submission === SUBMISSION.APPLIED || submission === SUBMISSION.CAPACITY_EXHAUSTED) {\n")], [CAS, SEL, PUB]),
+ 'VA2-capacity-exhausted-retried': ([(SRC, LOOP_IF, "    if (submission !== SUBMISSION.NOT_APPLIED && submission !== SUBMISSION.CAPACITY_EXHAUSTED) {\n")], [CAS, SEL, PUB]),
+ 'VA3-bound-counted-in-redecisions': ([(SRC, BOUND, "  return change.next && submissions - 1 === LIMIT.RESOURCES ?")], [CAS, SEL, PUB]),
+ 'VA4-lie-on-zero': ([(SRC, LOOP_IF, "    if (submission === SUBMISSION.NOT_APPLIED) return change.result;\n    if (submission !== SUBMISSION.NOT_APPLIED) {\n")], [CAS, SEL, PUB]),
+ 'VA8-bound-of-two': ([(SRC, BOUND, "  return change.next && submissions === 2 ?")], [CAS, SEL, PUB]),
+ # --- coverage probes on pristine source (temporary test cases appended to CAS) ---
+ 'PX-probes-on-pristine-source': ([(CAS, None, PROBES)], [CAS]),
+ # --- VA1 against the proposed absent-count witness (PX2) ---
+ 'VA1-with-probes': ([(SRC, LOOP_IF, "    if (submission === SUBMISSION.APPLIED || submission === SUBMISSION.CAPACITY_EXHAUSTED) {\n"), (CAS, None, PROBES)], [CAS]),
+}
+
+def sha(b): return hashlib.sha256(b).hexdigest()
+def read(p): return open(os.path.join(ROOT, p), 'rb').read()
+def write(p, b): open(os.path.join(ROOT, p), 'wb').write(b)
+
+names = sys.argv[1:] or list(M)
+summary = {}
+for name in names:
+    edits, files = M[name]
+    originals = {}
+    for path, _, _ in edits:
+        originals.setdefault(path, read(path))
+    texts = {p: b.decode() for p, b in originals.items()}
+    for path, old, new in edits:
+        if old is None:
+            texts[path] = texts[path] + new
+        else:
+            assert texts[path].count(old) == 1, (name, path, old)
+            texts[path] = texts[path].replace(old, new)
+    log = open(f'{OUT}/{name}.log', 'w')
+    res = {}
+    try:
+        for path, text in texts.items():
+            write(path, text.encode())
+        for f in files:
+            g = subprocess.run(['node', 'scripts/checks/wait-for-thermal-headroom.js'], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            log.write(g.stdout.decode(errors='replace'))
+            r = subprocess.run(['npm', 'run', 'test:file', '--', f], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=900)
+            log.write(r.stdout.decode(errors='replace'))
+            tap = f'{ROOT}/.tap/test-results/{f}.tap'
+            fails = subprocess.run(['python3', '-I', TAPFAIL, tap], stdout=subprocess.PIPE).stdout.decode()
+            log.write(f'\n==== {f} exit {r.returncode}\n{fails}\n')
+            res[f] = {'exit': r.returncode, 'failures': fails}
+    finally:
+        restored = {}
+        for path, original in originals.items():
+            write(path, original)
+            restored[path] = sha(read(path)) == sha(original)
+            log.write(f'\nRESTORED {path} sha256 {sha(original)} byte-identical={restored[path]}\n')
+        log.close()
+        assert all(restored.values()), (name, restored)
+    summary[name] = res
+    print('=====', name)
+    for f, v in res.items():
+        print(' ', f, 'exit', v['exit'])
+        print('   ' + v['failures'].replace('\n', '\n   ')[:2500])
+    sys.stdout.flush()
+json.dump(summary, open(f'{OUT}/summary-{"-".join(names) if sys.argv[1:] else "all"}.json', 'w'), indent=1)

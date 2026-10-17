@@ -1,0 +1,15 @@
+===== MA1r-single-shot-for-release-and-close-only
+  test/wasm-service/wasm-creation-publication.integration.test.js exit 1
+   FAIL: P19 a concurrent retirement of every founder closes each slot in one pass
+       failureType: 'testCodeFailure'
+       error: |-
+       {"outcome":"CLOSE_UNRESOLVED","retired":true,"closed":false,"release":{"outcome":"STATE_CHANGED"},"tombstone":{"outcome":"ALREADY"},"close":{"outcome":"STATE_CHANGED"},"operationId":"operation-1"}
+       
+       expected: true
+       actual: false
+   FAIL: 6double-prime: held grants, election changes, lost answers and absent consumers
+       failureType: 'subtestsFailed'
+       error: '1 subtest failed'
+       code: 'ERR_TEST_FAILURE'
+       ...
+   

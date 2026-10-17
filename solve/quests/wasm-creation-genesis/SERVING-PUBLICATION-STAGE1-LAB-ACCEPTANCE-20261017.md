@@ -173,3 +173,70 @@ Lead's commit-time changes after the verdict (no source or test change):
 `test/shards/impact-contracts.json` escapes restored (three unrelated
 descriptions), `npm run test:metadata:refresh` (classes unchanged in
 digest, import-graph seal refreshed), this record and the evidence folder.
+
+## Stage 1b: amendment A2' (bounded owner-side re-decide for slot transitions)
+
+Lead-authored addendum (2026-10-17). Owner decision recorded in the quest log
+(option 2 of the F0 alternatives); amendment A2 vetted (REVISE, no mechanism
+defect; `evidence/design-vets-20261017/design-vet-A2-20261017.md`), resolved
+by A2' in the design note; implemented by an Opus 5.5 implementer (report
+retained at `evidence/serving-publication-20261017/implementer-A2-report.md`).
+
+| Item | Value |
+| --- | --- |
+| Base | `89e70949fcbd49655dd93ab1cfc728c1b17b0981` (stage 1 landed) |
+| Snapshot under test | `8ec78a5e09cffa661acc249d576d25997adef9d1` = `refs/heads/wip/rs-raft-serving-publication-2` (the implementer's five uncommitted files plus the lead's uncommitted design/plan/log appends) |
+| Diff | `src/control-plane/owners/service-instance-metadata.js` (184 -> 240 lines: `submitState`/`settleSubmission`, bounded `mutateResource`, `boundedChange`), `test/control-plane/service-instance-creation-cas.test.js` (CAS-A1, A1b, A1c, A2, A3, A4, A5a, A5b, A6, A7), `test/control-plane/service-instance-selection-admission.test.js` (:206-223 superseded), `test/wasm-service/wasm-creation-publication.integration.test.js` (P1/P13/P15/P18 changes, P19, P20), `test/wasm-service/wasm-retained-bootstrap-fixture.js` (`reenterOnWake` STATE_CHANGED branch removed) |
+
+| Issue | Host | Head | Files | Outcome | Assertions | Request SHA256 | Log SHA256 (bytes) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| #142 | lenovo-laptop | `8ec78a5e0` | 9 | PASS 9/0 | 263 | see `evidence/serving-publication-20261017/lab-stage1b/LAB-RESULTS.json` | idem |
+| #143 | adam-laptop | `8ec78a5e0` | 8 | PASS 8/0 | 242 | idem | idem |
+
+Selection = every test consumer of the metadata owner and its fixtures (17
+files): CAS table (20 assertions, up from 10), selection-admission (23),
+creation-intent (24), the two minimal-deployment owner guards, reconciliation
+unit, `system-metadata-owner-modules` (146), local-record, publication
+integration (25, up from 23: P19 and P20), genesis, reconciliation
+integration, retained-bootstrap, C1 bound-native, creation-recovery,
+wasm-service-lifecycle, driver, runtime-lifecycle. Both placement heads equal
+the snapshot. No red. The three pre-existing lane reds recorded above are not
+consumers of this owner and were not in the selection.
+
+Red-first and mutations (implementer, retained under
+`evidence/serving-publication-20261017/implementer-A2-*`): CAS-A1/A1b/A1c/A2/A3/A7
+red before the source change (A4, A5a, A5b, A6 guard unchanged behaviour and
+were green by design); 13 of 23 publication cases red; MA1-MA7 all engage
+(MA1r added: single-shot for RELEASING/CLOSED only, caught by P19's own
+retirement assertions; MA3 "bound removed" not measured because it would hang
+the runner, both off-by-one directions measured instead).
+
+Lead decisions on the implementer's open findings: the P19 tombstone oracle is
+`ALREADY` for a live replica (the in-path tombstone of A1/N15 precedes the
+by-path verification), asserted together with the local record RETIRED read
+through a second connection; A2'.7's "tombstone.outcome === 'RETIRED'" was the
+vet's wording for a replica with no live instance and is corrected by this
+record. The stale comments at `wasm-creation-reconciliation.integration.test.js:94`
+and `:122` ("re-drives a sibling-raced grant") are superseded by the lead at
+commit, as is `wasm-creation-bound-native-fixture.js:312-314`.
+
+Independent verification (stage 1b): a separate Fable 5.1 subagent
+(`subagent:a8256b8a4e62d0ef5`) in its own detached worktree at the snapshot;
+verdict **APPROVE**, no blocking finding
+(`evidence/serving-publication-20261017/verifier-a2/verdict.md`, with its
+mutation driver, probes and logs beside it). Coverage: 35 cells mapped to
+committed witnesses, with six probes on the pristine source for the cells no
+committed witness covers (recorded in A2''). Mechanism read line by line; the
+loop lives only in `mutateResource`, selection stays single-shot, the bound is
+nine submissions, each submission runs under a fresh write identity. Mutations
+MA1-MA7 re-run with matching first failures, plus MA1r, VA1-VA4 and VA8 by
+semantic class; VA1 ("UNKNOWN re-decided") was caught only natively, which
+produced the component witness CAS-A8 that the lead added from the verifier's
+own probe and ran green locally (`lab-stage1b/local-cas-a8.log`). Statics on
+the snapshot: decision boundaries 0 (baseline 806), eslint clean, complexity
+and cognitive 0, fast-static ok, shards current; the whole-corpus duplication,
+literals, silent-catch and decision-boundary reds verified identical at the
+base. Lab: both placement heads and log digests matched. Eight non-blocking
+findings resolved or recorded in design section A2'' (F-1 text correction on
+the final re-observation, F-2 CAS-A8, F-3 unreachable edge, F-4 citations,
+F-5 P19 oracle, F-6/F-7 forms accepted, F-8 inherited statics).

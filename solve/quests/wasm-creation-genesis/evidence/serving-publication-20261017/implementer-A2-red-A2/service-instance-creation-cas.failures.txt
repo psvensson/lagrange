@@ -1,0 +1,42 @@
+FAIL: CAS-A1 a grant that loses to a sibling slot grant is re-decided and answers PUBLISHED
+    failureType: 'testCodeFailure'
+    error: |-
+    A_SIBLING_GRANT_DEFEATED_THE_CALLERS_OWN_SLOT
+    + actual - expected
+    expected:
+    actual:
+FAIL: CAS-A1b two consecutive losses publish on the third submission
+    failureType: 'testCodeFailure'
+    error: |-
+    NO_RE_DECIDED_SUBMISSION_AFTER_THE_FIRST_LOSS
+    + actual - expected
+    expected: 'entered'
+    actual: 'settled'
+FAIL: CAS-A1c sibling reserves of different replicas on different slots both admit
+    failureType: 'testCodeFailure'
+    error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    expected: 'ADMITTED'
+    actual: 'STATE_CHANGED'
+FAIL: CAS-A2 a close that loses to a sibling close answers CLOSED; the last CLOSED lifts the hold
+    failureType: 'testCodeFailure'
+    error: |-
+    A_SIBLING_CLOSE_LEFT_THE_CALLERS_SLOT_UNRESOLVED
+    + actual - expected
+    expected:
+    actual:
+FAIL: CAS-A3 a bound-exhausted grant answers STATE_CHANGED after exactly RESOURCES submissions
+    failureType: 'testCodeFailure'
+    error: |-
+    NOT_THE_DECLARED_SUBMISSION_BOUND
+    
+    expected: 9
+    actual: 1
+FAIL: CAS-A7 a failed re-observation after a definitive zero answers UNAVAILABLE, never UNKNOWN
+    failureType: 'testCodeFailure'
+    error: |-
+    A_DEFINITIVE_ZERO_WAS_REPORTED_AS_UNKNOWN
+    + actual - expected
+    expected:
+    actual:

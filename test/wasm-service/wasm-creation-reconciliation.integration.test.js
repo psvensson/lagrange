@@ -91,7 +91,10 @@ test('native applied wake survives an in-flight no-quorum INIT and resolves afte
   async (t) => {
     // Only setup notifications are delayed, so we can install the genuine
     // transport fault before INIT. Then all event delivery is automatic.
-    // N1: the operation owner consumes the wakes (it re-drives a sibling-raced grant).
+    // N1: the operation owner consumes the wakes. (Superseded with amendment A2'
+    // of SERVING-PUBLICATION-RETIREMENT-DESIGN-20261017: the metadata owner now
+    // resolves a sibling-slot CAS loss itself, so the consumer re-drives nothing;
+    // it collects PUBLISHED on the OBSERVED wake.)
     const f = await fixture(t, {creationWake: reenterOnWake});
     const records = watchReconciliation(f);
     await bootstrapGroup(f);
@@ -119,7 +122,10 @@ test('native applied wake survives an in-flight no-quorum INIT and resolves afte
 
 test('an expired writer interest resumes from actual applied progress, not a poll or new intent',
   async (t) => {
-    // N1: the operation owner consumes the wakes (it re-drives a sibling-raced grant).
+    // N1: the operation owner consumes the wakes. (Superseded with amendment A2'
+    // of SERVING-PUBLICATION-RETIREMENT-DESIGN-20261017: the metadata owner now
+    // resolves a sibling-slot CAS loss itself, so the consumer re-drives nothing;
+    // it collects PUBLISHED on the OBSERVED wake.)
     const f = await fixture(t, {creationWake: reenterOnWake});
     const records = watchReconciliation(f);
     await bootstrapGroup(f);

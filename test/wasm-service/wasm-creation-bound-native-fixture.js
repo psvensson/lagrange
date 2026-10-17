@@ -308,9 +308,12 @@ async function initializeAndPublish(t, f) {
   // Native events drive the same keyed continuation (no delayed wakes in
   // this fixture): the leader's run authors and commits INIT, and each run
   // that observes covered genesis grants its slot. The explicit, token-bound
-  // publishReplica then answers PUBLISHED for every founder: idempotently for
-  // one already serving, or as the grant of one whose event-run CAS lost to
-  // a sibling slot's concurrent grant.
+  // publishReplica then answers PUBLISHED for every founder, idempotently.
+  // (Superseded with amendment A2' of SERVING-PUBLICATION-RETIREMENT-DESIGN-20261017:
+  // the former text "or as the grant of one whose event-run CAS lost to a
+  // sibling slot's concurrent grant" no longer applies; the metadata owner
+  // re-decides a sibling-slot CAS loss itself, so every founder's event run
+  // grants its own slot.)
   await deliverScheduled(f);
   for (const host of f.hosts) {
     const published = await publish(f, host);

@@ -1,0 +1,1058 @@
+
+> lagrange-server@0.2.6 test:file
+> node scripts/run-classified-test-files.js test/control-plane/service-instance-creation-cas.test.js
+
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: ok cpu 51C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+not ok test/control-plane/service-instance-creation-cas.test.js (20 assertions, 946ms)
+# TAP assertions failed; test process exited 1
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-b', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'reconstructed-owner', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-b', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'reservation-restart', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-b', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-b', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-c', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-b', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-b', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-b', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-b', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-b', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+TAP version 13
+# Subtest: ServiceDefinitionsOwner C3 concurrent selection has one SQL winner and stable losing result
+ok 1 - ServiceDefinitionsOwner C3 concurrent selection has one SQL winner and stable losing result
+  ---
+  duration_ms: 43.063841
+  type: 'test'
+  ...
+# {"name":"concurrent selection","evidenceOffset":0,"jsonCharacters":15795,"evidenceChunk":"{\\"scope\\":\\"SQLite component CAS; read adapter; no native consensus\\",\\"name\\":\\"concurrent selection\\",\\"results\\":{\\"first\\":{\\"format\\":1,\\"requestId\\":{\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",\\"expectedVersion\\":0,\\"nonce\\":\\"0000000000000000000000000000000000000000000000000000000000000001\\"},\\"tenantId\\":\\"creation-test-tenant\\",\\"expectedIncarnation\\":null,\\"action\\":\\"CREATE\\",\\"revisionId\\":\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\",\\"definition\\":{\\"serviceName\\":\\"creation-test-service\\",\\"handlerFunctionId\\":\\"creation-test-handler\\",\\"readConsistency\\":\\"strong\\",\\"writeConsistency\\":\\"strong\\",\\"safetyIntervalMs\\":0},\\"profile\\":\\"wasm-writer-v1/1\\",\\"foundingPeers\\":[{\\"replicaId\\":\\"founder-1\\",\\"nodeId\\":\\"host-1\\"},{\\"replicaId\\":\\"founder-2\\",\\"nodeId\\":\\"host-2\\"},{\\"replicaId\\":\\"founder-3\\",\\"nodeId\\":\\"host-3\\"}]},\\"second\\":{\\"format\\":1,\\"requestId\\":{\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",\\"expectedVersion\\":0,\\"nonce\\":\\"0000000000000000000000000000000000000000000000000000000000000002\\"},\\"tenantId\\":\\"creation-test-tenant\\",\\"expectedIncarnation\\":null,\\"action\\":\\"CREATE\\",\\"revisionId\\":\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\",\\"definition\\":{\\"serviceName\\":\\"creation-test-service\\",\\"handlerFunctionId\\":\\"creation-test-handler\\",\\"readConsistency\\":\\"strong\\",\\"writeConsistency\\":\\"strong\\",\\"safetyIntervalMs\\":0},\\"profile\\":\\"wasm-writer-v1/1\\",\\"foundingPeers\\":[{\\"replicaId\\":\\"founder-1\\",\\"nodeId\\":\\"host-1\\"},{\\"replicaId\\":\\"founder-2\\",\\"nodeId\\":\\"host-2\\"},{\\"replicaId\\":\\"founder-3\\",\\"nodeId\\":\\"host-3\\"}]},\\"winner\\":{\\"outcome\\":\\"SELECTED\\",\\"binding\\":{\\"format\\":1,\\"tenantId\\":\\"creation-test-tenant\\",\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",\\"requestId\\":{\\"expectedVersion\\":0,\\"nonce\\":\\"0000000000000000000000000000000000000000000000000000000000000002\\",\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\"},\\"selectionVersion\\":1,\\"incarnation\\":\\"f133d3d00ee1bd2d649723e56f31f0d45dc3c25357477d327114d9a0313538e6\\",\\"requestDigest\\":\\"03942726437ff56f7208e462fbe032aefdc977401ce8fbfb9d3eeff840ffb86a\\",\\"revisionId\\":\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\",\\"revisionDigest\\":\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\",\\"definitionDigest\\":\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\",\\"profileDigest\\":\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\",\\"foundingPeers\\":[{\\"nodeId\\":\\"host-1\\",\\"replicaId\\":\\"founder-1\\"},{\\"nodeId\\":\\"host-2\\",\\"replicaId\\":\\"founder-2\\"},{\\"nodeId\\":\\"host-3\\",\\"replicaId\\":\\"founder-3\\"}]}},\\"loser\\":{\\"outcome\\":\\"CONFLICT\\",\\"winnerRequestId\\":{\\"expectedVersion\\":0,\\"nonce\\":\\"0000000000000000000000000000000000000000000000000000000000000002\\",\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\"}}},\\"row\\":{\\"service_id\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",\\"format\\":1,\\"state\\":\\"{\\\\\\"decisions\\\\\\":[{\\\\\\"expectedV\\\\\\":0,\\\\\\"originalResult\\\\\\":{\\\\\\"binding\\\\\\":{\\\\\\"definitionDigest\\\\\\":\\\\\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\\\\\",\\\\\\"format\\\\\\":1,\\\\\\"foundingPeers\\\\\\":[{\\\\\\"nodeId\\\\\\":\\\\\\"host-1\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-1\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-2\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-2\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-3\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-3\\\\\\"}],\\\\\\"incarnation\\\\\\":\\\\\\"f133d3d00ee1bd2d649723e56f31f0d45dc3c25357477d327114d9a0313538e6\\\\\\",\\\\\\"profileDigest\\\\\\":\\\\\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\\\\\",\\\\\\"requestDigest\\\\\\":\\\\\\"03942726437ff56f7208e462fbe032aefdc977401ce8fbfb9d3eeff840ffb86a\\\\\\",\\\\\\"requestId\\\\\\":{\\\\\\"expectedVersion\\\\\\":0,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000002\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"},\\\\\\"revisionDigest\\\\\\":\\\\\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\\\\\",\\\\\\"revisionId\\\\\\":\\\\\\"service-revision-69595c470d2a07d85483"}
+# {"name":"concurrent selection","evidenceOffset":4096,"jsonCharacters":15795,"evidenceChunk":"a86369997bd9368f72f6452fef7a40a4af86146ebc38\\\\\\",\\\\\\"selectionVersion\\\\\\":1,\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\",\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\"},\\\\\\"outcome\\\\\\":\\\\\\"SELECTED\\\\\\"},\\\\\\"requestDigest\\\\\\":\\\\\\"03942726437ff56f7208e462fbe032aefdc977401ce8fbfb9d3eeff840ffb86a\\\\\\",\\\\\\"winnerK\\\\\\":{\\\\\\"expectedVersion\\\\\\":0,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000002\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"}}],\\\\\\"retiring\\\\\\":null,\\\\\\"selected\\\\\\":{\\\\\\"binding\\\\\\":{\\\\\\"definitionDigest\\\\\\":\\\\\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\\\\\",\\\\\\"format\\\\\\":1,\\\\\\"foundingPeers\\\\\\":[{\\\\\\"nodeId\\\\\\":\\\\\\"host-1\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-1\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-2\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-2\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-3\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-3\\\\\\"}],\\\\\\"incarnation\\\\\\":\\\\\\"f133d3d00ee1bd2d649723e56f31f0d45dc3c25357477d327114d9a0313538e6\\\\\\",\\\\\\"profileDigest\\\\\\":\\\\\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\\\\\",\\\\\\"requestDigest\\\\\\":\\\\\\"03942726437ff56f7208e462fbe032aefdc977401ce8fbfb9d3eeff840ffb86a\\\\\\",\\\\\\"requestId\\\\\\":{\\\\\\"expectedVersion\\\\\\":0,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000002\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"},\\\\\\"revisionDigest\\\\\\":\\\\\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\\\\\",\\\\\\"revisionId\\\\\\":\\\\\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\\\\\",\\\\\\"selectionVersion\\\\\\":1,\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\",\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\"},\\\\\\"resources\\\\\\":[{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null}]},\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\",\\\\\\"version\\\\\\":1}\\"},\\"writes\\":[{\\"writer\\":\\"owner-a\\",\\"sql\\":\\"INSERT INTO service_packages (package_id, package_name, package_version, manifest_schema_version, runtime_kind, artifact_ref, artifact_digest, artifact_media_type, payload_media_type, signature_status, normalized_manifest, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\\",\\"params\\":[\\"service-package-58a0b93c47b6c7d03d60345b86d4559703f4adf1ca3ea7902787d549360fb090\\",\\"creation-test-service\\",\\"1.0.0\\",3,\\"wasm_component\\",\\"registry.example.test/creation-test:1.0.0\\",\\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\",\\"application/wasm\\",\\"application/wasm\\",\\"verified\\",\\"{\\\\\\"artifact\\\\\\":{\\\\\\"digest\\\\\\":\\\\\\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\\\\\",\\\\\\"media_type\\\\\\":\\\\\\"application/wasm\\\\\\",\\\\\\"ref\\\\\\":\\\\\\"registry.example.test/creation-test:1.0.0\\\\\\",\\\\\\"type\\\\\\":\\\\\\"oci\\\\\\"},\\\\\\"exports\\\\\\":[{\\\\\\"interface\\\\\\":\\\\\\"request_v1\\\\\\",\\\\\\"name\\\\\\":\\\\\\"serve\\\\\\"}],\\\\\\"name\\\\\\":\\\\\\"creation-test-service\\\\\\",\\\\\\"runtime\\\\\\":{\\\\\\"kind\\\\\\":\\\\\\"wasm_component\\\\\\"},\\\\\\"schema_version\\\\\\":3,\\\\\\"version\\\\\\":\\\\\\"1.0.0\\\\\\"}\\",1792237500919,1792237500919],\\"changes\\":1,\\"state\\":null},{\\"writer\\":\\"owner-a\\",\\"sql\\":\\"INSERT INTO service_revisions (revision_id, package_id, artifact_digest, config_digest, normalized_config, created_at) VALUES (?, ?, ?, ?, ?, ?)\\",\\"params\\":[\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\",\\"service-package-58a0b93c47b6c7d03d60345b86d4559703f4adf1ca3ea7902787d549360fb090\\",\\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\",\\"sha256:6192f905548497edb0f8f20f1c595969078cf686ed68862fee69c9499eae73f3\\",\\"{\\\\\\"definition\\\\\\":{\\\\\\"handlerFunctionId\\\\\\":\\\\\\"creation-test-handler\\\\\\",\\\\\\"read"}
+# {"name":"concurrent selection","evidenceOffset":8192,"jsonCharacters":15795,"evidenceChunk":"Consistency\\\\\\":\\\\\\"strong\\\\\\",\\\\\\"safetyIntervalMs\\\\\\":0,\\\\\\"serviceName\\\\\\":\\\\\\"creation-test-service\\\\\\",\\\\\\"writeConsistency\\\\\\":\\\\\\"strong\\\\\\"}}\\",1792237500924],\\"changes\\":1,\\"state\\":null},{\\"writer\\":\\"owner-a\\",\\"sql\\":\\"INSERT INTO service_installations (installation_id, revision_id, service_definition_id, desired_state, rollout_state, operation_id, latest_failure_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)\\",\\"params\\":[\\"service-installation-197f179ef0e677c305f623725fee11c7f004bb5467f3a92b531449c58255fc4d\\",\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\",\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",\\"active\\",\\"recorded_not_running\\",\\"service-operation-824ec01411fb4cb1cb04a6127135eb6a81882884e130ad754492c3723d78e7f2\\",null,1792237500925,1792237500925],\\"changes\\":1,\\"state\\":null},{\\"writer\\":\\"owner-b\\",\\"sql\\":\\"INSERT INTO service_instances (service_id, format, state) VALUES (?, ?, ?)\\",\\"params\\":[\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",1,\\"{\\\\\\"decisions\\\\\\":[{\\\\\\"expectedV\\\\\\":0,\\\\\\"originalResult\\\\\\":{\\\\\\"binding\\\\\\":{\\\\\\"definitionDigest\\\\\\":\\\\\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\\\\\",\\\\\\"format\\\\\\":1,\\\\\\"foundingPeers\\\\\\":[{\\\\\\"nodeId\\\\\\":\\\\\\"host-1\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-1\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-2\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-2\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-3\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-3\\\\\\"}],\\\\\\"incarnation\\\\\\":\\\\\\"f133d3d00ee1bd2d649723e56f31f0d45dc3c25357477d327114d9a0313538e6\\\\\\",\\\\\\"profileDigest\\\\\\":\\\\\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\\\\\",\\\\\\"requestDigest\\\\\\":\\\\\\"03942726437ff56f7208e462fbe032aefdc977401ce8fbfb9d3eeff840ffb86a\\\\\\",\\\\\\"requestId\\\\\\":{\\\\\\"expectedVersion\\\\\\":0,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000002\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"},\\\\\\"revisionDigest\\\\\\":\\\\\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\\\\\",\\\\\\"revisionId\\\\\\":\\\\\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\\\\\",\\\\\\"selectionVersion\\\\\\":1,\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\",\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\"},\\\\\\"outcome\\\\\\":\\\\\\"SELECTED\\\\\\"},\\\\\\"requestDigest\\\\\\":\\\\\\"03942726437ff56f7208e462fbe032aefdc977401ce8fbfb9d3eeff840ffb86a\\\\\\",\\\\\\"winnerK\\\\\\":{\\\\\\"expectedVersion\\\\\\":0,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000002\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"}}],\\\\\\"retiring\\\\\\":null,\\\\\\"selected\\\\\\":{\\\\\\"binding\\\\\\":{\\\\\\"definitionDigest\\\\\\":\\\\\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\\\\\",\\\\\\"format\\\\\\":1,\\\\\\"foundingPeers\\\\\\":[{\\\\\\"nodeId\\\\\\":\\\\\\"host-1\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-1\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-2\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-2\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-3\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-3\\\\\\"}],\\\\\\"incarnation\\\\\\":\\\\\\"f133d3d00ee1bd2d649723e56f31f0d45dc3c25357477d327114d9a0313538e6\\\\\\",\\\\\\"profileDigest\\\\\\":\\\\\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\\\\\",\\\\\\"requestDigest\\\\\\":\\\\\\"03942726437ff56f7208e462fbe032aefdc977401ce8fbfb9d3eeff840ffb86a\\\\\\",\\\\\\"requestId\\\\\\":{\\\\\\"expectedVersion\\\\\\":0,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000002\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"},\\\\\\"revisionDigest\\\\\\":\\\\\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\\\\\",\\\\\\"revisionId\\\\\\":\\\\\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\\\\\",\\\\\\"selectionVersion\\\\\\":1,\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\",\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\"},\\\\\\"resources\\\\\\":[{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"req"}
+# {"name":"concurrent selection","evidenceOffset":12288,"jsonCharacters":15795,"evidenceChunk":"uest\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null}]},\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\",\\\\\\"version\\\\\\":1}\\"],\\"changes\\":1,\\"state\\":{\\"decisions\\":[{\\"expectedV\\":0,\\"originalResult\\":{\\"binding\\":{\\"definitionDigest\\":\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\",\\"format\\":1,\\"foundingPeers\\":[{\\"nodeId\\":\\"host-1\\",\\"replicaId\\":\\"founder-1\\"},{\\"nodeId\\":\\"host-2\\",\\"replicaId\\":\\"founder-2\\"},{\\"nodeId\\":\\"host-3\\",\\"replicaId\\":\\"founder-3\\"}],\\"incarnation\\":\\"f133d3d00ee1bd2d649723e56f31f0d45dc3c25357477d327114d9a0313538e6\\",\\"profileDigest\\":\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\",\\"requestDigest\\":\\"03942726437ff56f7208e462fbe032aefdc977401ce8fbfb9d3eeff840ffb86a\\",\\"requestId\\":{\\"expectedVersion\\":0,\\"nonce\\":\\"0000000000000000000000000000000000000000000000000000000000000002\\",\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\"},\\"revisionDigest\\":\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\",\\"revisionId\\":\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\",\\"selectionVersion\\":1,\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",\\"tenantId\\":\\"creation-test-tenant\\"},\\"outcome\\":\\"SELECTED\\"},\\"requestDigest\\":\\"03942726437ff56f7208e462fbe032aefdc977401ce8fbfb9d3eeff840ffb86a\\",\\"winnerK\\":{\\"expectedVersion\\":0,\\"nonce\\":\\"0000000000000000000000000000000000000000000000000000000000000002\\",\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\"}}],\\"retiring\\":null,\\"selected\\":{\\"binding\\":{\\"definitionDigest\\":\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\",\\"format\\":1,\\"foundingPeers\\":[{\\"nodeId\\":\\"host-1\\",\\"replicaId\\":\\"founder-1\\"},{\\"nodeId\\":\\"host-2\\",\\"replicaId\\":\\"founder-2\\"},{\\"nodeId\\":\\"host-3\\",\\"replicaId\\":\\"founder-3\\"}],\\"incarnation\\":\\"f133d3d00ee1bd2d649723e56f31f0d45dc3c25357477d327114d9a0313538e6\\",\\"profileDigest\\":\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\",\\"requestDigest\\":\\"03942726437ff56f7208e462fbe032aefdc977401ce8fbfb9d3eeff840ffb86a\\",\\"requestId\\":{\\"expectedVersion\\":0,\\"nonce\\":\\"0000000000000000000000000000000000000000000000000000000000000002\\",\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\"},\\"revisionDigest\\":\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\",\\"revisionId\\":\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\",\\"selectionVersion\\":1,\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",\\"tenantId\\":\\"creation-test-tenant\\"},\\"resources\\":[{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null}]},\\"tenantId\\":\\"creation-test-tenant\\",\\"version\\":1}}]}"}
+# Subtest: ServiceDefinitionsOwner C4 lost selection reply resolves original K and cannot retag it
+ok 2 - ServiceDefinitionsOwner C4 lost selection reply resolves original K and cannot retag it
+  ---
+  duration_ms: 8.437226
+  type: 'test'
+  ...
+# {"name":"unknown exact replay and historical result","evidenceOffset":0,"jsonCharacters":33112,"evidenceChunk":"{\\"scope\\":\\"SQLite component CAS; read adapter; no native consensus\\",\\"name\\":\\"unknown exact replay and historical result\\",\\"results\\":{\\"uncertain\\":{\\"binding\\":{\\"definitionDigest\\":\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\",\\"format\\":1,\\"foundingPeers\\":[{\\"nodeId\\":\\"host-1\\",\\"replicaId\\":\\"founder-1\\"},{\\"nodeId\\":\\"host-2\\",\\"replicaId\\":\\"founder-2\\"},{\\"nodeId\\":\\"host-3\\",\\"replicaId\\":\\"founder-3\\"}],\\"incarnation\\":\\"0dc6dc73122fc1996bb646966cf8d4fa93335e71b26cb7031aa67b2eade4cd11\\",\\"profileDigest\\":\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\",\\"requestDigest\\":\\"a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d\\",\\"requestId\\":{\\"expectedVersion\\":0,\\"nonce\\":\\"0000000000000000000000000000000000000000000000000000000000000001\\",\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\"},\\"revisionDigest\\":\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\",\\"revisionId\\":\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\",\\"selectionVersion\\":1,\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",\\"tenantId\\":\\"creation-test-tenant\\"},\\"outcome\\":\\"SELECTED\\"},\\"replay\\":{\\"binding\\":{\\"definitionDigest\\":\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\",\\"format\\":1,\\"foundingPeers\\":[{\\"nodeId\\":\\"host-1\\",\\"replicaId\\":\\"founder-1\\"},{\\"nodeId\\":\\"host-2\\",\\"replicaId\\":\\"founder-2\\"},{\\"nodeId\\":\\"host-3\\",\\"replicaId\\":\\"founder-3\\"}],\\"incarnation\\":\\"0dc6dc73122fc1996bb646966cf8d4fa93335e71b26cb7031aa67b2eade4cd11\\",\\"profileDigest\\":\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\",\\"requestDigest\\":\\"a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d\\",\\"requestId\\":{\\"expectedVersion\\":0,\\"nonce\\":\\"0000000000000000000000000000000000000000000000000000000000000001\\",\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\"},\\"revisionDigest\\":\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\",\\"revisionId\\":\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\",\\"selectionVersion\\":1,\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",\\"tenantId\\":\\"creation-test-tenant\\"},\\"outcome\\":\\"SELECTED\\"},\\"advanced\\":{\\"outcome\\":\\"SELECTED\\",\\"binding\\":{\\"format\\":1,\\"tenantId\\":\\"creation-test-tenant\\",\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",\\"requestId\\":{\\"expectedVersion\\":1,\\"nonce\\":\\"0000000000000000000000000000000000000000000000000000000000000002\\",\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\"},\\"selectionVersion\\":2,\\"incarnation\\":\\"bbad8d4ead57568237310e62b7d8542c10296a5560c520e2b64ef257bb476926\\",\\"requestDigest\\":\\"875498c9a35c02206bd360cfc67ac3685d599b9bb53bbfe5f5426b394740610a\\",\\"revisionId\\":\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\",\\"revisionDigest\\":\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\",\\"definitionDigest\\":\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\",\\"profileDigest\\":\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\",\\"foundingPeers\\":[{\\"nodeId\\":\\"host-1\\",\\"replicaId\\":\\"founder-1\\"},{\\"nodeId\\":\\"host-2\\",\\"replicaId\\":\\"founder-2\\"},{\\"nodeId\\":\\"host-3\\",\\"replicaId\\":\\"founder-3\\"}]}},\\"historical\\":{\\"binding\\":{\\"definitionDigest\\":\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\",\\"format\\":1,\\"foundingPeers\\":[{\\"nodeId\\":\\"host-1\\",\\"replicaId\\":\\"founder-1\\"},{\\"nodeId\\":\\"host-2\\",\\"replicaId\\":\\"founder-2\\"},{\\"nodeId\\":\\"host-3\\",\\"replicaId\\":\\"founder-3\\"}],\\"incarnation\\":\\"0dc6dc73122fc1996bb646966cf8d4fa93335e71b26cb7031aa67b2eade4cd11\\",\\"profileDigest\\":\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\",\\"requestDigest\\":\\"a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d\\",\\"requestId\\":{\\"expectedVersion\\":0,\\"nonce\\":\\"0000000000000000000000000000000000000000000000000000000000000001\\",\\"serviceDefinitionId\\":\\"service-defini"}
+# {"name":"unknown exact replay and historical result","evidenceOffset":4096,"jsonCharacters":33112,"evidenceChunk":"tion-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\"},\\"revisionDigest\\":\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\",\\"revisionId\\":\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\",\\"selectionVersion\\":1,\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",\\"tenantId\\":\\"creation-test-tenant\\"},\\"outcome\\":\\"SELECTED\\"},\\"current\\":{\\"outcome\\":\\"CURRENT\\",\\"version\\":2,\\"selected\\":{\\"definitionDigest\\":\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\",\\"format\\":1,\\"foundingPeers\\":[{\\"nodeId\\":\\"host-1\\",\\"replicaId\\":\\"founder-1\\"},{\\"nodeId\\":\\"host-2\\",\\"replicaId\\":\\"founder-2\\"},{\\"nodeId\\":\\"host-3\\",\\"replicaId\\":\\"founder-3\\"}],\\"incarnation\\":\\"bbad8d4ead57568237310e62b7d8542c10296a5560c520e2b64ef257bb476926\\",\\"profileDigest\\":\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\",\\"requestDigest\\":\\"875498c9a35c02206bd360cfc67ac3685d599b9bb53bbfe5f5426b394740610a\\",\\"requestId\\":{\\"expectedVersion\\":1,\\"nonce\\":\\"0000000000000000000000000000000000000000000000000000000000000002\\",\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\"},\\"revisionDigest\\":\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\",\\"revisionId\\":\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\",\\"selectionVersion\\":2,\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",\\"tenantId\\":\\"creation-test-tenant\\"},\\"retiring\\":null}},\\"row\\":{\\"service_id\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",\\"format\\":1,\\"state\\":\\"{\\\\\\"decisions\\\\\\":[{\\\\\\"expectedV\\\\\\":0,\\\\\\"originalResult\\\\\\":{\\\\\\"binding\\\\\\":{\\\\\\"definitionDigest\\\\\\":\\\\\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\\\\\",\\\\\\"format\\\\\\":1,\\\\\\"foundingPeers\\\\\\":[{\\\\\\"nodeId\\\\\\":\\\\\\"host-1\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-1\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-2\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-2\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-3\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-3\\\\\\"}],\\\\\\"incarnation\\\\\\":\\\\\\"0dc6dc73122fc1996bb646966cf8d4fa93335e71b26cb7031aa67b2eade4cd11\\\\\\",\\\\\\"profileDigest\\\\\\":\\\\\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\\\\\",\\\\\\"requestDigest\\\\\\":\\\\\\"a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d\\\\\\",\\\\\\"requestId\\\\\\":{\\\\\\"expectedVersion\\\\\\":0,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000001\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"},\\\\\\"revisionDigest\\\\\\":\\\\\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\\\\\",\\\\\\"revisionId\\\\\\":\\\\\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\\\\\",\\\\\\"selectionVersion\\\\\\":1,\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\",\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\"},\\\\\\"outcome\\\\\\":\\\\\\"SELECTED\\\\\\"},\\\\\\"requestDigest\\\\\\":\\\\\\"a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d\\\\\\",\\\\\\"winnerK\\\\\\":{\\\\\\"expectedVersion\\\\\\":0,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000001\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"}},{\\\\\\"expectedV\\\\\\":1,\\\\\\"originalResult\\\\\\":{\\\\\\"binding\\\\\\":{\\\\\\"definitionDigest\\\\\\":\\\\\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\\\\\",\\\\\\"format\\\\\\":1,\\\\\\"foundingPeers\\\\\\":[{\\\\\\"nodeId\\\\\\":\\\\\\"host-1\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-1\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-2\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-2\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-3\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-3\\\\\\"}],\\\\\\"incarnation\\\\\\":\\\\\\"bbad8d4ead57568237310e62b7d8542c10296a5560c520e2b64ef257bb476926\\\\\\",\\\\\\"profileDigest\\\\\\":\\\\\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\\\\\",\\\\\\"requestDigest\\\\\\":\\\\\\"875498c9a35c02206bd360cfc67ac3685d599b9bb53bbfe5f5426b394740610a\\\\\\",\\\\\\"requestId\\\\\\":{\\\\\\"expectedVersion\\\\\\":1,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000002\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"},\\\\\\"revisionDigest\\\\\\":\\\\\\"f1733296bcee7796327c22a4c5a"}
+# {"name":"unknown exact replay and historical result","evidenceOffset":8192,"jsonCharacters":33112,"evidenceChunk":"9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\\\\\",\\\\\\"revisionId\\\\\\":\\\\\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\\\\\",\\\\\\"selectionVersion\\\\\\":2,\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\",\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\"},\\\\\\"outcome\\\\\\":\\\\\\"SELECTED\\\\\\"},\\\\\\"requestDigest\\\\\\":\\\\\\"875498c9a35c02206bd360cfc67ac3685d599b9bb53bbfe5f5426b394740610a\\\\\\",\\\\\\"winnerK\\\\\\":{\\\\\\"expectedVersion\\\\\\":1,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000002\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"}}],\\\\\\"retiring\\\\\\":null,\\\\\\"selected\\\\\\":{\\\\\\"binding\\\\\\":{\\\\\\"definitionDigest\\\\\\":\\\\\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\\\\\",\\\\\\"format\\\\\\":1,\\\\\\"foundingPeers\\\\\\":[{\\\\\\"nodeId\\\\\\":\\\\\\"host-1\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-1\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-2\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-2\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-3\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-3\\\\\\"}],\\\\\\"incarnation\\\\\\":\\\\\\"bbad8d4ead57568237310e62b7d8542c10296a5560c520e2b64ef257bb476926\\\\\\",\\\\\\"profileDigest\\\\\\":\\\\\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\\\\\",\\\\\\"requestDigest\\\\\\":\\\\\\"875498c9a35c02206bd360cfc67ac3685d599b9bb53bbfe5f5426b394740610a\\\\\\",\\\\\\"requestId\\\\\\":{\\\\\\"expectedVersion\\\\\\":1,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000002\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"},\\\\\\"revisionDigest\\\\\\":\\\\\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\\\\\",\\\\\\"revisionId\\\\\\":\\\\\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\\\\\",\\\\\\"selectionVersion\\\\\\":2,\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\",\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\"},\\\\\\"resources\\\\\\":[{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null}]},\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\",\\\\\\"version\\\\\\":2}\\"},\\"writes\\":[{\\"writer\\":\\"owner-a\\",\\"sql\\":\\"INSERT INTO service_packages (package_id, package_name, package_version, manifest_schema_version, runtime_kind, artifact_ref, artifact_digest, artifact_media_type, payload_media_type, signature_status, normalized_manifest, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\\",\\"params\\":[\\"service-package-58a0b93c47b6c7d03d60345b86d4559703f4adf1ca3ea7902787d549360fb090\\",\\"creation-test-service\\",\\"1.0.0\\",3,\\"wasm_component\\",\\"registry.example.test/creation-test:1.0.0\\",\\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\",\\"application/wasm\\",\\"application/wasm\\",\\"verified\\",\\"{\\\\\\"artifact\\\\\\":{\\\\\\"digest\\\\\\":\\\\\\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\\\\\",\\\\\\"media_type\\\\\\":\\\\\\"application/wasm\\\\\\",\\\\\\"ref\\\\\\":\\\\\\"registry.example.test/creation-test:1.0.0\\\\\\",\\\\\\"type\\\\\\":\\\\\\"oci\\\\\\"},\\\\\\"exports\\\\\\":[{\\\\\\"interface\\\\\\":\\\\\\"request_v1\\\\\\",\\\\\\"name\\\\\\":\\\\\\"serve\\\\\\"}],\\\\\\"name\\\\\\":\\\\\\"creation-test-service\\\\\\",\\\\\\"runtime\\\\\\":{\\\\\\"kind\\\\\\":\\\\\\"wasm_component\\\\\\"},\\\\\\"schema_version\\\\\\":3,\\\\\\"version\\\\\\":\\\\\\"1.0.0\\\\\\"}\\",1792237500934,1792237500934],\\"changes\\":1,\\"state\\":null},{\\"writer\\":\\"owner-a\\",\\"sql\\":\\"INSERT INTO service_revisions (revision_id, package_id, artifact_digest, config_digest, normalized_config, created_at) VALUES (?, ?, ?, ?, ?, ?)\\",\\"params\\":[\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\",\\"service-package-58a0b93c47b6c7d03d60345b86d4559703f4adf1ca3ea7902787d549360fb090\\",\\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\",\\"sha256:6192f905548497edb0f8f20f1c595969078cf686ed68"}
+# {"name":"unknown exact replay and historical result","evidenceOffset":12288,"jsonCharacters":33112,"evidenceChunk":"862fee69c9499eae73f3\\",\\"{\\\\\\"definition\\\\\\":{\\\\\\"handlerFunctionId\\\\\\":\\\\\\"creation-test-handler\\\\\\",\\\\\\"readConsistency\\\\\\":\\\\\\"strong\\\\\\",\\\\\\"safetyIntervalMs\\\\\\":0,\\\\\\"serviceName\\\\\\":\\\\\\"creation-test-service\\\\\\",\\\\\\"writeConsistency\\\\\\":\\\\\\"strong\\\\\\"}}\\",1792237500935],\\"changes\\":1,\\"state\\":null},{\\"writer\\":\\"owner-a\\",\\"sql\\":\\"INSERT INTO service_installations (installation_id, revision_id, service_definition_id, desired_state, rollout_state, operation_id, latest_failure_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)\\",\\"params\\":[\\"service-installation-197f179ef0e677c305f623725fee11c7f004bb5467f3a92b531449c58255fc4d\\",\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\",\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",\\"active\\",\\"recorded_not_running\\",\\"service-operation-824ec01411fb4cb1cb04a6127135eb6a81882884e130ad754492c3723d78e7f2\\",null,1792237500935,1792237500935],\\"changes\\":1,\\"state\\":null},{\\"writer\\":\\"owner-a\\",\\"sql\\":\\"INSERT INTO service_instances (service_id, format, state) VALUES (?, ?, ?)\\",\\"params\\":[\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",1,\\"{\\\\\\"decisions\\\\\\":[{\\\\\\"expectedV\\\\\\":0,\\\\\\"originalResult\\\\\\":{\\\\\\"binding\\\\\\":{\\\\\\"definitionDigest\\\\\\":\\\\\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\\\\\",\\\\\\"format\\\\\\":1,\\\\\\"foundingPeers\\\\\\":[{\\\\\\"nodeId\\\\\\":\\\\\\"host-1\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-1\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-2\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-2\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-3\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-3\\\\\\"}],\\\\\\"incarnation\\\\\\":\\\\\\"0dc6dc73122fc1996bb646966cf8d4fa93335e71b26cb7031aa67b2eade4cd11\\\\\\",\\\\\\"profileDigest\\\\\\":\\\\\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\\\\\",\\\\\\"requestDigest\\\\\\":\\\\\\"a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d\\\\\\",\\\\\\"requestId\\\\\\":{\\\\\\"expectedVersion\\\\\\":0,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000001\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"},\\\\\\"revisionDigest\\\\\\":\\\\\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\\\\\",\\\\\\"revisionId\\\\\\":\\\\\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\\\\\",\\\\\\"selectionVersion\\\\\\":1,\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\",\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\"},\\\\\\"outcome\\\\\\":\\\\\\"SELECTED\\\\\\"},\\\\\\"requestDigest\\\\\\":\\\\\\"a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d\\\\\\",\\\\\\"winnerK\\\\\\":{\\\\\\"expectedVersion\\\\\\":0,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000001\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"}}],\\\\\\"retiring\\\\\\":null,\\\\\\"selected\\\\\\":{\\\\\\"binding\\\\\\":{\\\\\\"definitionDigest\\\\\\":\\\\\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\\\\\",\\\\\\"format\\\\\\":1,\\\\\\"foundingPeers\\\\\\":[{\\\\\\"nodeId\\\\\\":\\\\\\"host-1\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-1\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-2\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-2\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-3\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-3\\\\\\"}],\\\\\\"incarnation\\\\\\":\\\\\\"0dc6dc73122fc1996bb646966cf8d4fa93335e71b26cb7031aa67b2eade4cd11\\\\\\",\\\\\\"profileDigest\\\\\\":\\\\\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\\\\\",\\\\\\"requestDigest\\\\\\":\\\\\\"a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d\\\\\\",\\\\\\"requestId\\\\\\":{\\\\\\"expectedVersion\\\\\\":0,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000001\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"},\\\\\\"revisionDigest\\\\\\":\\\\\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\\\\\",\\\\\\"revisionId\\\\\\":\\\\\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\\\\\",\\\\\\"selectionVersion\\\\\\":1,\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\",\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\"},\\\\\\"resources\\\\\\":[{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\"}
+# {"name":"unknown exact replay and historical result","evidenceOffset":16384,"jsonCharacters":33112,"evidenceChunk":"\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null}]},\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\",\\\\\\"version\\\\\\":1}\\"],\\"changes\\":1,\\"state\\":{\\"decisions\\":[{\\"expectedV\\":0,\\"originalResult\\":{\\"binding\\":{\\"definitionDigest\\":\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\",\\"format\\":1,\\"foundingPeers\\":[{\\"nodeId\\":\\"host-1\\",\\"replicaId\\":\\"founder-1\\"},{\\"nodeId\\":\\"host-2\\",\\"replicaId\\":\\"founder-2\\"},{\\"nodeId\\":\\"host-3\\",\\"replicaId\\":\\"founder-3\\"}],\\"incarnation\\":\\"0dc6dc73122fc1996bb646966cf8d4fa93335e71b26cb7031aa67b2eade4cd11\\",\\"profileDigest\\":\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\",\\"requestDigest\\":\\"a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d\\",\\"requestId\\":{\\"expectedVersion\\":0,\\"nonce\\":\\"0000000000000000000000000000000000000000000000000000000000000001\\",\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\"},\\"revisionDigest\\":\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\",\\"revisionId\\":\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\",\\"selectionVersion\\":1,\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",\\"tenantId\\":\\"creation-test-tenant\\"},\\"outcome\\":\\"SELECTED\\"},\\"requestDigest\\":\\"a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d\\",\\"winnerK\\":{\\"expectedVersion\\":0,\\"nonce\\":\\"0000000000000000000000000000000000000000000000000000000000000001\\",\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\"}}],\\"retiring\\":null,\\"selected\\":{\\"binding\\":{\\"definitionDigest\\":\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\",\\"format\\":1,\\"foundingPeers\\":[{\\"nodeId\\":\\"host-1\\",\\"replicaId\\":\\"founder-1\\"},{\\"nodeId\\":\\"host-2\\",\\"replicaId\\":\\"founder-2\\"},{\\"nodeId\\":\\"host-3\\",\\"replicaId\\":\\"founder-3\\"}],\\"incarnation\\":\\"0dc6dc73122fc1996bb646966cf8d4fa93335e71b26cb7031aa67b2eade4cd11\\",\\"profileDigest\\":\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\",\\"requestDigest\\":\\"a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d\\",\\"requestId\\":{\\"expectedVersion\\":0,\\"nonce\\":\\"0000000000000000000000000000000000000000000000000000000000000001\\",\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\"},\\"revisionDigest\\":\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\",\\"revisionId\\":\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\",\\"selectionVersion\\":1,\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",\\"tenantId\\":\\"creation-test-tenant\\"},\\"resources\\":[{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null}]},\\"tenantId\\":\\"creation-test-tenant\\",\\"version\\":1}},{\\"writer\\":\\"reconstructed-owner\\",\\"sql\\":\\"UPDATE service_instances SET state = ? WHERE service_id = ? AND format = ? AND state = ?\\",\\"params\\":[\\"{\\\\\\"decisions\\\\\\":[{\\\\\\"expectedV\\\\\\":0,\\\\\\"originalResult\\\\\\":{\\\\\\"binding\\\\\\":{\\\\\\"definitionDigest\\\\\\":\\\\\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\\\\\",\\\\\\"format\\\\\\":1,\\\\\\"foundingPeers\\\\\\":[{\\\\\\"nodeId\\\\\\":\\\\\\"host-1\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-1\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-2\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-2\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-3\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-3\\\\\\"}],\\\\\\"incarnati"}
+# {"name":"unknown exact replay and historical result","evidenceOffset":20480,"jsonCharacters":33112,"evidenceChunk":"on\\\\\\":\\\\\\"0dc6dc73122fc1996bb646966cf8d4fa93335e71b26cb7031aa67b2eade4cd11\\\\\\",\\\\\\"profileDigest\\\\\\":\\\\\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\\\\\",\\\\\\"requestDigest\\\\\\":\\\\\\"a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d\\\\\\",\\\\\\"requestId\\\\\\":{\\\\\\"expectedVersion\\\\\\":0,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000001\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"},\\\\\\"revisionDigest\\\\\\":\\\\\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\\\\\",\\\\\\"revisionId\\\\\\":\\\\\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\\\\\",\\\\\\"selectionVersion\\\\\\":1,\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\",\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\"},\\\\\\"outcome\\\\\\":\\\\\\"SELECTED\\\\\\"},\\\\\\"requestDigest\\\\\\":\\\\\\"a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d\\\\\\",\\\\\\"winnerK\\\\\\":{\\\\\\"expectedVersion\\\\\\":0,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000001\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"}},{\\\\\\"expectedV\\\\\\":1,\\\\\\"originalResult\\\\\\":{\\\\\\"binding\\\\\\":{\\\\\\"definitionDigest\\\\\\":\\\\\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\\\\\",\\\\\\"format\\\\\\":1,\\\\\\"foundingPeers\\\\\\":[{\\\\\\"nodeId\\\\\\":\\\\\\"host-1\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-1\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-2\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-2\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-3\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-3\\\\\\"}],\\\\\\"incarnation\\\\\\":\\\\\\"bbad8d4ead57568237310e62b7d8542c10296a5560c520e2b64ef257bb476926\\\\\\",\\\\\\"profileDigest\\\\\\":\\\\\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\\\\\",\\\\\\"requestDigest\\\\\\":\\\\\\"875498c9a35c02206bd360cfc67ac3685d599b9bb53bbfe5f5426b394740610a\\\\\\",\\\\\\"requestId\\\\\\":{\\\\\\"expectedVersion\\\\\\":1,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000002\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"},\\\\\\"revisionDigest\\\\\\":\\\\\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\\\\\",\\\\\\"revisionId\\\\\\":\\\\\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\\\\\",\\\\\\"selectionVersion\\\\\\":2,\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\",\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\"},\\\\\\"outcome\\\\\\":\\\\\\"SELECTED\\\\\\"},\\\\\\"requestDigest\\\\\\":\\\\\\"875498c9a35c02206bd360cfc67ac3685d599b9bb53bbfe5f5426b394740610a\\\\\\",\\\\\\"winnerK\\\\\\":{\\\\\\"expectedVersion\\\\\\":1,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000002\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"}}],\\\\\\"retiring\\\\\\":null,\\\\\\"selected\\\\\\":{\\\\\\"binding\\\\\\":{\\\\\\"definitionDigest\\\\\\":\\\\\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\\\\\",\\\\\\"format\\\\\\":1,\\\\\\"foundingPeers\\\\\\":[{\\\\\\"nodeId\\\\\\":\\\\\\"host-1\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-1\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-2\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-2\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-3\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-3\\\\\\"}],\\\\\\"incarnation\\\\\\":\\\\\\"bbad8d4ead57568237310e62b7d8542c10296a5560c520e2b64ef257bb476926\\\\\\",\\\\\\"profileDigest\\\\\\":\\\\\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\\\\\",\\\\\\"requestDigest\\\\\\":\\\\\\"875498c9a35c02206bd360cfc67ac3685d599b9bb53bbfe5f5426b394740610a\\\\\\",\\\\\\"requestId\\\\\\":{\\\\\\"expectedVersion\\\\\\":1,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000002\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"},\\\\\\"revisionDigest\\\\\\":\\\\\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\\\\\",\\\\\\"revisionId\\\\\\":\\\\\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\\\\\",\\\\\\"selectionVersion\\\\\\":2,\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\",\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\"},\\\\\\"resources\\\\\\":[{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":nu"}
+# {"name":"unknown exact replay and historical result","evidenceOffset":24576,"jsonCharacters":33112,"evidenceChunk":"ll},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null}]},\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\",\\\\\\"version\\\\\\":2}\\",\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",1,\\"{\\\\\\"decisions\\\\\\":[{\\\\\\"expectedV\\\\\\":0,\\\\\\"originalResult\\\\\\":{\\\\\\"binding\\\\\\":{\\\\\\"definitionDigest\\\\\\":\\\\\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\\\\\",\\\\\\"format\\\\\\":1,\\\\\\"foundingPeers\\\\\\":[{\\\\\\"nodeId\\\\\\":\\\\\\"host-1\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-1\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-2\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-2\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-3\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-3\\\\\\"}],\\\\\\"incarnation\\\\\\":\\\\\\"0dc6dc73122fc1996bb646966cf8d4fa93335e71b26cb7031aa67b2eade4cd11\\\\\\",\\\\\\"profileDigest\\\\\\":\\\\\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\\\\\",\\\\\\"requestDigest\\\\\\":\\\\\\"a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d\\\\\\",\\\\\\"requestId\\\\\\":{\\\\\\"expectedVersion\\\\\\":0,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000001\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"},\\\\\\"revisionDigest\\\\\\":\\\\\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\\\\\",\\\\\\"revisionId\\\\\\":\\\\\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\\\\\",\\\\\\"selectionVersion\\\\\\":1,\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\",\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\"},\\\\\\"outcome\\\\\\":\\\\\\"SELECTED\\\\\\"},\\\\\\"requestDigest\\\\\\":\\\\\\"a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d\\\\\\",\\\\\\"winnerK\\\\\\":{\\\\\\"expectedVersion\\\\\\":0,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000001\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"}}],\\\\\\"retiring\\\\\\":null,\\\\\\"selected\\\\\\":{\\\\\\"binding\\\\\\":{\\\\\\"definitionDigest\\\\\\":\\\\\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\\\\\",\\\\\\"format\\\\\\":1,\\\\\\"foundingPeers\\\\\\":[{\\\\\\"nodeId\\\\\\":\\\\\\"host-1\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-1\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-2\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-2\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-3\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-3\\\\\\"}],\\\\\\"incarnation\\\\\\":\\\\\\"0dc6dc73122fc1996bb646966cf8d4fa93335e71b26cb7031aa67b2eade4cd11\\\\\\",\\\\\\"profileDigest\\\\\\":\\\\\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\\\\\",\\\\\\"requestDigest\\\\\\":\\\\\\"a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d\\\\\\",\\\\\\"requestId\\\\\\":{\\\\\\"expectedVersion\\\\\\":0,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000001\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"},\\\\\\"revisionDigest\\\\\\":\\\\\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\\\\\",\\\\\\"revisionId\\\\\\":\\\\\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\\\\\",\\\\\\"selectionVersion\\\\\\":1,\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\",\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\"},\\\\\\"resources\\\\\\":[{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null}]},\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\",\\\\\\"version\\\\\\":1}\\"],\\"changes\\":1,\\"state\\":{\\"decisions\\":[{\\"expectedV\\":0,\\"originalResult\\":{\\"binding\\":{\\"definitionDigest\\":\\"3bc60e4846c47def52841554c86a8"}
+# {"name":"unknown exact replay and historical result","evidenceOffset":28672,"jsonCharacters":33112,"evidenceChunk":"183be89df058705f8205b2db4b3bc9214a8\\",\\"format\\":1,\\"foundingPeers\\":[{\\"nodeId\\":\\"host-1\\",\\"replicaId\\":\\"founder-1\\"},{\\"nodeId\\":\\"host-2\\",\\"replicaId\\":\\"founder-2\\"},{\\"nodeId\\":\\"host-3\\",\\"replicaId\\":\\"founder-3\\"}],\\"incarnation\\":\\"0dc6dc73122fc1996bb646966cf8d4fa93335e71b26cb7031aa67b2eade4cd11\\",\\"profileDigest\\":\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\",\\"requestDigest\\":\\"a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d\\",\\"requestId\\":{\\"expectedVersion\\":0,\\"nonce\\":\\"0000000000000000000000000000000000000000000000000000000000000001\\",\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\"},\\"revisionDigest\\":\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\",\\"revisionId\\":\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\",\\"selectionVersion\\":1,\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",\\"tenantId\\":\\"creation-test-tenant\\"},\\"outcome\\":\\"SELECTED\\"},\\"requestDigest\\":\\"a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d\\",\\"winnerK\\":{\\"expectedVersion\\":0,\\"nonce\\":\\"0000000000000000000000000000000000000000000000000000000000000001\\",\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\"}},{\\"expectedV\\":1,\\"originalResult\\":{\\"binding\\":{\\"definitionDigest\\":\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\",\\"format\\":1,\\"foundingPeers\\":[{\\"nodeId\\":\\"host-1\\",\\"replicaId\\":\\"founder-1\\"},{\\"nodeId\\":\\"host-2\\",\\"replicaId\\":\\"founder-2\\"},{\\"nodeId\\":\\"host-3\\",\\"replicaId\\":\\"founder-3\\"}],\\"incarnation\\":\\"bbad8d4ead57568237310e62b7d8542c10296a5560c520e2b64ef257bb476926\\",\\"profileDigest\\":\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\",\\"requestDigest\\":\\"875498c9a35c02206bd360cfc67ac3685d599b9bb53bbfe5f5426b394740610a\\",\\"requestId\\":{\\"expectedVersion\\":1,\\"nonce\\":\\"0000000000000000000000000000000000000000000000000000000000000002\\",\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\"},\\"revisionDigest\\":\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\",\\"revisionId\\":\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\",\\"selectionVersion\\":2,\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",\\"tenantId\\":\\"creation-test-tenant\\"},\\"outcome\\":\\"SELECTED\\"},\\"requestDigest\\":\\"875498c9a35c02206bd360cfc67ac3685d599b9bb53bbfe5f5426b394740610a\\",\\"winnerK\\":{\\"expectedVersion\\":1,\\"nonce\\":\\"0000000000000000000000000000000000000000000000000000000000000002\\",\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\"}}],\\"retiring\\":null,\\"selected\\":{\\"binding\\":{\\"definitionDigest\\":\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\",\\"format\\":1,\\"foundingPeers\\":[{\\"nodeId\\":\\"host-1\\",\\"replicaId\\":\\"founder-1\\"},{\\"nodeId\\":\\"host-2\\",\\"replicaId\\":\\"founder-2\\"},{\\"nodeId\\":\\"ho
+# ... 3296236 byte(s) elided; full output in .tap/test-results/test/control-plane/service-instance-creation-cas.test.js.tap ...
+},\\\\\\"revisionDigest\\\\\\":\\\\\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\\\\\",\\\\\\"revisionId\\\\\\":\\\\\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\\\\\",\\\\\\"selectionVersion\\\\\\":1,\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\",\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\"},\\\\\\"outcome\\\\\\":\\\\\\"SELECTED\\\\\\"},\\\\\\"requestDigest\\\\\\":\\\\\\"a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d\\\\\\",\\\\\\"winnerK\\\\\\":{\\\\\\"expectedVersion\\\\\\":0,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000001\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"}},{\\\\\\"expectedV\\\\\\":1,\\\\\\"originalResult\\\\\\":{\\\\\\"binding\\\\\\":{\\\\\\"definitionDigest\\\\\\":\\\\\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\\\\\",\\\\\\"format\\\\\\":1,\\\\\\"foundingPeers\\\\\\":[{\\\\\\"nodeId\\\\\\":\\\\\\"host-1\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-1\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-2\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-2\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-3\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-3\\\\\\"}],\\\\\\"incarnation\\\\\\":\\\\\\"bbad8d4ead57568237310e62b7d8542c10296a5560c520e2b64ef257bb476926\\\\\\",\\\\\\"profileDigest\\\\\\":\\\\\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\\\\\",\\\\\\"requestDigest\\\\\\":\\\\\\"875498c9a35c02206bd360cfc67ac3685d599b9bb53bbfe5f5426b394740610a\\\\\\",\\\\\\"requestId\\\\\\":{\\\\\\"expectedVersion\\\\\\":1,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000002\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"},\\\\\\"revisionDigest\\\\\\":\\\\\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\\\\\",\\\\\\"revisionId\\\\\\":\\\\\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\\\\\",\\\\\\"selectionVersion\\\\\\":2,\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\",\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\"},\\\\\\"outcome\\\\\\":\\\\\\"SELECTED\\\\\\"},\\\\\\"requestDigest\\\\\\":\\\\\\"875498c9a35c02206bd360cfc67ac3685d599b9bb53bbfe5f5426b394740610a\\\\\\",\\\\\\"winnerK\\\\\\":{\\\\\\"expectedVersion\\\\\\":1,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000002\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"}}],\\\\\\"retiring\\\\\\":{\\\\\\"binding\\\\\\":{\\\\\\"definitionDigest\\\\\\":\\\\\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\\\\\",\\\\\\"format\\\\\\":1,\\\\\\"foundingPeers\\\\\\":[{\\\\\\"nodeId\\\\\\":\\\\\\"host-1\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-1\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-2\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-2\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-3\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-3\\\\\\"}],\\\\\\"incarnation\\\\\\":\\\\\\"0dc6dc73122fc1996bb646966cf8d4fa93335e71b26cb7031aa67b2eade4cd11\\\\\\",\\\\\\"profileDigest\\\\\\":\\\\\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\\\\\",\\\\\\"requestDigest\\\\\\":\\\\\\"a103209cc01c91ba2c31d4"}
+# {"name":"CAS-A2 sibling close race","evidenceOffset":290816,"jsonCharacters":332618,"evidenceChunk":"e9effbc2e410d430d258c76f25b7357497077f2d7d\\\\\\",\\\\\\"requestId\\\\\\":{\\\\\\"expectedVersion\\\\\\":0,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000001\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"},\\\\\\"revisionDigest\\\\\\":\\\\\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\\\\\",\\\\\\"revisionId\\\\\\":\\\\\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\\\\\",\\\\\\"selectionVersion\\\\\\":1,\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\",\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\"},\\\\\\"resources\\\\\\":[{\\\\\\"ordinal\\\\\\":1,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":{\\\\\\"expectedOrdinal\\\\\\":0,\\\\\\"nodeId\\\\\\":\\\\\\"host-1\\\\\\",\\\\\\"operationId\\\\\\":\\\\\\"operation-0\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-1\\\\\\",\\\\\\"slot\\\\\\":0},\\\\\\"token\\\\\\":{\\\\\\"bindingDigest\\\\\\":\\\\\\"cdcd3a9e121a3177b3b3e618ffb2229683b9ad49bd1303e8acea10c2e8eeb8cf\\\\\\",\\\\\\"bodyDigest\\\\\\":\\\\\\"7c4a89464b8684baafbdb0a3fc809484c4050e821c88fd6ec5cf10d00f6c53e5\\\\\\",\\\\\\"operationId\\\\\\":\\\\\\"operation-0\\\\\\",\\\\\\"ordinal\\\\\\":1,\\\\\\"slot\\\\\\":0}},{\\\\\\"ordinal\\\\\\":1,\\\\\\"phase\\\\\\":\\\\\\"PUBLISHED\\\\\\",\\\\\\"request\\\\\\":{\\\\\\"expectedOrdinal\\\\\\":0,\\\\\\"nodeId\\\\\\":\\\\\\"host-2\\\\\\",\\\\\\"operationId\\\\\\":\\\\\\"operation-1\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-2\\\\\\",\\\\\\"slot\\\\\\":1},\\\\\\"token\\\\\\":{\\\\\\"bindingDigest\\\\\\":\\\\\\"cdcd3a9e121a3177b3b3e618ffb2229683b9ad49bd1303e8acea10c2e8eeb8cf\\\\\\",\\\\\\"bodyDigest\\\\\\":\\\\\\"ef5644412761b42083afb90bbf78b9d8cbcffe0526e003a748cf5844c2696027\\\\\\",\\\\\\"operationId\\\\\\":\\\\\\"operation-1\\\\\\",\\\\\\"ordinal\\\\\\":1,\\\\\\"slot\\\\\\":1}},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null}]},\\\\\\"selected\\\\\\":{\\\\\\"binding\\\\\\":{\\\\\\"definitionDigest\\\\\\":\\\\\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\\\\\",\\\\\\"format\\\\\\":1,\\\\\\"foundingPeers\\\\\\":[{\\\\\\"nodeId\\\\\\":\\\\\\"host-1\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-1\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-2\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-2\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-3\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-3\\\\\\"}],\\\\\\"incarnation\\\\\\":\\\\\\"bbad8d4ead57568237310e62b7d8542c10296a5560c520e2b64ef257bb476926\\\\\\",\\\\\\"profileDigest\\\\\\":\\\\\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\\\\\",\\\\\\"requestDigest\\\\\\":\\\\\\"875498c9a35c02206bd360cfc67ac3685d599b9bb53bbfe5f5426b394740610a\\\\\\",\\\\\\"requestId\\\\\\":{\\\\\\"expectedVersion\\\\\\":1,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000002\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"},\\\\\\"revisionDigest\\\\\\":\\\\\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\\\\\",\\\\\\"revisionId\\\\\\":\\\\\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\\\\\",\\\\\\"selectionVersion\\\\\\":2,\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\",\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\"},\\\\\\"resources\\\\\\":[{\\\\\\"ordinal\\\\\\":1,\\\\\\"phase\\\\\\":\\\\\\"ADMITTED\\\\\\",\\\\\\"request\\\\\\":{\\\\\\"expectedOrdinal\\\\\\":0,\\\\\\"nodeId\\\\\\":\\\\\\"host-1\\\\\\",\\\\\\"operationId\\\\\\":\\\\\\"operation-0\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-1\\\\\\",\\\\\\"slot\\\\\\":0},\\\\\\"token\\\\\\":{\\\\\\"bindingDigest\\\\\\":\\\\\\"d1367c249fca696c6667cc6c7859356a75a6dc22df84696a8ab1e734699e4b94\\\\\\",\\\\\\"bodyDigest\\\\\\":\\\\\\"7c4a89464b8684baafbdb0a3fc809484c4050e821c88fd6ec5cf10d00f6c53e5\\\\\\",\\\\\\"operationId\\\\\\":\\\\\\"operation-0\\\\\\",\\\\\\"ordinal\\\\\\":1,\\\\\\"slot\\\\\\":0}},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null}]},\\\\\\"tenantId"}
+# {"name":"CAS-A2 sibling close race","evidenceOffset":294912,"jsonCharacters":332618,"evidenceChunk":"\\\\\\":\\\\\\"creation-test-tenant\\\\\\",\\\\\\"version\\\\\\":2}\\",\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",1,\\"{\\\\\\"decisions\\\\\\":[{\\\\\\"expectedV\\\\\\":0,\\\\\\"originalResult\\\\\\":{\\\\\\"binding\\\\\\":{\\\\\\"definitionDigest\\\\\\":\\\\\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\\\\\",\\\\\\"format\\\\\\":1,\\\\\\"foundingPeers\\\\\\":[{\\\\\\"nodeId\\\\\\":\\\\\\"host-1\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-1\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-2\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-2\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-3\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-3\\\\\\"}],\\\\\\"incarnation\\\\\\":\\\\\\"0dc6dc73122fc1996bb646966cf8d4fa93335e71b26cb7031aa67b2eade4cd11\\\\\\",\\\\\\"profileDigest\\\\\\":\\\\\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\\\\\",\\\\\\"requestDigest\\\\\\":\\\\\\"a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d\\\\\\",\\\\\\"requestId\\\\\\":{\\\\\\"expectedVersion\\\\\\":0,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000001\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"},\\\\\\"revisionDigest\\\\\\":\\\\\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\\\\\",\\\\\\"revisionId\\\\\\":\\\\\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\\\\\",\\\\\\"selectionVersion\\\\\\":1,\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\",\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\"},\\\\\\"outcome\\\\\\":\\\\\\"SELECTED\\\\\\"},\\\\\\"requestDigest\\\\\\":\\\\\\"a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d\\\\\\",\\\\\\"winnerK\\\\\\":{\\\\\\"expectedVersion\\\\\\":0,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000001\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"}},{\\\\\\"expectedV\\\\\\":1,\\\\\\"originalResult\\\\\\":{\\\\\\"binding\\\\\\":{\\\\\\"definitionDigest\\\\\\":\\\\\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\\\\\",\\\\\\"format\\\\\\":1,\\\\\\"foundingPeers\\\\\\":[{\\\\\\"nodeId\\\\\\":\\\\\\"host-1\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-1\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-2\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-2\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-3\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-3\\\\\\"}],\\\\\\"incarnation\\\\\\":\\\\\\"bbad8d4ead57568237310e62b7d8542c10296a5560c520e2b64ef257bb476926\\\\\\",\\\\\\"profileDigest\\\\\\":\\\\\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\\\\\",\\\\\\"requestDigest\\\\\\":\\\\\\"875498c9a35c02206bd360cfc67ac3685d599b9bb53bbfe5f5426b394740610a\\\\\\",\\\\\\"requestId\\\\\\":{\\\\\\"expectedVersion\\\\\\":1,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000002\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"},\\\\\\"revisionDigest\\\\\\":\\\\\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\\\\\",\\\\\\"revisionId\\\\\\":\\\\\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\\\\\",\\\\\\"selectionVersion\\\\\\":2,\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\",\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\"},\\\\\\"outcome\\\\\\":\\\\\\"SELECTED\\\\\\"},\\\\\\"requestDigest\\\\\\":\\\\\\"875498c9a35c02206bd360cfc67ac3685d599b9bb53bbfe5f5426b394740610a\\\\\\",\\\\\\"winnerK\\\\\\":{\\\\\\"expectedVersion\\\\\\":1,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000002\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"}}],\\\\\\"retiring\\\\\\":{\\\\\\"binding\\\\\\":{\\\\\\"definitionDigest\\\\\\":\\\\\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\\\\\",\\\\\\"format\\\\\\":1,\\\\\\"foundingPeers\\\\\\":[{\\\\\\"nodeId\\\\\\":\\\\\\"host-1\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-1\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-2\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-2\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-3\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-3\\\\\\"}],\\\\\\"incarnation\\\\\\":\\\\\\"0dc6dc73122fc1996bb646966cf8d4fa93335e71b26cb7031aa67b2eade4cd11\\\\\\",\\\\\\"profileDigest\\\\\\":\\\\\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\\\\\",\\\\\\"requestDigest\\\\\\":\\\\\\"a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d\\\\\\",\\\\\\"requestId\\\\\\":{\\\\\\"expectedVersion\\\\\\":0,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000001\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"},\\\\\\"revisionDigest\\\\\\":\\\\\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\\\\\",\\\\\\"revisionId\\\\\\":\\\\\\"servi"}
+# {"name":"CAS-A2 sibling close race","evidenceOffset":299008,"jsonCharacters":332618,"evidenceChunk":"ce-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\\\\\",\\\\\\"selectionVersion\\\\\\":1,\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\",\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\"},\\\\\\"resources\\\\\\":[{\\\\\\"ordinal\\\\\\":1,\\\\\\"phase\\\\\\":\\\\\\"PUBLISHED\\\\\\",\\\\\\"request\\\\\\":{\\\\\\"expectedOrdinal\\\\\\":0,\\\\\\"nodeId\\\\\\":\\\\\\"host-1\\\\\\",\\\\\\"operationId\\\\\\":\\\\\\"operation-0\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-1\\\\\\",\\\\\\"slot\\\\\\":0},\\\\\\"token\\\\\\":{\\\\\\"bindingDigest\\\\\\":\\\\\\"cdcd3a9e121a3177b3b3e618ffb2229683b9ad49bd1303e8acea10c2e8eeb8cf\\\\\\",\\\\\\"bodyDigest\\\\\\":\\\\\\"7c4a89464b8684baafbdb0a3fc809484c4050e821c88fd6ec5cf10d00f6c53e5\\\\\\",\\\\\\"operationId\\\\\\":\\\\\\"operation-0\\\\\\",\\\\\\"ordinal\\\\\\":1,\\\\\\"slot\\\\\\":0}},{\\\\\\"ordinal\\\\\\":1,\\\\\\"phase\\\\\\":\\\\\\"PUBLISHED\\\\\\",\\\\\\"request\\\\\\":{\\\\\\"expectedOrdinal\\\\\\":0,\\\\\\"nodeId\\\\\\":\\\\\\"host-2\\\\\\",\\\\\\"operationId\\\\\\":\\\\\\"operation-1\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-2\\\\\\",\\\\\\"slot\\\\\\":1},\\\\\\"token\\\\\\":{\\\\\\"bindingDigest\\\\\\":\\\\\\"cdcd3a9e121a3177b3b3e618ffb2229683b9ad49bd1303e8acea10c2e8eeb8cf\\\\\\",\\\\\\"bodyDigest\\\\\\":\\\\\\"ef5644412761b42083afb90bbf78b9d8cbcffe0526e003a748cf5844c2696027\\\\\\",\\\\\\"operationId\\\\\\":\\\\\\"operation-1\\\\\\",\\\\\\"ordinal\\\\\\":1,\\\\\\"slot\\\\\\":1}},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null}]},\\\\\\"selected\\\\\\":{\\\\\\"binding\\\\\\":{\\\\\\"definitionDigest\\\\\\":\\\\\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\\\\\",\\\\\\"format\\\\\\":1,\\\\\\"foundingPeers\\\\\\":[{\\\\\\"nodeId\\\\\\":\\\\\\"host-1\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-1\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-2\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-2\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-3\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-3\\\\\\"}],\\\\\\"incarnation\\\\\\":\\\\\\"bbad8d4ead57568237310e62b7d8542c10296a5560c520e2b64ef257bb476926\\\\\\",\\\\\\"profileDigest\\\\\\":\\\\\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\\\\\",\\\\\\"requestDigest\\\\\\":\\\\\\"875498c9a35c02206bd360cfc67ac3685d599b9bb53bbfe5f5426b394740610a\\\\\\",\\\\\\"requestId\\\\\\":{\\\\\\"expectedVersion\\\\\\":1,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000002\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"},\\\\\\"revisionDigest\\\\\\":\\\\\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\\\\\",\\\\\\"revisionId\\\\\\":\\\\\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\\\\\",\\\\\\"selectionVersion\\\\\\":2,\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\",\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\"},\\\\\\"resources\\\\\\":[{\\\\\\"ordinal\\\\\\":1,\\\\\\"phase\\\\\\":\\\\\\"ADMITTED\\\\\\",\\\\\\"request\\\\\\":{\\\\\\"expectedOrdinal\\\\\\":0,\\\\\\"nodeId\\\\\\":\\\\\\"host-1\\\\\\",\\\\\\"operationId\\\\\\":\\\\\\"operation-0\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-1\\\\\\",\\\\\\"slot\\\\\\":0},\\\\\\"token\\\\\\":{\\\\\\"bindingDigest\\\\\\":\\\\\\"d1367c249fca696c6667cc6c7859356a75a6dc22df84696a8ab1e734699e4b94\\\\\\",\\\\\\"bodyDigest\\\\\\":\\\\\\"7c4a89464b8684baafbdb0a3fc809484c4050e821c88fd6ec5cf10d00f6c53e5\\\\\\",\\\\\\"operationId\\\\\\":\\\\\\"operation-0\\\\\\",\\\\\\"ordinal\\\\\\":1,\\\\\\"slot\\\\\\":0}},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null}]},\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\",\\\\\\"version\\\\\\":2}\\"],\\"changes\\":0,\\"state\\":{\\"decisions\\":[{\\"expectedV\\":0,\\"originalResult\\":{\\"binding\\":{\\"definitionDigest\\":\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\",\\"format\\":1,\\"foundingPeers\\":[{\\"nodeId\\":\\"host-1\\",\\"replicaId\\":\\"founder-1\\"},{\\"nodeId\\":\\"host-2\\",\\"replicaId\\":\\"founder-2\\"},{\\"nodeId\\":\\"host-3\\",\\"replicaId\\":\\"founder-3\\"}],\\"incarnatio"}
+# {"name":"CAS-A2 sibling close race","evidenceOffset":303104,"jsonCharacters":332618,"evidenceChunk":"n\\":\\"0dc6dc73122fc1996bb646966cf8d4fa93335e71b26cb7031aa67b2eade4cd11\\",\\"profileDigest\\":\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\",\\"requestDigest\\":\\"a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d\\",\\"requestId\\":{\\"expectedVersion\\":0,\\"nonce\\":\\"0000000000000000000000000000000000000000000000000000000000000001\\",\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\"},\\"revisionDigest\\":\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\",\\"revisionId\\":\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\",\\"selectionVersion\\":1,\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",\\"tenantId\\":\\"creation-test-tenant\\"},\\"outcome\\":\\"SELECTED\\"},\\"requestDigest\\":\\"a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d\\",\\"winnerK\\":{\\"expectedVersion\\":0,\\"nonce\\":\\"0000000000000000000000000000000000000000000000000000000000000001\\",\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\"}},{\\"expectedV\\":1,\\"originalResult\\":{\\"binding\\":{\\"definitionDigest\\":\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\",\\"format\\":1,\\"foundingPeers\\":[{\\"nodeId\\":\\"host-1\\",\\"replicaId\\":\\"founder-1\\"},{\\"nodeId\\":\\"host-2\\",\\"replicaId\\":\\"founder-2\\"},{\\"nodeId\\":\\"host-3\\",\\"replicaId\\":\\"founder-3\\"}],\\"incarnation\\":\\"bbad8d4ead57568237310e62b7d8542c10296a5560c520e2b64ef257bb476926\\",\\"profileDigest\\":\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\",\\"requestDigest\\":\\"875498c9a35c02206bd360cfc67ac3685d599b9bb53bbfe5f5426b394740610a\\",\\"requestId\\":{\\"expectedVersion\\":1,\\"nonce\\":\\"0000000000000000000000000000000000000000000000000000000000000002\\",\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\"},\\"revisionDigest\\":\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\",\\"revisionId\\":\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\",\\"selectionVersion\\":2,\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",\\"tenantId\\":\\"creation-test-tenant\\"},\\"outcome\\":\\"SELECTED\\"},\\"requestDigest\\":\\"875498c9a35c02206bd360cfc67ac3685d599b9bb53bbfe5f5426b394740610a\\",\\"winnerK\\":{\\"expectedVersion\\":1,\\"nonce\\":\\"0000000000000000000000000000000000000000000000000000000000000002\\",\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\"}}],\\"retiring\\":{\\"binding\\":{\\"definitionDigest\\":\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\",\\"format\\":1,\\"foundingPeers\\":[{\\"nodeId\\":\\"host-1\\",\\"replicaId\\":\\"founder-1\\"},{\\"nodeId\\":\\"host-2\\",\\"replicaId\\":\\"founder-2\\"},{\\"nodeId\\":\\"host-3\\",\\"replicaId\\":\\"founder-3\\"}],\\"incarnation\\":\\"0dc6dc73122fc1996bb646966cf8d4fa93335e71b26cb7031aa67b2eade4cd11\\",\\"profileDigest\\":\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\",\\"requestDigest\\":\\"a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d\\",\\"requestId\\":{\\"expectedVersion\\":0,\\"nonce\\":\\"0000000000000000000000000000000000000000000000000000000000000001\\",\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\"},\\"revisionDigest\\":\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\",\\"revisionId\\":\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\",\\"selectionVersion\\":1,\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",\\"tenantId\\":\\"creation-test-tenant\\"},\\"resources\\":[{\\"ordinal\\":1,\\"phase\\":\\"PUBLISHED\\",\\"request\\":{\\"expectedOrdinal\\":0,\\"nodeId\\":\\"host-1\\",\\"operationId\\":\\"operation-0\\",\\"replicaId\\":\\"founder-1\\",\\"slot\\":0},\\"token\\":{\\"bindingDigest\\":\\"cdcd3a9e121a3177b3b3e618ffb2229683b9ad49bd1303e8acea10c2e8eeb8cf\\",\\"bodyDigest\\":\\"7c4a89464b8684baafbdb0a3fc809484c4050e821c88fd6ec5cf10d00f6c53e5\\",\\"operationId\\":\\"operation-0\\",\\"ordinal\\":1,\\"slot\\":0}},{\\"ordinal\\":1,\\"phase\\":\\"CLOSED\\",\\"request\\":{\\"expectedOrdinal\\":0,\\"nodeId\\":\\"host-2\\",\\"operationId\\":\\"op"}
+# {"name":"CAS-A2 sibling close race","evidenceOffset":307200,"jsonCharacters":332618,"evidenceChunk":"eration-1\\",\\"replicaId\\":\\"founder-2\\",\\"slot\\":1},\\"token\\":{\\"bindingDigest\\":\\"cdcd3a9e121a3177b3b3e618ffb2229683b9ad49bd1303e8acea10c2e8eeb8cf\\",\\"bodyDigest\\":\\"ef5644412761b42083afb90bbf78b9d8cbcffe0526e003a748cf5844c2696027\\",\\"operationId\\":\\"operation-1\\",\\"ordinal\\":1,\\"slot\\":1}},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null}]},\\"selected\\":{\\"binding\\":{\\"definitionDigest\\":\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\",\\"format\\":1,\\"foundingPeers\\":[{\\"nodeId\\":\\"host-1\\",\\"replicaId\\":\\"founder-1\\"},{\\"nodeId\\":\\"host-2\\",\\"replicaId\\":\\"founder-2\\"},{\\"nodeId\\":\\"host-3\\",\\"replicaId\\":\\"founder-3\\"}],\\"incarnation\\":\\"bbad8d4ead57568237310e62b7d8542c10296a5560c520e2b64ef257bb476926\\",\\"profileDigest\\":\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\",\\"requestDigest\\":\\"875498c9a35c02206bd360cfc67ac3685d599b9bb53bbfe5f5426b394740610a\\",\\"requestId\\":{\\"expectedVersion\\":1,\\"nonce\\":\\"0000000000000000000000000000000000000000000000000000000000000002\\",\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\"},\\"revisionDigest\\":\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\",\\"revisionId\\":\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\",\\"selectionVersion\\":2,\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",\\"tenantId\\":\\"creation-test-tenant\\"},\\"resources\\":[{\\"ordinal\\":1,\\"phase\\":\\"ADMITTED\\",\\"request\\":{\\"expectedOrdinal\\":0,\\"nodeId\\":\\"host-1\\",\\"operationId\\":\\"operation-0\\",\\"replicaId\\":\\"founder-1\\",\\"slot\\":0},\\"token\\":{\\"bindingDigest\\":\\"d1367c249fca696c6667cc6c7859356a75a6dc22df84696a8ab1e734699e4b94\\",\\"bodyDigest\\":\\"7c4a89464b8684baafbdb0a3fc809484c4050e821c88fd6ec5cf10d00f6c53e5\\",\\"operationId\\":\\"operation-0\\",\\"ordinal\\":1,\\"slot\\":0}},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null}]},\\"tenantId\\":\\"creation-test-tenant\\",\\"version\\":2}},{\\"writer\\":\\"owner-a\\",\\"sql\\":\\"UPDATE service_instances SET state = ? WHERE service_id = ? AND format = ? AND state = ?\\",\\"params\\":[\\"{\\\\\\"decisions\\\\\\":[{\\\\\\"expectedV\\\\\\":0,\\\\\\"originalResult\\\\\\":{\\\\\\"binding\\\\\\":{\\\\\\"definitionDigest\\\\\\":\\\\\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\\\\\",\\\\\\"format\\\\\\":1,\\\\\\"foundingPeers\\\\\\":[{\\\\\\"nodeId\\\\\\":\\\\\\"host-1\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-1\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-2\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-2\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-3\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-3\\\\\\"}],\\\\\\"incarnation\\\\\\":\\\\\\"0dc6dc73122fc1996bb646966cf8d4fa93335e71b26cb7031aa67b2eade4cd11\\\\\\",\\\\\\"profileDigest\\\\\\":\\\\\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\\\\\",\\\\\\"requestDigest\\\\\\":\\\\\\"a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d\\\\\\",\\\\\\"requestId\\\\\\":{\\\\\\"expectedVersion\\\\\\":0,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000001\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"},\\\\\\"revisionDigest\\\\\\":\\\\\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\\\\\",\\\\\\"revisionId\\\\\\":\\\\\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\\\\\",\\\\\\"selectionVersion\\\\\\":1,\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\",\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\"},\\\\\\"outcome\\\\\\":\\\\\\"SELECTED\\\\\\"},\\\\\\"requestDigest\\\\\\":\\\\\\"a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7"}
+# {"name":"CAS-A2 sibling close race","evidenceOffset":311296,"jsonCharacters":332618,"evidenceChunk":"d\\\\\\",\\\\\\"winnerK\\\\\\":{\\\\\\"expectedVersion\\\\\\":0,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000001\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"}},{\\\\\\"expectedV\\\\\\":1,\\\\\\"originalResult\\\\\\":{\\\\\\"binding\\\\\\":{\\\\\\"definitionDigest\\\\\\":\\\\\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\\\\\",\\\\\\"format\\\\\\":1,\\\\\\"foundingPeers\\\\\\":[{\\\\\\"nodeId\\\\\\":\\\\\\"host-1\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-1\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-2\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-2\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-3\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-3\\\\\\"}],\\\\\\"incarnation\\\\\\":\\\\\\"bbad8d4ead57568237310e62b7d8542c10296a5560c520e2b64ef257bb476926\\\\\\",\\\\\\"profileDigest\\\\\\":\\\\\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\\\\\",\\\\\\"requestDigest\\\\\\":\\\\\\"875498c9a35c02206bd360cfc67ac3685d599b9bb53bbfe5f5426b394740610a\\\\\\",\\\\\\"requestId\\\\\\":{\\\\\\"expectedVersion\\\\\\":1,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000002\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"},\\\\\\"revisionDigest\\\\\\":\\\\\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\\\\\",\\\\\\"revisionId\\\\\\":\\\\\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\\\\\",\\\\\\"selectionVersion\\\\\\":2,\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\",\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\"},\\\\\\"outcome\\\\\\":\\\\\\"SELECTED\\\\\\"},\\\\\\"requestDigest\\\\\\":\\\\\\"875498c9a35c02206bd360cfc67ac3685d599b9bb53bbfe5f5426b394740610a\\\\\\",\\\\\\"winnerK\\\\\\":{\\\\\\"expectedVersion\\\\\\":1,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000002\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"}}],\\\\\\"retiring\\\\\\":{\\\\\\"binding\\\\\\":{\\\\\\"definitionDigest\\\\\\":\\\\\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\\\\\",\\\\\\"format\\\\\\":1,\\\\\\"foundingPeers\\\\\\":[{\\\\\\"nodeId\\\\\\":\\\\\\"host-1\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-1\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-2\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-2\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-3\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-3\\\\\\"}],\\\\\\"incarnation\\\\\\":\\\\\\"0dc6dc73122fc1996bb646966cf8d4fa93335e71b26cb7031aa67b2eade4cd11\\\\\\",\\\\\\"profileDigest\\\\\\":\\\\\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\\\\\",\\\\\\"requestDigest\\\\\\":\\\\\\"a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d\\\\\\",\\\\\\"requestId\\\\\\":{\\\\\\"expectedVersion\\\\\\":0,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000001\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"},\\\\\\"revisionDigest\\\\\\":\\\\\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\\\\\",\\\\\\"revisionId\\\\\\":\\\\\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\\\\\",\\\\\\"selectionVersion\\\\\\":1,\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\",\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\"},\\\\\\"resources\\\\\\":[{\\\\\\"ordinal\\\\\\":1,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":{\\\\\\"expectedOrdinal\\\\\\":0,\\\\\\"nodeId\\\\\\":\\\\\\"host-1\\\\\\",\\\\\\"operationId\\\\\\":\\\\\\"operation-0\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-1\\\\\\",\\\\\\"slot\\\\\\":0},\\\\\\"token\\\\\\":{\\\\\\"bindingDigest\\\\\\":\\\\\\"cdcd3a9e121a3177b3b3e618ffb2229683b9ad49bd1303e8acea10c2e8eeb8cf\\\\\\",\\\\\\"bodyDigest\\\\\\":\\\\\\"7c4a89464b8684baafbdb0a3fc809484c4050e821c88fd6ec5cf10d00f6c53e5\\\\\\",\\\\\\"operationId\\\\\\":\\\\\\"operation-0\\\\\\",\\\\\\"ordinal\\\\\\":1,\\\\\\"slot\\\\\\":0}},{\\\\\\"ordinal\\\\\\":1,\\\\\\"phase\\\\\\":\\\\\\"PUBLISHED\\\\\\",\\\\\\"request\\\\\\":{\\\\\\"expectedOrdinal\\\\\\":0,\\\\\\"nodeId\\\\\\":\\\\\\"host-2\\\\\\",\\\\\\"operationId\\\\\\":\\\\\\"operation-1\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-2\\\\\\",\\\\\\"slot\\\\\\":1},\\\\\\"token\\\\\\":{\\\\\\"bindingDigest\\\\\\":\\\\\\"cdcd3a9e121a3177b3b3e618ffb2229683b9ad49bd1303e8acea10c2e8eeb8cf\\\\\\",\\\\\\"bodyDigest\\\\\\":\\\\\\"ef5644412761b42083afb90bbf78b9d8cbcffe0526e003a748cf5844c2696027\\\\\\",\\\\\\"operationId\\\\\\":\\\\\\"operation-1\\\\\\",\\\\\\"ordinal\\\\\\":1,\\\\\\"slot\\\\\\":1}},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal"}
+# {"name":"CAS-A2 sibling close race","evidenceOffset":315392,"jsonCharacters":332618,"evidenceChunk":"\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null}]},\\\\\\"selected\\\\\\":{\\\\\\"binding\\\\\\":{\\\\\\"definitionDigest\\\\\\":\\\\\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\\\\\",\\\\\\"format\\\\\\":1,\\\\\\"foundingPeers\\\\\\":[{\\\\\\"nodeId\\\\\\":\\\\\\"host-1\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-1\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-2\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-2\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-3\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-3\\\\\\"}],\\\\\\"incarnation\\\\\\":\\\\\\"bbad8d4ead57568237310e62b7d8542c10296a5560c520e2b64ef257bb476926\\\\\\",\\\\\\"profileDigest\\\\\\":\\\\\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\\\\\",\\\\\\"requestDigest\\\\\\":\\\\\\"875498c9a35c02206bd360cfc67ac3685d599b9bb53bbfe5f5426b394740610a\\\\\\",\\\\\\"requestId\\\\\\":{\\\\\\"expectedVersion\\\\\\":1,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000002\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"},\\\\\\"revisionDigest\\\\\\":\\\\\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\\\\\",\\\\\\"revisionId\\\\\\":\\\\\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\\\\\",\\\\\\"selectionVersion\\\\\\":2,\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\",\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\"},\\\\\\"resources\\\\\\":[{\\\\\\"ordinal\\\\\\":1,\\\\\\"phase\\\\\\":\\\\\\"ADMITTED\\\\\\",\\\\\\"request\\\\\\":{\\\\\\"expectedOrdinal\\\\\\":0,\\\\\\"nodeId\\\\\\":\\\\\\"host-1\\\\\\",\\\\\\"operationId\\\\\\":\\\\\\"operation-0\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-1\\\\\\",\\\\\\"slot\\\\\\":0},\\\\\\"token\\\\\\":{\\\\\\"bindingDigest\\\\\\":\\\\\\"d1367c249fca696c6667cc6c7859356a75a6dc22df84696a8ab1e734699e4b94\\\\\\",\\\\\\"bodyDigest\\\\\\":\\\\\\"7c4a89464b8684baafbdb0a3fc809484c4050e821c88fd6ec5cf10d00f6c53e5\\\\\\",\\\\\\"operationId\\\\\\":\\\\\\"operation-0\\\\\\",\\\\\\"ordinal\\\\\\":1,\\\\\\"slot\\\\\\":0}},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null}]},\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\",\\\\\\"version\\\\\\":2}\\",\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",1,\\"{\\\\\\"decisions\\\\\\":[{\\\\\\"expectedV\\\\\\":0,\\\\\\"originalResult\\\\\\":{\\\\\\"binding\\\\\\":{\\\\\\"definitionDigest\\\\\\":\\\\\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\\\\\",\\\\\\"format\\\\\\":1,\\\\\\"foundingPeers\\\\\\":[{\\\\\\"nodeId\\\\\\":\\\\\\"host-1\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-1\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-2\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-2\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-3\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-3\\\\\\"}],\\\\\\"incarnation\\\\\\":\\\\\\"0dc6dc73122fc1996bb646966cf8d4fa93335e71b26cb7031aa67b2eade4cd11\\\\\\",\\\\\\"profileDigest\\\\\\":\\\\\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\\\\\",\\\\\\"requestDigest\\\\\\":\\\\\\"a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d\\\\\\",\\\\\\"requestId\\\\\\":{\\\\\\"expectedVersion\\\\\\":0,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000001\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"},\\\\\\"revisionDigest\\\\\\":\\\\\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\\\\\",\\\\\\"revisionId\\\\\\":\\\\\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\\\\\",\\\\\\"selectionVersion\\\\\\":1,\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\",\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\"},\\\\\\"outcome\\\\\\":\\\\\\"SELECTED\\\\\\"},\\\\\\"requestDigest\\\\\\":\\\\\\"a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d\\\\\\",\\\\\\"winnerK\\\\\\":{\\\\\\"expectedVersion\\\\\\":0,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000001\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"}},{\\\\\\"expectedV\\\\\\":1,\\\\\\"originalResult\\\\\\":{\\\\\\"binding\\\\\\":{\\\\\\"definitionDigest\\\\\\":\\\\\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\\\\\",\\\\\\"format\\\\\\":1"}
+# {"name":"CAS-A2 sibling close race","evidenceOffset":319488,"jsonCharacters":332618,"evidenceChunk":",\\\\\\"foundingPeers\\\\\\":[{\\\\\\"nodeId\\\\\\":\\\\\\"host-1\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-1\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-2\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-2\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-3\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-3\\\\\\"}],\\\\\\"incarnation\\\\\\":\\\\\\"bbad8d4ead57568237310e62b7d8542c10296a5560c520e2b64ef257bb476926\\\\\\",\\\\\\"profileDigest\\\\\\":\\\\\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\\\\\",\\\\\\"requestDigest\\\\\\":\\\\\\"875498c9a35c02206bd360cfc67ac3685d599b9bb53bbfe5f5426b394740610a\\\\\\",\\\\\\"requestId\\\\\\":{\\\\\\"expectedVersion\\\\\\":1,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000002\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"},\\\\\\"revisionDigest\\\\\\":\\\\\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\\\\\",\\\\\\"revisionId\\\\\\":\\\\\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\\\\\",\\\\\\"selectionVersion\\\\\\":2,\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\",\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\"},\\\\\\"outcome\\\\\\":\\\\\\"SELECTED\\\\\\"},\\\\\\"requestDigest\\\\\\":\\\\\\"875498c9a35c02206bd360cfc67ac3685d599b9bb53bbfe5f5426b394740610a\\\\\\",\\\\\\"winnerK\\\\\\":{\\\\\\"expectedVersion\\\\\\":1,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000002\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"}}],\\\\\\"retiring\\\\\\":{\\\\\\"binding\\\\\\":{\\\\\\"definitionDigest\\\\\\":\\\\\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\\\\\",\\\\\\"format\\\\\\":1,\\\\\\"foundingPeers\\\\\\":[{\\\\\\"nodeId\\\\\\":\\\\\\"host-1\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-1\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-2\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-2\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-3\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-3\\\\\\"}],\\\\\\"incarnation\\\\\\":\\\\\\"0dc6dc73122fc1996bb646966cf8d4fa93335e71b26cb7031aa67b2eade4cd11\\\\\\",\\\\\\"profileDigest\\\\\\":\\\\\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\\\\\",\\\\\\"requestDigest\\\\\\":\\\\\\"a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d\\\\\\",\\\\\\"requestId\\\\\\":{\\\\\\"expectedVersion\\\\\\":0,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000001\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"},\\\\\\"revisionDigest\\\\\\":\\\\\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\\\\\",\\\\\\"revisionId\\\\\\":\\\\\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\\\\\",\\\\\\"selectionVersion\\\\\\":1,\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\",\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\"},\\\\\\"resources\\\\\\":[{\\\\\\"ordinal\\\\\\":1,\\\\\\"phase\\\\\\":\\\\\\"PUBLISHED\\\\\\",\\\\\\"request\\\\\\":{\\\\\\"expectedOrdinal\\\\\\":0,\\\\\\"nodeId\\\\\\":\\\\\\"host-1\\\\\\",\\\\\\"operationId\\\\\\":\\\\\\"operation-0\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-1\\\\\\",\\\\\\"slot\\\\\\":0},\\\\\\"token\\\\\\":{\\\\\\"bindingDigest\\\\\\":\\\\\\"cdcd3a9e121a3177b3b3e618ffb2229683b9ad49bd1303e8acea10c2e8eeb8cf\\\\\\",\\\\\\"bodyDigest\\\\\\":\\\\\\"7c4a89464b8684baafbdb0a3fc809484c4050e821c88fd6ec5cf10d00f6c53e5\\\\\\",\\\\\\"operationId\\\\\\":\\\\\\"operation-0\\\\\\",\\\\\\"ordinal\\\\\\":1,\\\\\\"slot\\\\\\":0}},{\\\\\\"ordinal\\\\\\":1,\\\\\\"phase\\\\\\":\\\\\\"PUBLISHED\\\\\\",\\\\\\"request\\\\\\":{\\\\\\"expectedOrdinal\\\\\\":0,\\\\\\"nodeId\\\\\\":\\\\\\"host-2\\\\\\",\\\\\\"operationId\\\\\\":\\\\\\"operation-1\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-2\\\\\\",\\\\\\"slot\\\\\\":1},\\\\\\"token\\\\\\":{\\\\\\"bindingDigest\\\\\\":\\\\\\"cdcd3a9e121a3177b3b3e618ffb2229683b9ad49bd1303e8acea10c2e8eeb8cf\\\\\\",\\\\\\"bodyDigest\\\\\\":\\\\\\"ef5644412761b42083afb90bbf78b9d8cbcffe0526e003a748cf5844c2696027\\\\\\",\\\\\\"operationId\\\\\\":\\\\\\"operation-1\\\\\\",\\\\\\"ordinal\\\\\\":1,\\\\\\"slot\\\\\\":1}},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null}]},\\\\\\"selected\\\\\\":{\\\\\\"binding\\\\\\":{\\\\\\"definitionDigest\\\\\\":\\\\\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\\\\\",\\\\\\"format\\\\\\":1,\\\\\\"foundingPeers\\\\\\":[{\\\\\\"nodeId\\\\\\":\\\\\\"host-1\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-1\\\\\\"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-2\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-2\\\\\\""}
+# {"name":"CAS-A2 sibling close race","evidenceOffset":323584,"jsonCharacters":332618,"evidenceChunk":"},{\\\\\\"nodeId\\\\\\":\\\\\\"host-3\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-3\\\\\\"}],\\\\\\"incarnation\\\\\\":\\\\\\"bbad8d4ead57568237310e62b7d8542c10296a5560c520e2b64ef257bb476926\\\\\\",\\\\\\"profileDigest\\\\\\":\\\\\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\\\\\",\\\\\\"requestDigest\\\\\\":\\\\\\"875498c9a35c02206bd360cfc67ac3685d599b9bb53bbfe5f5426b394740610a\\\\\\",\\\\\\"requestId\\\\\\":{\\\\\\"expectedVersion\\\\\\":1,\\\\\\"nonce\\\\\\":\\\\\\"0000000000000000000000000000000000000000000000000000000000000002\\\\\\",\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\"},\\\\\\"revisionDigest\\\\\\":\\\\\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\\\\\",\\\\\\"revisionId\\\\\\":\\\\\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\\\\\",\\\\\\"selectionVersion\\\\\\":2,\\\\\\"serviceDefinitionId\\\\\\":\\\\\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\\\\\",\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\"},\\\\\\"resources\\\\\\":[{\\\\\\"ordinal\\\\\\":1,\\\\\\"phase\\\\\\":\\\\\\"ADMITTED\\\\\\",\\\\\\"request\\\\\\":{\\\\\\"expectedOrdinal\\\\\\":0,\\\\\\"nodeId\\\\\\":\\\\\\"host-1\\\\\\",\\\\\\"operationId\\\\\\":\\\\\\"operation-0\\\\\\",\\\\\\"replicaId\\\\\\":\\\\\\"founder-1\\\\\\",\\\\\\"slot\\\\\\":0},\\\\\\"token\\\\\\":{\\\\\\"bindingDigest\\\\\\":\\\\\\"d1367c249fca696c6667cc6c7859356a75a6dc22df84696a8ab1e734699e4b94\\\\\\",\\\\\\"bodyDigest\\\\\\":\\\\\\"7c4a89464b8684baafbdb0a3fc809484c4050e821c88fd6ec5cf10d00f6c53e5\\\\\\",\\\\\\"operationId\\\\\\":\\\\\\"operation-0\\\\\\",\\\\\\"ordinal\\\\\\":1,\\\\\\"slot\\\\\\":0}},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null},{\\\\\\"ordinal\\\\\\":0,\\\\\\"phase\\\\\\":\\\\\\"CLOSED\\\\\\",\\\\\\"request\\\\\\":null,\\\\\\"token\\\\\\":null}]},\\\\\\"tenantId\\\\\\":\\\\\\"creation-test-tenant\\\\\\",\\\\\\"version\\\\\\":2}\\"],\\"changes\\":0,\\"state\\":{\\"decisions\\":[{\\"expectedV\\":0,\\"originalResult\\":{\\"binding\\":{\\"definitionDigest\\":\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\",\\"format\\":1,\\"foundingPeers\\":[{\\"nodeId\\":\\"host-1\\",\\"replicaId\\":\\"founder-1\\"},{\\"nodeId\\":\\"host-2\\",\\"replicaId\\":\\"founder-2\\"},{\\"nodeId\\":\\"host-3\\",\\"replicaId\\":\\"founder-3\\"}],\\"incarnation\\":\\"0dc6dc73122fc1996bb646966cf8d4fa93335e71b26cb7031aa67b2eade4cd11\\",\\"profileDigest\\":\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\",\\"requestDigest\\":\\"a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d\\",\\"requestId\\":{\\"expectedVersion\\":0,\\"nonce\\":\\"0000000000000000000000000000000000000000000000000000000000000001\\",\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\"},\\"revisionDigest\\":\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\",\\"revisionId\\":\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\",\\"selectionVersion\\":1,\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",\\"tenantId\\":\\"creation-test-tenant\\"},\\"outcome\\":\\"SELECTED\\"},\\"requestDigest\\":\\"a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d\\",\\"winnerK\\":{\\"expectedVersion\\":0,\\"nonce\\":\\"0000000000000000000000000000000000000000000000000000000000000001\\",\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\"}},{\\"expectedV\\":1,\\"originalResult\\":{\\"binding\\":{\\"definitionDigest\\":\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\",\\"format\\":1,\\"foundingPeers\\":[{\\"nodeId\\":\\"host-1\\",\\"replicaId\\":\\"founder-1\\"},{\\"nodeId\\":\\"host-2\\",\\"replicaId\\":\\"founder-2\\"},{\\"nodeId\\":\\"host-3\\",\\"replicaId\\":\\"founder-3\\"}],\\"incarnation\\":\\"bbad8d4ead57568237310e62b7d8542c10296a5560c520e2b64ef257bb476926\\",\\"profileDigest\\":\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\",\\"requestDigest\\":\\"875498c9a35c02206bd360cfc67ac3685d599b9bb53bbfe5f5426b394740610a\\",\\"requestId\\":{\\"expectedVersion\\":1,\\"nonce\\":\\"0000000000000000000000000000000000000000000000000000000000000002\\",\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b695"}
+# {"name":"CAS-A2 sibling close race","evidenceOffset":327680,"jsonCharacters":332618,"evidenceChunk":"30de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\"},\\"revisionDigest\\":\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\",\\"revisionId\\":\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\",\\"selectionVersion\\":2,\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",\\"tenantId\\":\\"creation-test-tenant\\"},\\"outcome\\":\\"SELECTED\\"},\\"requestDigest\\":\\"875498c9a35c02206bd360cfc67ac3685d599b9bb53bbfe5f5426b394740610a\\",\\"winnerK\\":{\\"expectedVersion\\":1,\\"nonce\\":\\"0000000000000000000000000000000000000000000000000000000000000002\\",\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\"}}],\\"retiring\\":{\\"binding\\":{\\"definitionDigest\\":\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\",\\"format\\":1,\\"foundingPeers\\":[{\\"nodeId\\":\\"host-1\\",\\"replicaId\\":\\"founder-1\\"},{\\"nodeId\\":\\"host-2\\",\\"replicaId\\":\\"founder-2\\"},{\\"nodeId\\":\\"host-3\\",\\"replicaId\\":\\"founder-3\\"}],\\"incarnation\\":\\"0dc6dc73122fc1996bb646966cf8d4fa93335e71b26cb7031aa67b2eade4cd11\\",\\"profileDigest\\":\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\",\\"requestDigest\\":\\"a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d\\",\\"requestId\\":{\\"expectedVersion\\":0,\\"nonce\\":\\"0000000000000000000000000000000000000000000000000000000000000001\\",\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\"},\\"revisionDigest\\":\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\",\\"revisionId\\":\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\",\\"selectionVersion\\":1,\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",\\"tenantId\\":\\"creation-test-tenant\\"},\\"resources\\":[{\\"ordinal\\":1,\\"phase\\":\\"PUBLISHED\\",\\"request\\":{\\"expectedOrdinal\\":0,\\"nodeId\\":\\"host-1\\",\\"operationId\\":\\"operation-0\\",\\"replicaId\\":\\"founder-1\\",\\"slot\\":0},\\"token\\":{\\"bindingDigest\\":\\"cdcd3a9e121a3177b3b3e618ffb2229683b9ad49bd1303e8acea10c2e8eeb8cf\\",\\"bodyDigest\\":\\"7c4a89464b8684baafbdb0a3fc809484c4050e821c88fd6ec5cf10d00f6c53e5\\",\\"operationId\\":\\"operation-0\\",\\"ordinal\\":1,\\"slot\\":0}},{\\"ordinal\\":1,\\"phase\\":\\"CLOSED\\",\\"request\\":{\\"expectedOrdinal\\":0,\\"nodeId\\":\\"host-2\\",\\"operationId\\":\\"operation-1\\",\\"replicaId\\":\\"founder-2\\",\\"slot\\":1},\\"token\\":{\\"bindingDigest\\":\\"cdcd3a9e121a3177b3b3e618ffb2229683b9ad49bd1303e8acea10c2e8eeb8cf\\",\\"bodyDigest\\":\\"ef5644412761b42083afb90bbf78b9d8cbcffe0526e003a748cf5844c2696027\\",\\"operationId\\":\\"operation-1\\",\\"ordinal\\":1,\\"slot\\":1}},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null}]},\\"selected\\":{\\"binding\\":{\\"definitionDigest\\":\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\",\\"format\\":1,\\"foundingPeers\\":[{\\"nodeId\\":\\"host-1\\",\\"replicaId\\":\\"founder-1\\"},{\\"nodeId\\":\\"host-2\\",\\"replicaId\\":\\"founder-2\\"},{\\"nodeId\\":\\"host-3\\",\\"replicaId\\":\\"founder-3\\"}],\\"incarnation\\":\\"bbad8d4ead57568237310e62b7d8542c10296a5560c520e2b64ef257bb476926\\",\\"profileDigest\\":\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\",\\"requestDigest\\":\\"875498c9a35c02206bd360cfc67ac3685d599b9bb53bbfe5f5426b394740610a\\",\\"requestId\\":{\\"expectedVersion\\":1,\\"nonce\\":\\"0000000000000000000000000000000000000000000000000000000000000002\\",\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\"},\\"revisionDigest\\":\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\",\\"revisionId\\":\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\",\\"selectionVersion\\":2,\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",\\"tenantId\\":\\"creation-test-tenant\\"},\\"resources\\":[{\\"ordinal\\":1,\\"phase\\":\\"ADMITTED\\",\\"request\\":{\\"exp"}
+# {"name":"CAS-A2 sibling close race","evidenceOffset":331776,"jsonCharacters":332618,"evidenceChunk":"ectedOrdinal\\":0,\\"nodeId\\":\\"host-1\\",\\"operationId\\":\\"operation-0\\",\\"replicaId\\":\\"founder-1\\",\\"slot\\":0},\\"token\\":{\\"bindingDigest\\":\\"d1367c249fca696c6667cc6c7859356a75a6dc22df84696a8ab1e734699e4b94\\",\\"bodyDigest\\":\\"7c4a89464b8684baafbdb0a3fc809484c4050e821c88fd6ec5cf10d00f6c53e5\\",\\"operationId\\":\\"operation-0\\",\\"ordinal\\":1,\\"slot\\":0}},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null},{\\"ordinal\\":0,\\"phase\\":\\"CLOSED\\",\\"request\\":null,\\"token\\":null}]},\\"tenantId\\":\\"creation-test-tenant\\",\\"version\\":2}}]}"}
+# Subtest: CAS-A3 a bound-exhausted grant answers STATE_CHANGED after exactly RESOURCES submissions
+ok 15 - CAS-A3 a bound-exhausted grant answers STATE_CHANGED after exactly RESOURCES submissions
+  ---
+  duration_ms: 3.300664
+  type: 'test'
+  ...
+# Subtest: CAS-A4 a lost grant reply is resolved once and never resubmitted
+ok 16 - CAS-A4 a lost grant reply is resolved once and never resubmitted
+  ---
+  duration_ms: 3.393617
+  type: 'test'
+  ...
+# Subtest: CAS-A5a a selection inside the held grant re-decides to STALE_BINDING without resubmission
+not ok 17 - CAS-A5a a selection inside the held grant re-decides to STALE_BINDING without resubmission
+  ---
+  duration_ms: 9.863718
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/control-plane/service-instance-creation-cas.test.js:456:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+      {
+    +   outcome: 'STATE_CHANGED'
+    -   outcome: 'STALE_BINDING'
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    outcome: 'STALE_BINDING'
+  actual:
+    outcome: 'STATE_CHANGED'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/control-plane/service-instance-creation-cas.test.js:469:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: CAS-A5b same-slot races re-decide to the sealed answer without resubmission
+not ok 18 - CAS-A5b same-slot races re-decide to the sealed answer without resubmission
+  ---
+  duration_ms: 6.780182
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/control-plane/service-instance-creation-cas.test.js:473:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the sealed N3 order stands
+    + actual - expected
+    
+      {
+    +   outcome: 'STATE_CHANGED'
+    -   outcome: 'RESOURCE_CLOSED'
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    outcome: 'RESOURCE_CLOSED'
+  actual:
+    outcome: 'STATE_CHANGED'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/control-plane/service-instance-creation-cas.test.js:486:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: CAS-A6 a selection UPDATE that loses to a slot mutation stays single-shot STATE_CHANGED
+ok 19 - CAS-A6 a selection UPDATE that loses to a slot mutation stays single-shot STATE_CHANGED
+  ---
+  duration_ms: 4.825876
+  type: 'test'
+  ...
+# Subtest: CAS-A7 a failed re-observation after a definitive zero answers UNAVAILABLE, never UNKNOWN
+not ok 20 - CAS-A7 a failed re-observation after a definitive zero answers UNAVAILABLE, never UNKNOWN
+  ---
+  duration_ms: 3.115098
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/control-plane/service-instance-creation-cas.test.js:522:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    A_DEFINITIVE_ZERO_WAS_REPORTED_AS_UNKNOWN
+    + actual - expected
+    
+      {
+    +   outcome: 'PUBLISHED',
+    +   phase: 'PUBLISHED',
+    +   token: {
+    +     bindingDigest: 'cdcd3a9e121a3177b3b3e618ffb2229683b9ad49bd1303e8acea10c2e8eeb8cf',
+    +     bodyDigest: '7c4a89464b8684baafbdb0a3fc809484c4050e821c88fd6ec5cf10d00f6c53e5',
+    +     operationId: 'operation-0',
+    +     ordinal: 1,
+    +     slot: 0
+    +   }
+    -   outcome: 'UNAVAILABLE'
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    outcome: 'UNAVAILABLE'
+  actual:
+    outcome: 'PUBLISHED'
+    phase: 'PUBLISHED'
+    token:
+      bindingDigest: 'cdcd3a9e121a3177b3b3e618ffb2229683b9ad49bd1303e8acea10c2e8eeb8cf'
+      bodyDigest: '7c4a89464b8684baafbdb0a3fc809484c4050e821c88fd6ec5cf10d00f6c53e5'
+      operationId: 'operation-0'
+      ordinal: 1
+      slot: 0
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/control-plane/service-instance-creation-cas.test.js:537:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..20
+# tests 20
+# suites 0
+# pass 12
+# fail 8
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 255.231758
+# time=946ms
+# test-files total=1 pass=0 fail=1 assertions=20
+
+==== test/control-plane/service-instance-creation-cas.test.js exit 1
+FAIL: ServiceDefinitionsOwner cross-slot same-target race is fenced by row CAS
+    failureType: 'testCodeFailure'
+    error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    expected: 'TARGET_ALREADY_OWNED'
+    actual: 'STATE_CHANGED'
+FAIL: CAS-A1 a grant that loses to a sibling slot grant is re-decided and answers PUBLISHED
+    failureType: 'testCodeFailure'
+    error: |-
+    A_SIBLING_GRANT_DEFEATED_THE_CALLERS_OWN_SLOT
+    + actual - expected
+    expected:
+    actual:
+FAIL: CAS-A1b two consecutive losses publish on the third submission
+    failureType: 'testCodeFailure'
+    error: |-
+    {"outcome":"STATE_CHANGED"}
+    + actual - expected
+    expected: 'PUBLISHED'
+    actual: 'STATE_CHANGED'
+FAIL: CAS-A1c sibling reserves of different replicas on different slots both admit
+    failureType: 'testCodeFailure'
+    error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    expected: 'ADMITTED'
+    actual: 'STATE_CHANGED'
+FAIL: CAS-A2 a close that loses to a sibling close answers CLOSED; the last CLOSED lifts the hold
+    failureType: 'testCodeFailure'
+    error: |-
+    A_SIBLING_CLOSE_LEFT_THE_CALLERS_SLOT_UNRESOLVED
+    + actual - expected
+    expected:
+    actual:
+FAIL: CAS-A5a a selection inside the held grant re-decides to STALE_BINDING without resubmission
+    failureType: 'testCodeFailure'
+    error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    expected:
+    actual:
+FAIL: CAS-A5b same-slot races re-decide to the sealed answer without resubmission
+    failureType: 'testCodeFailure'
+    error: |-
+    the sealed N3 order stands
+    + actual - expected
+    expected:
+    actual:
+FAIL: CAS-A7 a failed re-observation after a definitive zero answers UNAVAILABLE, never UNKNOWN
+    failureType: 'testCodeFailure'
+    error: |-
+    A_DEFINITIVE_ZERO_WAS_REPORTED_AS_UNKNOWN
+    + actual - expected
+    expected:
+    actual:
+
+
+> lagrange-server@0.2.6 test:file
+> node scripts/run-classified-test-files.js test/control-plane/service-instance-selection-admission.test.js
+
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: ok cpu 59C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+not ok test/control-plane/service-instance-selection-admission.test.js (23 assertions, 761ms)
+# TAP assertions failed; test process exited 1
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'constructor', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-b', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-b', hasSqlQueryEngine: true }
+TAP version 13
+# Subtest: fresh instance selection refuses mismatched immutable lineage: tenantId
+ok 1 - fresh instance selection refuses mismatched immutable lineage: tenantId
+  ---
+  duration_ms: 33.862869
+  type: 'test'
+  ...
+# Subtest: fresh instance selection refuses mismatched immutable lineage: revisionId
+ok 2 - fresh instance selection refuses mismatched immutable lineage: revisionId
+  ---
+  duration_ms: 3.118855
+  type: 'test'
+  ...
+# Subtest: fresh instance selection refuses mismatched immutable lineage: definition
+ok 3 - fresh instance selection refuses mismatched immutable lineage: definition
+  ---
+  duration_ms: 3.335611
+  type: 'test'
+  ...
+# Subtest: fresh instance selection refuses mismatched immutable lineage: profile
+ok 4 - fresh instance selection refuses mismatched immutable lineage: profile
+  ---
+  duration_ms: 2.798041
+  type: 'test'
+  ...
+# Subtest: selection refuses invalid request counter -1
+ok 5 - selection refuses invalid request counter -1
+  ---
+  duration_ms: 2.356284
+  type: 'test'
+  ...
+# Subtest: selection refuses invalid request counter 1.5
+ok 6 - selection refuses invalid request counter 1.5
+  ---
+  duration_ms: 2.102643
+  type: 'test'
+  ...
+# Subtest: selection refuses invalid request counter 9007199254740992
+ok 7 - selection refuses invalid request counter 9007199254740992
+  ---
+  duration_ms: 3.572921
+  type: 'test'
+  ...
+# Subtest: selection captures complete request before its first await
+ok 8 - selection captures complete request before its first await
+  ---
+  duration_ms: 5.221843
+  type: 'test'
+  ...
+# Subtest: selection binds expected incarnation as well as expected version
+ok 9 - selection binds expected incarnation as well as expected version
+  ---
+  duration_ms: 3.493737
+  type: 'test'
+  ...
+# Subtest: zero affected rows cannot manufacture a successful selection
+ok 10 - zero affected rows cannot manufacture a successful selection
+  ---
+  duration_ms: 2.448862
+  type: 'test'
+  ...
+# Subtest: uncertain selection without an authoritative record stays UNKNOWN
+ok 11 - uncertain selection without an authoritative record stays UNKNOWN
+  ---
+  duration_ms: 2.232275
+  type: 'test'
+  ...
+# Subtest: failed authoritative read is not never-created absence
+ok 12 - failed authoritative read is not never-created absence
+  ---
+  duration_ms: 1.720385
+  type: 'test'
+  ...
+# Subtest: malformed retained state is refused, not repaired into new authority
+ok 13 - malformed retained state is refused, not repaired into new authority
+  ---
+  duration_ms: 2.503567
+  type: 'test'
+  ...
+# Subtest: malformed retained state is refused, not repaired into new authority
+ok 14 - malformed retained state is refused, not repaired into new authority
+  ---
+  duration_ms: 2.39482
+  type: 'test'
+  ...
+# Subtest: malformed retained state is refused, not repaired into new authority
+ok 15 - malformed retained state is refused, not repaired into new authority
+  ---
+  duration_ms: 2.234803
+  type: 'test'
+  ...
+# Subtest: oversize and non-JSON requests allocate no instance row
+ok 16 - oversize and non-JSON requests allocate no instance row
+  ---
+  duration_ms: 1.426423
+  type: 'test'
+  ...
+# Subtest: uncertain submission plus failed resolution cannot become pre-admission UNAVAILABLE
+ok 17 - uncertain submission plus failed resolution cannot become pre-admission UNAVAILABLE
+  ---
+  duration_ms: 1.85186
+  type: 'test'
+  ...
+# Subtest: resource requests cannot change their content while awaiting the row owner
+ok 18 - resource requests cannot change their content while awaiting the row owner
+  ---
+  duration_ms: 3.385287
+  type: 'test'
+  ...
+# Subtest: forged binding and altered tokens cannot close or publish a resource
+ok 19 - forged binding and altered tokens cannot close or publish a resource
+  ---
+  duration_ms: 3.574184
+  type: 'test'
+  ...
+# Subtest: lost grant and closure replies resolve exact persisted resource phases
+ok 20 - lost grant and closure replies resolve exact persisted resource phases
+  ---
+  duration_ms: 5.251904
+  type: 'test'
+  ...
+# Subtest: command constructor captures immutable request without creating metadata or changing identity
+ok 21 - command constructor captures immutable request without creating metadata or changing identity
+  ---
+  duration_ms: 2.249889
+  type: 'test'
+  ...
+# Subtest: selection overtaking an in-flight grant defeats its exact whole-row predicate
+not ok 22 - selection overtaking an in-flight grant defeats its exact whole-row predicate
+  ---
+  duration_ms: 9.888115
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/control-plane/service-instance-selection-admission.test.js:188:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'STATE_CHANGED'
+    - 'STALE_BINDING'
+          ^
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'STALE_BINDING'
+  actual: 'STATE_CHANGED'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/control-plane/service-instance-selection-admission.test.js:200:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: closed-slot contention is re-decided and closes only the exact token in the same call
+not ok 23 - closed-slot contention is re-decided and closes only the exact token in the same call
+  ---
+  duration_ms: 7.248592
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/control-plane/service-instance-selection-admission.test.js:212:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+      {
+    +   outcome: 'STATE_CHANGED'
+    -   outcome: 'CLOSED',
+    -   phase: 'CLOSED',
+    -   token: {
+    -     bindingDigest: 'cdcd3a9e121a3177b3b3e618ffb2229683b9ad49bd1303e8acea10c2e8eeb8cf',
+    -     bodyDigest: '7c4a89464b8684baafbdb0a3fc809484c4050e821c88fd6ec5cf10d00f6c53e5',
+    -     operationId: 'operation-0',
+    -     ordinal: 1,
+    -     slot: 0
+    -   }
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    outcome: 'CLOSED'
+    phase: 'CLOSED'
+    token:
+      bindingDigest: 'cdcd3a9e121a3177b3b3e618ffb2229683b9ad49bd1303e8acea10c2e8eeb8cf'
+      slot: 0
+      ordinal: 1
+      operationId: 'operation-0'
+      bodyDigest: '7c4a89464b8684baafbdb0a3fc809484c4050e821c88fd6ec5cf10d00f6c53e5'
+  actual:
+    outcome: 'STATE_CHANGED'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/control-plane/service-instance-selection-admission.test.js:225:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..23
+# tests 23
+# suites 0
+# pass 21
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 115.882347
+# time=761ms
+# test-files total=1 pass=0 fail=1 assertions=23
+thermal: ok cpu 59C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+
+==== test/control-plane/service-instance-selection-admission.test.js exit 1
+FAIL: selection overtaking an in-flight grant defeats its exact whole-row predicate
+    failureType: 'testCodeFailure'
+    error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    expected: 'STALE_BINDING'
+    actual: 'STATE_CHANGED'
+FAIL: closed-slot contention is re-decided and closes only the exact token in the same call
+    failureType: 'testCodeFailure'
+    error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    expected:
+    actual:
+
+
+> lagrange-server@0.2.6 test:file
+> node scripts/run-classified-test-files.js test/wasm-service/wasm-creation-publication.integration.test.js
+
+# test-files planned=1
+classified lane exclusive: 1 file(s), jobs=1
+thermal: ok cpu 59C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+not ok test/wasm-service/wasm-creation-publication.integration.test.js (25 assertions, 3693ms)
+# TAP assertions failed; test process exited 1
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+TAP version 13
+# Subtest: 6prime: publication owned by the keyed continuation, retirement before CLOSED
+    # Subtest: P1 native events publish every founder: durable grant, one wake, served write, quiet adapter
+    not ok 1 - P1 native events publish every founder: durable grant, one wake, served write, quiet adapter
+      ---
+      duration_ms: 230.914876
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:245:3'
+      failureType: 'testCodeFailure'
+      error: |-
+        host-3 did not publish
+        
+        'HELD' !== 'SERVING'
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 'SERVING'
+      actual: 'HELD'
+      operator: 'strictEqual'
+      stack: |-
+        publishedGroup (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:164:12)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:247:25)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Promise.all (index 0)
+        async Suite.run (node:internal/test_runner/test:1442:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    # Subtest: P2 predecessor outstanding holds the successor typed; P8 the last CLOSED wakes its owner
+    ok 2 - P2 predecessor outstanding holds the successor typed; P8 the last CLOSED wakes its owner
+      ---
+      duration_ms: 161.179212
+      type: 'test'
+      ...
+    # Subtest: P3a a selection before the grant answers STALE_BINDING and writes nothing local
+    ok 3 - P3a a selection before the grant answers STALE_BINDING and writes nothing local
+      ---
+      duration_ms: 141.257254
+      type: 'test'
+      ...
+    # Subtest: P3b a selection inside the held grant CAS window answers STALE_BINDING
+    not ok 4 - P3b a selection inside the held grant CAS window answers STALE_BINDING
+      ---
+      duration_ms: 148.055368
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:365:3'
+      failureType: 'testCodeFailure'
+      error: |-
+        {"outcome":"STATE_CHANGED"}
+        + actual - expected
+        
+        + 'STATE_CHANGED'
+        - 'STALE_BINDING'
+              ^
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 'STALE_BINDING'
+      actual: 'STATE_CHANGED'
+      operator: 'strictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:380:12)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: P4 retirement fences user work at call, RELEASING precedes RETIRED, RETIRED precedes CLOSED
+    not ok 5 - P4 retirement fences user work at call, RELEASING precedes RETIRED, RETIRED precedes CLOSED
+      ---
+      duration_ms: 128.066616
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:386:3'
+      failureType: 'testCodeFailure'
+      error: |-
+        host-3 did not publish
+        
+        'HELD' !== 'SERVING'
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 'SERVING'
+      actual: 'HELD'
+      operator: 'strictEqual'
+      stack: |-
+        publishedGroup (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:164:12)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:388:19)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: P5a a lost CLOSED reply is resolved by the metadata owner itself
+    not ok 6 - P5a a lost CLOSED reply is resolved by the metadata owner itself
+      ---
+      duration_ms: 129.587634
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:450:3'
+      failureType: 'testCodeFailure'
+      error: |-
+        host-3 did not publish
+        
+        'HELD' !== 'SERVING'
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 'SERVING'
+      actual: 'HELD'
+      operator: 'strictEqual'
+      stack: |-
+        publishedGroup (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:164:12)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:451:17)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: P5b an unresolved CLOSED keeps custody; a re-stop by creation resolves with no new mutation
+    not ok 7 - P5b an unresolved CLOSED keeps custody; a re-stop by creation resolves with no new mutation
+      ---
+      duration_ms: 118.691727
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:464:3'
+      failureType: 'testCodeFailure'
+      error: |-
+        host-3 did not publish
+        
+        'HELD' !== 'SERVING'
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 'SERVING'
+      actual: 'HELD'
+      operator: 'strictEqual'
+      stack: |-
+        publishedGroup (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:164:12)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:466:19)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: P5c a re-stop of the predecessor retires its file by creation and never touches a successor
+    not ok 8 - P5c a re-stop of the predecessor retires its file by creation and never touches a successor
+      ---
+      duration_ms: 121.999009
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:498:3'
+      failureType: 'testCodeFailure'
+      error: |-
+        host-3 did not publish
+        
+        'HELD' !== 'SERVING'
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 'SERVING'
+      actual: 'HELD'
+      operator: 'strictEqual'
+      stack: |-
+        publishedGroup (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:164:12)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:500:19)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: P6a orderly shutdown keeps the grant; a reopen serves after the open-time metadata check
+    not ok 9 - P6a orderly shutdown keeps the grant; a reopen serves after the open-time metadata check
+      ---
+      duration_ms: 132.359166
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:532:3'
+      failureType: 'testCodeFailure'
+      error: |-
+        host-3 did not publish
+        
+        'HELD' !== 'SERVING'
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 'SERVING'
+      actual: 'HELD'
+      operator: 'strictEqual'
+      stack: |-
+        publishedGroup (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:164:12)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:534:19)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: P6b a reopen after the slot was CLOSED is refused and the next retire tombstones the file
+    not ok 10 - P6b a reopen after the slot was CLOSED is refused and the next retire tombstones the file
+      ---
+      duration_ms: 128.025979
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:556:3'
+      failureType: 'testCodeFailure'
+      error: |-
+        host-3 did not publish
+        
+        'HELD' !== 'SERVING'
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 'SERVING'
+      actual: 'HELD'
+      operator: 'strictEqual'
+      stack: |-
+        publishedGroup (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:164:12)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:558:19)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: P9 a retirement during an in-flight grant enables nothing and closes the slot
+    ok 11 - P9 a retirement during an in-flight grant enables nothing and closes the slot
+      ---
+      duration_ms: 115.707132
+      type: 'test'
+      ...
+    # Subtest: P10 a START re-entry while the retirement is in flight is refused typed
+    not ok 12 - P10 a START re-entry while the retirement is in flight is refused typed
+      ---
+      duration_ms: 116.2065
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:617:3'
+      failureType: 'testCodeFailure'
+      error: |-
+        host-3 did not publish
+        
+        'HELD' !== 'SERVING'
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 'SERVING'
+      actual: 'HELD'
+      operator: 'strictEqual'
+      stack: |-
+        publishedGroup (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:164:12)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:618:17)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: P11 a forged PUBLISHED or RUNNING driver answer never becomes serving presentation
+    ok 13 - P11 a forged PUBLISHED or RUNNING driver answer never becomes serving presentation
+      ---
+      duration_ms: 31.796704
+      type: 'test'
+      ...
+    # Subtest: P11b a RUNNING claim carrying the exact binding and token is refused before any re-resolve
+    ok 14 - P11b a RUNNING claim carrying the exact binding and token is refused before any re-resolve
+      ---
+      duration_ms: 26.935991
+      type: 'test'
+      ...
+    # Subtest: P12 the first admitted user message finds the local grant already durable
+    ok 15 - P12 the first admitted user message finds the local grant already durable
+      ---
+      duration_ms: 120.395184
+      type: 'test'
+      ...
+    1..15
+not ok 1 - 6prime: publication owned by the keyed continuation, retirement before CLOSED
+  ---
+  duration_ms: 1852.207605
+  type: 'suite'
+  location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:244:1'
+  failureType: 'subtestsFailed'
+  error: '9 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: 6double-prime: held grants, election changes, lost answers and absent consumers
+    # Subtest: P13 an unavailable grant wakes once per held run typed and is never retried by the lifecycle
+    ok 1 - P13 an unavailable grant wakes once per held run typed and is never retried by the lifecycle
+      ---
+      duration_ms: 126.879914
+      type: 'test'
+      ...
+    # Subtest: P14 leadership LEADER -> FOLLOWER -> LEADER across a held grant replays effects once
+    ok 2 - P14 leadership LEADER -> FOLLOWER -> LEADER across a held grant replays effects once
+      ---
+      duration_ms: 125.657189
+      type: 'test'
+      ...
+    # Subtest: P15 a lost grant reply resolves to PUBLISHED inside the owner: one write, one wake
+    not ok 3 - P15 a lost grant reply resolves to PUBLISHED inside the owner: one write, one wake
+      ---
+      duration_ms: 118.355139
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:780:3'
+      failureType: 'testCodeFailure'
+      error: |-
+        A_LOST_GRANT_WAS_MUTATED_TWICE
+        
+        2 !== 3
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 3
+      actual: 2
+      operator: 'strictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:794:14)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: P16 a failed local RETIRED write blocks CLOSED while the handles stay open
+    not ok 4 - P16 a failed local RETIRED write blocks CLOSED while the handles stay open
+      ---
+      duration_ms: 131.201338
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:803:3'
+      failureType: 'testCodeFailure'
+      error: |-
+        host-3 did not publish
+        
+        'HELD' !== 'SERVING'
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 'SERVING'
+      actual: 'HELD'
+      operator: 'strictEqual'
+      stack: |-
+        publishedGroup (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:164:12)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:804:17)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: P17 an explicit START that observes genesis publishes and fires no wake
+    ok 5 - P17 an explicit START that observes genesis publishes and fires no wake
+      ---
+      duration_ms: 111.10096
+      type: 'test'
+      ...
+    # Subtest: P18 an absent wake consumer is a typed CONSUMER_ABSENT outcome, never silence
+    not ok 6 - P18 an absent wake consumer is a typed CONSUMER_ABSENT outcome, never silence
+      ---
+      duration_ms: 117.783075
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:858:3'
+      failureType: 'testCodeFailure'
+      error: |-
+        host-3 was held by a sibling
+        
+        'HELD' !== 'SERVING'
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 'SERVING'
+      actual: 'HELD'
+      operator: 'strictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:875:14)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: P19 a concurrent retirement of every founder closes each slot in one pass
+    not ok 7 - P19 a concurrent retirement of every founder closes each slot in one pass
+      ---
+      duration_ms: 119.745072
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:887:3'
+      failureType: 'testCodeFailure'
+      error: |-
+        host-3 did not publish
+        
+        'HELD' !== 'SERVING'
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 'SERVING'
+      actual: 'HELD'
+      operator: 'strictEqual'
+      stack: |-
+        publishedGroup (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:164:12)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:889:19)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: P20 a bound-exhausted grant holds typed STATE_CHANGED and an explicit START publishes
+    ok 8 - P20 a bound-exhausted grant holds typed STATE_CHANGED and an explicit START publishes
+      ---
+      duration_ms: 129.273182
+      type: 'test'
+      ...
+    1..8
+not ok 2 - 6double-prime: held grants, election changes, lost answers and absent consumers
+  ---
+  duration_ms: 980.295245
+  type: 'suite'
+  location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/wasm-creation-publication.integration.test.js:708:1'
+  failureType: 'subtestsFailed'
+  error: '4 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+1..2
+# tests 23
+# suites 2
+# pass 10
+# fail 13
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2839.319254
+# time=3693ms
+# test-files total=1 pass=0 fail=1 assertions=25
+
+==== test/wasm-service/wasm-creation-publication.integration.test.js exit 1
+FAIL: P1 native events publish every founder: durable grant, one wake, served write, quiet adapter
+    failureType: 'testCodeFailure'
+    error: |-
+    host-3 did not publish
+    
+    expected: 'SERVING'
+    actual: 'HELD'
+FAIL: P3b a selection inside the held grant CAS window answers STALE_BINDING
+    failureType: 'testCodeFailure'
+    error: |-
+    {"outcome":"STATE_CHANGED"}
+    + actual - expected
+    expected: 'STALE_BINDING'
+    actual: 'STATE_CHANGED'
+FAIL: P4 retirement fences user work at call, RELEASING precedes RETIRED, RETIRED precedes CLOSED
+    failureType: 'testCodeFailure'
+    error: |-
+    host-3 did not publish
+    
+    expected: 'SERVING'
+    actual: 'HELD'
+FAIL: P5a a lost CLOSED reply is resolved by the metadata owner itself
+    failureType: 'testCodeFailure'
+    error: |-
+    host-3 did not publish
+    
+    expected: 'SERVING'
+    actual: 'HELD'
+FAIL: P5b an unresolved CLOSED keeps custody; a re-stop by creation resolves with no new mutation
+    failureType: 'testCodeFailure'
+    error: |-
+    host-3 did not publish
+    
+    expected: 'SERVING'
+    actual: 'HELD'
+FAIL: P5c a re-stop of the predecessor retires its file by creation and never touches a successor
+    failureType: 'testCodeFailure'
+    error: |-
+    host-3 did not publish
+    
+    expected: 'SERVING'
+    actual: 'HELD'
+FAIL: P6a orderly shutdown keeps the grant; a reopen serves after the open-time metadata check
+    failureType: 'testCodeFailure'
+    error: |-
+    host-3 did not publish
+    
+    expected: 'SERVING'
+    actual: 'HELD'
+FAIL: P6b a reopen after the slot was CLOSED is refused and the next retire tombstones the file
+    failureType: 'testCodeFailure'
+    error: |-
+    host-3 did not publish
+    
+    expected: 'SERVING'
+    actual: 'HELD'
+FAIL: P10 a START re-entry while the retirement is in flight is refused typed
+    failureType: 'testCodeFailure'
+    error: |-
+    host-3 did not publish
+    
+    expected: 'SERVING'
+    actual: 'HELD'
+FAIL: 6prime: publication owned by the keyed continuation, retirement before CLOSED
+    failureType: 'subtestsFailed'
+    error: '9 subtests failed'
+    code: 'ERR_TEST_FAILURE'
+    ...
+FAIL: P15 a lost grant reply resolves to PUBLISHED inside the owner: one write, one wake
+    failureType: 'testCodeFailure'
+    error: |-
+    A_LOST_GRANT_WAS_MUTATED_TWICE
+    
+    expected: 3
+    actual: 2
+FAIL: P16 a failed local RETIRED write blocks CLOSED while the handles stay open
+    failureType: 'testCodeFailure'
+    error: |-
+    host-3 did not publish
+    
+    expected: 'SERVING'
+    actual: 'HELD'
+FAIL: P18 an absent wake consumer is a typed CONSUMER_ABSENT outcome, never silence
+    failureType: 'testCodeFailure'
+    error: |-
+    host-3 was held by a sibling
+    
+    expected: 'SERVING'
+    actual: 'HELD'
+FAIL: P19 a concurrent retirement of every founder closes each slot in one pass
+    failureType: 'testCodeFailure'
+    error: |-
+    host-3 did not publish
+    
+    expected: 'SERVING'
+    actual: 'HELD'
+FAIL: 6double-prime: held grants, election changes, lost answers and absent consumers
+    failureType: 'subtestsFailed'
+    error: '4 subtests failed'
+    code: 'ERR_TEST_FAILURE'
+    ...
+
+
+RESTORED sha256 a5bb5f2a098243685dcb7e28acfa9bef88ae10b0c7f152f44156e48698bc3832

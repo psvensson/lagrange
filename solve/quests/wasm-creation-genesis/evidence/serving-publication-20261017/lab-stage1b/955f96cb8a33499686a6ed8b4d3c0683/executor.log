@@ -1,0 +1,31 @@
+lab test: lenovo-laptop: ordinary, exclusive (9 files) cores=8 mem=15.5GiB speed x2.18
+[lenovo-laptop] placement-shell=1862719
+[lenovo-laptop] placement-head=8ec78a5e09cffa661acc249d576d25997adef9d1
+[lenovo-laptop] placement-link=node_modules
+[lenovo-laptop] placement-link=data/examples
+[lenovo-laptop] placement-link=data/partitions
+[lenovo-laptop] placement-link=tools/alloy-6.2.0
+[lenovo-laptop] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[lenovo-laptop] placement-link=tools/tla2tools.jar
+[lenovo-laptop] placement-prepared=import-graph
+[lenovo-laptop] placement-env=factor:2.2 mode:local retry:0 timeout: lanecap:7
+[lenovo-laptop] placement-pid=1863103
+[lenovo-laptop] # test-files planned=9
+[lenovo-laptop] classified lane ordinary: 8 file(s), jobs=4
+[lenovo-laptop] thermal: ok cpu 55C (coretemp/Package id 0) nvme unmeasured
+[lenovo-laptop] ok test/control-plane/service-instance-selection-admission.test.js (23 assertions, 1246ms)
+[lenovo-laptop] ok test/service/service-consensus-creation-intent.test.js (24 assertions, 1390ms)
+[lenovo-laptop] ok test/control-plane/service-instance-creation-cas.test.js (20 assertions, 1593ms)
+[lenovo-laptop] ok test/service/minimal-deployment-request-binding-compilation-owner-guard.test.js (4 assertions, 451ms)
+[lenovo-laptop] ok test/wasm-service/wasm-creation-reconciliation.test.js (8 assertions, 641ms)
+[lenovo-laptop] ok test/service/minimal-deployment-single-contract-owner-guard.test.js (4 assertions, 297ms)
+[lenovo-laptop] ok test/control-plane/system-metadata-owner-modules.test.js (146 assertions, 839ms)
+[lenovo-laptop] ok test/wasm-service/wasm-creation-local-record.test.js (9 assertions, 3642ms)
+[lenovo-laptop] # test-files total=8 pass=8 fail=0 assertions=238
+[lenovo-laptop] classified lane exclusive: 1 file(s), jobs=1
+[lenovo-laptop] thermal: ok cpu 46C (coretemp/Package id 0) nvme unmeasured
+[lenovo-laptop] ok test/wasm-service/wasm-creation-publication.integration.test.js (25 assertions, 15156ms)
+[lenovo-laptop] # test-files total=1 pass=1 fail=0 assertions=25
+lab test: lenovo-laptop: # test-files total=9 pass=9 fail=0 assertions=263
+lab test: lenovo-laptop: results copied to test-output/reports/test-results-lenovo-laptop.ndjson
+# test-files total=9 pass=9 fail=0 assertions=263

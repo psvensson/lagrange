@@ -21,7 +21,6 @@ import {createOriginFixture} from '../service/service-consensus-creation-fixture
 import {consensusBootstrapDescriptor, CONSENSUS_BOOTSTRAP} from
   '../../src/service/service-consensus-bootstrap.js';
 import {RECONCILE_REASON} from '../../src/workflow/reconcile-queue-constants.js';
-import {SERVICE_INSTANCE_OUTCOME} from '../../src/constants/service-instance.js';
 import {deliverScheduled} from './wasm-strong-write-native-fixture.js';
 
 const SETUP_ROUNDS = 200;
@@ -56,16 +55,16 @@ const SUCCESSOR_OPERATION_PREFIX = 'successor-operation-';
 // A wake consumer standing in for the operation owner of the original CREATE
 // (design SERVING-PUBLICATION-RETIREMENT-DESIGN-20261017 D6'/N7): a
 // genesis-observed or resource-closed wake re-enters the host's original
-// operation exactly once. A grant-held wake is the consumer's to re-drive:
-// this one re-drives only a grant whose single-row CAS lost to a sibling
-// slot's concurrent grant (owner answer STATE_CHANGED) and records every
-// other hold. Passed explicitly: without it the lifecycle has no consumer,
-// exactly as in production today.
+// operation exactly once. A grant-held wake is recorded only; a test re-enters
+// explicitly. Superseded by amendment A2 as revised by A2' (A2'.4, A2'.7):
+// "this one re-drives only a grant whose single-row CAS lost to a sibling
+// slot's concurrent grant (owner answer STATE_CHANGED)" - the metadata owner
+// now re-decides a lost slot CAS itself, so STATE_CHANGED reaches this
+// consumer only at bound exhaustion and is recorded like every other hold.
+// Passed explicitly: without it the lifecycle has no consumer, exactly as in
+// production today.
 function reenterOnWake(f, host, wake) {
-  if (wake.reason === RECONCILE_REASON.CREATION_GRANT_HELD &&
-      wake.grant?.outcome !== SERVICE_INSTANCE_OUTCOME.STATE_CHANGED) {
-    return undefined;
-  }
+  if (wake.reason === RECONCILE_REASON.CREATION_GRANT_HELD) return undefined;
   host.reentries += 1;
   const reentry = f.bootstrap(host);
   host.reentryResults.push(reentry);
