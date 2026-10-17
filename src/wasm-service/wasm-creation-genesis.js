@@ -85,4 +85,4 @@ async function progressWasmCreationGenesis(replica) {
       reason: error.code ?? SERVICE_INSTANCE_OUTCOME.UNAVAILABLE};
   }
 }
-export {progressWasmCreationGenesis};
+export {progressWasmCreationGenesis, WASM_CREATION_GENESIS};

@@ -136,6 +136,7 @@ class WasmServiceReplica extends EventEmitter {
     this.startupFailure = null;
     this.consensusCloseSettlement = null;
     this.transportHandler = null;
+    this.creationReconciliation = null;
     this.systemTableCache = options.systemTableCache ||
       NodeService.getInstance().getSystemTableCache();
     this.cdcIntegrationService = options.cdcIntegrationService || null;

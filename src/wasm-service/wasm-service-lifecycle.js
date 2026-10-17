@@ -1,4 +1,4 @@
-import {progressWasmCreationGenesis} from './wasm-creation-genesis.js';
+import {WasmCreationReconciliation} from './wasm-creation-reconciliation.js';
 import {captureWasmCreation} from './wasm-creation-opening.js';
 import {CONSENSUS_BOOTSTRAP} from '../service/service-consensus-bootstrap.js';
 import {instanceDigest} from '../control-plane/owners/service-instance-contract.js';
@@ -239,6 +239,9 @@ class WasmServiceLifecycle {
       leaderNodeUpdateWriter: this.leaderNodeUpdateWriter,
     });
 
+    if (creation !== null) {
+      replica.creationReconciliation = new WasmCreationReconciliation(this, replica);
+    }
     this.activeReplicas.set(serviceId, replica);
 
     this.logger.info(WASM_SERVICE_LOG_MSG.REPLICA_CREATED, {
@@ -348,7 +351,7 @@ class WasmServiceLifecycle {
 
     if (replica.consensusCreation !== null) {
       replica.portAllocation = port;
-      const genesis = await progressWasmCreationGenesis(replica);
+      const genesis = await replica.creationReconciliation.request();
       if (!replica.initialized || this.activeReplicas.get(serviceId) !== replica) {
         return this.refuseStart(serviceId, startOptions, {
           code: WASM_SERVICE_LIFECYCLE_REFUSAL.STOPPED_DURING_START,

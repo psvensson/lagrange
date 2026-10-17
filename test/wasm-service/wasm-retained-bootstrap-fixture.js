@@ -43,7 +43,7 @@ async function mirror(handler) {
       dependencies: [], capabilities: []}, exports: {run: (_ctx, args) => args}});
   return owner;
 }
-async function fixture(t) {
+async function fixture(t, {automaticReconciliation = false} = {}) {
   const cleanups = [];
   const metadata = await createOriginFixture({after: (fn) => cleanups.push(fn)});
   const directory = mkdtempSync(join(tmpdir(), 'wasm-retained-bootstrap-'));
@@ -94,6 +94,32 @@ async function fixture(t) {
       messageRouter: f.transport, serviceDefinitionsOwner: metadata.primary,
       dataDirectoryManager, moduleMirror, portAllocator: new PortAllocator()});
     lifecycle.logger = QUIET;
+    // Historical manual-reentry witnesses control native-wake delivery. This
+    // is a fixture-only queue boundary, not a product activation flag. New
+    // autonomous witnesses pass automaticReconciliation=true and never install it.
+    let deliverReconciliation = automaticReconciliation;
+    const delayedWakes = new Map();
+    const observed = new WeakSet();
+    const createReplica = lifecycle.createReplica.bind(lifecycle);
+    lifecycle.createReplica = (...args) => {
+      const replica = createReplica(...args);
+      const queue = replica.creationReconciliation?.queue;
+      if (queue && !observed.has(queue)) {
+        observed.add(queue);
+        queue.logger = QUIET;
+        if (!deliverReconciliation) {
+          const enqueue = queue.enqueue.bind(queue);
+          queue.enqueue = (...entry) => {
+            if (!deliverReconciliation && !entry[3]?.completionWaiter) {
+              delayedWakes.set(queue, () => enqueue(...entry));
+              return true;
+            }
+            return enqueue(...entry);
+          };
+        }
+      }
+      return replica;
+    };
     const driver = new WasmComponentDriver({wasmServiceLifecycle: lifecycle});
     const registry = new RuntimeDriverRegistry();
     registry.register(driver);
@@ -114,7 +140,11 @@ async function fixture(t) {
     const manager = metadata.manager();
     manager.registerAdapter(new RuntimeServiceAdapter({serviceRuntimeLifecycle: runtime}));
     const host = {intent, nodeId, manager, runtime, driver, lifecycle, publications,
-      timeSource, processOwner};
+      timeSource, processOwner, resumeReconciliation() {
+        deliverReconciliation = true;
+        for (const wake of delayedWakes.values()) wake();
+        delayedWakes.clear();
+      }};
     f.hosts.push(host);
     return host;
   };

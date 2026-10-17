@@ -96,6 +96,7 @@ async function openReplica(replica) {
       onFollower: () => replica.onBecameFollower(),
       onCandidate: () => replica.onBecameFollower(),
     });
+    replica.creationReconciliation?.bind();
     if (replica.transport) {
       // The exact handler identity is kept so retirement removes only it
       // (owner decision N2). Registration is the open's last step.
@@ -168,6 +169,12 @@ async function retireReplica(replica, handler, starting, activityFailure) {
       // to its initialize caller.
       await Promise.allSettled([starting]);
     }
+    try {
+      await replica.creationReconciliation?.shutdown();
+    } catch (error) {
+      activityFailure = activityFailure === null ? error :
+        withRaftOpeningCleanupFailure(activityFailure, error);
+    }
     // Exact-identity retirement (owner decision N2): a successor's handler
     // at the same address is never removed. No replica-lifecycle activation
     // binds a WASM service handler, so there is no effect section to wait on.
@@ -225,6 +232,7 @@ async function shutdownWasmServiceReplica(replica, stopActivity) {
     replica.lifecycleSettlement : null;
   const {promise, resolve, reject} = Promise.withResolvers();
   replica.lifecycleState = STATE.STOPPING;
+  replica.creationReconciliation?.closeAdmission();
   replica.lifecycleSettlement = promise;
   const handler = replica.transportHandler;
   let activityFailure = null;
