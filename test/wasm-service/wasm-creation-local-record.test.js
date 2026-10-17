@@ -22,7 +22,7 @@ import {
   openWasmCreationRecords, readWasmCreationLocal, recordWasmCreationLocalPhase,
   tombstoneWasmCreationLocal, wasmCreationLocalIdentity,
   WASM_CREATION_LOCAL_PHASE as LOCAL_PHASE, WASM_CREATION_LOCAL_RECORD as LOCAL_RECORD,
-  WASM_CREATION_RETIREMENT as RETIREMENT,
+  WASM_CREATION_RETIREMENT as RETIREMENT, inspectWasmCreationLocal,
 } from '../../src/wasm-service/wasm-creation-opening.js';
 
 const LOCAL_BYTES = 8192;
@@ -284,3 +284,46 @@ test('the record byte bound refuses an oversized retirement detail and leaves th
     assert.deepEqual(readWasmCreationLocal(db), before);
     assert.equal(db.inTransaction, false);
   });
+
+// Design RECOVERY-DESIGN-20261017 R1-A, R2-C (N13), R2-F: the by-path local
+// reader of the restart inventory, read-only, seven identity fields.
+test('R1-A/N13 the by-path reader classifies (opening, file) and the seven identity fields, ' +
+  'read-only', async (t) => {
+  const c = await component(t);
+  const identity = localIdentityOf(c);
+  const unclaimed = {...identity, opening: null, storage: null};
+  const read = (value = identity, binding = c.binding) =>
+    inspectWasmCreationLocal(c.path, value, binding).outcome;
+  assert.equal(read(unclaimed), 'ABSENT_UNCLAIMED', '(null, no file)');
+  assert.equal(read(), 'ABSENT_CLAIMED', '(claimed, no file)');
+  assert.equal(existsSync(c.path), false, 'the reader never creates the file');
+  c.openFile().close();
+  assert.equal(read(unclaimed), 'ABSENT_UNCLAIMED', '(null, zero tables): a FRESH precondition');
+  assert.equal(read(), 'ABSENT_CLAIMED', '(claimed, zero tables)');
+  const {db} = c.fresh();
+  assert.equal(read(unclaimed), 'CONTENT_CONFLICT', '(null, tables): cannot arise');
+  assert.equal(read(), LOCAL_PHASE.ADMITTED);
+  for (const field of ['storage', 'opening', 'token']) {
+    const other = {...identity, [field]: field === 'storage' ?
+      {...identity.storage, inode: '2'} : field === 'opening' ?
+        {...identity.opening, claimId: '8'.repeat(64)} : {...identity.token, ordinal: 9}};
+    assert.equal(read(other), 'CONTENT_CONFLICT', `${field} mismatch (seven fields)`);
+  }
+  assert.equal(read(identity, {...c.binding, incarnation: c.binding.incarnation + 1}),
+    'CONTENT_CONFLICT', 'root binding mismatch');
+  const before = db.prepare('SELECT record FROM _wasm_creation_local').get().record;
+  assert.equal(recordWasmCreationLocalPhase(db, {from: LOCAL_PHASE.ADMITTED,
+    to: LOCAL_PHASE.PUBLISHED, detail: {grant: {token: c.token, at: AT}}}).outcome,
+  LOCAL_RECORD.RECORDED);
+  assert.equal(read(), LOCAL_PHASE.PUBLISHED);
+  assert.equal(tombstoneWasmCreationLocal({db}, identity, {reason: RETIRE_REASON, at: AT}).outcome,
+    RETIREMENT.RETIRED);
+  assert.equal(read(), LOCAL_PHASE.RETIRED);
+  db.prepare('UPDATE _wasm_creation_local SET record = ?').run('{"corrupt":true}');
+  assert.equal(read(), 'CORRUPT_STATE');
+  db.prepare('UPDATE _wasm_creation_local SET record = ?').run(before);
+  const record = db.prepare('SELECT record FROM _wasm_creation_local').get().record;
+  read();
+  assert.equal(db.prepare('SELECT record FROM _wasm_creation_local').get().record, record,
+    'the reader wrote nothing');
+});

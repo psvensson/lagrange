@@ -600,3 +600,107 @@ called known.
   lab cone resubmitted (job in `lab/stage1c/submit-r7.log`), #171 withdrawn;
   narrow re-verification requested. V-N27 ruled: diagnostic-only, recorded in
   the acceptance record.
+- 2026-10-17 round-7 verification APPROVE (V-F4 closed, V-N26 closed, V-N27
+  diagnostic-only agreed). STAGE 1c COMMITTED on the lane as `381750de2`
+  (parent b3793c7e5): routes, publication, custody table, the writeAndObserve
+  repair, design Revisions 4-7, evidence (implementer rounds 2-5, verifier
+  rounds 1/3/4/5/6-7), acceptance record + Addendum A, quest-log entries, the
+  owner's rulings, composition docs. Gated push launched; PR #134 comment to
+  follow; lab classification addendum pending the owner's lab reconciliation.
+- 2026-10-17 recovery stage started (the `process-recovery` receipt): lead
+  draft `RECOVERY-DESIGN-20261017.md` (D-R1 restart model, D-R2 journal+local
+  inventory without metadata, D-R3 one re-entry path under the creation id,
+  D-R4 intact PUBLISHED restart on the local grant with GRANT_UNCONFIRMED
+  (contract B1, vet B R8), D-R5 retirement redo, D-R6 creation row completes
+  at CLOSED (A-B6), D-R7 wake re-derived, D-R8 PENDING row, D-R9 memo rebuilt
+  before `ready`, D-R10 process custody + C9 child process, D-R11 four typed
+  refusals; proof plan P-R1..P-R12). Finding: the restart scan
+  (`recoverPendingOperations`) has NO production caller today; production
+  wiring routed to the activation quest (charter item 13). Independent Fable
+  design vet launched (brief `briefs/vet-recovery-design.md`).
+- 2026-10-17 17:49Z the owner reconciled lab #159; at 17:50Z the owner's #160
+  (Harnessd proof) finished exit 0 / 0 failures and was classified UNCERTAIN
+  by the same v0.1.6 TAP-count bug (lab issue #165): the lab is blocked again
+  until #160 is reconciled. Stage-1c proof re-queued at the LANE TIP
+  `381750de2` (`refs/heads/work/rs-raft-event-reconciliation-20261016`): the
+  union of the round-2 broad selection and the round-6 cone, 89 files, 12 h
+  expiry: #173 tv-dator (27, request 5722a13bbfa94eaca861139184120f74), #174
+  adam-laptop (27, 1a33808e685d42ffa450378baf03d68e), #175 adams-gamla (27,
+  b31267fc886b4fc785ad7c3b6db1b0ac), #176 lenovo-laptop (8,
+  e8fe2b746c2a408ab16cefc8b281740e); #161-#163 and #172 withdrawn. Both
+  lane-regression bisections relaunched (v3, 12 h requests).
+- 2026-10-17 recovery design vet (Fable): REVISE, blocking B1 (the unconfirmed
+  grant had no owner and no release path: the one-shot re-entry runs before the
+  restarted group re-forms and nothing fires later), B2 (the draft's
+  retirement order was the inverse of the implemented one; no STOP row
+  exists), B3 (the four typed refusals collapse to one deferral at the
+  handler), B4 (the manager cannot own the local-record half of the
+  inventory); R1-R16; N1-N9. Report retained under
+  `evidence/design-vets-20261017/design-vet-recovery-20261017.md`. Revision 1
+  appended (R1-A..R1-J: owners of the inventory, typed refusals end to end,
+  TENTATIVE admission + GRANT_UNCONFIRMED decided by the opening module +
+  PUBLISHED_UNCONFIRMED consumed by the one confirmation site + subscriptions
+  bound until the first confirming run fires one wake, implemented retirement
+  order with the creation row completing last, silent restart re-drive, boot
+  incarnation bump, PENDING termination on REMOVE, ready latch, proof plan
+  P-R1..P-R15). Re-vet requested from the same vet.
+- 2026-10-17 recovery design re-vet (round 2): B1-B4 CLOSED in mechanism; new
+  blocking B5 (R1-G terminated a PENDING row before resolving a possibly
+  applied reservation: an orphaned ADMITTED slot would fence J forever) and B6
+  (a new TENTATIVE admission outcome cannot pass the capture sites below the
+  manager; skipping the opening claim made a second source of the opening
+  record); R17-R27, N10-N13. Revision 2 appended (R2-A reservation-first
+  REMOVE with PENDING -> CANCELLED only on a sealed refusal; R2-B
+  ADMISSION_RETAINED with phase UNAVAILABLE, claim kept; R2-C by-path table
+  under an unreachable owner honouring contract :164-165 HELD reopen; R2-D
+  formation-events-only while unconfirmed + grantConfirmation writer; R2-E
+  code-as-outcome + total scan; R2-F/G/H). Charter item 13 re-pointed to
+  `recoverPendingOperations` with the generic-row re-run consequence. Re-vet
+  round 3 requested.
+- 2026-10-17 recovery design re-vet (round 3): B5/B6 CLOSED; new blocking B7
+  (the formation-events-only filter starves the re-confirmation: a settled
+  group emits no formation events and the owner's return is not a raft
+  event); R28-R33 (post-retained UNAVAILABLE collides with the UNROUTED row;
+  the refusal code set must be closed; CANCELLED on repeated REMOVE; the
+  manager's REMOVE-time reservation resolution named; the R2-A crash window;
+  journal-corrupt entries split); N14/N15. Revision 3 appended (R3-A every
+  K-th APPLIED_PROGRESS while unconfirmed + filter only after genesis
+  observed; R3-B..R3-G). Re-vet round 4 requested.
+- 2026-10-17 recovery design re-vet (round 4): B7 and R28-R33 CLOSED; required
+  R35 (the K-th bound and the recorded GRANT_HELD(UNAVAILABLE) wake must cover
+  HELD reopened followers too, keyed on genesis-observed + last grant
+  UNAVAILABLE and on the wake detail), R34 (quiet-group bound stated), R36
+  (one mapping for UNRESOLVED-with-UNAVAILABLE at confirm); N16-N18. Revision
+  4 appended (R4-A..R4-D). Re-vet round 5 requested.
+- 2026-10-17 recovery design re-vet (round 5): REVISE record-only (no
+  mechanism finding remains; R37 supersession list for three committed
+  witnesses + the wakePending detail rule; N19-N21). Revision 5 appended
+  (R5-A, R5-B). Confirmation pass requested; unit-1 implementation (inventory,
+  memo rebuild, typed refusals, retirement completion, PENDING resolution,
+  embedding restartHost) launched in parallel on Opus (brief
+  `briefs/implementer-recovery-unit1.md`); unit 2 = the unconfirmed-grant
+  path + K-th bound + C9.
+- 2026-10-17 recovery design APPROVED (round 6 confirmation; R37 closed;
+  N19-N21 recorded; the vet notes the implementer must carry the wake detail
+  into `findWakeTarget`'s decision and must append, never rewrite, the three
+  R5-A witnesses). Quest-log decision entry written. Unit 1 implementing.
+- 2026-10-17 recovery unit 1 handed back (Opus): new
+  `src/node/runtime-service-restart-inventory.js` (handler composition: memos
+  first, `ready` latch opt-in via `awaitsRestartInventory`, one re-entry per
+  creation under its own id, silent RETIRED re-drive), INVENTORIED scan
+  entries at the manager, by-path read-only reader at the opening module
+  (reached lifecycle -> driver -> runtime -> adapter; partition/MG adapters
+  UNSUPPORTED), typed refusals end to end (five permanent codes, UNAVAILABLE
+  named deferral, CORRUPT_STATE permanent on REMOVE), creation row completes
+  after CLOSED + STOPPED, TERMINAL-with-row-state mapping, REMOVE-time
+  reservation resolution (ADMITTED/CANCELLED/HELD), wake-detail rule,
+  `restartHost` with boot-incarnation bump. New
+  `test/wasm-service/bound-creation-restart.integration.test.js` (15
+  witnesses, red first on 381750de2) + owner units; 29 mutations killed;
+  statics equal to base; six committed witnesses superseded by appending
+  (R5-A three + route P15 :668, cell (c) :835, publication P4 :440). Snapshot
+  `d55cb368d027d40c780ab8463aa6b1f254d2a540` = `wip/rs-raft-recovery-u1-1`
+  (pushed). Lab #183 (adam-laptop, 30b03fdebb234fe2820b7fa62e188b43) + #184
+  (adams-gamla, 86bea49bf92b41cc8b1fb977f7104cdc), 38 files, queued behind the
+  owner's reconciliation. Independent verification requested from the design
+  vet (own worktree verify-1c).

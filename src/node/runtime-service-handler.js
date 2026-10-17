@@ -33,6 +33,8 @@ import {
 import {consumeCreationWake, namesCreation, refuseForeignCreation, replyToRetainedMemo,
   routeBoundRemoval, routeRuntimeServiceCreate, rowCreationHint} from
   './runtime-service-bound-creation-route.js';
+import {createRestartLatch, notReadyReply, recoverRetainedCreations} from
+  './runtime-service-restart-inventory.js';
 import {
   RUNTIME_SERVICE_HANDLER_ADDRESS,
   RUNTIME_SERVICE_HANDLER_ERROR_MSG,
@@ -158,6 +160,12 @@ class RuntimeServiceHandler extends EventEmitter {
     this.inProgressOperations = new Map();
     /** @type {Map<string, Object>} Local replica state by ID */
     this.localReplicas = new Map();
+    // The restart ready latch (design RECOVERY-DESIGN-20261017 R1-H): a host
+    // that applies a restart inventory refuses every message NOT_READY until
+    // recoverRetainedCreations() wrote the memos.
+    this.restartLatch = createRestartLatch(options.awaitsRestartInventory === true);
+    /** @type {Promise<void>} Resolved once the restart inventory is applied. */
+    this.ready = this.restartLatch.ready;
 
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
@@ -203,6 +211,7 @@ class RuntimeServiceHandler extends EventEmitter {
       resolveCallCellServiceEnvelope(envelope);
     const payload = serviceEnvelope?.payload || envelope.payload;
     const type = payload?.[ReplicaOperationField.TYPE] || payload?.type;
+    if (!this.restartLatch.isReady()) return {...notReadyReply(this), correlationId};
 
     this.logger.debug(
       RUNTIME_SERVICE_HANDLER_LOG_MSG.MESSAGE_RECEIVED,
@@ -404,6 +413,16 @@ class RuntimeServiceHandler extends EventEmitter {
    */
   async createReplicaAsync(params) {
     return routeRuntimeServiceCreate(this, params);
+  }
+
+  /**
+   * Apply the restart inventory of bound creations (design
+   * RECOVERY-DESIGN-20261017 R1-A, R1-H): memos first, then `ready`, then
+   * one re-entry or re-drive per creation of this node.
+   * @return {Promise<Object[]>} The applied plans.
+   */
+  async recoverRetainedCreations() {
+    return recoverRetainedCreations(this);
   }
 
   /**

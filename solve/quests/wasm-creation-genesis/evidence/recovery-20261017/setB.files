@@ -1,0 +1,3 @@
+test/raft/raft-rs-backend/operation-port-boundary.test.js
+test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js
+test/wasm-service/wasm-service-replica.test.js

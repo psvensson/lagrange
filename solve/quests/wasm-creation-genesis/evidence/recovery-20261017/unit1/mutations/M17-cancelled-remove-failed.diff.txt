@@ -1,0 +1,121 @@
+diff --git a/src/node/runtime-service-bound-creation-route.js b/src/node/runtime-service-bound-creation-route.js
+index 3633c0e7c..8d51d51c6 100644
+--- a/src/node/runtime-service-bound-creation-route.js
++++ b/src/node/runtime-service-bound-creation-route.js
+@@ -10,7 +10,8 @@
+ // ADMISSION_RETAINED-class); only the refusal class of a CREATE that names no
+ // retained creation keys on the definition row. The handler memo is volatile;
+ // the manager's creation row is the authority, a services row only a hint.
+-import {RUNTIME_FIELD, RUNTIME_KIND, WORKFLOW_STEP} from '../constants/index.js';
++import {RUNTIME_FIELD, RUNTIME_KIND, SERVICE_OPERATION_STATE as OP_STATE, WORKFLOW_STEP} from
++  '../constants/index.js';
+ import {META_SERVICE_ID} from '../constants/wasm-meta.js';
+ import {SERVICE_INSTANCE_OUTCOME as OUTCOME} from '../constants/service-instance.js';
+ import {EXECUTOR_OUTCOME_TYPE} from '../rebalancer/executor-outcome-constants.js';
+@@ -42,11 +43,20 @@ const RESUME_STATUS = new Map([[CONSENSUS_BOOTSTRAP.HELD, DECISION.HELD],
+   [CONSENSUS_BOOTSTRAP.PUBLISHED, DECISION.ACTIVE]]);
+ const RESUME_OUTCOME = new Map([[CREATION.INTENT_NOT_FOUND, DECISION.UNROUTED],
+   [OUTCOME.UNAVAILABLE, DECISION.UNROUTED], [OUTCOME.UNKNOWN, DECISION.DEFERRED]]);
+-// RV3.3 REMOVE table: the journal-only read, then the retirement answer.
+-const READ_DECISION = new Map([[CREATION.NOT_ADMITTED, DECISION.COMPLETED],
+-  [OUTCOME.UNAVAILABLE, DECISION.DEFERRED]]);
++// RV3.3 REMOVE table: the journal-only read, then the retirement answer. A
++// NOT_ADMITTED read resolves the reservation first (design
++// RECOVERY-DESIGN-20261017 R2-A), never answers COMPLETED by itself.
++const READ_DECISION = new Map([[OUTCOME.UNAVAILABLE, DECISION.DEFERRED]]);
++// R2-A, R3-E: the REMOVE-time reservation resolution's answers.
++const RESOLUTION_DECISION = new Map([[CREATION.CANCELLED, DECISION.COMPLETED],
++  [OUTCOME.UNAVAILABLE, DECISION.HELD], [OUTCOME.UNKNOWN, DECISION.HELD]]);
++// R1-D, R3-D: a terminal creation row decides a REMOVE by its state:
++// COMPLETED and CANCELLED are done (idempotent), FAILED is a typed failure.
++const TERMINAL_REMOVAL = new Map([[OP_STATE.COMPLETED, DECISION.COMPLETED],
++  [OP_STATE.CANCELLED, DECISION.FAILED], [OP_STATE.FAILED, DECISION.FAILED]]);
++// R1-B (N5): a corrupt local file is an operator matter, never a re-drive.
+ const PERMANENT_RETIREMENT_REFUSALS = new Set([OUTCOME.INVALID_REQUEST,
+-  OUTCOME.CONTENT_CONFLICT, OUTCOME.INVALID_LINEAGE]);
++  OUTCOME.CONTENT_CONFLICT, OUTCOME.INVALID_LINEAGE, OUTCOME.CORRUPT_STATE]);
+ // RV5.3: the wake reasons that leave work for after an in-flight CREATE;
+ // RESOURCE_CLOSED is "nothing local".
+ const PENDING_WAKE_REASONS = new Set([RECONCILE_REASON.CREATION_GENESIS_OBSERVED,
+@@ -295,9 +305,22 @@ function replyToRetainedMemo(handler, existing, params) {
+ const WAKE_TARGET = Object.freeze({
+   IN_FLIGHT: 'IN_FLIGHT', ABSENT: 'ABSENT', SETTLED: 'SETTLED', HELD: 'HELD',
+ });
++// Design RECOVERY-DESIGN-20261017 R4-A rule 2, R5-A: a GRANT_HELD wake whose
++// detail is grant.outcome UNAVAILABLE is RECORDED for any memo and leaves no
++// pending wake: a re-entry would only re-read the same unavailable owner. The
++// rule keys on the reason AND the wake's detail, never on a serving state.
++function unavailableGrantWake(wake) {
++  return wake?.reason === RECONCILE_REASON.CREATION_GRANT_HELD &&
++    wake.grant?.outcome === OUTCOME.UNAVAILABLE;
++}
++
++function leavesPendingWake(found) {
++  return PENDING_WAKE_REASONS.has(found.diagnostic.reason) && !found.unavailableGrant;
++}
++
+ const WAKE_ACTION = Object.freeze({
+   [WAKE_TARGET.IN_FLIGHT]: (handler, found) => {
+-    if (PENDING_WAKE_REASONS.has(found.diagnostic.reason)) found.inFlight.wakePending = true;
++    if (leavesPendingWake(found)) found.inFlight.wakePending = true;
+     return WAKE.RECORDED;
+   },
+   [WAKE_TARGET.ABSENT]: (handler, found) => {
+@@ -325,11 +348,12 @@ function findWakeTarget(handler, serviceDefinitionId, wake) {
+       inFlight.entityId === serviceDefinitionId, WAKE_TARGET.IN_FLIGHT],
+     [memo === undefined, WAKE_TARGET.ABSENT],
+     [wake.reason === RECONCILE_REASON.CREATION_RESOURCE_CLOSED ||
+-      memo?.status !== ReplicaStatus.HELD, WAKE_TARGET.SETTLED],
++      memo?.status !== ReplicaStatus.HELD || unavailableGrantWake(wake), WAKE_TARGET.SETTLED],
+     [true, WAKE_TARGET.HELD],
+   ].find(([matches]) => matches)[1];
+-  return {target, inFlight, memo,
+-    diagnostic: {serviceDefinitionId, operationId, reason: wake?.reason}};
++  return {target, inFlight, memo, unavailableGrant: unavailableGrantWake(wake),
++    diagnostic: {serviceDefinitionId, operationId, reason: wake?.reason,
++      grantOutcome: wake?.grant?.outcome ?? null}};
+ }
+ 
+ /**
+@@ -362,13 +386,29 @@ function decideRetirement(result) {
+   return RETIREMENT_DECISIONS.find(([matches]) => matches(result))[1](result);
+ }
+ 
+-async function decideBoundRemoval(handler, creationOperationId, reason) {
+-  const manager = handler.serviceLifecycleManager;
++function terminalOrTable(answer, table) {
++  const kind = answer.outcome === CREATION.TERMINAL_OPERATION ?
++    TERMINAL_REMOVAL.get(answer.rowState) : table.get(answer.outcome);
++  return {kind: kind ?? DECISION.FAILED, errorCode: answer.reason ?? answer.outcome};
++}
++
++// The creation a REMOVE retires: the journal-only read; a PENDING row's
++// reservation is resolved with the same request first (R2-A, R3-E).
++async function retainedForRemoval(manager, creationOperationId) {
+   const retained = await manager.readRetainedCreation(creationOperationId);
+-  if (retained.outcome !== CREATION.ADMISSION_RETAINED) {
+-    return {kind: READ_DECISION.get(retained.outcome) ?? DECISION.FAILED,
+-      errorCode: retained.outcome};
++  if (retained.outcome !== CREATION.NOT_ADMITTED) {
++    return retained.outcome === CREATION.ADMISSION_RETAINED ? {retained} :
++      {decision: terminalOrTable(retained, READ_DECISION)};
+   }
++  const resolved = await manager.resolveRetainedReservation(creationOperationId);
++  return resolved.outcome === CREATION.ADMISSION_RETAINED ? {retained: resolved} :
++    {decision: terminalOrTable(resolved, RESOLUTION_DECISION)};
++}
++
++async function decideBoundRemoval(handler, creationOperationId, reason) {
++  const manager = handler.serviceLifecycleManager;
++  const {retained, decision} = await retainedForRemoval(manager, creationOperationId);
++  if (decision !== undefined) return decision;
+   return decideRetirement(await manager.stopReplica({
+     definition: consensusBootstrapDescriptor(retained), consensusCreation: retained,
+     consensusOpeningOwner: manager}, {nodeId: handler.nodeId, reason}));
+@@ -427,4 +467,5 @@ function rowCreationHint(row) {
+ }
+ 
+ export {routeRuntimeServiceCreate, replyToRetainedMemo, refuseForeignCreation, namesCreation,
+-  consumeCreationWake, routeBoundRemoval, rowCreationHint};
++  consumeCreationWake, routeBoundRemoval, rowCreationHint, decideBoundRemoval,
++  scheduleBoundReentry, BOUND_DECISION};

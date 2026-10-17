@@ -1,6 +1,6 @@
 import {hasConsensusCreation} from '../service/service-consensus-bootstrap.js';
-import {prepareConsensusBootstrap, startConsensusBootstrap, retireConsensusBootstrap} from
-  './service-runtime-consensus-bootstrap.js';
+import {prepareConsensusBootstrap, startConsensusBootstrap, retireConsensusBootstrap,
+  inspectConsensusBootstrap} from './service-runtime-consensus-bootstrap.js';
 import {PREPARE_STATUS} from './runtime-driver.js';
 import {RequestCellRoutingError} from
   '../service/request-cell-routing-contract.js';
@@ -562,6 +562,16 @@ function createServiceRuntimeLifecycleOperationMethods(deps) {
           op, runtimeKind, serviceId, err.message, {cause: err},
         );
       }
+    }
+
+    /**
+     * The local half of one inventoried bound creation through its driver
+     * (design RECOVERY-DESIGN-20261017 R1-A): no journal, no effect.
+     * @param {Object} owned - {consensusCreation: {intent, token, opening}}.
+     * @return {Promise<{outcome: string}>}
+     */
+    async inspectRetainedCreation(owned) {
+      return inspectConsensusBootstrap(this, owned);
     }
 
     /**

@@ -3,13 +3,13 @@
   "id": "test-primary-classification",
   "counts": {
     "unit": 2093,
-    "integration": 104,
+    "integration": 105,
     "bootstrap": 205,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2409,
-  "digest": "fnv1a32-3bb526c0",
+  "censusSize": 2410,
+  "digest": "fnv1a32-063d7653",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -2339,6 +2339,7 @@
     "test/utils/phase-state-machine.test.js": "unit",
     "test/wasm-service/backward-compat-serialization.test.js": "unit",
     "test/wasm-service/bound-creation-handler-embedding.integration.test.js": "integration",
+    "test/wasm-service/bound-creation-restart.integration.test.js": "integration",
     "test/wasm-service/call-cell-world-abi.test.js": "unit",
     "test/wasm-service/capability-policy.test.js": "unit",
     "test/wasm-service/dependency-lock-determinism.property.test.js": "unit",

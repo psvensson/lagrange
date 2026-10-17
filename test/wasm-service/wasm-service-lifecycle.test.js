@@ -11,6 +11,8 @@ import {PortAllocator} from
   '../../src/wasm-service/port-allocator.js';
 import {ModuleMirror} from
   '../../src/wasm-service/module-mirror.js';
+import {ServiceInstanceContractError} from
+  '../../src/control-plane/owners/service-instance-contract.js';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from
@@ -492,6 +494,22 @@ describe('WasmServiceLifecycle', () => {
         assert.equal(result.error, 'consensus refused');
         assert.equal(result.diagnostic.code, 'consensus_start_refused');
         assert.equal(pa.isAvailable(port), true);
+      });
+
+    // Census N18 (design RECOVERY-DESIGN-20261017 R1-B, R4-D): the witness
+    // above stands (a generic error keeps consensus_start_refused); a typed
+    // contract refusal's outcome is now the diagnostic code.
+    it('a typed contract refusal of the consensus start is the diagnostic code itself',
+      async () => {
+        const pa = new PortAllocator();
+        const lifecycle = makeLifecycle({portAllocator: pa});
+        lifecycle.createReplica(makeServiceDef(), makeReplicaConfig());
+        lifecycle.getReplica('svc-1').initialize = async () => {
+          throw new ServiceInstanceContractError('CREATION_STORAGE_MISSING');
+        };
+        const result = await lifecycle.startReplica('svc-1');
+        assert.equal(result.started, false);
+        assert.equal(result.diagnostic.code, 'CREATION_STORAGE_MISSING');
       });
   });
 

@@ -1,0 +1,24 @@
+[
+ {
+  "id": "M13b-phase-passthrough-removed",
+  "file": "src/service/service-consensus-creation-intent.js",
+  "catcher": "test/service/service-consensus-creation-intent.test.js",
+  "edits": [
+   [
+    "    [resource?.outcome === OUTCOME.UNAVAILABLE, () => retained(OUTCOME.UNAVAILABLE)],",
+    "    [resource?.outcome === OUTCOME.UNAVAILABLE,\n      () => ({outcome: OUTCOME.UNKNOWN, reason: OUTCOME.UNAVAILABLE})],"
+   ]
+  ]
+ },
+ {
+  "id": "M13c-phase-passthrough-removed-embedding",
+  "file": "src/service/service-consensus-creation-intent.js",
+  "catcher": "test/wasm-service/bound-creation-restart.integration.test.js",
+  "edits": [
+   [
+    "    [resource?.outcome === OUTCOME.UNAVAILABLE, () => retained(OUTCOME.UNAVAILABLE)],",
+    "    [resource?.outcome === OUTCOME.UNAVAILABLE,\n      () => ({outcome: OUTCOME.UNKNOWN, reason: OUTCOME.UNAVAILABLE})],"
+   ]
+  ]
+ }
+]

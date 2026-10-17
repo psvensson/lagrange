@@ -6,6 +6,7 @@
 // attempt is recorded but never blocks the local stop, the receiver-local
 // RETIRED tombstone is durable before the metadata CLOSED CAS, and an
 // unresolved CLOSED keeps custody with the caller's retained creation.
+import fs from 'node:fs';
 import {SERVICE_INSTANCE_LIMIT as LIMIT, SERVICE_INSTANCE_OUTCOME as OUTCOME} from
   '../constants/service-instance.js';
 import {captureInstanceJson, instanceDigest, instanceFailure, requireInstance} from
@@ -74,12 +75,22 @@ function fenceTarget(lifecycle, retired, replica, metadataRelease) {
     .then(() => NO_FAILURE, (failure) => failure);
 }
 
+// The file's own identity when it exists (design RECOVERY-DESIGN-20261017
+// R1-B, section 7 F-R1: compared when present, never required): a copied or
+// replaced file refuses CONTENT_CONFLICT and is never tombstoned (B4).
+function presentStorage(lifecycle, retired) {
+  if (!fs.existsSync(retired.dbPath)) return {};
+  return {storage: lifecycle.dataDirectoryManager.getWasmServiceFileIdentity(
+    retired.identity.groupId, retired.identity.replicaId)};
+}
+
 function tombstoneByPath(lifecycle, retired) {
   const {groupId, replicaId, nodeId} = retired.identity;
   const at = resolveTimeSource({timeSource: lifecycle.dependencies.timeSource}).now();
   try {
     return tombstoneWasmCreationLocal({dbPath: retired.dbPath},
-      {format: LIMIT.FORMAT, groupId, replicaId, nodeId, token: retired.token},
+      {format: LIMIT.FORMAT, groupId, replicaId, nodeId, token: retired.token,
+        ...presentStorage(lifecycle, retired)},
       {reason: INTENT.RETIRE_RESOURCE, at});
   } catch (error) {
     return {outcome: instanceFailure(error, error?.code ?? OUTCOME.UNAVAILABLE).outcome};

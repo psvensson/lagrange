@@ -14,6 +14,9 @@ const LOCAL_STR_CREATEREPLICA = 'createReplica';
 const LOCAL_STR_STARTREPLICA = 'startReplica';
 const LOCAL_STR_STOPREPLICA = 'stopReplica';
 const LOCAL_STR_HEALTH = 'health';
+// The typed answer of an adapter without retained bound creations (design
+// RECOVERY-DESIGN-20261017 R2-F N11): partition and message-group adapters.
+const SERVICE_TYPE_ADAPTER_INSPECTION = Object.freeze({UNSUPPORTED: 'UNSUPPORTED'});
 
 class ServiceTypeAdapter {
   /**
@@ -90,6 +93,16 @@ class ServiceTypeAdapter {
       LOCAL_STR_HEALTH,
     );
   }
+
+  /**
+   * The local half of one inventoried bound creation (design
+   * RECOVERY-DESIGN-20261017 R1-A, R2-F N11); typed UNSUPPORTED by default.
+   * @param {Object} _owned - {consensusCreation: {intent, token, opening}}.
+   * @return {Promise<{outcome: string}>}
+   */
+  async inspectRetainedCreation(_owned) {
+    return {outcome: SERVICE_TYPE_ADAPTER_INSPECTION.UNSUPPORTED};
+  }
 }
 
-export {ServiceTypeAdapter};
+export {ServiceTypeAdapter, SERVICE_TYPE_ADAPTER_INSPECTION};

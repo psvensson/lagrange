@@ -59,6 +59,10 @@ const RUNTIME_SERVICE_HANDLER_LOG_MSG = Object.freeze({
   REMOVE_HELD: 'Runtime service bound retirement held',
   CREATION_WAKE_NO_LOCAL_OPERATION:
     'Runtime service creation wake names no local operation',
+  // Design RECOVERY-DESIGN-20261017 R1-A, R1-E, R3-F.
+  RESTART_INVENTORY_APPLIED: 'Runtime service restart inventory applied',
+  RESTART_ENTRY_UNREADABLE: 'Runtime service restart entry has an undecodable intent',
+  RESTART_RETIREMENT_REDRIVEN: 'Runtime service restart retirement re-driven',
 });
 
 const RUNTIME_SERVICE_HANDLER_ERROR_MSG = Object.freeze({
@@ -85,6 +89,8 @@ const RUNTIME_SERVICE_HANDLER_ERROR_MSG = Object.freeze({
   RETIREMENT_IN_PROGRESS: 'runtime_service_retirement_in_progress',
   // A HELD memo that names no creation: corrupt by construction (RV6.4).
   CORRUPT_LOCAL_MEMO: 'runtime_service_corrupt_local_memo',
+  // A message before the restart inventory is applied (RECOVERY-DESIGN R1-H, R2-F).
+  NOT_READY: 'runtime_service_not_ready',
 });
 
 // The node-local creation wake consumer's answers (design RV2.4, RV3.5).
