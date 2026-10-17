@@ -31,7 +31,7 @@ function nativeType(name) {
 const HEARTBEAT = nativeType('MsgHeartbeat');
 const HB_RESPONSE = nativeType('MsgHeartbeatResponse');
 const COUNTS = Object.freeze([1, 8, 16]);
-const SAMPLE_MS = 1250;
+const SAMPLE_MS = 750;
 const PUMP_PERIOD_MS = 20;
 const REQUIRED_WAVES = 4;
 const TIMING = Object.freeze({
