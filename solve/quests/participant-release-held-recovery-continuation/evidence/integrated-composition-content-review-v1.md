@@ -14,7 +14,7 @@ The following exact durable reviews retain their original scope and HOLD ceiling
 
 | Review | SHA256 |
 | --- | --- |
-| C2 source, 41-item independent review: `solve/quests/message-group-c2-orphan-removal-alpha/evidence/independent-implementation-review.md` | `0429ae581ab04210a5f6f04287e309afaf0e263f246e249a40fb98b058ae31bd` |
+| C2 source, 41-item independent review: `solve/quests/message-group-fresh-identity-membership/evidence/c2-independent-implementation-review-20261013.md` | `0429ae581ab04210a5f6f04287e309afaf0e263f246e249a40fb98b058ae31bd` |
 | C2 harness final binding, incorporates complete 44-item review: `.../evidence/harness-implementation-review-v2-final-metadata.md` | `c32913163736ea139357ce5e10511bd15a79aa6c41f810e123a21f468e13190a` |
 | Recovery source/content/evidence, complete 50-item review: `solve/quests/participant-release-held-recovery-continuation/evidence/implementation-review-v3.md` | `b86a953cf45b62742bf5b19cc4e23f83038f3ff6d0fe8d0eaf3ec1e97bd3f495` |
 
@@ -59,3 +59,5 @@ The first integrated focused Carinas attempt is a retained **not-executed placem
 
 Final candidate/control raw outcomes, exact body engagement, complete artifact archive and before/after hash recheck are still required before a final composition verdict. Any later source/test correction would invalidate this preservation binding and require independent delta review. Main, whole Quest, corpus and integrated startup remain HOLD regardless of partial green.
 
+
+<!-- 2026-10-17 lead note (owner ruling, closeout plan decision 4): the C2 independent implementation review cited above was retained in the superseded quest message-group-c2-orphan-removal-alpha; its closed-quest shape removed the file, so the same bytes (sha256 0429ae581ab04210a5f6f04287e309afaf0e263f246e249a40fb98b058ae31bd) now live at solve/quests/message-group-fresh-identity-membership/evidence/c2-independent-implementation-review-20261013.md under the superseding FreshMG quest. Path changed only. -->

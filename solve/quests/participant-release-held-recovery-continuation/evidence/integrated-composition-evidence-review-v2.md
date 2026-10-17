@@ -18,7 +18,7 @@ This report incorporates the complete source/intersection audit in `test-output/
 
 | Component review | SHA256 |
 | --- | --- |
-| C2 independent source review, 41 items, `solve/quests/message-group-c2-orphan-removal-alpha/evidence/independent-implementation-review.md` | `0429ae581ab04210a5f6f04287e309afaf0e263f246e249a40fb98b058ae31bd` |
+| C2 independent source review, 41 items, `solve/quests/message-group-fresh-identity-membership/evidence/c2-independent-implementation-review-20261013.md` | `0429ae581ab04210a5f6f04287e309afaf0e263f246e249a40fb98b058ae31bd` |
 | C2 corrected harness/metadata binding, incorporates 44 items, `.../evidence/harness-implementation-review-v2-final-metadata.md` | `c32913163736ea139357ce5e10511bd15a79aa6c41f810e123a21f468e13190a` |
 | Recovery final source/content/evidence, 50 items, `solve/quests/participant-release-held-recovery-continuation/evidence/implementation-review-v3.md` | `b86a953cf45b62742bf5b19cc4e23f83038f3ff6d0fe8d0eaf3ec1e97bd3f495` |
 
