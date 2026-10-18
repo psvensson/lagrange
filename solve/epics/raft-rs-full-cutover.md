@@ -35,6 +35,31 @@ authorizes:
 
 # Raft-rs full cutover
 
+## Execution lanes and Harnessd tracking (2026-10-18)
+
+Start with [the cloud handover](raft-rs-full-cutover/HANDOVER-2026-10-18-cloud.md).
+The [execution lane register](raft-rs-full-cutover/execution-lanes-2026-10-18.md)
+assigns bounded work, dependencies, guidance/implementation profiles and next
+checkpoints. It is the current scheduling plan; the Quest seals and exact-head
+evidence still own acceptance. The independent U1 verdict remains **REJECT**.
+
+| Lane | Existing owner | Next checkpoint | Parallel start |
+| --- | --- | --- | --- |
+| A — reservation finality | `wasm-creation-genesis` | Test-only checkpoint, then bounded F1 implementation | With B design/review; coordinate shared files |
+| B — inventory and retirement | `wasm-creation-genesis` | Resolve D1 and finish independent contract/oracle review | With A; production waits for approval |
+| C — grant confirmation / U2 | `wasm-creation-genesis` | Resolve K-write versus event bound | Design now; implementation after corrected U1 approval |
+| D — production activation | Prospective activation Quest | Seal reviewed charter and meaningful red probe | Preparation now; activation after U2 and learner custody |
+| E — FreshMG | `message-group-fresh-identity-membership` | Exact candidate learner-cleanup review and owner repair | Isolated from A/B; compose before activation |
+| F — transactions / CDC | Existing TX1 Quests | Reconcile current exact-head evidence and remaining receipts | Independent owner work; coordinate shared runtime edits |
+| G — snapshot / custody | Existing snapshot and cleanup Quests | Audit current candidate obligations | Audit now; implement only an evidenced remaining gap |
+| L — lab / regressions | Evidence for the owning Quests | Classify #184 and Set A; reconcile uncertain submission | Analysis overlaps; deployed lab owner serializes runs |
+| I — integration / certification | This epic | Freeze and review a composed candidate | Preparation now; certification after prerequisites |
+
+[Harnessd setup and execution boundaries](raft-rs-full-cutover/harnessd-tracking-2026-10-18.md)
+describe project registration, exact checkout selection, accepted tasks and
+independent lanes. These are planned lanes; this documentation change starts no
+worker, accepts no Harnessd task and records no new Quest completion.
+
 ## Closeout plan and lane composition (2026-10-17)
 
 The owner asked for the steps from the current lanes to a main merge as a

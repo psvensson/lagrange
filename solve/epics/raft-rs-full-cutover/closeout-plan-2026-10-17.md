@@ -724,3 +724,19 @@ called known.
   classification. SetB178PASS,190FAIL,191PASS,192FAIL: current good9ff61abd,
   bad9b53962f,35 first-parent commits; next c425ef42 not submitted. Candidate
   e7a3525a5 and user's other checkout/branch were not modified.
+
+- 2026-10-18 local tracking setup: the owner requested the parallel lane plan
+  implemented as durable epic/Quest/Harnessd tracking and delegated model/effort
+  selection. [execution-lanes-2026-10-18.md](execution-lanes-2026-10-18.md) records
+  A finality, B inventory/retirement, C U2, D activation, E FreshMG, F TX1/CDC,
+  G snapshot/custody, plus shared lab and integration functions. A/B/C remain
+  units of wasm-creation-genesis; D requires a new reviewed seal. The epic source
+  contains the lane table for Harnessd's bounded planning preview.
+  [harnessd-tracking-2026-10-18.md](harnessd-tracking-2026-10-18.md) maps existing
+  registration/planning/task owners and distinguishes visibility from writable
+  planning, accepted tasks and execution. Current service access requires the
+  operator session; live registration has not been performed. Independent
+  documentation review retained the U1 REJECT and corrected deployment caveats.
+  This docs-only change starts no worker, accepts no task, changes no seal and
+  modifies no production/test bytes. Primary checkout and other agents' work
+  remain untouched.
