@@ -1,0 +1,27 @@
+# Exact-source owner map for B0 review
+
+Every source reference below is at U1 `a251ce4fd9c980a78c0fd33d8a5f873161f90870`.
+The isolated planning base has identical production/test bytes. Hashes are in
+`source-manifest.json`. This is source evidence, not an implementation change.
+
+| Interaction | Existing owner evidence and required amendment |
+| --- | --- |
+| D1 dispatch | `src/node/runtime-service-handler.js:282–305` consults the canonical memo first. `runtime-service-bound-creation-route.js:227–242` resumes its operation, `:275–301` rejects different ACTIVE/resumes HELD, `:339–356` cannot find a settled noncurrent plan. New retained-plan precedence must change this whole interaction; see RV6.2/6.3/7.2/7.3 in Quest `ACTIVATION-DISCOVERY-DESIGN-20261017.md:1020–1107`. |
+| Observation | `src/service/service-lifecycle-manager.js:522–543` currently makes two reads; `src/wasm-service/operation-lifecycle.js:195–218` is the SQL list owner. `service-lifecycle-recovery.js:97–110,316–343` and `service-consensus-creation-intent.js:312–335` retain total journal inventory validation. One query does not prove a future multi-shard production reader atomic. |
+| Startup application | `src/node/runtime-service-restart-inventory.js:109–128,135–178` shows separate retirement insertion, memo-naming prerequisite, and independently reapplied scans. `runtime-service-handler.js:961–975` clears maps without a lasting fence. B02/B03/B06 address these exact failures. |
+| REMOVE capture/gate | `src/node/runtime-service-handler.js:525–550,644–727` has canonical removal single-flight but delayed memo target lookup; route `:446–455` settles/deletes by operation. Extend this existing gate and entry identity; do not create a parallel retirement scheduler. |
+| Manager projections | `src/service/service-consensus-bootstrap.js:118–135,150–186` writes STOPPING/STARTING before waits and RUNNING/STOPPED afterward. Existing map starts at `service-lifecycle-manager.js:78`; getter `:191–193`. Canonical representation conversion includes every generic writer in `service-lifecycle-operations.js:159,245,290,299,313,328` and `service-lifecycle-recovery.js:182,193,201,211,219,230,238,245,253,288`. |
+| Handler projection census | `runtime-service-bound-creation-route.js:121,421,431`, restart inventory `:124,167`, and handler `:341,481,501,588,693,749,766,954,967` write/clear canonical memos. Classify generic writes separately, preserving generic behavior; every bound write must obey exact owner/lifetime, not just one successful path. |
+| Driver bookkeeping | `src/runtime/wasm-component-driver.js:337–366,400–499,584–588,616–638,714–732`; `wasm-component-driver-consensus.js:42–57,75–95,107–116`; shutdown helper `:40–44`. `_prepared`, `_running`, `_lifecycles`, `_replicaContexts` must not accept or delete a successor through stale bound work. Do not duplicate physical currentness in a new map. |
+| Physical currentness | `src/wasm-service/wasm-service-lifecycle.js:222–280,426–434` owns live/retiring admission and exact current object checks. `sameLiveCreation` already compares captured identity. Expose a synchronous value-only observation through the existing adapter/runtime/driver chain; never export a traversable replica. |
+| Physical retirement | `src/wasm-service/wasm-creation-retirement.js:25–54,120–165` validates token/path, awaits release, tombstones and closes; missing storage currently contributes to `retired:true`. `wasm-service-lifecycle.js:483–484,640–651,748–763` shows untracked retirement and object-only shutdown. Exact task registration/join is required, distinct from handler callback fencing. |
+| Runtime projection | `src/runtime/service-runtime-consensus-publication.js:117–127` withdraws endpoint then projects STOPPED only on `closed`. `service-runtime-lifecycle.js:473–502` may return undefined, swallow STOPPED failure or return RETAINED. Require exact applied acknowledgment on the bound retirement interaction; preserve generic best-effort behavior. |
+| Original completion | `src/service/service-consensus-creation-intent.js:391–403` currently writes `{closed:true}` and confirms COMPLETED through CAS/reread; sole production caller is bound bootstrap. Adopt canonical terminal physical proof and truthful history proof, preserving UNKNOWN rather than letting route `:373–383` discharge it alone. |
+| Resource authority | `src/control-plane/owners/service-instance-state.js:198–207,240–279` retains selected and retiring resources and owns monotone close/history decisions. Lane A owns SEALED/UNRESOLVED negative reserve finality; B consumes it. Higher selection is not automatic retirement authorization. |
+| Process directory | `src/storage/data-directory-process-owner.js:64–72` awaits successful runtime shutdown before release; `src/lagrange-runtime-startup.js:715–719,769` binds failure-sensitive startup cleanup. Embedding `test/wasm-service/bound-creation-handler-embedding-fixture.js:179–180,281–285` awaits lifecycle shutdown before its real owner release. Preserve and measure actual transfer, not a mocked flag. |
+
+The applicable paired-owner records are the existing `wasm-creation-genesis` and
+`runtime-service-bound-creation-route` impact-contract groups in
+`test/shards/impact-contracts.json`, including their named witness tests. A later
+implementation updates those existing records only when its actual changed-owner
+cone requires it. No evidence permits raising static/classification ratchets.
