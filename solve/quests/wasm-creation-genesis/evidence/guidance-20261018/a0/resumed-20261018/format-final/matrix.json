@@ -1,0 +1,293 @@
+{
+  "classification": "CHECKPOINT_EXPECTED_RED_REMEASURED_REVIEW_PENDING",
+  "is_product_test_pass": false,
+  "parent_U1_verdict": "REJECT retained",
+  "raw_child_exit": 1,
+  "counts": {
+    "tests": 33,
+    "pass": 30,
+    "fail": 3,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "thermal": [
+    "thermal: ok cpu 56C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)"
+  ],
+  "all33names_statuses_match": true,
+  "all_three_expected_assertions_reached": true,
+  "diagnostics": [
+    {
+      "condition": "TARGET_ALREADY_OWNED",
+      "resolution": {
+        "outcome": "RESERVATION_CANCELLED",
+        "operationId": "operation-0",
+        "reason": "TARGET_ALREADY_OWNED"
+      },
+      "rowAfterResolution": "cancelled",
+      "originalResult": {
+        "outcome": "TERMINAL_OPERATION",
+        "rowState": "cancelled"
+      },
+      "finalJournalState": "cancelled",
+      "admissionJson": null,
+      "finalResource": {
+        "ordinal": 1,
+        "phase": "ADMITTED",
+        "request": {
+          "expectedOrdinal": 0,
+          "nodeId": "host-1",
+          "operationId": "operation-0",
+          "replicaId": "founder-1",
+          "slot": 0
+        },
+        "token": {
+          "bindingDigest": "cdcd3a9e121a3177b3b3e618ffb2229683b9ad49bd1303e8acea10c2e8eeb8cf",
+          "bodyDigest": "7c4a89464b8684baafbdb0a3fc809484c4050e821c88fd6ec5cf10d00f6c53e5",
+          "operationId": "operation-0",
+          "ordinal": 1,
+          "slot": 0
+        }
+      },
+      "inventory": []
+    },
+    {
+      "condition": "INVALID_EXPECTED_STATE",
+      "resolution": {
+        "outcome": "RESERVATION_CANCELLED",
+        "operationId": "operation-0",
+        "reason": "INVALID_EXPECTED_STATE"
+      },
+      "rowAfterResolution": "cancelled",
+      "originalResult": {
+        "outcome": "TERMINAL_OPERATION",
+        "rowState": "cancelled"
+      },
+      "finalJournalState": "cancelled",
+      "admissionJson": null,
+      "finalResource": {
+        "ordinal": 2,
+        "phase": "ADMITTED",
+        "request": {
+          "expectedOrdinal": 1,
+          "nodeId": "host-1",
+          "operationId": "operation-0",
+          "replicaId": "founder-1",
+          "slot": 0
+        },
+        "token": {
+          "bindingDigest": "cdcd3a9e121a3177b3b3e618ffb2229683b9ad49bd1303e8acea10c2e8eeb8cf",
+          "bodyDigest": "f29179bc7f03806ac8016903e151da8ea908d88f7677f649c1a901d7a452fb3f",
+          "operationId": "operation-0",
+          "ordinal": 2,
+          "slot": 0
+        }
+      },
+      "inventory": []
+    },
+    {
+      "resolution": {
+        "outcome": "RESERVATION_CANCELLED",
+        "operationId": "operation-0",
+        "reason": "STALE_BINDING"
+      },
+      "originalResult": {
+        "outcome": "TERMINAL_OPERATION",
+        "rowState": "cancelled"
+      },
+      "finalJournalState": "cancelled",
+      "admissionJson": null,
+      "resource": {
+        "ordinal": 1,
+        "phase": "ADMITTED",
+        "request": {
+          "expectedOrdinal": 0,
+          "nodeId": "host-1",
+          "operationId": "operation-0",
+          "replicaId": "founder-1",
+          "slot": 0
+        },
+        "token": {
+          "bindingDigest": "51961ea8af7b4fec7d93515cebbc6323cd9b868c1f0da91274cbd6ab270fe47f",
+          "bodyDigest": "7c4a89464b8684baafbdb0a3fc809484c4050e821c88fd6ec5cf10d00f6c53e5",
+          "operationId": "operation-0",
+          "ordinal": 1,
+          "slot": 0
+        }
+      }
+    }
+  ],
+  "cases": [
+    {
+      "ordinal": 1,
+      "name": "ServiceLifecycleManager persists original intent before reservation and token before return",
+      "status": "PASS"
+    },
+    {
+      "ordinal": 2,
+      "name": "ServiceLifecycleManager redelivery retains one origin and never reserves another ordinal",
+      "status": "PASS"
+    },
+    {
+      "ordinal": 3,
+      "name": "ServiceLifecycleManager recovers lost reservation from its original durable request",
+      "status": "PASS"
+    },
+    {
+      "ordinal": 4,
+      "name": "ServiceLifecycleManager resolves an applied intent write with lost reply",
+      "status": "PASS"
+    },
+    {
+      "ordinal": 5,
+      "name": "ServiceLifecycleManager resolves an applied admission write with lost reply",
+      "status": "PASS"
+    },
+    {
+      "ordinal": 6,
+      "name": "ServiceLifecycleManager refuses reservation when intent write did not persist",
+      "status": "PASS"
+    },
+    {
+      "ordinal": 7,
+      "name": "ServiceLifecycleManager retains the original request when admission persistence fails",
+      "status": "PASS"
+    },
+    {
+      "ordinal": 8,
+      "name": "ServiceLifecycleManager captures original intent before its first awaited read",
+      "status": "PASS"
+    },
+    {
+      "ordinal": 9,
+      "name": "ServiceLifecycleManager rejects changed descriptor under a retained operation ID",
+      "status": "PASS"
+    },
+    {
+      "ordinal": 10,
+      "name": "ServiceLifecycleManager recovery does not replace original intent with current resolver data",
+      "status": "PASS"
+    },
+    {
+      "ordinal": 11,
+      "name": "R5-A successor (:113-126): the scan inventories a PENDING row and reserves nothing; the re-entry resolves the same request",
+      "status": "PASS"
+    },
+    {
+      "ordinal": 12,
+      "name": "ServiceLifecycleManager never revives CLOSED resource from retained admission",
+      "status": "PASS"
+    },
+    {
+      "ordinal": 13,
+      "name": "ServiceLifecycleManager completed journal is history, not a new effect grant",
+      "status": "PASS"
+    },
+    {
+      "ordinal": 14,
+      "name": "ServiceLifecycleManager cancelled journal is history, not a new effect grant",
+      "status": "PASS"
+    },
+    {
+      "ordinal": 15,
+      "name": "ServiceLifecycleManager failed journal is history, not a new effect grant",
+      "status": "PASS"
+    },
+    {
+      "ordinal": 16,
+      "name": "ServiceLifecycleManager refuses forged persisted admission rather than borrowing another token",
+      "status": "PASS"
+    },
+    {
+      "ordinal": 17,
+      "name": "ServiceLifecycleManager absent or unavailable journal cannot invent recovery intent",
+      "status": "PASS"
+    },
+    {
+      "ordinal": 18,
+      "name": "ServiceLifecycleManager requires durable journal capabilities before resource admission",
+      "status": "PASS"
+    },
+    {
+      "ordinal": 19,
+      "name": "ServiceLifecycleManager malformed or oversized intent allocates no journal or reservation",
+      "status": "PASS"
+    },
+    {
+      "ordinal": 20,
+      "name": "ServiceLifecycleManager concurrent identical delivery converges on one original operation and token",
+      "status": "PASS"
+    },
+    {
+      "ordinal": 21,
+      "name": "ServiceLifecycleManager validates descriptor lineage before retaining a new request",
+      "status": "PASS"
+    },
+    {
+      "ordinal": 22,
+      "name": "SystemTableCache projects actual intent/admission columns without granting lifecycle completion",
+      "status": "PASS"
+    },
+    {
+      "ordinal": 23,
+      "name": "ServiceLifecycleManager damaged bound journal cannot fall through to old unbound recovery",
+      "status": "PASS"
+    },
+    {
+      "ordinal": 24,
+      "name": "R5-A successor (:222-230): a corrupt journal row is an INVENTORIED CORRUPT_STATE entry with reentry false",
+      "status": "PASS"
+    },
+    {
+      "ordinal": 25,
+      "name": "ServiceLifecycleManager unavailable resource resolution after retention stays UNKNOWN",
+      "status": "PASS"
+    },
+    {
+      "ordinal": 26,
+      "name": "R5-A successor (:232-239): an unreachable owner after retention is ADMISSION_RETAINED with phase UNAVAILABLE (answered or thrown)",
+      "status": "PASS"
+    },
+    {
+      "ordinal": 27,
+      "name": "ServiceLifecycleManager does not erase bound descriptor fields into legacy physical CREATE",
+      "status": "PASS"
+    },
+    {
+      "ordinal": 28,
+      "name": "recovery R2-E the restart scan is total: a malformed row fails alone, the creation row after it is still inventoried",
+      "status": "PASS"
+    },
+    {
+      "ordinal": 29,
+      "name": "recovery R1-D/R3-D the TERMINAL answer carries the row state",
+      "status": "PASS"
+    },
+    {
+      "ordinal": 30,
+      "name": "independent U1: TARGET_ALREADY_OWNED is not a sealed reservation refusal under a delayed original request",
+      "status": "FAIL",
+      "assertion": "CANCELLED_JOURNAL_WITH_DELAYED_ADMITTED_RESOURCE: unresolved obligation lost",
+      "code": "ERR_ASSERTION"
+    },
+    {
+      "ordinal": 31,
+      "name": "independent U1: INVALID_EXPECTED_STATE is not a sealed reservation refusal under a delayed original request",
+      "status": "FAIL",
+      "assertion": "CANCELLED_JOURNAL_WITH_DELAYED_ADMITTED_RESOURCE: unresolved obligation lost",
+      "code": "ERR_ASSERTION"
+    },
+    {
+      "ordinal": 32,
+      "name": "independent U1: STALE_BINDING before the exact future selection is not a sealed reservation refusal",
+      "status": "FAIL",
+      "assertion": "FUTURE_BINDING_CANCELLED_BEFORE_EXACT_REQUEST_BECAME_ADMISSIBLE",
+      "code": "ERR_ASSERTION"
+    },
+    {
+      "ordinal": 33,
+      "name": "independent U1 control: inventory never asks the resource authority to resolve a retained token",
+      "status": "PASS"
+    }
+  ]
+}

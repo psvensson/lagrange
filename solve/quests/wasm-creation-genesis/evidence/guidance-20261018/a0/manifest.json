@@ -1,0 +1,50 @@
+{
+  "scope": "A0 retained raw checkpoint evidence; no product passing claim",
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 3453,
+      "sha256": "b4fe334a8573806af23ae342c97d0b6e3663bac181ca39b185e589924a3d8125"
+    },
+    {
+      "path": "adopted-first-diff.patch",
+      "bytes": 6274,
+      "sha256": "fe5b0776d58641f9f88e4f0a7db74a57898845e7ca84132391c18ae72a867df7"
+    },
+    {
+      "path": "classified-runner.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "classified-runner.stdout.log",
+      "bytes": 16244,
+      "sha256": "f80f806bf7ea83d7d4b184112d38e21c5356cc71253de2a8b70f9ee7ae54e7b7"
+    },
+    {
+      "path": "matrix.json",
+      "bytes": 9030,
+      "sha256": "94170fea6bb203e772fe3eea23c68f7214a76af7b8190cc93cecf82f756ced6e"
+    },
+    {
+      "path": "provenance.json",
+      "bytes": 2169,
+      "sha256": "578414967b9f93abc5efdc8035db293291b52dd101803ecb8dc5719b1327cbdd"
+    },
+    {
+      "path": "run-result.json",
+      "bytes": 505,
+      "sha256": "eed7b40603b1dcc91627f6f3f21f0ae239b81c4e46252e3a86e3dd0b937c0a1d"
+    },
+    {
+      "path": "test-output.tap",
+      "bytes": 15791,
+      "sha256": "e6f7c233ebf50c58e41470023e2767231d88aba5f5514dc030a4565838ca0f69"
+    },
+    {
+      "path": "test-output.tap.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ]
+}

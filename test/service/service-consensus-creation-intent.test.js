@@ -365,3 +365,110 @@ test('recovery R1-D/R3-D the TERMINAL answer carries the row state', async (t) =
       {outcome: 'TERMINAL_OPERATION', rowState: state});
   }
 });
+
+// Independently authored by /root/verify_recovery_u1, a251ce4fd review.
+// Append to test/service/service-consensus-creation-intent.test.js: uses its
+// actual component SQLite owner fixture, without replacing owner decisions.
+for (const condition of ['TARGET_ALREADY_OWNED', 'INVALID_EXPECTED_STATE']) {
+  test(`independent U1: ${condition} is not a sealed reservation refusal under a delayed original request`, async (t) => {
+    const f = await createOriginFixture(t);
+    const binding = f.intent.consensusBinding;
+    const request = f.intent.consensusSlotRequest;
+    // Both are currently inadmissible but legally become admissible after an
+    // existing resource closes. Every owner call below uses the real CAS.
+    const blocker = condition === 'TARGET_ALREADY_OWNED' ?
+      f.slotRequest(3, 0, 'independent-blocker', 0) :
+      f.slotRequest(0, 0, 'independent-blocker', 0);
+    if (condition === 'INVALID_EXPECTED_STATE') request.expectedOrdinal = 1;
+    const blockedBy = await f.primary.reserveInstanceResource(binding, blocker);
+    assert.equal(blockedBy.outcome, 'ADMITTED', 'the prior resource is durably owed');
+    const reserve = f.primary.reserveInstanceResource.bind(f.primary);
+    const arrived = Promise.withResolvers();
+    const release = Promise.withResolvers();
+    let delayed = false;
+    f.primary.reserveInstanceResource = async (...args) => {
+      if (args[1].operationId === request.operationId && !delayed) {
+        delayed = true;
+        arrived.resolve();
+        await release.promise;
+      }
+      return reserve(...args);
+    };
+    const original = f.prepare();
+    await arrived.promise;
+    assert.equal(f.row().state, 'pending', 'original intent durable, original reservation pending');
+    const resolution = await f.manager().resolveRetainedReservation(request.operationId);
+    const rowAfterResolution = f.row().state;
+    assert.equal((await f.primary.closeInstanceResource(binding, blockedBy.token)).outcome,
+      'CLOSED', 'only the genuine prior token is closed');
+    release.resolve();
+    const originalResult = await original;
+    const finalRow = f.row();
+    const resource = f.state().selected.resources[request.slot];
+    t.diagnostic(JSON.stringify({condition, resolution, rowAfterResolution, originalResult,
+      finalJournalState: finalRow.state, admissionJson: finalRow.admission_json,
+      finalResource: resource,
+      inventory: await f.manager().recoverPendingOperations({resolveServiceContext: () => null})}));
+    assert.ok(!(finalRow.state === 'cancelled' && resource.phase === 'ADMITTED' &&
+      resource.token.operationId === request.operationId),
+    'CANCELLED_JOURNAL_WITH_DELAYED_ADMITTED_RESOURCE: unresolved obligation lost');
+  });
+}
+
+// Independent future-binding member of the reservation-finality class.
+test('independent U1: STALE_BINDING before the exact future selection is not a sealed reservation refusal', async (t) => {
+  const {selectInstanceState} = await import('../../src/control-plane/owners/service-instance-state.js');
+  const f = await createOriginFixture(t);
+  const previous = f.intent.consensusBinding;
+  const nextRequest = f.request(previous.selectionVersion, 73, previous.incarnation);
+  const revision = await f.primary.catalogOwner.getCreationRevision(
+    nextRequest.revisionId, nextRequest.tenantId);
+  const predicted = selectInstanceState(f.state(), nextRequest, revision).result.binding;
+  // This is a syntactically valid immutable intent. Predicting the deterministic
+  // binding grants no authority: the real owner refuses it until the selection.
+  f.intent.consensusBinding = predicted;
+  const request = f.intent.consensusSlotRequest;
+  const reserve = f.primary.reserveInstanceResource.bind(f.primary);
+  const arrived = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  let delayed = false;
+  f.primary.reserveInstanceResource = async (...args) => {
+    if (args[1].operationId === request.operationId && !delayed) {
+      delayed = true;
+      arrived.resolve();
+      await release.promise;
+    }
+    return reserve(...args);
+  };
+  const original = f.prepare();
+  await arrived.promise;
+  assert.equal(f.row().state, 'pending');
+  const resolution = await f.manager().resolveRetainedReservation(request.operationId);
+  const selected = await f.primary.selectConsensusInstance(nextRequest);
+  assert.equal(selected.outcome, 'SELECTED');
+  assert.deepEqual(selected.binding, predicted, 'the actual authoritative future selection is the exact binding');
+  release.resolve();
+  const originalResult = await original;
+  const finalRow = f.row();
+  const resource = f.state().selected.resources[request.slot];
+  t.diagnostic(JSON.stringify({resolution, originalResult, finalJournalState: finalRow.state,
+    admissionJson: finalRow.admission_json, resource}));
+  assert.ok(!(finalRow.state === 'cancelled' && resource.phase === 'ADMITTED' &&
+    resource.token.operationId === request.operationId),
+  'FUTURE_BINDING_CANCELLED_BEFORE_EXACT_REQUEST_BECAME_ADMISSIBLE');
+});
+
+// Independent positive control for the journal-only inventory boundary.
+test('independent U1 control: inventory never asks the resource authority to resolve a retained token', async (t) => {
+  const f = await createOriginFixture(t);
+  await f.prepare();
+  let authorityReads = 0;
+  const resolve = f.primary.resolveInstanceResource.bind(f.primary);
+  f.primary.resolveInstanceResource = async (...args) => {
+    authorityReads += 1;
+    return resolve(...args);
+  };
+  const rows = await f.manager().recoverPendingOperations({resolveServiceContext: () => null});
+  assert.equal(rows[0].status, 'INVENTORIED');
+  assert.equal(authorityReads, 0, 'INVENTORY_CROSSED_JOURNAL_ONLY_AUTHORITY_BOUNDARY');
+});

@@ -1,0 +1,24 @@
+diff --git a/test/service/service-consensus-creation-intent.test.js b/test/service/service-consensus-creation-intent.test.js
+index e9d1ae17d..ea6df73b9 100644
+--- a/test/service/service-consensus-creation-intent.test.js
++++ b/test/service/service-consensus-creation-intent.test.js
+@@ -407,7 +407,8 @@ for (const condition of ['TARGET_ALREADY_OWNED', 'INVALID_EXPECTED_STATE']) {
+     const resource = f.state().selected.resources[request.slot];
+     t.diagnostic(JSON.stringify({condition, resolution, rowAfterResolution, originalResult,
+       finalJournalState: finalRow.state, admissionJson: finalRow.admission_json,
+-      finalResource: resource, inventory: await f.manager().recoverPendingOperations({resolveServiceContext: () => null})}));
++      finalResource: resource,
++      inventory: await f.manager().recoverPendingOperations({resolveServiceContext: () => null})}));
+     assert.ok(!(finalRow.state === 'cancelled' && resource.phase === 'ADMITTED' &&
+       resource.token.operationId === request.operationId),
+     'CANCELLED_JOURNAL_WITH_DELAYED_ADMITTED_RESOURCE: unresolved obligation lost');
+@@ -420,7 +421,8 @@ test('independent U1: STALE_BINDING before the exact future selection is not a s
+   const f = await createOriginFixture(t);
+   const previous = f.intent.consensusBinding;
+   const nextRequest = f.request(previous.selectionVersion, 73, previous.incarnation);
+-  const revision = await f.primary.catalogOwner.getCreationRevision(nextRequest.revisionId, nextRequest.tenantId);
++  const revision = await f.primary.catalogOwner.getCreationRevision(
++      nextRequest.revisionId, nextRequest.tenantId);
+   const predicted = selectInstanceState(f.state(), nextRequest, revision).result.binding;
+   // This is a syntactically valid immutable intent. Predicting the deterministic
+   // binding grants no authority: the real owner refuses it until the selection.

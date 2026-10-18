@@ -1,0 +1,16 @@
+{
+  "reviewer": "subagent:/root",
+  "scope": "Independent bounded A0 expected-red checkpoint preservation review; no product/U1/parent approval",
+  "files": [
+    {
+      "path": "a0-independent-review-20261018.md",
+      "sha256": "a552424e77e3457a9ae248a3504a2e87936fb54cb7176efb26fbf309dee6459f",
+      "bytes": 10310
+    },
+    {
+      "path": "a0-root-evidence-audit.json",
+      "sha256": "3acd209069717b107b14b787b50cb708421551516070a037212b924defe6bc88",
+      "bytes": 469
+    }
+  ]
+}

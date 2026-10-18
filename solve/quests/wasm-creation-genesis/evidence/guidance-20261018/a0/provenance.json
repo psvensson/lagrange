@@ -1,0 +1,45 @@
+{
+  "base_sha": "a1c3cde54fcb46471791062bcae4a6000ae484e0",
+  "branch": "test/rs-raft-a0-finality-witness-20261018",
+  "precommit_head": "a1c3cde54fcb46471791062bcae4a6000ae484e0",
+  "src_tree": "97388f76ab4468da91b4a7eb9badc8b3c1804e62",
+  "production_diff": "",
+  "original_test_sha256": "b42c9123feaa03668700b633bf81c842155f52496f538804b87da257c5a56875",
+  "adopted_test_sha256": "656e5e2ca870d68ec78b9f004d7bb94cd872c3f6f9259ad964af2b77a1071cc2",
+  "adopted_test_blob": "e9d1ae17d91ba8f32410c62a3b77637a3a0c6bb6",
+  "first_diff_sha256": "fe5b0776d58641f9f88e4f0a7db74a57898845e7ca84132391c18ae72a867df7",
+  "runtime": {
+    "execPath": "/home/peter/.nvm/versions/node/v22.23.2/bin/node",
+    "node": "v22.23.2",
+    "abi": "127",
+    "sqliteModule": "/mnt/data/peter/projects/lagrange/node_modules/better-sqlite3/lib/index.js",
+    "sqliteVersion": "3.49.2"
+  },
+  "dependencies": {
+    "node_modules_realpath": "/mnt/data/peter/projects/lagrange/node_modules",
+    "base_package_lock_sha256": "8fb1a612db45cac0a61e281b41fd60da315f916b7aeb52046bcbe3e7b8d61ecd",
+    "installed_package_lock_sha256": "3e44644d20052191778fb4a7d59336cb451219ad71f5db840044121154d5fa78",
+    "base_lock_packages": 1191,
+    "installed_lock_packages": 1217,
+    "base_required_version_integrity_mismatches": [],
+    "extra_installed_packages": 27,
+    "ceiling": "Shared existing dependency installation; all base-required version/integrity lock entries match, extra packages present; no hermetic dependency claim. Shared native bindings were not rebuilt or modified.",
+    "sqlite_native_path": "/mnt/data/peter/projects/lagrange/node_modules/better-sqlite3/build/Release/better_sqlite3.node",
+    "sqlite_native_sha256": "d7d9272b12d11c1dc2bb787741b1b7c4037d336155f316ace3420410c28fda37"
+  },
+  "runner_env": {
+    "NODE_OPTIONS": null,
+    "TAP_TIMEOUT": null,
+    "TAP_TIMEOUT_FLOOR": null,
+    "LAGRANGE_SKIP_THERMAL_GATE": null,
+    "LAGRANGE_LANE_JOBS_CAP": null
+  },
+  "command_argv": [
+    "npm",
+    "run",
+    "test:file",
+    "--",
+    "test/service/service-consensus-creation-intent.test.js"
+  ],
+  "cwd": "/mnt/data/peter/projects/.worktrees/rs-raft-a0-witness-20261018"
+}

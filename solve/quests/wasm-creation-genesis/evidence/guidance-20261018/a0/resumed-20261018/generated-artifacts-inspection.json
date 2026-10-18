@@ -1,0 +1,17 @@
+{
+  "solve/changes/global-owner-debt-inventory/inventory.json": {
+    "preserved_from_failed_hook": true,
+    "previous_base_sha256": "b3d82131c9183c864f5a665f2d0afeb52f886e9bfa30d2103fa40eeba5114524",
+    "preserved_current_sha256": "d22360af71588415e6b11130ec0364aab95dfffd6a2f7d2059c3ce2d91234310",
+    "change_reason": "Actual new test dynamic import adds one dependency graph edge; producer digests refresh. No ratchet baseline changed.",
+    "signalCountsUnchanged": true,
+    "edgeCountBefore": 28528,
+    "edgeCountAfter": 28529
+  },
+  "test/shards/impact-graph-seal.json": {
+    "preserved_from_failed_hook": true,
+    "previous_base_sha256": "6fdd17ecc92acd63f23d9b48e00122e4d60caaf3c5999453ca9fe442386b9b97",
+    "preserved_current_sha256": "812c297eb8eebf94cbc2c0f3423798cfbc5973bc3150895f5b3c8a527ca37e19",
+    "change_reason": "Actual new test dynamic import adds one dependency graph edge; producer digests refresh. No ratchet baseline changed."
+  }
+}

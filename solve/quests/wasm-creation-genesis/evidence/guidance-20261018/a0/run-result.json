@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "npm",
+    "run",
+    "test:file",
+    "--",
+    "test/service/service-consensus-creation-intent.test.js"
+  ],
+  "cwd": "/mnt/data/peter/projects/.worktrees/rs-raft-a0-witness-20261018",
+  "started_at": "2026-10-18T10:44:53.933617+00:00",
+  "finished_at": "2026-10-18T10:44:57.939971+00:00",
+  "exit_code": 1,
+  "expected_faulty_baseline_exit": 1,
+  "meaning": "Raw classified runner result, not a product passing test proof; matrix and independent checkpoint review remain separate."
+}

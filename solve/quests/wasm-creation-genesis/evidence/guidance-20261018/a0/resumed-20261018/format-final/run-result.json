@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "npm",
+    "run",
+    "test:file",
+    "--",
+    "test/service/service-consensus-creation-intent.test.js"
+  ],
+  "cwd": "/mnt/data/peter/projects/.worktrees/rs-raft-a0-witness-20261018",
+  "started_at": "2026-10-18T12:31:44.925704+00:00",
+  "finished_at": "2026-10-18T12:31:45.724675+00:00",
+  "exit_code": 1,
+  "signal": null,
+  "meaning": "Final formatted test bytes; raw classified expected-red result, not product test pass."
+}

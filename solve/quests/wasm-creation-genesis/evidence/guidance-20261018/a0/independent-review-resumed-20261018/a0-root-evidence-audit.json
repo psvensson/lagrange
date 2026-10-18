@@ -1,0 +1,11 @@
+{
+  "reviewer": "/root",
+  "scope": "A0 checkpoint only; independent bytes and raw evidence review, not an independently executed rerun",
+  "test_sha256": "59d3627fdbbd784853ce21df5054ffd9460d59e5156ff0527bb426eae7c89147",
+  "original_prefix_exact": true,
+  "manifest_entries_verified": 24,
+  "raw_cases_verified": 33,
+  "production_diff_empty": true,
+  "base_sha": "a1c3cde54fcb46471791062bcae4a6000ae484e0",
+  "src_tree": "97388f76ab4468da91b4a7eb9badc8b3c1804e62"
+}
