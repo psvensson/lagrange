@@ -634,3 +634,483 @@ describe('recovery unit 1: typed open-time refusals reach the handler (R1-B, R3-
     assert.equal(fs.existsSync(dbPathOf(host)), false, 'nothing opened');
   });
 });
+
+// Independent witnesses; append to bound-creation-restart.integration.test.js.
+test('independent U1: an inventory suspended across shutdown cannot restart a resource after process custody transfers', async (t) => {
+  const e = await hostsOf(t);
+  const original = e.hosts[1];
+  await e.retain(original);
+  const host = await e.restartHost(original, {inventory: false});
+  const resumes = trackResumes(host);
+  const scanned = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  const recover = host.manager.recoverPendingOperations.bind(host.manager);
+  host.manager.recoverPendingOperations = async (...args) => {
+    const rows = await recover(...args);
+    scanned.resolve();
+    await release.promise;
+    return rows;
+  };
+  const inventory = host.handler.recoverRetainedCreations();
+  await scanned.promise;
+  await e.stopHost(host);
+  // An actual second composition now holds the same directory's real owner.
+  const successor = await e.composeHost(host.slot, {inventory: false});
+  const index = e.hosts.indexOf(host);
+  e.hosts[index] = successor;
+  e.clocks[index] = successor.timeSource;
+  t.after(async () => {
+    host.handler.shutdown();
+    await host.lifecycle.shutdownAll();
+  });
+  release.resolve();
+  await inventory;
+  for (let turn = 0; turn < 4; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+  t.diagnostic(JSON.stringify({oldStopped: host.stopped, resumedAfterCustodyTransfer: resumes,
+    oldMemo: memoOf(host), oldInFlight: [...host.handler.inProgressOperations],
+    newCompositionOwnsDirectory: Boolean(successor.processOwner)}));
+  assert.deepEqual(resumes, [], 'INVENTORY_REENTERED_AFTER_PROCESS_CUSTODY_TRANSFER');
+});
+
+test('independent U1: RETIRED restart redrive and coordinator REMOVE share one in-flight retirement', async (t) => {
+  const e = await publishedGroup(t);
+  const original = e.hosts[1];
+  crashOnce(e.metadata.primary, 'closeInstanceResource');
+  await removeAndSettle(e, original, 'independent-initial-remove',
+    OUTCOME.RUNTIME_SERVICE_REMOVE_HELD);
+  const host = await e.restartHost(original, {inventory: false});
+  const firstEntered = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  const stop = host.manager.stopReplica.bind(host.manager);
+  let entries = 0;
+  host.manager.stopReplica = async (...args) => {
+    entries += 1;
+    if (entries === 1) {
+      firstEntered.resolve();
+      await release.promise;
+    }
+    return stop(...args);
+  };
+  host.inventory = await host.handler.recoverRetainedCreations();
+  const reply = await e.dispatch(host, TYPE.REMOVE_REPLICA, 'independent-concurrent-remove');
+  assert.equal(reply.status, REPLY.IN_PROGRESS);
+  await firstEntered.promise;
+  for (let turn = 0; turn < 4; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+  const concurrentEntries = entries;
+  release.resolve();
+  await e.settle(() => memoOf(host)?.status === ReplicaStatus.REMOVED, 'independent retirement');
+  t.diagnostic(JSON.stringify({concurrentEntries, totalEntries: entries,
+    outcomes: host.outcomes, rowState: rowOf(e, host).state}));
+  assert.equal(concurrentEntries, 1, 'RESTART_REDRIVE_BYPASSED_EXISTING_REMOVE_SINGLE_FLIGHT');
+});
+
+// Independent live-versus-restart discrimination witness: both calls begin
+// before ready, and the late earlier scan must not overwrite the newer state.
+test('independent U1: overlapping startup inventories cannot overwrite an ACTIVE creation with a stale HELD memo', async (t) => {
+  const e = await publishedGroup(t);
+  const host = await e.restartHost(e.hosts[1], {inventory: false});
+  const resumes = trackResumes(host);
+  const scanned = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  const recover = host.manager.recoverPendingOperations.bind(host.manager);
+  let invocations = 0;
+  host.manager.recoverPendingOperations = async (...args) => {
+    invocations += 1;
+    const rows = await recover(...args);
+    if (invocations === 1) {
+      scanned.resolve();
+      await release.promise;
+    }
+    return rows;
+  };
+  const first = host.handler.recoverRetainedCreations();
+  await scanned.promise;
+  // V3 preserves the independent coalescence oracle without waiting on a
+  // second scan that a correct shared startup promise must never perform.
+  const second = host.handler.recoverRetainedCreations();
+  await inventoryTurns();
+  const scansBeforeRelease = invocations;
+  release.resolve();
+  const [firstPlans, secondPlans] = await Promise.all([first, second]);
+  host.inventory = firstPlans;
+  await e.form();
+  await e.settle(() => memoOf(host)?.status === ReplicaStatus.ACTIVE, 'inventory reached ACTIVE');
+  const before = {...memoOf(host)};
+  const replay = await host.handler.recoverRetainedCreations();
+  const after = {...memoOf(host)};
+  t.diagnostic(JSON.stringify({invocations, scansBeforeRelease, before, after, resumes}));
+  assert.equal(scansBeforeRelease, 1, 'OVERLAPPING_INVENTORY_STARTED_A_SECOND_SCAN');
+  assert.strictEqual(firstPlans, secondPlans, 'CALLERS_DID_NOT_SHARE_THE_APPLIED_PLAN');
+  assert.strictEqual(replay, firstPlans, 'SUCCESSFUL_INVENTORY_WAS_RESCANNED');
+  assert.deepEqual(after, before, 'STALE_STARTUP_SCAN_OVERWROTE_LIVE_ACTIVE_MEMO');
+});
+
+// An admitted by-path retirement belongs to the lifecycle until it is joined.
+test('independent U1: shutdown cannot release process custody while an admitted by-path retirement is paused', async (t) => {
+  const e = await publishedGroup(t);
+  const host = await e.restartHost(e.hosts[1], {inventory: false});
+  const retained = await host.manager.readRetainedCreation(creationId(host));
+  const owner = e.metadata.primary;
+  const releaseResource = owner.releaseInstanceResource.bind(owner);
+  const entered = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  owner.releaseInstanceResource = async (...args) => {
+    entered.resolve();
+    await release.promise;
+    return releaseResource(...args);
+  };
+  assert.equal(host.lifecycle.activeReplicas.size, 0, 'retirement uses the unopened file path');
+  assert.equal(localRecord(host).phase, 'PUBLISHED');
+  const retiring = host.lifecycle.retireReplica(retained);
+  await entered.promise;
+  let shutdownFinished = false;
+  const shuttingDown = e.stopHost(host).then(() => {
+    shutdownFinished = true;
+  });
+  for (let turn = 0; turn < 4; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+  const custodyReleasedWhileRetirementPending = shutdownFinished;
+  let successor = null;
+  if (custodyReleasedWhileRetirementPending) {
+    successor = await e.composeHost(host.slot, {inventory: false});
+    const index = e.hosts.indexOf(host);
+    e.hosts[index] = successor;
+    e.clocks[index] = successor.timeSource;
+  }
+  release.resolve();
+  const retired = await retiring;
+  await shuttingDown;
+  t.diagnostic(JSON.stringify({custodyReleasedWhileRetirementPending,
+    newCompositionOwnsDirectory: Boolean(successor?.processOwner), retired,
+    localPhaseAfterRelease: localRecord(host).phase, resourcePhase: slotPhase(e, host)}));
+  assert.equal(custodyReleasedWhileRetirementPending, false,
+    'PROCESS_OWNER_RELEASED_WITH_ADMITTED_BY_PATH_RETIREMENT_OUTSTANDING');
+});
+
+// Two retained creations for one canonical replica are legitimate when the
+// predecessor CLOSED, its completion-row write was lost, and a successor was selected.
+for (const order of ['predecessor-first', 'successor-first']) {
+  test(`independent U1: ${order} inventory preserves both predecessor cleanup and successor reentry`, async (t) => {
+    const e = await publishedGroup(t);
+    const host = e.hosts[1];
+    const predecessorId = creationId(host);
+    const predecessorTime = rowOf(e, host).created_at;
+    const previousBinding = host.intent.consensusBinding;
+    // Existing labelled crash point 5, after CLOSED/STOPPED, before row completion.
+    e.metadata.setJournalFault('before-admission');
+    await e.dispatch(host, TYPE.REMOVE_REPLICA, 'independent-old-remove');
+    await e.settle();
+    e.metadata.setJournalFault(null);
+    assert.equal(rowOf(e, host).state, 'in_progress');
+    for (const other of e.hosts.filter((item) => item !== host)) {
+      await removeAndSettle(e, other, `independent-other-remove-${other.slot}`, OUTCOME.RUNTIME_SERVICE_REMOVE_COMPLETED);
+    }
+    assert.ok(e.metadata.state().selected.resources.every((slot) => slot.phase === 'CLOSED'));
+    const successor = await e.metadata.primary.selectConsensusInstance(
+      e.metadata.request(1, 91, previousBinding.incarnation));
+    assert.equal(successor.outcome, 'SELECTED');
+    const successorId = order === 'predecessor-first' ? 'z-successor-1' : 'a-successor-1';
+    const intent = structuredClone(host.intent);
+    intent.consensusBinding = successor.binding;
+    intent.consensusSlotRequest = e.metadata.slotRequest(host.slot, 0, successorId);
+    assert.equal(intent.consensusSlotRequest.replicaId, replicaIdOf(host));
+    // Equal creation milliseconds are legal. Operation ids break the scan tie.
+    host.manager._timeSource = {now: () => predecessorTime};
+    const retained = await host.manager.prepareConsensusCreation(intent);
+    assert.equal(retained.outcome, 'ADMISSION_RETAINED');
+    const restarted = await e.restartHost(host, {inventory: false});
+    const resumes = trackResumes(restarted);
+    restarted.inventory = await restarted.handler.recoverRetainedCreations();
+    await e.settle();
+    const predecessorRow = e.metadata.db.prepare('SELECT state FROM wasm_operations WHERE operation_id = ?').get(predecessorId);
+    const successorRow = e.metadata.db.prepare('SELECT state FROM wasm_operations WHERE operation_id = ?').get(successorId);
+    const observations = {order, plans: plansOf(restarted), resumes, memo: memoOf(restarted),
+      predecessorRow: predecessorRow.state, successorRow: successorRow.state,
+      outcomes: restarted.outcomes};
+    t.diagnostic(JSON.stringify(observations));
+    assert.deepEqual({predecessorRow: observations.predecessorRow,
+      successorRow: observations.successorRow,
+      memoId: observations.memo?.operationId, memoStatus: observations.memo?.status, resumes},
+    {predecessorRow: 'completed', successorRow: 'in_progress', memoId: successorId,
+      memoStatus: ReplicaStatus.HELD, resumes: [successorId]},
+    'DISTINCT_RETAINED_CREATION_OBLIGATION_LOST_BY_INVENTORY_ORDER');
+  });
+}
+
+// The same canonical-replica collision is not limited to a RETIRED plan.
+for (const order of ['predecessor-first', 'successor-first']) {
+  test(`independent U1: ${order} older ABSENT reentry cannot hide the successor`, async (t) => {
+    const e = await hostsOf(t);
+    await e.retain(e.hosts[1]);
+    const host = await e.restartHost(e.hosts[1], {inventory: false});
+    const previousBinding = host.intent.consensusBinding;
+    const previousTime = rowOf(e, host).created_at;
+    host.inventory = await host.handler.recoverRetainedCreations();
+    // REMOVE takes custody before the queued opening, and closes on genuine absence.
+    e.metadata.setJournalFault('before-admission');
+    await e.dispatch(host, TYPE.REMOVE_REPLICA, 'independent-absent-remove');
+    await e.settle();
+    e.metadata.setJournalFault(null);
+    assert.equal(fs.existsSync(dbPathOf(host)), false);
+    assert.equal(rowOf(e, host).state, 'in_progress');
+    assert.equal(slotPhase(e, host), 'CLOSED');
+    const selected = await e.metadata.primary.selectConsensusInstance(
+      e.metadata.request(1, 92, previousBinding.incarnation));
+    assert.equal(selected.outcome, 'SELECTED');
+    const successorId = order === 'predecessor-first' ? 'z-live-1' : 'a-live-1';
+    const intent = e.intentFor(host.slot, selected.binding, successorId);
+    host.manager._timeSource = {now: () => previousTime};
+    assert.equal((await host.manager.prepareConsensusCreation(intent)).outcome, 'ADMISSION_RETAINED');
+    const restarted = await e.restartHost(host, {inventory: false});
+    const resumes = trackResumes(restarted);
+    restarted.inventory = await restarted.handler.recoverRetainedCreations();
+    await e.settle();
+    t.diagnostic(JSON.stringify({order, plans: plansOf(restarted), resumes,
+      memo: memoOf(restarted)}));
+    assert.deepEqual([resumes.includes(successorId), memoOf(restarted)?.operationId,
+      memoOf(restarted)?.status], [true, successorId, ReplicaStatus.HELD],
+    'OLDER_REENTER_PLAN_SUPPRESSED_SUCCESSOR_REENTRY');
+  });
+}
+
+// Direct behavioral observations supplement convergence assertions in M02,
+// M05 and M12. A missing event fails its own assertion after runner turns.
+test('independent U1 control: restart invokes the retained operation id without a scan identity', async (t) => {
+  const e = await hostsOf(t);
+  await e.retain(e.hosts[1]);
+  const host = await e.restartHost(e.hosts[1], {inventory: false});
+  const resumes = trackResumes(host);
+  host.inventory = await host.handler.recoverRetainedCreations();
+  for (let turn = 0; turn < 4; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(resumes, [creationId(host)], 'RESTART_USED_AN_ID_OTHER_THAN_RETAINED_CREATION');
+});
+test('independent U1 control: a RETIRED startup plan enters one bound stop', async (t) => {
+  const e = await publishedGroup(t);
+  const old = e.hosts[1];
+  crashOnce(e.metadata.primary, 'closeInstanceResource');
+  await removeAndSettle(e, old, 'independent-control-retire', OUTCOME.RUNTIME_SERVICE_REMOVE_HELD);
+  const host = await e.restartHost(old, {inventory: false});
+  let stops = 0;
+  const stop = host.manager.stopReplica.bind(host.manager);
+  host.manager.stopReplica = (...args) => {
+    stops += 1; return stop(...args);
+  };
+  host.inventory = await host.handler.recoverRetainedCreations();
+  assert.equal(host.inventory[0].local, 'RETIRED');
+  for (let turn = 0; turn < 4; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(stops, 1, 'RETIRED_PLAN_NEVER_ENTERED_CANONICAL_STOP');
+});
+test('independent U1 control: a corrupt local record yields REMOVE_FAILED after the actual stop settles', async (t) => {
+  const e = await publishedGroup(t);
+  const host = await e.restartHost(e.hosts[1], {beforeCompose: (old) => {
+    const db = new Database(dbPathOf(old), {fileMustExist: true});
+    try {
+      db.prepare('UPDATE _wasm_creation_local SET record = ? WHERE id = 1').run('{"corrupt":true}');
+    } finally {
+      db.close();
+    }
+  }});
+  await e.settle();
+  assert.equal(lastOutcome(host).errorCode, 'CORRUPT_STATE');
+  await e.dispatch(host, TYPE.REMOVE_REPLICA, 'independent-control-corrupt-remove');
+  await e.settle();
+  assert.deepEqual([lastOutcome(host).outcomeType, lastOutcome(host).errorCode],
+    [OUTCOME.RUNTIME_SERVICE_REMOVE_FAILED, 'CORRUPT_STATE'], 'CORRUPT_LOCAL_RECORD_WAS_LEFT_REDRIVABLE');
+});
+
+
+// V3 exact-plan and lifetime witnesses. Reuse the real C6 owners and their
+// labelled pause seams; no test chooses physical authority by scan order.
+const INVENTORY_TURNS = 4;
+async function inventoryTurns() {
+  for (let turn = 0; turn < INVENTORY_TURNS; turn += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+}
+
+for (const memoStatus of [ReplicaStatus.HELD, ReplicaStatus.ACTIVE]) {
+  test(`U1 v3 D1: original future CREATE retries itself while ${memoStatus} belongs to J`,
+    async (t) => {
+      const e = memoStatus === ReplicaStatus.ACTIVE ? await publishedGroup(t) : await heldGroup(t);
+      const original = e.hosts[1];
+      const currentId = creationId(original);
+      const futureId = 'future-retained-operation';
+      const request = e.metadata.request(1, 97, original.intent.consensusBinding.incarnation);
+      const revision = await e.metadata.primary.catalogOwner.getCreationRevision(
+        request.revisionId, request.tenantId);
+      const {selectInstanceState} = await import(
+        '../../src/control-plane/owners/service-instance-state.js');
+      const predicted = selectInstanceState(e.metadata.state(), request, revision).result.binding;
+      const futureIntent = e.intentFor(original.slot, predicted, futureId);
+      assert.equal((await original.manager.prepareConsensusCreation(futureIntent)).outcome,
+        'STALE_BINDING', 'the original immutable future request is not selected yet');
+      const futureRow = () => e.metadata.db.prepare(
+        'SELECT * FROM wasm_operations WHERE operation_id = ?').get(futureId);
+      const originalIntentJson = futureRow().intent_json;
+      assert.equal(futureRow().state, 'pending');
+      const host = await e.restartHost(original, {inventory: false});
+      // Reorder actual owner rows so the inherited implementation at least
+      // reaches J; its retry will still incorrectly dispatch J for F.
+      const recover = host.manager.recoverPendingOperations.bind(host.manager);
+      host.manager.recoverPendingOperations = async (...args) => {
+        const rows = await recover(...args);
+        return [...rows.filter((entry) => entry.operationId === futureId),
+          ...rows.filter((entry) => entry.operationId !== futureId)];
+      };
+      host.inventory = await host.handler.recoverRetainedCreations();
+      await e.settle();
+      if (memoStatus === ReplicaStatus.ACTIVE) {
+        await e.form();
+        await e.settle(() => memoOf(host)?.status === ReplicaStatus.ACTIVE, 'J active');
+      }
+      assert.equal(memoOf(host)?.operationId, currentId, 'J owns the live memo');
+      assert.equal(memoOf(host)?.status, memoStatus);
+      const exactObject = e.replicaOf(host);
+      const resumes = trackResumes(host);
+      const reply = await e.dispatch(host, TYPE.CREATE_REPLICA, futureId);
+      await e.settle();
+      assert.equal(reply.status, REPLY.IN_PROGRESS);
+      assert.deepEqual(resumes, [futureId], 'KNOWN_RETAINED_F_REDIRECTED_TO_CURRENT_J');
+      assert.equal(futureRow().state, 'pending');
+      assert.equal(futureRow().intent_json, originalIntentJson);
+      assert.equal(memoOf(host)?.operationId, currentId);
+      assert.strictEqual(e.replicaOf(host), exactObject);
+      const selected = await e.metadata.primary.selectConsensusInstance(request);
+      assert.equal(selected.outcome, 'SELECTED');
+      assert.deepEqual(selected.binding, predicted, 'real future selection matches the request');
+      resumes.length = 0;
+      await e.dispatch(host, TYPE.CREATE_REPLICA, futureId);
+      await e.settle();
+      assert.deepEqual(resumes, [futureId], 'LATER_EXACT_F_TRIGGER_WAS_UNREACHABLE');
+      assert.equal(futureRow().state, 'in_progress', 'original admission is durably retained');
+      assert.equal(futureRow().intent_json, originalIntentJson);
+      assert.equal(JSON.parse(futureRow().admission_json).operationId, futureId);
+      assert.strictEqual(e.replicaOf(host), exactObject, 'F cannot replace physical live J');
+      assert.equal(memoOf(host)?.operationId, currentId, 'F refusal cannot replace J memo');
+    });
+}
+
+test('U1 v3: a local inspection suspended past shutdown has no late handler effect', async (t) => {
+  const e = await hostsOf(t);
+  const original = e.hosts[1];
+  await e.retain(original);
+  const host = await e.restartHost(original, {inventory: false});
+  const entered = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  const inspect = host.manager.inspectRetainedCreation.bind(host.manager);
+  host.manager.inspectRetainedCreation = async (...args) => {
+    const result = await inspect(...args);
+    entered.resolve();
+    await release.promise;
+    return result;
+  };
+  const resumes = trackResumes(host);
+  let readyOpened = false;
+  host.handler.ready.then(() => {
+    readyOpened = true;
+  });
+  const inventory = host.handler.recoverRetainedCreations();
+  await entered.promise;
+  await e.stopHost(host);
+  const successor = await e.composeHost(host.slot, {inventory: false});
+  e.hosts[e.hosts.indexOf(host)] = successor;
+  release.resolve();
+  await inventory;
+  await inventoryTurns();
+  assert.deepEqual(resumes, [], 'STOPPED_LOCAL_INSPECTION_ADMITTED_A_CREATION');
+  assert.equal(host.handler.localReplicas.size, 0, 'STOPPED_LOCAL_INSPECTION_WROTE_MEMOS');
+  assert.equal(host.handler.inProgressOperations.size, 0);
+  assert.equal(readyOpened, false, 'STOPPED_LOCAL_INSPECTION_REOPENED_READY');
+  assert.deepEqual(host.outcomes, [], 'STOPPED_LOCAL_INSPECTION_EMITTED_AN_OUTCOME');
+});
+
+test('U1 v3: RETIRED physical closure keeps startup debt until original journal confirms',
+  async (t) => {
+    const e = await publishedGroup(t);
+    const original = e.hosts[1];
+    crashOnce(e.metadata.primary, 'closeInstanceResource');
+    await removeAndSettle(e, original, 'v3-prepare-retired', OUTCOME.RUNTIME_SERVICE_REMOVE_HELD);
+    const host = await e.restartHost(original, {inventory: false});
+    e.metadata.setJournalFault('before-admission');
+    host.inventory = await host.handler.recoverRetainedCreations();
+    await e.settle();
+    assert.equal(slotPhase(e, host), 'CLOSED', 'physical closure is complete');
+    assert.equal(localRecord(host).phase, 'RETIRED');
+    assert.equal(rowOf(e, host).state, 'in_progress', 'completion is still owed');
+    assert.equal(memoOf(host)?.status, ReplicaStatus.REMOVING,
+      'PHYSICAL_CLOSED_DISCHARGED_UNCONFIRMED_ORIGINAL_JOURNAL');
+    assert.deepEqual(host.outcomes, [], 'startup housekeeping emits no workflow outcome');
+    e.metadata.setJournalFault(null);
+    await removeAndSettle(e, host, 'v3-completion-retry', OUTCOME.RUNTIME_SERVICE_REMOVE_COMPLETED);
+    assertRetiredAndCompleted(e, host);
+    assert.equal(e.rows('wasm_operations').filter((row) => row.operation_id.startsWith('v3-')).length,
+      0, 'retirement retry created a separate STOP journal');
+  });
+
+test('U1 v3: one journal SELECT observes a PENDING-to-IN_PROGRESS transition once', async (t) => {
+  const e = await hostsOf(t);
+  const host = e.hosts[1];
+  const entered = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  const reserve = e.metadata.primary.reserveInstanceResource.bind(e.metadata.primary);
+  e.metadata.primary.reserveInstanceResource = async (...args) => {
+    entered.resolve();
+    await release.promise;
+    return reserve(...args);
+  };
+  const preparing = e.retain(host);
+  await entered.promise;
+  assert.equal(rowOf(e, host).state, 'pending');
+  const queries = [];
+  host.manager.setRecoveryReader(async (sql, params) => {
+    queries.push({sql, params});
+    if (params.length === 1 && params[0] === 'in_progress') {
+      await preparing;
+      return e.metadata.reader(sql, params);
+    }
+    const rows = await e.metadata.reader(sql, params);
+    release.resolve();
+    await preparing;
+    return rows;
+  });
+  const result = await host.manager.recoverPendingOperations({resolveServiceContext: () => null});
+  assert.equal(rowOf(e, host).state, 'in_progress', 'real journal transition occurred');
+  assert.equal(queries.length, 1, 'RECOVERY_TORE_ONE_JOURNAL_SNAPSHOT_INTO_TWO_READS');
+  assert.deepEqual(queries[0].params, ['pending', 'in_progress']);
+  assert.deepEqual(result.map((entry) => entry.operationId), [creationId(host)],
+    'PENDING_TO_IN_PROGRESS_RETURNED_ONE_ORIGINAL_OBLIGATION_TWICE');
+});
+
+for (const conflict of [false, true]) {
+  test(`U1 v3: duplicate journal observation is ${conflict ? 'refused' : 'folded'} by identity`,
+    async (t) => {
+      const e = await hostsOf(t);
+      const original = e.hosts[1];
+      await e.retain(original);
+      const host = await e.restartHost(original, {inventory: false});
+      host.manager.setRecoveryReader(async (sql, params) => {
+        const rows = await e.metadata.reader(sql, params);
+        if (!rows.length) return rows;
+        const duplicate = structuredClone(rows[0]);
+        if (conflict) duplicate.intent_json = '{}';
+        return [...rows, duplicate];
+      });
+      const resumes = trackResumes(host);
+      let readyOpened = false;
+      host.handler.ready.then(() => {
+        readyOpened = true;
+      });
+      if (conflict) {
+        await assert.rejects(host.handler.recoverRetainedCreations(),
+          {code: 'CORRUPT_STATE'}, 'CONFLICTING_OBSERVATIONS_WERE_ORDERED_INTO_A_WINNER');
+        await inventoryTurns();
+        assert.equal(readyOpened, false);
+        assert.equal(host.handler.localReplicas.size, 0);
+        assert.deepEqual(resumes, []);
+      } else {
+        host.inventory = await host.handler.recoverRetainedCreations();
+        await e.settle();
+        assert.equal(host.inventory.length, 1, 'SAME_OBLIGATION_WAS_RETAINED_TWICE');
+        assert.deepEqual(resumes, [creationId(host)]);
+      }
+    });
+}

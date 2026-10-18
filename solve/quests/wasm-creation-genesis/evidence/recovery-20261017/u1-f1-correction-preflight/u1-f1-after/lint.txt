@@ -1,0 +1,6 @@
+
+/workspace/scratch/08c30b6ce00d/u1-finality/src/control-plane/owners/service-instance-state.js
+  226:1  error  This line has a length of 102. Maximum allowed is 100  max-len
+
+✖ 1 problem (1 error, 0 warnings)
+

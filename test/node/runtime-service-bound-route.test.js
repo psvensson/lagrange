@@ -1120,3 +1120,160 @@ for (const condition of ['TARGET_ALREADY_OWNED', 'INVALID_EXPECTED_STATE', 'STAL
         admitted.token)).phase, 'CLOSED', 'AN_ADMITTED_RESOURCE_WAS_ABANDONED');
     });
 }
+
+
+// U1 v3 hydration addendum: these are journal/handler component witnesses.
+// The scripted runtime is an explicit physical-owner stand-in; native custody
+// and the actual process-directory join are witnessed in the restart embedding.
+const HYDRATION_TURNS = 6;
+async function hydrationTurns() {
+  for (let index = 0; index < HYDRATION_TURNS; index += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+}
+
+describe('U1 v3 deferred immutable-origin hydration', () => {
+  test('first ACK is nonblocking; pre-hydration wakes are absent, actual first-start wakes match',
+    async (t) => {
+      const w = await world(t);
+      const retained = await w.metadata.prepare();
+      const wake = {reason: 'creation_resource_closed', binding: retained.intent.consensusBinding,
+        token: retained.token};
+      const answers = [];
+      const start = w.runtime.start;
+      w.runtime.start = async (handle) => {
+        answers.push(w.handler.onCreationWake(w.metadata.serviceId, wake).outcome);
+        return start(handle);
+      };
+      const reply = await w.handler.handleCreateReplica(createRequest(w.metadata.serviceId,
+        w.replicaId, w.operationId));
+      assert.equal(reply.status, ReplicaOperationResponseStatus.INITIATED);
+      assert.equal(w.handler.onCreationWake(w.metadata.serviceId, wake).outcome,
+        RUNTIME_SERVICE_CREATION_WAKE_OUTCOME.NO_LOCAL_OPERATION,
+        'an operation ID alone is not a locally captured immutable origin');
+      assert.equal(w.handler.inProgressOperations.get(w.operationId).wakePending, false);
+      await drain(w.handler);
+      assert.deepEqual(answers, [RUNTIME_SERVICE_CREATION_WAKE_OUTCOME.RECORDED]);
+      assert.equal(w.runtime.calls.filter((call) => call.kind === 'start').length, 1);
+    });
+
+  for (const fence of ['shutdown', 'replacement']) {
+    test(`a hydration read settling after ${fence} cannot admit work or settle another entry`,
+      async (t) => {
+        const w = await world(t);
+        await w.metadata.prepare();
+        const released = Promise.withResolvers();
+        t.after(() => released.resolve());
+        const read = w.manager.readRetainedCreation.bind(w.manager);
+        let entered = false;
+        w.manager.readRetainedCreation = async (...args) => {
+          const answer = await read(...args);
+          entered = true;
+          await released.promise;
+          return answer;
+        };
+        let resumes = 0;
+        const resume = w.manager.resumeConsensusCreation.bind(w.manager);
+        w.manager.resumeConsensusCreation = (...args) => { resumes += 1; return resume(...args); };
+        await w.handler.handleCreateReplica(createRequest(w.metadata.serviceId, w.replicaId,
+          w.operationId));
+        await hydrationTurns();
+        assert.equal(entered, true, 'unknown first CREATE never hydrated its exact journal origin');
+        const replacement = {operationId: w.operationId, replicaId: w.replicaId,
+          entityId: w.metadata.serviceId, type: ReplicaOperationMessageType.REMOVE_REPLICA};
+        if (fence === 'shutdown') w.handler.shutdown();
+        else w.handler.inProgressOperations.set(w.operationId, replacement);
+        const memo = w.handler.getLocalReplica(w.replicaId);
+        released.resolve();
+        await hydrationTurns();
+        assert.equal(resumes, 0);
+        assert.deepEqual(w.runtime.calls, []);
+        assert.deepEqual(w.outcomes, []);
+        assert.strictEqual(w.handler.getLocalReplica(w.replicaId), memo);
+        if (fence === 'replacement') {
+          assert.strictEqual(w.handler.inProgressOperations.get(w.operationId), replacement);
+        }
+      });
+  }
+
+  test('failed bound hydration retains the original row; explicit retry resumes after owner returns',
+    async (t) => {
+      const w = await world(t);
+      const retained = await w.metadata.prepare();
+      const before = w.metadata.db.prepare('SELECT * FROM wasm_operations WHERE operation_id = ?')
+        .get(w.operationId);
+      const reader = w.manager._idempotencyReader;
+      w.manager._idempotencyReader = async () => { throw new Error('HYDRATION_READER_UNAVAILABLE'); };
+      let resumes = 0;
+      const resume = w.manager.resumeConsensusCreation.bind(w.manager);
+      w.manager.resumeConsensusCreation = (...args) => { resumes += 1; return resume(...args); };
+      await create(w);
+      assert.equal(resumes, 0, 'failed hydration was followed by a blind bound resume');
+      assert.deepEqual(w.runtime.calls, []);
+      assert.equal(lastOutcome(w).deferRetry, true);
+      assert.deepEqual(w.metadata.db.prepare('SELECT * FROM wasm_operations WHERE operation_id = ?')
+        .get(w.operationId), before);
+      w.manager._idempotencyReader = reader;
+      await create(w);
+      assert.equal(resumes, 1);
+      assert.equal(w.handler.getLocalReplica(w.replicaId).status, ReplicaStatus.HELD);
+      assert.deepEqual((await w.manager.readRetainedCreation(w.operationId)).token, retained.token);
+    });
+
+  test('hydrated immutable envelope mismatch refuses before resume or physical preparation', async (t) => {
+    const w = await world(t);
+    const retained = await w.metadata.prepare();
+    const request = {...createRequest(w.metadata.serviceId, w.replicaId, w.operationId),
+      consensusBinding: {...retained.intent.consensusBinding, version: 999}};
+    let resumes = 0;
+    const resume = w.manager.resumeConsensusCreation.bind(w.manager);
+    w.manager.resumeConsensusCreation = (...args) => { resumes += 1; return resume(...args); };
+    await w.handler.handleCreateReplica(request);
+    await drain(w.handler);
+    assert.equal(resumes, 0);
+    assert.deepEqual(w.runtime.calls, []);
+    assert.equal(lastOutcome(w).errorCode, 'CONTENT_CONFLICT');
+  });
+});
+
+
+test('U1 v3 hydration: a PENDING wake is only an immutable-request hint, never token adoption',
+  async (t) => {
+    const w = await world(t);
+    w.metadata.setJournalFault('before-admission');
+    await w.metadata.prepare();
+    assert.equal(w.metadata.row().state, 'pending');
+    const intent = w.metadata.intent;
+    const admitted = await w.metadata.primary.reserveInstanceResource(intent.consensusBinding,
+      intent.consensusSlotRequest);
+    assert.equal(admitted.outcome, 'ADMITTED');
+    const release = Promise.withResolvers();
+    t.after(() => release.resolve());
+    let entered = false;
+    const resume = w.manager.resumeConsensusCreation.bind(w.manager);
+    w.manager.resumeConsensusCreation = async (...args) => {
+      entered = true;
+      await release.promise;
+      return resume(...args);
+    };
+    await w.handler.handleCreateReplica(createRequest(w.metadata.serviceId, w.replicaId,
+      w.operationId));
+    await hydrationTurns();
+    assert.equal(entered, true);
+    const execution = w.handler.inProgressOperations.get(w.operationId);
+    assert.equal(execution.origin?.token, null, 'PENDING original was not hydrated before resume');
+    const wake = {reason: 'creation_genesis_observed', binding: intent.consensusBinding,
+      token: admitted.token};
+    assert.equal(w.handler.onCreationWake(w.metadata.serviceId,
+      {...wake, binding: {...wake.binding, version: 999}}).outcome,
+    RUNTIME_SERVICE_CREATION_WAKE_OUTCOME.NO_LOCAL_OPERATION);
+    assert.equal(execution.wakePending, false);
+    assert.equal(w.handler.onCreationWake(w.metadata.serviceId, wake).outcome,
+      RUNTIME_SERVICE_CREATION_WAKE_OUTCOME.RECORDED);
+    assert.equal(execution.origin.token, null);
+    assert.equal(w.metadata.row().admission_json, null);
+    w.metadata.setJournalFault(null);
+    release.resolve();
+    await drain(w.handler);
+    assert.deepEqual((await w.manager.readRetainedCreation(w.operationId)).token, admitted.token);
+  });

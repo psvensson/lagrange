@@ -1,0 +1,7 @@
+
+/workspace/scratch/08c30b6ce00d/u1-finality/test/service/service-consensus-creation-intent.test.js
+  410:1  error  This line has a length of 125. Maximum allowed is 100  max-len
+  423:1  error  This line has a length of 114. Maximum allowed is 100  max-len
+
+✖ 2 problems (2 errors, 0 warnings)
+
