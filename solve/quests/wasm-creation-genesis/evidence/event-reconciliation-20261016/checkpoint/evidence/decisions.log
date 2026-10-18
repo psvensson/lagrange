@@ -1,0 +1,6 @@
+Scanned 5 JavaScript files
+Found 6 decision-boundary guideline violations
+Top files:
+- src/wasm-service/wasm-service-replica-lifecycle.js: 4
+- src/wasm-service/wasm-creation-reconciliation.js: 2
+Matched 4 inherited decision-boundary baseline violations

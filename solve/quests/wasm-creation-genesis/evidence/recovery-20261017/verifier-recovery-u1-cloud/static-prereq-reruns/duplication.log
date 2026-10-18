@@ -1,0 +1,20 @@
+
+> lagrange-server@0.2.6 test:duplication
+> node scripts/check-duplication.js
+
+[32mJSON report saved to test-output/analysis/jscpd-src-scripts/jscpd-report.json[39m
+[src+scripts] Duplication ratchet OK: 47/47 clone group(s), 1462/1462 duplicated line(s).
+Saved duplication report to test-output/analysis/jscpd-src-scripts/jscpd-report.json.
+[32mJSON report saved to test-output/analysis/jscpd-test/jscpd-report.json[39m
+[test] Duplication ratchet FAILED: 698 clone group(s) and 26458 duplicated line(s) exceed the current baseline of 697 clone group(s) and 26369 duplicated line(s).
+
+test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics-tail-test-cases.js: 25 clone group(s), 916 duplicated line(s)
+test/distributed/harness/__tests__/postgres-baseline-comparison-degraded-fallback-load-admission.test.js: 24 clone group(s), 911 duplicated line(s)
+test/distributed/harness/failure-bundle-scenario-assembly.js: 7 clone group(s), 821 duplicated line(s)
+test/distributed/harness/__tests__/seven-node-read-write-load-transaction-recovery-tail-test-cases.js: 18 clone group(s), 818 duplicated line(s)
+test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js: 8 clone group(s), 754 duplicated line(s)
+test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics-tail-more-test-cases.js: 15 clone group(s), 750 duplicated line(s)
+test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-retry-and-recovery.test.js: 20 clone group(s), 712 duplicated line(s)
+test/rebalancer/rebalance-coordinator-operation-ownership-priority-admission-test-cases.js: 21 clone group(s), 675 duplicated line(s)
+test/rebalancer/unified-rebalancer-surrogate-followup-synthesis-test-cases.js: 13 clone group(s), 615 duplicated line(s)
+test/distributed/harness/__tests__/postgres-baseline-comparison-test-helpers.js: 14 clone group(s), 564 duplicated line(s)

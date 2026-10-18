@@ -1,0 +1,101 @@
+FAIL: P1 native events publish every founder: durable grant, one wake, served write, quiet adapter
+    failureType: 'testCodeFailure'
+    error: |-
+    host-3 did not publish
+    
+    expected: 'SERVING'
+    actual: 'HELD'
+FAIL: P4 retirement fences user work at call, RELEASING precedes RETIRED, RETIRED precedes CLOSED
+    failureType: 'testCodeFailure'
+    error: |-
+    host-3 did not publish
+    
+    expected: 'SERVING'
+    actual: 'HELD'
+FAIL: P5a a lost CLOSED reply is resolved by the metadata owner itself
+    failureType: 'testCodeFailure'
+    error: |-
+    host-3 did not publish
+    
+    expected: 'SERVING'
+    actual: 'HELD'
+FAIL: P5b an unresolved CLOSED keeps custody; a re-stop by creation resolves with no new mutation
+    failureType: 'testCodeFailure'
+    error: |-
+    host-3 did not publish
+    
+    expected: 'SERVING'
+    actual: 'HELD'
+FAIL: P5c a re-stop of the predecessor retires its file by creation and never touches a successor
+    failureType: 'testCodeFailure'
+    error: |-
+    host-3 did not publish
+    
+    expected: 'SERVING'
+    actual: 'HELD'
+FAIL: P6a orderly shutdown keeps the grant; a reopen serves after the open-time metadata check
+    failureType: 'testCodeFailure'
+    error: |-
+    host-3 did not publish
+    
+    expected: 'SERVING'
+    actual: 'HELD'
+FAIL: P6b a reopen after the slot was CLOSED is refused and the next retire tombstones the file
+    failureType: 'testCodeFailure'
+    error: |-
+    host-3 did not publish
+    
+    expected: 'SERVING'
+    actual: 'HELD'
+FAIL: P10 a START re-entry while the retirement is in flight is refused typed
+    failureType: 'testCodeFailure'
+    error: |-
+    host-3 did not publish
+    
+    expected: 'SERVING'
+    actual: 'HELD'
+FAIL: 6prime: publication owned by the keyed continuation, retirement before CLOSED
+    failureType: 'subtestsFailed'
+    error: '8 subtests failed'
+    code: 'ERR_TEST_FAILURE'
+    ...
+FAIL: P15 a lost grant reply resolves to PUBLISHED inside the owner: one write, one wake
+    failureType: 'testCodeFailure'
+    error: |-
+    A_LOST_GRANT_WAS_MUTATED_TWICE
+    
+    expected: 3
+    actual: 2
+FAIL: P16 a failed local RETIRED write blocks CLOSED while the handles stay open
+    failureType: 'testCodeFailure'
+    error: |-
+    host-3 did not publish
+    
+    expected: 'SERVING'
+    actual: 'HELD'
+FAIL: P18 an absent wake consumer is a typed CONSUMER_ABSENT outcome, never silence
+    failureType: 'testCodeFailure'
+    error: |-
+    host-3 was held by a sibling
+    
+    expected: 'SERVING'
+    actual: 'HELD'
+FAIL: P19 a concurrent retirement of every founder closes each slot in one pass
+    failureType: 'testCodeFailure'
+    error: |-
+    host-3 did not publish
+    
+    expected: 'SERVING'
+    actual: 'HELD'
+FAIL: P20 a bound-exhausted grant holds typed STATE_CHANGED and an explicit START publishes
+    failureType: 'testCodeFailure'
+    error: |-
+    NOT_THE_DECLARED_SUBMISSION_BOUND_PER_GRANT
+    
+    expected: 27
+    actual: 3
+FAIL: 6double-prime: held grants, election changes, lost answers and absent consumers
+    failureType: 'subtestsFailed'
+    error: '5 subtests failed'
+    code: 'ERR_TEST_FAILURE'
+    ...

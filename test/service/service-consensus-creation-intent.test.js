@@ -121,8 +121,42 @@ test('ServiceLifecycleManager recovery does not replace original intent with cur
   }});
   assert.equal(resolverCalls, 0);
   assert.equal(result.length, 1);
-  assert.equal(result[0].status, 'held');
-  assert.equal(result[0].outcome, 'ADMISSION_RETAINED');
+  // SUPERSEDED (design RECOVERY-DESIGN-20261017 Revision 5 R5-A; successor
+  // appended below): the scan no longer resolves the reservation (F3).
+  // assert.equal(result[0].status, 'held');
+  // assert.equal(result[0].outcome, 'ADMISSION_RETAINED');
+  // assert.equal(f.row().state, 'in_progress');
+});
+
+// Successor of the witness above (design RECOVERY-DESIGN-20261017 Revision 5
+// R5-A, R1-A): the restart scan answers the journal half only - an INVENTORIED
+// PENDING entry, nothing reserved, the row left PENDING; the RE-ENTRY resolves
+// the same request (P-R12 is the successor of the F3 claim).
+test('R5-A successor (:113-126): the scan inventories a PENDING row and reserves nothing; ' +
+  'the re-entry resolves the same request', async (t) => {
+  const f = await createOriginFixture(t);
+  f.loseReservation();
+  await f.prepare();
+  const reserves = () => f.events.filter((event) => event.kind === 'reserve');
+  const before = reserves().length;
+  let resolverCalls = 0;
+  const result = await f.manager().recoverPendingOperations({resolveServiceContext: async () => {
+    resolverCalls += 1;
+    throw new Error('current definition is not original creation intent');
+  }});
+  assert.equal(resolverCalls, 0);
+  assert.equal(result.length, 1);
+  const {intent, ...entry} = result[0];
+  assert.deepEqual(entry, {status: 'INVENTORIED', operationId: f.intent.consensusSlotRequest.operationId,
+    token: null, rowState: 'pending', opening: null, nodeId: f.intent.consensusSlotRequest.nodeId});
+  assert.deepEqual(intent, f.intent, 'the journaled intent, never the resolver');
+  assert.equal(reserves().length, before, 'THE_SCAN_RESERVED');
+  assert.equal(f.row().state, 'pending');
+  const resumed = await f.manager().recoverConsensusCreation(entry.operationId);
+  assert.equal(resumed.outcome, 'ADMISSION_RETAINED');
+  assert.equal(reserves().length, before + 1);
+  assert.deepEqual(reserves().at(-1).request, f.intent.consensusSlotRequest, 'the same request');
+  assert.equal(f.state().selected.resources[0].ordinal, 1, 'no second allocation');
   assert.equal(f.row().state, 'in_progress');
 });
 
@@ -225,7 +259,24 @@ test('ServiceLifecycleManager damaged bound journal cannot fall through to old u
   }});
   assert.equal(resolverCalls, 0);
   assert.equal(results[0].outcome, 'CORRUPT_STATE');
-  assert.equal(results[0].status, 'held');
+  // SUPERSEDED (design RECOVERY-DESIGN-20261017 Revision 5 R5-A; successor
+  // appended below): the scan no longer re-enters a corrupt row.
+  // assert.equal(results[0].status, 'held');
+  assert.equal(f.row().state, 'in_progress');
+});
+
+// Successor (design RECOVERY-DESIGN-20261017 Revision 5 R5-A, R3-F): an
+// undecodable intent names no replica: a typed entry never re-entered.
+test('R5-A successor (:222-230): a corrupt journal row is an INVENTORIED CORRUPT_STATE entry ' +
+  'with reentry false', async (t) => {
+  const f = await createOriginFixture(t);
+  await f.prepare();
+  f.db.prepare('UPDATE wasm_operations SET intent_json = NULL, admission_json = NULL').run();
+  const results = await f.manager().recoverPendingOperations({
+    resolveServiceContext: async () => null});
+  assert.deepEqual(results, [{status: 'INVENTORIED',
+    operationId: f.intent.consensusSlotRequest.operationId, outcome: 'CORRUPT_STATE',
+    reentry: false}]);
   assert.equal(f.row().state, 'in_progress');
 });
 
@@ -234,8 +285,31 @@ test('ServiceLifecycleManager unavailable resource resolution after retention st
   const prepared = await f.prepare();
   f.primary.resolveInstanceResource = async () => ({outcome: 'UNAVAILABLE'});
   const result = await f.manager().recoverConsensusCreation(prepared.operationId);
-  assert.deepEqual(result, {outcome: 'UNKNOWN', reason: 'UNAVAILABLE'});
+  // SUPERSEDED (design RECOVERY-DESIGN-20261017 Revision 5 R5-A; successor
+  // appended below): the manager no longer refuses on an unreachable owner.
+  // assert.deepEqual(result, {outcome: 'UNKNOWN', reason: 'UNAVAILABLE'});
+  assert.equal(result.phase, 'UNAVAILABLE', 'R5-A: the successor below pins the full answer');
   assert.equal(f.row().state, 'in_progress');
+});
+
+// Successor (design RECOVERY-DESIGN-20261017 Revision 5 R5-A, R2-B): the
+// UNAVAILABLE class passes through as ADMISSION_RETAINED with phase
+// UNAVAILABLE; no new outcome value; the opening module decides on its own
+// owner read (witnessed in test/wasm-service/bound-creation-restart.integration.test.js,
+// the named open-time deferral of R3-B).
+test('R5-A successor (:232-239): an unreachable owner after retention is ADMISSION_RETAINED ' +
+  'with phase UNAVAILABLE (answered or thrown)', async (t) => {
+  const f = await createOriginFixture(t);
+  const prepared = await f.prepare();
+  for (const owner of [async () => ({outcome: 'UNAVAILABLE'}), async () => {
+    throw new Error('OWNER_READ_THREW');
+  }]) {
+    f.primary.resolveInstanceResource = owner;
+    const result = await f.manager().recoverConsensusCreation(prepared.operationId);
+    assert.deepEqual(result, {outcome: 'ADMISSION_RETAINED', operationId: prepared.operationId,
+      intent: prepared.intent, token: prepared.token, phase: 'UNAVAILABLE'});
+    assert.equal(f.row().state, 'in_progress');
+  }
 });
 
 
@@ -260,4 +334,34 @@ test('ServiceLifecycleManager does not erase bound descriptor fields into legacy
     /bound consensus physical creation is not yet composed/u);
   assert.equal(effects, 0);
   assert.equal(f.row(), null);
+});
+
+// Design RECOVERY-DESIGN-20261017 R2-E: the restart scan is total; one
+// unreadable row is that row's typed result, never the end of the scan.
+test('recovery R2-E the restart scan is total: a malformed row fails alone, the creation ' +
+  'row after it is still inventoried', async (t) => {
+  const f = await createOriginFixture(t);
+  await f.prepare();
+  const manager = f.manager();
+  manager.setRecoveryReader(async (sql, params) => {
+    const rows = await f.reader(sql, params);
+    return params.includes('pending') ? [{command: 'start:svc', state: 'pending', created_at: 0}] :
+      rows;
+  });
+  const results = await manager.recoverPendingOperations({resolveServiceContext: async () => null});
+  assert.deepEqual(results.map((result) => result.status), ['failed', 'INVENTORIED']);
+  assert.equal(results[1].operationId, f.intent.consensusSlotRequest.operationId);
+});
+
+// Design RECOVERY-DESIGN-20261017 R1-D, R3-D: a terminal row's answer
+// carries its state (the REMOVE decides COMPLETED/CANCELLED vs FAILED by it).
+test('recovery R1-D/R3-D the TERMINAL answer carries the row state', async (t) => {
+  for (const state of ['completed', 'cancelled', 'failed']) {
+    const f = await createOriginFixture(t);
+    const prepared = await f.prepare();
+    f.db.prepare('UPDATE wasm_operations SET state = ? WHERE operation_id = ?')
+      .run(state, prepared.operationId);
+    assert.deepEqual(await f.manager().readRetainedCreation(prepared.operationId),
+      {outcome: 'TERMINAL_OPERATION', rowState: state});
+  }
 });

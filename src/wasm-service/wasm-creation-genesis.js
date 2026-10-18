@@ -1,6 +1,7 @@
 // The held lifecycle's INIT continuation. WriterCompletion owns pending interest;
 // WriterState owns applied results; the native port owns committed membership.
-// Nothing in this module grants local serving or publishes lifecycle completion.
+// Nothing in this module grants local serving or publishes lifecycle completion;
+// the same keyed continuation grants afterwards (wasm-creation-publication.js).
 import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
 import {COMMITTED_MEMBERSHIP_READ_PURPOSE as PURPOSE,
   COMMITTED_MEMBERSHIP_REFUSAL as MEMBERSHIP_REFUSAL} from
@@ -14,6 +15,9 @@ import {WRITER_STATUS, WRITER_REASON} from './wasm-writer-profile.js';
 
 const WASM_CREATION_GENESIS = Object.freeze({
   OBSERVED: 'GENESIS_OBSERVED', HELD: 'GENESIS_HELD',
+  // The continuation granted after observed genesis and the replica serves
+  // (design SERVING-PUBLICATION-RETIREMENT-DESIGN-20261017 D1').
+  PUBLISHED: 'GENESIS_PUBLISHED',
   MEMBERSHIP_MISMATCH: 'GENESIS_MEMBERSHIP_MISMATCH',
   APPLICATION_NOT_COVERED: 'GENESIS_APPLICATION_NOT_COVERED',
 });
@@ -85,4 +89,4 @@ async function progressWasmCreationGenesis(replica) {
       reason: error.code ?? SERVICE_INSTANCE_OUTCOME.UNAVAILABLE};
   }
 }
-export {progressWasmCreationGenesis};
+export {progressWasmCreationGenesis, WASM_CREATION_GENESIS};

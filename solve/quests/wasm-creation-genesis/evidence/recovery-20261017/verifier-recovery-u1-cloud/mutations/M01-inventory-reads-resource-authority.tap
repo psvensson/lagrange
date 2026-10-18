@@ -1,0 +1,240 @@
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+TAP version 13
+# Subtest: ServiceLifecycleManager persists original intent before reservation and token before return
+ok 1 - ServiceLifecycleManager persists original intent before reservation and token before return
+  ---
+  duration_ms: 89.74561
+  type: 'test'
+  ...
+# {"scope":"component intent-before-reservation","boundaries":[{"kind":"intent","intentRetained":false},{"kind":"reserve","intentRetained":true,"outcome":"ADMITTED","token":{"bindingDigest":"cdcd3a9e121a3177b3b3e618ffb2229683b9ad49bd1303e8acea10c2e8eeb8cf","slot":0,"ordinal":1,"operationId":"operation-0","bodyDigest":"7c4a89464b8684baafbdb0a3fc809484c4050e821c88fd6ec5cf10d00f6c53e5"}},{"kind":"admission","intentRetained":false}],"ordinal":1}
+# Subtest: ServiceLifecycleManager redelivery retains one origin and never reserves another ordinal
+ok 2 - ServiceLifecycleManager redelivery retains one origin and never reserves another ordinal
+  ---
+  duration_ms: 15.959413
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager recovers lost reservation from its original durable request
+ok 3 - ServiceLifecycleManager recovers lost reservation from its original durable request
+  ---
+  duration_ms: 14.646947
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager resolves an applied intent write with lost reply
+ok 4 - ServiceLifecycleManager resolves an applied intent write with lost reply
+  ---
+  duration_ms: 13.001881
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager resolves an applied admission write with lost reply
+ok 5 - ServiceLifecycleManager resolves an applied admission write with lost reply
+  ---
+  duration_ms: 11.648479
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager refuses reservation when intent write did not persist
+ok 6 - ServiceLifecycleManager refuses reservation when intent write did not persist
+  ---
+  duration_ms: 9.318438
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager retains the original request when admission persistence fails
+ok 7 - ServiceLifecycleManager retains the original request when admission persistence fails
+  ---
+  duration_ms: 14.979238
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager captures original intent before its first awaited read
+ok 8 - ServiceLifecycleManager captures original intent before its first awaited read
+  ---
+  duration_ms: 16.853349
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager rejects changed descriptor under a retained operation ID
+ok 9 - ServiceLifecycleManager rejects changed descriptor under a retained operation ID
+  ---
+  duration_ms: 12.835784
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager recovery does not replace original intent with current resolver data
+ok 10 - ServiceLifecycleManager recovery does not replace original intent with current resolver data
+  ---
+  duration_ms: 8.550157
+  type: 'test'
+  ...
+# Subtest: R5-A successor (:113-126): the scan inventories a PENDING row and reserves nothing; the re-entry resolves the same request
+ok 11 - R5-A successor (:113-126): the scan inventories a PENDING row and reserves nothing; the re-entry resolves the same request
+  ---
+  duration_ms: 9.066205
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager never revives CLOSED resource from retained admission
+ok 12 - ServiceLifecycleManager never revives CLOSED resource from retained admission
+  ---
+  duration_ms: 12.3047
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager completed journal is history, not a new effect grant
+ok 13 - ServiceLifecycleManager completed journal is history, not a new effect grant
+  ---
+  duration_ms: 6.762254
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager cancelled journal is history, not a new effect grant
+ok 14 - ServiceLifecycleManager cancelled journal is history, not a new effect grant
+  ---
+  duration_ms: 7.185394
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager failed journal is history, not a new effect grant
+ok 15 - ServiceLifecycleManager failed journal is history, not a new effect grant
+  ---
+  duration_ms: 7.002356
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager refuses forged persisted admission rather than borrowing another token
+ok 16 - ServiceLifecycleManager refuses forged persisted admission rather than borrowing another token
+  ---
+  duration_ms: 10.850882
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager absent or unavailable journal cannot invent recovery intent
+ok 17 - ServiceLifecycleManager absent or unavailable journal cannot invent recovery intent
+  ---
+  duration_ms: 4.386542
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager requires durable journal capabilities before resource admission
+ok 18 - ServiceLifecycleManager requires durable journal capabilities before resource admission
+  ---
+  duration_ms: 4.372735
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager malformed or oversized intent allocates no journal or reservation
+ok 19 - ServiceLifecycleManager malformed or oversized intent allocates no journal or reservation
+  ---
+  duration_ms: 4.663805
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager concurrent identical delivery converges on one original operation and token
+ok 20 - ServiceLifecycleManager concurrent identical delivery converges on one original operation and token
+  ---
+  duration_ms: 13.135471
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager validates descriptor lineage before retaining a new request
+ok 21 - ServiceLifecycleManager validates descriptor lineage before retaining a new request
+  ---
+  duration_ms: 5.067949
+  type: 'test'
+  ...
+# Subtest: SystemTableCache projects actual intent/admission columns without granting lifecycle completion
+ok 22 - SystemTableCache projects actual intent/admission columns without granting lifecycle completion
+  ---
+  duration_ms: 8.789731
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager damaged bound journal cannot fall through to old unbound recovery
+ok 23 - ServiceLifecycleManager damaged bound journal cannot fall through to old unbound recovery
+  ---
+  duration_ms: 6.926591
+  type: 'test'
+  ...
+# Subtest: R5-A successor (:222-230): a corrupt journal row is an INVENTORIED CORRUPT_STATE entry with reentry false
+ok 24 - R5-A successor (:222-230): a corrupt journal row is an INVENTORIED CORRUPT_STATE entry with reentry false
+  ---
+  duration_ms: 6.900613
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager unavailable resource resolution after retention stays UNKNOWN
+ok 25 - ServiceLifecycleManager unavailable resource resolution after retention stays UNKNOWN
+  ---
+  duration_ms: 6.679855
+  type: 'test'
+  ...
+# Subtest: R5-A successor (:232-239): an unreachable owner after retention is ADMISSION_RETAINED with phase UNAVAILABLE (answered or thrown)
+ok 26 - R5-A successor (:232-239): an unreachable owner after retention is ADMISSION_RETAINED with phase UNAVAILABLE (answered or thrown)
+  ---
+  duration_ms: 10.78919
+  type: 'test'
+  ...
+# Subtest: ServiceLifecycleManager does not erase bound descriptor fields into legacy physical CREATE
+ok 27 - ServiceLifecycleManager does not erase bound descriptor fields into legacy physical CREATE
+  ---
+  duration_ms: 6.089522
+  type: 'test'
+  ...
+# Subtest: recovery R2-E the restart scan is total: a malformed row fails alone, the creation row after it is still inventoried
+ok 28 - recovery R2-E the restart scan is total: a malformed row fails alone, the creation row after it is still inventoried
+  ---
+  duration_ms: 8.557271
+  type: 'test'
+  ...
+# Subtest: recovery R1-D/R3-D the TERMINAL answer carries the row state
+ok 29 - recovery R1-D/R3-D the TERMINAL answer carries the row state
+  ---
+  duration_ms: 26.46112
+  type: 'test'
+  ...
+# Subtest: independent U1 control: inventory never asks the resource authority to resolve a retained token
+not ok 30 - independent U1 control: inventory never asks the resource authority to resolve a retained token
+  ---
+  duration_ms: 9.912596
+  type: 'test'
+  location: '/workspace/scratch/6d2a7b72384f/verify-recovery-u1/test/service/service-consensus-creation-intent.test.js:370:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    INVENTORY_CROSSED_JOURNAL_ONLY_AUTHORITY_BOUNDARY
+    
+    1 !== 0
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/6d2a7b72384f/verify-recovery-u1/test/service/service-consensus-creation-intent.test.js:381:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..30
+# tests 30
+# suites 0
+# pass 29
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 401.580354
+# time=1140ms

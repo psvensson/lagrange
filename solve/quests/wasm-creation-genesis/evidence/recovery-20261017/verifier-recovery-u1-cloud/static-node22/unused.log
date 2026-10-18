@@ -1,0 +1,18 @@
+
+> lagrange-server@0.2.6 test:unused:ratchet
+> node scripts/check-unused-exports.js
+
+Unused-export ratchet FAILED: 1456 unused export(s) exceed the current baseline of 1416.
+
+test/distributed/harness/failure-bundle-diagnostics-foundation.js: 209 unused export(s)
+src/diagnostics/topology-convergence-normalizers.js: 43 unused export(s)
+src/control-plane/publication-recovery-evidence-normalizers.js: 38 unused export(s)
+src/diagnostics/topology-convergence-constants.js: 35 unused export(s)
+test/control-plane/membership-publication-coordinator-candidate-fixtures.js: 28 unused export(s)
+src/diagnostics/topology-convergence-edge-resolvers.js: 23 unused export(s)
+src/constants/index.js: 20 unused export(s)
+test/distributed/harness/failure-bundle-priority-recovery-classification.js: 19 unused export(s)
+src/control-plane/priority-recovery-snapshot-actuation.js: 19 unused export(s)
+src/diagnostics/topology-convergence-replay.js: 17 unused export(s)
+
+Run `npm run test:unused:exports` for the full list; remove the new unused exports or delete newly-dead code.

@@ -1,0 +1,1 @@
+The full TAP of the CAS red-first run (2.5 MB; the CAS witnesses print their evidence objects) exceeds the 1 MB solve/ rule and was not retained; its failing-assertion summary is the sibling .failures.txt file. Lead, 2026-10-17.

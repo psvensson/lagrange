@@ -491,6 +491,7 @@ class ServiceRuntimeLifecycle extends EventEmitter {
           serviceId, status, nodeId, causeId,
         });
       }
+      return {stateRow, projectionResult};
     } catch (err) {
       this.emit(STATE_PROJECTION_EVENT.STATE_PROJECTION_FAILED, {
         serviceId, status, nodeId, causeId, error: err,
@@ -513,24 +514,27 @@ class ServiceRuntimeLifecycle extends EventEmitter {
    *
    * @param {string} serviceId - Replica service identifier.
    * @param {Object} definition - Service definition or context.
-   * @return {Promise<void>}
+   * @param {Object} [removal] - A bound removal's {consensusBinding}.
+   * @return {Promise<Object|undefined>} The remover's answer, if any.
    * @private
    */
-  async _removeEndpoint(serviceId, definition) {
+  async _removeEndpoint(serviceId, definition, removal) {
     if (!this._endpointRemover) {
       return;
     }
     const nodeId = definition?.nodeId ??
       definition?.node_id ?? null;
     try {
-      await this._endpointRemover(serviceId, nodeId);
+      const removed = await this._endpointRemover(serviceId, nodeId, removal);
       this.emit(LIFECYCLE_EVENT.ENDPOINT_REMOVED, {
         serviceId, nodeId,
       });
+      return removed;
     } catch (err) {
       this.emit(LIFECYCLE_EVENT.ENDPOINT_REMOVAL_FAILED, {
         serviceId, nodeId, error: err,
       });
+      return {success: false, error: err.message};
     }
   }
 

@@ -1,0 +1,304 @@
+{
+ "schema": "lab-results-summary/v1",
+ "stage": "serving-publication-retirement stage 1",
+ "snapshot_sha": "300c360baac383cf016be7929788a8cb47860336",
+ "snapshot_ref": "refs/heads/wip/rs-raft-serving-publication-1",
+ "base_sha": "7696c3d8e9fa5b978bd9a2adac0d157c7693cad6",
+ "base_ref": "refs/heads/work/rs-raft-event-reconciliation-20261016",
+ "jobs": [
+  {
+   "issue": 126,
+   "request_id": "14074bde25014e829313b4071634acb0",
+   "host": "lenovo-laptop",
+   "source_sha": "300c360baac383cf016be7929788a8cb47860336",
+   "source_ref": "refs/heads/wip/rs-raft-serving-publication-1",
+   "request_sha256": "66181b63c7c20219ad5c19cfbb99a880d7e9e468a06cbc62a36a7d602198ed4c",
+   "outcome": "PASS",
+   "exit_code": 0,
+   "finished_at": "2026-10-17T10:11:50Z",
+   "log_sha256": "6607a78dcfe59191fc9e9734f1876416f1c06859956de3ea4a90ea83d712e9ad",
+   "log_bytes": 2523,
+   "placement_heads": [
+    "300c360baac383cf016be7929788a8cb47860336"
+   ],
+   "totals": {
+    "files": 10,
+    "pass": 10,
+    "fail": 0,
+    "assertions": 245
+   },
+   "files": [
+    {
+     "file": "test/wasm-service/wasm-creation-reconciliation.test.js",
+     "status": "ok",
+     "assertions": 8,
+     "ms": 671
+    },
+    {
+     "file": "test/control-plane/service-instance-selection-admission.test.js",
+     "status": "ok",
+     "assertions": 23,
+     "ms": 1248
+    },
+    {
+     "file": "test/control-plane/service-instance-creation-cas.test.js",
+     "status": "ok",
+     "assertions": 10,
+     "ms": 1397
+    },
+    {
+     "file": "test/wasm-service/wasm-writer-state-v1.test.js",
+     "status": "ok",
+     "assertions": 11,
+     "ms": 868
+    },
+    {
+     "file": "test/wasm-service/wasm-creation-local-record.test.js",
+     "status": "ok",
+     "assertions": 9,
+     "ms": 1790
+    },
+    {
+     "file": "test/runtime/node-shutdown-cell-worker-teardown.test.js",
+     "status": "ok",
+     "assertions": 23,
+     "ms": 947
+    },
+    {
+     "file": "test/wasm-service/timer-manager.test.js",
+     "status": "ok",
+     "assertions": 27,
+     "ms": 10356
+    },
+    {
+     "file": "test/bootstrap/wasm-meta-table-schemas.test.js",
+     "status": "ok",
+     "assertions": 95,
+     "ms": 346
+    },
+    {
+     "file": "test/wasm-service/wasm-creation-publication.integration.test.js",
+     "status": "ok",
+     "assertions": 23,
+     "ms": 13352
+    },
+    {
+     "file": "test/wasm-service/wasm-retained-bootstrap.integration.test.js",
+     "status": "ok",
+     "assertions": 16,
+     "ms": 4989
+    }
+   ]
+  },
+  {
+   "issue": 127,
+   "request_id": "4cece57dc6f543318247965f648b4c56",
+   "host": "adam-laptop",
+   "source_sha": "300c360baac383cf016be7929788a8cb47860336",
+   "source_ref": "refs/heads/wip/rs-raft-serving-publication-1",
+   "request_sha256": "8fd4e8fbd47c0bcb342bf8a727c362c4bc04d9a57671a72367e07c1c68ddfe07",
+   "outcome": "FAIL",
+   "exit_code": 1,
+   "finished_at": "2026-10-17T10:13:45Z",
+   "log_sha256": "39428125cbf62e28434e1cb3db9152e066165cc59a8298cb1b01a7f8e6e7f760",
+   "log_bytes": 54016,
+   "placement_heads": [
+    "300c360baac383cf016be7929788a8cb47860336"
+   ],
+   "totals": {
+    "files": 10,
+    "pass": 9,
+    "fail": 1,
+    "assertions": 345
+   },
+   "files": [
+    {
+     "file": "test/service/service-consensus-creation-intent.test.js",
+     "status": "ok",
+     "assertions": 24,
+     "ms": 1379
+    },
+    {
+     "file": "test/wasm-service/wasm-writer-completion-v1.test.js",
+     "status": "ok",
+     "assertions": 7,
+     "ms": 1648
+    },
+    {
+     "file": "test/workflow/owner-key-reconcile-queue-current-work.test.js",
+     "status": "ok",
+     "assertions": 32,
+     "ms": 792
+    },
+    {
+     "file": "test/workflow/owner-key-reconcile-queue.test.js",
+     "status": "ok",
+     "assertions": 179,
+     "ms": 895
+    },
+    {
+     "file": "test/wasm-service/wasm-creation-bound-native.test.js",
+     "status": "ok",
+     "assertions": 3,
+     "ms": 3544
+    },
+    {
+     "file": "test/wasm-service/wasm-service-replica.test.js",
+     "status": "not ok",
+     "assertions": 53,
+     "ms": 21735
+    },
+    {
+     "file": "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+     "status": "ok",
+     "assertions": 27,
+     "ms": 3824
+    },
+    {
+     "file": "test/service/service-consensus-creation-recovery.integration.test.js",
+     "status": "ok",
+     "assertions": 2,
+     "ms": 1743
+    },
+    {
+     "file": "test/wasm-service/wasm-creation-genesis.integration.test.js",
+     "status": "ok",
+     "assertions": 14,
+     "ms": 5338
+    },
+    {
+     "file": "test/wasm-service/wasm-creation-reconciliation.integration.test.js",
+     "status": "ok",
+     "assertions": 4,
+     "ms": 2688
+    }
+   ]
+  },
+  {
+   "issue": 128,
+   "request_id": "2f4a688838f14221aff69dc5a503ba09",
+   "host": "tv-dator",
+   "source_sha": "300c360baac383cf016be7929788a8cb47860336",
+   "source_ref": "refs/heads/wip/rs-raft-serving-publication-1",
+   "request_sha256": "e6f3000f6b5d2431ea031ce5814e14271f0ed6933be072967f0aae8300723aa5",
+   "outcome": "FAIL",
+   "exit_code": 1,
+   "finished_at": "2026-10-17T10:14:40Z",
+   "log_sha256": "63d218a7767eae47619e93a6c09995ff365c9847ac4829aa9e11588719359300",
+   "log_bytes": 9775,
+   "placement_heads": [
+    "300c360baac383cf016be7929788a8cb47860336"
+   ],
+   "totals": {
+    "files": 10,
+    "pass": 8,
+    "fail": 2,
+    "assertions": 300
+   },
+   "files": [
+    {
+     "file": "test/workflow/reconcile-queue-retry-wait-bound-spent.test.js",
+     "status": "ok",
+     "assertions": 10,
+     "ms": 600
+    },
+    {
+     "file": "test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js",
+     "status": "not ok",
+     "assertions": 3,
+     "ms": 1561
+    },
+    {
+     "file": "test/wasm-service/wasm-strong-write-v1-native-completion.test.js",
+     "status": "ok",
+     "assertions": 2,
+     "ms": 1580
+    },
+    {
+     "file": "test/runtime/service-runtime-lifecycle-idempotency.test.js",
+     "status": "ok",
+     "assertions": 33,
+     "ms": 512
+    },
+    {
+     "file": "test/runtime/wasm-component-driver.test.js",
+     "status": "ok",
+     "assertions": 61,
+     "ms": 592
+    },
+    {
+     "file": "test/runtime/service-runtime-lifecycle.test.js",
+     "status": "ok",
+     "assertions": 82,
+     "ms": 361
+    },
+    {
+     "file": "test/runtime/service-runtime-lifecycle-journal.test.js",
+     "status": "ok",
+     "assertions": 34,
+     "ms": 506
+    },
+    {
+     "file": "test/wasm-service/wasm-service-lifecycle.test.js",
+     "status": "ok",
+     "assertions": 60,
+     "ms": 2232
+    },
+    {
+     "file": "test/workflow/owner-key-reconcile-queue-failure-atomicity.test.js",
+     "status": "ok",
+     "assertions": 11,
+     "ms": 395
+    },
+    {
+     "file": "test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js",
+     "status": "not ok",
+     "assertions": 4,
+     "ms": 11686
+    }
+   ]
+  },
+  {
+   "issue": 130,
+   "request_id": "31c3b5355c2e448b9727028204f24794",
+   "host": "tv-dator",
+   "source_sha": "7696c3d8e9fa5b978bd9a2adac0d157c7693cad6",
+   "source_ref": "refs/heads/work/rs-raft-event-reconciliation-20261016",
+   "request_sha256": "351263001c049cdb325f70d629443f5d9a202d44f91987eba0088526e77a6a19",
+   "outcome": "FAIL",
+   "exit_code": 1,
+   "finished_at": "2026-10-17T10:18:42Z",
+   "log_sha256": "d57eda7db115c3f2f11ce3dd64976deb92a5d6b092f08e670c05014f5f1da09b",
+   "log_bytes": 58958,
+   "placement_heads": [
+    "7696c3d8e9fa5b978bd9a2adac0d157c7693cad6"
+   ],
+   "totals": {
+    "files": 3,
+    "pass": 0,
+    "fail": 3,
+    "assertions": 60
+   },
+   "files": [
+    {
+     "file": "test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js",
+     "status": "not ok",
+     "assertions": 3,
+     "ms": 1498
+    },
+    {
+     "file": "test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js",
+     "status": "not ok",
+     "assertions": 4,
+     "ms": 11443
+    },
+    {
+     "file": "test/wasm-service/wasm-service-replica.test.js",
+     "status": "not ok",
+     "assertions": 53,
+     "ms": 20556
+    }
+   ]
+  }
+ ]
+}

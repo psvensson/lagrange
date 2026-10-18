@@ -1,0 +1,4 @@
+mutated sha: 4f57a33bb9188d248600bc7779c5c6b765e2f4d2e06f05f19960327f3a40ba99
+catcher test/wasm-service/bound-creation-handler-embedding.integration.test.js rc=0
+catcher test/runtime/service-runtime-consensus-publication.test.js rc=0
+RESTORED_BYTE_IDENTICAL src/wasm-service/wasm-service-serving-state.js

@@ -1,0 +1,348 @@
+
+> lagrange-server@0.2.6 test:file
+> node scripts/run-classified-test-files.js test/node/runtime-service-bound-route.test.js
+
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: unmeasurable (no sensors)
+not ok test/node/runtime-service-bound-route.test.js (50 assertions, 1410ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: stage 1c: RuntimeServiceHandler bound CREATE route (RV2.2, RV3.2, RV3.3)
+    # Subtest: C6-1 a retained creation answering HELD -> memo HELD + CREATE_HELD at the CREATING step
+    ok 1 - C6-1 a retained creation answering HELD -> memo HELD + CREATE_HELD at the CREATING step
+      ---
+      duration_ms: 116.959257
+      type: 'test'
+      ...
+    # Subtest: PUBLISHED_UNPROJECTED keeps the memo HELD; a confirmed PUBLISHED answers ACTIVE
+    ok 2 - PUBLISHED_UNPROJECTED keeps the memo HELD; a confirmed PUBLISHED answers ACTIVE
+      ---
+      duration_ms: 31.509552
+      type: 'test'
+      ...
+    # Subtest: Revision 4: a PUBLISHED_UNPROJECTED answer for an ungranted slot is contradicted and retired
+    ok 3 - Revision 4: a PUBLISHED_UNPROJECTED answer for an ungranted slot is contradicted and retired
+      ---
+      duration_ms: 24.335036
+      type: 'test'
+      ...
+    # Subtest: UNKNOWN after retention is the handler-typed deferral: CREATE_FAILED + deferRetry, memo FAILED
+    ok 4 - UNKNOWN after retention is the handler-typed deferral: CREATE_FAILED + deferRetry, memo FAILED
+      ---
+      duration_ms: 11.614201
+      type: 'test'
+      ...
+    # Subtest: TERMINAL_OPERATION is a permanent CREATE_FAILED with its code (slot not live)
+    ok 5 - TERMINAL_OPERATION is a permanent CREATE_FAILED with its code (slot not live)
+      ---
+      duration_ms: 10.489358
+      type: 'test'
+      ...
+    # Subtest: C6-4 a definitive INTENT_NOT_FOUND for a bound-class definition is BOUND_ROUTE_REQUIRED
+    ok 6 - C6-4 a definitive INTENT_NOT_FOUND for a bound-class definition is BOUND_ROUTE_REQUIRED
+      ---
+      duration_ms: 8.323043
+      type: 'test'
+      ...
+    # Subtest: C6-5 an unavailable journal read defers a bound-class CREATE; never NOT_FOUND
+    ok 7 - C6-5 an unavailable journal read defers a bound-class CREATE; never NOT_FOUND
+      ---
+      duration_ms: 7.217717
+      type: 'test'
+      ...
+    # Subtest: a native_js definition with no retained creation takes the generic path, journal or not
+    ok 8 - a native_js definition with no retained creation takes the generic path, journal or not
+      ---
+      duration_ms: 16.875105
+      type: 'test'
+      ...
+    # Subtest: cell (a) production-shaped manager (no journal): native_js and Cell generic, bound-class deferred
+    ok 9 - cell (a) production-shaped manager (no journal): native_js and Cell generic, bound-class deferred
+      ---
+      duration_ms: 9.419435
+      type: 'test'
+      ...
+    1..9
+ok 1 - stage 1c: RuntimeServiceHandler bound CREATE route (RV2.2, RV3.2, RV3.3)
+  ---
+  duration_ms: 238.783695
+  type: 'suite'
+  ...
+# Subtest: stage 1c: HELD re-entry and the node-local wake consumer (RV2.4, RV3.5)
+    # Subtest: F9 a duplicate CREATE while a HELD re-entry is in flight starts no second resume
+    ok 1 - F9 a duplicate CREATE while a HELD re-entry is in flight starts no second resume
+      ---
+      duration_ms: 10.871716
+      type: 'test'
+      ...
+    # Subtest: a wake naming the HELD operation re-enters once; a wake during it is recorded and consumed
+    ok 2 - a wake naming the HELD operation re-enters once; a wake during it is recorded and consumed
+      ---
+      duration_ms: 18.03121
+      type: 'test'
+      ...
+    # Subtest: C6-10 a wake naming no local operation answers NO_LOCAL_OPERATION and runs nothing
+    ok 3 - C6-10 a wake naming no local operation answers NO_LOCAL_OPERATION and runs nothing
+      ---
+      duration_ms: 8.930077
+      type: 'test'
+      ...
+    1..3
+ok 2 - stage 1c: HELD re-entry and the node-local wake consumer (RV2.4, RV3.5)
+  ---
+  duration_ms: 38.214803
+  type: 'suite'
+  ...
+# Subtest: stage 1c round 3: the HELD creation keeps custody (RV5.1, RV5.2, RV5.3)
+    # Subtest: RV5.1 a CREATE under another operation id for a HELD replica keeps the memo creation, re-enters it once, emits under its id; the next REMOVE is bound
+    ok 1 - RV5.1 a CREATE under another operation id for a HELD replica keeps the memo creation, re-enters it once, emits under its id; the next REMOVE is bound
+      ---
+      duration_ms: 13.787922
+      type: 'test'
+      ...
+    # Subtest: RV5.1 a wake during that re-entry is RECORDED on the creation in-flight entry; no second resume runs beside it
+    ok 2 - RV5.1 a wake during that re-entry is RECORDED on the creation in-flight entry; no second resume runs beside it
+      ---
+      duration_ms: 10.571151
+      type: 'test'
+      ...
+    # Subtest: RV5.2 a BOUND_ROUTE_REQUIRED refusal for a request naming no creation leaves a HELD memo untouched (outcome under the request id)
+    ok 3 - RV5.2 a BOUND_ROUTE_REQUIRED refusal for a request naming no creation leaves a HELD memo untouched (outcome under the request id)
+      ---
+      duration_ms: 9.104952
+      type: 'test'
+      ...
+    # Subtest: RV5.2 the catch path before the resume answers a retained class leaves a creation-naming memo untouched
+    ok 4 - RV5.2 the catch path before the resume answers a retained class leaves a creation-naming memo untouched
+      ---
+      duration_ms: 11.155462
+      type: 'test'
+      ...
+    # Subtest: RV5.3 a wake without a token operation id is NO_LOCAL_OPERATION, never matched to a nameless memo
+    ok 5 - RV5.3 a wake without a token operation id is NO_LOCAL_OPERATION, never matched to a nameless memo
+      ---
+      duration_ms: 5.656129
+      type: 'test'
+      ...
+    # Subtest: RV5.3 a RESOURCE_CLOSED wake during the first START is recorded and re-enters nothing
+    ok 6 - RV5.3 a RESOURCE_CLOSED wake during the first START is recorded and re-enters nothing
+      ---
+      duration_ms: 10.190294
+      type: 'test'
+      ...
+    # Subtest: RV6.3 (P5) a CREATE under another id while the memo is REMOVING keeps the creation, is deferred typed with RETIREMENT_IN_PROGRESS, and the re-REMOVE is bound and completes
+    ok 7 - RV6.3 (P5) a CREATE under another id while the memo is REMOVING keeps the creation, is deferred typed with RETIREMENT_IN_PROGRESS, and the re-REMOVE is bound and completes
+      ---
+      duration_ms: 9.921472
+      type: 'test'
+      ...
+    # Subtest: RV6.1 the in-progress tracker never writes a creation-naming memo: a CREATE after a completed bound REMOVE is tracked only and its refusal leaves the memo
+    ok 8 - RV6.1 the in-progress tracker never writes a creation-naming memo: a CREATE after a completed bound REMOVE is tracked only and its refusal leaves the memo
+      ---
+      duration_ms: 16.026064
+      type: 'test'
+      ...
+    # Subtest: RV6.2 (P6) a CREATE under another id while the memo is a named deferral keeps the creation, re-enters it once under its id, and the next REMOVE is bound
+    ok 9 - RV6.2 (P6) a CREATE under another id while the memo is a named deferral keeps the creation, re-enters it once under its id, and the next REMOVE is bound
+      ---
+      duration_ms: 11.53817
+      type: 'test'
+      ...
+    # Subtest: RV6.2 the same-id retry of a named deferral re-enters it once
+    ok 10 - RV6.2 the same-id retry of a named deferral re-enters it once
+      ---
+      duration_ms: 14.004591
+      type: 'test'
+      ...
+    # Subtest: RV6.4 (P8) a nameless HELD memo answers the ERROR reply with CORRUPT_LOCAL_MEMO, memo untouched, nothing emitted
+    ok 11 - RV6.4 (P8) a nameless HELD memo answers the ERROR reply with CORRUPT_LOCAL_MEMO, memo untouched, nothing emitted
+      ---
+      duration_ms: 8.026411
+      type: 'test'
+      ...
+    # Subtest: RV7.2 (P14) a permanently failed named memo does not capture a CREATE under another id: the request proceeds under its own id; an unrouted request is refused, memo untouched
+    ok 12 - RV7.2 (P14) a permanently failed named memo does not capture a CREATE under another id: the request proceeds under its own id; an unrouted request is refused, memo untouched
+      ---
+      duration_ms: 9.003206
+      type: 'test'
+      ...
+    # Subtest: RV7.2 (P15) I retired, a late duplicate of I answers RESOURCE_CLOSED, then J founder CREATE for the same canonical replica resumes J and the memo is named J
+    ok 13 - RV7.2 (P15) I retired, a late duplicate of I answers RESOURCE_CLOSED, then J founder CREATE for the same canonical replica resumes J and the memo is named J
+      ---
+      duration_ms: 20.585904
+      type: 'test'
+      ...
+    # Subtest: RV7.1 a DEFERRED settle records deferRetry:true, a permanent one does not; only the flagged memo re-enters
+    ok 14 - RV7.1 a DEFERRED settle records deferRetry:true, a permanent one does not; only the flagged memo re-enters
+      ---
+      duration_ms: 21.690581
+      type: 'test'
+      ...
+    # Subtest: RV7.3 a named ACTIVE memo and a request under a different id: ALREADY_EXISTS, CREATE_FAILED CONTENT_CONFLICT under the request, never CREATE_ACTIVE, memo untouched
+    ok 15 - RV7.3 a named ACTIVE memo and a request under a different id: ALREADY_EXISTS, CREATE_FAILED CONTENT_CONFLICT under the request, never CREATE_ACTIVE, memo untouched
+      ---
+      duration_ms: 13.70297
+      type: 'test'
+      ...
+    # Subtest: RV7.3 the same-id duplicate of a named ACTIVE memo still emits CREATE_ACTIVE
+    ok 16 - RV7.3 the same-id duplicate of a named ACTIVE memo still emits CREATE_ACTIVE
+      ---
+      duration_ms: 10.853297
+      type: 'test'
+      ...
+    # Subtest: RV6.3/RV6.4 codes at the handler constants owner
+    ok 17 - RV6.3/RV6.4 codes at the handler constants owner
+      ---
+      duration_ms: 0.117519
+      type: 'test'
+      ...
+    1..17
+ok 3 - stage 1c round 3: the HELD creation keeps custody (RV5.1, RV5.2, RV5.3)
+  ---
+  duration_ms: 197.096269
+  type: 'suite'
+  ...
+# Subtest: stage 1c: bound REMOVE route (RV2.1, RV3.3 REMOVE table)
+    # Subtest: closed:true retires through the manager bound STOP and completes
+    ok 1 - closed:true retires through the manager bound STOP and completes
+      ---
+      duration_ms: 9.891587
+      type: 'test'
+      ...
+    # Subtest: a HISTORY_UNAVAILABLE close of a durable tombstone completes (slot reused later)
+    ok 2 - a HISTORY_UNAVAILABLE close of a durable tombstone completes (slot reused later)
+      ---
+      duration_ms: 11.409342
+      type: 'test'
+      ...
+    # Subtest: a permanent refusal is REMOVE_FAILED with its code
+    ok 3 - a permanent refusal is REMOVE_FAILED with its code
+      ---
+      duration_ms: 9.462841
+      type: 'test'
+      ...
+    # Subtest: C6-8/cell (b) closed:false -> REMOVE_HELD, memo REMOVING; the next REMOVE resolves
+    ok 4 - C6-8/cell (b) closed:false -> REMOVE_HELD, memo REMOVING; the next REMOVE resolves
+      ---
+      duration_ms: 9.652674
+      type: 'test'
+      ...
+    # Subtest: cell (c) a REMOVE whose creation row is PENDING completes and reserves nothing
+    ok 5 - cell (c) a REMOVE whose creation row is PENDING completes and reserves nothing
+      ---
+      duration_ms: 8.221985
+      type: 'test'
+      ...
+    # Subtest: C6-9 after a handler restart the services row hint (replica_id, create_attempt_token) recovers the creation
+    ok 6 - C6-9 after a handler restart the services row hint (replica_id, create_attempt_token) recovers the creation
+      ---
+      duration_ms: 7.866983
+      type: 'test'
+      ...
+    1..6
+ok 4 - stage 1c: bound REMOVE route (RV2.1, RV3.3 REMOVE table)
+  ---
+  duration_ms: 56.929934
+  type: 'suite'
+  ...
+# Subtest: stage 1c: readRetainedCreation, the journal-only REMOVE read (RV2.1, RV3.3 N2)
+    # Subtest: result table over the real journal
+    ok 1 - result table over the real journal
+      ---
+      duration_ms: 10.139589
+      type: 'test'
+      ...
+    # Subtest: a PENDING row answers NOT_ADMITTED; an unwired manager answers UNAVAILABLE
+    ok 2 - a PENDING row answers NOT_ADMITTED; an unwired manager answers UNAVAILABLE
+      ---
+      duration_ms: 6.595679
+      type: 'test'
+      ...
+    1..2
+ok 5 - stage 1c: readRetainedCreation, the journal-only REMOVE read (RV2.1, RV3.3 N2)
+  ---
+  duration_ms: 16.85383
+  type: 'suite'
+  ...
+# Subtest: stage 1c: shared vocabulary (RV3.6, RV3.8)
+    # Subtest: HELD is a valid, peer-excluded, non-terminal status; HELD outcomes are UPDATE_STEP
+    ok 1 - HELD is a valid, peer-excluded, non-terminal status; HELD outcomes are UPDATE_STEP
+      ---
+      duration_ms: 0.227574
+      type: 'test'
+      ...
+    1..1
+ok 6 - stage 1c: shared vocabulary (RV3.6, RV3.8)
+  ---
+  duration_ms: 0.295714
+  type: 'suite'
+  ...
+# Subtest: recovery unit 1 (design RECOVERY-DESIGN-20261017): the handler side
+    # Subtest: R1-H/R2-F a handler that awaits its restart inventory answers NOT_READY with deferRetry and emits nothing; after recoverRetainedCreations it routes normally
+    ok 1 - R1-H/R2-F a handler that awaits its restart inventory answers NOT_READY with deferRetry and emits nothing; after recoverRetainedCreations it routes normally
+      ---
+      duration_ms: 20.445059
+      type: 'test'
+      ...
+    # Subtest: R4-A rule 2 / R5-A a GRANT_HELD wake whose grant is UNAVAILABLE is RECORDED for a HELD memo and leaves no pending wake in flight; another GRANT_HELD still re-enters
+    not ok 2 - R4-A rule 2 / R5-A a GRANT_HELD wake whose grant is UNAVAILABLE is RECORDED for a HELD memo and leaves no pending wake in flight; another GRANT_HELD still re-enters
+      ---
+      duration_ms: 10.144272
+      type: 'test'
+      location: '/workspace/scratch/6d2a7b72384f/verify-recovery-u1/test/node/runtime-service-bound-route.test.js:944:3'
+      failureType: 'testCodeFailure'
+      error: |-
+        NO_WAKE_PENDING_FOR_AN_UNAVAILABLE_GRANT
+        
+        true !== false
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: false
+      actual: true
+      operator: 'strictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///workspace/scratch/6d2a7b72384f/verify-recovery-u1/test/node/runtime-service-bound-route.test.js:963:12)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: R1-B/R3-C the open's typed code: a permanent code is a permanent CREATE_FAILED, UNAVAILABLE the named deferral, a transient lifecycle code stays today's deferral
+    ok 3 - R1-B/R3-C the open's typed code: a permanent code is a permanent CREATE_FAILED, UNAVAILABLE the named deferral, a transient lifecycle code stays today's deferral
+      ---
+      duration_ms: 28.560359
+      type: 'test'
+      ...
+    # Subtest: R3-D a REMOVE of a CANCELLED creation is REMOVE_COMPLETED; of a FAILED one REMOVE_FAILED typed
+    ok 4 - R3-D a REMOVE of a CANCELLED creation is REMOVE_COMPLETED; of a FAILED one REMOVE_FAILED typed
+      ---
+      duration_ms: 18.861957
+      type: 'test'
+      ...
+    # Subtest: R2-A/R3-E a REMOVE of a PENDING row whose owner seals the request CANCELS the row (never FAILED) and completes; an unreachable owner holds it PENDING
+    ok 5 - R2-A/R3-E a REMOVE of a PENDING row whose owner seals the request CANCELS the row (never FAILED) and completes; an unreachable owner holds it PENDING
+      ---
+      duration_ms: 9.061055
+      type: 'test'
+      ...
+    1..5
+not ok 7 - recovery unit 1 (design RECOVERY-DESIGN-20261017): the handler side
+  ---
+  duration_ms: 87.516608
+  type: 'suite'
+  location: '/workspace/scratch/6d2a7b72384f/verify-recovery-u1/test/node/runtime-service-bound-route.test.js:915:1'
+  failureType: 'subtestsFailed'
+  error: '1 subtest failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+1..7
+# tests 43
+# suites 7
+# pass 42
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 645.070574
+# time=1410ms
+# test-files total=1 pass=0 fail=1 assertions=50

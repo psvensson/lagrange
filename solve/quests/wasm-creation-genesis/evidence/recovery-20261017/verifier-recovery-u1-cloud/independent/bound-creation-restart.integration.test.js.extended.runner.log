@@ -1,0 +1,241 @@
+
+> lagrange-server@0.2.6 test:file
+> node scripts/run-classified-test-files.js test/wasm-service/bound-creation-restart.integration.test.js
+
+# test-files planned=1
+classified lane exclusive: 1 file(s), jobs=1
+thermal: unmeasurable (no sensors)
+not ok test/wasm-service/bound-creation-restart.integration.test.js (21 assertions, 9445ms)
+# TAP assertions failed; test process exited 1
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+TAP version 13
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: recovery unit 1: host restart of bound creations (inventory, memo, re-entry)
+    # Subtest: P-R1 host: a retained creation with no local file is ABSENT_UNCLAIMED, memo HELD, one re-entry under its id; a REMOVE afterwards routes bound and completes
+    ok 1 - P-R1 host: a retained creation with no local file is ABSENT_UNCLAIMED, memo HELD, one re-entry under its id; a REMOVE afterwards routes bound and completes
+      ---
+      duration_ms: 371.753023
+      type: 'test'
+      ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+    # Subtest: P-R1b host: a claim without its file (ABSENT_CLAIMED) is a permanent CREATION_STORAGE_MISSING, never a FRESH reopen; a REMOVE closes the slot
+    ok 2 - P-R1b host: a claim without its file (ABSENT_CLAIMED) is a permanent CREATION_STORAGE_MISSING, never a FRESH reopen; a REMOVE closes the slot
+      ---
+      duration_ms: 215.923612
+      type: 'test'
+      ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+    # Subtest: P-R4 host: local ADMITTED + metadata PUBLISHED (the grant CAS reply lost, owner reachable): reopen HELD, the re-grant is idempotent, SERVING and ACTIVE
+    ok 3 - P-R4 host: local ADMITTED + metadata PUBLISHED (the grant CAS reply lost, owner reachable): reopen HELD, the re-grant is idempotent, SERVING and ACTIVE
+      ---
+      duration_ms: 481.405164
+      type: 'test'
+      ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+    # Subtest: P-R5 host: retired-not-closed (CLOSE_UNRESOLVED) before the restart: inventory RETIRED, memo REMOVING, an in-flight REMOVE entry, the re-drive closes, projects STOPPED, completes the row and emits NO outcome
+    ok 4 - P-R5 host: retired-not-closed (CLOSE_UNRESOLVED) before the restart: inventory RETIRED, memo REMOVING, an in-flight REMOVE entry, the re-drive closes, projects STOPPED, completes the row and emits NO outcome
+      ---
+      duration_ms: 448.529444
+      type: 'test'
+      ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+    # Subtest: P-R6 host: metadata RELEASING, crash before the tombstone: the re-entry is a permanent RESOURCE_CLOSED; the next REMOVE retires by path, closes and completes
+    ok 5 - P-R6 host: metadata RELEASING, crash before the tombstone: the re-entry is a permanent RESOURCE_CLOSED; the next REMOVE retires by path, closes and completes
+      ---
+      duration_ms: 409.328759
+      type: 'test'
+      ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+    # Subtest: P-R7 host: a crash after each of the five retirement steps (R1-D) recovers idempotently
+    ok 6 - P-R7 host: a crash after each of the five retirement steps (R1-D) recovers idempotently
+      ---
+      duration_ms: 1536.496463
+      type: 'test'
+      ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+    # Subtest: P-R8 in-process: a COMPLETED creation row re-enters as the permanent TERMINAL memo, its REMOVE is REMOVE_COMPLETED; after a host restart the same REMOVE is NOT_FOUND (recorded honest answer)
+    ok 7 - P-R8 in-process: a COMPLETED creation row re-enters as the permanent TERMINAL memo, its REMOVE is REMOVE_COMPLETED; after a host restart the same REMOVE is NOT_FOUND (recorded honest answer)
+      ---
+      duration_ms: 403.256822
+      type: 'test'
+      ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+    # Subtest: P-R9 host: CREATION_STORAGE_MISSING, CORRUPT_STATE and CONTENT_CONFLICT (a copied file) are permanent typed memos, no reopen, no tombstone inferred; a REMOVE closes only the storage-missing slot
+    ok 8 - P-R9 host: CREATION_STORAGE_MISSING, CORRUPT_STATE and CONTENT_CONFLICT (a copied file) are permanent typed memos, no reopen, no tombstone inferred; a REMOVE closes only the storage-missing slot
+      ---
+      duration_ms: 478.705397
+      type: 'test'
+      ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+    # Subtest: P-R11 host: a message before ready is NOT_READY + deferRetry, nothing emitted; a wake between the memo write and the re-entry finds the memo; one re-entry
+    ok 9 - P-R11 host: a message before ready is NOT_READY + deferRetry, nothing emitted; a wake between the memo write and the re-entry finds the memo; one re-entry
+      ---
+      duration_ms: 192.67732
+      type: 'test'
+      ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+    # Subtest: P-R12 host: a PENDING row: the REMOVE resolves the reservation first (applied -> retired, sealed -> CANCELLED, unavailable -> HELD); a restart re-enters PENDING, never CANCELLED
+    ok 10 - P-R12 host: a PENDING row: the REMOVE resolves the reservation first (applied -> retired, sealed -> CANCELLED, unavailable -> HELD); a restart re-enters PENDING, never CANCELLED
+      ---
+      duration_ms: 309.419028
+      type: 'test'
+      ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+    # Subtest: P-R12c host: the REMOVE-time resolution persisted the token, crash before CLOSED: the restart re-enters a HELD founder and the REMOVE retry retires it (no orphan)
+    ok 11 - P-R12c host: the REMOVE-time resolution persisted the token, crash before CLOSED: the restart re-enters a HELD founder and the REMOVE retry retires it (no orphan)
+      ---
+      duration_ms: 305.318593
+      type: 'test'
+      ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+    # Subtest: P-R13 host: two hosts restart over the shared journal; each inventory holds only its own node's creation
+    ok 12 - P-R13 host: two hosts restart over the shared journal; each inventory holds only its own node's creation
+      ---
+      duration_ms: 312.932254
+      type: 'test'
+      ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+    # Subtest: P-R14 host: a REMOVE racing the restart re-entry takes custody: the re-entry is not started, the creation link survives, one REMOVE_COMPLETED
+    ok 13 - P-R14 host: a REMOVE racing the restart re-entry takes custody: the re-entry is not started, the creation link survives, one REMOVE_COMPLETED
+      ---
+      duration_ms: 254.983351
+      type: 'test'
+      ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+    # Subtest: P-R15 process custody: no second composition runs the inventory while the owner lock is held; a failed startup cleanup keeps the lock (ledger path, labelled)
+    ok 14 - P-R15 process custody: no second composition runs the inventory while the owner lock is held; a failed startup cleanup keeps the lock (ledger path, labelled)
+      ---
+      duration_ms: 288.438616
+      type: 'test'
+      ...
+    1..14
+ok 1 - recovery unit 1: host restart of bound creations (inventory, memo, re-entry)
+  ---
+  duration_ms: 6012.034085
+  type: 'suite'
+  ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: recovery unit 1: typed open-time refusals reach the handler (R1-B, R3-B)
+    # Subtest: R3-B an open-time UNAVAILABLE of a RETAINED creation is the NAMED deferral, decided by the opening module on its own owner read; distinct from the UNROUTED row
+    ok 1 - R3-B an open-time UNAVAILABLE of a RETAINED creation is the NAMED deferral, decided by the opening module on its own owner read; distinct from the UNROUTED row
+      ---
+      duration_ms: 135.190582
+      type: 'test'
+      ...
+    1..1
+ok 2 - recovery unit 1: typed open-time refusals reach the handler (R1-B, R3-B)
+  ---
+  duration_ms: 135.676619
+  type: 'suite'
+  ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: independent U1: an inventory suspended across shutdown cannot restart a resource after process custody transfers
+not ok 3 - independent U1: an inventory suspended across shutdown cannot restart a resource after process custody transfers
+  ---
+  duration_ms: 240.348434
+  type: 'test'
+  location: '/workspace/scratch/6d2a7b72384f/verify-recovery-u1/test/wasm-service/bound-creation-restart.integration.test.js:639:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    INVENTORY_REENTERED_AFTER_PROCESS_CUSTODY_TRANSFER
+    + actual - expected
+    
+    + [
+    +   'operation-1'
+    + ]
+    - []
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    0: 'operation-1'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/6d2a7b72384f/verify-recovery-u1/test/wasm-service/bound-creation-restart.integration.test.js:672:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# {"oldStopped":true,"resumedAfterCustodyTransfer":["operation-1"],"oldMemo":{"replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2","entityId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","status":"failed","operationId":"operation-1","deferRetry":true},"oldInFlight":[],"newCompositionOwnsDirectory":true}
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: independent U1: RETIRED restart redrive and coordinator REMOVE share one in-flight retirement
+not ok 4 - independent U1: RETIRED restart redrive and coordinator REMOVE share one in-flight retirement
+  ---
+  duration_ms: 515.785936
+  type: 'test'
+  location: '/workspace/scratch/6d2a7b72384f/verify-recovery-u1/test/wasm-service/bound-creation-restart.integration.test.js:675:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    RESTART_REDRIVE_BYPASSED_EXISTING_REMOVE_SINGLE_FLIGHT
+    
+    2 !== 1
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 1
+  actual: 2
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/6d2a7b72384f/verify-recovery-u1/test/wasm-service/bound-creation-restart.integration.test.js:704:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# {"concurrentEntries":2,"totalEntries":2,"outcomes":[{"outcomeType":"RUNTIME_SERVICE_REMOVE_COMPLETED","operationId":"independent-concurrent-remove","workflowStep":"REMOVED","timestamp":1792269678070,"replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2"}],"rowState":"completed"}
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# Subtest: independent U1: overlapping startup inventories cannot overwrite an ACTIVE creation with a stale HELD memo
+not ok 5 - independent U1: overlapping startup inventories cannot overwrite an ACTIVE creation with a stale HELD memo
+  ---
+  duration_ms: 653.985219
+  type: 'test'
+  location: '/workspace/scratch/6d2a7b72384f/verify-recovery-u1/test/wasm-service/bound-creation-restart.integration.test.js:709:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    STALE_STARTUP_SCAN_OVERWROTE_LIVE_ACTIVE_MEMO
+    
+    'held' !== 'active'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'active'
+  actual: 'held'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/6d2a7b72384f/verify-recovery-u1/test/wasm-service/bound-creation-restart.integration.test.js:735:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# {"invocations":2,"before":{"replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2","entityId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","status":"active","operationId":"operation-1"},"after":{"replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2","entityId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","status":"held","operationId":"operation-1"},"resumes":["operation-1"]}
+# Subtest: independent U1: shutdown cannot release process custody while an admitted by-path retirement is paused
+not ok 6 - independent U1: shutdown cannot release process custody while an admitted by-path retirement is paused
+  ---
+  duration_ms: 417.647388
+  type: 'test'
+  location: '/workspace/scratch/6d2a7b72384f/verify-recovery-u1/test/wasm-service/bound-creation-restart.integration.test.js:739:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    PROCESS_OWNER_RELEASED_WITH_ADMITTED_BY_PATH_RETIREMENT_OUTSTANDING
+    
+    true !== false
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: false
+  actual: true
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///workspace/scratch/6d2a7b72384f/verify-recovery-u1/test/wasm-service/bound-creation-restart.integration.test.js:773:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# {"custodyReleasedWhileRetirementPending":true,"newCompositionOwnsDirectory":true,"retired":{"outcome":"CLOSED","retired":true,"closed":true,"release":{"outcome":"RELEASING","phase":"RELEASING","token":{"bindingDigest":"624a8d2075675706a8b52b4fd0ae768b575ab38e1ac287f17e8b115d94ec64ac","bodyDigest":"1fa54d33b7281621301d9d6c094c22355497732252468c0e54f67231d2c12762","operationId":"operation-1","ordinal":1,"slot":1}},"tombstone":{"outcome":"RETIRED"},"close":{"outcome":"CLOSED","phase":"CLOSED","token":{"bindingDigest":"624a8d2075675706a8b52b4fd0ae768b575ab38e1ac287f17e8b115d94ec64ac","bodyDigest":"1fa54d33b7281621301d9d6c094c22355497732252468c0e54f67231d2c12762","operationId":"operation-1","ordinal":1,"slot":1}},"wake":{"outcome":"DELIVERED"}},"localPhaseAfterRelease":"RETIRED","resourcePhase":"CLOSED"}
+1..6
+# tests 19
+# suites 2
+# pass 15
+# fail 4
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 7989.902803
+# time=9445ms
+# test-files total=1 pass=0 fail=1 assertions=21

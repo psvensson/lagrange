@@ -1,0 +1,644 @@
+{
+ "M0-clean": {
+  "description": "No mutation: green baseline of the publication file in the verify worktree",
+  "testFile": "test/wasm-service/wasm-creation-publication.integration.test.js",
+  "exit": 0,
+  "elapsedMs": 4081,
+  "files": {
+   "total": 1,
+   "pass": 1,
+   "fail": 0
+  },
+  "engaged": false,
+  "failures": []
+ },
+ "V1-pending-event-not-processed": {
+  "description": "Native events never enqueue (admitsNativeWake false): pending event not processed",
+  "testFile": "test/wasm-service/wasm-creation-publication.integration.test.js",
+  "exit": 1,
+  "elapsedMs": 3622,
+  "files": {
+   "total": 1,
+   "pass": 0,
+   "fail": 1
+  },
+  "engaged": true,
+  "failures": [
+   {
+    "subtest": "P1 native events publish every founder: durable grant, one wake, served write, quiet adapter",
+    "detail": "host-1 did not publish"
+   },
+   {
+    "subtest": "P2 predecessor outstanding holds the successor typed; P8 the last CLOSED wakes its owner",
+    "detail": "'[]'"
+   },
+   {
+    "subtest": "P4 retirement fences user work at call, RELEASING precedes RETIRED, RETIRED precedes CLOSED",
+    "detail": "host-1 did not publish"
+   },
+   {
+    "subtest": "P5a a lost CLOSED reply is resolved by the metadata owner itself",
+    "detail": "host-1 did not publish"
+   },
+   {
+    "subtest": "P5b an unresolved CLOSED keeps custody; a re-stop by creation resolves with no new mutation",
+    "detail": "host-1 did not publish"
+   },
+   {
+    "subtest": "P5c a re-stop of the predecessor retires its file by creation and never touches a successor",
+    "detail": "host-1 did not publish"
+   },
+   {
+    "subtest": "P6a orderly shutdown keeps the grant; a reopen serves after the open-time metadata check",
+    "detail": "host-1 did not publish"
+   },
+   {
+    "subtest": "P6b a reopen after the slot was CLOSED is refused and the next retire tombstones the file",
+    "detail": "host-1 did not publish"
+   }
+  ],
+  "restored": {
+   "src/wasm-service/wasm-creation-reconciliation.js": "byte-identical"
+  }
+ },
+ "V1b-unbind-before-grant": {
+  "description": "Subscriptions retired at the start of publish() (before the grant), so a held replica loses its native re-drive",
+  "testFile": "test/wasm-service/wasm-creation-publication.integration.test.js",
+  "exit": 0,
+  "elapsedMs": 3919,
+  "files": {
+   "total": 1,
+   "pass": 1,
+   "fail": 0
+  },
+  "engaged": false,
+  "failures": [],
+  "restored": {
+   "src/wasm-service/wasm-creation-reconciliation.js": "byte-identical"
+  }
+ },
+ "V2-open-serving-ignores-metadata": {
+  "description": "Open-time SERVING decided from the local record alone (cached pre-event state; metadata phase ignored)",
+  "testFile": "test/wasm-service/wasm-creation-publication.integration.test.js",
+  "exit": 0,
+  "elapsedMs": 3809,
+  "files": {
+   "total": 1,
+   "pass": 1,
+   "fail": 0
+  },
+  "engaged": false,
+  "failures": [],
+  "restored": {
+   "src/wasm-service/wasm-service-serving-state.js": "byte-identical"
+  }
+ },
+ "V3-membership-coverage-ignored": {
+  "description": "Genesis ignores whether the committed membership stamp covers the INIT receipt (membership ignored)",
+  "testFile": "test/wasm-service/wasm-creation-publication.integration.test.js",
+  "exit": 1,
+  "elapsedMs": 3849,
+  "files": {
+   "total": 1,
+   "pass": 0,
+   "fail": 1
+  },
+  "engaged": true,
+  "failures": [
+   {
+    "subtest": "P3a a selection before the grant answers STALE_BINDING and writes nothing local",
+    "detail": "{\"status\":\"PUBLISHED\",\"started\":true,\"bootstrapped\":true,\"port\":30000,\"consensusBinding\":{\"definitionDigest\":\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\",\"format\":1,\"foundingPeers\":[{\"nodeId\":\"host-"
+   },
+   {
+    "subtest": "P3b a selection inside the held grant CAS window answers STALE_BINDING",
+    "detail": "{\"status\":\"PUBLISHED\",\"started\":true,\"bootstrapped\":true,\"port\":30000,\"consensusBinding\":{\"definitionDigest\":\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\",\"format\":1,\"foundingPeers\":[{\"nodeId\":\"host-"
+   },
+   {
+    "subtest": "P9 a retirement during an in-flight grant enables nothing and closes the slot",
+    "detail": "{\"status\":\"PUBLISHED\",\"started\":true,\"bootstrapped\":true,\"port\":30000,\"consensusBinding\":{\"definitionDigest\":\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\",\"format\":1,\"foundingPeers\":[{\"nodeId\":\"host-"
+   },
+   {
+    "subtest": "6prime: publication owned by the keyed continuation, retirement before CLOSED",
+    "detail": "'3 subtests failed'"
+   },
+   {
+    "subtest": "P14 leadership LEADER -> FOLLOWER -> LEADER across a held grant replays effects once",
+    "detail": "{\"status\":\"PUBLISHED\",\"started\":true,\"bootstrapped\":true,\"port\":30000,\"consensusBinding\":{\"definitionDigest\":\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\",\"format\":1,\"foundingPeers\":[{\"nodeId\":\"host-"
+   },
+   {
+    "subtest": "P17 an explicit START that observes genesis publishes and fires no wake",
+    "detail": "{\"status\":\"PUBLISHED\",\"started\":true,\"bootstrapped\":true,\"port\":30000,\"consensusBinding\":{\"definitionDigest\":\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\",\"format\":1,\"foundingPeers\":[{\"nodeId\":\"host-"
+   },
+   {
+    "subtest": "P18 an absent wake consumer is a typed CONSUMER_ABSENT outcome, never silence",
+    "detail": "'[{\"outcome\":\"CONSUMER_ABSENT\"},null]'"
+   },
+   {
+    "subtest": "6double-prime: held grants, election changes, lost answers and absent consumers",
+    "detail": "'3 subtests failed'"
+   }
+  ],
+  "restored": {
+   "src/wasm-service/wasm-creation-genesis.js": "byte-identical"
+  }
+ },
+ "V4-local-phase-not-written": {
+  "description": "Local phase CAS answers RECORDED without the UPDATE (success without the durable effect)",
+  "testFile": "test/wasm-service/wasm-creation-publication.integration.test.js",
+  "exit": 1,
+  "elapsedMs": 3694,
+  "files": {
+   "total": 1,
+   "pass": 0,
+   "fail": 1
+  },
+  "engaged": true,
+  "failures": [
+   {
+    "subtest": "P1 native events publish every founder: durable grant, one wake, served write, quiet adapter",
+    "detail": "LOCAL_GRANT_NOT_DURABLE"
+   },
+   {
+    "subtest": "P4 retirement fences user work at call, RELEASING precedes RETIRED, RETIRED precedes CLOSED",
+    "detail": "CLOSED_REQUESTED_BEFORE_LOCAL_RETIRED"
+   },
+   {
+    "subtest": "P5b an unresolved CLOSED keeps custody; a re-stop by creation resolves with no new mutation",
+    "detail": "Expected values to be strictly equal:"
+   },
+   {
+    "subtest": "P6a orderly shutdown keeps the grant; a reopen serves after the open-time metadata check",
+    "detail": "ORDERLY_STOP_TOMBSTONED_THE_RESOURCE"
+   },
+   {
+    "subtest": "P6b a reopen after the slot was CLOSED is refused and the next retire tombstones the file",
+    "detail": "Expected values to be strictly equal:"
+   },
+   {
+    "subtest": "P9 a retirement during an in-flight grant enables nothing and closes the slot",
+    "detail": "Expected values to be strictly equal:"
+   },
+   {
+    "subtest": "P12 the first admitted user message finds the local grant already durable",
+    "detail": "USER_WORK_ADMITTED_BEFORE_THE_LOCAL_GRANT"
+   },
+   {
+    "subtest": "6prime: publication owned by the keyed continuation, retirement before CLOSED",
+    "detail": "'7 subtests failed'"
+   }
+  ],
+  "restored": {
+   "src/wasm-service/wasm-creation-opening.js": "byte-identical"
+  }
+ },
+ "V4b-commitDurably-bypassed": {
+  "description": "Local phase CAS commits in a plain transaction, not through commitDurably (durability pragma not raised)",
+  "testFile": "test/wasm-service/wasm-creation-local-record.test.js",
+  "exit": 1,
+  "elapsedMs": 1019,
+  "files": {
+   "total": 1,
+   "pass": 0,
+   "fail": 1
+  },
+  "engaged": true,
+  "failures": [
+   {
+    "subtest": "the phase CAS commits through commitDurably: synchronous raised to FULL and restored",
+    "detail": "'DURABLE_COMMIT_DID_NOT_RAISE_SYNCHRONOUS'"
+   }
+  ],
+  "restored": {
+   "src/wasm-service/wasm-creation-opening.js": "byte-identical"
+  }
+ },
+ "V5-recheck-after-genesis-removed": {
+  "description": "The recheck after the genesis await is removed (decision taken between two processing steps; the post-grant recheck stays)",
+  "testFile": "test/wasm-service/wasm-creation-publication.integration.test.js",
+  "exit": 0,
+  "elapsedMs": 3931,
+  "files": {
+   "total": 1,
+   "pass": 1,
+   "fail": 0
+  },
+  "engaged": false,
+  "failures": [],
+  "restored": {
+   "src/wasm-service/wasm-creation-reconciliation.js": "byte-identical"
+  }
+ },
+ "V6-tombstone-identity-dropped": {
+  "description": "Tombstone identity check always matches (identity check dropped)",
+  "testFile": "test/wasm-service/wasm-creation-local-record.test.js",
+  "exit": 1,
+  "elapsedMs": 1002,
+  "files": {
+   "total": 1,
+   "pass": 0,
+   "fail": 1
+  },
+  "engaged": true,
+  "failures": [
+   {
+    "subtest": "a RETAINED reopen checks the identity projection with exact fields and canonical bytes",
+    "detail": "'Missing expected exception: IDENTITY_FIELD_CHANGE_REOPENED'"
+   },
+   {
+    "subtest": "tombstone by path and by connection: RETIRED, ALREADY, storage missing, identity mismatch",
+    "detail": "A_FOREIGN_TOKEN_RETIRED_THE_FILE"
+   }
+  ],
+  "restored": {
+   "src/wasm-service/wasm-creation-opening.js": "byte-identical"
+  }
+ },
+ "V7-successor-fence-removed": {
+  "description": "createReplica admits a bound successor while the predecessor instance is still retiring (successor fence removed)",
+  "testFile": "test/wasm-service/wasm-creation-publication.integration.test.js",
+  "exit": 1,
+  "elapsedMs": 2936,
+  "files": {
+   "total": 1,
+   "pass": 0,
+   "fail": 1
+  },
+  "engaged": true,
+  "failures": [
+   {
+    "subtest": "P10 a START re-entry while the retirement is in flight is refused typed",
+    "detail": "'{\"status\":\"PUBLISHED\",\"started\":true,\"bootstrapped\":true,\"port\":30000,\"consensusBinding\":{\"definitionDigest\":\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\",\"format\":1,\"foundingPeers\":[{\"nodeId\":\"host"
+   },
+   {
+    "subtest": "P11 a forged PUBLISHED or RUNNING driver answer never becomes serving presentation",
+    "detail": "'Promise resolution is still pending but the event loop has already resolved'"
+   },
+   {
+    "subtest": "P11b a RUNNING claim carrying the exact binding and token is refused before any re-resolve",
+    "detail": "'Promise resolution is still pending but the event loop has already resolved'"
+   },
+   {
+    "subtest": "P12 the first admitted user message finds the local grant already durable",
+    "detail": "'Promise resolution is still pending but the event loop has already resolved'"
+   },
+   {
+    "subtest": "6prime: publication owned by the keyed continuation, retirement before CLOSED",
+    "detail": "'Promise resolution is still pending but the event loop has already resolved'"
+   },
+   {
+    "subtest": "P13 an unavailable grant wakes once per held run typed and is never retried by the lifecycle",
+    "detail": "'Promise resolution is still pending but the event loop has already resolved'"
+   },
+   {
+    "subtest": "P14 leadership LEADER -> FOLLOWER -> LEADER across a held grant replays effects once",
+    "detail": "'Promise resolution is still pending but the event loop has already resolved'"
+   },
+   {
+    "subtest": "P15 a lost grant reply resolves to PUBLISHED inside the owner: one write, one wake",
+    "detail": "'Promise resolution is still pending but the event loop has already resolved'"
+   }
+  ],
+  "restored": {
+   "src/wasm-service/wasm-service-lifecycle.js": "byte-identical"
+  }
+ },
+ "V8-latch-replays-twice": {
+  "description": "enableServing applies leader effects on every call, not only on the HELD -> SERVING edge (latch replaying twice)",
+  "testFile": "test/wasm-service/wasm-creation-publication.integration.test.js",
+  "exit": 1,
+  "elapsedMs": 3841,
+  "files": {
+   "total": 1,
+   "pass": 0,
+   "fail": 1
+  },
+  "engaged": true,
+  "failures": [
+   {
+    "subtest": "P1 native events publish every founder: durable grant, one wake, served write, quiet adapter",
+    "detail": "LEADER_EFFECTS_NOT_REPLAYED_ONCE"
+   },
+   {
+    "subtest": "6prime: publication owned by the keyed continuation, retirement before CLOSED",
+    "detail": "'1 subtest failed'"
+   }
+  ],
+  "restored": {
+   "src/wasm-service/wasm-service-serving-state.js": "byte-identical"
+  }
+ },
+ "V10-releasing-after-local-stop": {
+  "description": "RELEASING is attempted only after the local stop settled (ordering RELEASING -> RETIRED inverted)",
+  "testFile": "test/wasm-service/wasm-creation-publication.integration.test.js",
+  "exit": 1,
+  "elapsedMs": 2800,
+  "files": {
+   "total": 1,
+   "pass": 0,
+   "fail": 1
+  },
+  "engaged": true,
+  "failures": [
+   {
+    "subtest": "P4 retirement fences user work at call, RELEASING precedes RETIRED, RETIRED precedes CLOSED",
+    "detail": "'TOMBSTONE_PRECEDED_RELEASING'"
+   },
+   {
+    "subtest": "P9 a retirement during an in-flight grant enables nothing and closes the slot",
+    "detail": "'Promise resolution is still pending but the event loop has already resolved'"
+   },
+   {
+    "subtest": "P10 a START re-entry while the retirement is in flight is refused typed",
+    "detail": "'Promise resolution is still pending but the event loop has already resolved'"
+   },
+   {
+    "subtest": "P11 a forged PUBLISHED or RUNNING driver answer never becomes serving presentation",
+    "detail": "'Promise resolution is still pending but the event loop has already resolved'"
+   },
+   {
+    "subtest": "P11b a RUNNING claim carrying the exact binding and token is refused before any re-resolve",
+    "detail": "'Promise resolution is still pending but the event loop has already resolved'"
+   },
+   {
+    "subtest": "P12 the first admitted user message finds the local grant already durable",
+    "detail": "'Promise resolution is still pending but the event loop has already resolved'"
+   },
+   {
+    "subtest": "6prime: publication owned by the keyed continuation, retirement before CLOSED",
+    "detail": "'Promise resolution is still pending but the event loop has already resolved'"
+   },
+   {
+    "subtest": "P13 an unavailable grant wakes once per held run typed and is never retried by the lifecycle",
+    "detail": "'Promise resolution is still pending but the event loop has already resolved'"
+   }
+  ],
+  "restored": {
+   "src/wasm-service/wasm-creation-retirement.js": "byte-identical"
+  }
+ },
+ "V11-fence-refusal-reason-shape": {
+  "description": "A stopping bound replica refuses with WRITER_NOT_READY instead of WRITER_SHUTDOWN (reason-shape fidelity)",
+  "testFile": "test/wasm-service/wasm-creation-publication.integration.test.js",
+  "exit": 1,
+  "elapsedMs": 3863,
+  "files": {
+   "total": 1,
+   "pass": 0,
+   "fail": 1
+  },
+  "engaged": true,
+  "failures": [
+   {
+    "subtest": "P4 retirement fences user work at call, RELEASING precedes RETIRED, RETIRED precedes CLOSED",
+    "detail": "READ_ADMITTED_AFTER_THE_STOP_FENCE"
+   },
+   {
+    "subtest": "6prime: publication owned by the keyed continuation, retirement before CLOSED",
+    "detail": "'1 subtest failed'"
+   }
+  ],
+  "restored": {
+   "src/wasm-service/wasm-service-serving-state.js": "byte-identical"
+  }
+ },
+ "M1-rerun-skip-local-published-write": {
+  "description": "Re-run of implementer M1: skip the local PUBLISHED write before enableServing",
+  "testFile": "test/wasm-service/wasm-creation-publication.integration.test.js",
+  "exit": 1,
+  "elapsedMs": 3894,
+  "files": {
+   "total": 1,
+   "pass": 0,
+   "fail": 1
+  },
+  "engaged": true,
+  "failures": [
+   {
+    "subtest": "P1 native events publish every founder: durable grant, one wake, served write, quiet adapter",
+    "detail": "LOCAL_GRANT_NOT_DURABLE"
+   },
+   {
+    "subtest": "P4 retirement fences user work at call, RELEASING precedes RETIRED, RETIRED precedes CLOSED",
+    "detail": "\"Cannot read properties of null (reading 'token')\""
+   },
+   {
+    "subtest": "P6a orderly shutdown keeps the grant; a reopen serves after the open-time metadata check",
+    "detail": "ORDERLY_STOP_TOMBSTONED_THE_RESOURCE"
+   },
+   {
+    "subtest": "P6b a reopen after the slot was CLOSED is refused and the next retire tombstones the file",
+    "detail": "Expected values to be strictly equal:"
+   },
+   {
+    "subtest": "P12 the first admitted user message finds the local grant already durable",
+    "detail": "USER_WORK_ADMITTED_BEFORE_THE_LOCAL_GRANT"
+   },
+   {
+    "subtest": "6prime: publication owned by the keyed continuation, retirement before CLOSED",
+    "detail": "'5 subtests failed'"
+   },
+   {
+    "subtest": "P15 a lost grant reply resolves to PUBLISHED inside the owner: one write, one wake",
+    "detail": "Expected values to be strictly equal:"
+   },
+   {
+    "subtest": "6double-prime: held grants, election changes, lost answers and absent consumers",
+    "detail": "'1 subtest failed'"
+   }
+  ],
+  "restored": {
+   "src/wasm-service/wasm-creation-publication.js": "byte-identical"
+  }
+ },
+ "M3-rerun-closed-before-tombstone": {
+  "description": "Re-run of implementer M3: CLOSED requested without the tombstone (in-path tombstone skipped, by-path verification forged)",
+  "testFile": "test/wasm-service/wasm-creation-publication.integration.test.js",
+  "exit": 1,
+  "elapsedMs": 3768,
+  "files": {
+   "total": 1,
+   "pass": 0,
+   "fail": 1
+  },
+  "engaged": true,
+  "failures": [
+   {
+    "subtest": "P2 predecessor outstanding holds the successor typed; P8 the last CLOSED wakes its owner",
+    "detail": "Expected values to be strictly equal:"
+   },
+   {
+    "subtest": "P4 retirement fences user work at call, RELEASING precedes RETIRED, RETIRED precedes CLOSED",
+    "detail": "CLOSED_REQUESTED_BEFORE_LOCAL_RETIRED"
+   },
+   {
+    "subtest": "P5b an unresolved CLOSED keeps custody; a re-stop by creation resolves with no new mutation",
+    "detail": "Expected values to be strictly equal:"
+   },
+   {
+    "subtest": "P6b a reopen after the slot was CLOSED is refused and the next retire tombstones the file",
+    "detail": "Expected values to be strictly equal:"
+   },
+   {
+    "subtest": "P9 a retirement during an in-flight grant enables nothing and closes the slot",
+    "detail": "Expected values to be strictly equal:"
+   },
+   {
+    "subtest": "6prime: publication owned by the keyed continuation, retirement before CLOSED",
+    "detail": "'5 subtests failed'"
+   },
+   {
+    "subtest": "P16 a failed local RETIRED write blocks CLOSED while the handles stay open",
+    "detail": "{\"outcome\":\"CLOSED\",\"retired\":true,\"closed\":true,\"release\":{\"outcome\":\"RELEASING\",\"phase\":\"RELEASING\",\"token\":{\"bindingDigest\":\"cdcd3a9e121a3177b3b3e618ffb2229683b9ad49bd1303e8acea10c2e8eeb8cf\",\"bodyDigest\":\"ef5644412761"
+   },
+   {
+    "subtest": "6double-prime: held grants, election changes, lost answers and absent consumers",
+    "detail": "'1 subtest failed'"
+   }
+  ],
+  "restored": {
+   "src/wasm-service/wasm-service-replica-lifecycle.js": "byte-identical",
+   "src/wasm-service/wasm-creation-retirement.js": "byte-identical"
+  }
+ },
+ "M4-rerun-serving-without-READY": {
+  "description": "Re-run of implementer M4: remove the READY term from the serving fence",
+  "testFile": "test/wasm-service/wasm-creation-publication.integration.test.js",
+  "exit": 1,
+  "elapsedMs": 3933,
+  "files": {
+   "total": 1,
+   "pass": 0,
+   "fail": 1
+  },
+  "engaged": true,
+  "failures": [
+   {
+    "subtest": "P4 retirement fences user work at call, RELEASING precedes RETIRED, RETIRED precedes CLOSED",
+    "detail": "READ_ADMITTED_AFTER_THE_STOP_FENCE"
+   },
+   {
+    "subtest": "6prime: publication owned by the keyed continuation, retirement before CLOSED",
+    "detail": "'1 subtest failed'"
+   }
+  ],
+  "restored": {
+   "src/wasm-service/wasm-service-serving-state.js": "byte-identical"
+  }
+ },
+ "M7-rerun-drop-waiter-term": {
+  "description": "Re-run of implementer M7: drop the waiter term of the wake predicate",
+  "testFile": "test/wasm-service/wasm-creation-publication.integration.test.js",
+  "exit": 1,
+  "elapsedMs": 4110,
+  "files": {
+   "total": 1,
+   "pass": 0,
+   "fail": 1
+  },
+  "engaged": true,
+  "failures": [
+   {
+    "subtest": "P1 native events publish every founder: durable grant, one wake, served write, quiet adapter",
+    "detail": "[{\"serviceDefinitionId\":\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\",\"reason\":\"creation_grant_held\",\"binding\":{\"definitionDigest\":\"3bc60e4846c47def52841554c86a8183be89df058705f820"
+   },
+   {
+    "subtest": "P2 predecessor outstanding holds the successor typed; P8 the last CLOSED wakes its owner",
+    "detail": "Expected values to be strictly equal:"
+   },
+   {
+    "subtest": "6prime: publication owned by the keyed continuation, retirement before CLOSED",
+    "detail": "'2 subtests failed'"
+   },
+   {
+    "subtest": "P15 a lost grant reply resolves to PUBLISHED inside the owner: one write, one wake",
+    "detail": "[{\"serviceDefinitionId\":\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\",\"reason\":\"creation_grant_held\",\"binding\":{\"definitionDigest\":\"3bc60e4846c47def52841554c86a8183be89df058705f820"
+   },
+   {
+    "subtest": "P17 an explicit START that observes genesis publishes and fires no wake",
+    "detail": "A_WAITED_START_ALSO_WOKE_ITS_OWNER"
+   },
+   {
+    "subtest": "6double-prime: held grants, election changes, lost answers and absent consumers",
+    "detail": "'2 subtests failed'"
+   }
+  ],
+  "restored": {
+   "src/wasm-service/wasm-creation-reconciliation.js": "byte-identical"
+  }
+ },
+ "M8-rerun-remove-post-grant-recheck": {
+  "description": "Re-run of implementer M8: remove the recheck after the grant await",
+  "testFile": "test/wasm-service/wasm-creation-publication.integration.test.js",
+  "exit": 1,
+  "elapsedMs": 4066,
+  "files": {
+   "total": 1,
+   "pass": 0,
+   "fail": 1
+  },
+  "engaged": true,
+  "failures": [
+   {
+    "subtest": "P9 a retirement during an in-flight grant enables nothing and closes the slot",
+    "detail": "A_GRANT_LANDED_LOCALLY_AFTER_THE_STOP_FENCE"
+   },
+   {
+    "subtest": "6prime: publication owned by the keyed continuation, retirement before CLOSED",
+    "detail": "'1 subtest failed'"
+   }
+  ],
+  "restored": {
+   "src/wasm-service/wasm-creation-publication.js": "byte-identical"
+  }
+ },
+ "M10-rerun-remove-releasing-closed-guards": {
+  "description": "Re-run of implementer M10: remove the CLOSED-monotonic and allowed-from rows of the resource transition table",
+  "testFile": "test/control-plane/service-instance-creation-cas.test.js",
+  "exit": 1,
+  "elapsedMs": 979,
+  "files": {
+   "total": 1,
+   "pass": 0,
+   "fail": 1
+  },
+  "engaged": true,
+  "failures": [
+   {
+    "subtest": "ServiceDefinitionsOwner resource phase table: guarded RELEASING, monotonic CLOSED slots",
+    "detail": "RELEASING_REGRESSED_A_CLOSED_SLOT"
+   }
+  ],
+  "restored": {
+   "src/control-plane/owners/service-instance-state.js": "byte-identical"
+  }
+ },
+ "M11-rerun-retire-target-by-serviceId": {
+  "description": "Re-run of implementer M11: match the retire target by serviceId instead of creation digest",
+  "testFile": "test/wasm-service/wasm-creation-publication.integration.test.js",
+  "exit": 1,
+  "elapsedMs": 4850,
+  "files": {
+   "total": 1,
+   "pass": 0,
+   "fail": 1
+  },
+  "engaged": true,
+  "failures": [
+   {
+    "subtest": "P2 predecessor outstanding holds the successor typed; P8 the last CLOSED wakes its owner",
+    "detail": "{\"outcome\":\"UNKNOWN\",\"reason\":\"CONSENSUS_SERVING_NOT_IMPLEMENTED\",\"operationId\":\"successor-operation-0\"}"
+   },
+   {
+    "subtest": "P5c a re-stop of the predecessor retires its file by creation and never touches a successor",
+    "detail": "PREDECESSOR_RETIREMENT_TOUCHED_THE_SUCCESSOR"
+   },
+   {
+    "subtest": "6prime: publication owned by the keyed continuation, retirement before CLOSED",
+    "detail": "'2 subtests failed'"
+   }
+  ],
+  "restored": {
+   "src/wasm-service/wasm-creation-retirement.js": "byte-identical"
+  }
+ }
+}

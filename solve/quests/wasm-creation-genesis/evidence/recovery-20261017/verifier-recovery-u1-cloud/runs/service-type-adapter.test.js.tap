@@ -1,0 +1,18 @@
+▶ ServiceTypeAdapter contract
+  ✔ cannot instantiate abstract class directly (3.041478ms)
+  ✔ rejects unknown service type (0.346493ms)
+  ✔ stores serviceType as readonly property (0.167201ms)
+  ✔ throws typed error for unimplemented contract methods (0.59071ms)
+✔ ServiceTypeAdapter contract (6.787289ms)
+▶ ServiceTypeAdapter inspectRetainedCreation (R2-F N11)
+  ✔ answers typed UNSUPPORTED on the partition and message-group adapters (1.9262ms)
+✔ ServiceTypeAdapter inspectRetainedCreation (R2-F N11) (2.06994ms)
+ℹ tests 5
+ℹ suites 2
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 19.98623
+# time=491ms

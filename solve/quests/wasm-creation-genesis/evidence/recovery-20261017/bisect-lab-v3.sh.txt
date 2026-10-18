@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# First-parent bisection of a lab-observed regression set.
+#   bisect-lab.sh <label> <good-sha> <bad-sha> <files-list> <host>
+# good = every listed file (present there) green; bad = at least one red.
+# Each step pushes refs/heads/probe/bisect-<label>-<n> at the midpoint (a
+# preservation push of an existing commit), submits one lab test-files job
+# (files filtered to those present at the midpoint), waits for its result and
+# narrows. Output: <scratch>/bisect/<label>.log and <label>.result.
+set -euo pipefail
+LABEL="$1"; FILES="$4"; HOST="$5"
+# Git runs from the lane worktree, NEVER the primary checkout (another agent owns it).
+REPO=/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016
+GOOD=$(git -C "$REPO" rev-parse --verify "$2^{commit}"); BAD=$(git -C "$REPO" rev-parse --verify "$3^{commit}")
+S=/tmp/claude-1000/-mnt-data-peter-projects-lagrange/52d74044-bacb-41c7-9eb9-7fdbcbd93317/scratchpad
+LAB=$S/lab; OUT=$S/bisect; LOG=$OUT/$LABEL.log; RUNS=~/.local/state/lagrange-lab/runs
+log() { printf '%s %s\n' "$(date -u +%H:%M:%S)" "$*" | tee -a "$LOG"; }
+run_at() { # $1 sha $2 step -> prints "GOOD" or "BAD <files>" ; "SKIP" if no file present
+  local sha="$1"
+  local step="$2"
+  local ref="refs/heads/probe/bisect-$LABEL-$step"
+  local list="$OUT/$LABEL-$step.files"
+  : > "$list"; while read -r f; do git -C "$REPO" cat-file -e "$sha:$f" 2>/dev/null && echo "$f" >> "$list" || true; done < "$FILES"
+  [ -s "$list" ] || { echo SKIP; return; }
+  # An up-to-date push runs the pre-push hook with EMPTY stdin, which fail-closes
+  # into a full gate of HEAD (observed 2026-10-17). Push only when the remote
+  # does not already hold this sha at this ref.
+  local remote_sha; remote_sha=$(git -C "$REPO" ls-remote origin "$ref" | cut -f1)
+  if [ "$remote_sha" != "$sha" ]; then
+    git -C "$REPO" push -q origin "$sha:$ref" >/dev/null 2>&1 || git -C "$REPO" push -q -f origin "$sha:$ref" >/dev/null 2>&1
+  fi
+  local sub rid reuse_var="REUSE_${step}"
+  rid="${!reuse_var:-}"
+  if [ -z "$rid" ]; then
+    sub=$(cd "$LAB" && python3 -I lab-request.py test-files --sha "$sha" --ref "$ref" --host "$HOST" --tests-file "$list" --seconds 1800 --hours 12 --submit 2>&1); rid=$(printf '%s' "$sub" | sed -n 's/^request_id=//p')
+  fi
+  log "step $step sha ${sha:0:9} files=$(wc -l < "$list") request=$rid"
+  local waited=0; while [ ! -f "$RUNS/$rid/result.json" ]; do sleep 30; waited=$((waited+30)); [ $waited -gt 10800 ] && { log "TIMEOUT waiting $rid"; echo SKIP; return; }; done
+  local outcome; outcome=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1])).get("outcome"))' "$RUNS/$rid/result.json")
+  if [ "$outcome" = "REFUSED" ] || [ "$outcome" = "ERROR" ]; then log "step $step $outcome"; echo SKIP; return; fi
+  local reds; reds=$(grep -E '^\[[a-z-]+\] not ok test/' "$RUNS/$rid/executor.log" | sed -E 's/^\[[a-z-]+\] not ok //; s/ \(.*//' | tr '\n' ' ')
+  if [ -z "$reds" ]; then echo GOOD; else echo "BAD $reds"; fi
+}
+log "bisect $LABEL good=${GOOD:0:9} bad=${BAD:0:9} host=$HOST"
+V=$(run_at "$GOOD" good); log "good end: $V"; [[ "$V" == GOOD ]] || { log "GOOD END IS NOT GREEN: $V"; echo "good-end-red: $V" > "$OUT/$LABEL.result"; exit 2; }
+step=0
+while :; do
+  n=$(git -C "$REPO" rev-list --first-parent --count "$GOOD..$BAD")
+  [ "$n" -le 1 ] && break
+  mid=$(git -C "$REPO" rev-list --first-parent "$GOOD..$BAD" | sed -n "$(( (n+1)/2 ))p")
+  step=$((step+1)); V=$(run_at "$mid" "$step"); log "step $step ${mid:0:9} ($n commits left): $V"
+  case "$V" in GOOD) GOOD="$mid";; BAD*) BAD="$mid";; SKIP) log "skip: treating as bad to continue"; BAD="$mid";; esac
+done
+log "RESULT: first bad first-parent commit = $BAD ($(git -C "$REPO" log -1 --format='%ad %s' --date=short "$BAD" | cut -c1-120)); last good = $GOOD"
+printf 'first_bad=%s\nlast_good=%s\n' "$BAD" "$GOOD" > "$OUT/$LABEL.result"

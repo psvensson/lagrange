@@ -1,0 +1,11 @@
+--- a/src/node/runtime-service-bound-creation-route.js	2026-10-17 18:42:43.056196606 +0200
++++ b/src/node/runtime-service-bound-creation-route.js	2026-10-17 18:42:43.060196636 +0200
+@@ -232,7 +232,7 @@
+ // settle leaves the memo (RV5.2); the next REMOVE re-drives the retirement.
+ function deferDuringRetirement(handler, existing, params) {
+   settleCreation(handler, params, {kind: DECISION.DEFERRED,
+-    errorCode: HANDLER_ERROR.RETIREMENT_IN_PROGRESS, names: false});
++    errorCode: HANDLER_ERROR.RETIREMENT_IN_PROGRESS, names: true});
+   return inProgressReply(handler, params.replicaId);
+ }
+ 

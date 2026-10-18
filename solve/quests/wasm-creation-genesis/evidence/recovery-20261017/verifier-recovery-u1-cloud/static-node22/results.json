@@ -1,0 +1,384 @@
+[
+  {
+    "name": "fast-static",
+    "command": [
+      "node",
+      "scripts/check-fast-static.js",
+      "--base",
+      "381750de29af647d446b19adedf1da53eb712093",
+      "--explain"
+    ],
+    "exitCode": 1,
+    "seconds": 24.13
+  },
+  {
+    "name": "decision-01",
+    "command": [
+      "node",
+      "scripts/check-guideline-decision-boundaries.js",
+      "--json",
+      "src/node/runtime-service-bound-creation-route.js"
+    ],
+    "exitCode": 0,
+    "seconds": 0.114
+  },
+  {
+    "name": "decision-02",
+    "command": [
+      "node",
+      "scripts/check-guideline-decision-boundaries.js",
+      "--json",
+      "src/node/runtime-service-handler-constants.js"
+    ],
+    "exitCode": 0,
+    "seconds": 0.085
+  },
+  {
+    "name": "decision-03",
+    "command": [
+      "node",
+      "scripts/check-guideline-decision-boundaries.js",
+      "--json",
+      "src/node/runtime-service-handler.js"
+    ],
+    "exitCode": 0,
+    "seconds": 0.137
+  },
+  {
+    "name": "decision-04",
+    "command": [
+      "node",
+      "scripts/check-guideline-decision-boundaries.js",
+      "--json",
+      "src/node/runtime-service-restart-inventory.js"
+    ],
+    "exitCode": 0,
+    "seconds": 0.094
+  },
+  {
+    "name": "decision-05",
+    "command": [
+      "node",
+      "scripts/check-guideline-decision-boundaries.js",
+      "--json",
+      "src/runtime/service-runtime-consensus-bootstrap.js"
+    ],
+    "exitCode": 0,
+    "seconds": 0.091
+  },
+  {
+    "name": "decision-06",
+    "command": [
+      "node",
+      "scripts/check-guideline-decision-boundaries.js",
+      "--json",
+      "src/runtime/service-runtime-lifecycle-operation-methods.js"
+    ],
+    "exitCode": 0,
+    "seconds": 0.108
+  },
+  {
+    "name": "decision-07",
+    "command": [
+      "node",
+      "scripts/check-guideline-decision-boundaries.js",
+      "--json",
+      "src/runtime/wasm-component-driver-consensus.js"
+    ],
+    "exitCode": 0,
+    "seconds": 0.09
+  },
+  {
+    "name": "decision-08",
+    "command": [
+      "node",
+      "scripts/check-guideline-decision-boundaries.js",
+      "--json",
+      "src/runtime/wasm-component-driver.js"
+    ],
+    "exitCode": 0,
+    "seconds": 0.113
+  },
+  {
+    "name": "decision-09",
+    "command": [
+      "node",
+      "scripts/check-guideline-decision-boundaries.js",
+      "--json",
+      "src/service/adapters/runtime-service-adapter.js"
+    ],
+    "exitCode": 0,
+    "seconds": 0.078
+  },
+  {
+    "name": "decision-10",
+    "command": [
+      "node",
+      "scripts/check-guideline-decision-boundaries.js",
+      "--json",
+      "src/service/service-consensus-bootstrap.js"
+    ],
+    "exitCode": 0,
+    "seconds": 0.095
+  },
+  {
+    "name": "decision-11",
+    "command": [
+      "node",
+      "scripts/check-guideline-decision-boundaries.js",
+      "--json",
+      "src/service/service-consensus-creation-intent.js"
+    ],
+    "exitCode": 0,
+    "seconds": 0.121
+  },
+  {
+    "name": "decision-12",
+    "command": [
+      "node",
+      "scripts/check-guideline-decision-boundaries.js",
+      "--json",
+      "src/service/service-lifecycle-manager.js"
+    ],
+    "exitCode": 0,
+    "seconds": 0.102
+  },
+  {
+    "name": "decision-13",
+    "command": [
+      "node",
+      "scripts/check-guideline-decision-boundaries.js",
+      "--json",
+      "src/service/service-lifecycle-recovery.js"
+    ],
+    "exitCode": 0,
+    "seconds": 0.099
+  },
+  {
+    "name": "decision-14",
+    "command": [
+      "node",
+      "scripts/check-guideline-decision-boundaries.js",
+      "--json",
+      "src/service/service-type-adapter.js"
+    ],
+    "exitCode": 0,
+    "seconds": 0.071
+  },
+  {
+    "name": "decision-15",
+    "command": [
+      "node",
+      "scripts/check-guideline-decision-boundaries.js",
+      "--json",
+      "src/wasm-service/wasm-creation-opening.js"
+    ],
+    "exitCode": 0,
+    "seconds": 0.114
+  },
+  {
+    "name": "decision-16",
+    "command": [
+      "node",
+      "scripts/check-guideline-decision-boundaries.js",
+      "--json",
+      "src/wasm-service/wasm-creation-retirement.js"
+    ],
+    "exitCode": 0,
+    "seconds": 0.095
+  },
+  {
+    "name": "decision-17",
+    "command": [
+      "node",
+      "scripts/check-guideline-decision-boundaries.js",
+      "--json",
+      "src/wasm-service/wasm-service-lifecycle.js"
+    ],
+    "exitCode": 0,
+    "seconds": 0.107
+  },
+  {
+    "name": "eslint",
+    "command": [
+      "node",
+      "node_modules/eslint/bin/eslint.js",
+      "src/node/runtime-service-bound-creation-route.js",
+      "src/node/runtime-service-handler-constants.js",
+      "src/node/runtime-service-handler.js",
+      "src/node/runtime-service-restart-inventory.js",
+      "src/runtime/service-runtime-consensus-bootstrap.js",
+      "src/runtime/service-runtime-lifecycle-operation-methods.js",
+      "src/runtime/wasm-component-driver-consensus.js",
+      "src/runtime/wasm-component-driver.js",
+      "src/service/adapters/runtime-service-adapter.js",
+      "src/service/service-consensus-bootstrap.js",
+      "src/service/service-consensus-creation-intent.js",
+      "src/service/service-lifecycle-manager.js",
+      "src/service/service-lifecycle-recovery.js",
+      "src/service/service-type-adapter.js",
+      "src/wasm-service/wasm-creation-opening.js",
+      "src/wasm-service/wasm-creation-retirement.js",
+      "src/wasm-service/wasm-service-lifecycle.js",
+      "test/node/runtime-service-bound-route.test.js",
+      "test/runtime/wasm-driver-contract-conformance.test.js",
+      "test/service/service-consensus-creation-intent.test.js",
+      "test/service/service-type-adapter.test.js",
+      "test/wasm-service/bound-creation-handler-embedding-fixture.js",
+      "test/wasm-service/bound-creation-restart.integration.test.js",
+      "test/wasm-service/wasm-creation-local-record.test.js",
+      "test/wasm-service/wasm-creation-publication.integration.test.js",
+      "test/wasm-service/wasm-service-lifecycle.test.js"
+    ],
+    "exitCode": 0,
+    "seconds": 1.651
+  },
+  {
+    "name": "complexity",
+    "command": [
+      "node",
+      "scripts/check-complexity.js",
+      "--scoped",
+      "src/node/runtime-service-bound-creation-route.js",
+      "src/node/runtime-service-handler-constants.js",
+      "src/node/runtime-service-handler.js",
+      "src/node/runtime-service-restart-inventory.js",
+      "src/runtime/service-runtime-consensus-bootstrap.js",
+      "src/runtime/service-runtime-lifecycle-operation-methods.js",
+      "src/runtime/wasm-component-driver-consensus.js",
+      "src/runtime/wasm-component-driver.js",
+      "src/service/adapters/runtime-service-adapter.js",
+      "src/service/service-consensus-bootstrap.js",
+      "src/service/service-consensus-creation-intent.js",
+      "src/service/service-lifecycle-manager.js",
+      "src/service/service-lifecycle-recovery.js",
+      "src/service/service-type-adapter.js",
+      "src/wasm-service/wasm-creation-opening.js",
+      "src/wasm-service/wasm-creation-retirement.js",
+      "src/wasm-service/wasm-service-lifecycle.js"
+    ],
+    "exitCode": 0,
+    "seconds": 0.566
+  },
+  {
+    "name": "cognitive",
+    "command": [
+      "node",
+      "scripts/check-cognitive-complexity.js",
+      "--scoped",
+      "src/node/runtime-service-bound-creation-route.js",
+      "src/node/runtime-service-handler-constants.js",
+      "src/node/runtime-service-handler.js",
+      "src/node/runtime-service-restart-inventory.js",
+      "src/runtime/service-runtime-consensus-bootstrap.js",
+      "src/runtime/service-runtime-lifecycle-operation-methods.js",
+      "src/runtime/wasm-component-driver-consensus.js",
+      "src/runtime/wasm-component-driver.js",
+      "src/service/adapters/runtime-service-adapter.js",
+      "src/service/service-consensus-bootstrap.js",
+      "src/service/service-consensus-creation-intent.js",
+      "src/service/service-lifecycle-manager.js",
+      "src/service/service-lifecycle-recovery.js",
+      "src/service/service-type-adapter.js",
+      "src/wasm-service/wasm-creation-opening.js",
+      "src/wasm-service/wasm-creation-retirement.js",
+      "src/wasm-service/wasm-service-lifecycle.js"
+    ],
+    "exitCode": 0,
+    "seconds": 1.172
+  },
+  {
+    "name": "literals",
+    "command": [
+      "node",
+      "scripts/check-guideline-literals.js",
+      "--json",
+      "src/node/runtime-service-bound-creation-route.js",
+      "src/node/runtime-service-handler-constants.js",
+      "src/node/runtime-service-handler.js",
+      "src/node/runtime-service-restart-inventory.js",
+      "src/runtime/service-runtime-consensus-bootstrap.js",
+      "src/runtime/service-runtime-lifecycle-operation-methods.js",
+      "src/runtime/wasm-component-driver-consensus.js",
+      "src/runtime/wasm-component-driver.js",
+      "src/service/adapters/runtime-service-adapter.js",
+      "src/service/service-consensus-bootstrap.js",
+      "src/service/service-consensus-creation-intent.js",
+      "src/service/service-lifecycle-manager.js",
+      "src/service/service-lifecycle-recovery.js",
+      "src/service/service-type-adapter.js",
+      "src/wasm-service/wasm-creation-opening.js",
+      "src/wasm-service/wasm-creation-retirement.js",
+      "src/wasm-service/wasm-service-lifecycle.js"
+    ],
+    "exitCode": 0,
+    "seconds": 0.186
+  },
+  {
+    "name": "silent-catch",
+    "command": [
+      "node",
+      "scripts/check-guideline-silent-catch.js",
+      "--json",
+      "src/node/runtime-service-bound-creation-route.js",
+      "src/node/runtime-service-handler-constants.js",
+      "src/node/runtime-service-handler.js",
+      "src/node/runtime-service-restart-inventory.js",
+      "src/runtime/service-runtime-consensus-bootstrap.js",
+      "src/runtime/service-runtime-lifecycle-operation-methods.js",
+      "src/runtime/wasm-component-driver-consensus.js",
+      "src/runtime/wasm-component-driver.js",
+      "src/service/adapters/runtime-service-adapter.js",
+      "src/service/service-consensus-bootstrap.js",
+      "src/service/service-consensus-creation-intent.js",
+      "src/service/service-lifecycle-manager.js",
+      "src/service/service-lifecycle-recovery.js",
+      "src/service/service-type-adapter.js",
+      "src/wasm-service/wasm-creation-opening.js",
+      "src/wasm-service/wasm-creation-retirement.js",
+      "src/wasm-service/wasm-service-lifecycle.js"
+    ],
+    "exitCode": 0,
+    "seconds": 0.2
+  },
+  {
+    "name": "shards",
+    "command": [
+      "npm",
+      "run",
+      "audit:shards"
+    ],
+    "exitCode": 1,
+    "seconds": 4.066
+  },
+  {
+    "name": "impact-contracts",
+    "command": [
+      "npm",
+      "run",
+      "audit:impact-contracts"
+    ],
+    "exitCode": 0,
+    "seconds": 0.331
+  },
+  {
+    "name": "duplication",
+    "command": [
+      "npm",
+      "run",
+      "test:duplication"
+    ],
+    "exitCode": 134,
+    "seconds": 253.877
+  },
+  {
+    "name": "unused",
+    "command": [
+      "npm",
+      "run",
+      "test:unused:ratchet"
+    ],
+    "exitCode": 1,
+    "seconds": 29.628
+  }
+]

@@ -1,0 +1,11 @@
+--- a/src/wasm-service/wasm-creation-reconciliation.js
++++ b/src/wasm-service/wasm-creation-reconciliation.js
+@@ -45,7 +45,7 @@
+     for (const event of WAKE_EVENTS) {
+       this.subscriptions.push(context.port.subscribe(event, () => {
+         // Never read membership, submit INIT, await or retain event payloads here.
+-        if (this.current(context)) this.queue.enqueue(this.replica.replicaId, event, context);
++        if (this.current(context)) return;
+       }));
+     }
+   }

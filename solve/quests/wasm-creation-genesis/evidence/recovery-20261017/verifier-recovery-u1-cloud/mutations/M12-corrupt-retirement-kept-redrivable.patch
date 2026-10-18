@@ -1,0 +1,11 @@
+--- a/src/node/runtime-service-bound-creation-route.js
++++ b/src/node/runtime-service-bound-creation-route.js
+@@ -56,7 +56,7 @@
+   [OP_STATE.CANCELLED, DECISION.COMPLETED], [OP_STATE.FAILED, DECISION.FAILED]]);
+ // R1-B (N5): a corrupt local file is an operator matter, never a re-drive.
+ const PERMANENT_RETIREMENT_REFUSALS = new Set([OUTCOME.INVALID_REQUEST,
+-  OUTCOME.CONTENT_CONFLICT, OUTCOME.INVALID_LINEAGE, OUTCOME.CORRUPT_STATE]);
++  OUTCOME.CONTENT_CONFLICT, OUTCOME.INVALID_LINEAGE]);
+ // RV5.3: the wake reasons that leave work for after an in-flight CREATE;
+ // RESOURCE_CLOSED is "nothing local".
+ const PENDING_WAKE_REASONS = new Set([RECONCILE_REASON.CREATION_GENESIS_OBSERVED,

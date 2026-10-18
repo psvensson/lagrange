@@ -1,0 +1,42 @@
+{
+  "candidate": {
+    "failures": [
+      "prepare returns {status: READY} on success",
+      "start returns {status: RUNNING} on success",
+      "health returns {status: string}",
+      "prepare is idempotent (double prepare succeeds)",
+      "start is idempotent (double start succeeds)",
+      "valid descriptor always leads to successful prepare",
+      "prepared service always starts successfully"
+    ],
+    "counters": [
+      "# tests 30",
+      "# suites 7",
+      "# pass 23",
+      "# fail 7",
+      "# cancelled 0",
+      "# skipped 0",
+      "# todo 0"
+    ]
+  },
+  "base": {
+    "failures": [
+      "prepare returns {status: READY} on success",
+      "start returns {status: RUNNING} on success",
+      "health returns {status: string}",
+      "prepare is idempotent (double prepare succeeds)",
+      "start is idempotent (double start succeeds)",
+      "valid descriptor always leads to successful prepare",
+      "prepared service always starts successfully"
+    ],
+    "counters": [
+      "# tests 30",
+      "# suites 7",
+      "# pass 23",
+      "# fail 7",
+      "# cancelled 0",
+      "# skipped 0",
+      "# todo 0"
+    ]
+  }
+}

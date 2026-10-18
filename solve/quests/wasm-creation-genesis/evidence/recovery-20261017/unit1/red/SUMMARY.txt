@@ -1,0 +1,172 @@
+== bound-creation-restart.integration.test.base.txt
+  not ok P-R1 host: a retained creation with no local file is ABSENT_UNCLAIMED, memo HELD, one re-entry under its id; a :: Expected values to be strictly deep-equal: + actual - expected
+  not ok P-R1b host: a claim without its file (ABSENT_CLAIMED) is a permanent CREATION_STORAGE_MISSING, never a FRESH r :: Expected values to be strictly deep-equal: + actual - expected
+  not ok P-R4 host: local ADMITTED + metadata PUBLISHED (the grant CAS reply lost, owner reachable): reopen HELD, the r :: Expected values to be strictly deep-equal: + actual - expected
+  not ok P-R5 host: retired-not-closed (CLOSE_UNRESOLVED) before the restart: inventory RETIRED, memo REMOVING, an in-f :: Expected values to be strictly deep-equal: + actual - expected
+  not ok P-R6 host: metadata RELEASING, crash before the tombstone: the re-entry is a permanent RESOURCE_CLOSED; the ne :: Expected values to be strictly deep-equal: + actual - expected
+  not ok P-R7 host: a crash after each of the five retirement steps (R1-D) recovers idempotently :: Expected values to be strictly deep-equal: + actual - expected
+  not ok P-R8 in-process: a COMPLETED creation row re-enters as the permanent TERMINAL memo, its REMOVE is REMOVE_COMPL :: Expected values to be strictly equal: + actual - expected
+  not ok P-R9 host: CREATION_STORAGE_MISSING, CORRUPT_STATE and CONTENT_CONFLICT (a copied file) are permanent typed me :: host-1 + actual - expected
+  not ok P-R11 host: a message before ready is NOT_READY + deferRetry, nothing emitted; a wake between the memo write a :: CREATE_REPLICA + actual - expected
+  not ok P-R12 host: a PENDING row: the REMOVE resolves the reservation first (applied -> retired, sealed -> CANCELLED, :: same request + actual - expected
+  not ok P-R12c host: the REMOVE-time resolution persisted the token, crash before CLOSED: the restart re-enters a HELD :: host-2 RUNTIME_SERVICE_REMOVE_HELD: did not settle within the declared rounds
+  not ok P-R13 host: two hosts restart over the shared journal; each inventory holds only its own node's creation :: Expected values to be strictly deep-equal: + actual - expected
+  not ok P-R14 host: a REMOVE racing the restart re-entry takes custody: the re-entry is not started, the creation link :: restarted.handler.recoverRetainedCreations is not a function
+  ok     P-R15 process custody: no second composition runs the inventory while the owner lock is held; a failed startup :: 
+  not ok recovery unit 1: host restart of bound creations (inventory, memo, re-entry) :: 13 subtests failed
+  not ok R3-B an open-time UNAVAILABLE of a RETAINED creation is the NAMED deferral, decided by the opening module on i :: the manager passed the phase through; the opening module read again 
+  not ok recovery unit 1: typed open-time refusals reach the handler (R1-B, R3-B) :: 1 subtest failed
+== runtime-service-bound-route.test.base.txt
+  ok     C6-1 a retained creation answering HELD -> memo HELD + CREATE_HELD at the CREATING step :: 
+  ok     PUBLISHED_UNPROJECTED keeps the memo HELD; a confirmed PUBLISHED answers ACTIVE :: 
+  ok     Revision 4: a PUBLISHED_UNPROJECTED answer for an ungranted slot is contradicted and retired :: 
+  ok     UNKNOWN after retention is the handler-typed deferral: CREATE_FAILED + deferRetry, memo FAILED :: 
+  ok     TERMINAL_OPERATION is a permanent CREATE_FAILED with its code (slot not live) :: 
+  ok     C6-4 a definitive INTENT_NOT_FOUND for a bound-class definition is BOUND_ROUTE_REQUIRED :: 
+  ok     C6-5 an unavailable journal read defers a bound-class CREATE; never NOT_FOUND :: 
+  ok     a native_js definition with no retained creation takes the generic path, journal or not :: 
+  ok     cell (a) production-shaped manager (no journal): native_js and Cell generic, bound-class deferred :: 
+  ok     stage 1c: RuntimeServiceHandler bound CREATE route (RV2.2, RV3.2, RV3.3) :: 
+  ok     F9 a duplicate CREATE while a HELD re-entry is in flight starts no second resume :: 
+  ok     a wake naming the HELD operation re-enters once; a wake during it is recorded and consumed :: 
+  ok     C6-10 a wake naming no local operation answers NO_LOCAL_OPERATION and runs nothing :: 
+  ok     stage 1c: HELD re-entry and the node-local wake consumer (RV2.4, RV3.5) :: 
+  ok     RV5.1 a CREATE under another operation id for a HELD replica keeps the memo creation, re-enters it once, emits :: 
+  ok     RV5.1 a wake during that re-entry is RECORDED on the creation in-flight entry; no second resume runs beside it :: 
+  ok     RV5.2 a BOUND_ROUTE_REQUIRED refusal for a request naming no creation leaves a HELD memo untouched (outcome un :: 
+  ok     RV5.2 the catch path before the resume answers a retained class leaves a creation-naming memo untouched :: 
+  ok     RV5.3 a wake without a token operation id is NO_LOCAL_OPERATION, never matched to a nameless memo :: 
+  ok     RV5.3 a RESOURCE_CLOSED wake during the first START is recorded and re-enters nothing :: 
+  ok     RV6.3 (P5) a CREATE under another id while the memo is REMOVING keeps the creation, is deferred typed with RET :: 
+  ok     RV6.1 the in-progress tracker never writes a creation-naming memo: a CREATE after a completed bound REMOVE is  :: 
+  ok     RV6.2 (P6) a CREATE under another id while the memo is a named deferral keeps the creation, re-enters it once  :: 
+  ok     RV6.2 the same-id retry of a named deferral re-enters it once :: 
+  ok     RV6.4 (P8) a nameless HELD memo answers the ERROR reply with CORRUPT_LOCAL_MEMO, memo untouched, nothing emitt :: 
+  ok     RV7.2 (P14) a permanently failed named memo does not capture a CREATE under another id: the request proceeds u :: 
+  not ok RV7.2 (P15) I retired, a late duplicate of I answers RESOURCE_CLOSED, then J founder CREATE for the same canon :: Expected values to be strictly deep-equal: + actual - expected
+  ok     RV7.1 a DEFERRED settle records deferRetry:true, a permanent one does not; only the flagged memo re-enters :: 
+  ok     RV7.3 a named ACTIVE memo and a request under a different id: ALREADY_EXISTS, CREATE_FAILED CONTENT_CONFLICT u :: 
+  ok     RV7.3 the same-id duplicate of a named ACTIVE memo still emits CREATE_ACTIVE :: 
+  ok     RV6.3/RV6.4 codes at the handler constants owner :: 
+  not ok stage 1c round 3: the HELD creation keeps custody (RV5.1, RV5.2, RV5.3) :: 1 subtest failed
+  ok     closed:true retires through the manager bound STOP and completes :: 
+  ok     a HISTORY_UNAVAILABLE close of a durable tombstone completes (slot reused later) :: 
+  ok     a permanent refusal is REMOVE_FAILED with its code :: 
+  ok     C6-8/cell (b) closed:false -> REMOVE_HELD, memo REMOVING; the next REMOVE resolves :: 
+  not ok cell (c) a REMOVE whose creation row is PENDING completes and reserves nothing :: the REMOVE resolved the same request once 
+  ok     C6-9 after a handler restart the services row hint (replica_id, create_attempt_token) recovers the creation :: 
+  not ok stage 1c: bound REMOVE route (RV2.1, RV3.3 REMOVE table) :: 1 subtest failed
+  ok     result table over the real journal :: 
+  ok     a PENDING row answers NOT_ADMITTED; an unwired manager answers UNAVAILABLE :: 
+  ok     stage 1c: readRetainedCreation, the journal-only REMOVE read (RV2.1, RV3.3 N2) :: 
+  ok     HELD is a valid, peer-excluded, non-terminal status; HELD outcomes are UPDATE_STEP :: 
+  ok     stage 1c: shared vocabulary (RV3.6, RV3.8) :: 
+  not ok R1-H/R2-F a handler that awaits its restart inventory answers NOT_READY with deferRetry and emits nothing; aft :: Expected values to be strictly deep-equal: + actual - expected
+  not ok R4-A rule 2 / R5-A a GRANT_HELD wake whose grant is UNAVAILABLE is RECORDED for a HELD memo and leaves no pend :: the HELD-target branch records it + actual - expected
+  not ok R1-B/R3-C the open's typed code: a permanent code is a permanent CREATE_FAILED, UNAVAILABLE the named deferral :: STORAGE_MISSING + actual - expected
+  not ok R3-D a REMOVE of a CANCELLED creation is REMOVE_COMPLETED; of a FAILED one REMOVE_FAILED typed :: cancelled + actual - expected
+  not ok R2-A/R3-E a REMOVE of a PENDING row whose owner seals the request CANCELS the row (never FAILED) and completes :: Expected values to be strictly deep-equal: + actual - expected
+  not ok recovery unit 1 (design RECOVERY-DESIGN-20261017): the handler side :: 5 subtests failed
+== service-consensus-creation-intent.test.base.txt
+  ok     ServiceLifecycleManager persists original intent before reservation and token before return :: 
+  ok     ServiceLifecycleManager redelivery retains one origin and never reserves another ordinal :: 
+  ok     ServiceLifecycleManager recovers lost reservation from its original durable request :: 
+  ok     ServiceLifecycleManager resolves an applied intent write with lost reply :: 
+  ok     ServiceLifecycleManager resolves an applied admission write with lost reply :: 
+  ok     ServiceLifecycleManager refuses reservation when intent write did not persist :: 
+  ok     ServiceLifecycleManager retains the original request when admission persistence fails :: 
+  ok     ServiceLifecycleManager captures original intent before its first awaited read :: 
+  ok     ServiceLifecycleManager rejects changed descriptor under a retained operation ID :: 
+  ok     ServiceLifecycleManager recovery does not replace original intent with current resolver data :: 
+  not ok R5-A successor (:113-126): the scan inventories a PENDING row and reserves nothing; the re-entry resolves the  :: Expected values to be strictly deep-equal: + actual - expected
+  ok     ServiceLifecycleManager never revives CLOSED resource from retained admission :: 
+  ok     ServiceLifecycleManager completed journal is history, not a new effect grant :: 
+  ok     ServiceLifecycleManager cancelled journal is history, not a new effect grant :: 
+  ok     ServiceLifecycleManager failed journal is history, not a new effect grant :: 
+  ok     ServiceLifecycleManager refuses forged persisted admission rather than borrowing another token :: 
+  ok     ServiceLifecycleManager absent or unavailable journal cannot invent recovery intent :: 
+  ok     ServiceLifecycleManager requires durable journal capabilities before resource admission :: 
+  ok     ServiceLifecycleManager malformed or oversized intent allocates no journal or reservation :: 
+  ok     ServiceLifecycleManager concurrent identical delivery converges on one original operation and token :: 
+  ok     ServiceLifecycleManager validates descriptor lineage before retaining a new request :: 
+  ok     SystemTableCache projects actual intent/admission columns without granting lifecycle completion :: 
+  ok     ServiceLifecycleManager damaged bound journal cannot fall through to old unbound recovery :: 
+  not ok R5-A successor (:222-230): a corrupt journal row is an INVENTORIED CORRUPT_STATE entry with reentry false :: Expected values to be strictly deep-equal: + actual - expected
+  ok     ServiceLifecycleManager unavailable resource resolution after retention stays UNKNOWN :: 
+  not ok R5-A successor (:232-239): an unreachable owner after retention is ADMISSION_RETAINED with phase UNAVAILABLE ( :: Expected values to be strictly deep-equal: + actual - expected
+  ok     ServiceLifecycleManager does not erase bound descriptor fields into legacy physical CREATE :: 
+  not ok recovery R2-E the restart scan is total: a malformed row fails alone, the creation row after it is still inven :: operation row is missing operation_id
+  not ok recovery R1-D/R3-D the TERMINAL answer carries the row state :: Expected values to be strictly deep-equal: + actual - expected
+== service-type-adapter.test.base.txt
+  ok     cannot instantiate abstract class directly :: 
+  ok     rejects unknown service type :: 
+  ok     stores serviceType as readonly property :: 
+  ok     throws typed error for unimplemented contract methods :: 
+  ok     ServiceTypeAdapter contract :: 
+  not ok answers typed UNSUPPORTED on the partition and message-group adapters :: adapter.inspectRetainedCreation is not a function
+  not ok ServiceTypeAdapter inspectRetainedCreation (R2-F N11) :: 1 subtest failed
+== wasm-creation-local-record.test.base.txt
+== wasm-service-lifecycle.test.base.txt
+  ok     should export WasmServiceLifecycle class :: 
+  ok     should export REPLICA_LIFECYCLE_STATE enum :: 
+  ok     exports :: 
+  ok     should initialize with empty active replicas :: 
+  ok     should store portAllocator reference :: 
+  ok     should store moduleMirror reference :: 
+  ok     should store nodeId :: 
+  ok     binds module mirror to cdc integration service :: 
+  ok     constructor :: 
+  ok     should store replica in active replicas map :: 
+  ok     should return the created replica :: 
+  ok     derives the durable path from the data directory owner :: 
+  ok     should pass serviceDefinitionId to replica :: 
+  ok     should pass replicaId from config :: 
+  ok     should pass readConsistency from definition :: 
+  ok     should create multiple replicas for different services :: 
+  ok     createReplica :: 
+  ok     refuses a replica without its explicit replica set :: 
+  ok     refuses a replica outside or a set without distinct ids :: 
+  ok     founding replica set :: 
+  ok     should allocate port and return result :: 
+  ok     should set portAllocation on the replica :: 
+  ok     should return null for unknown serviceId :: 
+  ok     should check module mirror when handler provided :: 
+  ok     fails closed when module is unavailable :: 
+  ok     fails closed when module mirror is missing :: 
+  ok     records and clears startup diagnostics :: 
+  ok     should build endpoint when serviceDefinition provided :: 
+  ok     should return null endpoint when no serviceDefinition :: 
+  ok     should allocate different ports for different services :: 
+  ok     opens the replica consensus on the raft-rs operation port :: 
+  ok     refuses start typed when the node owns no port allocator :: 
+  ok     releases the port when its consensus refuses to start :: 
+  not ok a typed contract refusal of the consensus start is the diagnostic code itself :: Expected values to be strictly equal: + actual - expected
+  not ok startReplica :: 1 subtest failed
+  ok     should release port and remove from map :: 
+  ok     should return stopped false for unknown serviceId :: 
+  ok     should make port available again after release :: 
+  ok     should call replica shutdown :: 
+  ok     a stop in flight leaves the successor created and started for the same serviceId owned, registered and stoppab :: 
+  ok     a start of a replica whose stop is in flight is refused typed :: 
+  ok     a stop that begins while a start awaits refuses that start typed :: 
+  ok     a start refused on a stopping replica leaves a successor's port and diagnostic alone :: 
+  ok     a failing start overlapped by a stop leaves a successor's port and diagnostic alone :: 
+  ok     a failed start releases its port when the successor that replaced it never started :: 
+  ok     a refused start leaves no diagnostic once its stop removed the replica :: 
+  ok     a replica is never created over a live one for its serviceId :: 
+  ok     stop and start overlapping for one serviceId :: 
+  ok     stopReplica :: 
+  ok     after PRESENT a second mark for its own token answers ALREADY_PRESENT and leaves pendingRoleUpdate untouched :: 
+  ok     enableServicesRowPublication (RV3.4, RV5.4) :: 
+  ok     should return active replica by serviceId :: 
+  ok     should return null for unknown serviceId :: 
+  ok     getReplica :: 
+  ok     should return empty map when no replicas :: 
+  ok     should return all active replicas :: 
+  ok     getActiveReplicas :: 
+  ok     should stop all active replicas :: 
+  ok     should release all ports :: 
+  ok     should handle empty replicas map gracefully :: 
+  ok     unbinds module mirror CDC listeners on shutdown :: 
+  ok     shutdownAll :: 
+  not ok WasmServiceLifecycle :: 1 subtest failed

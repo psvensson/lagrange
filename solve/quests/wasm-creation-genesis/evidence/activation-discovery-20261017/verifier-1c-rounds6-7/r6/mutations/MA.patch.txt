@@ -1,0 +1,10 @@
+--- a/src/service/service-consensus-creation-intent.js	2026-10-17 19:27:48.955009420 +0200
++++ b/src/service/service-consensus-creation-intent.js	2026-10-17 19:27:48.963009489 +0200
+@@ -95,6 +95,7 @@
+     await manager._operationWriter(query.sql, query.params);
+   } catch (error) {
+     writeFailure = error;
++    throw error;
+   }
+   try {
+     return await readJournal(manager, operationId);

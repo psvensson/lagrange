@@ -1,0 +1,11 @@
+{
+  "original_path": "static-prereq-reruns/jscpd-test.json",
+  "bytes": 2560765,
+  "sha256": "24b459d282dcb6fb287b94028877818f6429fcb1b4e480d13fb168c9a0d35449",
+  "file_name": "rs-raft-u1-duplication-raw-20261018.json",
+  "library_file_id": "libfile_68c11b34ebc881919cb5c41c21760625",
+  "file_id": "file_000000009d04824682bb1c907e634d96",
+  "version": 0,
+  "canonical_solve_evidence_upload": "NOT_UPLOADED: gh executable unavailable in this cloud workspace; solve evidence add failed before upload. Use the existing evidence owner when available.",
+  "summary_path": "static-prereq-reruns/jscpd-test-summary.json"
+}

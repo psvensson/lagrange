@@ -1,0 +1,13 @@
+{
+  "head": "a251ce4fd9c980a78c0fd33d8a5f873161f90870",
+  "trackedStatus": "",
+  "trackedSrcTestFiles": 5220,
+  "changedSrcTestFiles": 31,
+  "independentAddedTests": 15,
+  "independentNegativeResults": 10,
+  "independentPositiveResults": 5,
+  "combinedPatchMeasuredAsOneRun": false,
+  "individualConstituentRunsMeasured": true,
+  "completePatchSha256": "51dafdbdb8c8b5438d3ca679e014a3038160c09f92a339040b4206ef3890367e",
+  "sourceTestManifestSha256": "12bedf58d4e24086d2070dc247e4d1f69f95ebfde13e11ff51ebd205391dc9e3"
+}

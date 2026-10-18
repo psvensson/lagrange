@@ -1,0 +1,2 @@
+Scanned 1 JavaScript files
+Found 0 runtime-grammar-contract violations

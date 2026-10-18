@@ -1,0 +1,2 @@
+Scoped complexity ratchet: 0 violation(s) in 5 target(s) (threshold: 12).
+Saved complexity report to test-output/analysis/complexity-scoped.json.

@@ -1,0 +1,10 @@
+--- a/src/node/runtime-service-restart-inventory.js
++++ b/src/node/runtime-service-restart-inventory.js
+@@ -125,6 +125,7 @@
+   }
+   handler.logger.info(LOG.RESTART_RETIREMENT_REDRIVEN, {...creation, nodeId: handler.nodeId,
+     decision: decision.kind, outcome: decision.errorCode ?? null});
++  handler.emitExecutorOutcome('RUNTIME_SERVICE_REMOVE_COMPLETED', creation.operationId, 'REMOVED', {replicaId: creation.replicaId});
+   return decision;
+ }
+ 

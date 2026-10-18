@@ -1,0 +1,259 @@
+Source oversized-file ratchet: 26/27 over 800 lines.
+Test oversized-file ratchet: 21/21 over 1500 lines.
+
+Largest oversized files (25 max):
+2820 test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js (threshold 1500)
+2232 test/distributed/harness/__tests__/cluster-load-readiness-stability-quiescence-test-cases.js (threshold 1500)
+2082 test/diagnostics/topology-convergence-graph.test.js (threshold 1500)
+2075 src/raft/raft-rs-runtime-owner.js (threshold 800)
+1884 test/distributed/harness/cluster-class-lifecycle-base.js (threshold 1500)
+1879 test/rebalancer/replace-replica-workflow-tail-more-test-cases.js (threshold 1500)
+1873 test/distributed/harness/assertions-convergence-wait.js (threshold 1500)
+1864 test/bootstrap/node-joining-service.test.js (threshold 1500)
+1770 test/distributed/harness/failure-bundle-diagnostics-artifact-builder.js (threshold 1500)
+1764 test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js (threshold 1500)
+1740 test/rebalancer/rebalance-coordinator-outcome-routing.test.js (threshold 1500)
+1714 test/admin/admin-control-snapshot-publication-convergence-membership-observation-test-cases.js (threshold 1500)
+1689 test/distributed/harness/post-rebalance-closure-contract.js (threshold 1500)
+1647 test/distributed/harness/__tests__/cluster-active-wait-startup-progress-witness-test-cases.js (threshold 1500)
+1633 test/rebalancer/priority-recovery-snapshot-handoff-timeout-reentry-test-cases.js (threshold 1500)
+1624 test/distributed/harness/cluster-class-control-snapshot-recovery.js (threshold 1500)
+1597 test/distributed/harness/cluster-class-quiescence.js (threshold 1500)
+1595 test/distributed/harness/report-writer.js (threshold 1500)
+1588 test/logging/logs-table-service.test.js (threshold 1500)
+1568 test/admin/admin-control-snapshot-deferred-refresh-membership-observation-test-cases.js (threshold 1500)
+1555 test/distributed/harness/__tests__/report-writer.test.js (threshold 1500)
+1513 test/distributed/harness/__tests__/run.test.js (threshold 1500)
+1264 src/rebalancer/operation-workflow-dispatch-response-reconcile.js (threshold 800)
+1068 src/control-plane/control-plane-readiness-priority-recovery-planning.js (threshold 800)
+1068 src/rebalancer/move-planner-move-calculation-methods.js (threshold 800)
+Scanned 8 JavaScript files
+Found 0 hot-path diagnostics violations
+Matched 31 inherited hot-path diagnostics baseline violations
+[work/rs-raft-event-reconciliation-20261016 ca90e507] handover: preserve independent U1 rejection and cloud restart evidence
+ 227 files changed, 79781 insertions(+)
+ create mode 100644 solve/epics/raft-rs-full-cutover/HANDOVER-2026-10-18-cloud.md
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/activation-prerequisite-audit.md
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/cloud-lab-evidence/stage1c-original-requests.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/cloud-lab-evidence/stage1c-replacement-173.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/cloud-lab-evidence/stage1c-replacement-174.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/cloud-lab-evidence/stage1c-replacement-175.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/cloud-lab-evidence/stage1c-replacement-176.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/cloud-lab-evidence/stage1c-replacement-manifest.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/cloud-lab-evidence/takeover-ping-request.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/cloud-rsraft-bisect/issue-177-results.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/cloud-rsraft-bisect/issue-178-request.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/cloud-rsraft-bisect/issue-178-results.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/cloud-rsraft-bisect/issue-188-request.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/cloud-rsraft-bisect/issue-188-results.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/cloud-rsraft-bisect/issue-190-results.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/cloud-rsraft-bisect/issue173-comments.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/cloud-rsraft-bisect/issue174-comments.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/cloud-rsraft-bisect/issue175-comments.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/cloud-rsraft-bisect/issue176-comments.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/cloud-rsraft-bisect/issue177-comments.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/cloud-rsraft-bisect/issue178-comments.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/cloud-rsraft-bisect/issue183-comments.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/cloud-rsraft-bisect/issue184-comments.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/cloud-rsraft-bisect/issue188-comments.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/cloud-rsraft-bisect/issue190-comments.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/cloud-rsraft-bisect/issue191-comments.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/cloud-rsraft-bisect/issue191-results.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/cloud-rsraft-bisect/issue192-comments.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/cloud-rsraft-bisect/setA-history.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/cloud-rsraft-bisect/setB-bad-request.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/cloud-rsraft-bisect/setB-history.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/cloud-rsraft-bisect/setB-progress.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/cloud-rsraft-bisect/setB-step01-request.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/cloud-rsraft-bisect/setB-step02-request.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/stopped-status.md
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/u1-correction-design-verdict.md
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/u1-correction-inventory-amendment-draft.md
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/u1-correction-proposal.md
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/u1-inventory-continuation-contract-v2.md
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/u1-reservation-finality-bounded-verdict.md
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/u2-owner-plan.md
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/u2-progress-bound-amendment-draft.md
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/PRESERVATION.md
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/base-comparison/failure-signature.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/base-comparison/results.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/base-comparison/wasm-driver-contract-conformance.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/base-comparison/wasm-driver-contract-conformance.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/category-report.md
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/census/changed-files.txt
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/census/completion-terminal.txt
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/census/identity-local-owner.txt
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/census/retirement-lifetime.txt
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/census/scan.txt
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/census/start-outcomes.txt
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/census/unit2-exclusion.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/census/wake.txt
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/correction-design-review.md
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/final-restoration.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/final-source-test-sha256.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/bound-creation-restart.integration.test.js.extended.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/bound-creation-restart.integration.test.js.extended.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/bound-creation-restart.integration.test.js.independent-complete
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/bound-creation-restart.integration.test.js.runner.log.wrong-node24
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/bound-creation-restart.integration.test.js.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/bound-creation-restart.integration.test.js.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/bound-creation-restart.integration.test.js.tap.stderr.wrong-node24
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/bound-creation-restart.integration.test.js.tap.wrong-node24
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/bound-creation-restart.original
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/independent-witnesses-complete.patch
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/independent-witnesses-extended.patch
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/independent-witnesses.patch
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/inventory-overlap.js.txt
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/inventory-owner-read-control.js.txt
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/mutation-direct-controls.js.txt
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/mutation-direct-controls.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/mutation-direct-controls.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/older-reenter-inventory.js.txt
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/older-reenter-inventory.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/older-reenter-inventory.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/predecessor-successor-inventory.js.txt
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/predecessor-successor.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/predecessor-successor.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/reservation-future-binding.js.txt
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/reservation-races.js.txt
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/restart-races.js.txt
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/retirement-shutdown.js.txt
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/service-consensus-creation-intent.original
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/service-consensus-creation-intent.test.js.extended.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/service-consensus-creation-intent.test.js.extended.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/service-consensus-creation-intent.test.js.independent-complete
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/service-consensus-creation-intent.test.js.runner.log.diagnostic-fixture-gap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/service-consensus-creation-intent.test.js.runner.log.wrong-node24
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/service-consensus-creation-intent.test.js.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/service-consensus-creation-intent.test.js.tap.diagnostic-fixture-gap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/service-consensus-creation-intent.test.js.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/service-consensus-creation-intent.test.js.tap.stderr.diagnostic-fixture-gap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/service-consensus-creation-intent.test.js.tap.stderr.wrong-node24
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/service-consensus-creation-intent.test.js.tap.wrong-node24
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/supplement-results.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations-direct/M02.direct-summary.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations-direct/M02.patch
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations-direct/M02.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations-direct/M02.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations-direct/M05.direct-summary.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations-direct/M05.patch
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations-direct/M05.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations-direct/M05.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations-direct/M12.direct-summary.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations-direct/M12.patch
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations-direct/M12.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations-direct/M12.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations-direct/results.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations-direct/source-after.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations-direct/source-before.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M01-inventory-reads-resource-authority.patch
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M01-inventory-reads-resource-authority.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M01-inventory-reads-resource-authority.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M02-reentry-under-scan-id.patch
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M02-reentry-under-scan-id.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M02-reentry-under-scan-id.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M03-memo-after-reentry.patch
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M03-memo-after-reentry.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M03-memo-after-reentry.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M04-row-completed-at-published.patch
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M04-row-completed-at-published.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M04-row-completed-at-published.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M05-closed-redrive-skipped.patch
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M05-closed-redrive-skipped.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M05-closed-redrive-skipped.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M06-tombstone-inferred-from-storage-missing.patch
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M06-tombstone-inferred-from-storage-missing.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M06-tombstone-inferred-from-storage-missing.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M07-five-field-local-identity.patch
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M07-five-field-local-identity.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M07-five-field-local-identity.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M08-foreign-node-filter-removed.patch
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M08-foreign-node-filter-removed.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M08-foreign-node-filter-removed.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M09-redrive-emits-remove-outcome.patch
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M09-redrive-emits-remove-outcome.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M09-redrive-emits-remove-outcome.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M10-pending-terminal-without-resolution.patch
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M10-pending-terminal-without-resolution.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M10-pending-terminal-without-resolution.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M11-unavailable-grant-wake-pending.patch
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M11-unavailable-grant-wake-pending.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M11-unavailable-grant-wake-pending.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M12-corrupt-retirement-kept-redrivable.patch
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M12-corrupt-retirement-kept-redrivable.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M12-corrupt-retirement-kept-redrivable.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M13-arbitrary-lifecycle-code-permanent.patch
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M13-arbitrary-lifecycle-code-permanent.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/M13-arbitrary-lifecycle-code-permanent.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/results.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/source-after.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/source-before.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/mutations/summary.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/preserved-evidence-manifest.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/run-base-comparison.py
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/run-clean-suites.py
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/run-direct-mutations.py
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/run-final-statics.py
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/run-independent-extended.py
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/run-mutations.py
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/run-static-prereq-reruns.py
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/run-statics.py
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/run-supplements.py
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs-node22/bound-creation-handler-embedding.integration.test.js.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs-node22/bound-creation-handler-embedding.integration.test.js.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs-node22/bound-creation-restart.integration.test.js.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs-node22/bound-creation-restart.integration.test.js.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs-node22/results.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs-node22/runtime-service-bound-route.test.js.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs-node22/runtime-service-bound-route.test.js.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs-node22/runtime-service-handler.test.js.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs-node22/runtime-service-handler.test.js.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs-node22/service-consensus-creation-intent.test.js.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs-node22/service-consensus-creation-intent.test.js.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs-node22/service-type-adapter.test.js.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs-node22/service-type-adapter.test.js.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs-node22/test-counts.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs-node22/wasm-creation-local-record.test.js.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs-node22/wasm-creation-local-record.test.js.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs-node22/wasm-creation-publication.integration.test.js.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs-node22/wasm-creation-publication.integration.test.js.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs-node22/wasm-driver-contract-conformance.test.js.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs-node22/wasm-driver-contract-conformance.test.js.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs-node22/wasm-service-lifecycle.test.js.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs-node22/wasm-service-lifecycle.test.js.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs/bound-creation-handler-embedding.integration.test.js.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs/bound-creation-handler-embedding.integration.test.js.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs/bound-creation-restart.integration.test.js.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs/bound-creation-restart.integration.test.js.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs/results.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs/runtime-service-bound-route.test.js.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs/runtime-service-bound-route.test.js.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs/runtime-service-handler.test.js.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs/runtime-service-handler.test.js.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs/service-consensus-creation-intent.test.js.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs/service-consensus-creation-intent.test.js.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs/service-type-adapter.test.js.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs/service-type-adapter.test.js.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs/wasm-creation-local-record.test.js.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs/wasm-creation-local-record.test.js.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs/wasm-creation-publication.integration.test.js.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs/wasm-creation-publication.integration.test.js.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs/wasm-driver-contract-conformance.test.js.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs/wasm-driver-contract-conformance.test.js.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs/wasm-service-lifecycle.test.js.tap
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/runs/wasm-service-lifecycle.test.js.tap.stderr
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/static-final/dataset-prerequisite.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/static-final/results.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/static-node22/cognitive-complexity-scoped.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/static-node22/complexity-scoped.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/static-node22/results.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/static-prereq-reruns/impact-graph-seal.committed.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/static-prereq-reruns/impact-graph-seal.local.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/static-prereq-reruns/jscpd-src-scripts.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/static-prereq-reruns/jscpd-test-summary.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/static-prereq-reruns/jscpd-test.external-evidence.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/static-prereq-reruns/results.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/static-prereq-reruns/seal-comparison.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/static-prereq-reruns/subsystem-classes.expected.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/static-prereq-reruns/subsystem-observation-drift.json
+ create mode 100644 solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/verdict.md

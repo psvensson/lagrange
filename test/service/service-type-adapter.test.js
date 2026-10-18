@@ -1,6 +1,9 @@
 import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
 import {ServiceTypeAdapter} from '../../src/service/service-type-adapter.js';
+import {PartitionServiceAdapter} from '../../src/service/adapters/partition-service-adapter.js';
+import {MessageGroupServiceAdapter} from
+  '../../src/service/adapters/message-group-service-adapter.js';
 import {
   ServiceTypeAdapterNotImplementedError,
   UnknownServiceTypeError,
@@ -92,5 +95,19 @@ describe('ServiceTypeAdapter contract', () => {
         return true;
       },
     );
+  });
+});
+
+// Design RECOVERY-DESIGN-20261017 R2-F (N11): the inventory's local-half verb
+// is on the base; adapters without retained bound creations answer typed.
+describe('ServiceTypeAdapter inspectRetainedCreation (R2-F N11)', () => {
+  it('answers typed UNSUPPORTED on the partition and message-group adapters', async () => {
+    const hooks = {createReplica: async () => ({}), startReplica: async () => ({}),
+      stopReplica: async () => ({})};
+    for (const adapter of [new PartitionAdapterStub(), new PartitionServiceAdapter(hooks),
+      new MessageGroupServiceAdapter(hooks)]) {
+      assert.deepEqual(await adapter.inspectRetainedCreation({consensusCreation: {}}),
+        {outcome: 'UNSUPPORTED'}, adapter.serviceType);
+    }
   });
 });

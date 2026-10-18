@@ -9,6 +9,7 @@ import {
   SERVICE_LIFECYCLE_TRANSITIONS,
   SERVICE_OPERATION_STATE,
   SUBSYSTEM,
+  UNIFIED_SERVICE_TYPE,
 } from '../constants/index.js';
 import {
   buildIdempotencyCheckSQL,
@@ -41,9 +42,11 @@ import {
 } from './service-lifecycle-operations.js';
 import {recoverPendingOperations as recoverLifecyclePendingOperations} from './service-lifecycle-recovery.js';
 import {resolveTimeSource} from '../time/time-source.js';
-import {claimConsensusCreationOpening, prepareConsensusCreation, recoverConsensusCreation} from './service-consensus-creation-intent.js';
+import {claimConsensusCreationOpening, prepareConsensusCreation, readRetainedCreation,
+  recoverConsensusCreation, resolveRetainedReservation} from './service-consensus-creation-intent.js';
 
-import {bootstrapConsensusCreation} from './service-consensus-bootstrap.js';
+import {bootstrapConsensusCreation, resumeConsensusCreation} from
+  './service-consensus-bootstrap.js';
 
 const DEFAULT_DIAGNOSTICS_LIMIT = 100;
 const MAX_DIAGNOSTICS_LIMIT = 500;
@@ -556,6 +559,29 @@ const MAX_DIAGNOSTICS_LIMIT = 500;
   /** Resume only the original journaled intent, never a current-definition reconstruction. */
   async recoverConsensusCreation(operationId, context = {}) {
     return recoverConsensusCreation(this, operationId, context);
+  }
+  /** Journal-only read of one retained creation: no policy, reservation or metadata read. */
+  async readRetainedCreation(operationId) {
+    return readRetainedCreation(this, operationId);
+  }
+  /** REMOVE-time resolution of a PENDING creation's reservation; no runtime policy (R3-E). */
+  async resolveRetainedReservation(operationId) {
+    return resolveRetainedReservation(this, operationId);
+  }
+  /**
+   * The local half of one inventoried creation, answered by its adapter
+   * (design RECOVERY-DESIGN-20261017 R1-A): no physical effect; the manager
+   * reads no local file itself.
+   * @param {Object} owned - {consensusCreation: {intent, token, opening}}.
+   * @return {Promise<{outcome: string}>}
+   */
+  async inspectRetainedCreation(owned) {
+    const adapter = this._resolveAdapter(UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE);
+    return adapter.inspectRetainedCreation(owned);
+  }
+  /** Recover one retained creation by operation id and continue it, in one pass. */
+  async resumeConsensusCreation(operationId, context = {}) {
+    return resumeConsensusCreation(this, operationId, context);
   }
   /**
    * Create a service replica via the matching adapter.

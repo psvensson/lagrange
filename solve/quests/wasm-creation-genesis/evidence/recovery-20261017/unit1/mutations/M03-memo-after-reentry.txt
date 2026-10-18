@@ -1,0 +1,310 @@
+# test-files planned=1
+classified lane exclusive: 1 file(s), jobs=1
+thermal: ok cpu 47C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+not ok test/wasm-service/bound-creation-restart.integration.test.js (17 assertions, 3362ms)
+# TAP assertions failed; test process exited 1
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+TAP version 13
+# Subtest: recovery unit 1: host restart of bound creations (inventory, memo, re-entry)
+    # Subtest: P-R1 host: a retained creation with no local file is ABSENT_UNCLAIMED, memo HELD, one re-entry under its id; a REMOVE afterwards routes bound and completes
+    not ok 1 - P-R1 host: a retained creation with no local file is ABSENT_UNCLAIMED, memo HELD, one re-entry under its id; a REMOVE afterwards routes bound and completes
+      ---
+      duration_ms: 112.030294
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-restart.integration.test.js:164:3'
+      failureType: 'testCodeFailure'
+      error: |-
+        the memo is written before ready
+        + actual - expected
+        
+          [
+        +   undefined,
+        +   undefined
+        -   'held',
+        -   'operation-1'
+          ]
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+        0: 'held'
+        1: 'operation-1'
+      actual:
+      operator: 'deepStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-restart.integration.test.js:174:12)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Promise.all (index 0)
+        async Suite.run (node:internal/test_runner/test:1442:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+    # Subtest: P-R1b host: a claim without its file (ABSENT_CLAIMED) is a permanent CREATION_STORAGE_MISSING, never a FRESH reopen; a REMOVE closes the slot
+    not ok 2 - P-R1b host: a claim without its file (ABSENT_CLAIMED) is a permanent CREATION_STORAGE_MISSING, never a FRESH reopen; a REMOVE closes the slot
+      ---
+      duration_ms: 159.206971
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-restart.integration.test.js:187:3'
+      failureType: 'testCodeFailure'
+      error: 'storage missing: did not settle within the declared rounds'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      operator: 'fail'
+      stack: |-
+        e.settle (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-handler-embedding-fixture.js:333:12)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-restart.integration.test.js:196:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+    # Subtest: P-R4 host: local ADMITTED + metadata PUBLISHED (the grant CAS reply lost, owner reachable): reopen HELD, the re-grant is idempotent, SERVING and ACTIVE
+    not ok 3 - P-R4 host: local ADMITTED + metadata PUBLISHED (the grant CAS reply lost, owner reachable): reopen HELD, the re-grant is idempotent, SERVING and ACTIVE
+      ---
+      duration_ms: 225.380612
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-restart.integration.test.js:209:3'
+      failureType: 'testCodeFailure'
+      error: 'held: did not settle within the declared rounds'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      operator: 'fail'
+      stack: |-
+        e.settle (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-handler-embedding-fixture.js:333:12)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-restart.integration.test.js:219:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+    # Subtest: P-R5 host: retired-not-closed (CLOSE_UNRESOLVED) before the restart: inventory RETIRED, memo REMOVING, an in-flight REMOVE entry, the re-drive closes, projects STOPPED, completes the row and emits NO outcome
+    not ok 4 - P-R5 host: retired-not-closed (CLOSE_UNRESOLVED) before the restart: inventory RETIRED, memo REMOVING, an in-flight REMOVE entry, the re-drive closes, projects STOPPED, completes the row and emits NO outcome
+      ---
+      duration_ms: 190.26434
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-restart.integration.test.js:233:3'
+      failureType: 'testCodeFailure'
+      error: "Cannot read properties of undefined (reading 'status')"
+      code: 'ERR_TEST_FAILURE'
+      name: 'TypeError'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-restart.integration.test.js:245:40)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+    # Subtest: P-R6 host: metadata RELEASING, crash before the tombstone: the re-entry is a permanent RESOURCE_CLOSED; the next REMOVE retires by path, closes and completes
+    not ok 5 - P-R6 host: metadata RELEASING, crash before the tombstone: the re-entry is a permanent RESOURCE_CLOSED; the next REMOVE retires by path, closes and completes
+      ---
+      duration_ms: 256.835796
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-restart.integration.test.js:268:3'
+      failureType: 'testCodeFailure'
+      error: 'resource closed: did not settle within the declared rounds'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      operator: 'fail'
+      stack: |-
+        e.settle (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-handler-embedding-fixture.js:333:12)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-restart.integration.test.js:282:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+    # Subtest: P-R7 host: a crash after each of the five retirement steps (R1-D) recovers idempotently
+    not ok 6 - P-R7 host: a crash after each of the five retirement steps (R1-D) recovers idempotently
+      ---
+      duration_ms: 248.921347
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-restart.integration.test.js:292:3'
+      failureType: 'testCodeFailure'
+      error: 'reopened: did not settle within the declared rounds'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      operator: 'fail'
+      stack: |-
+        e.settle (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-handler-embedding-fixture.js:333:12)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-restart.integration.test.js:306:7)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+    # Subtest: P-R8 in-process: a COMPLETED creation row re-enters as the permanent TERMINAL memo, its REMOVE is REMOVE_COMPLETED; after a host restart the same REMOVE is NOT_FOUND (recorded honest answer)
+    ok 7 - P-R8 in-process: a COMPLETED creation row re-enters as the permanent TERMINAL memo, its REMOVE is REMOVE_COMPLETED; after a host restart the same REMOVE is NOT_FOUND (recorded honest answer)
+      ---
+      duration_ms: 170.156367
+      type: 'test'
+      ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+    # Subtest: P-R9 host: CREATION_STORAGE_MISSING, CORRUPT_STATE and CONTENT_CONFLICT (a copied file) are permanent typed memos, no reopen, no tombstone inferred; a REMOVE closes only the storage-missing slot
+    not ok 8 - P-R9 host: CREATION_STORAGE_MISSING, CORRUPT_STATE and CONTENT_CONFLICT (a copied file) are permanent typed memos, no reopen, no tombstone inferred; a REMOVE closes only the storage-missing slot
+      ---
+      duration_ms: 257.19102
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-restart.integration.test.js:380:3'
+      failureType: 'testCodeFailure'
+      error: 'host-1: did not settle within the declared rounds'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      operator: 'fail'
+      stack: |-
+        e.settle (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-handler-embedding-fixture.js:333:12)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-restart.integration.test.js:415:7)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: P-R11 host: a message before ready is NOT_READY + deferRetry, nothing emitted; a wake between the memo write and the re-entry finds the memo; one re-entry
+    not ok 9 - P-R11 host: a message before ready is NOT_READY + deferRetry, nothing emitted; a wake between the memo write and the re-entry finds the memo; one re-entry
+      ---
+      duration_ms: 68.442728
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-restart.integration.test.js:435:3'
+      failureType: 'testCodeFailure'
+      error: |-
+        the memo was written before the re-entry
+        + actual - expected
+        
+        + 'NO_LOCAL_OPERATION'
+        - 'QUEUED'
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 'QUEUED'
+      actual: 'NO_LOCAL_OPERATION'
+      operator: 'strictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-restart.integration.test.js:452:12)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+    # Subtest: P-R12 host: a PENDING row: the REMOVE resolves the reservation first (applied -> retired, sealed -> CANCELLED, unavailable -> HELD); a restart re-enters PENDING, never CANCELLED
+    not ok 10 - P-R12 host: a PENDING row: the REMOVE resolves the reservation first (applied -> retired, sealed -> CANCELLED, unavailable -> HELD); a restart re-enters PENDING, never CANCELLED
+      ---
+      duration_ms: 178.399979
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-restart.integration.test.js:459:3'
+      failureType: 'testCodeFailure'
+      error: 'the PENDING row resolves the same request on re-entry: did not settle within the declared rounds'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      operator: 'fail'
+      stack: |-
+        e.settle (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-handler-embedding-fixture.js:333:12)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-restart.integration.test.js:512:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+    # Subtest: P-R12c host: the REMOVE-time resolution persisted the token, crash before CLOSED: the restart re-enters a HELD founder and the REMOVE retry retires it (no orphan)
+    not ok 11 - P-R12c host: the REMOVE-time resolution persisted the token, crash before CLOSED: the restart re-enters a HELD founder and the REMOVE retry retires it (no orphan)
+      ---
+      duration_ms: 146.544676
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-restart.integration.test.js:517:3'
+      failureType: 'testCodeFailure'
+      error: 'held: did not settle within the declared rounds'
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      operator: 'fail'
+      stack: |-
+        e.settle (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-handler-embedding-fixture.js:333:12)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-restart.integration.test.js:534:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+    # Subtest: P-R13 host: two hosts restart over the shared journal; each inventory holds only its own node's creation
+    not ok 12 - P-R13 host: two hosts restart over the shared journal; each inventory holds only its own node's creation
+      ---
+      duration_ms: 136.891654
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-restart.integration.test.js:539:3'
+      failureType: 'testCodeFailure'
+      error: |-
+        Expected values to be strictly deep-equal:
+        + actual - expected
+        
+        + []
+        - [
+        -   'service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2'
+        - ]
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+        0: 'service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2'
+      actual:
+      operator: 'deepStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-restart.integration.test.js:546:14)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+    # Subtest: P-R14 host: a REMOVE racing the restart re-entry takes custody: the re-entry is not started, the creation link survives, one REMOVE_COMPLETED
+    not ok 13 - P-R14 host: a REMOVE racing the restart re-entry takes custody: the re-entry is not started, the creation link survives, one REMOVE_COMPLETED
+      ---
+      duration_ms: 99.111395
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-restart.integration.test.js:555:3'
+      failureType: 'testCodeFailure'
+      error: |-
+        Expected values to be strictly equal:
+        + actual - expected
+        
+        + 'not_found'
+        - 'initiated'
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 'initiated'
+      actual: 'not_found'
+      operator: 'strictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-restart.integration.test.js:562:12)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+    # Subtest: P-R15 process custody: no second composition runs the inventory while the owner lock is held; a failed startup cleanup keeps the lock (ledger path, labelled)
+    ok 14 - P-R15 process custody: no second composition runs the inventory while the owner lock is held; a failed startup cleanup keeps the lock (ledger path, labelled)
+      ---
+      duration_ms: 105.264752
+      type: 'test'
+      ...
+    1..14
+not ok 1 - recovery unit 1: host restart of bound creations (inventory, memo, re-entry)
+  ---
+  duration_ms: 2355.910233
+  type: 'suite'
+  location: '/mnt/data/peter/projects/.worktrees/rs-raft-event-reconciliation-20261016/test/wasm-service/bound-creation-restart.integration.test.js:163:1'
+  failureType: 'subtestsFailed'
+  error: '12 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: recovery unit 1: typed open-time refusals reach the handler (R1-B, R3-B)
+    # Subtest: R3-B an open-time UNAVAILABLE of a RETAINED creation is the NAMED deferral, decided by the opening module on its own owner read; distinct from the UNROUTED row
+    ok 1 - R3-B an open-time UNAVAILABLE of a RETAINED creation is the NAMED deferral, decided by the opening module on its own owner read; distinct from the UNROUTED row
+      ---
+      duration_ms: 51.004318
+      type: 'test'
+      ...
+    1..1
+ok 2 - recovery unit 1: typed open-time refusals reach the handler (R1-B, R3-B)
+  ---
+  duration_ms: 51.104325
+  type: 'suite'
+  ...
+1..2
+# tests 15
+# suites 2
+# pass 3
+# fail 12
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2411.409882
+# time=3362ms
+# test-files total=1 pass=0 fail=1 assertions=17
+rc=1

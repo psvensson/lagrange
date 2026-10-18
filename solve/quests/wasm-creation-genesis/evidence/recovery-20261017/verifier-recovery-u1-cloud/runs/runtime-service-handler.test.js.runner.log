@@ -1,0 +1,69 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> lagrange-server@0.2.6 test:file
+> node scripts/run-classified-test-files.js test/node/runtime-service-handler.test.js
+
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: unmeasurable (no sensors)
+not ok test/node/runtime-service-handler.test.js (0 assertions, 882ms)
+# no assertions executed
+▶ RuntimeServiceHandler initialization
+  ✔ throws when serviceLifecycleManager is missing (48.826987ms)
+  ✔ throws when cdcIntegrationService is missing (0.489851ms)
+  ✔ throws when systemTableCache is missing (0.287119ms)
+  ✔ initializes successfully with all dependencies (0.410745ms)
+✔ RuntimeServiceHandler initialization (51.260936ms)
+▶ RuntimeServiceHandler handleCreateReplica
+  ✔ returns error when required fields are missing (0.97305ms)
+  ✔ returns INITIATED for valid create request (0.821966ms)
+  ✔ rejects non-canonical dispatched identities before lifecycle effects (0.495852ms)
+  ✔ returns ALREADY_EXISTS for active replica (1.857773ms)
+  ✔ returns IN_PROGRESS for creating replica (0.386252ms)
+  ✔ returns IN_PROGRESS for duplicate operation ID (0.309368ms)
+  ✔ a CREATE over a nameless FAILED or REMOVING memo takes the generic path (RV6.1-RV6.3) (4.808485ms)
+  ✔ calls lifecycle create + start without direct workflow-step persistence (0.923411ms)
+{"level":50,"time":"2026-10-17T20:25:29.542Z","nodeId":"unknown","pid":368,"subsystem":"runtime-service-handler","operationId":"op-1","replicaId":"sys-postgres-wire-r1","entityId":"sys-postgres-wire","error":"bind failed","nodeId":"unknown","contextNodeId":"test-node","msg":"Runtime service replica creation failed"}
+  ✔ transitions to FAILED when lifecycle throws (4.808869ms)
+{"level":50,"time":"2026-10-17T20:25:29.549Z","nodeId":"unknown","pid":368,"subsystem":"runtime-service-handler","operationId":"op-1","replicaId":"sys-postgres-wire-r1","entityId":"sys-postgres-wire","error":"Service definition not found: sys-postgres-wire","nodeId":"unknown","contextNodeId":"test-node","msg":"Runtime service replica creation failed"}
+  ✔ fails when service definition not found (3.068217ms)
+✔ RuntimeServiceHandler handleCreateReplica (19.624586ms)
+▶ RuntimeServiceHandler handleRemoveReplica
+  ✔ returns error when required fields are missing (1.015497ms)
+  ✔ returns NOT_FOUND when replica does not exist (0.415406ms)
+  ✔ returns INITIATED for valid remove request (0.224922ms)
+  ✔ reconstructs a persisted legacy target after handler restart before removal (0.879347ms)
+  ✔ returns IN_PROGRESS for removing replica (0.241574ms)
+  ✔ resumes stalled removing replica when no removal task is active (0.370504ms)
+  ✔ returns COMPLETED for already removed replica (0.170652ms)
+  ✔ calls lifecycle stop without direct workflow-step persistence (0.419769ms)
+{"level":50,"time":"2026-10-17T20:25:29.554Z","nodeId":"unknown","pid":368,"subsystem":"runtime-service-handler","operationId":"op-1","replicaId":"sys-postgres-wire-r1","entityId":"sys-postgres-wire","error":"stop failed","nodeId":"unknown","contextNodeId":"test-node","msg":"Runtime service replica removal failed"}
+  ✔ transitions to FAILED when stop throws (0.621146ms)
+✔ RuntimeServiceHandler handleRemoveReplica (5.390711ms)
+▶ RuntimeServiceHandler handleMessage dispatch
+  ✔ dispatches CREATE_REPLICA messages (0.416809ms)
+  ✔ dispatches REMOVE_REPLICA messages (0.192943ms)
+  ✔ returns error for unknown message type (0.485956ms)
+✔ RuntimeServiceHandler handleMessage dispatch (1.367928ms)
+▶ RuntimeServiceHandler router registration
+  ✔ registers handler at correct address (0.340451ms)
+  ✔ unregisters handler from router (0.200498ms)
+  ✔ registered handler returns acknowledged response (0.275841ms)
+✔ RuntimeServiceHandler router registration (1.092806ms)
+▶ RuntimeServiceHandler REPLACE operation flow
+  ✔ handles REPLACE add phase as CREATE_REPLICA (0.517541ms)
+  ✔ handles REPLACE remove phase as REMOVE_REPLICA (0.38946ms)
+✔ RuntimeServiceHandler REPLACE operation flow (1.312717ms)
+▶ RuntimeServiceHandler shutdown
+  ✔ clears all state on shutdown (0.196551ms)
+✔ RuntimeServiceHandler shutdown (0.310051ms)
+ℹ tests 32
+ℹ suites 7
+ℹ pass 32
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 93.83043
+# time=882ms
+# test-files total=1 pass=0 fail=1 assertions=0

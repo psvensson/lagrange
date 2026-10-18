@@ -1,0 +1,12 @@
+--- a/src/node/runtime-service-bound-creation-route.js	2026-10-17 17:28:09.205793710 +0200
++++ b/src/node/runtime-service-bound-creation-route.js	2026-10-17 17:28:09.217793805 +0200
+@@ -251,7 +251,8 @@
+ 
+ async function decideBoundRemoval(handler, creationOperationId, reason) {
+   const manager = handler.serviceLifecycleManager;
+-  const retained = await manager.readRetainedCreation(creationOperationId);
++  const retained = await manager.recoverConsensusCreation(creationOperationId,
++    {nodeId: handler.nodeId});
+   if (retained.outcome !== CREATION.ADMISSION_RETAINED) {
+     return {kind: READ_DECISION.get(retained.outcome) ?? DECISION.FAILED,
+       errorCode: retained.outcome};

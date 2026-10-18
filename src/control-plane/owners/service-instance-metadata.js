@@ -1,5 +1,10 @@
-// ServiceDefinitionsOwner's private row adapter and one-shot durable mutation
-// interaction. Transport retries reuse the exact predicate; no semantic CAS loop.
+// ServiceDefinitionsOwner's private row adapter and durable mutation interaction.
+// Superseded for slot transitions by design SERVING-PUBLICATION-RETIREMENT-
+// DESIGN-20261017 amendment A2 as revised by A2' (A2'.0, A2'.3): "Transport
+// retries reuse the exact predicate; no semantic CAS loop." now reads: no
+// resubmission after an UNKNOWN answer; a definitive zero-row answer to a slot
+// transition is re-decided from a fresh observation, bounded by RESOURCES
+// submissions in total. Selection stays single-shot (it never re-decides).
 import {TABLES} from '../../constants/index.js';
 import {SERVICE_INSTANCE_ACTION as ACTION, SERVICE_INSTANCE_LIMIT as LIMIT,
   SERVICE_INSTANCE_OUTCOME as OUTCOME, SERVICE_INSTANCE_PHASE as PHASE, SERVICE_INSTANCE_DECISION as DECISION} from
@@ -42,12 +47,17 @@ async function readState(owner, id, options) {
 function affectedRows(result) {
   return result?.partitionResult?.affectedRows ?? result?.affectedRows;
 }
-async function commitState(owner, id, observation, change, options, resolve) {
+// What one exact-predicate submission proved (A2'.1): a numeric count of one
+// applied, a numeric zero definitively did not apply at the apply point; an
+// absent count or a thrown/failed envelope is UNKNOWN (it may have applied).
+const SUBMISSION = Object.freeze({APPLIED: 'APPLIED', NOT_APPLIED: 'NOT_APPLIED',
+  UNKNOWN: 'UNKNOWN', CAPACITY_EXHAUSTED: 'CAPACITY_EXHAUSTED'});
+async function submitState(owner, id, observation, change, options) {
   let state;
   try {
     state = encodeInstanceJson(change.next, LIMIT.STATE_BYTES);
   } catch {
-    return {outcome: OUTCOME.CAPACITY_EXHAUSTED};
+    return SUBMISSION.CAPACITY_EXHAUSTED;
   }
   const rows = ROWS.get(owner);
   let submitted;
@@ -59,16 +69,35 @@ async function commitState(owner, id, observation, change, options, resolve) {
   } catch {
     submitted = null;
   }
-  if (affectedRows(submitted) === 1) return change.result;
-  // One authoritative resolution, never another rewritten mutation. A successful
-  // gateway envelope with zero changes is not a successful conditional mutation.
-  const fallback = affectedRows(submitted) === 0 ? OUTCOME.STATE_CHANGED : OUTCOME.UNKNOWN;
+  switch (affectedRows(submitted)) {
+  case 1: return SUBMISSION.APPLIED;
+  case 0: return SUBMISSION.NOT_APPLIED;
+  default: return SUBMISSION.UNKNOWN;
+  }
+}
+// One authoritative resolution, never another rewritten mutation, after an
+// UNKNOWN answer (and, for selection only, after a zero-row answer). Superseded
+// for slot transitions by amendment A2' (A2'.0): the sentence "never another
+// rewritten mutation" no longer covers a definitive zero-row slot answer,
+// which mutateResource re-decides. A successful gateway envelope with zero
+// changes is still not a successful conditional mutation.
+async function settleSubmission(owner, id, change, submission, options, resolve) {
+  switch (submission) {
+  case SUBMISSION.APPLIED: return change.result;
+  case SUBMISSION.CAPACITY_EXHAUSTED: return {outcome: OUTCOME.CAPACITY_EXHAUSTED};
+  default: break;
+  }
+  const fallback = submission === SUBMISSION.NOT_APPLIED ? OUTCOME.STATE_CHANGED : OUTCOME.UNKNOWN;
   try {
     const current = await readState(owner, id, options);
     return resolve(current) ?? {outcome: fallback};
   } catch (error) {
     return {outcome: OUTCOME.UNKNOWN, reason: instanceFailure(error).outcome};
   }
+}
+async function commitState(owner, id, observation, change, options, resolve) {
+  const submission = await submitState(owner, id, observation, change, options);
+  return settleSubmission(owner, id, change, submission, options, resolve);
 }
 async function creationRevision(owner, request) {
   if (request.action === ACTION.RETIRE) return null;
@@ -128,17 +157,43 @@ function captureResourceInput(binding, value, validator) {
   requireInstance(validator(input));
   return {binding: capturedBinding, input};
 }
+// The re-observation after a definitive zero is the same authoritative read as
+// the first. Its failure is typed UNAVAILABLE / CORRUPT_STATE by the caller's
+// instanceFailure, never UNKNOWN: nothing about the mutation is unknown. Rows
+// are never deleted, so a NEVER_CREATED answer here is CORRUPT_STATE (A2'.3).
+async function observeAgain(owner, id, options) {
+  const observation = await readState(owner, id, options);
+  requireInstance(observation.outcome !== OUTCOME.NEVER_CREATED, OUTCOME.CORRUPT_STATE);
+  return observation;
+}
+// One attempt's decision under the bound (A2'.0): a change that still needs a
+// mutation after RESOURCES submissions in total answers STATE_CHANGED.
+function boundedChange(change, submissions) {
+  return change.next && submissions === LIMIT.RESOURCES ?
+    {result: {outcome: OUTCOME.STATE_CHANGED}} : change;
+}
+// Slot transitions (reserve, PUBLISHED, RELEASING, CLOSED): amendment A2' bounded
+// re-decide. Every attempt decides on the state object of its own fresh
+// observation (decide mutates its argument) and submits that observation's row
+// bytes as the exact predicate; at most RESOURCES submissions in total, then
+// STATE_CHANGED. Selection never reaches this loop.
 async function mutateResource(owner, binding, input, options, decide) {
   const id = binding.serviceDefinitionId;
-  const observation = await readState(owner, id, options);
+  let observation = await readState(owner, id, options);
   if (observation.outcome === OUTCOME.NEVER_CREATED) return {outcome: OUTCOME.STALE_BINDING};
-  const change = decide(observation.state, binding, input);
-  if (!change.next) return change.result;
-  return commitState(owner, id, observation, change, options, (current) => {
-    if (current.outcome === OUTCOME.NEVER_CREATED) return null;
-    const resolved = decide(current.state, binding, input);
-    return resolved.next ? null : resolved.result;
-  });
+  for (let submissions = 0; ; submissions += 1) {
+    const change = boundedChange(decide(observation.state, binding, input), submissions);
+    if (!change.next) return change.result;
+    const submission = await submitState(owner, id, observation, change, options);
+    if (submission !== SUBMISSION.NOT_APPLIED) {
+      return settleSubmission(owner, id, change, submission, options, (current) => {
+        if (current.outcome === OUTCOME.NEVER_CREATED) return null;
+        const resolved = decide(current.state, binding, input);
+        return resolved.next ? null : resolved.result;
+      });
+    }
+    observation = await observeAgain(owner, id, options);
+  }
 }
 async function reserveInstanceResource(owner, value, request, options = {}) {
   try {
@@ -175,5 +230,10 @@ const grantInstanceResource = (owner, binding, token, options) =>
   transitionInstanceResource(owner, binding, token, PHASE.PUBLISHED, options);
 const closeInstanceResource = (owner, binding, token, options) =>
   transitionInstanceResource(owner, binding, token, PHASE.CLOSED, options);
+// Retirement visibility: the local owner is releasing this exact resource.
+// Never a precondition of the local stop; CLOSED may follow from any live phase.
+const releaseInstanceResource = (owner, binding, token, options) =>
+  transitionInstanceResource(owner, binding, token, PHASE.RELEASING, options);
 export {registerInstanceRows, selectConsensusInstance, getCurrentInstance,
-  reserveInstanceResource, resolveInstanceResource, grantInstanceResource, closeInstanceResource};
+  reserveInstanceResource, resolveInstanceResource, grantInstanceResource, closeInstanceResource,
+  releaseInstanceResource};

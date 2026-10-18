@@ -1,0 +1,144 @@
+src/wasm-service/wasm-service-replica-lifecycle.js:247:    replicaId: replica.replicaId, outcome: result.outcome,
+test/wasm-service/wasm-service-lifecycle.test.js:321:      const result = await lifecycle.startReplica('svc-1');
+test/wasm-service/wasm-service-lifecycle.test.js:331:      const result = await lifecycle.startReplica('svc-1');
+test/wasm-service/wasm-service-lifecycle.test.js:338:      const result = await lifecycle.startReplica('nonexistent');
+test/wasm-service/wasm-service-lifecycle.test.js:355:        await lifecycle.startReplica('svc-1', {
+test/wasm-service/wasm-service-lifecycle.test.js:371:      const result = await lifecycle.startReplica('svc-1', {
+test/wasm-service/wasm-service-lifecycle.test.js:380:      assert.equal(result.diagnostic.code, 'module_unavailable');
+test/wasm-service/wasm-service-lifecycle.test.js:387:      const result = await lifecycle.startReplica('svc-1', {
+test/wasm-service/wasm-service-lifecycle.test.js:393:      assert.equal(result.diagnostic.code, 'module_mirror_missing');
+test/wasm-service/wasm-service-lifecycle.test.js:402:      await lifecycle.startReplica('svc-1', {
+test/wasm-service/wasm-service-lifecycle.test.js:409:      await lifecycle.startReplica('svc-1', {
+test/wasm-service/wasm-service-lifecycle.test.js:421:      const result = await lifecycle.startReplica('svc-1', {
+test/wasm-service/wasm-service-lifecycle.test.js:441:      const result = await lifecycle.startReplica('svc-1');
+test/wasm-service/wasm-service-lifecycle.test.js:456:      const r1 = await lifecycle.startReplica('svc-a');
+test/wasm-service/wasm-service-lifecycle.test.js:457:      const r2 = await lifecycle.startReplica('svc-b');
+test/wasm-service/wasm-service-lifecycle.test.js:464:        const result = await lifecycle.startReplica('svc-1');
+test/wasm-service/wasm-service-lifecycle.test.js:475:        const result = await lifecycle.startReplica('svc-1');
+test/wasm-service/wasm-service-lifecycle.test.js:477:        assert.equal(result.diagnostic.code, 'port_allocator_unavailable');
+test/wasm-service/wasm-service-lifecycle.test.js:492:        const result = await lifecycle.startReplica('svc-1');
+test/wasm-service/wasm-service-lifecycle.test.js:495:        assert.equal(result.diagnostic.code, 'consensus_start_refused');
+test/wasm-service/wasm-service-lifecycle.test.js:510:        const result = await lifecycle.startReplica('svc-1');
+test/wasm-service/wasm-service-lifecycle.test.js:512:        assert.equal(result.diagnostic.code, 'CREATION_STORAGE_MISSING');
+test/wasm-service/wasm-service-lifecycle.test.js:523:        await lifecycle.startReplica('svc-1');
+test/wasm-service/wasm-service-lifecycle.test.js:543:        const startResult = await lifecycle.startReplica('svc-1');
+test/wasm-service/wasm-service-lifecycle.test.js:586:        assert.equal((await lifecycle.startReplica('svc-1')).started, true);
+test/wasm-service/wasm-service-lifecycle.test.js:597:        const started = await lifecycle.startReplica('svc-1');
+test/wasm-service/wasm-service-lifecycle.test.js:621:          const started = await lifecycle.startReplica('svc-1');
+test/wasm-service/wasm-service-lifecycle.test.js:623:          assert.equal(started.diagnostic.code,
+test/wasm-service/wasm-service-lifecycle.test.js:638:          const starting = lifecycle.startReplica('svc-1');
+test/wasm-service/wasm-service-lifecycle.test.js:642:          assert.equal(started.diagnostic.code,
+test/wasm-service/wasm-service-lifecycle.test.js:674:        const retiredStart = lifecycle.startReplica('svc-1');
+test/wasm-service/wasm-service-lifecycle.test.js:677:        const successorStart = await lifecycle.startReplica('svc-1');
+test/wasm-service/wasm-service-lifecycle.test.js:681:        assert.equal(refused.diagnostic.code,
+test/wasm-service/wasm-service-lifecycle.test.js:713:        const failingStart = lifecycle.startReplica('svc-1');
+test/wasm-service/wasm-service-lifecycle.test.js:717:        const successorStart = await lifecycle.startReplica('svc-1');
+test/wasm-service/wasm-service-lifecycle.test.js:743:        const failingStart = lifecycle.startReplica('svc-1');
+test/wasm-service/wasm-service-lifecycle.test.js:772:        const starting = lifecycle.startReplica('svc-1');
+test/wasm-service/wasm-service-lifecycle.test.js:779:        assert.equal(refused.diagnostic.code,
+test/wasm-service/wasm-service-lifecycle.test.js:876:      await lifecycle.startReplica('svc-a');
+test/wasm-service/wasm-service-lifecycle.test.js:877:      await lifecycle.startReplica('svc-b');
+test/wasm-service/wasm-service-lifecycle.test.js:894:      const r1 = await lifecycle.startReplica('svc-a');
+test/wasm-service/wasm-service-lifecycle.test.js:895:      const r2 = await lifecycle.startReplica('svc-b');
+src/wasm-service/meta-service-lifecycle.js:77:  return lifecycle.startReplica(serviceId, startOptions);
+src/wasm-service/wasm-service-lifecycle.js:338:  async startReplica(serviceId, startOptions = {}) {
+test/query/partition-transaction-seam-falsifiers.test.js:382:    const replica = await startReplica(replicaId);
+test/model/participant-release-disposition/model.js:244:  restartReplica(id) {
+test/partition/partition-transaction-determinism.test.js:304:  const follower = await startReplica(REPLICAS[1], ON_CUTOVER_TABLE);
+test/partition/partition-tx1-single-path-alpha.test.js:318:  const follower = await startReplica(REPLICAS[1]);
+test/partition/partition-participant-release-admission.test.js:68:  const follower = await startReplica(REPLICAS[1], {generationOrigin: false});
+test/partition/partition-participant-transaction-staging.test.js:224:    const replica = await startReplica(replicaId, {schema: NOT_NULL_SCHEMA});
+test/partition/partition-participant-transaction-staging.test.js:248:  const replica = await startReplica(REPLICAS[1]);
+test/partition/partition-participant-transaction-staging.test.js:390:  const follower = await startReplica(REPLICAS[1]);
+test/partition/partition-participant-transaction-staging.test.js:421:    const created = await startReplica(REPLICAS[0], {dbPath, generationOrigin: false});
+test/partition/partition-participant-transaction-staging.test.js:462:  const replica = await startReplica(REPLICAS[1]);
+test/partition/partition-participant-transaction-staging.test.js:582:  const follower = await startReplica(REPLICAS[1], {generationOrigin: false});
+test/partition/partition-participant-transaction-apply.test.js:114:    replica = await startReplica(REPLICAS[1], {dbPath});
+test/partition/partition-participant-transaction-apply.test.js:385:    const replica = await startReplica(replicaId, {schema: IPK_SCHEMA});
+test/partition/partition-participant-transaction-apply.test.js:405:  const replica = await startReplica(REPLICAS[1], extra);
+test/partition/partition-participant-transaction-apply.test.js:448:    upgraded = await startReplica(REPLICAS[1], {dbPath, generationOrigin: false});
+test/partition/partition-participant-transaction-apply.test.js:454:    upgraded = await startReplica(REPLICAS[1], {dbPath, generationOrigin: false});
+test/partition/partition-participant-transaction-apply.test.js:456:    replayed = await startReplica(REPLICAS[2], {generationOrigin: false});
+test/partition/partition-transaction-replicated-apply-v3.test.js:109:  const follower = await startReplica(REPLICAS[1]);
+test/partition/partition-transaction-replicated-apply-v3.test.js:133:  const follower = await startReplica(REPLICAS[1]);
+test/partition/partition-transaction-replicated-apply-v3.test.js:156:  const follower = await startReplica(REPLICAS[1]);
+test/partition/partition-transaction-replicated-apply-v3.test.js:179:  const follower = await startReplica(REPLICAS[1]);
+test/partition/partition-transaction-replicated-apply-v3.test.js:226:  const healthy = await startReplica(REPLICAS[1]);
+test/partition/partition-transaction-replicated-apply-v3.test.js:227:  const faulty = await startReplica(REPLICAS[2]);
+test/partition/partition-transaction-replicated-apply-v3.test.js:722:  const follower = await startReplica(REPLICAS[1]);
+test/partition/partition-transaction-replicated-apply-v3.test.js:836:  const follower = await startReplica(REPLICAS[1]);
+test/partition/partition-transaction-replicated-apply-v3.test.js:875:  const follower = await startReplica(REPLICAS[1]);
+test/partition/partition-transaction-replicated-apply-v3.test.js:897:  const replicas = [await startReplica(REPLICAS[0]), await startReplica(REPLICAS[1]),
+test/partition/partition-transaction-replicated-apply-v3.test.js:898:    await startReplica(REPLICAS[2])];
+test/partition/partition-transaction-replicated-apply-v3.test.js:923:    first = await startReplica(REPLICAS[1], {dbPath});
+test/partition/partition-transaction-replicated-apply-v3.test.js:928:    restarted = await startReplica(REPLICAS[1], {dbPath});
+test/partition/partition-transaction-replicated-apply-v3.test.js:971:  const follower = await startReplica(REPLICAS[1]);
+test/partition/partition-transaction-replay-cursor-v4.test.js:372:    const ipk = await startReplica(replicaId, {schema: IPK_SCHEMA});
+test/partition/partition-transaction-replay-cursor-v4.test.js:373:    const text = await startReplica(replicaId);
+test/partition/partition-transaction-replay-cursor-v4.test.js:466:  const replica = await startReplica(REPLICAS[1]);
+test/partition/partition-transaction-replay-cursor-v4.test.js:484:  const replica = await startReplica(REPLICAS[1]);
+src/runtime/wasm-component-driver.js:466:      const startResult = await lifecycle.startReplica(serviceId, replicaContext.startOptions);
+test/partition/partition-statement-admission.test.js:133:    const replica = await startReplica(replicaId, {schema: IPK_SCHEMA});
+test/partition/partition-statement-admission.test.js:193:    const replica = await startReplica(replicaId, {schema: IPK_SCHEMA});
+test/partition/partition-statement-admission.test.js:255:        const replica = await startReplica(replicaId, c.schema ? {schema: c.schema} : {});
+test/partition/partition-statement-admission.test.js:417:    const replica = await startReplica(replicaId);
+test/partition/partition-statement-admission.test.js:511:  const replica = await startReplica(REPLICAS[1]);
+test/partition/partition-statement-admission.test.js:604:  const ipk = await startReplica(REPLICAS[1], {schema: IPK_SCHEMA});
+src/runtime/service-runtime-consensus-bootstrap.js:3:import {captureConsensusBootstrap, confirmConsensusBootstrapResult, CONSENSUS_BOOTSTRAP} from
+src/runtime/service-runtime-consensus-bootstrap.js:29:  const confirmed = confirmConsensusBootstrapResult(result, bound.origin);
+src/runtime/wasm-component-driver-consensus.js:63:        outcome: startResult.diagnostic.code} : {})};
+src/runtime/wasm-component-driver-consensus.js:79:    const startResult = await lifecycle.startReplica(serviceId,
+test/partition/participant-envelope-admission.test.js:48:  const replica = await startReplica(REPLICAS[1]);
+test/partition/partition-cdc-obligation.test.js:181:  const follower = await startReplica(REPLICAS[1]);
+test/partition/partition-cdc-obligation.test.js:432:  const follower = await startReplica(REPLICAS[1]);
+test/partition/partition-cdc-obligation.test.js:514:    restarted = await startReplica(REPLICAS[0], {dbPath, timeSource, generationOrigin: false});
+test/partition/partition-cdc-obligation.test.js:575:    restarted = await startReplica(REPLICAS[0], {dbPath, timeSource, generationOrigin: false});
+test/partition/partition-cdc-obligation.test.js:678:    const replica = await startReplica(REPLICAS[1]);
+test/partition/partition-cdc-obligation.test.js:768:    const replica = await startReplica(REPLICAS[1]);
+src/node/runtime-service-handler.js:477:      await this.serviceLifecycleManager.startReplica(
+test/node/runtime-service-handler.test.js:89:    async startReplica(handle, context) {
+test/node/replica-runtime-cleanup-custody.integration.test.js:137:    assert.equal((await owner.startReplica(definition.serviceId)).started, true);
+test/service/service-lifecycle-manager.test.js:35:  async startReplica(_replicaHandle, _context) {
+test/service/service-lifecycle-manager.test.js:90:    await manager.startReplica(handle);
+test/service/service-lifecycle-manager.test.js:91:    await manager.restartReplica(handle);
+test/service/service-lifecycle-manager.test.js:106:      () => manager.startReplica(serviceHandle('svc-unknown')),
+test/service/service-lifecycle-manager.test.js:141:    await manager.startReplica(handle);
+test/service/service-lifecycle-manager.test.js:161:    await manager.startReplica(handle);
+test/service/service-lifecycle-manager.test.js:164:      () => manager.startReplica(handle),
+test/service/service-lifecycle-manager.test.js:182:    await assert.rejects(() => manager.startReplica(handle));
+test/service/service-lifecycle-manager.test.js:203:    const result = await manager.startReplica(serviceHandle('svc-journal'), {}, {
+test/service/service-lifecycle-manager.test.js:229:      () => manager.startReplica(handle),
+test/service/service-lifecycle-manager.test.js:258:    const result = await manager.startReplica(handle, {}, {
+test/service/service-lifecycle-manager.test.js:300:    await manager.startReplica(handle);
+test/service/service-lifecycle-manager.test.js:328:    await manager.startReplica(handle);
+test/service/service-lifecycle-manager.test.js:336:    const result = await manager.restartReplica(handle, {}, {
+test/service/service-lifecycle-manager.test.js:385:      () => manager.startReplica(handle),
+test/service/service-lifecycle-manager.test.js:455:    await manager.startReplica(handle);
+test/service/service-lifecycle-manager.test.js:545:    await manager.startReplica(handle);
+test/service/adapters/adapter-conformance.test.js:30:      const startResult = await setup.adapter.startReplica(options.replicaHandle, {});
+test/service/service-reconciler.test.js:48:  async startReplica(replicaHandle, context) {
+test/service/service-type-adapter.test.js:73:      () => adapter.startReplica({}, {}),
+test/runtime/runtime-driver-no-writes.test.js:70:    async startReplica() {
+test/runtime/runtime-startup-wiring.test.js:162:      assert.equal(started.diagnostic.code, 'port_allocator_unavailable');
+test/test-helpers/participant-transaction-fixture.js:419:async function startReplica(replicaId, extra) {
+test/test-helpers/participant-transaction-fixture.js:434:  const leader = await startReplica(REPLICAS[0], extra);
+test/test-helpers/participant-transaction-fixture.js:1001:    replicas.push(await startReplica(REPLICAS[1]));
+test/test-helpers/participant-transaction-fixture.js:1002:    replicas.push(await startReplica(REPLICAS[2]));
+test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js:173:    async startReplica(handle) {
+src/service/service-lifecycle-operations.js:413:async function startReplica(manager, replicaHandle, context = {}, options = {}) {
+src/service/service-lifecycle-operations.js:439:async function restartReplica(manager, replicaHandle, context = {}, options = {}) {
+src/service/adapters/hook-backed-service-adapter.js:105:  async startReplica(replicaHandle, context) {
+src/service/adapters/hook-backed-service-adapter.js:106:    return this._hooks.startReplica(replicaHandle, context);
+src/service/adapters/runtime-service-adapter.js:94:  async startReplica(replicaHandle, _context) {
+src/service/service-lifecycle-recovery.js:194:      result = await adapter.startReplica(replicaHandle, runtimeContext);
+src/service/service-lifecycle-recovery.js:246:      result = await adapter.startReplica(replicaHandle, runtimeContext);
+src/service/service-consensus-bootstrap.js:78:    return {outcome: result.outcome, operationId: origin.operationId};
+src/service/service-consensus-bootstrap.js:84:function confirmConsensusBootstrapResult(result, origin) {
+src/service/service-consensus-bootstrap.js:178:    const result = await adapter.startReplica(owned);
+src/service/service-consensus-bootstrap.js:179:    const confirmed = confirmConsensusBootstrapResult(result, retained);
+src/service/service-consensus-bootstrap.js:213:  consensusBootstrapDescriptor, captureConsensusBootstrap, confirmConsensusBootstrapResult,
+src/service/service-lifecycle-manager.js:605:   */ async startReplica(replicaHandle, context = {}, options = {}) {
+src/service/service-lifecycle-manager.js:631:  async restartReplica(replicaHandle, context = {}, options = {}) {
+src/service/service-type-adapter.js:66:  async startReplica(_replicaHandle, _context) {
+src/service/service-reconciler.js:588:      return await this._lifecycleManager.startReplica(
+src/service/service-reconciler.js:601:      return await this._lifecycleManager.startReplica(

@@ -110,7 +110,29 @@ const WASM_SERVICE_LIFECYCLE_REFUSAL = Object.freeze({
   REPLICA_LIVE: 'wasm_service_replica_live',
   // The replica's stop began while its start awaited its initialization.
   STOPPED_DURING_START: 'wasm_service_replica_stopped_during_start',
+  // The metadata grant answered PUBLISHED but the receiver-local record could
+  // not durably record it: serving stays closed, the grant stays counted.
+  LOCAL_GRANT_NOT_RECORDED: 'wasm_service_local_grant_not_recorded',
+  // The local grant is durable but the leader effects could not be applied.
+  SERVING_ENABLE_FAILED: 'wasm_service_serving_enable_failed',
+  // The receiver-local record is RETIRED: the file never reopens.
+  CREATION_RETIRED: 'wasm_service_creation_retired',
+  // A retirement whose replica still holds open handles after a failed
+  // shutdown: no tombstone can be trusted, so no metadata CLOSED follows.
+  RETIREMENT_BLOCKED_CLEANUP_REQUIRED: 'wasm_service_retirement_blocked_cleanup_required',
 });
+
+// The intent a replica shutdown carries, captured synchronously at its
+// STOPPING fence: an orderly stop (node teardown, plain stop) never retires
+// the resource; only a retirement writes the receiver-local tombstone.
+const WASM_SERVICE_SHUTDOWN_INTENT = Object.freeze({
+  ORDERLY_STOP: 'orderly_stop',
+  RETIRE_RESOURCE: 'retire_resource',
+});
+
+// The named no-failure state of a replica's startup/activity failure custody
+// (R07): a failure slot holds this, never a raw null.
+const WASM_SERVICE_NO_FAILURE = Object.freeze({failure: 'none'});
 
 // The committed command vocabulary of a WASM service group's consensus log
 // (design R4): the only types its committed apply dispatches.
@@ -137,6 +159,10 @@ const WASM_SERVICE_LOG_MSG = Object.freeze({
   REPLICA_CREATED: 'WASM service replica created',
   REPLICA_STARTED: 'WASM service replica started',
   REPLICA_STOPPED: 'WASM service replica stopped',
+  CREATION_PUBLISHED: 'WASM creation resource granted and serving locally',
+  CREATION_RETIRED: 'WASM creation resource retired locally',
+  CREATION_WAKE_UNDELIVERED: 'WASM creation wake not delivered to its consumer',
+  CREATION_WAKE_REJECTED: 'WASM creation wake consumer rejected the wake',
   BECAME_LEADER: 'WASM service replica became leader',
   LOST_LEADERSHIP: 'WASM service replica lost leadership',
   TIMER_CREATED: 'Timer created',
@@ -225,6 +251,8 @@ export {
   WASM_SERVICE_COMMAND_REFUSAL,
   WASM_SERVICE_FOUNDING_REFUSAL,
   WASM_SERVICE_LIFECYCLE_REFUSAL,
+  WASM_SERVICE_NO_FAILURE,
+  WASM_SERVICE_SHUTDOWN_INTENT,
   WASM_SERVICE_LOG_MSG,
   WASM_SERVICE_REPLICA_STATE,
   WASM_SERVICE_VALUE_ENCODING,

@@ -1,0 +1,32 @@
+test/wasm-service/bound-creation-restart.integration.test.js:448:    restarted.inventory = await restarted.handler.recoverRetainedCreations();
+test/wasm-service/bound-creation-restart.integration.test.js:561:    restarted.inventory = await restarted.handler.recoverRetainedCreations();
+test/wasm-service/bound-creation-handler-embedding-fixture.js:276:    if (inventory) host.inventory = await host.handler.recoverRetainedCreations();
+src/service/service-lifecycle-recovery.js:13:import {isConsensusCreationRow, inventoryConsensusCreationRow} from
+src/service/service-lifecycle-recovery.js:102:    return inventoryConsensusCreationRow(operationRow);
+src/service/service-lifecycle-recovery.js:316:async function recoverPendingOperations(manager, options = {}) {
+src/service/service-lifecycle-recovery.js:322:  const operationRows = await manager._readRecoverableOperations();
+src/service/service-lifecycle-recovery.js:346:export {recoverPendingOperations};
+src/service/service-consensus-creation-intent.js:312:function inventoryConsensusCreationRow(row) {
+src/service/service-consensus-creation-intent.js:469:  isConsensusCreationRow, inventoryConsensusCreationRow, resolveRetainedReservation,
+src/service/service-lifecycle-common.js:15:  RECOVERY_RESOLVER_REQUIRED: 'recoverPendingOperations requires resolveServiceContext function',
+src/service/service-lifecycle-manager.js:43:import {recoverPendingOperations as recoverLifecyclePendingOperations} from './service-lifecycle-recovery.js';
+src/service/service-lifecycle-manager.js:522:   */ async _readRecoverableOperations() {
+src/service/service-lifecycle-manager.js:552:   */ async recoverPendingOperations(options = {}) {
+test/service/service-lifecycle-manager.test.js:432:    const results = await manager.recoverPendingOperations({
+test/service/service-lifecycle-manager.test.js:473:    const results = await manager.recoverPendingOperations({
+test/service/service-lifecycle-manager.test.js:511:    const results = await manager.recoverPendingOperations({
+test/service/service-lifecycle-manager.test.js:532:      () => manager.recoverPendingOperations(),
+test/service/service-consensus-creation-intent.test.js:118:  const result = await f.manager().recoverPendingOperations({resolveServiceContext: async () => {
+test/service/service-consensus-creation-intent.test.js:143:  const result = await f.manager().recoverPendingOperations({resolveServiceContext: async () => {
+test/service/service-consensus-creation-intent.test.js:256:  const results = await f.manager().recoverPendingOperations({resolveServiceContext: async () => {
+test/service/service-consensus-creation-intent.test.js:275:  const results = await f.manager().recoverPendingOperations({
+test/service/service-consensus-creation-intent.test.js:351:  const results = await manager.recoverPendingOperations({resolveServiceContext: async () => null});
+src/node/runtime-service-handler.js:36:import {createRestartLatch, notReadyReply, recoverRetainedCreations} from
+src/node/runtime-service-handler.js:165:    // recoverRetainedCreations() wrote the memos.
+src/node/runtime-service-handler.js:424:  async recoverRetainedCreations() {
+src/node/runtime-service-handler.js:425:    return recoverRetainedCreations(this);
+src/node/runtime-service-restart-inventory.js:159:async function recoverRetainedCreations(handler) {
+src/node/runtime-service-restart-inventory.js:160:  const results = await handler.serviceLifecycleManager.recoverPendingOperations(
+src/node/runtime-service-restart-inventory.js:181:export {createRestartLatch, notReadyReply, recoverRetainedCreations};
+test/node/runtime-service-bound-route.test.js:917:    'deferRetry and emits nothing; after recoverRetainedCreations it routes normally',
+test/node/runtime-service-bound-route.test.js:933:    const plans = await handler.recoverRetainedCreations();

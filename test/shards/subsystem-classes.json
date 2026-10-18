@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 116,
     "architecture-governance": 19,
-    "bootstrap-membership": 316,
+    "bootstrap-membership": 317,
     "cdc-metadata": 63,
     "cli-tooling": 96,
     "control-plane": 216,
@@ -16,19 +16,19 @@
     "query-sql": 184,
     "release-packaging": 15,
     "runtime-primitives": 22,
-    "services-runtime": 148,
+    "services-runtime": 150,
     "solver-tooling": 7,
     "storage-partition": 189,
     "storage-raft": 134,
     "test-infrastructure": 143,
     "transactions": 16,
     "transport-messaging": 96,
-    "wasm-toolchain": 66
+    "wasm-toolchain": 72
   },
-  "censusSize": 2401,
-  "digest": "fnv1a32-397a1ddb",
+  "censusSize": 2410,
+  "digest": "fnv1a32-746dd8da",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-4ece5ef1",
+  "observationDigest": "fnv1a32-7dcf9869",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1212,6 +1212,7 @@
     "test/node/replica-status-state-machine.property.test.js": "bootstrap-membership",
     "test/node/replica-status-write-retry-spent-owner.test.js": "bootstrap-membership",
     "test/node/replica-transport-handler-identity.test.js": "bootstrap-membership",
+    "test/node/runtime-service-bound-route.test.js": "bootstrap-membership",
     "test/node/runtime-service-call-cell-handler.test.js": "bootstrap-membership",
     "test/node/runtime-service-handler.test.js": "bootstrap-membership",
     "test/node/services-p1-diagnostic-logger.test.js": "bootstrap-membership",
@@ -2014,6 +2015,7 @@
     "test/runtime/pgwire-session.test.js": "pgwire-compat",
     "test/runtime/pgwire-tls-policy-cutover.test.js": "pgwire-compat",
     "test/runtime/pgwire-transaction-outcome.test.js": "pgwire-compat",
+    "test/runtime/request-cell-definition-classification.test.js": "services-runtime",
     "test/runtime/request-cell-table-read-index.test.js": "services-runtime",
     "test/runtime/runtime-adapter-determinism.test.js": "services-runtime",
     "test/runtime/runtime-adapter-ingress.test.js": "services-runtime",
@@ -2052,6 +2054,7 @@
     "test/runtime/service-cell-worker-modes.test.js": "services-runtime",
     "test/runtime/service-discovery-catalog.test.js": "services-runtime",
     "test/runtime/service-lifecycle-pgwire-executor-handoff.test.js": "services-runtime",
+    "test/runtime/service-runtime-consensus-publication.test.js": "services-runtime",
     "test/runtime/service-runtime-lifecycle-idempotency.test.js": "services-runtime",
     "test/runtime/service-runtime-lifecycle-journal.test.js": "services-runtime",
     "test/runtime/service-runtime-lifecycle.test.js": "services-runtime",
@@ -2354,6 +2357,8 @@
     "test/utils/phase-state-machine-transitions.property.test.js": "runtime-primitives",
     "test/utils/phase-state-machine.test.js": "runtime-primitives",
     "test/wasm-service/backward-compat-serialization.test.js": "wasm-toolchain",
+    "test/wasm-service/bound-creation-handler-embedding.integration.test.js": "wasm-toolchain",
+    "test/wasm-service/bound-creation-restart.integration.test.js": "wasm-toolchain",
     "test/wasm-service/call-cell-world-abi.test.js": "wasm-toolchain",
     "test/wasm-service/capability-policy.test.js": "wasm-toolchain",
     "test/wasm-service/dependency-lock-determinism.property.test.js": "wasm-toolchain",
@@ -2402,6 +2407,10 @@
     "test/wasm-service/timer-manager.test.js": "wasm-toolchain",
     "test/wasm-service/wasm-creation-bound-native.test.js": "wasm-toolchain",
     "test/wasm-service/wasm-creation-genesis.integration.test.js": "wasm-toolchain",
+    "test/wasm-service/wasm-creation-local-record.test.js": "wasm-toolchain",
+    "test/wasm-service/wasm-creation-publication.integration.test.js": "wasm-toolchain",
+    "test/wasm-service/wasm-creation-reconciliation.integration.test.js": "wasm-toolchain",
+    "test/wasm-service/wasm-creation-reconciliation.test.js": "wasm-toolchain",
     "test/wasm-service/wasm-executor-run-export.test.js": "wasm-toolchain",
     "test/wasm-service/wasm-executor-runtime-adapter-parity.test.js": "wasm-toolchain",
     "test/wasm-service/wasm-executor.test.js": "wasm-toolchain",
@@ -5856,6 +5865,7 @@
     },
     "test/distributed/harness/__tests__/comparative-efficiency-movielens-grouped-reduce.test.js": {
       "files": [
+        "data/examples/movielens-100k/u.data",
         "test/distributed/harness/benchmark-capacity-heterogeneous-observation.js"
       ]
     },
@@ -7104,6 +7114,9 @@
       ]
     },
     "test/examples/movielens-public-request-evidence-artifacts.test.js": {
+      "files": [
+        "data/examples/movielens-100k/u.data"
+      ],
       "directories": [
         "examples/service-data-affinity"
       ]
@@ -8655,6 +8668,19 @@
       "files": [
         "src/bootstrap/shared/message-group-transport-handler.js",
         "src/wasm-service/wasm-service-replica.js"
+      ]
+    },
+    "test/node/runtime-service-bound-route.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/node/runtime-service-handler-constants.js",
+        "src/rebalancer/executor-outcome-constants.js",
+        "src/rebalancer/executor-outcome-emitter.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-status.js",
+        "src/service/service-lifecycle-command-contract.js",
+        "test/control-plane/service-instance-creation-sqlite-fixture.js"
       ]
     },
     "test/node/runtime-service-call-cell-handler.test.js": {
@@ -13273,6 +13299,17 @@
         "src/runtime/runtime-startup-wiring.js"
       ]
     },
+    "test/runtime/service-runtime-consensus-publication.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/query/runtime-replica-state-projection.js",
+        "src/rebalancer/runtime-service-replica-identity.js",
+        "src/runtime/runtime-endpoint-publication-wiring.js",
+        "src/service/service-lifecycle-command-contract.js",
+        "test/control-plane/service-instance-creation-sqlite-fixture.js"
+      ]
+    },
     "test/runtime/service-runtime-lifecycle-idempotency.test.js": {
       "files": [
         "src/runtime/runtime-driver-registry.js",
@@ -13457,6 +13494,7 @@
     },
     "test/scripts/change-proof-boundary.test.js": {
       "files": [
+        "data/examples/movielens-100k/u.data",
         "package-lock.json",
         "package.json",
         "scripts/checks/git-process-environment.js",
@@ -13485,6 +13523,7 @@
     },
     "test/scripts/change-proof-collection-safety.test.js": {
       "files": [
+        "data/examples/movielens-100k/u.data",
         "package-lock.json",
         "package.json",
         "scripts/checks/git-process-environment.js",
@@ -13527,6 +13566,7 @@
     },
     "test/scripts/change-proof-own-authority.test.js": {
       "files": [
+        "data/examples/movielens-100k/u.data",
         "package-lock.json",
         "package.json",
         "scripts/checks/git-process-environment.js",
@@ -14174,6 +14214,7 @@
     "test/scripts/home-lab-cli-guidelines.test.js": {
       "files": [
         "Dockerfile",
+        "data/examples/movielens-100k/u.data",
         "package-lock.json",
         "package.json",
         "scripts/check-guideline-decision-boundaries-baseline.json",
@@ -14361,6 +14402,7 @@
       "files": [
         ".github/workflows/full-corpus-canary.yml",
         "Dockerfile",
+        "data/examples/movielens-100k/u.data",
         "package-lock.json",
         "package.json",
         "scripts/checks/wait-for-thermal-headroom.js",
@@ -14399,6 +14441,7 @@
     "test/scripts/lab-test-base.test.js": {
       "files": [
         "Dockerfile",
+        "data/examples/movielens-100k/u.data",
         "package-lock.json",
         "package.json",
         "scripts/checks/impact-proof-cone-constants.js",
@@ -14426,6 +14469,7 @@
     "test/scripts/lab-worker-provisioning.test.js": {
       "files": [
         ".github/workflows/full-corpus-canary.yml",
+        "data/examples/movielens-100k/u.data",
         "package-lock.json",
         "package.json",
         "scripts/checks/wait-for-thermal-headroom.js",
@@ -14451,6 +14495,7 @@
         ".githooks/pre-push",
         ".github/workflows/full-corpus-canary.yml",
         ".gitignore",
+        "data/examples/movielens-100k/u.data",
         "data/formation-health/trend.ndjson",
         "examples/service-data-affinity/download-movielens.js",
         "package-lock.json",
@@ -14753,6 +14798,7 @@
       "directories": [
         ".githooks",
         "data",
+        "data/examples/movielens-100k",
         "data/formation-health",
         "data/releases",
         "solve",
@@ -14764,6 +14810,7 @@
         ".githooks/pre-push",
         ".taprc",
         "CHANGELOG.md",
+        "data/examples/movielens-100k/u.data",
         "docs/development/solver-runbook.md",
         "examples/service-data-affinity/download-movielens.js",
         "package-lock.json",
@@ -14953,6 +15000,7 @@
     },
     "test/scripts/run-classified-test-files.test.js": {
       "files": [
+        "data/examples/movielens-100k/u.data",
         "package-lock.json",
         "package.json",
         "scripts/checks/wait-for-thermal-headroom.js",
@@ -15106,6 +15154,7 @@
     "test/scripts/scenario-certification-consumers.test.js": {
       "files": [
         "Dockerfile",
+        "data/examples/movielens-100k/u.data",
         "data/formation-health/trend.ndjson",
         "examples/service-data-affinity/run-affinity-demo.js",
         "package-lock.json",
@@ -15145,6 +15194,7 @@
     "test/scripts/scenario-refused-outcome-consumers.test.js": {
       "files": [
         "Dockerfile",
+        "data/examples/movielens-100k/u.data",
         "package-lock.json",
         "package.json",
         "scripts/checks/wait-for-thermal-headroom.js",
@@ -15185,6 +15235,7 @@
     },
     "test/scripts/select-change-tests.test.js": {
       "files": [
+        "data/examples/movielens-100k/u.data",
         "docs/steering/rules.md",
         "package-lock.json",
         "package.json",
@@ -15219,6 +15270,7 @@
     },
     "test/scripts/selection-golden-corpus.test.js": {
       "files": [
+        "data/examples/movielens-100k/u.data",
         "package-lock.json",
         "package.json",
         "scripts/checks/wait-for-thermal-headroom.js",
@@ -15368,6 +15420,7 @@
     },
     "test/scripts/test-placement-lab-split.test.js": {
       "files": [
+        "data/examples/movielens-100k/u.data",
         "package-lock.json",
         "package.json",
         "scripts/checks/wait-for-thermal-headroom.js",
@@ -15387,6 +15440,7 @@
     "test/scripts/test-placement.test.js": {
       "files": [
         "README.md",
+        "data/examples/movielens-100k/u.data",
         "package-lock.json",
         "package.json",
         "scripts/checks/wait-for-thermal-headroom.js",
@@ -15401,6 +15455,7 @@
         "test/shards/primary-classes.json"
       ],
       "directories": [
+        "data/examples",
         "data/storage-load",
         "test"
       ],
@@ -15613,6 +15668,11 @@
     "test/service/service-local-oci-layout-builder.test.js": {
       "files": [
         "Dockerfile"
+      ]
+    },
+    "test/service/service-type-adapter.test.js": {
+      "files": [
+        "src/service/adapters/message-group-service-adapter.js"
       ]
     },
     "test/simulation/formation-attribution-provenance.test.js": {
@@ -16074,6 +16134,59 @@
         "src/diagnostics/comparative-efficiency-opportunity-input-integrity.js"
       ]
     },
+    "test/wasm-service/bound-creation-handler-embedding.integration.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/index.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/query/runtime-replica-state-projection.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/rebalancer/executor-outcome-constants.js",
+        "src/rebalancer/executor-outcome-emitter.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/runtime-service-replica-identity.js",
+        "src/runtime/runtime-endpoint-publication-wiring.js",
+        "src/service/service-lifecycle-command-contract.js",
+        "src/wasm-service/wasm-service-committed-command-codec.js",
+        "src/wasm-service/wasm-service-constants.js",
+        "src/wasm-service/wasm-service-replica.js",
+        "test/control-plane/service-instance-creation-sqlite-fixture.js",
+        "test/partition/partition-service-test-support.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/wasm-service/bound-creation-restart.integration.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/index.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/entrypoint-startup-acquisition-ledger.js",
+        "src/query/runtime-replica-state-projection.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/rebalancer/executor-outcome-constants.js",
+        "src/rebalancer/executor-outcome-emitter.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/runtime-service-replica-identity.js",
+        "src/runtime/runtime-endpoint-publication-wiring.js",
+        "src/service/service-lifecycle-command-contract.js",
+        "src/wasm-service/wasm-service-committed-command-codec.js",
+        "src/wasm-service/wasm-service-constants.js",
+        "src/wasm-service/wasm-service-replica.js",
+        "test/control-plane/service-instance-creation-sqlite-fixture.js",
+        "test/partition/partition-service-test-support.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
     "test/wasm-service/call-cell-world-abi.test.js": {
       "files": [
         "test/wasm-service/fixtures/call-cell-world/guest.js"
@@ -16172,6 +16285,7 @@
     },
     "test/wasm-service/wasm-creation-genesis.integration.test.js": {
       "files": [
+        "src/bootstrap/shared/meta-service-definition-registration.js",
         "src/bootstrap/system-table-schemas-constants.js",
         "src/constants/index.js",
         "src/control-plane/control-plane-system-table-gateway.js",
@@ -16180,6 +16294,64 @@
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
+        "src/service/service-consensus-bootstrap.js",
+        "src/service/service-lifecycle-command-contract.js",
+        "src/wasm-service/wasm-service-committed-command-codec.js",
+        "src/wasm-service/wasm-service-constants.js",
+        "src/wasm-service/wasm-service-replica.js",
+        "test/control-plane/service-instance-creation-sqlite-fixture.js",
+        "test/partition/partition-service-test-support.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js",
+        "test/wasm-service/wasm-retained-bootstrap-fixture.js"
+      ]
+    },
+    "test/wasm-service/wasm-creation-local-record.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/rebalancer/runtime-service-replica-identity.js",
+        "src/service/service-consensus-creation-intent.js",
+        "src/service/service-lifecycle-command-contract.js",
+        "test/control-plane/service-instance-creation-sqlite-fixture.js"
+      ]
+    },
+    "test/wasm-service/wasm-creation-publication.integration.test.js": {
+      "files": [
+        "src/bootstrap/shared/meta-service-definition-registration.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/index.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/service/service-consensus-bootstrap.js",
+        "src/service/service-consensus-creation-intent.js",
+        "src/service/service-lifecycle-command-contract.js",
+        "src/wasm-service/wasm-service-committed-command-codec.js",
+        "src/wasm-service/wasm-service-constants.js",
+        "src/wasm-service/wasm-service-replica.js",
+        "test/control-plane/service-instance-creation-sqlite-fixture.js",
+        "test/partition/partition-service-test-support.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js",
+        "test/wasm-service/wasm-retained-bootstrap-fixture.js"
+      ]
+    },
+    "test/wasm-service/wasm-creation-reconciliation.integration.test.js": {
+      "files": [
+        "src/bootstrap/shared/meta-service-definition-registration.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/index.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/service/service-consensus-bootstrap.js",
         "src/service/service-lifecycle-command-contract.js",
         "src/wasm-service/wasm-service-committed-command-codec.js",
         "src/wasm-service/wasm-service-constants.js",
@@ -16198,6 +16370,7 @@
     },
     "test/wasm-service/wasm-retained-bootstrap.integration.test.js": {
       "files": [
+        "src/bootstrap/shared/meta-service-definition-registration.js",
         "src/bootstrap/system-table-schemas-constants.js",
         "src/constants/index.js",
         "src/control-plane/control-plane-system-table-gateway.js",
@@ -16206,6 +16379,7 @@
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
+        "src/service/service-consensus-bootstrap.js",
         "src/service/service-lifecycle-command-contract.js",
         "src/wasm-service/wasm-service-committed-command-codec.js",
         "src/wasm-service/wasm-service-constants.js",
@@ -16221,12 +16395,14 @@
       "files": [
         "src/address/address-manager.js",
         "src/config/configuration-manager.js",
+        "src/control-plane/owners/service-instance-contract.js",
         "src/logging/logging-service.js",
         "src/node/node-service.js",
         "src/storage/data-directory-manager.js",
         "src/wasm-service/module-mirror.js",
         "src/wasm-service/port-allocator.js",
         "src/wasm-service/wasm-service-constants.js",
+        "src/wasm-service/wasm-service-serving-state.js",
         "test/test-helpers/boot-incarnation-fixture.js"
       ]
     },

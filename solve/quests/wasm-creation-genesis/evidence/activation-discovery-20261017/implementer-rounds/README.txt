@@ -1,0 +1,1 @@
+Stage 1c implementer rounds 2-5 (Opus): reports, red-first logs, mutation patches/results (as .txt), statics logs and lab selections. Round 2 snapshot 04f1a9112, round 3 9f83c7be3, round 4 6b4208268, round 5 4bcf5f86d (all pushed as wip/rs-raft-serving-publication-3..6).

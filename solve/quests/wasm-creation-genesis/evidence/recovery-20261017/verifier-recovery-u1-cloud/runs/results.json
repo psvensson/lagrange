@@ -1,0 +1,52 @@
+[
+  {
+    "file": "test/wasm-service/bound-creation-restart.integration.test.js",
+    "exitCode": 1,
+    "durationSeconds": 3.199
+  },
+  {
+    "file": "test/node/runtime-service-bound-route.test.js",
+    "exitCode": 1,
+    "durationSeconds": 2.423
+  },
+  {
+    "file": "test/service/service-consensus-creation-intent.test.js",
+    "exitCode": 1,
+    "durationSeconds": 2.056
+  },
+  {
+    "file": "test/wasm-service/wasm-creation-local-record.test.js",
+    "exitCode": 1,
+    "durationSeconds": 2.119
+  },
+  {
+    "file": "test/service/service-type-adapter.test.js",
+    "exitCode": 1,
+    "durationSeconds": 1.148
+  },
+  {
+    "file": "test/wasm-service/wasm-service-lifecycle.test.js",
+    "exitCode": 1,
+    "durationSeconds": 3.013
+  },
+  {
+    "file": "test/wasm-service/wasm-creation-publication.integration.test.js",
+    "exitCode": 1,
+    "durationSeconds": 2.892
+  },
+  {
+    "file": "test/runtime/wasm-driver-contract-conformance.test.js",
+    "exitCode": 1,
+    "durationSeconds": 1.877
+  },
+  {
+    "file": "test/wasm-service/bound-creation-handler-embedding.integration.test.js",
+    "exitCode": 1,
+    "durationSeconds": 2.939
+  },
+  {
+    "file": "test/node/runtime-service-handler.test.js",
+    "exitCode": 1,
+    "durationSeconds": 1.757
+  }
+]

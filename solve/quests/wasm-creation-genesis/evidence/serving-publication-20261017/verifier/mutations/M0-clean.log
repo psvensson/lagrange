@@ -1,0 +1,8 @@
+thermal: ok cpu 54C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+
+# test-files planned=1
+classified lane exclusive: 1 file(s), jobs=1
+thermal: ok cpu 60C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+ok test/wasm-service/wasm-creation-publication.integration.test.js (23 assertions, 3822ms)
+# test-files total=1 pass=1 fail=0 assertions=23
+

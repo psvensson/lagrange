@@ -1,0 +1,32 @@
+// The same canonical-replica collision is not limited to a RETIRED plan.
+for (const order of ['predecessor-first', 'successor-first']) {
+  test(`independent U1: ${order} older ABSENT reentry cannot hide the successor`, async (t) => {
+    const e = await hostsOf(t);
+    await e.retain(e.hosts[1]);
+    const host = await e.restartHost(e.hosts[1], {inventory: false});
+    const previousBinding = host.intent.consensusBinding;
+    const previousTime = rowOf(e, host).created_at;
+    host.inventory = await host.handler.recoverRetainedCreations();
+    // REMOVE takes custody before the queued opening, and closes on genuine absence.
+    e.metadata.setJournalFault('before-admission');
+    await removeAndSettle(e, host, 'independent-absent-remove', OUTCOME.RUNTIME_SERVICE_REMOVE_COMPLETED);
+    e.metadata.setJournalFault(null);
+    assert.equal(fs.existsSync(dbPathOf(host)), false);
+    assert.equal(rowOf(e, host).state, 'in_progress');
+    assert.equal(slotPhase(e, host), 'CLOSED');
+    const selected = await e.metadata.primary.selectConsensusInstance(e.metadata.request(1, 92, previousBinding.incarnation));
+    assert.equal(selected.outcome, 'SELECTED');
+    const successorId = order === 'predecessor-first' ? 'z-live-1' : 'a-live-1';
+    const intent = e.intentFor(host.slot, selected.binding, successorId);
+    host.manager._timeSource = {now: () => previousTime};
+    assert.equal((await host.manager.prepareConsensusCreation(intent)).outcome, 'ADMISSION_RETAINED');
+    const restarted = await e.restartHost(host, {inventory: false});
+    const resumes = trackResumes(restarted);
+    restarted.inventory = await restarted.handler.recoverRetainedCreations();
+    await e.settle();
+    t.diagnostic(JSON.stringify({order, plans: plansOf(restarted), resumes, memo: memoOf(restarted)}));
+    assert.deepEqual([resumes.includes(successorId), memoOf(restarted)?.operationId,
+      memoOf(restarted)?.status], [true, successorId, ReplicaStatus.HELD],
+    'OLDER_REENTER_PLAN_SUPPRESSED_SUCCESSOR_REENTRY');
+  });
+}

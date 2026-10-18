@@ -1,0 +1,28 @@
+{
+  "schema": "lagrange-lab-result/v1",
+  "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+  "request_id": "5aeeb9ef6ea04205a6230a788af6e33f",
+  "request_sha256": "60b3aab51cf5713c987cec2f61c5718d0f38ccca9f9eac6b5c2959fe7cf679b6",
+  "status": "COMPLETE",
+  "recorded_at": "2026-10-17T06:48:50Z",
+  "result": {
+    "allowed_hosts": [
+      "tv-dator",
+      "lenovo-laptop",
+      "adam-laptop",
+      "adams-gamla"
+    ],
+    "authorization": {
+      "expires_at": null,
+      "mode": "trusted-repository",
+      "source_repo": "psvensson/lagrange",
+      "source_requirement": "exact SHA at a named refs/heads/ branch tip",
+      "until_revoked": true
+    },
+    "executed_source": false,
+    "paused": false,
+    "source_repo": "psvensson/lagrange",
+    "uncertain_execution": false,
+    "version": "0.1.4"
+  }
+}

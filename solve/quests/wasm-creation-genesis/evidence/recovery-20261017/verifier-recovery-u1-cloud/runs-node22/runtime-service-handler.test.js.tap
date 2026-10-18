@@ -1,0 +1,255 @@
+TAP version 13
+# Subtest: RuntimeServiceHandler initialization
+    # Subtest: throws when serviceLifecycleManager is missing
+    ok 1 - throws when serviceLifecycleManager is missing
+      ---
+      duration_ms: 48.609799
+      type: 'test'
+      ...
+    # Subtest: throws when cdcIntegrationService is missing
+    ok 2 - throws when cdcIntegrationService is missing
+      ---
+      duration_ms: 0.423232
+      type: 'test'
+      ...
+    # Subtest: throws when systemTableCache is missing
+    ok 3 - throws when systemTableCache is missing
+      ---
+      duration_ms: 0.227111
+      type: 'test'
+      ...
+    # Subtest: initializes successfully with all dependencies
+    ok 4 - initializes successfully with all dependencies
+      ---
+      duration_ms: 0.340975
+      type: 'test'
+      ...
+    1..4
+ok 1 - RuntimeServiceHandler initialization
+  ---
+  duration_ms: 50.689485
+  type: 'suite'
+  ...
+# Subtest: RuntimeServiceHandler handleCreateReplica
+    # Subtest: returns error when required fields are missing
+    ok 1 - returns error when required fields are missing
+      ---
+      duration_ms: 0.818271
+      type: 'test'
+      ...
+    # Subtest: returns INITIATED for valid create request
+    ok 2 - returns INITIATED for valid create request
+      ---
+      duration_ms: 0.69687
+      type: 'test'
+      ...
+    # Subtest: rejects non-canonical dispatched identities before lifecycle effects
+    ok 3 - rejects non-canonical dispatched identities before lifecycle effects
+      ---
+      duration_ms: 0.517966
+      type: 'test'
+      ...
+    # Subtest: returns ALREADY_EXISTS for active replica
+    ok 4 - returns ALREADY_EXISTS for active replica
+      ---
+      duration_ms: 1.55174
+      type: 'test'
+      ...
+    # Subtest: returns IN_PROGRESS for creating replica
+    ok 5 - returns IN_PROGRESS for creating replica
+      ---
+      duration_ms: 0.420445
+      type: 'test'
+      ...
+    # Subtest: returns IN_PROGRESS for duplicate operation ID
+    ok 6 - returns IN_PROGRESS for duplicate operation ID
+      ---
+      duration_ms: 0.238482
+      type: 'test'
+      ...
+    # Subtest: a CREATE over a nameless FAILED or REMOVING memo takes the generic path (RV6.1-RV6.3)
+    ok 7 - a CREATE over a nameless FAILED or REMOVING memo takes the generic path (RV6.1-RV6.3)
+      ---
+      duration_ms: 8.43219
+      type: 'test'
+      ...
+    # Subtest: calls lifecycle create + start without direct workflow-step persistence
+    ok 8 - calls lifecycle create + start without direct workflow-step persistence
+      ---
+      duration_ms: 1.326134
+      type: 'test'
+      ...
+{"level":50,"time":"2026-10-17T20:33:40.587Z","nodeId":"unknown","pid":464,"subsystem":"runtime-service-handler","operationId":"op-1","replicaId":"sys-postgres-wire-r1","entityId":"sys-postgres-wire","error":"bind failed","nodeId":"unknown","contextNodeId":"test-node","msg":"Runtime service replica creation failed"}
+    # Subtest: transitions to FAILED when lifecycle throws
+    ok 9 - transitions to FAILED when lifecycle throws
+      ---
+      duration_ms: 2.576505
+      type: 'test'
+      ...
+{"level":50,"time":"2026-10-17T20:33:40.592Z","nodeId":"unknown","pid":464,"subsystem":"runtime-service-handler","operationId":"op-1","replicaId":"sys-postgres-wire-r1","entityId":"sys-postgres-wire","error":"Service definition not found: sys-postgres-wire","nodeId":"unknown","contextNodeId":"test-node","msg":"Runtime service replica creation failed"}
+    # Subtest: fails when service definition not found
+    ok 10 - fails when service definition not found
+      ---
+      duration_ms: 3.794064
+      type: 'test'
+      ...
+    1..10
+ok 2 - RuntimeServiceHandler handleCreateReplica
+  ---
+  duration_ms: 21.09169
+  type: 'suite'
+  ...
+# Subtest: RuntimeServiceHandler handleRemoveReplica
+    # Subtest: returns error when required fields are missing
+    ok 1 - returns error when required fields are missing
+      ---
+      duration_ms: 0.569039
+      type: 'test'
+      ...
+    # Subtest: returns NOT_FOUND when replica does not exist
+    ok 2 - returns NOT_FOUND when replica does not exist
+      ---
+      duration_ms: 0.372387
+      type: 'test'
+      ...
+    # Subtest: returns INITIATED for valid remove request
+    ok 3 - returns INITIATED for valid remove request
+      ---
+      duration_ms: 0.323687
+      type: 'test'
+      ...
+    # Subtest: reconstructs a persisted legacy target after handler restart before removal
+    ok 4 - reconstructs a persisted legacy target after handler restart before removal
+      ---
+      duration_ms: 1.793025
+      type: 'test'
+      ...
+    # Subtest: returns IN_PROGRESS for removing replica
+    ok 5 - returns IN_PROGRESS for removing replica
+      ---
+      duration_ms: 0.626287
+      type: 'test'
+      ...
+    # Subtest: resumes stalled removing replica when no removal task is active
+    ok 6 - resumes stalled removing replica when no removal task is active
+      ---
+      duration_ms: 0.834064
+      type: 'test'
+      ...
+    # Subtest: returns COMPLETED for already removed replica
+    ok 7 - returns COMPLETED for already removed replica
+      ---
+      duration_ms: 0.255062
+      type: 'test'
+      ...
+    # Subtest: calls lifecycle stop without direct workflow-step persistence
+    ok 8 - calls lifecycle stop without direct workflow-step persistence
+      ---
+      duration_ms: 0.874628
+      type: 'test'
+      ...
+{"level":50,"time":"2026-10-17T20:33:40.600Z","nodeId":"unknown","pid":464,"subsystem":"runtime-service-handler","operationId":"op-1","replicaId":"sys-postgres-wire-r1","entityId":"sys-postgres-wire","error":"stop failed","nodeId":"unknown","contextNodeId":"test-node","msg":"Runtime service replica removal failed"}
+    # Subtest: transitions to FAILED when stop throws
+    ok 9 - transitions to FAILED when stop throws
+      ---
+      duration_ms: 0.978644
+      type: 'test'
+      ...
+    1..9
+ok 3 - RuntimeServiceHandler handleRemoveReplica
+  ---
+  duration_ms: 7.386395
+  type: 'suite'
+  ...
+# Subtest: RuntimeServiceHandler handleMessage dispatch
+    # Subtest: dispatches CREATE_REPLICA messages
+    ok 1 - dispatches CREATE_REPLICA messages
+      ---
+      duration_ms: 0.706911
+      type: 'test'
+      ...
+    # Subtest: dispatches REMOVE_REPLICA messages
+    ok 2 - dispatches REMOVE_REPLICA messages
+      ---
+      duration_ms: 0.254825
+      type: 'test'
+      ...
+    # Subtest: returns error for unknown message type
+    ok 3 - returns error for unknown message type
+      ---
+      duration_ms: 0.154409
+      type: 'test'
+      ...
+    1..3
+ok 4 - RuntimeServiceHandler handleMessage dispatch
+  ---
+  duration_ms: 1.23249
+  type: 'suite'
+  ...
+# Subtest: RuntimeServiceHandler router registration
+    # Subtest: registers handler at correct address
+    ok 1 - registers handler at correct address
+      ---
+      duration_ms: 0.313259
+      type: 'test'
+      ...
+    # Subtest: unregisters handler from router
+    ok 2 - unregisters handler from router
+      ---
+      duration_ms: 0.174575
+      type: 'test'
+      ...
+    # Subtest: registered handler returns acknowledged response
+    ok 3 - registered handler returns acknowledged response
+      ---
+      duration_ms: 0.235853
+      type: 'test'
+      ...
+    1..3
+ok 5 - RuntimeServiceHandler router registration
+  ---
+  duration_ms: 0.868553
+  type: 'suite'
+  ...
+# Subtest: RuntimeServiceHandler REPLACE operation flow
+    # Subtest: handles REPLACE add phase as CREATE_REPLICA
+    ok 1 - handles REPLACE add phase as CREATE_REPLICA
+      ---
+      duration_ms: 2.649537
+      type: 'test'
+      ...
+    # Subtest: handles REPLACE remove phase as REMOVE_REPLICA
+    ok 2 - handles REPLACE remove phase as REMOVE_REPLICA
+      ---
+      duration_ms: 0.811354
+      type: 'test'
+      ...
+    1..2
+ok 6 - RuntimeServiceHandler REPLACE operation flow
+  ---
+  duration_ms: 3.646542
+  type: 'suite'
+  ...
+# Subtest: RuntimeServiceHandler shutdown
+    # Subtest: clears all state on shutdown
+    ok 1 - clears all state on shutdown
+      ---
+      duration_ms: 0.198886
+      type: 'test'
+      ...
+    1..1
+ok 7 - RuntimeServiceHandler shutdown
+  ---
+  duration_ms: 0.263008
+  type: 'suite'
+  ...
+1..7
+# tests 32
+# suites 7
+# pass 32
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 95.386992
+# time=647ms

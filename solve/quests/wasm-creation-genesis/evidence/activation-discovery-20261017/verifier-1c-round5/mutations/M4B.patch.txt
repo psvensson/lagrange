@@ -1,0 +1,12 @@
+--- a/src/node/runtime-service-bound-creation-route.js	2026-10-17 19:07:02.032231207 +0200
++++ b/src/node/runtime-service-bound-creation-route.js	2026-10-17 19:07:02.040231276 +0200
+@@ -248,8 +248,7 @@
+ }
+ 
+ // The replies to a memo that names a retained creation, by its status.
+-const NAMED_MEMO_REPLIES = new Map([[ReplicaStatus.FAILED, reenterDeferredCreation],
+-  [ReplicaStatus.REMOVING, deferDuringRetirement]]);
++const NAMED_MEMO_REPLIES = new Map([[ReplicaStatus.REMOVING, deferDuringRetirement]]);
+ 
+ /**
+  * RV7.3: a named ACTIVE memo never earns an outcome for a different request.

@@ -1,0 +1,41 @@
+thermal: ok cpu 58C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+
+> lagrange-server@0.2.6 test:file
+> node scripts/run-classified-test-files.js test/control-plane/service-instance-creation-cas.test.js
+
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: ok cpu 58C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+ok test/control-plane/service-instance-creation-cas.test.js (20 assertions, 865ms)
+# test-files total=1 pass=1 fail=0 assertions=20
+
+==== test/control-plane/service-instance-creation-cas.test.js exit 0
+
+thermal: ok cpu 55C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+
+> lagrange-server@0.2.6 test:file
+> node scripts/run-classified-test-files.js test/control-plane/service-instance-selection-admission.test.js
+
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: ok cpu 55C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+ok test/control-plane/service-instance-selection-admission.test.js (23 assertions, 768ms)
+# test-files total=1 pass=1 fail=0 assertions=23
+
+==== test/control-plane/service-instance-selection-admission.test.js exit 0
+
+thermal: ok cpu 52C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+
+> lagrange-server@0.2.6 test:file
+> node scripts/run-classified-test-files.js test/wasm-service/wasm-creation-publication.integration.test.js
+
+# test-files planned=1
+classified lane exclusive: 1 file(s), jobs=1
+thermal: ok cpu 52C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+ok test/wasm-service/wasm-creation-publication.integration.test.js (25 assertions, 3938ms)
+# test-files total=1 pass=1 fail=0 assertions=25
+
+==== test/wasm-service/wasm-creation-publication.integration.test.js exit 0
+
+
+RESTORED src/control-plane/owners/service-instance-metadata.js sha256 62cb2191b7168aa05c6c5faa0b70a0d7b1ecf3474f97fb5c6dd18a270d6d8793 byte-identical=True

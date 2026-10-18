@@ -1,0 +1,620 @@
+src/message-group/message-group-service-peer-resolution.js:211:      // clock takes it from there; otherwise setImmediate stays, because a
+src/message-group/message-group-service-peer-resolution.js:222:      setImmediate(hop);
+test/cdc/endpoint-cdc-propagation.property.test.js:544:          // Wait for setImmediate to fire
+test/cdc/endpoint-cdc-propagation.property.test.js:545:          await new Promise((resolve) => setImmediate(resolve));
+test/cdc/node-endpoints-cdc.test.js:431:  // Wait for setImmediate to fire
+test/cdc/node-endpoints-cdc.test.js:432:  await new Promise((resolve) => setImmediate(resolve));
+test/cdc/cdc-terminal-gate-inflight.test.js:58:    await new Promise((resolve) => setImmediate(resolve));
+test/cdc/cdc-integration-service-time-seam.test.js:56:    await new Promise((resolve) => setImmediate(resolve));
+test/cdc/cdc-authoritative-catchup-hydration.test.js:158:    await new Promise((resolve) => setImmediate(resolve));
+test/cdc/cdc-authoritative-catchup-hydration.test.js:214:    await new Promise((resolve) => setImmediate(resolve));
+test/cdc/cdc-authoritative-catchup-terminal.test.js:54:    await new Promise((resolve) => setImmediate(resolve));
+test/integration/message-group-service-handler-services-row.integration.test.js:23:  return new Promise((resolve) => setImmediate(resolve));
+test/cdc/cdc-event-delivery.property.test.js:141:          await new Promise((resolve) => setImmediate(resolve));
+test/cdc/cdc-event-delivery.property.test.js:189:          await new Promise((resolve) => setImmediate(resolve));
+test/cdc/cdc-event-delivery.property.test.js:239:          await new Promise((resolve) => setImmediate(resolve));
+test/cdc/cdc-event-delivery.property.test.js:290:          await new Promise((resolve) => setImmediate(resolve));
+test/cdc/cdc-event-delivery.property.test.js:384:          await new Promise((resolve) => setImmediate(resolve));
+test/cdc/cdc-event-delivery.property.test.js:440:          await new Promise((resolve) => setImmediate(resolve));
+test/cdc/cdc-shutdown-terminal-owner-write.test.js:264:    await new Promise((resolve) => setImmediate(resolve));
+test/integration/membership-consistency-integration-test-helpers.js:399:  const settle = () => new Promise((resolve) => setImmediate(resolve));
+test/integration/membership-consistency.integration.test.js:356:      // Track cache changes (listener is called via setImmediate)
+test/integration/membership-consistency.integration.test.js:387:      // Wait for setImmediate callbacks to fire
+test/integration/membership-consistency.integration.test.js:388:      await new Promise((r) => setImmediate(r));
+test/integration/message-group-learner-discovery.integration.test.js:57:    await new Promise((resolve) => setImmediate(resolve));
+src/cache/system-table-cache.js:72:  return setImmediate(callback);
+src/cache/system-table-cache.js:161:   *   exactly `setImmediate(callback)`; a deterministic host supplies its own
+test/integration/preflight-critical-path-hops.integration.test.js:366:      // formation churn that setImmediate notification may be delayed after
+test/integration/preflight-critical-path-hops.integration.test.js:514:    await joiningNodeFixtures.shutdownAll();
+test/integration/message-group-multi-join-formation.integration.test.js:662:    await joiningNodeFixtures.shutdownAll();
+test/integration/helpers/cluster-test-helpers.js:783:    async shutdownAll() {
+test/integration/admin-cdc-propagation.integration.test.js:103:      // Wait for setImmediate callbacks to execute (cache notifications are async)
+test/integration/admin-cdc-propagation.integration.test.js:104:      await new Promise((resolve) => setImmediate(resolve));
+test/integration/admin-cdc-propagation.integration.test.js:277:      // Wait for setImmediate callbacks to execute (cache notifications are async)
+test/integration/admin-cdc-propagation.integration.test.js:278:      await new Promise((resolve) => setImmediate(resolve));
+test/integration/admin-cdc-propagation.integration.test.js:307:      // Wait for setImmediate callbacks to execute (cache notifications are async)
+test/integration/admin-cdc-propagation.integration.test.js:308:      await new Promise((resolve) => setImmediate(resolve));
+test/integration/admin-cdc-propagation.integration.test.js:365:      // Wait for setImmediate callbacks to execute (cache notifications are async)
+test/integration/admin-cdc-propagation.integration.test.js:366:      await new Promise((resolve) => setImmediate(resolve));
+test/partition/partition-transaction-determinism.test.js:333:    await shutdownAll(leader, follower);
+test/partition/partition-participant-transaction-topology.test.js:47:    await shutdownAll(leader);
+test/partition/partition-tx1-single-path-alpha.test.js:344:    await shutdownAll(follower);
+test/message-group/message-group-service-strict-cdc-forward-routing.test.js:1207:      await new Promise((resolve) => setImmediate(resolve));
+test/message-group/message-group-service-strict-cdc-forward-routing.test.js:1234:      await new Promise((resolve) => setImmediate(resolve));
+test/message-group/message-group-service-strict-cdc-forward-routing.test.js:1235:      await new Promise((resolve) => setImmediate(resolve));
+test/partition/cdc-generation.property.test.js:44:    await new Promise((resolve) => setImmediate(resolve));
+test/integration/message-group-learner-runtime-authorization.integration.test.js:500:      await new Promise((resolve) => setImmediate(resolve));
+test/integration/minimal-deployment-call-cell-invocation-live.integration.test.js:253:      setImmediate(() => {
+test/message-group/message-group-service.test.js:458:      await new Promise((resolve) => setImmediate(resolve));
+test/partition/partition-service-learner-promotion.test.js:115:    await new Promise((resolve) => setImmediate(resolve));
+test/integration/minimal-deployment-runtime-access-policy-live-validation.integration.test.js:140:      setImmediate(() => {
+test/partition/partition-service-write-commit.test.js:867:    await new Promise((resolve) => setImmediate(resolve));
+test/admin/admin-websocket-api-shutdown-state.test.js:16:  return new Promise((resolve) => setImmediate(resolve));
+test/partition/partition-transaction.property.test.js:188:            await shutdownAll(partition);
+test/partition/partition-transaction.property.test.js:302:            await shutdownAll(partition);
+test/message-group/message-group-service-raft-replication-and-cdc.test.js:1178:      await new Promise((resolve) => setImmediate(resolve));
+test/partition/partition-retiring-row-peer-retirement.test.js:51:  return new Promise((resolve) => setImmediate(resolve));
+test/message-group/message-group-service-role-publication-and-delivery.test.js:100:    await new Promise((resolve) => setImmediate(resolve));
+test/message-group/message-group-service-role-publication-and-delivery.test.js:182:    await new Promise((resolve) => setImmediate(resolve));
+test/message-group/message-group-service-role-publication-and-delivery.test.js:256:    await new Promise((resolve) => setImmediate(resolve));
+test/message-group/message-group-service-role-publication-and-delivery.test.js:331:      await new Promise((resolve) => setImmediate(resolve));
+test/message-group/message-group-service-role-publication-and-delivery.test.js:778:    await new Promise((resolve) => setImmediate(resolve));
+test/message-group/message-group-proposal-deadline-wait-bound-spent.test.js:87:  await new Promise((resolve) => setImmediate(resolve));
+src/wasm-service/wasm-creation-retirement.js:156:async function retireWasmCreation(lifecycle, value) {
+src/wasm-service/wasm-creation-retirement.js:172:export {retireWasmCreation};
+src/wasm-service/wasm-creation-reconciliation.js:37:    return !this.closed && !this.lifecycle.consensusClosing && this.replica.initialized &&
+test/rebalancer/replace-replica-workflow-source-removal-retry-test-cases.js:210:        await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/replace-replica-workflow-source-removal-retry-test-cases.js:428:          await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/replace-replica-workflow-source-removal-retry-test-cases.js:444:          await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/rebalance-coordinator-stopping-reconcile-source-handoff.test.js:531:    await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/rebalance-coordinator-stopping-reconcile-source-handoff.test.js:532:    await new Promise((resolve) => setImmediate(resolve));
+src/wasm-service/wasm-service-replica-lifecycle.js:260:async function retireReplica(replica, handler, starting, activityFailure, shutdownIntent) {
+src/wasm-service/wasm-service-replica-lifecycle.js:343:  retireReplica(replica, handler, starting, activityFailure, retirement).then(resolve, reject);
+test/service/call-shard-dispatch-pool.test.js:34:    setImmediate(resolve);
+test/service/call-cell-invoker-parallel.test.js:51:    setImmediate(resolve);
+src/wasm-service/wasm-service-lifecycle.js:4:import {retireWasmCreation} from './wasm-creation-retirement.js';
+src/wasm-service/wasm-service-lifecycle.js:119:    this.consensusClosing = false;
+src/wasm-service/wasm-service-lifecycle.js:225:    if (creation !== null && this.consensusClosing) {
+src/wasm-service/wasm-service-lifecycle.js:483:  retireReplica(creation) {
+src/wasm-service/wasm-service-lifecycle.js:484:    return retireWasmCreation(this, creation);
+src/wasm-service/wasm-service-lifecycle.js:748:  async shutdownAll() {
+src/wasm-service/wasm-service-lifecycle.js:749:    this.consensusClosing = true;
+test/rebalancer/replace-owner-wake.test.js:194:    await new Promise((resolve) => setImmediate(resolve));
+test/service/service-installation-reconciler.test.js:378:      await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/rebalance-coordinator-timeout-cache-visibility-tail-final-test-cases.js:223:      await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/rebalance-coordinator-timeout-cache-visibility-tail-final-test-cases.js:224:      await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/rebalance-coordinator-timeout-cache-visibility-tail-final-test-cases.js:456:      await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/rebalance-coordinator-timeout-cache-visibility-tail-final-test-cases.js:457:      await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/rebalance-coordinator-timeout-cache-visibility-tail-final-test-cases.js:702:      await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/rebalance-coordinator-timeout-cache-visibility-tail-final-test-cases.js:703:      await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/rebalance-coordinator-timeout-cache-visibility-tail-final-test-cases.js:951:      await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/rebalance-coordinator-timeout-cache-visibility-tail-final-test-cases.js:952:      await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/rebalance-coordinator-timeout-cache-visibility-tail-final-test-cases.js:966:      await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/rebalance-coordinator-timeout-cache-visibility-tail-final-test-cases.js:967:      await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/rebalance-coordinator-timeout-cache-visibility-tail-final-test-cases.js:1185:      await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/rebalance-coordinator-timeout-cache-visibility-tail-final-test-cases.js:1186:      await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/rebalance-coordinator-timeout-cache-visibility-tail-final-test-cases.js:1435:        await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/rebalance-coordinator-timeout-cache-visibility-tail-final-test-cases.js:1454:        await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/replace-replica-workflow-tail-test-cases.js:143:          await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/replace-replica-workflow-tail-test-cases.js:284:          await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/replace-replica-workflow-tail-test-cases.js:963:          await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/replace-replica-workflow-tail-test-cases.js:1108:            await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/replace-replica-workflow-tail-test-cases.js:1266:        await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/replace-replica-workflow-tail-test-cases.js:1267:        await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/replace-replica-workflow-tail-test-cases.js:1394:        await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/replace-replica-workflow-tail-test-cases.js:1395:        await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/executor-outcome-redrive-untouched-payload-retry-owner.test.js:76:    await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/executor-outcome-redrive-untouched-payload-retry-owner.test.js:103:    await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/rebalance-coordinator-outcome-routing.test.js:343:    await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/rebalance-coordinator-outcome-routing.test.js:1016:          await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/rebalance-coordinator-outcome-routing.test.js:1017:          await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/rebalance-coordinator-outcome-routing.test.js:1120:          await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/rebalance-coordinator-outcome-routing.test.js:1121:          await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/rebalance-coordinator-outcome-routing.test.js:1250:          await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/rebalance-coordinator-outcome-routing.test.js:1251:          await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/rebalance-coordinator-outcome-routing.test.js:1344:          await new Promise((r) => setImmediate(r));
+test/rebalancer/rebalance-coordinator-outcome-routing.test.js:1377:          await new Promise((r) => setImmediate(r));
+test/rebalancer/rebalance-coordinator-outcome-routing.test.js:1502:          await new Promise((r) => setImmediate(r));
+src/raft/raft-rs-lifecycle-administration.js:11:function retireReplica(replicaIdentity, reason, {groupId, runtime,
+test/rebalancer/operation-workflow-observed-progress-lane-held.test.js:440:      await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/operation-workflow-observed-progress-lane-held.test.js:456:      await new Promise((resolve) => setImmediate(resolve));
+test/scripts/test-placement.test.js:541:  for (let tick = 0; tick < 20 && !releaseLocal; tick += 1) await new Promise(setImmediate);
+test/scripts/test-placement.test.js:635:  for (let tick = 0; tick < 20 && !started; tick += 1) await new Promise(setImmediate);
+test/scripts/test-placement.test.js:669:  for (let tick = 0; tick < 20 && !started; tick += 1) await new Promise(setImmediate);
+test/rebalancer/replace-owner-recovery-equivalence.test.js:129:    await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/replace-owner-recovery-equivalence.test.js:449:      await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/coordinator-reconcile-lane-ledger-write-head-of-line.test.js:8:import {setImmediate as waitForImmediate} from 'node:timers/promises';
+test/simulation/formation-sim-quiescence.js:19://   - a checkpoint is one real host event-loop turn (setImmediate), not a
+test/simulation/formation-sim-quiescence.js:188:        const immediate = setImmediate(() => resolve());
+test/simulation/formation-attribution-provenance.test.js:6:// resolved on setImmediate, an await that resumes a loop, the return of the
+src/service/service-reconciler.js:40: * there; otherwise setImmediate stays, because a zero-delay timer is a
+src/service/service-reconciler.js:51:  return new Promise((resolve) => setImmediate(resolve));
+test/control-plane/membership-publication-first-epoch-members.test.js:98:    await new Promise((resolve) => setImmediate(resolve));
+test/simulation/formation-sim-node-hosts.js:82:  // node's deterministic queue instead of a real setImmediate the virtual
+test/simulation/formation-sim-node-hosts.js:112:    // the real setImmediate. Left alone, every build in a deterministic run
+test/rebalancer/replica-operation-retained-owner-turn.test.js:168:    await new Promise((resolve) => setImmediate(resolve));
+test/control-plane/readiness-planning-identity-churn-currency.test.js:55:  return new Promise((resolve) => setImmediate(resolve));
+test/simulation/formation-attribution-census.js:80:  await new Promise((resolve) => setImmediate(resolve));
+test/simulation/formation-attribution-census.js:92:    await new Promise((resolve) => setImmediate(resolve));
+test/simulation/formation-sim-production-seed-host.js:387:  const hostTurn = () => new Promise((resolve) => setImmediate(() => {
+test/simulation/formation-sim-attribution-isolation.test.js:286:      await new Promise((resolve) => setImmediate(resolve));
+src/runtime/wasm-component-driver-shutdown-methods.js:35:        ...lifecycles.map(async (owner) => owner.shutdownAll()),
+test/rebalancer/operation-ownership-lease-fencing.test.js:33:import {setImmediate as waitForImmediate} from 'node:timers/promises';
+test/rebalancer/rebalance-coordinator-owner-path-convergence.test.js:384:        await new Promise((r) => setImmediate(r));
+test/rebalancer/rebalance-coordinator-owner-path-convergence.test.js:435:        await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/rebalance-coordinator-owner-path-convergence.test.js:436:        await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/rebalance-coordinator-owner-path-convergence.test.js:533:          await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/rebalance-coordinator-owner-path-convergence.test.js:735:        await new Promise((r) => setImmediate(r));
+test/rebalancer/rebalance-coordinator-owner-path-convergence.test.js:970:        await new Promise((resolve) => setImmediate(resolve));
+test/control-plane/control-plane-system-table-gateway-tail-test-cases.js:942:      await new Promise((resolve) => setImmediate(resolve));
+test/control-plane/control-plane-system-table-gateway-tail-test-cases.js:1180:      await new Promise((resolve) => setImmediate(resolve));
+test/partition/partition-participant-release-admission.test.js:26:    await shutdownAll(leader);
+test/partition/partition-participant-release-admission.test.js:89:    await shutdownAll(leader, follower);
+test/partition/group-retirement-provisioning-mark.test.js:58:    await new Promise((resolve) => setImmediate(resolve));
+test/control-plane/replica-dispatch-virtual-timer-test-support.js:43:  await new Promise((resolve) => setImmediate(resolve));
+test/control-plane/replica-dispatch-virtual-timer-test-support.js:48:    await new Promise((resolve) => setImmediate(resolve));
+test/simulation/calibration/formation-live-sim-correspondence.md:420:clock; otherwise `setImmediate` and `Date.now` stay): the debounced
+test/simulation/calibration/formation-live-sim-correspondence.md:424:rather than `setImmediate` - the same substrate the peer-reconciliation hop
+test/partition/split-mirror-flush-ordering.test.js:79:    setImmediate(resolve);
+test/simulation/formation-sim-connection-environment.test.js:53:    await new Promise((resolve) => setImmediate(resolve));
+test/partition/partition-coordinator-settlement.test.js:45:    await shutdownAll(leader);
+test/simulation/formation-sim-guard.js:20:const GUARDED_GLOBALS = Object.freeze(['setTimeout', 'setInterval', 'setImmediate']);
+test/partition/partition-participant-transaction-staging.test.js:104:    await shutdownAll(other);
+test/partition/partition-participant-transaction-staging.test.js:232:      await shutdownAll(replica);
+test/partition/partition-participant-transaction-staging.test.js:261:    await shutdownAll(replica);
+test/partition/partition-participant-transaction-staging.test.js:397:    await shutdownAll(follower);
+test/partition/partition-participant-transaction-staging.test.js:422:    await shutdownAll(created);
+test/partition/partition-participant-transaction-staging.test.js:478:    await shutdownAll(replica);
+test/partition/partition-participant-transaction-staging.test.js:637:    await shutdownAll(leader, follower);
+src/runtime/wasm-component-driver-consensus.js:114:  const result = await lifecycle.retireReplica(origin);
+test/simulation/formation-attribution-provenance-classify.js:21:  // code: a promise created and resolved on setImmediate.
+test/simulation/formation-attribution-provenance-classify.js:48:  ['new Promise((resolve) => setImmediate(() => {', SEED_HOST,
+test/control-plane/readiness-admission-transitions-rig.js:298:        await new Promise((resolve) => setImmediate(resolve));
+test/partition/partition-participant-transaction-apply.test.js:134:    await shutdownAll(replica);
+test/partition/partition-participant-transaction-apply.test.js:176:    await shutdownAll(leader);
+test/partition/partition-participant-transaction-apply.test.js:299:    await shutdownAll(leader);
+test/partition/partition-participant-transaction-apply.test.js:351:    await shutdownAll(leader);
+test/partition/partition-participant-transaction-apply.test.js:394:      await shutdownAll(replica);
+test/partition/partition-participant-transaction-apply.test.js:409:    await shutdownAll(replica);
+test/partition/partition-participant-transaction-apply.test.js:419:    await shutdownAll(leader);
+test/partition/partition-participant-transaction-apply.test.js:483:    await shutdownAll(upgraded, replayed);
+test/rebalancer/replace-real-group-harness.js:170:    await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/replace-real-group-harness.js:177:    await new Promise((resolve) => setImmediate(resolve));
+test/partition/merge-cutover-coordination.test.js:722:    await new Promise((resolve) => setImmediate(resolve));
+test/partition/merge-cutover-coordination.test.js:739:  await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js:161:    await new Promise((resolve) => setImmediate(resolve));
+test/partition/participant-release-applied-position.test.js:107:      ['service', () => leader === null ? undefined : shutdownAll(leader)],
+test/control-plane/control-plane-readiness-service-getall-and-snapshot-cache.test.js:1006:  await new Promise((resolve) => setImmediate(resolve));
+test/control-plane/control-plane-readiness-service-getall-and-snapshot-cache.test.js:1074:  await new Promise((resolve) => setImmediate(resolve));
+test/control-plane/control-plane-readiness-service-getall-and-snapshot-cache.test.js:1083:  await new Promise((resolve) => setImmediate(resolve));
+test/control-plane/control-plane-readiness-service-getall-and-snapshot-cache.test.js:1188:  await new Promise((resolve) => setImmediate(resolve));
+test/transport/message-router-routing-and-recovery.js:807:        new Promise((resolve) => setImmediate(() => resolve('pending'))),
+test/transport/bulk-registry-bootstrap.test.js:45:  await new Promise((resolve) => setImmediate(resolve));
+test/transport/bulk-registry-bootstrap.test.js:46:  await new Promise((resolve) => setImmediate(resolve));
+test/control-plane/incarnation-reuse-cross-owner-anchor.test.js:170:    () => raftRsLifecycleAdministration.retireReplica(REPLICA_ID,
+test/partition/partition-transaction-replicated-apply-v3.test.js:102:    await shutdownAll(leader);
+test/partition/partition-transaction-replicated-apply-v3.test.js:124:    await shutdownAll(follower);
+test/partition/partition-transaction-replicated-apply-v3.test.js:149:    await shutdownAll(follower);
+test/partition/partition-transaction-replicated-apply-v3.test.js:173:    await shutdownAll(follower);
+test/partition/partition-transaction-replicated-apply-v3.test.js:190:    await shutdownAll(follower);
+test/partition/partition-transaction-replicated-apply-v3.test.js:248:    await shutdownAll(healthy, faulty);
+test/partition/partition-transaction-replicated-apply-v3.test.js:384:    await shutdownAll(leader);
+test/partition/partition-transaction-replicated-apply-v3.test.js:408:    await shutdownAll(leader);
+test/partition/partition-transaction-replicated-apply-v3.test.js:436:    await shutdownAll(leader);
+test/partition/partition-transaction-replicated-apply-v3.test.js:461:    await shutdownAll(contended.leader, quiet.leader, after.leader);
+test/partition/partition-transaction-replicated-apply-v3.test.js:505:    await shutdownAll(leader);
+test/partition/partition-transaction-replicated-apply-v3.test.js:550:    await shutdownAll(leader);
+test/partition/partition-transaction-replicated-apply-v3.test.js:572:    await shutdownAll(leader);
+test/partition/partition-transaction-replicated-apply-v3.test.js:612:    await shutdownAll(leader);
+test/partition/partition-transaction-replicated-apply-v3.test.js:651:    await shutdownAll(leader);
+test/partition/partition-transaction-replicated-apply-v3.test.js:677:    await shutdownAll(leader);
+test/partition/partition-transaction-replicated-apply-v3.test.js:714:    await shutdownAll(leader);
+test/partition/partition-transaction-replicated-apply-v3.test.js:736:    await shutdownAll(follower);
+test/partition/partition-transaction-replicated-apply-v3.test.js:792:    await shutdownAll(leader);
+test/partition/partition-transaction-replicated-apply-v3.test.js:812:      await shutdownAll(leader);
+test/partition/partition-transaction-replicated-apply-v3.test.js:830:    await shutdownAll(leader);
+test/partition/partition-transaction-replicated-apply-v3.test.js:847:    await shutdownAll(follower);
+test/partition/partition-transaction-replicated-apply-v3.test.js:867:    await shutdownAll(leader);
+test/partition/partition-transaction-replicated-apply-v3.test.js:890:    await shutdownAll(follower);
+test/partition/partition-transaction-replicated-apply-v3.test.js:912:    await shutdownAll(...replicas);
+test/partition/partition-transaction-replicated-apply-v3.test.js:940:    await shutdownAll(first, restarted);
+test/partition/partition-transaction-replicated-apply-v3.test.js:964:    await shutdownAll(leader);
+test/partition/partition-transaction-replicated-apply-v3.test.js:982:    await shutdownAll(follower);
+test/control-plane/control-plane-readiness-service-serve-refresh-and-publication.test.js:136:  await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/replace-remove-safety-wake-harness.js:220:      return new Promise((resolve) => setImmediate(() => {
+test/rebalancer/replace-remove-safety-wake-harness.js:351:    await new Promise((resolve) => setImmediate(resolve));
+test/transport/message-router-critical-capacity-reservation.js:117:        new Promise((resolve) => setImmediate(() => resolve('pending'))),
+test/control-plane/readiness-liveness-projection-single-source.test.js:85:  return new Promise((resolve) => setImmediate(resolve));
+test/partition/partition-service-size-split-transport.test.js:1159:      await new Promise((resolve) => setImmediate(resolve));
+test/partition/partition-transaction-replay-cursor-v4.test.js:204:    await shutdownAll(leader);
+test/partition/partition-transaction-replay-cursor-v4.test.js:237:    await shutdownAll(leader, failing.leader);
+test/partition/partition-transaction-replay-cursor-v4.test.js:282:    await shutdownAll(leader);
+test/partition/partition-transaction-replay-cursor-v4.test.js:355:    await shutdownAll(leader);
+test/partition/partition-transaction-replay-cursor-v4.test.js:404:      await shutdownAll(ipk, text);
+test/partition/partition-transaction-replay-cursor-v4.test.js:425:    await shutdownAll(leader);
+test/partition/partition-transaction-replay-cursor-v4.test.js:460:      await shutdownAll(leader);
+test/partition/partition-transaction-replay-cursor-v4.test.js:478:    await shutdownAll(replica);
+test/partition/partition-transaction-replay-cursor-v4.test.js:498:    await shutdownAll(replica);
+test/partition/partition-transaction-replay-cursor-v4.test.js:519:    await shutdownAll(leader);
+test/control-plane/replica-dispatch-node-state-update-cache-replay.test.js:441:      await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/replace-source-removal-owner.test.js:387:    await new Promise((resolve) => setImmediate(resolve));
+test/transport/outbound-saturation-warn-rate-limit.test.js:109:      await new Promise((resolve) => setImmediate(resolve));
+test/transport/bulk-transfer-lane-isolation.test.js:69:  await new Promise((resolve) => setImmediate(resolve));
+test/transport/bulk-transfer-lane-isolation.test.js:70:  await new Promise((resolve) => setImmediate(resolve));
+test/partition/durable-replay-cursor.test.js:593:  await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/add-workflow-step-progression.property.test.js:259:      await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/add-workflow-step-progression.property.test.js:267:      await new Promise((resolve) => setImmediate(resolve));
+test/partition/partition-statement-admission.test.js:127:    await shutdownAll(leader);
+test/partition/partition-statement-admission.test.js:146:      await shutdownAll(replica);
+test/partition/partition-statement-admission.test.js:205:      await shutdownAll(replica);
+test/partition/partition-statement-admission.test.js:263:          await shutdownAll(replica);
+test/partition/partition-statement-admission.test.js:269:    await shutdownAll(...leaders.values());
+test/partition/partition-statement-admission.test.js:433:      await shutdownAll(replica);
+test/partition/partition-statement-admission.test.js:501:    await shutdownAll(leader);
+test/partition/partition-statement-admission.test.js:526:    await shutdownAll(replica);
+test/partition/partition-statement-admission.test.js:601:    await shutdownAll(leader);
+test/partition/partition-statement-admission.test.js:611:    await shutdownAll(ipk);
+test/partition/partition-statement-admission.test.js:637:    await shutdownAll(leader);
+test/control-plane/membership-publication-coordinator-tail-more-test-cases.js:912:        await new Promise((resolve) => setImmediate(resolve));
+test/partition/partition-split-merge-manager.test.js:712:  await new Promise((resolve) => setImmediate(resolve));
+test/partition/partition-split-merge-manager.test.js:805:    await new Promise((resolve) => setImmediate(resolve));
+test/partition/partition-split-merge-manager.test.js:836:  await new Promise((resolve) => setImmediate(resolve));
+test/partition/partition-split-merge-manager.test.js:880:  await new Promise((resolve) => setImmediate(resolve));
+test/partition/partition-split-merge-manager.test.js:1071:  await new Promise((resolve) => setImmediate(resolve));
+test/partition/partition-split-merge-manager.test.js:1099:    await new Promise((resolve) => setImmediate(resolve));
+test/control-plane/publication-readiness-churn-liveness.test.js:818:    await new Promise((resolve) => setImmediate(resolve));
+test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js:72:  await new Promise((resolve) => setImmediate(resolve));
+test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js:77:    await new Promise((resolve) => setImmediate(resolve));
+test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js:437:      await new Promise((resolve) => setImmediate(resolve));
+src/control-plane/readiness-planning-version-contract.js:174:  return setImmediate(callback);
+test/partition/workflow-record-sqlite-world.js:138:        await new Promise((resolve) => setImmediate(resolve));
+test/partition/workflow-record-sqlite-world.js:202:    await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/startup-authority-available-node-contract.test.js:93:    await new Promise((resolve) => setImmediate(resolve));
+test/cache/cdc-event-broadcast-completeness.property.test.js:107:        // Wait for all setImmediate callbacks to fire
+test/cache/cdc-event-broadcast-completeness.property.test.js:108:        await new Promise((resolve) => setImmediate(resolve));
+test/cache/cdc-event-broadcast-completeness.property.test.js:176:          await new Promise((resolve) => setImmediate(resolve));
+test/cache/cdc-event-broadcast-completeness.property.test.js:191:        // Wait for setImmediate
+test/cache/cdc-event-broadcast-completeness.property.test.js:192:        await new Promise((resolve) => setImmediate(resolve));
+test/cache/cdc-event-broadcast-completeness.property.test.js:236:        await new Promise((resolve) => setImmediate(resolve));
+test/cache/cdc-event-broadcast-completeness.property.test.js:273:        await new Promise((resolve) => setImmediate(resolve));
+test/partition/partition-write-typed-releases.test.js:177:      await new Promise((resolve) => setImmediate(resolve));
+test/partition/partition-write-typed-releases.test.js:187:      await shutdownAll(service);
+test/partition/partition-write-typed-releases.test.js:261:      await shutdownAll(service);
+test/rebalancer/rebalance-coordinator-partition-serialization-preservation.property.test.js:167:  await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/rebalance-coordinator-partition-serialization-preservation.property.test.js:182:  await new Promise((resolve) => setImmediate(resolve));
+test/control-plane/readiness-routing-heartbeat-window.test.js:62:  return new Promise((resolve) => setImmediate(resolve));
+test/cache/system-table-cache.test.js:707:  // Wait for setImmediate to fire
+test/cache/system-table-cache.test.js:708:  await new Promise((resolve) => setImmediate(resolve));
+test/cache/system-table-cache.test.js:741:  await new Promise((resolve) => setImmediate(resolve));
+test/cache/system-table-cache.test.js:764:  await new Promise((resolve) => setImmediate(resolve));
+test/cache/system-table-cache.test.js:784:  await new Promise((resolve) => setImmediate(resolve));
+test/cache/system-table-cache.test.js:786:  t.equal(listenerCalled, true, 'Listener should be called after setImmediate');
+test/cache/system-table-cache.test.js:843:  await new Promise((resolve) => setImmediate(resolve));
+test/cache/system-table-cache.test.js:867:  await new Promise((resolve) => setImmediate(resolve));
+test/control-plane/single-readiness-owner.receipt.test.js:55:  return new Promise((resolve) => setImmediate(resolve));
+test/control-plane/single-readiness-owner.receipt.test.js:59:// setImmediate drain) so the reads below compare COMPLETED snapshots, not
+test/cache/system-table-cache-anti-entropy-sweep.test.js:595:  // Notifications are dispatched via setImmediate; let them flush.
+test/cache/system-table-cache-anti-entropy-sweep.test.js:596:  await new Promise((resolve) => setImmediate(resolve));
+test/cache/hydration-no-cdc-generation.property.test.js:318:        await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/coordinator-created-user-partition-remote-outcome.test.js:196:  await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/coordinator-created-user-partition-remote-outcome.test.js:197:  await new Promise((resolve) => setImmediate(resolve));
+test/cache/system-cache-client.test.js:132:  await new Promise((resolve) => setImmediate(resolve));
+test/partition/partition-consensus-hold-log.test.js:80:  return new Promise((resolve) => setImmediate(resolve));
+test/control-plane/projection-readiness-per-node-generation.receipt.test.js:7:// setImmediate listeners) and the REAL MembershipPublicationCoordinator sync
+test/control-plane/projection-readiness-per-node-generation.receipt.test.js:122:  return new Promise((resolve) => setImmediate(resolve));
+test/control-plane/projection-readiness-per-node-generation.receipt.test.js:772:  // Sync race: apply epoch 2 and read BEFORE the setImmediate listener that
+test/partition/group-retirement-resume-claim.test.js:65:    await new Promise((resolve) => setImmediate(resolve));
+test/partition/group-retirement-resume-claim.test.js:89:      await new Promise((resolve) => setImmediate(resolve));
+test/partition/group-retirement-resume-claim.test.js:96:      setImmediate(() => store.emit({...row}));
+test/partition/partition-admission-redrive-wakes.test.js:72:  return new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/replace-replica-workflow.test.js:824:          await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/replace-replica-workflow.test.js:957:        await new Promise((resolve) => setImmediate(resolve));
+test/partition/partition-service-role-metadata-publication.test.js:186:  await new Promise((resolve) => setImmediate(resolve));
+test/partition/partition-service-role-metadata-publication.test.js:279:  await new Promise((resolve) => setImmediate(resolve));
+test/partition/partition-service-role-metadata-publication.test.js:355:    await new Promise((resolve) => setImmediate(resolve));
+test/partition/partition-service-role-metadata-publication.test.js:491:    await new Promise((resolve) => setImmediate(resolve));
+test/partition/partition-service-role-metadata-publication.test.js:598:    await new Promise((resolve) => setImmediate(resolve));
+test/partition/partition-service-role-metadata-publication.test.js:866:  await new Promise((resolve) => setImmediate(resolve));
+test/partition/partition-service-role-metadata-publication.test.js:1107:  await new Promise((resolve) => setImmediate(resolve));
+test/partition/partition-service-role-metadata-publication.test.js:1184:    await new Promise((resolve) => setImmediate(resolve));
+test/control-plane/heartbeat-owner-completion-test-cases.js:91:    await new Promise((resolve) => setImmediate(resolve));
+test/control-plane/heartbeat-owner-completion-test-cases.js:102:    await new Promise((resolve) => setImmediate(resolve));
+test/control-plane/heartbeat-owner-completion-test-cases.js:301:  await new Promise((resolve) => setImmediate(resolve));
+test/control-plane/heartbeat-owner-completion-test-cases.js:350:  await new Promise((resolve) => setImmediate(resolve));
+test/control-plane/heartbeat-owner-completion-test-cases.js:355:  await new Promise((resolve) => setImmediate(resolve));
+test/control-plane/heartbeat-owner-completion-test-cases.js:358:  await new Promise((resolve) => setImmediate(resolve));
+test/partition/participant-release-protocol.test.js:113:      ['service', () => shutdownAll(leader)],
+test/rebalancer/replica-operation-repository-owner-clock-waits.test.js:97:    await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/replica-operation-repository-owner-clock-waits.test.js:102:  await new Promise((resolve) => setImmediate(resolve));
+test/raft/snapshot-lifecycle-staging.test.js:47:  const absent = await raftRsLifecycleAdministration.retireReplica(IDENTITY.replicaIdentity,
+test/partition/participant-envelope-admission.test.js:66:    await shutdownAll(replica);
+test/test-helpers/service-delivery-fixture.js:75:      await new Promise((resolve) => setImmediate(resolve));
+test/partition/partition-cdc-obligation.test.js:205:    await shutdownAll(follower);
+test/partition/partition-cdc-obligation.test.js:302:    await shutdownAll(leader);
+test/partition/partition-cdc-obligation.test.js:360:    await shutdownAll(leader);
+test/partition/partition-cdc-obligation.test.js:396:    await shutdownAll(leader);
+test/partition/partition-cdc-obligation.test.js:423:    await shutdownAll(leader);
+test/partition/partition-cdc-obligation.test.js:492:    await shutdownAll(follower);
+test/partition/partition-cdc-obligation.test.js:548:    await shutdownAll(leader, restarted);
+test/partition/partition-cdc-obligation.test.js:602:    await shutdownAll(leader, restarted);
+test/partition/partition-cdc-obligation.test.js:626:    await shutdownAll(leader);
+test/partition/partition-cdc-obligation.test.js:672:      await shutdownAll(leader);
+test/partition/partition-cdc-obligation.test.js:700:      await shutdownAll(replica);
+test/partition/partition-cdc-obligation.test.js:740:      await shutdownAll(leader);
+test/partition/partition-cdc-obligation.test.js:762:    await shutdownAll(leader);
+test/partition/partition-cdc-obligation.test.js:794:      await shutdownAll(replica);
+test/partition/partition-cdc-obligation.test.js:824:      await shutdownAll(leader);
+test/partition/partition-cdc-obligation.test.js:851:    await shutdownAll(leader);
+test/partition/partition-cdc-obligation.test.js:879:        await shutdownAll(leader);
+test/test-helpers/learner-recipient-fixture.js:25:const immediate = () => new Promise((resolve) => setImmediate(resolve));
+test/test-helpers/participant-transaction-fixture.js:137:const settle = () => new Promise((resolve) => setImmediate(resolve));
+test/test-helpers/participant-transaction-fixture.js:409:    await shutdownAll(...replicas);
+test/test-helpers/participant-transaction-fixture.js:790:async function shutdownAll(...replicas) {
+test/raft/authoritative-row-mutation-helper.test.js:452:    await new Promise((resolve) => setImmediate(resolve));
+test/raft/authoritative-row-mutation-helper.test.js:604:    await new Promise((resolve) => setImmediate(resolve));
+test/raft/authoritative-row-mutation-helper.test.js:820:    await new Promise((resolve) => setImmediate(resolve));
+test/control-plane/readiness-planning-deferral-bounded.test.js:247:        await new Promise((resolve) => setImmediate(resolve));
+test/control-plane/readiness-planning-deferral-bounded.test.js:542:      await new Promise((resolve) => setImmediate(resolve));
+test/control-plane/readiness-planning-cache-classification-barrier.test.js:121:    await new Promise((resolve) => setImmediate(resolve));
+test/control-plane/readiness-planning-cache-classification-barrier.test.js:172:    await new Promise((resolve) => setImmediate(resolve));
+test/control-plane/readiness-planning-cache-classification-barrier.test.js:234:  await new Promise((resolve) => setImmediate(resolve));
+test/control-plane/readiness-planning-cache-classification-barrier.test.js:257:  await new Promise((resolve) => setImmediate(resolve));
+test/raft/snapshot-offer-router.test.js:70:  await new Promise((resolve) => setImmediate(resolve));
+test/raft/snapshot-offer-router.test.js:71:  await new Promise((resolve) => setImmediate(resolve));
+test/control-plane/replica-dispatch-node-state-membership-publication-test-cases.js:58:    setImmediate(resolve);
+test/migration/migration-recovery-trigger.test.js:66:  const flushMicrotasks = () => new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/failed-create-cleanup-recovery-owner-lifetime.test.js:33:  return new Promise((resolve) => setImmediate(resolve));
+test/raft/raft-rs-backend/operation-port-boundary.test.js:265:      'export function retireReplica() {}\n');
+test/raft/raft-rs-backend/operation-port-boundary.test.js:269:      'retireReplica();\n');
+test/node/replica-state-delegation.test.js:203:      handler.inProgressOperations.set('op-1', {
+test/raft/raft-rs-backend/persistence-admission.test.js:351:    await new Promise((resolve) => setImmediate(resolve));
+test/raft/raft-rs-backend/persistence-admission.test.js:356:      await new Promise((resolve) => setImmediate(resolve));
+test/raft/raft-rs-backend/persistence-admission.test.js:364:      await new Promise((resolve) => setImmediate(resolve));
+test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js:128:    const result = await raftRsLifecycleAdministration.retireReplica(
+test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js:139:    const newRemoval = await raftRsLifecycleAdministration.retireReplica(
+test/node/replica-handler-identity-entry-test-cases.js:313:      setImmediate(() => {
+test/rebalancer/replace-replica-workflow-create-satisfaction-test-cases.js:148:          await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/replace-replica-workflow-create-satisfaction-test-cases.js:444:          await new Promise((resolve) => setImmediate(resolve));
+test/rebalancer/replace-replica-workflow-create-satisfaction-test-cases.js:657:          await new Promise((resolve) => setImmediate(resolve));
+test/workflow/owner-key-reconcile-queue.test.js:290:    await new Promise((resolve) => setImmediate(resolve));
+test/workflow/owner-key-reconcile-queue.test.js:350:    await new Promise((resolve) => setImmediate(resolve));
+test/node/replica-removal-consensus-exit-fixture.js:48: * Let `turns` macrotask turns run (the handlers' setImmediate hops).
+test/node/replica-removal-consensus-exit-fixture.js:55:    chain = chain.then(() => new Promise((resolve) => setImmediate(resolve)));
+test/node/group-retirement-fail-closed.test.js:298:      setImmediate(observe);
+src/partition/partition-service-core-base.js:717:    // clock takes it from there; otherwise setImmediate stays, because a
+src/partition/partition-service-core-base.js:728:    setImmediate(hop);
+test/node/message-group-service-handler-membership.test.js:57:  return new Promise((resolve) => setImmediate(resolve));
+test/node/replica-removal-deferred-row-write.test.js:62:    chain = chain.then(() => new Promise((resolve) => setImmediate(resolve)));
+test/raft/raft-rs-backend/operation-port-throw-containment.test.js:18:import {setImmediate as nextEventLoopTurn} from 'node:timers/promises';
+test/config/dynamic-config-startup-wiring.test.js:50:    setImmediate(resolve);
+test/node/replica-removal-consensus-exit-decisions.test.js:83:    chain = chain.then(() => new Promise((resolve) => setImmediate(resolve)));
+test/raft/raft-rs-backend/inbound-drain-owned-timer.test.js:51:    else await new Promise((resolve) => setImmediate(resolve));
+test/raft/raft-rs-backend/partition-node-cluster.js:271:  retireReplica(replicaId, reason) {
+test/raft/raft-rs-backend/partition-node-cluster.js:272:    return raftRsLifecycleAdministration.retireReplica(
+src/partition/partition-consensus-hold-log.js:41:  setImmediate(work);
+src/partition/partition-service-cdc-stream-base.js:761:    // setImmediate stays, because a zero-delay timer is a DIFFERENT
+src/partition/partition-service-cdc-stream-base.js:775:    setImmediate(hop);
+test/raft/raft-rs-backend/admission-redrive-chain.test.js:71:    await new Promise((resolve) => setImmediate(resolve));
+test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js:3:import {setImmediate as nextTurn} from 'node:timers/promises';
+test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js:105:  handler.inProgressOperations.set(operationId, {
+test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js:149:  handler.inProgressOperations.set(operationId, {
+test/node/replica-removal-consensus-exit.test.js:75:    chain = chain.then(() => new Promise((resolve) => setImmediate(resolve)));
+test/raft/raft-rs-backend/runtime-wait-bound-spent.test.js:145:      await new Promise((resolve) => setImmediate(resolve));
+test/raft/raft-rs-backend/runtime-wait-bound-spent.test.js:151:        await new Promise((resolve) => setImmediate(resolve));
+test/raft/raft-rs-backend/runtime-wait-bound-spent.test.js:205:      await new Promise((resolve) => setImmediate(resolve));
+test/runtime/pgwire-protocol-ordering.test.js:117:    await new Promise((resolve) => setImmediate(resolve));
+test/node/replica-runtime-cleanup-custody.integration.test.js:147:      if (wholeHost) await owner.shutdownAll(); else await owner.stopReplica(definition.serviceId);
+test/node/replica-runtime-cleanup-custody.integration.test.js:152:      fault.restore(); await owner.shutdownAll();
+test/node/replica-runtime-cleanup-custody.integration.test.js:175:    fault.restore(); await owner.shutdownAll();
+test/raft/raft-rs-backend/transfer-leadership-drain-oracle-harness.js:148:  return new Promise((resolve) => setImmediate(resolve));
+test/node/runtime-service-bound-route.test.js:165:    await new Promise((resolve) => setImmediate(resolve));
+test/node/replica-handler-create-admission-test-cases.js:180:        await new Promise((resolve) => setImmediate(resolve));
+test/node/replica-handler-create-admission-test-cases.js:260:      await new Promise((resolve) => setImmediate(resolve));
+test/node/replica-handler-create-admission-test-cases.js:579:    await new Promise((resolve) => setImmediate(resolve));
+test/raft/raft-rs-backend/evidence-o1-admission-liveness.test.js:226:    await new Promise((resolve) => setImmediate(resolve));
+test/raft/raft-rs-backend/evidence-o1-admission-liveness.test.js:273:    await new Promise((resolve) => setImmediate(resolve));
+test/runtime/pgwire-protocol-handler.test.js:362:  await new Promise((r) => setImmediate(r));
+test/runtime/pgwire-protocol-handler.test.js:486:      await new Promise((r) => setImmediate(r));
+test/runtime/pgwire-protocol-handler.test.js:511:      await new Promise((r) => setImmediate(r));
+test/runtime/pgwire-protocol-handler.test.js:567:      await new Promise((r) => setImmediate(r));
+test/runtime/pgwire-protocol-handler.test.js:609:      await new Promise((r) => setImmediate(r));
+test/runtime/pgwire-protocol-handler.test.js:634:      await new Promise((r) => setImmediate(r));
+test/runtime/pgwire-protocol-handler.test.js:655:      await new Promise((r) => setImmediate(r));
+test/runtime/pgwire-protocol-handler.test.js:686:      await new Promise((r) => setImmediate(r));
+test/runtime/pgwire-protocol-handler.test.js:715:      await new Promise((r) => setImmediate(r));
+test/runtime/pgwire-protocol-handler.test.js:723:      await new Promise((r) => setImmediate(r));
+test/runtime/pgwire-protocol-handler.test.js:731:      await new Promise((r) => setImmediate(r));
+test/runtime/pgwire-protocol-handler.test.js:740:      await new Promise((r) => setImmediate(r));
+test/runtime/pgwire-protocol-handler.test.js:769:      await new Promise((r) => setImmediate(r));
+test/runtime/pgwire-protocol-handler.test.js:773:      await new Promise((r) => setImmediate(r));
+test/runtime/pgwire-protocol-handler.test.js:777:      await new Promise((r) => setImmediate(r));
+test/runtime/pgwire-protocol-handler.test.js:798:        await new Promise((r) => setImmediate(r));
+test/runtime/pgwire-protocol-handler.test.js:821:        await new Promise((r) => setImmediate(r));
+test/runtime/pgwire-protocol-handler.test.js:842:      await new Promise((r) => setImmediate(r));
+test/runtime/pgwire-protocol-handler.test.js:848:      await new Promise((r) => setImmediate(r));
+test/runtime/pgwire-protocol-handler.test.js:867:      await new Promise((r) => setImmediate(r));
+test/runtime/pgwire-protocol-handler.test.js:873:      await new Promise((r) => setImmediate(r));
+test/runtime/pgwire-protocol-handler.test.js:903:      await new Promise((r) => setImmediate(r));
+test/runtime/pgwire-protocol-handler.test.js:913:      await new Promise((r) => setImmediate(r));
+test/runtime/pgwire-protocol-handler.test.js:934:      await new Promise((r) => setImmediate(r));
+test/runtime/pgwire-protocol-handler.test.js:940:      await new Promise((r) => setImmediate(r));
+test/runtime/pgwire-protocol-handler.test.js:964:        await new Promise((r) => setImmediate(r));
+test/runtime/pgwire-protocol-handler.test.js:969:        await new Promise((r) => setImmediate(r));
+test/runtime/pgwire-protocol-handler.test.js:975:        await new Promise((r) => setImmediate(r));
+test/runtime/pgwire-protocol-handler.test.js:987:        await new Promise((r) => setImmediate(r));
+test/runtime/pgwire-protocol-handler.test.js:1008:        const flush = () => new Promise((r) => setImmediate(r));
+test/runtime/pgwire-protocol-handler.test.js:1053:      await new Promise((r) => setImmediate(r));
+test/runtime/pgwire-protocol-handler.test.js:1069:      await new Promise((r) => setImmediate(r));
+test/runtime/pgwire-protocol-handler.test.js:1084:      await new Promise((r) => setImmediate(r));
+test/runtime/pgwire-protocol-handler.test.js:1120:      await new Promise((r) => setImmediate(r));
+test/runtime/pgwire-protocol-handler.test.js:1145:      await new Promise((r) => setImmediate(r));
+test/runtime/pgwire-protocol-handler.test.js:1416:      await new Promise((r) => setImmediate(r));
+test/runtime/pgwire-protocol-handler.test.js:1422:      await new Promise((r) => setImmediate(r));
+test/runtime/pgwire-protocol-handler.test.js:1454:        await new Promise((r) => setImmediate(r));
+test/node/message-group-service-handler.test.js:181:  return new Promise((resolve) => setImmediate(resolve));
+test/node/replica-create-admission-owner.test.js:112:    await new Promise((resolve) => setImmediate(resolve));
+test/node/replica-create-admission-recovery.test.js:260:    await new Promise((resolve) => setImmediate(resolve));
+test/node/replica-handler-tail-test-cases.js:73:    handler.inProgressOperations.set('op-1', {
+test/node/replica-handler-tail-test-cases.js:880:      handler.inProgressOperations.set('op-1', {
+test/runtime/pgwire-password-authentication-cutover.test.js:94:  return new Promise((resolve) => setImmediate(resolve));
+test/bootstrap/seed-teardown-pending-cdc-delivery.test.js:74:    await new Promise((resolve) => setImmediate(resolve));
+test/raft/raft-rs-backend/identity-record-window.test.js:82:  await new Promise((resolve) => setImmediate(resolve));
+test/node/runtime-service-handler.test.js:139: * Wait for setImmediate-based async work to complete.
+test/node/runtime-service-handler.test.js:142:  return new Promise((resolve) => setImmediate(resolve));
+test/node/runtime-service-handler.test.js:305:    handler.inProgressOperations.set('op-1', {
+test/node/runtime-service-handler.test.js:522:    handler.inProgressOperations.set('op-1', {
+test/node/runtime-service-handler.test.js:832:    handler.inProgressOperations.set('op-1', {});
+src/control-plane/control-plane-readiness-publication-diagnostics.js:92:    // setImmediate, so a sync readiness build scheduled between a publication
+test/node/replica-handler-tail-more-test-cases.js:111:    handler.inProgressOperations.set('op-1', {type: 'CREATE_REPLICA'});
+test/node/replica-handler-tail-more-test-cases.js:991:        await new Promise((resolve) => setImmediate(resolve));
+test/raft/raft-rs-backend/operation-port-lifecycle.test.js:66:      await cluster.retireReplica('queued-replica', 'retire-after-admission');
+test/raft/raft-rs-backend/operation-port-lifecycle.test.js:110:      await cluster.retireReplica(
+test/node/services-p1-diagnostic-logger.test.js:138:  await new Promise((resolve) => setImmediate(resolve));
+test/node/services-p1-diagnostic-logger.test.js:202:  await new Promise((resolve) => setImmediate(resolve));
+test/node/replica-state-machine.test.js:763:    await new Promise((resolve) => setImmediate(resolve));
+test/node/timeout-triggered-failures.property.test.js:61:  await new Promise((resolve) => setImmediate(resolve));
+test/runtime/runtime-replica-state-projection-retained-reconcile.test.js:146:    await new Promise((resolve) => setImmediate(resolve));
+test/runtime/runtime-replica-state-projection-retained-reconcile.test.js:158:    await new Promise((resolve) => setImmediate(resolve));
+test/runtime/runtime-replica-state-projection-retained-reconcile.test.js:228:      await new Promise((resolve) => setImmediate(resolve));
+test/runtime/runtime-replica-state-projection-retained-reconcile.test.js:442:  await new Promise((resolve) => setImmediate(resolve));
+test/runtime/runtime-replica-state-projection-retained-reconcile.test.js:485:    await new Promise((resolve) => setImmediate(resolve));
+test/bootstrap/node-joining-service-mesh-reconciliation.test.js:971:    await new Promise((resolve) => setImmediate(resolve));
+test/bootstrap/node-joining-service-mesh-reconciliation.test.js:986:    await new Promise((resolve) => setImmediate(resolve));
+test/node/replica-handler.test.js:968:      handler.inProgressOperations.set(TEST_IN_PROGRESS_OPERATION_ID, {
+src/partition/partition-service-split-accessor-base.js:353:      if (typeof setImmediate === 'function') {
+src/partition/partition-service-split-accessor-base.js:354:        setImmediate(resolve);
+test/bootstrap/join-message-group-identity-record.test.js:258:          await new Promise((resolve) => setImmediate(resolve));
+test/node/replica-handler-owner-path-bypass.test.js:839:      await new Promise((resolve) => setImmediate(resolve));
+test/node/group-retirement-reseed-held.test.js:70:  const outcome = await world.cluster.retireReplica(held, RESEED_REQUIRED);
+test/node/group-retirement-reseed-held.test.js:96:  const again = await world.cluster.retireReplica(held, GROUP_RETIRED);
+test/node/group-retirement-reseed-held.test.js:149:  const outcome = await world.cluster.retireReplica(held, RESEED_REQUIRED);
+test/runtime/endpoint-sync-source-client.test.js:56:  setImmediate(() => {
+test/runtime/endpoint-sync-source-client.test.js:97:      setImmediate(() => socket.emit('open'));
+test/runtime/endpoint-sync-source-client.test.js:134:      setImmediate(() => socket.emit('open'));
+test/runtime/endpoint-sync-source-client.test.js:139:        setImmediate(() => socket.emit('error', new Error('first-failure')));
+test/runtime/endpoint-sync-source-client.test.js:177:      setImmediate(() => socket.emit('open'));
+test/runtime/endpoint-sync-source-client.test.js:180:      setImmediate(() => socket.emit('error', new Error('always-fail')));
+test/runtime/endpoint-sync-source-client.test.js:204:      setImmediate(() => socket.emit('open'));
+test/bootstrap/node-joining-cdc-catchup-wiring.test.js:25:// effects are settled before assertions. setImmediate runs after the microtask
+test/bootstrap/node-joining-cdc-catchup-wiring.test.js:28:  return new Promise((resolve) => setImmediate(resolve));
+test/runtime/pgwire-tls-policy-cutover.test.js:136:  return new Promise((resolve) => setImmediate(resolve));
+test/runtime/runtime-startup-wiring.test.js:110:      await lifecycle.shutdownAll();
+test/runtime/cell-host-call-protocol.test.js:406:    await new Promise((resolve) => setImmediate(resolve));
+test/runtime/endpoint-sync-source-wait-bound-spent.test.js:26:      setImmediate(() => this.emit('open'));
+test/runtime/endpoint-sync-source-wait-bound-spent.test.js:73:      setImmediate(() => socket.emit('error', new Error('always-fail')));
+test/runtime/endpoint-sync-source-wait-bound-spent.test.js:104:        setImmediate(() => socket.emit('message', Buffer.from(JSON.stringify({
+test/bootstrap/cdc-subscription-consistency.property.test.js:254:          await new Promise((resolve) => setImmediate(resolve));
+test/bootstrap/cdc-subscription-consistency.property.test.js:306:          await new Promise((resolve) => setImmediate(resolve));
+test/bootstrap/cdc-subscription-consistency.property.test.js:371:          await new Promise((resolve) => setImmediate(resolve));
+test/bootstrap/cdc-subscription-consistency.property.test.js:417:          await new Promise((resolve) => setImmediate(resolve));
+test/bootstrap/cdc-subscription-consistency.property.test.js:424:          await new Promise((resolve) => setImmediate(resolve));
+test/bootstrap/cdc-subscription-consistency.property.test.js:431:          await new Promise((resolve) => setImmediate(resolve));
+test/bootstrap/cdc-subscription-consistency.property.test.js:474:          await new Promise((resolve) => setImmediate(resolve));
+test/bootstrap/cdc-subscription-consistency.property.test.js:515:          await new Promise((resolve) => setImmediate(resolve));
+test/runtime/pgwire-result-mapper.test.js:229:  await new Promise((resolve) => setImmediate(resolve));
+test/runtime/pgwire-result-mapper.test.js:235:    await new Promise((resolve) => setImmediate(resolve));
+test/entrypoint/process-custody-review-child.js:4:import {setImmediate as nextTurn} from 'node:timers/promises';
+test/entrypoint/application-database-runtime-composition.test.js:179:  await new Promise((resolve) => setImmediate(resolve));
+test/entrypoint/application-database-runtime-composition.test.js:213:    await new Promise((resolve) => setImmediate(resolve));
+test/entrypoint/application-database-runtime-composition.test.js:218:    await new Promise((resolve) => setImmediate(resolve));
+test/entrypoint/application-database-runtime-composition.test.js:307:  await new Promise((resolve) => setImmediate(resolve));
+test/topology/cdc-group-propagation-stop-settles-deliveries.test.js:79:const nextTurn = () => new Promise((resolve) => setImmediate(resolve));
+src/node/node-runtime-local-authorities.js:96:    // clock takes it there; one that does not keeps setImmediate, because a
+test/helpers/owner-work-ledger.js:143:const TIMER_TOKEN = /\b(setTimeout|setInterval|setImmediate)\b/gu;
+src/node/runtime-service-handler.js:166:    this.restartLatch = createRestartLatch(options.awaitsRestartInventory === true);
+src/node/runtime-service-handler.js:168:    this.ready = this.restartLatch.ready;
+src/node/runtime-service-handler.js:214:    if (!this.restartLatch.isReady()) return {...notReadyReply(this), correlationId};
+src/node/runtime-service-handler.js:308:    setImmediate(() => {
+src/node/runtime-service-handler.js:347:    this.inProgressOperations.set(operationId, {
+src/node/runtime-service-handler.js:525:  hasInProgressReplicaRemoval(replicaId) {
+src/node/runtime-service-handler.js:538:    this.inProgressOperations.set(operationId, {
+src/node/runtime-service-handler.js:547:    setImmediate(() => {
+src/node/runtime-service-handler.js:645:      if (!this.hasInProgressReplicaRemoval(replicaId)) {
+src/node/replica-handler-create-methods.js:121:      this.inProgressOperations.set(operationId, {
+src/node/replica-handler-create-methods.js:140:          setImmediate(() => {
+test/bootstrap/startup-runtime-handoff-owner.test.js:121:    await new Promise((resolve) => setImmediate(resolve));
+src/node/replica-handler-remove-execution-methods.js:298:      await raftRsLifecycleAdministration.retireReplica(
+test/topology/cdc-group-propagation-stop-arms-nothing.test.js:29://   setImmediate reference, no node:timers or timers/promises import, and no
+test/topology/cdc-group-propagation-stop-arms-nothing.test.js:109:    await new Promise((resolve) => setImmediate(resolve));
+test/topology/cdc-group-propagation-stop-arms-nothing.test.js:425:  ], 'no setTimeout, setInterval or setImmediate reference outside ' +
+src/node/replica-handler-group-retirement-request-methods.js:46:          this.hasInProgressReplicaRemoval(replicaId) ||
+src/node/replica-handler-group-retirement-request-methods.js:300:          setImmediate(() => {
+test/bootstrap/node-bootstrap-consistency.property.test.js:603:    await owner.shutdownAll();
+test/convergence/dt-formation-priority-placement-before-active.test.js:349:    await new Promise((resolve) => setImmediate(resolve));
+test/transaction/session-transaction-isolation.test.js:196:    await shutdownAll(first);
+test/transaction/session-transaction-isolation.test.js:259:    await shutdownAll(service);
+test/transaction/session-transaction-isolation.test.js:354:    await shutdownAll(service);
+src/node/runtime-service-restart-inventory.js:110:  handler.inProgressOperations.set(creation.operationId, {
+src/node/runtime-service-restart-inventory.js:171:  handler.restartLatch.open();
+src/node/runtime-service-restart-inventory.js:172:  setImmediate(() => {
+test/convergence/dt-movielens-raft-peer-cohort-pruning-election.test.js:102:  return new Promise((resolve) => setImmediate(resolve));
+test/convergence/dt6-priority-recovery-add-dispatch-cadence.test.js:464:    await new Promise((resolve) => setImmediate(resolve));
+test/convergence/operation-ledger-self-move-hold-engagement-witness-fixture.js:552:    await new Promise((resolve) => setImmediate(resolve));
+test/bootstrap/production-scheduling-defaults.test.js:8:// consensus scheduling through it and moves every hop from setImmediate to a
+test/bootstrap/production-scheduling-defaults.test.js:59:const hostSetImmediate = globalThis.setImmediate;
+test/bootstrap/production-scheduling-defaults.test.js:72:const SET_IMMEDIATE = 'setImmediate';
+test/bootstrap/production-scheduling-defaults.test.js:145:  globalThis.setImmediate = (callback, ...args) => {
+test/bootstrap/production-scheduling-defaults.test.js:158:    globalThis.setImmediate = hostSetImmediate;
+test/bootstrap/production-scheduling-defaults.test.js:384:// One setImmediate per action, and nothing else.
+test/bootstrap/production-scheduling-defaults.test.js:417:      [SET_IMMEDIATE], 'the peer-reconciliation hop is a setImmediate');
+test/bootstrap/production-scheduling-defaults.test.js:420:      [SET_IMMEDIATE], 'the size-update hop is a setImmediate');
+test/bootstrap/production-scheduling-defaults.test.js:515:// own timers. setImmediate is that boundary in production.
+test/bootstrap/production-scheduling-defaults.test.js:516:test('a production reconciler takes each per-action turn on setImmediate',
+test/bootstrap/production-scheduling-defaults.test.js:527:        'the reconciler the seed path builds yields on setImmediate');
+test/bootstrap/bootstrap-service-ready-signal.test.js:352:    service.deferredLatencyTopologyStartHandle = setImmediate(() => {
+test/convergence/dt-movielens-canonical-leader-publication-retained-wake.test.js:44:  return new Promise((resolve) => setImmediate(resolve));
+src/node/message-group-service-handler.js:291:  hasInProgressReplicaRemoval(replicaId) {
+src/node/message-group-service-handler.js:304:    this.inProgressOperations.set(operationId, {
+src/node/message-group-service-handler.js:313:    setImmediate(() => {
+src/node/message-group-service-handler.js:376:      if (!this.hasInProgressReplicaRemoval(replicaId)) {
+src/bootstrap/shared/hosted-replica-authorities.js:13: * different event-loop phase from the setImmediate production runs - and a
+test/bootstrap/boot-incarnation-owner.test.js:697:      await new Promise((resolve) => setImmediate(() => {
+test/bootstrap/boot-incarnation-owner.test.js:702:        'a setImmediate scheduled after persistNow() ran while the write ' +
+test/distributed/harness/cluster-class-active-probe-attempt-join.js:101:    return new Promise((resolve) => setImmediate(resolve));
+src/node/runtime-service-bound-creation-route.js:143:  handler.inProgressOperations.set(operationId, {
+src/node/runtime-service-bound-creation-route.js:153:  setImmediate(() => {
+src/node/replica-handler-remove-request-methods.js:165:    hasInProgressReplicaRemoval(replicaId) {
+src/node/replica-handler-remove-request-methods.js:184:      this.inProgressOperations.set(operationId, {
+src/node/replica-handler-remove-request-methods.js:439:        if (!this.hasInProgressReplicaRemoval(replicaId)) {
+test/diagnostics/formation-turn-attribution.test.js:79:    await new Promise((resolvePromise) => setImmediate(() => {
+test/diagnostics/formation-turn-attribution.test.js:96:      setImmediate(() => {
+test/diagnostics/formation-turn-attribution.test.js:98:        setImmediate(() => {
+test/diagnostics/formation-turn-attribution.test.js:1063:  return new Promise((resolve) => setImmediate(resolve));
+test/diagnostics/formation-turn-attribution.test.js:1075:      setImmediate(step);
+test/diagnostics/formation-turn-attribution.test.js:1077:    setImmediate(step);
+src/bootstrap/bootstrap-service-seed-workflow.js:209:      if (typeof setImmediate === TYPE_FUNCTION) {
+src/bootstrap/bootstrap-service-seed-workflow.js:211:        this.deferredLatencyTopologyStartHandle = setImmediate(startTopologyAsync);
+src/bootstrap/bootstrap-service-runtime-methods.js:377:      if (typeof setImmediate !== TYPEOF_FUNCTION) {
+src/bootstrap/bootstrap-service-runtime-methods.js:380:      return new Promise((resolve) => setImmediate(resolve));
+src/bootstrap/bootstrap-service-runtime-methods.js:410:        // otherwise setImmediate stays, because a zero-delay timer is a
+test/distributed/harness/__tests__/cluster-probe-active-state-readiness.test.js:113:        await new Promise((resolve) => setImmediate(resolve));
+test/wasm-service/wasm-retained-bootstrap-fixture.js:89:        await host.lifecycle.shutdownAll();
+test/wasm-service/wasm-creation-bound-native-fixture.js:351:    const retired = await host.lifecycle.retireReplica({intent: JSON.parse(row.intent_json),
+test/wasm-service/bound-creation-handler-embedding-fixture.js:179:        await host.lifecycle.shutdownAll();
+test/wasm-service/bound-creation-handler-embedding-fixture.js:283:    await host.lifecycle.shutdownAll();
+test/wasm-service/bound-creation-handler-embedding-fixture.js:324:  // Deliver the queued native traffic and let the handlers' setImmediate work
+test/wasm-service/bound-creation-handler-embedding-fixture.js:330:      await new Promise((resolve) => setImmediate(resolve));
+test/wasm-service/bound-creation-restart.integration.test.js:250:      inFlight.push(restarted.handler.hasInProgressReplicaRemoval(replicaIdOf(host)));
+test/wasm-service/wasm-creation-reconciliation.test.js:23:  const lifecycle = {consensusClosing: false, activeReplicas: new Map([['service', replica]])};
+test/wasm-service/wasm-service-lifecycle.test.js:132:      await lifecycle.shutdownAll();
+test/wasm-service/wasm-service-lifecycle.test.js:744:        await new Promise((resolve) => setImmediate(resolve));
+test/wasm-service/wasm-service-lifecycle.test.js:879:      await lifecycle.shutdownAll();
+test/wasm-service/wasm-service-lifecycle.test.js:896:      await lifecycle.shutdownAll();
+test/wasm-service/wasm-service-lifecycle.test.js:904:        await lifecycle.shutdownAll();
+test/wasm-service/wasm-service-lifecycle.test.js:919:        await lifecycle.shutdownAll();
+test/distributed/harness/__tests__/trace-artifact-recorder.test.js:90:      await new Promise((resolve) => setImmediate(resolve));
+test/distributed/harness/__tests__/trace-artifact-recorder.test.js:91:      await new Promise((resolve) => setImmediate(resolve));
+test/query/application-database.test.js:450:  await new Promise((resolve) => setImmediate(resolve));
+test/query/partition-write-answer-consumers.test.js:188:          await new Promise((resolve) => setImmediate(resolve));
+test/query/transaction-session-reads.test.js:111:    gateway.db.close(); await shutdownAll(leader);
+test/query/schema-provisioning-job-owner.test.js:230:    await new Promise((resolve) => setImmediate(resolve));
+test/query/schema-provisioning-job-owner.test.js:396:  await new Promise((resolve) => setImmediate(resolve));
+test/query/schema-provisioning-job-owner.test.js:478:    await new Promise((resolve) => setImmediate(resolve));
+test/query/schema-provisioning-job-owner.test.js:488:    await new Promise((resolve) => setImmediate(resolve));
+test/query/schema-provisioning-job-owner.test.js:613:  await new Promise((resolve) => setImmediate(resolve));
+test/query/postgres-wire-adapter.test.js:196:  await new Promise((resolve) => setImmediate(resolve));
+test/query/postgres-wire-adapter.test.js:215:  await new Promise((resolve) => setImmediate(resolve));
+test/query/partition-transaction-seam-falsifiers.test.js:390:      await shutdownAll(replica);
+test/query/durable-provisioning-job-owner-directed.test.js:399:  while (capacity.deniedNodeIds.size === 0) await new Promise(setImmediate);
+test/distributed/harness/__tests__/cluster-active-probe-resample-after-snapshot-lane.test.js:121:    await new Promise((resolve) => setImmediate(resolve));
+test/cli/service-install-lifecycle-cli.test.js:323:    await new Promise((resolve) => setImmediate(resolve));
