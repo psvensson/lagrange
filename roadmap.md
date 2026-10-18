@@ -28,21 +28,13 @@ recovery, production activation, certification and the main-merge gates. This
 supersedes the previous immediate scheduling in this checkout as of 2026-10-18.
 The broader feature sequence and sealed acceptance criteria remain unchanged.
 
-Start with the [current primary planning index](solve/epics/raft-rs-full-cutover/current-primary-planning-2026-10-18.md)
-and the [rs-raft epic](solve/epics/raft-rs-full-cutover.md). The epic contains the
-current lane table; its handover and lane register identify the exact execution
-branches, dependencies and next checkpoints. U1 remains independently **REJECTED**.
+The [progress and planning history](docs/development/plans/rs-raft-progress.md)
+page links the current work, review findings and preserved earlier plans.
+Recovery corrections remain necessary before activation and certification.
 
-This checkout now holds current planning and historical proof records. Its
-production/test files remain the earlier local implementation, including preserved
-staged work. Imported SOLVED records and stored receipts concern their recorded
-source commits; they do not certify these local implementation bytes. Execute each
-lane at its explicitly selected base and obtain fresh applicable verification.
-
-The [previous roadmap](solve/archive/plans/primary-before-20261018/roadmap.md)
-and [previous rs-raft scheduling](solve/archive/plans/primary-before-20261018/raft-rs-full-cutover.md)
-are retained as historical planning, outside active epic/Quest discovery. They
-are available for context in Harnessd's planning document view, not as new tasks.
+This planning refresh does not update the implementation in this checkout.
+Recorded results on other branches apply to their tested source versions;
+they do not establish release readiness for the local code.
 
 ## Planned - 0.2 Stable Core follow-on work
 

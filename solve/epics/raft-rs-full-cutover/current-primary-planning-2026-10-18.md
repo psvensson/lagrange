@@ -52,7 +52,8 @@ bind every task, review and proof to its actual base/head.
 Each archived roadmap/epic has a prominent wrapper and retains the original
 document bytes after that wrapper. Both live outside active `solve/epics/` and
 `solve/quests/` discovery. Harnessd can browse them as planning documents through
-the roadmap links; they do not create another active epic or new execution tasks.
+the roadmap's progress/history index; they do not create another active epic or
+new execution tasks.
 Older dated decisions inside the live epic remain provenance or binding acceptance
 as applicable, while the current lane register controls immediate scheduling.
 
