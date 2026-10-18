@@ -1,0 +1,46 @@
+// Two retained creations for one canonical replica are legitimate when the
+// predecessor CLOSED, its completion-row write was lost, and a successor was selected.
+for (const order of ['predecessor-first', 'successor-first']) {
+  test(`independent U1: ${order} inventory preserves both predecessor cleanup and successor reentry`, async (t) => {
+    const e = await publishedGroup(t);
+    const host = e.hosts[1];
+    const predecessorId = creationId(host);
+    const predecessorTime = rowOf(e, host).created_at;
+    const previousBinding = host.intent.consensusBinding;
+    // Existing labelled crash point 5, after CLOSED/STOPPED, before row completion.
+    e.metadata.setJournalFault('before-admission');
+    await removeAndSettle(e, host, 'independent-old-remove', OUTCOME.RUNTIME_SERVICE_REMOVE_COMPLETED);
+    e.metadata.setJournalFault(null);
+    assert.equal(rowOf(e, host).state, 'in_progress');
+    for (const other of e.hosts.filter((item) => item !== host)) {
+      await removeAndSettle(e, other, `independent-other-remove-${other.slot}`, OUTCOME.RUNTIME_SERVICE_REMOVE_COMPLETED);
+    }
+    assert.ok(e.metadata.state().selected.resources.every((slot) => slot.phase === 'CLOSED'));
+    const successor = await e.metadata.primary.selectConsensusInstance(
+      e.metadata.request(1, 91, previousBinding.incarnation));
+    assert.equal(successor.outcome, 'SELECTED');
+    const successorId = order === 'predecessor-first' ? 'z-successor-1' : 'a-successor-1';
+    const intent = structuredClone(host.intent);
+    intent.consensusBinding = successor.binding;
+    intent.consensusSlotRequest = e.metadata.slotRequest(host.slot, 0, successorId);
+    assert.equal(intent.consensusSlotRequest.replicaId, replicaIdOf(host));
+    // Equal creation milliseconds are legal. Operation ids break the scan tie.
+    host.manager._timeSource = {now: () => predecessorTime};
+    const retained = await host.manager.prepareConsensusCreation(intent);
+    assert.equal(retained.outcome, 'ADMISSION_RETAINED');
+    const restarted = await e.restartHost(host, {inventory: false});
+    const resumes = trackResumes(restarted);
+    restarted.inventory = await restarted.handler.recoverRetainedCreations();
+    await e.settle();
+    const predecessorRow = e.metadata.db.prepare('SELECT state FROM wasm_operations WHERE operation_id = ?').get(predecessorId);
+    const successorRow = e.metadata.db.prepare('SELECT state FROM wasm_operations WHERE operation_id = ?').get(successorId);
+    const observations = {order, plans: plansOf(restarted), resumes, memo: memoOf(restarted),
+      predecessorRow: predecessorRow.state, successorRow: successorRow.state, outcomes: restarted.outcomes};
+    t.diagnostic(JSON.stringify(observations));
+    assert.deepEqual({predecessorRow: observations.predecessorRow, successorRow: observations.successorRow,
+      memoId: observations.memo?.operationId, memoStatus: observations.memo?.status, resumes},
+    {predecessorRow: 'completed', successorRow: 'in_progress', memoId: successorId,
+      memoStatus: ReplicaStatus.HELD, resumes: [successorId]},
+    'DISTINCT_RETAINED_CREATION_OBLIGATION_LOST_BY_INVENTORY_ORDER');
+  });
+}

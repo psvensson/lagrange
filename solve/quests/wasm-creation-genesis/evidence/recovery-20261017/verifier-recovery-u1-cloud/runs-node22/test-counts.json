@@ -1,0 +1,92 @@
+[
+  {
+    "file": "bound-creation-handler-embedding.integration.test.js",
+    "tests": 2,
+    "pass": 2,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  {
+    "file": "bound-creation-restart.integration.test.js",
+    "tests": 15,
+    "pass": 15,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  {
+    "file": "runtime-service-bound-route.test.js",
+    "tests": 43,
+    "pass": 43,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  {
+    "file": "runtime-service-handler.test.js",
+    "tests": 32,
+    "pass": 32,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  {
+    "file": "service-consensus-creation-intent.test.js",
+    "tests": 29,
+    "pass": 29,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  {
+    "file": "service-type-adapter.test.js",
+    "tests": 5,
+    "pass": 5,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  {
+    "file": "wasm-creation-local-record.test.js",
+    "tests": 10,
+    "pass": 10,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  {
+    "file": "wasm-creation-publication.integration.test.js",
+    "tests": 23,
+    "pass": 23,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  {
+    "file": "wasm-driver-contract-conformance.test.js",
+    "tests": 30,
+    "pass": 23,
+    "fail": 7,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  {
+    "file": "wasm-service-lifecycle.test.js",
+    "tests": 51,
+    "pass": 51,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  }
+]

@@ -1,0 +1,167 @@
+[
+  {
+    "original_issue": 173,
+    "request": {
+      "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+      "created_at": "2026-10-17T17:51:16Z",
+      "expires_at": "2026-10-18T05:51:16Z",
+      "hosts": [
+        "tv-dator"
+      ],
+      "max_seconds": 1800,
+      "operation": "test-files",
+      "request_id": "5722a13bbfa94eaca861139184120f74",
+      "schema": "lagrange-lab-job/v1",
+      "source_ref": "refs/heads/work/rs-raft-event-reconciliation-20261016",
+      "source_sha": "381750de29af647d446b19adedf1da53eb712093",
+      "tests": [
+        "test/bootstrap/join-resume-replica-lifecycle-owner.test.js",
+        "test/bootstrap/message-group-activation-handler-boundary.test.js",
+        "test/bootstrap/meta-service-endpoint-registration.test.js",
+        "test/config/architecture-ownership-guardrails.test.js",
+        "test/control-plane/incarnation-reuse-cross-owner-anchor.test.js",
+        "test/control-plane/service-instance-creation-cas.test.js",
+        "test/control-plane/service-instance-selection-admission.test.js",
+        "test/integration/call-cell-public-outcome-adversarial.integration.test.js",
+        "test/integration/data-local-call-missing-cell-activation.integration.test.js",
+        "test/integration/http-to-call-composition.integration.test.js",
+        "test/integration/minimal-deployment-call-cell-invocation-live.integration.test.js",
+        "test/integration/minimal-deployment-call-cell-production-wiring.integration.test.js",
+        "test/integration/minimal-deployment-runtime-access-policy-live-validation.integration.test.js",
+        "test/integration/service-install-lifecycle-cli-pgwire.integration.test.js",
+        "test/node/replica-runtime-cleanup-custody.integration.test.js",
+        "test/node/replica-state-delegation.test.js",
+        "test/node/replica-transport-handler-identity.test.js",
+        "test/node/runtime-service-bound-route.test.js",
+        "test/node/runtime-service-call-cell-handler.test.js",
+        "test/node/runtime-service-handler.test.js",
+        "test/query/callback-execution-host.test.js",
+        "test/query/callback-execution-host-throughput-metrics.test.js",
+        "test/query/callback-runtime-driver-registry.test.js",
+        "test/query/execute-request.test.js",
+        "test/query/partition-callback-integration.test.js",
+        "test/query/write-identity-instance.test.js",
+        "test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js"
+      ]
+    }
+  },
+  {
+    "original_issue": 174,
+    "request": {
+      "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+      "created_at": "2026-10-17T17:51:18Z",
+      "expires_at": "2026-10-18T05:51:18Z",
+      "hosts": [
+        "adam-laptop"
+      ],
+      "max_seconds": 1800,
+      "operation": "test-files",
+      "request_id": "1a33808e685d42ffa450378baf03d68e",
+      "schema": "lagrange-lab-job/v1",
+      "source_ref": "refs/heads/work/rs-raft-event-reconciliation-20261016",
+      "source_sha": "381750de29af647d446b19adedf1da53eb712093",
+      "tests": [
+        "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+        "test/raft/raft-rs-backend/startup-cleanup.integration.test.js",
+        "test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js",
+        "test/rebalancer/executor-outcome-emitter.test.js",
+        "test/rebalancer/formation-runtime-service-create-lane-budget-starvation.test.js",
+        "test/rebalancer/replica-operations-single-writer.test.js",
+        "test/rebalancer/replica-status-completeness.property.test.js",
+        "test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js",
+        "test/rebalancer/terminal-status-sql-clause-consistency.property.test.js",
+        "test/runtime/endpoint-intent.property.test.js",
+        "test/runtime/endpoint-lifecycle.test.js",
+        "test/runtime/minimal-deployment-request-cell-runtime-readiness.test.js",
+        "test/runtime/movielens-affinity-demo-wiring.test.js",
+        "test/runtime/node-shutdown-cell-worker-teardown.test.js",
+        "test/runtime/pgwire-password-authentication-cutover.test.js",
+        "test/runtime/pgwire-tls-policy-cutover.test.js",
+        "test/runtime/request-cell-definition-classification.test.js",
+        "test/runtime/runtime-callback-fail-closed.test.js",
+        "test/runtime/runtime-callback-invocation-contract.test.js",
+        "test/runtime/runtime-callback-lifecycle-routing.test.js",
+        "test/runtime/runtime-callback-runtime-adapter-parity.test.js",
+        "test/runtime/runtime-callback-unified-integration.test.js",
+        "test/runtime/runtime-command-metrics.test.js",
+        "test/runtime/runtime-driver-no-writes.test.js",
+        "test/runtime/runtime-endpoint-writer.test.js",
+        "test/runtime/runtime-idempotency-key.test.js",
+        "test/runtime/runtime-log-trace-dimensions.test.js"
+      ]
+    }
+  },
+  {
+    "original_issue": 175,
+    "request": {
+      "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+      "created_at": "2026-10-17T17:51:19Z",
+      "expires_at": "2026-10-18T05:51:19Z",
+      "hosts": [
+        "adams-gamla"
+      ],
+      "max_seconds": 1800,
+      "operation": "test-files",
+      "request_id": "b31267fc886b4fc785ad7c3b6db1b0ac",
+      "schema": "lagrange-lab-job/v1",
+      "source_ref": "refs/heads/work/rs-raft-event-reconciliation-20261016",
+      "source_sha": "381750de29af647d446b19adedf1da53eb712093",
+      "tests": [
+        "test/runtime/runtime-monotonic-transitions.test.js",
+        "test/runtime/runtime-mutation-path.test.js",
+        "test/runtime/runtime-operation-stream.test.js",
+        "test/runtime/runtime-policy-gates.test.js",
+        "test/runtime/runtime-replica-state-projection-retained-reconcile.test.js",
+        "test/runtime/runtime-replica-state-projection-wiring.test.js",
+        "test/runtime/runtime-selection-diagnostics.test.js",
+        "test/runtime/runtime-startup-wiring.test.js",
+        "test/runtime/runtime-telemetry-dimensions.test.js",
+        "test/runtime/service-cell-bridge-roundtrip.test.js",
+        "test/runtime/service-lifecycle-pgwire-executor-handoff.test.js",
+        "test/runtime/service-runtime-consensus-publication.test.js",
+        "test/runtime/service-runtime-lifecycle-idempotency.test.js",
+        "test/runtime/service-runtime-lifecycle-journal.test.js",
+        "test/runtime/service-runtime-lifecycle.test.js",
+        "test/runtime/state-projection.test.js",
+        "test/runtime/wasm-api-compat.test.js",
+        "test/runtime/wasm-component-driver.test.js",
+        "test/runtime/wasm-driver-contract-conformance.test.js",
+        "test/service/minimal-deployment-request-cell-routing.test.js",
+        "test/service/minimal-deployment-single-contract-owner-guard.test.js",
+        "test/service/service-consensus-creation-intent.test.js",
+        "test/service/service-consensus-creation-recovery.integration.test.js",
+        "test/service/service-lifecycle-manager.test.js",
+        "test/wasm-service/bound-creation-handler-embedding.integration.test.js",
+        "test/wasm-service/meta-service-lifecycle.test.js",
+        "test/wasm-service/wasm-creation-bound-native.test.js"
+      ]
+    }
+  },
+  {
+    "original_issue": 176,
+    "request": {
+      "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+      "created_at": "2026-10-17T17:51:21Z",
+      "expires_at": "2026-10-18T05:51:21Z",
+      "hosts": [
+        "lenovo-laptop"
+      ],
+      "max_seconds": 1800,
+      "operation": "test-files",
+      "request_id": "e8fe2b746c2a408ab16cefc8b281740e",
+      "schema": "lagrange-lab-job/v1",
+      "source_ref": "refs/heads/work/rs-raft-event-reconciliation-20261016",
+      "source_sha": "381750de29af647d446b19adedf1da53eb712093",
+      "tests": [
+        "test/wasm-service/wasm-creation-genesis.integration.test.js",
+        "test/wasm-service/wasm-creation-local-record.test.js",
+        "test/wasm-service/wasm-creation-publication.integration.test.js",
+        "test/wasm-service/wasm-creation-reconciliation.integration.test.js",
+        "test/wasm-service/wasm-retained-bootstrap.integration.test.js",
+        "test/wasm-service/wasm-service-lifecycle.test.js",
+        "test/wasm-service/wasm-service-replica.test.js",
+        "test/wasm-service/wasm-writer-completion-v1.test.js"
+      ]
+    }
+  }
+]

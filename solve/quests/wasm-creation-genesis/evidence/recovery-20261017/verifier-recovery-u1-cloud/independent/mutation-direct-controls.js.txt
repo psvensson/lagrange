@@ -1,0 +1,39 @@
+// Direct behavioral observations supplement convergence assertions in M02,
+// M05 and M12. A missing event fails its own assertion after runner turns.
+test('independent U1 control: restart invokes the retained operation id without a scan identity', async (t) => {
+  const e = await hostsOf(t);
+  await e.retain(e.hosts[1]);
+  const host = await e.restartHost(e.hosts[1], {inventory: false});
+  const resumes = trackResumes(host);
+  host.inventory = await host.handler.recoverRetainedCreations();
+  for (let turn = 0; turn < 4; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(resumes, [creationId(host)], 'RESTART_USED_AN_ID_OTHER_THAN_RETAINED_CREATION');
+});
+test('independent U1 control: a RETIRED startup plan enters one bound stop', async (t) => {
+  const e = await publishedGroup(t);
+  const old = e.hosts[1];
+  crashOnce(e.metadata.primary, 'closeInstanceResource');
+  await removeAndSettle(e, old, 'independent-control-retire', OUTCOME.RUNTIME_SERVICE_REMOVE_HELD);
+  const host = await e.restartHost(old, {inventory: false});
+  let stops = 0;
+  const stop = host.manager.stopReplica.bind(host.manager);
+  host.manager.stopReplica = (...args) => { stops += 1; return stop(...args); };
+  host.inventory = await host.handler.recoverRetainedCreations();
+  assert.equal(host.inventory[0].local, 'RETIRED');
+  for (let turn = 0; turn < 4; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(stops, 1, 'RETIRED_PLAN_NEVER_ENTERED_CANONICAL_STOP');
+});
+test('independent U1 control: a corrupt local record yields REMOVE_FAILED after the actual stop settles', async (t) => {
+  const e = await publishedGroup(t);
+  const host = await e.restartHost(e.hosts[1], {beforeCompose: (old) => {
+    const db = new Database(dbPathOf(old), {fileMustExist: true});
+    try { db.prepare('UPDATE _wasm_creation_local SET record = ? WHERE id = 1').run('{"corrupt":true}'); }
+    finally { db.close(); }
+  }});
+  await e.settle();
+  assert.equal(lastOutcome(host).errorCode, 'CORRUPT_STATE');
+  await e.dispatch(host, TYPE.REMOVE_REPLICA, 'independent-control-corrupt-remove');
+  await e.settle();
+  assert.deepEqual([lastOutcome(host).outcomeType, lastOutcome(host).errorCode],
+    [OUTCOME.RUNTIME_SERVICE_REMOVE_FAILED, 'CORRUPT_STATE'], 'CORRUPT_LOCAL_RECORD_WAS_LEFT_REDRIVABLE');
+});

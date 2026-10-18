@@ -1,0 +1,44 @@
+[
+  {
+    "check": "fast-static",
+    "command": [
+      "node",
+      "scripts/check-fast-static.js",
+      "--base",
+      "381750de29af647d446b19adedf1da53eb712093",
+      "--explain"
+    ],
+    "exitCode": 1,
+    "seconds": 27.597
+  },
+  {
+    "check": "shards",
+    "command": [
+      "npm",
+      "run",
+      "audit:shards"
+    ],
+    "exitCode": 1,
+    "seconds": 3.878
+  },
+  {
+    "check": "duplication",
+    "command": [
+      "npm",
+      "run",
+      "test:duplication"
+    ],
+    "exitCode": 1,
+    "seconds": 274.365
+  },
+  {
+    "check": "seal-refresh",
+    "command": [
+      "node",
+      "scripts/generate-global-owner-debt-inventory.js",
+      "--refresh-import-graph-only"
+    ],
+    "exitCode": 0,
+    "seconds": 38.14
+  }
+]

@@ -1,0 +1,37 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> lagrange-server@0.2.6 test:file
+> node scripts/run-classified-test-files.js test/wasm-service/wasm-creation-local-record.test.js
+
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: unmeasurable (no sensors)
+not ok test/wasm-service/wasm-creation-local-record.test.js (0 assertions, 1376ms)
+# no assertions executed; test process received SIGABRT; test process exited without a status
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+# time=1376ms
+
+  #  /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node[150]: void node::RemoveEnvironmentCleanupHook(v8::Isolate*, CleanupHook, void*) at ../src/api/hooks.cc:142
+  #  Assertion failed: (env) != nullptr
+
+----- Native stack trace -----
+
+ 1: 0x921e57 node::Assert(node::AssertionInfo const&) [/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node]
+ 2: 0x80969b node::RemoveEnvironmentCleanupHook(v8::Isolate*, void (*)(void*), void*) [/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node]
+ 3: 0x7fb172118d39 Statement::~Statement() [/workspace/scratch/6d2a7b72384f/lagrange/node_modules/better-sqlite3/build/Release/better_sqlite3.node]
+ 4: 0x7fb172118e75 Statement::~Statement() [/workspace/scratch/6d2a7b72384f/lagrange/node_modules/better-sqlite3/build/Release/better_sqlite3.node]
+ 5: 0xe53ccd  [/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node]
+ 6: 0xf065f4  [/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node]
+ 7: 0xf075e9  [/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node]
+ 8: 0xf0ba60  [/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node]
+ 9: 0x199e0d1  [/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node]
+# test-files total=1 pass=0 fail=1 assertions=0

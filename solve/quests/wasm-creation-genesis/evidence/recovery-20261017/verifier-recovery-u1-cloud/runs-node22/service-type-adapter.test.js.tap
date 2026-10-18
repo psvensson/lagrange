@@ -1,0 +1,55 @@
+TAP version 13
+# Subtest: ServiceTypeAdapter contract
+    # Subtest: cannot instantiate abstract class directly
+    ok 1 - cannot instantiate abstract class directly
+      ---
+      duration_ms: 0.830976
+      type: 'test'
+      ...
+    # Subtest: rejects unknown service type
+    ok 2 - rejects unknown service type
+      ---
+      duration_ms: 0.3068
+      type: 'test'
+      ...
+    # Subtest: stores serviceType as readonly property
+    ok 3 - stores serviceType as readonly property
+      ---
+      duration_ms: 0.133793
+      type: 'test'
+      ...
+    # Subtest: throws typed error for unimplemented contract methods
+    ok 4 - throws typed error for unimplemented contract methods
+      ---
+      duration_ms: 0.915971
+      type: 'test'
+      ...
+    1..4
+ok 1 - ServiceTypeAdapter contract
+  ---
+  duration_ms: 3.103195
+  type: 'suite'
+  ...
+# Subtest: ServiceTypeAdapter inspectRetainedCreation (R2-F N11)
+    # Subtest: answers typed UNSUPPORTED on the partition and message-group adapters
+    ok 1 - answers typed UNSUPPORTED on the partition and message-group adapters
+      ---
+      duration_ms: 1.372192
+      type: 'test'
+      ...
+    1..1
+ok 2 - ServiceTypeAdapter inspectRetainedCreation (R2-F N11)
+  ---
+  duration_ms: 1.52781
+  type: 'suite'
+  ...
+1..2
+# tests 5
+# suites 2
+# pass 5
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 15.501087
+# time=492ms

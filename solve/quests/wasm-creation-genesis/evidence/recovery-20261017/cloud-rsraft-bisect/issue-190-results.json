@@ -1,0 +1,48 @@
+[
+  {
+    "url": "https://github.com/psvensson/lagrange-lab/issues/190#issuecomment-6240714265",
+    "schema": "lagrange-lab-result/v1",
+    "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+    "request_id": "737feabcea83c97927085b10e6b9b2c4",
+    "request_sha256": "5bcd2b320b5c6e9fb58f3974129a3eff810459922d16adee50476f2b0e52af49",
+    "status": "CLAIMED",
+    "recorded_at": "2026-10-17T20:43:26Z",
+    "result": {
+      "authorization": {
+        "expires_at": null,
+        "observed_at": "2026-10-17T20:43:26Z",
+        "observed_sha": "c6006c7451c5d56b079e7b9b52193b24c1fa4f21",
+        "ref": "refs/heads/probe/bisect-setB-cloud-bad-20261017-6d2a7b72",
+        "source_repo": "psvensson/lagrange",
+        "type": "local-trusted-repository",
+        "until_revoked": true
+      }
+    }
+  },
+  {
+    "url": "https://github.com/psvensson/lagrange-lab/issues/190#issuecomment-6240732492",
+    "schema": "lagrange-lab-result/v1",
+    "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+    "request_id": "737feabcea83c97927085b10e6b9b2c4",
+    "request_sha256": "5bcd2b320b5c6e9fb58f3974129a3eff810459922d16adee50476f2b0e52af49",
+    "status": "COMPLETE",
+    "recorded_at": "2026-10-17T20:44:29Z",
+    "result": {
+      "exit_code": 1,
+      "finished_at": "2026-10-17T20:44:29Z",
+      "hosts_requested": [
+        "tv-dator"
+      ],
+      "local_run_directory": "/home/peter/.local/state/lagrange-lab/runs/737feabcea83c97927085b10e6b9b2c4",
+      "log_bytes": 58488,
+      "log_sha256": "03b5c10b1801e8164f2d060d8bcb730c508941cb8fe5aede8f7fd79298d396f5",
+      "log_tail": " the model's (null)\"\n[tv-dator]             82: \"initB~,shutdownB~,initB: after shutdownB: registered handler is not the model's (null)\"\n[tv-dator]             83: \"initB~,shutdownB~,initB~: after shutdownB: registered handler is not the model's (null); after initB: registered handler is not the model's (null)\"\n[tv-dator]             84: \"initB~,shutdownB~,failInitA: after shutdownB: registered handler is not the model's (null)\"\n[tv-dator]             85: \"initB~,shutdownB~,failInitA~: after shutdownB: registered handler is not the model's (null); after failInitA: registered handler is not the model's (null)\"\n[tv-dator]             86: \"initB~,shutdownB~,failInitB: after shutdownB: registered handler is not the model's (null)\"\n[tv-dator]             87: \"initB~,shutdownB~,failInitB~: after shutdownB: registered handler is not the model's (null); after failInitB: registered handler is not the model's (null)\"\n[tv-dator]             88: \"initB~,shutdownB~,shutdownA: after shutdownB: registered handler is not the model's (null)\"\n[tv-dator]             89: \"initB~,shutdownB~,shutdownA~: after shutdownB: registered handler is not the model's (null); after shutdownA: registered handler is not the model's (null)\"\n[tv-dator]             90: \"initB~,shutdownB~,shutdownB: after shutdownB: registered handler is not the model's (null)\"\n[tv-dator]             91: \"initB~,shutdownB~,shutdownB~: after shutdownB: registered handler is not the model's (null); after shutdownB: registered handler is not the model's (null)\"\n[tv-dator]             92: \"failInitA,initA,shutdownA~: after shutdownA: registered handler is not the model's (null)\"\n[tv-dator]             93: \"failInitA,initA~,shutdownA~: after shutdownA: registered handler is not the model's (null)\"\n[tv-dator]             94: \"failInitA,initB,shutdownB~: after shutdownB: registered handler is not the model's (null)\"\n[tv-dator]             95: \"failInitA,initB~,shutdownB~: after shutdownB: registered handler is not the model's (null)\"\n[tv-dator]             96: \"failInitA~,initB,shutdownB~: after shutdownB: registered handler is not the model's (null)\"\n[tv-dator]             97: \"failInitA~,initB~,shutdownB~: after shutdownB: registered handler is not the model's (null)\"\n[tv-dator]             98: \"failInitB,initA,shutdownA~: after shutdownA: registered handler is not the model's (null)\"\n[tv-dator]             99: \"failInitB,initA~,shutdownA~: after shutdownA: registered handler is not the model's (null)\"\n[tv-dator]             100: \"failInitB,initB,shutdownB~: after shutdownB: registered handler is not the model's (null)\"\n[tv-dator]             101: \"failInitB,initB~,shutdownB~: after shutdownB: registered handler is not the model's (null)\"\n[tv-dator]             102: \"failInitB~,initA,shutdownA~: after shutdownA: registered handler is not the model's (null)\"\n[tv-dator]             103: \"failInitB~,initA~,shutdownA~: after shutdownA: registered handler is not the model's (null)\"\n[tv-dator]             104: \"shutdownA,initB,shutdownB~: after shutdownB: registered handler is not the model's (null)\"\n[tv-dator]             105: \"shutdownA,initB~,shutdownB~: after shutdownB: registered handler is not the model's (null)\"\n[tv-dator]             106: \"shutdownA~,initB,shutdownB~: after shutdownB: registered handler is not the model's (null)\"\n[tv-dator]             107: \"shutdownA~,initB~,shutdownB~: after shutdownB: registered handler is not the model's (null)\"\n[tv-dator]             108: \"shutdownB,initA,shutdownA~: after shutdownA: registered handler is not the model's (null)\"\n[tv-dator]             109: \"shutdownB,initA~,shutdownA~: after shutdownA: registered handler is not the model's (null)\"\n[tv-dator]             110: \"shutdownB~,initA,shutdownA~: after shutdownA: registered handler is not the model's (null)\"\n[tv-dator]             111: \"shutdownB~,initA~,shutdownA~: after shutdownA: registered handler is not the model's (null)\"\n[tv-dator]           operator: 'deepStrictEqual'\n[tv-dator]           stack: |-\n[tv-dator]             TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/c6006c7451c5-mvcv6bdq-1155385/test/wasm-service/wasm-service-replica.test.js:963:14)\n[tv-dator]             async Test.run (node:internal/test_runner/test:1054:7)\n[tv-dator]             async Promise.all (index 0)\n[tv-dator]             async Suite.run (node:internal/test_runner/test:1442:7)\n[tv-dator]             async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)\n[tv-dator]           ...\n[tv-dator]         1..1\n[tv-dator]     not ok 12 - lifecycle interleavings\n[tv-dator]       ---\n[tv-dator]       duration_ms: 19137.775808\n[tv-dator]       type: 'suite'\n[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/c6006c7451c5-mvcv6bdq-1155385/test/wasm-service/wasm-service-replica.test.js:760:3'\n[tv-dator]       failureType: 'subtestsFailed'\n[tv-dator]       error: '1 subtest failed'\n[tv-dator]       code: 'ERR_TEST_FAILURE'\n[tv-dator]       ...\n[tv-dator]     1..12\n[tv-dator] not ok 1 - WasmServiceReplica\n[tv-dator]   ---\n[tv-dator]   duration_ms: 20338.917847\n[tv-dator]   type: 'suite'\n[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/c6006c7451c5-mvcv6bdq-1155385/test/wasm-service/wasm-service-replica.test.js:159:1'\n[tv-dator]   failureType: 'subtestsFailed'\n[tv-dator]   error: '2 subtests failed'\n[tv-dator]   code: 'ERR_TEST_FAILURE'\n[tv-dator]   ...\n[tv-dator] 1..1\n[tv-dator] # tests 40\n[tv-dator] # suites 13\n[tv-dator] # pass 35\n[tv-dator] # fail 5\n[tv-dator] # cancelled 0\n[tv-dator] # skipped 0\n[tv-dator] # todo 0\n[tv-dator] # duration_ms 20359.442472\n[tv-dator] # time=20976ms\n[tv-dator] # test-files total=3 pass=0 fail=3 assertions=64\nlab test: tv-dator: # test-files total=3 pass=0 fail=3 assertions=64\nlab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson\n# test-files total=3 pass=0 fail=3 assertions=64\n",
+      "operation": "test-files",
+      "outcome": "FAIL",
+      "reason": null,
+      "scope": "executor result; not independent verification or merge certification",
+      "source_sha": "c6006c7451c5d56b079e7b9b52193b24c1fa4f21",
+      "tail_truncated": true
+    }
+  }
+]

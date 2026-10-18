@@ -1,0 +1,10 @@
+--- a/src/node/runtime-service-restart-inventory.js
++++ b/src/node/runtime-service-restart-inventory.js
+@@ -140,6 +140,7 @@
+ 
+ function startPlan(handler, plan) {
+   if (plan.action === RESTART_ACTION.REDRIVE) {
++    return;
+     redriveRetiredCreation(handler, plan.creation).catch((error) => {
+       handler.logger.error(LOG.ASYNC_REMOVE_FAILED, {...plan.creation, error: error.message});
+     });

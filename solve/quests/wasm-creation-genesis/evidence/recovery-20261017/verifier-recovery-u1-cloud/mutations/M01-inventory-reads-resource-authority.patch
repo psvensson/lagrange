@@ -1,0 +1,13 @@
+--- a/src/service/service-lifecycle-recovery.js
++++ b/src/service/service-lifecycle-recovery.js
+@@ -99,7 +99,9 @@
+   // RECOVERY-DESIGN-20261017 R1-A, R2-G): no metadata read, no reservation,
+   // no effect; its node re-enters it under its own id.
+   if (isConsensusCreationRow(operationRow)) {
+-    return inventoryConsensusCreationRow(operationRow);
++    const entry = inventoryConsensusCreationRow(operationRow);
++    if (entry.token) await manager._serviceDefinitionsOwner.resolveInstanceResource(entry.intent.consensusBinding, entry.token);
++    return entry;
+   }
+   const operationId = operationRow.operation_id || operationRow.operationId;
+   const operationState = operationRow.state;

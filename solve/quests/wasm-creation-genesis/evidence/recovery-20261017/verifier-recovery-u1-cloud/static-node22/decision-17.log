@@ -1,0 +1,9 @@
+{
+  "scannedFileCount": 1,
+  "totalViolationCount": 0,
+  "filesWithViolations": [],
+  "violations": [],
+  "rawViolationCount": 3,
+  "inheritedViolationCount": 3,
+  "baselineViolationCount": 806
+}

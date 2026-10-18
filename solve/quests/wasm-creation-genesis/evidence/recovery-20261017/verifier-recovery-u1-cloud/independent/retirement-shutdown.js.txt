@@ -1,0 +1,38 @@
+// An admitted by-path retirement belongs to the lifecycle until it is joined.
+test('independent U1: shutdown cannot release process custody while an admitted by-path retirement is paused', async (t) => {
+  const e = await publishedGroup(t);
+  const host = await e.restartHost(e.hosts[1], {inventory: false});
+  const retained = await host.manager.readRetainedCreation(creationId(host));
+  const owner = e.metadata.primary;
+  const releaseResource = owner.releaseInstanceResource.bind(owner);
+  const entered = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  owner.releaseInstanceResource = async (...args) => {
+    entered.resolve();
+    await release.promise;
+    return releaseResource(...args);
+  };
+  assert.equal(host.lifecycle.activeReplicas.size, 0, 'retirement uses the unopened file path');
+  assert.equal(localRecord(host).phase, 'PUBLISHED');
+  const retiring = host.lifecycle.retireReplica(retained);
+  await entered.promise;
+  let shutdownFinished = false;
+  const shuttingDown = e.stopHost(host).then(() => { shutdownFinished = true; });
+  for (let turn = 0; turn < 4; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+  const custodyReleasedWhileRetirementPending = shutdownFinished;
+  let successor = null;
+  if (custodyReleasedWhileRetirementPending) {
+    successor = await e.composeHost(host.slot, {inventory: false});
+    const index = e.hosts.indexOf(host);
+    e.hosts[index] = successor;
+    e.clocks[index] = successor.timeSource;
+  }
+  release.resolve();
+  const retired = await retiring;
+  await shuttingDown;
+  t.diagnostic(JSON.stringify({custodyReleasedWhileRetirementPending,
+    newCompositionOwnsDirectory: Boolean(successor?.processOwner), retired,
+    localPhaseAfterRelease: localRecord(host).phase, resourcePhase: slotPhase(e, host)}));
+  assert.equal(custodyReleasedWhileRetirementPending, false,
+    'PROCESS_OWNER_RELEASED_WITH_ADMITTED_BY_PATH_RETIREMENT_OUTSTANDING');
+});

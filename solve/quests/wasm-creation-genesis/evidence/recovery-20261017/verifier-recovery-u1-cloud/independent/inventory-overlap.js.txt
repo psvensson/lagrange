@@ -1,0 +1,30 @@
+// Independent live-versus-restart discrimination witness: both calls begin
+// before ready, and the late earlier scan must not overwrite the newer state.
+test('independent U1: overlapping startup inventories cannot overwrite an ACTIVE creation with a stale HELD memo', async (t) => {
+  const e = await publishedGroup(t);
+  const host = await e.restartHost(e.hosts[1], {inventory: false});
+  const resumes = trackResumes(host);
+  const scanned = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  const recover = host.manager.recoverPendingOperations.bind(host.manager);
+  let invocations = 0;
+  host.manager.recoverPendingOperations = async (...args) => {
+    invocations += 1;
+    const rows = await recover(...args);
+    if (invocations === 1) {
+      scanned.resolve();
+      await release.promise;
+    }
+    return rows;
+  };
+  const first = host.handler.recoverRetainedCreations();
+  await scanned.promise;
+  host.inventory = await host.handler.recoverRetainedCreations();
+  await e.settle(() => memoOf(host)?.status === ReplicaStatus.ACTIVE, 'second inventory reached ACTIVE');
+  const before = {...memoOf(host)};
+  release.resolve();
+  await first;
+  const after = {...memoOf(host)};
+  t.diagnostic(JSON.stringify({invocations, before, after, resumes}));
+  assert.equal(after.status, ReplicaStatus.ACTIVE, 'STALE_STARTUP_SCAN_OVERWROTE_LIVE_ACTIVE_MEMO');
+});

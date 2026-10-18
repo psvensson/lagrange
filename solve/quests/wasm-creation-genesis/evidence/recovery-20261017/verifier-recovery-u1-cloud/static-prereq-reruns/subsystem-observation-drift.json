@@ -1,0 +1,1187 @@
+[
+  {
+    "test": "test/distributed/harness/__tests__/comparative-efficiency-movielens-grouped-reduce.test.js",
+    "committed": {
+      "files": [
+        "data/examples/movielens-100k/u.data",
+        "test/distributed/harness/benchmark-capacity-heterogeneous-observation.js"
+      ]
+    },
+    "observed": {
+      "files": [
+        "test/distributed/harness/benchmark-capacity-heterogeneous-observation.js"
+      ]
+    }
+  },
+  {
+    "test": "test/examples/movielens-public-request-evidence-artifacts.test.js",
+    "committed": {
+      "files": [
+        "data/examples/movielens-100k/u.data"
+      ],
+      "directories": [
+        "examples/service-data-affinity"
+      ]
+    },
+    "observed": {
+      "directories": [
+        "examples/service-data-affinity"
+      ]
+    }
+  },
+  {
+    "test": "test/scripts/change-proof-boundary.test.js",
+    "committed": {
+      "files": [
+        "data/examples/movielens-100k/u.data",
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/git-process-environment.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/generate-test-subsystem-classes.js",
+        "scripts/proof-authority.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/run-test-files.js",
+        "scripts/select-change-tests.js",
+        "test/shards/primary-classes.json"
+      ],
+      "directories": [
+        "data",
+        "scripts",
+        "solve/quests",
+        "src/test-helpers",
+        "test",
+        "test/shards"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
+      ]
+    },
+    "observed": {
+      "files": [
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/git-process-environment.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/generate-test-subsystem-classes.js",
+        "scripts/proof-authority.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/run-test-files.js",
+        "scripts/select-change-tests.js",
+        "test/shards/primary-classes.json"
+      ],
+      "directories": [
+        "data",
+        "scripts",
+        "solve/quests",
+        "src/test-helpers",
+        "test",
+        "test/shards"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
+      ]
+    }
+  },
+  {
+    "test": "test/scripts/change-proof-collection-safety.test.js",
+    "committed": {
+      "files": [
+        "data/examples/movielens-100k/u.data",
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/git-process-environment.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/generate-test-subsystem-classes.js",
+        "scripts/proof-authority.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/run-test-files.js",
+        "scripts/select-change-tests.js",
+        "test/shards/primary-classes.json"
+      ],
+      "directories": [
+        "data",
+        "scripts",
+        "solve/quests",
+        "src/test-helpers",
+        "test",
+        "test/shards"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
+      ]
+    },
+    "observed": {
+      "files": [
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/git-process-environment.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/generate-test-subsystem-classes.js",
+        "scripts/proof-authority.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/run-test-files.js",
+        "scripts/select-change-tests.js",
+        "test/shards/primary-classes.json"
+      ],
+      "directories": [
+        "data",
+        "scripts",
+        "solve/quests",
+        "src/test-helpers",
+        "test",
+        "test/shards"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
+      ]
+    }
+  },
+  {
+    "test": "test/scripts/change-proof-own-authority.test.js",
+    "committed": {
+      "files": [
+        "data/examples/movielens-100k/u.data",
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/git-process-environment.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/generate-test-subsystem-classes.js",
+        "scripts/proof-authority.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/run-test-files.js",
+        "scripts/select-change-tests.js",
+        "test/shards/primary-classes.json"
+      ],
+      "directories": [
+        "data",
+        "scripts",
+        "solve/quests",
+        "src/test-helpers",
+        "test",
+        "test/shards"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
+      ]
+    },
+    "observed": {
+      "files": [
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/git-process-environment.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/generate-test-subsystem-classes.js",
+        "scripts/proof-authority.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/run-test-files.js",
+        "scripts/select-change-tests.js",
+        "test/shards/primary-classes.json"
+      ],
+      "directories": [
+        "data",
+        "scripts",
+        "solve/quests",
+        "src/test-helpers",
+        "test",
+        "test/shards"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
+      ]
+    }
+  },
+  {
+    "test": "test/scripts/home-lab-cli-guidelines.test.js",
+    "committed": {
+      "files": [
+        "Dockerfile",
+        "data/examples/movielens-100k/u.data",
+        "package-lock.json",
+        "package.json",
+        "scripts/check-guideline-decision-boundaries-baseline.json",
+        "scripts/check-guideline-literals-baseline.json",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/lab.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/select-change-tests.js",
+        "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/static/playback-viewer.html",
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/local-three-node.json",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/distributed/run.js"
+      ],
+      "directories": [
+        "scripts",
+        "scripts/lab",
+        "solve/epics/raft-rs-full-cutover",
+        "src",
+        "test",
+        "test/distributed/scenarios"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
+      ]
+    },
+    "observed": {
+      "files": [
+        "Dockerfile",
+        "package-lock.json",
+        "package.json",
+        "scripts/check-guideline-decision-boundaries-baseline.json",
+        "scripts/check-guideline-literals-baseline.json",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/lab.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/select-change-tests.js",
+        "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/static/playback-viewer.html",
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/local-three-node.json",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/distributed/run.js"
+      ],
+      "directories": [
+        "scripts",
+        "scripts/lab",
+        "solve/epics/raft-rs-full-cutover",
+        "src",
+        "test",
+        "test/distributed/scenarios"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
+      ]
+    }
+  },
+  {
+    "test": "test/scripts/lab-fleet-discovery.test.js",
+    "committed": {
+      "files": [
+        ".github/workflows/full-corpus-canary.yml",
+        "Dockerfile",
+        "data/examples/movielens-100k/u.data",
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/generate-test-subsystem-classes.js",
+        "scripts/proof-authority.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/run-test-files.js",
+        "scripts/select-change-tests.js",
+        "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/static/playback-viewer.html",
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/local-three-node.json",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/distributed/run.js",
+        "test/shards/primary-classes.json"
+      ],
+      "directories": [
+        "data",
+        "solve/epics/raft-rs-full-cutover",
+        "solve/quests",
+        "src/test-helpers",
+        "test",
+        "test/distributed/scenarios"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "NVM_DIR",
+        "PATH",
+        "XDG_CONFIG_HOME"
+      ]
+    },
+    "observed": {
+      "files": [
+        ".github/workflows/full-corpus-canary.yml",
+        "Dockerfile",
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/generate-test-subsystem-classes.js",
+        "scripts/proof-authority.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/run-test-files.js",
+        "scripts/select-change-tests.js",
+        "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/static/playback-viewer.html",
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/local-three-node.json",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/distributed/run.js",
+        "test/shards/primary-classes.json"
+      ],
+      "directories": [
+        "data",
+        "solve/epics/raft-rs-full-cutover",
+        "solve/quests",
+        "src/test-helpers",
+        "test",
+        "test/distributed/scenarios"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "NVM_DIR",
+        "PATH",
+        "XDG_CONFIG_HOME"
+      ]
+    }
+  },
+  {
+    "test": "test/scripts/lab-test-base.test.js",
+    "committed": {
+      "files": [
+        "Dockerfile",
+        "data/examples/movielens-100k/u.data",
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/impact-proof-cone-constants.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/generate-test-subsystem-classes.js",
+        "scripts/proof-authority.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/run-test-files.js",
+        "scripts/select-change-tests.js",
+        "test/shards/primary-classes.json"
+      ],
+      "directories": [
+        "data",
+        "solve/quests",
+        "src/test-helpers",
+        "test"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
+      ]
+    },
+    "observed": {
+      "files": [
+        "Dockerfile",
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/impact-proof-cone-constants.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/generate-test-subsystem-classes.js",
+        "scripts/proof-authority.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/run-test-files.js",
+        "scripts/select-change-tests.js",
+        "test/shards/primary-classes.json"
+      ],
+      "directories": [
+        "data",
+        "solve/quests",
+        "src/test-helpers",
+        "test"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
+      ]
+    }
+  },
+  {
+    "test": "test/scripts/lab-worker-provisioning.test.js",
+    "committed": {
+      "files": [
+        ".github/workflows/full-corpus-canary.yml",
+        "data/examples/movielens-100k/u.data",
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/lab.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/select-change-tests.js"
+      ],
+      "env": [
+        "APPDATA",
+        "GIT_DIR",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
+      ]
+    },
+    "observed": {
+      "files": [
+        ".github/workflows/full-corpus-canary.yml",
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/lab.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/select-change-tests.js"
+      ],
+      "env": [
+        "APPDATA",
+        "GIT_DIR",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
+      ]
+    }
+  },
+  {
+    "test": "test/scripts/local-corpus.test.js",
+    "committed": {
+      "files": [
+        ".githooks/pre-push",
+        ".github/workflows/full-corpus-canary.yml",
+        ".gitignore",
+        "data/examples/movielens-100k/u.data",
+        "data/formation-health/trend.ndjson",
+        "examples/service-data-affinity/download-movielens.js",
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/push-gate-corpus-worktree.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/generate-test-subsystem-classes.js",
+        "scripts/proof-authority.js",
+        "scripts/prune-test-output.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/run-test-files.js",
+        "scripts/select-change-tests.js",
+        "test/shards/primary-classes.json"
+      ],
+      "directories": [
+        ".githooks",
+        "data",
+        "solve/quests",
+        "src/test-helpers",
+        "test"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "PATH",
+        "XDG_CONFIG_HOME"
+      ]
+    },
+    "observed": {
+      "files": [
+        ".githooks/pre-push",
+        ".github/workflows/full-corpus-canary.yml",
+        ".gitignore",
+        "data/formation-health/trend.ndjson",
+        "examples/service-data-affinity/download-movielens.js",
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/push-gate-corpus-worktree.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/generate-test-subsystem-classes.js",
+        "scripts/proof-authority.js",
+        "scripts/prune-test-output.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/run-test-files.js",
+        "scripts/select-change-tests.js",
+        "test/shards/primary-classes.json"
+      ],
+      "directories": [
+        ".githooks",
+        "data",
+        "solve/quests",
+        "src/test-helpers",
+        "test"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "PATH",
+        "XDG_CONFIG_HOME"
+      ]
+    }
+  },
+  {
+    "test": "test/scripts/publish-head.test.js",
+    "committed": {
+      "files": [
+        ".githooks/pre-push",
+        ".gitignore",
+        "CHANGELOG.md",
+        "data/formation-health/trend.ndjson",
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/push-gate-corpus-worktree.js",
+        "scripts/proof-authority.js",
+        "scripts/prune-test-output.js",
+        "scripts/run-classified-test-files.js",
+        "src/cli/cli-constants.js",
+        "src/constants/entrypoint.js",
+        "test/shards/primary-classes.json"
+      ],
+      "directories": [
+        ".githooks",
+        "data",
+        "data/examples/movielens-100k",
+        "data/formation-health",
+        "data/releases",
+        "solve",
+        "test"
+      ]
+    },
+    "observed": {
+      "files": [
+        ".githooks/pre-push",
+        ".gitignore",
+        "CHANGELOG.md",
+        "data/formation-health/trend.ndjson",
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/push-gate-corpus-worktree.js",
+        "scripts/proof-authority.js",
+        "scripts/prune-test-output.js",
+        "scripts/run-classified-test-files.js",
+        "src/cli/cli-constants.js",
+        "src/constants/entrypoint.js",
+        "test/shards/primary-classes.json"
+      ],
+      "directories": [
+        ".githooks",
+        "data",
+        "data/formation-health",
+        "data/releases",
+        "solve",
+        "test"
+      ]
+    }
+  },
+  {
+    "test": "test/scripts/push-gate-change-proof.test.js",
+    "committed": {
+      "files": [
+        ".githooks/pre-push",
+        ".taprc",
+        "CHANGELOG.md",
+        "data/examples/movielens-100k/u.data",
+        "docs/development/solver-runbook.md",
+        "examples/service-data-affinity/download-movielens.js",
+        "package-lock.json",
+        "package.json",
+        "scripts/check-subsystem.js",
+        "scripts/checks/acceptance-proof-manifest-runner.js",
+        "scripts/checks/change-proof-string-collections.js",
+        "scripts/checks/change-selection-constants.js",
+        "scripts/checks/change-selection.js",
+        "scripts/checks/changed-paths.js",
+        "scripts/checks/helper-import-closure.js",
+        "scripts/checks/impact-proof-cone-constants.js",
+        "scripts/checks/push-gate-change-proof.js",
+        "scripts/checks/run-static-audits.js",
+        "scripts/checks/test-primary-classification.js",
+        "scripts/checks/test-timeout-declarations.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/generate-test-primary-classes.js",
+        "scripts/generate-test-resource-classes.js",
+        "scripts/generate-test-subsystem-classes.js",
+        "scripts/lab/probe.js",
+        "scripts/lab/process.js",
+        "scripts/lab/state.js",
+        "scripts/plan-test-lane.js",
+        "scripts/proof-authority.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/run-project-hardening-acceptance.js",
+        "scripts/run-test-files.js",
+        "scripts/select-change-tests.js",
+        "scripts/solve.js",
+        "src/cli/cli-constants.js",
+        "src/constants/entrypoint.js",
+        "test/manifests/pre-push-stages.json",
+        "test/manifests/project-hardening-proof-postpush-manifest.json",
+        "test/manifests/proof-obligations.json",
+        "test/shards/impact-contracts.json",
+        "test/shards/impact-coverage.json",
+        "test/shards/impact-graph-seal.json",
+        "test/shards/primary-classes.json",
+        "test/shards/resource-classes.json",
+        "test/shards/safety-spine.json",
+        "test/shards/subsystem-classes.json"
+      ],
+      "directories": [
+        ".githooks",
+        ".github",
+        "data",
+        "data/releases",
+        "scripts",
+        "solve",
+        "solve/quests",
+        "src",
+        "src/test-helpers",
+        "test"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
+      ]
+    },
+    "observed": {
+      "files": [
+        ".githooks/pre-push",
+        ".taprc",
+        "CHANGELOG.md",
+        "docs/development/solver-runbook.md",
+        "examples/service-data-affinity/download-movielens.js",
+        "package-lock.json",
+        "package.json",
+        "scripts/check-subsystem.js",
+        "scripts/checks/acceptance-proof-manifest-runner.js",
+        "scripts/checks/change-proof-string-collections.js",
+        "scripts/checks/change-selection-constants.js",
+        "scripts/checks/change-selection.js",
+        "scripts/checks/changed-paths.js",
+        "scripts/checks/helper-import-closure.js",
+        "scripts/checks/impact-proof-cone-constants.js",
+        "scripts/checks/push-gate-change-proof.js",
+        "scripts/checks/run-static-audits.js",
+        "scripts/checks/test-primary-classification.js",
+        "scripts/checks/test-timeout-declarations.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/generate-test-primary-classes.js",
+        "scripts/generate-test-resource-classes.js",
+        "scripts/generate-test-subsystem-classes.js",
+        "scripts/lab/probe.js",
+        "scripts/lab/process.js",
+        "scripts/lab/state.js",
+        "scripts/plan-test-lane.js",
+        "scripts/proof-authority.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/run-project-hardening-acceptance.js",
+        "scripts/run-test-files.js",
+        "scripts/select-change-tests.js",
+        "scripts/solve.js",
+        "src/cli/cli-constants.js",
+        "src/constants/entrypoint.js",
+        "test/manifests/pre-push-stages.json",
+        "test/manifests/project-hardening-proof-postpush-manifest.json",
+        "test/manifests/proof-obligations.json",
+        "test/shards/impact-contracts.json",
+        "test/shards/impact-coverage.json",
+        "test/shards/impact-graph-seal.json",
+        "test/shards/primary-classes.json",
+        "test/shards/resource-classes.json",
+        "test/shards/safety-spine.json",
+        "test/shards/subsystem-classes.json"
+      ],
+      "directories": [
+        ".githooks",
+        ".github",
+        "data",
+        "data/releases",
+        "scripts",
+        "solve",
+        "solve/quests",
+        "src",
+        "src/test-helpers",
+        "test"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
+      ]
+    }
+  },
+  {
+    "test": "test/scripts/run-classified-test-files.test.js",
+    "committed": {
+      "files": [
+        "data/examples/movielens-100k/u.data",
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/run-test-files.js",
+        "scripts/select-change-tests.js",
+        "test/address/address-manager.test.js",
+        "test/bootstrap/_min-test.test.js",
+        "test/examples/service-compiler-account-summary-parity.test.js",
+        "test/integration/admin-cdc-propagation.integration.test.js",
+        "test/scripts/exact-election-evidence-same-turn-model-contract.test.js",
+        "test/shards/primary-classes.json"
+      ],
+      "directories": [
+        "scripts",
+        "test"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "TAP_TIMEOUT",
+        "TAP_TIMEOUT_FLOOR",
+        "XDG_CONFIG_HOME"
+      ]
+    },
+    "observed": {
+      "files": [
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/run-test-files.js",
+        "scripts/select-change-tests.js",
+        "test/address/address-manager.test.js",
+        "test/bootstrap/_min-test.test.js",
+        "test/examples/service-compiler-account-summary-parity.test.js",
+        "test/integration/admin-cdc-propagation.integration.test.js",
+        "test/scripts/exact-election-evidence-same-turn-model-contract.test.js",
+        "test/shards/primary-classes.json"
+      ],
+      "directories": [
+        "scripts",
+        "test"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "TAP_TIMEOUT",
+        "TAP_TIMEOUT_FLOOR",
+        "XDG_CONFIG_HOME"
+      ]
+    }
+  },
+  {
+    "test": "test/scripts/scenario-certification-consumers.test.js",
+    "committed": {
+      "files": [
+        "Dockerfile",
+        "data/examples/movielens-100k/u.data",
+        "data/formation-health/trend.ndjson",
+        "examples/service-data-affinity/run-affinity-demo.js",
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/certification-verdict.js",
+        "scripts/checks/run-formation-release-handoff-gcp-streak.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/run-distributed-matrix.js",
+        "scripts/select-change-tests.js",
+        "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/static/playback-viewer.html",
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/convergence-sealed-bars.json",
+        "test/distributed/config/local-three-node.json",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/distributed/harness/priority-recovery-summary-normalization.js",
+        "test/distributed/harness/report-writer-optimization-summary.js",
+        "test/distributed/run.js"
+      ],
+      "directories": [
+        "scripts/checks",
+        "solve/epics",
+        "solve/epics/raft-rs-full-cutover",
+        "solve/quests",
+        "test/distributed/scenarios"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
+      ]
+    },
+    "observed": {
+      "files": [
+        "Dockerfile",
+        "data/formation-health/trend.ndjson",
+        "examples/service-data-affinity/run-affinity-demo.js",
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/certification-verdict.js",
+        "scripts/checks/run-formation-release-handoff-gcp-streak.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/run-distributed-matrix.js",
+        "scripts/select-change-tests.js",
+        "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/static/playback-viewer.html",
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/convergence-sealed-bars.json",
+        "test/distributed/config/local-three-node.json",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/distributed/harness/priority-recovery-summary-normalization.js",
+        "test/distributed/harness/report-writer-optimization-summary.js",
+        "test/distributed/run.js"
+      ],
+      "directories": [
+        "scripts/checks",
+        "solve/epics",
+        "solve/epics/raft-rs-full-cutover",
+        "solve/quests",
+        "test/distributed/scenarios"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
+      ]
+    }
+  },
+  {
+    "test": "test/scripts/scenario-refused-outcome-consumers.test.js",
+    "committed": {
+      "files": [
+        "Dockerfile",
+        "data/examples/movielens-100k/u.data",
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/rerun-failed-distributed-scenarios.sh",
+        "scripts/run-classified-test-files.js",
+        "scripts/select-change-tests.js",
+        "scripts/summarize-harness-runs.js",
+        "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/static/playback-viewer.html",
+        "src/control-plane/priority-recovery-observation-snapshot.js",
+        "src/control-plane/publication-recovery-evidence.js",
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/convergence-sealed-bars.json",
+        "test/distributed/config/local-three-node.json",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-gate-closure-classification.js",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
+        "test/distributed/harness/priority-recovery-summary-normalization.js",
+        "test/distributed/harness/publication-evidence-contract.js",
+        "test/distributed/harness/report-writer-optimization-summary.js",
+        "test/distributed/run.js"
+      ],
+      "directories": [
+        "scripts/checks",
+        "solve/epics",
+        "solve/epics/raft-rs-full-cutover",
+        "solve/quests",
+        "test/distributed/scenarios"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
+      ]
+    },
+    "observed": {
+      "files": [
+        "Dockerfile",
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/rerun-failed-distributed-scenarios.sh",
+        "scripts/run-classified-test-files.js",
+        "scripts/select-change-tests.js",
+        "scripts/summarize-harness-runs.js",
+        "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/static/playback-viewer.html",
+        "src/control-plane/priority-recovery-observation-snapshot.js",
+        "src/control-plane/publication-recovery-evidence.js",
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/convergence-sealed-bars.json",
+        "test/distributed/config/local-three-node.json",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-gate-closure-classification.js",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
+        "test/distributed/harness/priority-recovery-summary-normalization.js",
+        "test/distributed/harness/publication-evidence-contract.js",
+        "test/distributed/harness/report-writer-optimization-summary.js",
+        "test/distributed/run.js"
+      ],
+      "directories": [
+        "scripts/checks",
+        "solve/epics",
+        "solve/epics/raft-rs-full-cutover",
+        "solve/quests",
+        "test/distributed/scenarios"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
+      ]
+    }
+  },
+  {
+    "test": "test/scripts/select-change-tests.test.js",
+    "committed": {
+      "files": [
+        "data/examples/movielens-100k/u.data",
+        "docs/steering/rules.md",
+        "package-lock.json",
+        "package.json",
+        "scripts/check-subsystem.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/generate-test-subsystem-classes.js",
+        "scripts/proof-authority.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/run-test-files.js",
+        "scripts/select-change-tests.js",
+        "scripts/solve/commands.js",
+        "src/query/sql-query-engine.js",
+        "src/rebalancer/move-planner.js",
+        "test/address/address-manager.test.js",
+        "test/shards/primary-classes.json",
+        "test/shards/safety-spine.json",
+        "test/shards/subsystem-classes.json"
+      ],
+      "directories": [
+        "data",
+        "solve/quests",
+        "src/test-helpers",
+        "test",
+        "test/shards"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
+      ]
+    },
+    "observed": {
+      "files": [
+        "docs/steering/rules.md",
+        "package-lock.json",
+        "package.json",
+        "scripts/check-subsystem.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/generate-test-subsystem-classes.js",
+        "scripts/proof-authority.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/run-test-files.js",
+        "scripts/select-change-tests.js",
+        "scripts/solve/commands.js",
+        "src/query/sql-query-engine.js",
+        "src/rebalancer/move-planner.js",
+        "test/address/address-manager.test.js",
+        "test/shards/primary-classes.json",
+        "test/shards/safety-spine.json",
+        "test/shards/subsystem-classes.json"
+      ],
+      "directories": [
+        "data",
+        "solve/quests",
+        "src/test-helpers",
+        "test",
+        "test/shards"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
+      ]
+    }
+  },
+  {
+    "test": "test/scripts/selection-golden-corpus.test.js",
+    "committed": {
+      "files": [
+        "data/examples/movielens-100k/u.data",
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/generate-test-subsystem-classes.js",
+        "scripts/proof-authority.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/run-test-files.js",
+        "scripts/select-change-tests.js",
+        "test/shards/primary-classes.json",
+        "test/shards/selection-golden-corpus.json"
+      ],
+      "directories": [
+        "data",
+        "solve/quests",
+        "src/test-helpers",
+        "test"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
+      ]
+    },
+    "observed": {
+      "files": [
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/generate-test-subsystem-classes.js",
+        "scripts/proof-authority.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/run-test-files.js",
+        "scripts/select-change-tests.js",
+        "test/shards/primary-classes.json",
+        "test/shards/selection-golden-corpus.json"
+      ],
+      "directories": [
+        "data",
+        "solve/quests",
+        "src/test-helpers",
+        "test"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
+      ]
+    }
+  },
+  {
+    "test": "test/scripts/test-placement-lab-split.test.js",
+    "committed": {
+      "files": [
+        "data/examples/movielens-100k/u.data",
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/select-change-tests.js"
+      ],
+      "directories": [
+        "test"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
+      ]
+    },
+    "observed": {
+      "files": [
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/select-change-tests.js"
+      ],
+      "directories": [
+        "test"
+      ],
+      "env": [
+        "APPDATA",
+        "LAGRANGE_LAB_HOME",
+        "XDG_CONFIG_HOME"
+      ]
+    }
+  },
+  {
+    "test": "test/scripts/test-placement.test.js",
+    "committed": {
+      "files": [
+        "README.md",
+        "data/examples/movielens-100k/u.data",
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/lab/probe.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/run-test-files.js",
+        "scripts/select-change-tests.js",
+        "test/query/budget-limit-error.test.js",
+        "test/query/distributed-merge-engine.test.js",
+        "test/scripts/check-operation-dispatch-completion-owner.test.js",
+        "test/shards/primary-classes.json"
+      ],
+      "directories": [
+        "data/examples",
+        "data/storage-load",
+        "test"
+      ],
+      "env": [
+        "APPDATA",
+        "GIT_DIR",
+        "LAGRANGE_LAB_HOME",
+        "PRODUCER_FAILS",
+        "XDG_CONFIG_HOME"
+      ]
+    },
+    "observed": {
+      "files": [
+        "README.md",
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/lab/probe.js",
+        "scripts/run-classified-test-files.js",
+        "scripts/run-test-files.js",
+        "scripts/select-change-tests.js",
+        "test/query/budget-limit-error.test.js",
+        "test/query/distributed-merge-engine.test.js",
+        "test/scripts/check-operation-dispatch-completion-owner.test.js",
+        "test/shards/primary-classes.json"
+      ],
+      "directories": [
+        "data/storage-load",
+        "test"
+      ],
+      "env": [
+        "APPDATA",
+        "GIT_DIR",
+        "LAGRANGE_LAB_HOME",
+        "PRODUCER_FAILS",
+        "XDG_CONFIG_HOME"
+      ]
+    }
+  }
+]

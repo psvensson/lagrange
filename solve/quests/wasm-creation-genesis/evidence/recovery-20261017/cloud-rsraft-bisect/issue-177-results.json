@@ -1,0 +1,60 @@
+[
+  {
+    "url": "https://github.com/psvensson/lagrange-lab/issues/177#issuecomment-6238062408",
+    "schema": "lagrange-lab-result/v1",
+    "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+    "request_id": "05e03a96d5254c618b5e2de15b83305a",
+    "request_sha256": "3400dc147cebf4159267a2285a40168b8028ab2d021c3b507f3d00431bdfa106",
+    "status": "WAITING_APPROVAL",
+    "recorded_at": "2026-10-17T17:52:54Z",
+    "result": {
+      "reason": "LOCAL_PAUSE_OR_UNCERTAIN_PRIOR_EXECUTION"
+    }
+  },
+  {
+    "url": "https://github.com/psvensson/lagrange-lab/issues/177#issuecomment-6240512876",
+    "schema": "lagrange-lab-result/v1",
+    "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+    "request_id": "05e03a96d5254c618b5e2de15b83305a",
+    "request_sha256": "3400dc147cebf4159267a2285a40168b8028ab2d021c3b507f3d00431bdfa106",
+    "status": "CLAIMED",
+    "recorded_at": "2026-10-17T20:27:24Z",
+    "result": {
+      "authorization": {
+        "expires_at": null,
+        "observed_at": "2026-10-17T20:27:23Z",
+        "observed_sha": "e7c89f4b5114c0238312d3831b65889a4622f4e9",
+        "ref": "refs/heads/probe/bisect-setA-good",
+        "source_repo": "psvensson/lagrange",
+        "type": "local-trusted-repository",
+        "until_revoked": true
+      }
+    }
+  },
+  {
+    "url": "https://github.com/psvensson/lagrange-lab/issues/177#issuecomment-6240579953",
+    "schema": "lagrange-lab-result/v1",
+    "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+    "request_id": "05e03a96d5254c618b5e2de15b83305a",
+    "request_sha256": "3400dc147cebf4159267a2285a40168b8028ab2d021c3b507f3d00431bdfa106",
+    "status": "COMPLETE",
+    "recorded_at": "2026-10-17T20:33:39Z",
+    "result": {
+      "exit_code": 1,
+      "finished_at": "2026-10-17T20:33:39Z",
+      "hosts_requested": [
+        "lenovo-laptop"
+      ],
+      "local_run_directory": "/home/peter/.local/state/lagrange-lab/runs/05e03a96d5254c618b5e2de15b83305a",
+      "log_bytes": 398046,
+      "log_sha256": "c17b5da604484c53455cd8531678b0c44c21afd18480dd1b527dd60f48bf2e49",
+      "log_tail": "\n[lenovo-laptop]   address: '550e8400-e29b-41d4-a716-446655440101/service/replica-handler',\n[lenovo-laptop]   nodeId: '550e8400-e29b-41d4-a716-446655440101'\n[lenovo-laptop] }\n[lenovo-laptop] Shutting down ReplicaHandler { nodeId: '550e8400-e29b-41d4-a716-446655440101' }\n[lenovo-laptop] not ok 6 - CDC pipeline readiness gate timed out: unmet=[pipelineProven] timeout=6600ms kind=absolute_deadline_exhausted\n[lenovo-laptop]   ---\n[lenovo-laptop]   stack: >\n[lenovo-laptop]     CDCPipelineReadinessGate.waitForReady\n[lenovo-laptop]     (src/cdc/cdc-pipeline-readiness-gate.js:210:23)\n[lenovo-laptop]   \n[lenovo-laptop]     async waitForCdcPipelineReadiness\n[lenovo-laptop]     (test/integration/leader-metadata-validation.integration.test.js:217:3)\n[lenovo-laptop]   \n[lenovo-laptop]     async Test.<anonymous>\n[lenovo-laptop]     (test/integration/leader-metadata-validation.integration.test.js:277:9)\n[lenovo-laptop]   at:\n[lenovo-laptop]     fileName: src/cdc/cdc-pipeline-readiness-gate.js\n[lenovo-laptop]     lineNumber: 210\n[lenovo-laptop]     columnNumber: 23\n[lenovo-laptop]     typeName: CDCPipelineReadinessGate\n[lenovo-laptop]     methodName: waitForReady\n[lenovo-laptop]     functionName: CDCPipelineReadinessGate.waitForReady\n[lenovo-laptop]   unmetConditions:\n[lenovo-laptop]     - pipelineProven\n[lenovo-laptop]   timeoutMs: 6600\n[lenovo-laptop]   timeoutKind: absolute_deadline_exhausted\n[lenovo-laptop]   lastProgressElapsedMs: 1\n[lenovo-laptop]   tapCaught: returnedPromiseRejection\n[lenovo-laptop]   test: join fails with LEADER_METADATA_INCOMPLETE when partition leaders missing\n[lenovo-laptop]   source: |2\n[lenovo-laptop]               },\n[lenovo-laptop]             });\n[lenovo-laptop]             const error = new Error(\n[lenovo-laptop]     ----------------------^\n[lenovo-laptop]               `${CDC_LIFECYCLE_LOG_MSG.PIPELINE_READINESS_TIMEOUT}: ` +\n[lenovo-laptop]               `unmet=[${result.unmetConditions.join(', ')}] ` +\n[lenovo-laptop]   ...\n[lenovo-laptop] \n[lenovo-laptop] 1..6\n[lenovo-laptop] # { total: 6, pass: 0, fail: 6 }\n[lenovo-laptop] # time=83576.776ms\n[lenovo-laptop] # test-files total=2 pass=0 fail=2 assertions=11\n[lenovo-laptop] DIAG publications write-leader resolution (seed-driven membership) {\n[lenovo-laptop]   nodeId: '550e8400-e29b-41d4-a716-446655440101',\n[lenovo-laptop]   helperSaysWriteLeader: true,\n[lenovo-laptop]   tier1PartitionsLeaderNodeId: '550e8400-e29b-41d4-a716-446655440101',\n[lenovo-laptop]   liveRebalancerIsLeader: true\n[lenovo-laptop] }\n[lenovo-laptop] DIAG publications write-leader resolution (seed-driven membership) {\n[lenovo-laptop]   nodeId: '550e8400-e29b-41d4-a716-446655440101',\n[lenovo-laptop]   helperSaysWriteLeader: true,\n[lenovo-laptop]   tier1PartitionsLeaderNodeId: '550e8400-e29b-41d4-a716-446655440101',\n[lenovo-laptop]   liveRebalancerIsLeader: true\n[lenovo-laptop] }\n[lenovo-laptop] DIAG publications write-leader resolution (seed-driven membership) {\n[lenovo-laptop]   nodeId: '550e8400-e29b-41d4-a716-446655440101',\n[lenovo-laptop]   helperSaysWriteLeader: true,\n[lenovo-laptop]   tier1PartitionsLeaderNodeId: '550e8400-e29b-41d4-a716-446655440101',\n[lenovo-laptop]   liveRebalancerIsLeader: true\n[lenovo-laptop] }\n[lenovo-laptop] DIAG publications write-leader resolution (seed-driven membership) {\n[lenovo-laptop]   nodeId: '550e8400-e29b-41d4-a716-446655440101',\n[lenovo-laptop]   helperSaysWriteLeader: true,\n[lenovo-laptop]   tier1PartitionsLeaderNodeId: '550e8400-e29b-41d4-a716-446655440101',\n[lenovo-laptop]   liveRebalancerIsLeader: true\n[lenovo-laptop] }\n[lenovo-laptop] DIAG publications write-leader resolution (seed-driven membership) {\n[lenovo-laptop]   nodeId: '550e8400-e29b-41d4-a716-446655440101',\n[lenovo-laptop]   helperSaysWriteLeader: true,\n[lenovo-laptop]   tier1PartitionsLeaderNodeId: '550e8400-e29b-41d4-a716-446655440101',\n[lenovo-laptop]   liveRebalancerIsLeader: true\n[lenovo-laptop] }\n[lenovo-laptop] DIAG publications write-leader resolution (seed-driven membership) {\n[lenovo-laptop]   nodeId: '550e8400-e29b-41d4-a716-446655440101',\n[lenovo-laptop]   helperSaysWriteLeader: true,\n[lenovo-laptop]   tier1PartitionsLeaderNodeId: '550e8400-e29b-41d4-a716-446655440101',\n[lenovo-laptop]   liveRebalancerIsLeader: true\n[lenovo-laptop] }\n[lenovo-laptop] Repaired readiness cache from authoritative node/service/partition rows {\n[lenovo-laptop]   nodeId: '550e8400-e29b-41d4-a716-446655440101',\n[lenovo-laptop]   repairIntent: 'refresh_evidence',\n[lenovo-laptop]   repairedRowCount: 45,\n[lenovo-laptop]   repairedNodeRowCount: 1,\n[lenovo-laptop]   repairedServiceRowCount: 138,\n[lenovo-laptop]   repairedPartitionRowCount: 45,\n[lenovo-laptop]   nodeEvidenceState: 'observed_rows',\n[lenovo-laptop]   serviceEvidenceState: 'observed_rows',\n[lenovo-laptop]   partitionEvidenceState: 'observed_rows'\n[lenovo-laptop] }\n[lenovo-laptop] DIAG owner-membership driver predicate (am I the owner?) { nodeId: '550e8400-e29b-41d4-a716-446655440101', isLeader: true }\n[lenovo-laptop] DIAG owner-membership driver planning snapshot {\n[lenovo-laptop]   nodeId: '550e8400-e29b-41d4-a716-446655440101',\n[lenovo-laptop]   hasSnapshot: true,\n[lenovo-laptop]   publishedCount: 1\n[lenovo-laptop] }\n[lenovo-laptop] Repaired readiness cache from authoritative node/service/partition rows {\n[lenovo-laptop]   nodeId: '550e8400-e29b-41d4-a716-446655440101',\n[lenovo-laptop]   repairIntent: 'refresh_evidence',\n[lenovo-laptop]   repairedRowCount: 45,\n[lenovo-laptop]   repairedNodeRowCount: 1,\n[lenovo-laptop]   repairedServiceRowCount: 138,\n[lenovo-laptop]   repairedPartitionRowCount: 45,\n[lenovo-laptop]   nodeEvidenceState: 'observed_rows',\n[lenovo-laptop]   serviceEvidenceState: 'observed_rows',\n[lenovo-laptop]   partitionEvidenceState: 'observed_rows'\n[lenovo-laptop] }\nlab test: lenovo-laptop: # test-files total=12 pass=6 fail=6 assertions=95\nlab test: lenovo-laptop: results copied to test-output/reports/test-results-lenovo-laptop.ndjson\n# test-files total=12 pass=6 fail=6 assertions=95\n",
+      "operation": "test-files",
+      "outcome": "FAIL",
+      "reason": null,
+      "scope": "executor result; not independent verification or merge certification",
+      "source_sha": "e7c89f4b5114c0238312d3831b65889a4622f4e9",
+      "tail_truncated": true
+    }
+  }
+]

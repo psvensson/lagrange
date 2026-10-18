@@ -1,0 +1,106 @@
+[
+  {
+    "id": "M01-inventory-reads-resource-authority",
+    "file": "src/service/service-lifecycle-recovery.js",
+    "test": "test/service/service-consensus-creation-intent.test.js",
+    "exitCode": 1,
+    "seconds": 1.68,
+    "sourceRestored": true
+  },
+  {
+    "id": "M02-reentry-under-scan-id",
+    "file": "src/node/runtime-service-restart-inventory.js",
+    "test": "test/wasm-service/bound-creation-restart.integration.test.js",
+    "exitCode": 1,
+    "seconds": 9.153,
+    "sourceRestored": true
+  },
+  {
+    "id": "M03-memo-after-reentry",
+    "file": "src/node/runtime-service-restart-inventory.js",
+    "test": "test/wasm-service/bound-creation-restart.integration.test.js",
+    "exitCode": 1,
+    "seconds": 7.524,
+    "sourceRestored": true
+  },
+  {
+    "id": "M04-row-completed-at-published",
+    "file": "src/service/service-consensus-bootstrap.js",
+    "test": "test/wasm-service/wasm-creation-publication.integration.test.js",
+    "exitCode": 1,
+    "seconds": 8.737,
+    "sourceRestored": true
+  },
+  {
+    "id": "M05-closed-redrive-skipped",
+    "file": "src/node/runtime-service-restart-inventory.js",
+    "test": "test/wasm-service/bound-creation-restart.integration.test.js",
+    "exitCode": 1,
+    "seconds": 8.113,
+    "sourceRestored": true
+  },
+  {
+    "id": "M06-tombstone-inferred-from-storage-missing",
+    "file": "src/wasm-service/wasm-creation-opening.js",
+    "test": "test/wasm-service/wasm-creation-local-record.test.js",
+    "exitCode": 1,
+    "seconds": 1.677,
+    "sourceRestored": true
+  },
+  {
+    "id": "M07-five-field-local-identity",
+    "file": "src/wasm-service/wasm-creation-opening.js",
+    "test": "test/wasm-service/wasm-creation-local-record.test.js",
+    "exitCode": 1,
+    "seconds": 1.623,
+    "sourceRestored": true
+  },
+  {
+    "id": "M08-foreign-node-filter-removed",
+    "file": "src/node/runtime-service-restart-inventory.js",
+    "test": "test/wasm-service/bound-creation-restart.integration.test.js",
+    "exitCode": 1,
+    "seconds": 7.175,
+    "sourceRestored": true
+  },
+  {
+    "id": "M09-redrive-emits-remove-outcome",
+    "file": "src/node/runtime-service-restart-inventory.js",
+    "test": "test/wasm-service/bound-creation-restart.integration.test.js",
+    "exitCode": 1,
+    "seconds": 7.427,
+    "sourceRestored": true
+  },
+  {
+    "id": "M10-pending-terminal-without-resolution",
+    "file": "src/node/runtime-service-bound-creation-route.js",
+    "test": "test/node/runtime-service-bound-route.test.js",
+    "exitCode": 1,
+    "seconds": 1.928,
+    "sourceRestored": true
+  },
+  {
+    "id": "M11-unavailable-grant-wake-pending",
+    "file": "src/node/runtime-service-bound-creation-route.js",
+    "test": "test/node/runtime-service-bound-route.test.js",
+    "exitCode": 1,
+    "seconds": 2.061,
+    "sourceRestored": true
+  },
+  {
+    "id": "M12-corrupt-retirement-kept-redrivable",
+    "file": "src/node/runtime-service-bound-creation-route.js",
+    "test": "test/wasm-service/bound-creation-restart.integration.test.js",
+    "exitCode": 1,
+    "seconds": 9.23,
+    "sourceRestored": true
+  },
+  {
+    "id": "M13-arbitrary-lifecycle-code-permanent",
+    "file": "src/service/service-consensus-bootstrap.js",
+    "test": "test/node/runtime-service-bound-route.test.js",
+    "exitCode": 1,
+    "seconds": 2.151,
+    "sourceRestored": true
+  }
+]

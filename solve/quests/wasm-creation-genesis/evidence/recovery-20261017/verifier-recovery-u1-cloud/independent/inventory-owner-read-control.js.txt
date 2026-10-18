@@ -1,0 +1,14 @@
+// Independent positive control for the journal-only inventory boundary.
+test('independent U1 control: inventory never asks the resource authority to resolve a retained token', async (t) => {
+  const f = await createOriginFixture(t);
+  await f.prepare();
+  let authorityReads = 0;
+  const resolve = f.primary.resolveInstanceResource.bind(f.primary);
+  f.primary.resolveInstanceResource = async (...args) => {
+    authorityReads += 1;
+    return resolve(...args);
+  };
+  const rows = await f.manager().recoverPendingOperations({resolveServiceContext: () => null});
+  assert.equal(rows[0].status, 'INVENTORIED');
+  assert.equal(authorityReads, 0, 'INVENTORY_CROSSED_JOURNAL_ONLY_AUTHORITY_BOUNDARY');
+});

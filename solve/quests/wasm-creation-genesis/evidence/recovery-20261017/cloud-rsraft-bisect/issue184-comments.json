@@ -1,0 +1,60 @@
+[
+  {
+    "url": "https://github.com/psvensson/lagrange-lab/issues/184#issuecomment-6239963055",
+    "schema": "lagrange-lab-result/v1",
+    "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+    "request_id": "86bea49bf92b41cc8b1fb977f7104cdc",
+    "request_sha256": "80885360594f94e815d0e4ff62edb4540b510b717404163e4aef74191dfb5c31",
+    "status": "WAITING_APPROVAL",
+    "recorded_at": "2026-10-17T19:52:12Z",
+    "result": {
+      "reason": "LOCAL_PAUSE_OR_UNCERTAIN_PRIOR_EXECUTION"
+    }
+  },
+  {
+    "url": "https://github.com/psvensson/lagrange-lab/issues/184#issuecomment-6240660662",
+    "schema": "lagrange-lab-result/v1",
+    "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+    "request_id": "86bea49bf92b41cc8b1fb977f7104cdc",
+    "request_sha256": "80885360594f94e815d0e4ff62edb4540b510b717404163e4aef74191dfb5c31",
+    "status": "CLAIMED",
+    "recorded_at": "2026-10-17T20:39:32Z",
+    "result": {
+      "authorization": {
+        "expires_at": null,
+        "observed_at": "2026-10-17T20:39:32Z",
+        "observed_sha": "d55cb368d027d40c780ab8463aa6b1f254d2a540",
+        "ref": "refs/heads/wip/rs-raft-recovery-u1-1",
+        "source_repo": "psvensson/lagrange",
+        "type": "local-trusted-repository",
+        "until_revoked": true
+      }
+    }
+  },
+  {
+    "url": "https://github.com/psvensson/lagrange-lab/issues/184#issuecomment-6240678735",
+    "schema": "lagrange-lab-result/v1",
+    "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+    "request_id": "86bea49bf92b41cc8b1fb977f7104cdc",
+    "request_sha256": "80885360594f94e815d0e4ff62edb4540b510b717404163e4aef74191dfb5c31",
+    "status": "COMPLETE",
+    "recorded_at": "2026-10-17T20:41:01Z",
+    "result": {
+      "exit_code": 1,
+      "finished_at": "2026-10-17T20:41:01Z",
+      "hosts_requested": [
+        "adams-gamla"
+      ],
+      "local_run_directory": "/home/peter/.local/state/lagrange-lab/runs/86bea49bf92b41cc8b1fb977f7104cdc",
+      "log_bytes": 27220,
+      "log_sha256": "3570100726f390852d13fe720b91d5bd79d8d2165cdbb5be7bd3bf864ffbd46e",
+      "log_tail": "   + actual - expected\n[adams-gamla]             \n[adams-gamla]             + 'failed'\n[adams-gamla]             - 'running'\n[adams-gamla]             \n[adams-gamla]                 at file:///home/peter/projects/lagrange/test-output/placement-worktrees/d55cb368d027-mvcv1bm8-1151548/test/runtime/wasm-driver-contract-conformance.test.js:364:18\n[adams-gamla]                 at async AsyncProperty.run (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:28)\n[adams-gamla]                 at async asyncRunIt (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:21)\n[adams-gamla]                 at async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d55cb368d027-mvcv1bm8-1151548/test/runtime/wasm-driver-contract-conformance.test.js:355:7)\n[adams-gamla]                 at async Test.run (node:internal/test_runner/test:1054:7)\n[adams-gamla]                 at async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)\n[adams-gamla]             \n[adams-gamla]             Hint: Enable verbose mode in order to have the list of all failing values encountered during the run\n[adams-gamla]           code: 'ERR_TEST_FAILURE'\n[adams-gamla]           stack: |-\n[adams-gamla]             file:///home/peter/projects/lagrange/test-output/placement-worktrees/d55cb368d027-mvcv1bm8-1151548/test/runtime/wasm-driver-contract-conformance.test.js:364:18\n[adams-gamla]             async AsyncProperty.run (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:28)\n[adams-gamla]             async asyncRunIt (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:21)\n[adams-gamla]             async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d55cb368d027-mvcv1bm8-1151548/test/runtime/wasm-driver-contract-conformance.test.js:355:7)\n[adams-gamla]             async Test.run (node:internal/test_runner/test:1054:7)\n[adams-gamla]             async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)\n[adams-gamla]             buildError (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)\n[adams-gamla]             asyncThrowIfFailed (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)\n[adams-gamla]           ...\n[adams-gamla]         1..4\n[adams-gamla]     not ok 6 - property-based contract invariants\n[adams-gamla]       ---\n[adams-gamla]       duration_ms: 19.609636\n[adams-gamla]       type: 'suite'\n[adams-gamla]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/d55cb368d027-mvcv1bm8-1151548/test/runtime/wasm-driver-contract-conformance.test.js:316:3'\n[adams-gamla]       failureType: 'subtestsFailed'\n[adams-gamla]       error: '2 subtests failed'\n[adams-gamla]       code: 'ERR_TEST_FAILURE'\n[adams-gamla]       ...\n[adams-gamla]     1..6\n[adams-gamla] not ok 1 - WasmComponentDriver contract conformance\n[adams-gamla]   ---\n[adams-gamla]   duration_ms: 40.584914\n[adams-gamla]   type: 'suite'\n[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/d55cb368d027-mvcv1bm8-1151548/test/runtime/wasm-driver-contract-conformance.test.js:44:1'\n[adams-gamla]   failureType: 'subtestsFailed'\n[adams-gamla]   error: '3 subtests failed'\n[adams-gamla]   code: 'ERR_TEST_FAILURE'\n[adams-gamla]   ...\n[adams-gamla] 1..1\n[adams-gamla] # tests 30\n[adams-gamla] # suites 7\n[adams-gamla] # pass 23\n[adams-gamla] # fail 7\n[adams-gamla] # cancelled 0\n[adams-gamla] # skipped 0\n[adams-gamla] # todo 0\n[adams-gamla] # duration_ms 88.849674\n[adams-gamla] # time=873ms\n[adams-gamla] ok test/runtime/wasm-component-driver.test.js (61 assertions, 923ms)\n[adams-gamla] ok test/service/service-lifecycle-manager.test.js (26 assertions, 584ms)\n[adams-gamla] ok test/service/service-type-adapter.test.js (7 assertions, 320ms)\n[adams-gamla] ok test/service/service-consensus-creation-intent.test.js (29 assertions, 1310ms)\n[adams-gamla] ok test/wasm-service/time-binding-compilation.test.js (4 assertions, 2311ms)\n[adams-gamla] ok test/wasm-service/once-binding-compilation.test.js (16 assertions, 4348ms)\n[adams-gamla] ok test/wasm-service/wasm-creation-local-record.test.js (10 assertions, 1009ms)\n[adams-gamla] ok test/service/minimal-deployment-request-cell-routing.test.js (6 assertions, 7114ms)\n[adams-gamla] ok test/wasm-service/wasm-creation-bound-native.test.js (3 assertions, 3397ms)\n[adams-gamla] ok test/wasm-service/wasm-strong-write-v1-native-completion.test.js (2 assertions, 1929ms)\n[adams-gamla] ok test/wasm-service/wasm-service-lifecycle.test.js (63 assertions, 2863ms)\n[adams-gamla] # test-files total=13 pass=12 fail=1 assertions=277\n[adams-gamla] classified lane exclusive: 6 file(s), jobs=1\n[adams-gamla] thermal: ok cpu 58C (coretemp/Package id 0) nvme unmeasured\n[adams-gamla] ok test/wasm-service/bound-creation-handler-embedding.integration.test.js (3 assertions, 2148ms)\n[adams-gamla] ok test/wasm-service/bound-creation-restart.integration.test.js (17 assertions, 6201ms)\n[adams-gamla] ok test/wasm-service/wasm-creation-genesis.integration.test.js (14 assertions, 5503ms)\n[adams-gamla] ok test/wasm-service/wasm-creation-publication.integration.test.js (25 assertions, 7585ms)\n[adams-gamla] ok test/wasm-service/wasm-creation-reconciliation.integration.test.js (4 assertions, 2873ms)\n[adams-gamla] ok test/wasm-service/wasm-retained-bootstrap.integration.test.js (16 assertions, 3212ms)\n[adams-gamla] # test-files total=6 pass=6 fail=0 assertions=79\nlab test: adams-gamla: # test-files total=19 pass=18 fail=1 assertions=356\nlab test: adams-gamla: results copied to test-output/reports/test-results-adams-gamla.ndjson\n# test-files total=19 pass=18 fail=1 assertions=356\n",
+      "operation": "test-files",
+      "outcome": "FAIL",
+      "reason": null,
+      "scope": "executor result; not independent verification or merge certification",
+      "source_sha": "d55cb368d027d40c780ab8463aa6b1f254d2a540",
+      "tail_truncated": true
+    }
+  }
+]

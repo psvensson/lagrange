@@ -1,0 +1,9 @@
+
+> lagrange-server@0.2.6 test:file
+> node scripts/run-classified-test-files.js test/node/runtime-service-bound-route.test.js
+
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: unmeasurable (no sensors)
+ok test/node/runtime-service-bound-route.test.js (50 assertions, 1334ms)
+# test-files total=1 pass=1 fail=0 assertions=50

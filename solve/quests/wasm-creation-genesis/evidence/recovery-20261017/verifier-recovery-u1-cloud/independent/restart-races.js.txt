@@ -1,0 +1,68 @@
+// Independent witnesses; append to bound-creation-restart.integration.test.js.
+test('independent U1: an inventory suspended across shutdown cannot restart a resource after process custody transfers', async (t) => {
+  const e = await hostsOf(t);
+  const original = e.hosts[1];
+  await e.retain(original);
+  const host = await e.restartHost(original, {inventory: false});
+  const resumes = trackResumes(host);
+  const scanned = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  const recover = host.manager.recoverPendingOperations.bind(host.manager);
+  host.manager.recoverPendingOperations = async (...args) => {
+    const rows = await recover(...args);
+    scanned.resolve();
+    await release.promise;
+    return rows;
+  };
+  const inventory = host.handler.recoverRetainedCreations();
+  await scanned.promise;
+  await e.stopHost(host);
+  // An actual second composition now holds the same directory's real owner.
+  const successor = await e.composeHost(host.slot, {inventory: false});
+  const index = e.hosts.indexOf(host);
+  e.hosts[index] = successor;
+  e.clocks[index] = successor.timeSource;
+  t.after(async () => {
+    host.handler.shutdown();
+    await host.lifecycle.shutdownAll();
+  });
+  release.resolve();
+  await inventory;
+  for (let turn = 0; turn < 4; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+  t.diagnostic(JSON.stringify({oldStopped: host.stopped, resumedAfterCustodyTransfer: resumes,
+    oldMemo: memoOf(host), oldInFlight: [...host.handler.inProgressOperations],
+    newCompositionOwnsDirectory: Boolean(successor.processOwner)}));
+  assert.deepEqual(resumes, [], 'INVENTORY_REENTERED_AFTER_PROCESS_CUSTODY_TRANSFER');
+});
+
+test('independent U1: RETIRED restart redrive and coordinator REMOVE share one in-flight retirement', async (t) => {
+  const e = await publishedGroup(t);
+  const original = e.hosts[1];
+  crashOnce(e.metadata.primary, 'closeInstanceResource');
+  await removeAndSettle(e, original, 'independent-initial-remove',
+    OUTCOME.RUNTIME_SERVICE_REMOVE_HELD);
+  const host = await e.restartHost(original, {inventory: false});
+  const firstEntered = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  const stop = host.manager.stopReplica.bind(host.manager);
+  let entries = 0;
+  host.manager.stopReplica = async (...args) => {
+    entries += 1;
+    if (entries === 1) {
+      firstEntered.resolve();
+      await release.promise;
+    }
+    return stop(...args);
+  };
+  host.inventory = await host.handler.recoverRetainedCreations();
+  const reply = await e.dispatch(host, TYPE.REMOVE_REPLICA, 'independent-concurrent-remove');
+  assert.equal(reply.status, REPLY.IN_PROGRESS);
+  await firstEntered.promise;
+  for (let turn = 0; turn < 4; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+  const concurrentEntries = entries;
+  release.resolve();
+  await e.settle(() => memoOf(host)?.status === ReplicaStatus.REMOVED, 'independent retirement');
+  t.diagnostic(JSON.stringify({concurrentEntries, totalEntries: entries,
+    outcomes: host.outcomes, rowState: rowOf(e, host).state}));
+  assert.equal(concurrentEntries, 1, 'RESTART_REDRIVE_BYPASSED_EXISTING_REMOVE_SINGLE_FLIGHT');
+});

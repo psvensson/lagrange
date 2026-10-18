@@ -704,3 +704,23 @@ called known.
   (adams-gamla, 86bea49bf92b41cc8b1fb977f7104cdc), 38 files, queued behind the
   owner's reconciliation. Independent verification requested from the design
   vet (own worktree verify-1c).
+
+- 2026-10-18 cloud takeover checkpoint, owner requested commit/push/handover:
+  `HANDOVER-2026-10-18-cloud.md` is the current restart entry. Production/test
+  bytes remain original a251ce4fd. Independent U1 review completed REJECT
+  (F1 false reservation finality; F2 inventory lifetime/one-shot; F3 removal
+  serialization; F4 by-path task custody; F5 historical journal residue;
+  F6 distinct retained origins lost under one canonical memo). Full55-item
+  verdict and15 independent cases preserved;13 mutations killed. Required
+  local233/240 pass,7 exact-base inherited failures; fast-static and shards
+  green with real pinned data; inherited duplication/unused ratchets still red.
+  Finality correction has bounded design APPROVE but no implementation.
+  Inventory contract v2 is DRAFT with preliminary independent D1 REVISE
+  (known-plan redelivery must remain reachable after a successor owns memo).
+  Unit2/activation audits preserved; implementation/certification/merge pending.
+  Owner reconciled lab160. Original U1 lab183PASS/184FAIL; stage173-176
+  moving-ref mismatch means no proof, fixed-ref replacement requests prepared
+  but no confirmed submission. SetA claimed-good177FAIL needs new endpoint
+  classification. SetB178PASS,190FAIL,191PASS,192FAIL: current good9ff61abd,
+  bad9b53962f,35 first-parent commits; next c425ef42 not submitted. Candidate
+  e7a3525a5 and user's other checkout/branch were not modified.

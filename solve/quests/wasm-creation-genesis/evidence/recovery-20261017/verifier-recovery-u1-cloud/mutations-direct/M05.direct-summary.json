@@ -1,0 +1,22 @@
+{
+  "mutation": "M05",
+  "directFailure": "RETIRED_PLAN_NEVER_ENTERED_CANONICAL_STOP",
+  "log": "mutations-direct/M05.runner.log",
+  "line": 175,
+  "baseline": {
+    "tests": 18,
+    "pass": 18,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "mutant": {
+    "tests": 18,
+    "pass": 15,
+    "fail": 3,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  }
+}

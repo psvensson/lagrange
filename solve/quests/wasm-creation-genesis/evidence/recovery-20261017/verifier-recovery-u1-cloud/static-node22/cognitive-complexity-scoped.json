@@ -1,0 +1,26 @@
+{
+  "targetThreshold": 20,
+  "baselineCount": 152,
+  "scoped": true,
+  "targets": [
+    "src/node/runtime-service-bound-creation-route.js",
+    "src/node/runtime-service-handler-constants.js",
+    "src/node/runtime-service-handler.js",
+    "src/node/runtime-service-restart-inventory.js",
+    "src/runtime/service-runtime-consensus-bootstrap.js",
+    "src/runtime/service-runtime-lifecycle-operation-methods.js",
+    "src/runtime/wasm-component-driver-consensus.js",
+    "src/runtime/wasm-component-driver.js",
+    "src/service/adapters/runtime-service-adapter.js",
+    "src/service/service-consensus-bootstrap.js",
+    "src/service/service-consensus-creation-intent.js",
+    "src/service/service-lifecycle-manager.js",
+    "src/service/service-lifecycle-recovery.js",
+    "src/service/service-type-adapter.js",
+    "src/wasm-service/wasm-creation-opening.js",
+    "src/wasm-service/wasm-creation-retirement.js",
+    "src/wasm-service/wasm-service-lifecycle.js"
+  ],
+  "count": 0,
+  "violations": []
+}

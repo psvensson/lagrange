@@ -1,0 +1,9 @@
+
+> lagrange-server@0.2.6 test:file
+> node scripts/run-classified-test-files.js test/service/service-consensus-creation-intent.test.js
+
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: unmeasurable (no sensors)
+ok test/service/service-consensus-creation-intent.test.js (29 assertions, 1185ms)
+# test-files total=1 pass=1 fail=0 assertions=29

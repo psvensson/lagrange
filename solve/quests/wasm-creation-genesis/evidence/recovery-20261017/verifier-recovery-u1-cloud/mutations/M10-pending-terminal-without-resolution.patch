@@ -1,0 +1,10 @@
+--- a/src/node/runtime-service-bound-creation-route.js
++++ b/src/node/runtime-service-bound-creation-route.js
+@@ -400,6 +400,7 @@
+     return retained.outcome === CREATION.ADMISSION_RETAINED ? {retained} :
+       {decision: terminalOrTable(retained, READ_DECISION)};
+   }
++  return {decision: {kind: DECISION.COMPLETED}};
+   const resolved = await manager.resolveRetainedReservation(creationOperationId);
+   return resolved.outcome === CREATION.ADMISSION_RETAINED ? {retained: resolved} :
+     {decision: terminalOrTable(resolved, RESOLUTION_DECISION)};

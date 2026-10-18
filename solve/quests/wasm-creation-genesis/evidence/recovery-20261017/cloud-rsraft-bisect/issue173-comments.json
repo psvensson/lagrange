@@ -1,0 +1,14 @@
+[
+  {
+    "url": "https://github.com/psvensson/lagrange-lab/issues/173#issuecomment-6238040378",
+    "schema": "lagrange-lab-result/v1",
+    "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+    "request_id": "5722a13bbfa94eaca861139184120f74",
+    "request_sha256": "3f6e17ff65cb7ad9b4db0a35a8f2f70aff9c0e4a7e876d9f2251bf9386581a49",
+    "status": "WAITING_APPROVAL",
+    "recorded_at": "2026-10-17T17:51:44Z",
+    "result": {
+      "reason": "LOCAL_PAUSE_OR_UNCERTAIN_PRIOR_EXECUTION"
+    }
+  }
+]
