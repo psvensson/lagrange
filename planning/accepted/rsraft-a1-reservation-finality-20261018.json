@@ -1,0 +1,88 @@
+{
+  "version": 2,
+  "task_id": "rsraft-a1-reservation-finality-20261018",
+  "plan_revision": "rsraft-a1-finality-r1-20261018",
+  "expected_base_sha": "a1d187da74702db8b84fe928d0353c785fce2ac6",
+  "intent": "Implement only the independently approved reservation-finality subunit of existing Quest wasm-creation-genesis after the adopted A0 expected-red checkpoint. U1 remains REJECT for the larger implementation until separately verified. The execution base is the independently reviewed A0 checkpoint a1d187da74702db8b84fe928d0353c785fce2ac6, published on refs/heads/test/rs-raft-a0-finality-witness-20261018. Its production src tree97388f76ab4468da91b4a7eb9badc8b3c1804e62 is unchanged; the adopted test SHA25659d3627fdbbd784853ce21df5054ffd9460d59e5156ff0527bb426eae7c89147 binds its expected-red baseline. This is future implementation work; task planning acceptance and execution authorization remain separate.\n\nRead AGENTS.md -> rules -> router, the existing Quest seal and seven sealed verification templates, and recovery-20261017/u1-correction-proposal.md section lines11-46 (SHA25690d98bb2bae217faaeff848200bc684ccfc20a9ac4c2c1a22fc8b759b8a61d34) with u1-reservation-finality-bounded-verdict.md (SHA256257a6177e931bbbcc0f1d586418ef6ad7f279049aa9fcf6df23f7a8aed58e6a8). That bounded approval does not approve inventory/retirement correction.\n\nProduction writer allowlist: src/constants/service-instance.js; src/control-plane/owners/service-instance-state.js; src/control-plane/owners/service-instance-metadata.js; src/service/service-consensus-creation-intent.js. Needed tests only: existing creation-cas, selection-admission, creation-intent and runtime-service-bound-route tests plus two new explicit finality files named in proof. Required producer-derived metadata and append-only existing Quest evidence/log records are allowed. No B inventory/retirement/U2/activation/snapshot/runtime policy repair, Quest seal or terminal, main merge or release. Preserve all original evidence and all original29 tests plus adopted A0 witness assertions; no skipping/swallowing failures or weakening controls.\n\nEvery negative public reserve answer has explicit reservationRefusal SEALED|UNRESOLVED from the canonical constant. Only deterministic resource-state owner may establish SEALED from approved monotone facts; metadata defaults all other failures to UNRESOLVED. Intent consumer never infers finality from outcome strings. Only SEALED allows existing PENDING->CANCELLED CAS and confirming reread; UNRESOLVED leaves PENDING, returns UNKNOWN with original reason and keeps REMOVE_HELD. ADMITTED persists exact token before retirement. Independently observed terminal/corrupt journal identities retain existing distinct semantics.\n\nDecisive content-bound proof matrix:\nF1-delay-target: Exact same original delayed request; ADMITTED blocker and PENDING original journal; temporary TARGET_ALREADY_OWNED gives UNRESOLVED, UNKNOWN/reason and REMOVE_HELD, no cancellation; genuine blocker CLOSED; original later ADMITTED; exact token persisted before retirement.\nF1-delay-ordinal: Real INVALID_EXPECTED_STATE temporary blocker/futureordinal schedule; same ordered custody assertions, no cancelled-plus-live-admission residue.\nF1-future-binding: Missing valid deterministic future binding UNRESOLVED; actual later SELECTED exactly matches predicted binding; original later admission; contrast irrevocably missing oldbinding<=retainedversion SEALED and positive cancellation.\nstate-finality-census: Below-current ordinal; exact ordinal differentoperation; sameoperation different immutablebody; exact matching current/historical/CLOSED admission wins before refusal; retiringbinding newreservation refusal; representable-counter exhaustion vs encoded-size failure.\nmetadata-uncertainty: Capture/validation/encoding/read failure, unknown submission, absent affectedcount and exhausted definitive-zero CAS contention all explicit UNRESOLVED. Every negative public reserve answer has tag; unknown ack alone never SEALED.\nintent-custody: Only explicit SEALED permits existing PENDING\u2192CANCELLED CAS+confirming reread; terminal row race retains exact rowState; corrupt journalidentity distinct; exactadmission persisted before physicalretire; no fresh runtimepolicy during REMOVE; older/fake owner no SEALED stays UNKNOWN/PENDING/REMOVE_HELD.\ncontrols: All original29 intent cases plus adopted inventoryzero-resource-read and all owner/replay/concurrency controls remain green, no skip/todo/timeout/fixturefailure counted as proof.\nmutations: Kill both explicit tag production removal/misclassification and caller outcome-name inference replacement using intended delayed/futurebinding assertions under same profile; restore exact source after each. Mutation evidence independently reviewed; ordinary task proof green alone does not imply mutation proof.\n\nEvery step below must return ordinary green after the implementation. At the checkpoint the adopted three F1 witnesses are intentionally red: no fake successful A0 task is created. Missing new finality test files, zero/setup/ABI/thermal errors, malformed output, skips/todos/cancellations are failure. Retain full raw child results, source/runtime/native dependency hashes, complete controls and intended same-profile mutation results. Exact-head independent category-complete review is required before source approval; task completion is not parent Quest completion.\n\nNode22 ABI127 with compatible existing native SQLite dependency installation must be made available by its real owner in the isolated managed checkout; preparation does not install or rebuild dependencies. Use classified npm test:file with thermal guard; no direct node test-run substitute. Native RF3/full-U1/lab certification remains separate and is not claimed by this component proof. Shared creation-intent writes serialize with future B implementation using the same exclusive semantic key; B0 contract review can proceed independently. No synthetic accepted/proven state or self-review.\n",
+  "dependencies": [],
+  "authority": [
+    {
+      "key": "rsraft-u1/reservation-finality",
+      "mode": "exclusive"
+    },
+    {
+      "key": "rsraft-u1/creation-intent",
+      "mode": "exclusive"
+    },
+    {
+      "key": {
+        "scope": "foreign",
+        "repo": "psvensson/lagrange",
+        "kind": "epic",
+        "id": "raft-rs-full-cutover"
+      },
+      "mode": "read"
+    },
+    {
+      "key": {
+        "scope": "foreign",
+        "repo": "psvensson/lagrange",
+        "kind": "quest",
+        "id": "wasm-creation-genesis"
+      },
+      "mode": "read"
+    }
+  ],
+  "proof": {
+    "version": 1,
+    "steps": [
+      {
+        "id": "scoped-lint",
+        "argv": [
+          "node",
+          "node_modules/eslint/bin/eslint.js",
+          "src/constants/service-instance.js",
+          "src/control-plane/owners/service-instance-state.js",
+          "src/control-plane/owners/service-instance-metadata.js",
+          "src/service/service-consensus-creation-intent.js",
+          "test/control-plane/service-instance-creation-cas.test.js",
+          "test/control-plane/service-instance-selection-admission.test.js",
+          "test/service/service-consensus-creation-intent.test.js",
+          "test/node/runtime-service-bound-route.test.js",
+          "test/control-plane/service-instance-reservation-finality.test.js",
+          "test/service/service-consensus-reservation-finality.test.js"
+        ],
+        "cwd": ".",
+        "timeout_seconds": 180
+      },
+      {
+        "id": "owner-and-intent-controls",
+        "argv": [
+          "npm",
+          "run",
+          "test:file",
+          "--",
+          "test/control-plane/service-instance-creation-cas.test.js",
+          "test/control-plane/service-instance-selection-admission.test.js",
+          "test/service/service-consensus-creation-intent.test.js",
+          "test/node/runtime-service-bound-route.test.js"
+        ],
+        "cwd": ".",
+        "timeout_seconds": 600
+      },
+      {
+        "id": "finality-control-matrix",
+        "argv": [
+          "npm",
+          "run",
+          "test:file",
+          "--",
+          "test/control-plane/service-instance-reservation-finality.test.js",
+          "test/service/service-consensus-reservation-finality.test.js"
+        ],
+        "cwd": ".",
+        "timeout_seconds": 600
+      }
+    ]
+  }
+}
