@@ -8,7 +8,18 @@ doneWhen:
   probe: oracle
   args:
     file: solve/oracle/raft-rs-full-cutover.json
-quests: []
+quests:
+  - public-binding-two-partition-harness
+  - cutover-transition-authority-review
+  - message-group-fresh-identity-membership
+  - replicated-transaction-decision-and-apply
+  - tx1-single-path-alpha
+  - transaction-topology-admission-barrier
+  - snapshot-receiver-admission
+  - snapshot-lifecycle-staging-boundary
+  - replica-opening-history
+  - startup-refusal-cleanup-custody
+  - replica-cleanup-host-custody
 authorizes:
   - architecture
   - docs
@@ -23,6 +34,130 @@ authorizes:
 ---
 
 # Raft-rs full cutover
+
+## Current primary planning (2026-10-18)
+
+The owner designated this epic and its current lanes as the primary checkout's
+active work. [The planning index](raft-rs-full-cutover/current-primary-planning-2026-10-18.md)
+records the imported source, history and execution boundaries. Current scheduling
+supersedes older next-step instructions below; existing contracts and sealed
+acceptance remain binding.
+
+Only planning and historical proof have been refreshed here. Production/test bytes
+remain the earlier primary implementation plus its preserved staged work. Imported
+Quest terminals and receipts are source-bound historical evidence, not approval
+of this checkout's code. Use each lane's pinned newer execution base and fresh
+applicable verification. U1 remains **REJECTED**; no worker starts from this update.
+
+## Execution lanes and Harnessd tracking (2026-10-18)
+
+Start with [the cloud handover](raft-rs-full-cutover/HANDOVER-2026-10-18-cloud.md).
+The [execution lane register](raft-rs-full-cutover/execution-lanes-2026-10-18.md)
+assigns bounded work, dependencies, guidance/implementation profiles and next
+checkpoints. It is the current scheduling plan; the Quest seals and exact-head
+evidence still own acceptance. The independent U1 verdict remains **REJECT**.
+
+| Lane | Existing owner | Next checkpoint | Parallel start |
+| --- | --- | --- | --- |
+| A — reservation finality | `wasm-creation-genesis` | Test-only checkpoint, then bounded F1 implementation | With B design/review; coordinate shared files |
+| B — inventory and retirement | `wasm-creation-genesis` | Resolve D1 and finish independent contract/oracle review | With A; production waits for approval |
+| C — grant confirmation / U2 | `wasm-creation-genesis` | Resolve K-write versus event bound | Design now; implementation after corrected U1 approval |
+| D — production activation | Prospective activation Quest | Seal reviewed charter and meaningful red probe | Preparation now; activation after U2 and learner custody |
+| E — FreshMG | `message-group-fresh-identity-membership` | Exact candidate learner-cleanup review and owner repair | Isolated from A/B; compose before activation |
+| F — transactions / CDC | Existing TX1 Quests | Reconcile current exact-head evidence and remaining receipts | Independent owner work; coordinate shared runtime edits |
+| G — snapshot / custody | Existing snapshot and cleanup Quests | Audit current candidate obligations | Audit now; implement only an evidenced remaining gap |
+| L — lab / regressions | Evidence for the owning Quests | Classify #184 and Set A; reconcile uncertain submission | Analysis overlaps; deployed lab owner serializes runs |
+| I — integration / certification | This epic | Freeze and review a composed candidate | Preparation now; certification after prerequisites |
+
+[Harnessd setup and execution boundaries](raft-rs-full-cutover/harnessd-tracking-2026-10-18.md)
+describe project registration, exact checkout selection, accepted tasks and
+independent lanes. These are planned lanes; this documentation change starts no
+worker, accepts no Harnessd task and records no new Quest completion.
+
+## Closeout plan and lane composition (2026-10-17)
+
+The owner asked for the steps from the current lanes to a main merge as a
+tracked document. [`closeout-plan-2026-10-17.md`](raft-rs-full-cutover/closeout-plan-2026-10-17.md)
+measures where the work is (four diverged rs-raft branches plus one local
+integration lane; main moved only by trend records since 2026-10-04), orders
+six steps (finish the creation lane; compose one candidate; close or park the
+open quests; prove the frozen head with three certification formations;
+closeout report with independent verification; merge, post-merge publish,
+land the parked governance quests) with the acceptance each must show, and
+carries an append-only tracking section. It is an ordering of the binding
+criteria below, not a new authority.
+
+## Adversarial priorities and local continuation (2026-10-10)
+
+The operator requested an adversarial review of the codebase recommendations,
+durable tracking and specific instructions for the already-running capable
+local agent. The [final review](https://github.com/psvensson/lagrange/blob/a1c3cde54fcb46471791062bcae4a6000ae484e0/docs/development/adversarial-risk-review-2026-10-10.md)
+owns the recommendation inventory; the [local handoff](https://github.com/psvensson/lagrange/blob/a1c3cde54fcb46471791062bcae4a6000ae484e0/solve/epics/raft-rs-full-cutover/local-priorities-2026-10-10.md)
+owns the immediate work order. This supersedes the October 8 cloud execution
+assignment, while preserving its technical constraints and historical evidence.
+Inspect and preserve the actual local HEAD and work before applying the plan;
+PR115's `86d53bc79615a91ad70ff5b75b40ee091211519a` is an audit anchor.
+
+| Risk | Existing owner or staged unit | Required next action |
+| --- | --- | --- |
+| RS1 | Durable store / runtime Ready owner | Recorded verified on 80632c7e4; retain the four-witness evidence and its process-kill limit; recheck if relevant inputs change |
+| MG1 | Sealed `message-group-fresh-identity-membership` | D1/D2/D3 follow-up approved at 045c9130e; branch selection must consume the shared fact predicate before new promotion/abandonment. Final canonical/changed-discovery proof, CREATE and full replacement/recovery remain |
+| TX1 | Sealed, OPEN `replicated-transaction-decision-and-apply`, PR100 Leg A | Query seam and six owner choices agreed in owner-decisions-2026-10-10.md; finish rev7 and review its bounded delta, then implement both lanes toward one compatible cutover. Receipt 8 stays required |
+| TX2 | Prospective `transaction-topology-admission-barrier`, PR100 Leg B | After TX1, order admission/drain against cutover and preserve frozen terminal routes through restart; no participant remapping |
+| SN1 | Current checkpoint/install owners and preserved catch-up work | Distinguish FreshMG membership image from full SQL-partition recovery; preserve application, transaction, HLC and replay state before truncation |
+| RS2 | Durable-store diagnostic lifetime | Small bounded journal correction, independent of the whole snapshot program; preferably before long soak runs |
+
+RS1 status 2026-10-10 (local owner, candidate 80632c7e4c7da43fc84139e82dc8f7f336dec720):
+the required-sync correction (9c0ccb2de, owner decision O4) is in the candidate and
+its four existing witnesses pass there with normal locked dependencies -
+`test/raft/raft-rs-backend/durable-commit-sync.test.js` (FULL sync on every
+must-sync Ready before any message leaves, measured on the real connection with the
+real core; snapshot Ready; persist failure rolls back and restores the level, nested
+refusal, no downgrade; lifecycle rows), `operation-port-ready-recovery.test.js`
+(Ready persistence failure after take_ready is a typed host failure that keeps
+identity and recovers), `durable-ready-loop.test.js` (durable commit index at or
+past every entry before apply; a record with applied past commit is refused on
+restart; configuration and applied index are one write; an apply fault leaves the
+pair agreeing) and `evidence-o1-restart-equivalence.test.js` (M4 restart points x
+restart classes converge, including applied behind the committed prefix). No second
+implementation and no blanket FULL. Process-kill coverage only: not a power-loss or
+storage-controller certification.
+
+TX1 is now a declared, OPEN Quest, sealed at
+`df51b799acdb224253fdb3548ebdf8471d692f5b` against the local-visibility and follower-
+application reds. At reviewed head `6d24e3b4f`, revision 6 is rejected and the
+local owner reports revision 7 in progress. The
+[owner decisions](https://github.com/psvensson/lagrange/blob/a1c3cde54fcb46471791062bcae4a6000ae484e0/solve/quests/replicated-transaction-decision-and-apply/owner-decisions-2026-10-10.md)
+now agree the query seam, prepare-first single-participant behavior, conservative
+conflicts, guarded rowid direction, existing seed persistence wiring and local
+CDC ownership. Design acceptance and implementation proof remain outstanding.
+The [local handoff](https://github.com/psvensson/lagrange/blob/a1c3cde54fcb46471791062bcae4a6000ae484e0/solve/epics/raft-rs-full-cutover/local-priorities-2026-10-10.md#3-next-new-safety-unit-transaction-leg-a-then-leg-b)
+owns the concrete continuation. Isolate FreshMG and TX1 integration work while
+preserving the mixed branch; explicitly supersede obsolete runnable TX1 tests
+with stronger replacements and retain their original red evidence. All eight
+receipts remain required for TX1 land. TX2 remains a staged slot; reconcile
+the [existing PR100 design](https://github.com/psvensson/lagrange/blob/daddead73ffeb8c348663695ac2f0eaa8873cf75/solve/changes/0-3-prepared-transactions-split-merge/design.md)
+and actual local work before declaring it against a meaningful red. This does not widen the
+FreshMG seal, reopen historical transaction/snapshot Quests, or change this
+epic's sealed final oracle. The transaction slots track adjacent safety work;
+their relation to a particular release/cutover claim must be explicit before
+execution, not inferred as a new terminal requirement for an old Quest.
+
+The separate query lane keeps A1/A2 and its existing 0.3 feature scope. Correct
+stale A1 pointers through that owner; do not certify compatibility against an
+intermediate cutover. Source changes remain independently reviewed. Safety,
+physical fault-domain proof, source-own absence, exact-generation cleanup and
+membership/reservation debt retain their existing owners and acceptance bars.
+
+## Contract-first continuation (2026-10-08)
+
+The user approved a bounded contract-first correction and cloud takeover of
+this remaining cutover work. Follow [the active continuation plan](https://github.com/psvensson/lagrange/blob/a1c3cde54fcb46471791062bcae4a6000ae484e0/solve/epics/raft-rs-full-cutover/contract-first-2026-10-08.md) before further production changes.
+The first Quest is cutover-transition-authority-review; existing FreshMG
+acceptance is preserved, broader core convergence remains gated, and no
+intermediate SHA certifies A1-v13 compatibility. Distributed runs use GitHub
+Actions/GCP, with deterministic evidence first. Preserved salvage refs and
+PR #73 are not modified by this continuation.
 
 ## Owner decision
 
@@ -189,6 +324,89 @@ implementation already behaved that way.
 Prefer using the same operation port and runtime owner as partitions, with a
 message-group-specific application callback and explicitly owned local durable
 storage.
+
+Open obligation (owner decision 2026-10-04, identity-reuse safety fix): a
+message-group replica is no longer moved to a joiner (MOVE_REPLICA re-opened a
+committed raft identity on an empty log with no conf change: vote amnesia, a
+trapped core, two leaders in one term). Every joiner hosts its own group and
+mg-1 stays entirely on the seed. That is an availability regression accepted
+ONLY as an interim state: mg-1 is not replicated off the seed, and its leader
+runs the rebalancing scheduler, so seed loss leaves mg-1 without quorum. The
+next quest inside this epic is a fresh-identity ADD and promotion path for
+message groups (a new raft id as a learner, caught up, promoted through a
+committed conf change), never a revival of an identity-keeping move. The seed
+side's now-unreachable MOVE reservation/handoff machinery
+(`src/bootstrap/owners/move-replica-*`, its bootstrap-api and register-service
+handoff wiring) is deleted with that quest or before it.
+
+Amendment 2026-10-04 (corrective attempt after verifier
+identity-safety-review-1 rejected the identity-reuse safety fix; owner rulings
+of 2026-10-04 relayed by the lead):
+
+- mg-1 stays on the seed. Its committed state lives only on the seed's disk:
+  losing that disk loses mg-1's committed state, and there is no recovery
+  path. The seed's disk is a single point of durable loss for mg-1, and while
+  it is down every control-plane function mg-1 owns stops cluster-wide. A
+  replica held for reseed (`reseed-required`) has no recovery path either: no
+  reseed procedure and no release exist. The fresh-replica-identity ADD and
+  promotion path for message groups is therefore a closing condition of this
+  epic (see Completion criteria, part a), not a follow-up.
+- Until that path exists, every message-group membership change (ADD,
+  REPLACE, MOVE, and a CREATE_REPLICA arriving at a node) is refused with one
+  typed reason, at the rebalancer's planning and fail-closed at the
+  `MessageGroupServiceHandler`. A joiner hosting its own group and a durable
+  rejoin of a node's own replica remain allowed.
+- The legacy `POST /register-service` MOVE handoff is refused unconditionally
+  at the wire. Deleting the seed-side subsystem it fronted
+  (`src/bootstrap/owners/move-replica-*`, about 2.3k lines, its bootstrap-api
+  reservation endpoints and the register-service handoff wiring) is the
+  follow-up quest `move-replica-handoff-deletion` (part b). It shares code
+  with ordinary service registration, which must keep working.
+- Upgrade residual (verifier probe `probe-residual.mjs` R1): two message-group
+  replicas re-opened empty under names a joiner received by MOVE_REPLICA can
+  elect each other in term 1 before any heartbeat from the seed reaches them,
+  and an acknowledged write is lost when the seed returns. In-place upgrade
+  from every affected build is declared UNSUPPORTED (owner ruling A).
+  Affected builds (checked 2026-10-04 against git history, the npm registry
+  and Docker Hub): every commit from 30d64250a (2026-01-19, "bootable system
+  and working admin cli", the first commit carrying the MOVE_REPLICA
+  assignment strategy and the joiner's join-existing-group phase) up to and
+  excluding 9d006ff31 on this branch, which removed it. That covers every
+  release tag v0.1.0 through v0.2.5 (including v0.2.4-rc.0..rc.2 and v0.2.4,
+  which was tagged and never published), every published artifact (npm
+  `lagrange-server` 0.1.1, 0.2.4-rc.0, 0.2.4-rc.1, 0.2.4-rc.2 and 0.2.5;
+  Docker `psvensson/lagrange` 0.1.0, 0.1.1, 0.2.4-rc.2, 0.2.5 and `latest`;
+  the Helm chart shipped with 0.2.5), the unreleased 0.2.6 (CHANGELOG entry
+  of 2026-09-30, untagged), and origin/main up to at least d60c30921
+  (2026-10-04), which still contains the join-time MOVE. The affected STATE
+  is a node holding a message-group replica (`mg-<n>-r<k>`) whose name that
+  node did not create: it received it by MOVE_REPLICA at join, so after the
+  upgrade it re-opens under a raft id derived from that name with no history
+  of its own. A cluster in which no node ever joined (single seed) does not
+  carry the state. Clusters that ever ran such a build with a joined node are
+  rebuilt or dumped and restored; no in-place path is offered. Recorded in
+  `docs/current-capabilities.json` (limitation
+  `upgrade-from-message-group-move-builds`), the implementation-status
+  authority `audit:current-capabilities` checks. The sweep that would make
+  such an upgrade safe is the required follow-up quest
+  `message-group-foreign-replica-startup-sweep` (part b). No per-group
+  identity high-water mark is built.
+- Votes stay un-gated by the participation gate: refusing a vote while the
+  local gate is closed locked a group out for good (verifier reproduced
+  `evidence-o1-restart-equivalence` M4, H1 + self), and nothing in an empty
+  shell's local state separates it from a genuine founder at genesis.
+- Residual stated, not closed: the node transport does not authenticate a
+  sender (limitation `node-transport-security`), and raft ids derive from
+  replica names, so a sender that presents a member's id at a current term
+  can still hold a replica for reseed or step a leader down. The sender rule
+  stops unknown ids and stale terms only.
+- No document may present a mechanism that does not exist yet as an
+  operational exit (owner ruling B). The only exits today are rebuilding the
+  cluster or dump and restore; there is no per-replica reseed, release of a
+  `reseed-required` hold, fresh-identity re-add, or startup sweep yet. The
+  "recreate/reseed the replica under rs-raft" wording under "No compatibility
+  migration" names no existing per-replica procedure either: for legacy state
+  the exit is likewise recreating the cluster or dump and restore.
 
 ### Generic/worker/WASM replica helpers
 
@@ -405,6 +623,11 @@ state-machine concern and should be renamed/re-owned rather than removed.
 
 ## Completion criteria
 
+Structured 2026-10-04 (owner ruling C) in three parts. An epic-level finding of
+"no regression from main" does not clear a release-level blocker in part c.
+
+### a. Conditions required to close this epic
+
 This epic closes only when:
 
 - all active consensus groups are rs-raft;
@@ -419,4 +642,281 @@ This epic closes only when:
 - old dependency is absent;
 - active-surface zero-reference ratchet is green;
 - exact-main release proof is durably recorded;
-- Q0 reports READY for core convergence.
+- Q0 reports READY for core convergence;
+- (owner ruling B, 2026-10-04) a fresh-replica-identity ADD and promotion
+  path for message groups exists and is proven: a new raft id joins as a
+  learner, catches up and is promoted through a committed configuration
+  change, and mg-1 is replicated off the seed with it. Reason: the identity
+  reuse it replaces demonstrably lost acknowledged committed state; until it
+  exists the seed's disk is a single point of durable loss for mg-1, and a
+  replica held for reseed has no recovery path.
+
+### b. Follow-up quests created
+
+- `message-group-foreign-replica-startup-sweep` (REQUIRED; owner ruling A).
+  Statement: at node startup, before any message-group replica opens, every
+  message-group replica whose persisted identity this node did not create is
+  quarantined durably (held, never opened as a voter), once. Done when: the
+  verifier's R1 shape upgraded in place (two such replicas, seed unreachable
+  at their restart) opens no second leader and loses no acknowledged write,
+  witnessed on real ports; a genuine founder and a node's own durable rejoin
+  still open. Mandatory before an in-place upgrade from an affected version
+  is advertised anywhere. It does not build a per-group identity high-water
+  mark.
+- `move-replica-handoff-deletion`. Statement: delete the seed-side MOVE
+  reservation/handoff subsystem (`src/bootstrap/owners/move-replica-*`, its
+  bootstrap-api reservation endpoints and the register-service handoff
+  wiring) that the wire refusal of 2026-10-04 left unreachable, keeping
+  ordinary service registration. Done when: no reference to the subsystem
+  remains, ordinary registration witnesses stay green, and the wire refusal
+  witness is replaced by the absence of the route's MOVE branch.
+- `group-retirement-operator-retirement-fact` (owner ruling C, 2026-10-04).
+  Statement: an operator mechanism retires a member that lingers in a retired
+  group (a replica of a group retired as a unit whose own retirement never
+  completed) by writing an explicit, durable operator retirement fact for the
+  exact group and member identity. The fact is authoritative, idempotent and
+  auditable (who, when, which group/member identity), survives cleanup of the
+  group's workflow records, and is never inferred from a missing row. Done
+  when: retiring a lingering member through the fact ends it; replaying the
+  fact is a no-op; a member whose workflow records were cleaned up is still
+  refused without the fact and retired with it; the fact for one identity
+  never retires another. Until it lands this epic keeps the current behaviour:
+  a lingering member stays fail-closed indefinitely, with no timer as its
+  exit.
+- `single-unresolved-operation-owner` (owner decision 2026-10-05: the
+  invariant "at most one unresolved operation per partition" is NOT made
+  universal on `replace-in-flight-blocks-planning`; the deliberate
+  two-operation flows go to this one quest). Statement: one owner answers
+  "this partition has an unresolved operation", and every admission asks it;
+  today each lane derives part of the answer. A provisioning cohort is one
+  logical operation. Scope: the serial planner's deficit-transition
+  admissions (FAILED_REPLICA_REMOVE / TRUE_DEFICIT_ADD under
+  `isEligibleDuringDeficitTransition`); the COORDINATION_MISMATCH exemption,
+  replaced by an explicit supersede (fail the mismatched operation, then
+  plan); the missing coordinator lane for a REMOVE beside an unresolved ADD
+  on a priority partition; non-priority cleanup REMOVE while an operation is
+  pending; and the initial-provisioning fan-out
+  (`deferDispatchUntilBootstrapTopology`) as one multi-replica cohort
+  operation. Done when: one predicate
+  owns "unresolved operation exists" and every admission asks it, with a
+  witness per flow.
+
+### c. Conditions that remain 0.3 release blockers
+
+- (recorded from another branch's findings, 2026-10-04) prepared or
+  in-flight 2PC transactions are not awaited at split/merge cutover, so
+  atomicity is lost. The defect exists on main and belongs to the
+  transaction-replication owner. It blocks any release that claims split or
+  merge is supported with transactional work in flight: for 0.3 either that
+  owner's quest fixes it, or the supported-contract and release
+  documentation explicitly exclude transactional split/merge.
+- In-place upgrade from a build that moved message-group replicas (part b,
+  first quest) stays unsupported and stated so in the release documentation
+  until the sweep lands.
+- A finding of "no regression from main" at epic level (for example for the
+  2PC split/merge defect above, which main already has) does not clear a
+  release-level blocker: each item here is cleared only by its own fix or by
+  the release's supported-contract documentation excluding it.
+
+## Amendments
+
+- 2026-10-04, owner decision: ruling F2 (2026-09-26, a removed replica keeps
+  participating until its own removal commits) is amended - "a group retired
+  by a durable cutover exits AS A UNIT". F2 stays for every removal from a
+  continuing group; split/merge source dissolution and aborted split-child /
+  merge-target teardown retire the whole group on verified durable-workflow
+  evidence with no conf change, and the 30 s consensus-exit backstop is an
+  ERROR alarm only. Record:
+  [`f2-amendment-group-retirement-2026-10-04.md`](https://github.com/psvensson/lagrange/blob/a1c3cde54fcb46471791062bcae4a6000ae484e0/solve/epics/raft-rs-full-cutover/quest-records/replace-source-removal-owner/f2-amendment-group-retirement-2026-10-04.md).
+
+## Upgrade notes
+
+- 2026-10-05, workflow record generation (quest zero-liferaft-active-runtime,
+  group retirement as a unit; design
+  [`design-workflow-record-change-store-2026-10-05.md`](https://github.com/psvensson/lagrange/blob/a1c3cde54fcb46471791062bcae4a6000ae484e0/solve/epics/raft-rs-full-cutover/quest-records/replace-source-removal-owner/design-workflow-record-change-store-2026-10-05.md),
+  "Round 7"). Durable-format change: the `tables` system row gains
+  `partition_transition_generation INTEGER NOT NULL DEFAULT 0`. On open, the
+  tables-table column upgrade adds it to an existing `tables` partition
+  database (existing rows read 0); a view/cache/CDC row image without the
+  field decodes as 0. The first managed split/merge record write after the
+  upgrade moves a row to 1; nothing ever writes 0 again. The record metadata
+  gains `workflowAttempt` (absent = legacy attempt 0) and records may carry
+  `postCutoverIncidents`; group-retirement evidence gains `attempt`;
+  group-retired tombstones are version 3 (`attempt`; a version-2 file reads
+  as attempt 0). Constraint: a node that predates the column fails to apply a
+  replicated `tables` UPDATE naming it, and neither advances nor compares
+  the generation - upgrade every node holding a `tables` replica before any
+  managed split or merge runs (quiesce split/merge during a rolling upgrade).
+
+<!-- BEGIN identity-open-refusal-native-prevote 2026-10-05 -->
+### 2026-10-05: open-time identity refusal, native pre-vote / check-quorum (owner ruling)
+
+**Closing condition (part a).** pre_vote and check_quorum on for every group the
+port opens is a required closing condition of this epic. It is no longer an
+optional follow-up. `RAFT_RS_GROUP_TUNING` in
+`src/raft/raft-rs-group-constants.js` is the one place, and `tuningOf` builds
+every core config from it. The disruptive-server requirement rests on
+raft-rs's own lease:
+- a replica that heard a leader within its election timeout ignores a
+  higher-term vote or pre-vote request;
+- a pre-vote never moves a term;
+- a leader that hears no quorum for an election timeout steps down.
+
+A transfer's election (MsgTimeoutNow, CAMPAIGN_TRANSFER) bypasses the lease.
+
+**Tick ownership.** Every opened replica is ticked, so no lease freezes.
+- A COMMITTED joiner opens with itself as a **learner** of C_j. O2 still
+  holds: it names itself. The core does not campaign it: raft-rs
+  `tick_election` returns before MsgHup while the replica is not promotable.
+- The applied AddNode that opens the participation gate is the entry that
+  makes it a voter.
+- Configuration entries at or below j are folded into C_j and not applied to
+  the core again. Without the fold, a replay could walk C_j through
+  configurations the group never held, or leave it with no voter.
+- The gate still refuses campaigns, proposals, and a tick of a gated core that
+  is promotable (only a record written before this change).
+- Founder deferrals and the durable-rejoin deferral stay host decisions,
+  bounded by `startElection()` in the same phase. The joiner deferral is
+  removed.
+- B0: `quest-records/identity-open-refusal-native-prevote/b0-gate-ticking-finding-2026-10-05.md`.
+
+**Open-time refusal (primary amnesia detector).** The rule lives in one place,
+the participation gate's opening admission (`openingWithoutRecordRefusal`).
+An opening under any bootstrap source (GENESIS, COMMITTED, DURABLE_RECORD) is
+refused when both hold:
+- the replica holds no durable raft record;
+- the opening host's authoritative row proves the identity existed before.
+
+The refusal is reseed-required and is held durably by the replica's lifecycle
+owner, before the core is entered.
+
+The prior-existence facts:
+- **Seed and message-group founders:** a SERVICES row for this replica on this
+  node in a non-empty startup admission. The seed registers founder rows only
+  after the founders opened, so a first boot has an empty admission.
+- **CREATE_REPLICA targets (provisioning GENESIS retries, stale COMMITTED
+  stamps):** the authoritative SERVICES row read before this create writes any
+  status. It names this node in SYNCING or ACTIVE, statuses the target writes
+  only after its port opened. An unreadable row defers the create.
+
+**The open-to-SYNCING window is closed (verifier N3, follow-up of
+2026-10-05).** raft-rs 0.7 learners grant votes and a GENESIS founder votes
+from birth, so a target that voted between its port open and its SYNCING row,
+then lost its disk, reopened with no fact and could vote again in the same
+term (reproduced on c7a942030 with the real core: two leaders in term 1). Now:
+- The participation gate has an "identity unrecorded" state. A port opened
+  with `IDENTITY_RECORDED` (a promise) drops every delivered envelope
+  unstepped (a lost message to its sender, never a typed refusal), enters the
+  core for a status read only (no tick, campaign, proposal, transfer or
+  probe) and reports `gateOpen` false.
+- `createReplicaAsync` hands that promise whenever its prior-existence read
+  found no SYNCING/ACTIVE row on this node. Only the durable acknowledgement
+  of the SYNCING write releases it (an event, never a timer). The write now
+  runs through the status owner's bounded retry; a write that ends without it
+  logs the spent wait, the create fails, and its failure path closes a port
+  that never stepped anything. A crash before the write means the core never
+  voted, so the reopening (no fact) is safe; a crash after it carries the
+  fact and is refused reseed-required.
+- The row-driven peer admission no longer admits PENDING/CREATING rows as
+  voters. A target becomes a voter on the row change that records its fact,
+  so no group counts a voter that cannot answer, and the services
+  partition's own SYNCING write never waits on the replica it records (the
+  formation-order deadlock the gate would otherwise create at services RF
+  1->2 and at a REPLACE into {a, b, c-dead}).
+- Seed founders take their fact from the seed phase, not this path: every
+  founder of a system partition is on the seed node, rows are registered
+  after the founders opened, and a partial first boot defers every founder
+  without a row (`assertBootstrapPartitionStorageAdmission`), so no founder
+  re-founds empty while a sibling remembers its vote.
+
+**Property 2, exactly.** Vote and pre-vote requests from a never-member or a
+removed ex-member never move a healthy leader's term: measured with the real
+core at term+5, single or looped every 5/15/30 ticks to the leader and to the
+followers, the term stays unchanged, the leader holds 100% of rounds and every
+proposal commits; a removed ex-member kept running for 1500 rounds moves no
+term. What it does NOT cover: FABRICATED higher-term leader traffic (a
+heartbeat or append from a non-member: Byzantine, or a transport bug) deposes
+its receiver exactly as in plain raft-rs (`become_follower` on a higher-term
+append/heartbeat/snapshot, independent of pre_vote and check_quorum). Looped
+at one election timeout to every member it keeps the group leaderless
+indefinitely. Refusing it host-side would lock out a legitimate new leader the
+receiver has not applied yet; Raft does not defend against it. It is a
+residual, not covered.
+
+**O2 (DECIDED 2026-10-05).** B1 represents the joiner in its own opening
+configuration as a LEARNER of C_j. The owner confirmed that "self as learner
+of C_j" satisfies O2: it is role establishment, which O2 allows ("fix the
+gate / role establishment, not the bootstrap membership convention").
+
+**Latent conditions and limits, stated plainly:**
+- The raft-rs runtime does no log compaction, so no snapshot can carry a
+  joiner past its AddNode. If compaction is added, the gate must also open
+  from the snapshot's ConfState; otherwise a promotable gated core has its
+  ticks refused (the old lock-out).
+- A legacy record with a promotable gated core keeps its ticks refused. That
+  is acceptable only because in-place upgrade is unsupported.
+- A once-opened replica whose row later reads FAILED is not read as having
+  existed (FAILED is also written for creates that never opened). Reaching
+  it needs the replica DB lost without a restart; recorded, not closed.
+- Message-group replicas created outside the seed carry no prior-existence
+  fact at all (the open-time rule covers seed message-group founders only);
+  the message-group create handler opens and starts the replica before its
+  row exists - the same N3 window shape (owner: message-group create
+  handler).
+- One producer still admits a voter without the row filter: the partition
+  init loop (`partition-service-raft-init-base.js`, bootstrap peers proposed
+  when the opening replica already leads, e.g. a restored sole voter).
+  Under check_quorum a not-yet-recorded voter costs the measured leaderless
+  window: RF 1->2 and a REPLACE into {a, b, c-dead} lose their leader while
+  it is closed (94 and 106 of 120 rounds) and elect on its release; RF 2->3
+  and 3->4 with every member live keep their leader.
+- An RF=1 replica created by CREATE_REPLICA no longer campaigns inside
+  `initialize()`: its gate is closed until the SYNCING write, so it elects
+  on its first election timeout after the release.
+
+**Live formations: what the next ones should and must not show** (production
+timing: 20 ms ticks; election timeout 1 s / 3.5 s / 6 s for replica index
+0/1/2, randomized up to 2x). Expect more terms and leader changes during cold
+formation than before; each spurious check_quorum step-down costs about
+3.5-7 s leaderless, because followers holding the lease ignore pre-votes until
+their own timeout. Watch: raft-rs "stepped down to follower since quorum is
+not active"; "ignored ... lease is not expired"; leader changes per group in
+the first 5 minutes; terms above about 10; no-leader deferrals of critical
+system partitions; the new "Replica identity record never became durable"
+warning. Must NEVER show: `reseed-required` at open for a first-boot founder
+or a first create; a gated joiner whose applied index freezes while its group
+advances; a replica that stays `identityRecorded: false` after its SYNCING
+row is durable; two leaders in one term.
+
+**Live-formation watch list after the identity follow-up (verifier
+verify-identity-4, 2026-10-05).** Should show: creates logging SYNCING then
+AddNode within about 1 s (event-driven); create->voter-ready of a few seconds,
+the same as base within noise; an RF1 partition's first leader 1-2 s after its
+SYNCING; no new spent 60 s voter-ready waits attributable to the admission
+filter; a joiner's self-hosted message group electing only after its STOPPED
+services rows are registered. Must NOT show: two leaders in one term;
+`IDENTITY_RECORD_WAIT_SPENT` in a healthy formation (any occurrence is the
+ack-loss wedge or its residue: capture the row and the authority-read
+errors); a replica stuck with `identityRecorded:false` after its SYNCING row
+is visible; `participation-gate-identity-unrecorded` refusals after release;
+reseed-required at open for a first create or a first join; a leaderless group
+whose ConfState names a FAILED or closed target (the FAILED_REPLICA cure must
+REMOVE a terminally failed ADD/REPLACE target); a services group leaderless
+after a seed restart during an ADD (I3-i); a message-group replica of a joiner
+that leads before its services row is durable.
+
+**The heartbeat hold stays as the second net.** P1, the local-log guard's
+commit-beyond-log hold, is unchanged.
+
+**Removed.** The host's non-member vote/pre-vote refusal (C1, 08f2cbb87) is
+removed. Three host-side patches of it each opened a new hole, the last a
+permanent lock-out (verdict round 2, B1). The owner ruled out a fourth patch
+and any host-side lease.
+
+**Residuals, stated plainly:**
+- Fabricated higher-term leader traffic (above): not covered.
+- `from` is unauthenticated, so a forger naming a member id is not covered.
+- A held replica has no recovery path until the fresh-identity ADD exists.
+- With a quorum held or unreachable, the leader now steps down (no leader,
+  term unchanged under pre-vote) instead of leading a group that cannot commit.
+<!-- END identity-open-refusal-native-prevote 2026-10-05 -->

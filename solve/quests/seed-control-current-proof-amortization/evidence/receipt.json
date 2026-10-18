@@ -1,0 +1,33 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "seed-control-current-proof-amortization",
+  "status": "fail",
+  "base": "31f35ac44845b343131ac032ec3a5b44f7c649d7",
+  "receipts": [
+    {
+      "id": "original-causal-cost-measurement",
+      "passed": false,
+      "detail": "No current independent proof. Hosted diagnostics and source review do not authorize merge."
+    },
+    {
+      "id": "engaged-source-only-idempotent-control-negative",
+      "passed": false,
+      "detail": "No current independent proof. Hosted diagnostics and source review do not authorize merge."
+    },
+    {
+      "id": "correct-current-member-authority-and-fence",
+      "passed": false,
+      "detail": "No current independent proof. Hosted diagnostics and source review do not authorize merge."
+    },
+    {
+      "id": "unchanged-seed-1000-5000-ms-and-transaction-integration",
+      "passed": false,
+      "detail": "No current independent proof. Hosted diagnostics and source review do not authorize merge."
+    },
+    {
+      "id": "independent-static-distributed-composed-review",
+      "passed": false,
+      "detail": "No current independent proof. Hosted diagnostics and source review do not authorize merge."
+    }
+  ]
+}

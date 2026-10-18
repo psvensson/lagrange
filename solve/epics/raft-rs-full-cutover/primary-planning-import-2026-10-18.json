@@ -1,0 +1,1081 @@
+{
+  "kind": "planning-import-provenance",
+  "recordedOn": "2026-10-18",
+  "sourceCommit": "a1c3cde54fcb46471791062bcae4a6000ae484e0",
+  "previousPrimaryCommit": "0996d7576516af24f5f4d3e1e9aee37c775aabae",
+  "sourceMeaning": "Exact imported planning and historical proof; not approval of primary implementation bytes. Execute at the separately pinned task base.",
+  "u1ImplementationSubject": "a251ce4fd9c980a78c0fd33d8a5f873161f90870",
+  "composedCandidateAtHandover": "e7a3525a52afcc1e38218483f87ca3a74a421744",
+  "quests": [
+    {
+      "id": "cutover-transition-authority-review",
+      "sealedAt": "8a6f5b95d61b6fb1ef8ea4da0338a420af13f077",
+      "terminalStatuses": [],
+      "requiredProof": "solve/quests/cutover-transition-authority-review/evidence/receipt.json",
+      "sourceUrl": "https://github.com/psvensson/lagrange/tree/a1c3cde54fcb46471791062bcae4a6000ae484e0/solve/quests/cutover-transition-authority-review"
+    },
+    {
+      "id": "failed-create-cleanup-settlement-separation",
+      "sealedAt": "79d16909296d88397fb277da95138a23c37f3dd9",
+      "terminalStatuses": [
+        "solved"
+      ],
+      "requiredProof": "solve/quests/failed-create-cleanup-settlement-separation/evidence/receipt.json",
+      "sourceUrl": "https://github.com/psvensson/lagrange/tree/a1c3cde54fcb46471791062bcae4a6000ae484e0/solve/quests/failed-create-cleanup-settlement-separation"
+    },
+    {
+      "id": "failed-create-target-authoritative-cleanup",
+      "sealedAt": "79d16909296d88397fb277da95138a23c37f3dd9",
+      "terminalStatuses": [
+        "superseded"
+      ],
+      "requiredProof": "solve/quests/failed-create-target-authoritative-cleanup/evidence/receipt.json",
+      "sourceUrl": "https://github.com/psvensson/lagrange/tree/a1c3cde54fcb46471791062bcae4a6000ae484e0/solve/quests/failed-create-target-authoritative-cleanup"
+    },
+    {
+      "id": "message-group-c2-orphan-removal-alpha",
+      "sealedAt": "e6d43bc1acb128a2b83ac89c77a3ec400e7edb1f",
+      "terminalStatuses": [],
+      "requiredProof": "solve/quests/message-group-c2-orphan-removal-alpha/evidence/receipt.json",
+      "sourceUrl": "https://github.com/psvensson/lagrange/tree/a1c3cde54fcb46471791062bcae4a6000ae484e0/solve/quests/message-group-c2-orphan-removal-alpha"
+    },
+    {
+      "id": "message-group-fresh-identity-membership",
+      "sealedAt": "c16e73eb8ddb5077e6e1af5f68b22121c487d3bf",
+      "terminalStatuses": [],
+      "requiredProof": "solve/quests/message-group-fresh-identity-membership/evidence/receipt.json",
+      "sourceUrl": "https://github.com/psvensson/lagrange/tree/a1c3cde54fcb46471791062bcae4a6000ae484e0/solve/quests/message-group-fresh-identity-membership"
+    },
+    {
+      "id": "participant-release-held-recovery-continuation",
+      "sealedAt": "d35d8828c630d1b9675b47f511c477b3cc9ee991",
+      "terminalStatuses": [],
+      "requiredProof": "solve/quests/participant-release-held-recovery-continuation/evidence/receipt.json",
+      "sourceUrl": "https://github.com/psvensson/lagrange/tree/a1c3cde54fcb46471791062bcae4a6000ae484e0/solve/quests/participant-release-held-recovery-continuation"
+    },
+    {
+      "id": "participant-release-owner-cycle-removal",
+      "sealedAt": "77e091f64fb711fbc5ca40a7915ae85f01a5cf4e",
+      "terminalStatuses": [],
+      "requiredProof": "solve/quests/participant-release-owner-cycle-removal/evidence/receipt.json",
+      "sourceUrl": "https://github.com/psvensson/lagrange/tree/a1c3cde54fcb46471791062bcae4a6000ae484e0/solve/quests/participant-release-owner-cycle-removal"
+    },
+    {
+      "id": "partition-deferred-evaluation-obligation-scheduler",
+      "sealedAt": "7ee6712d12c3791570ec488bd9f1ac81a708f840",
+      "terminalStatuses": [
+        "solved"
+      ],
+      "requiredProof": "solve/quests/partition-deferred-evaluation-obligation-scheduler/evidence/receipt.json",
+      "sourceUrl": "https://github.com/psvensson/lagrange/tree/a1c3cde54fcb46471791062bcae4a6000ae484e0/solve/quests/partition-deferred-evaluation-obligation-scheduler"
+    },
+    {
+      "id": "partition-replication-restart-attempt-handoff",
+      "sealedAt": "125bb12e761ef48e7f7b5387540e524a8c6c1c80",
+      "terminalStatuses": [
+        "solved"
+      ],
+      "requiredProof": "solve/quests/partition-replication-restart-attempt-handoff/evidence/receipt.json",
+      "sourceUrl": "https://github.com/psvensson/lagrange/tree/a1c3cde54fcb46471791062bcae4a6000ae484e0/solve/quests/partition-replication-restart-attempt-handoff"
+    },
+    {
+      "id": "public-binding-two-partition-harness",
+      "sealedAt": "125bb12e761ef48e7f7b5387540e524a8c6c1c80",
+      "terminalStatuses": [
+        "solved"
+      ],
+      "requiredProof": "solve/quests/public-binding-two-partition-harness/evidence/receipt.json",
+      "sourceUrl": "https://github.com/psvensson/lagrange/tree/a1c3cde54fcb46471791062bcae4a6000ae484e0/solve/quests/public-binding-two-partition-harness"
+    },
+    {
+      "id": "raft-rs-single-path-partition-cutover",
+      "sealedAt": "6e4fe787c175d6da81ecf0540bbb404ee7be95de",
+      "terminalStatuses": [
+        "solved"
+      ],
+      "requiredProof": "solve/quests/raft-rs-single-path-partition-cutover/evidence/receipt.json",
+      "sourceUrl": "https://github.com/psvensson/lagrange/tree/a1c3cde54fcb46471791062bcae4a6000ae484e0/solve/quests/raft-rs-single-path-partition-cutover"
+    },
+    {
+      "id": "replica-cleanup-host-custody",
+      "sealedAt": "3ea4dd5053c5f60682cfc7bdcabfa32e0472682d",
+      "terminalStatuses": [],
+      "requiredProof": "solve/quests/replica-cleanup-host-custody/evidence/receipt.json",
+      "sourceUrl": "https://github.com/psvensson/lagrange/tree/a1c3cde54fcb46471791062bcae4a6000ae484e0/solve/quests/replica-cleanup-host-custody"
+    },
+    {
+      "id": "replica-lifecycle-durable-generation",
+      "sealedAt": "6831054b1916c9be4db6b13e2b8dec7ba2d03e0c",
+      "terminalStatuses": [
+        "solved"
+      ],
+      "requiredProof": null,
+      "sourceUrl": "https://github.com/psvensson/lagrange/tree/a1c3cde54fcb46471791062bcae4a6000ae484e0/solve/quests/replica-lifecycle-durable-generation"
+    },
+    {
+      "id": "replica-opening-history",
+      "sealedAt": "316e5fcdab102ddc562433139d73b3df62748590",
+      "terminalStatuses": [],
+      "requiredProof": "solve/quests/replica-opening-history/evidence/receipt.json",
+      "sourceUrl": "https://github.com/psvensson/lagrange/tree/a1c3cde54fcb46471791062bcae4a6000ae484e0/solve/quests/replica-opening-history"
+    },
+    {
+      "id": "replicated-transaction-decision-and-apply",
+      "sealedAt": "df51b799acdb224253fdb3548ebdf8471d692f5b",
+      "terminalStatuses": [],
+      "requiredProof": "solve/quests/replicated-transaction-decision-and-apply/evidence/receipt.json",
+      "sourceUrl": "https://github.com/psvensson/lagrange/tree/a1c3cde54fcb46471791062bcae4a6000ae484e0/solve/quests/replicated-transaction-decision-and-apply"
+    },
+    {
+      "id": "rs-raft-admitted-inbound-liveness",
+      "sealedAt": "01ccac020143d2a61887712431188e206e02f51e",
+      "terminalStatuses": [],
+      "requiredProof": "solve/quests/rs-raft-admitted-inbound-liveness/evidence/receipt.json",
+      "sourceUrl": "https://github.com/psvensson/lagrange/tree/a1c3cde54fcb46471791062bcae4a6000ae484e0/solve/quests/rs-raft-admitted-inbound-liveness"
+    },
+    {
+      "id": "runtime-captured-inbound-extent",
+      "sealedAt": "a7e821154f1039df82bfc73ef4f2e25e4fa0468d",
+      "terminalStatuses": [],
+      "requiredProof": "solve/quests/runtime-captured-inbound-extent/evidence/receipt.json",
+      "sourceUrl": "https://github.com/psvensson/lagrange/tree/a1c3cde54fcb46471791062bcae4a6000ae484e0/solve/quests/runtime-captured-inbound-extent"
+    },
+    {
+      "id": "runtime-ordering-completion-consumer-proof",
+      "sealedAt": "96985eb2ba0720b7f5e3b36c63ce10e3a2ff71b3",
+      "terminalStatuses": [],
+      "requiredProof": "solve/quests/runtime-ordering-completion-consumer-proof/evidence/receipt.json",
+      "sourceUrl": "https://github.com/psvensson/lagrange/tree/a1c3cde54fcb46471791062bcae4a6000ae484e0/solve/quests/runtime-ordering-completion-consumer-proof"
+    },
+    {
+      "id": "seed-control-current-proof-amortization",
+      "sealedAt": "68c88fcfdc0bd7e60cff543e295e3ffd15d172a4",
+      "terminalStatuses": [],
+      "requiredProof": "solve/quests/seed-control-current-proof-amortization/evidence/receipt.json",
+      "sourceUrl": "https://github.com/psvensson/lagrange/tree/a1c3cde54fcb46471791062bcae4a6000ae484e0/solve/quests/seed-control-current-proof-amortization"
+    },
+    {
+      "id": "seed-participant-release-applied-position-barrier",
+      "sealedAt": "77e091f64fb711fbc5ca40a7915ae85f01a5cf4e",
+      "terminalStatuses": [],
+      "requiredProof": "solve/quests/seed-participant-release-applied-position-barrier/evidence/receipt.json",
+      "sourceUrl": "https://github.com/psvensson/lagrange/tree/a1c3cde54fcb46471791062bcae4a6000ae484e0/solve/quests/seed-participant-release-applied-position-barrier"
+    },
+    {
+      "id": "seed-participant-release-failure-projection-alpha",
+      "sealedAt": "a3b5c63451c3cf968b3d7ec807a0381261d4b61f",
+      "terminalStatuses": [],
+      "requiredProof": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/receipt.json",
+      "sourceUrl": "https://github.com/psvensson/lagrange/tree/a1c3cde54fcb46471791062bcae4a6000ae484e0/solve/quests/seed-participant-release-failure-projection-alpha"
+    },
+    {
+      "id": "seed-participant-release-native-startup-census",
+      "sealedAt": "ffe35e77d51cbd4ba35fb30518de1307eaaa2eec",
+      "terminalStatuses": [
+        "superseded"
+      ],
+      "requiredProof": "solve/quests/seed-participant-release-native-startup-census/evidence/receipt.json",
+      "sourceUrl": "https://github.com/psvensson/lagrange/tree/a1c3cde54fcb46471791062bcae4a6000ae484e0/solve/quests/seed-participant-release-native-startup-census"
+    },
+    {
+      "id": "seed-registration-election-priority",
+      "sealedAt": "89365eb925f9aad16b063d9cb8a550ebef7a90d4",
+      "terminalStatuses": [
+        "solved"
+      ],
+      "requiredProof": "solve/quests/seed-registration-election-priority/evidence/receipt.json",
+      "sourceUrl": "https://github.com/psvensson/lagrange/tree/a1c3cde54fcb46471791062bcae4a6000ae484e0/solve/quests/seed-registration-election-priority"
+    },
+    {
+      "id": "seed-release-once-per-partition-cohort",
+      "sealedAt": "4431a5e94b4128f91576911a76071b0d03bbf962",
+      "terminalStatuses": [],
+      "requiredProof": "solve/quests/seed-release-once-per-partition-cohort/evidence/receipt.json",
+      "sourceUrl": "https://github.com/psvensson/lagrange/tree/a1c3cde54fcb46471791062bcae4a6000ae484e0/solve/quests/seed-release-once-per-partition-cohort"
+    },
+    {
+      "id": "snapshot-lifecycle-staging-boundary",
+      "sealedAt": "ba4e497581afb9cab2743d3263a9f19245a1b126",
+      "terminalStatuses": [],
+      "requiredProof": "solve/quests/snapshot-lifecycle-staging-boundary/evidence/receipt.json",
+      "sourceUrl": "https://github.com/psvensson/lagrange/tree/a1c3cde54fcb46471791062bcae4a6000ae484e0/solve/quests/snapshot-lifecycle-staging-boundary"
+    },
+    {
+      "id": "snapshot-receiver-admission",
+      "sealedAt": "4981aad1ed8eef5784f531a5cccc0b76b477ae01",
+      "terminalStatuses": [],
+      "requiredProof": "solve/quests/snapshot-receiver-admission/evidence/receipt.json",
+      "sourceUrl": "https://github.com/psvensson/lagrange/tree/a1c3cde54fcb46471791062bcae4a6000ae484e0/solve/quests/snapshot-receiver-admission"
+    },
+    {
+      "id": "startup-refusal-cleanup-custody",
+      "sealedAt": "0bc2ea4284e314d4b5dc00c07b8b0f135384c0af",
+      "terminalStatuses": [],
+      "requiredProof": "solve/quests/startup-refusal-cleanup-custody/evidence/receipt.json",
+      "sourceUrl": "https://github.com/psvensson/lagrange/tree/a1c3cde54fcb46471791062bcae4a6000ae484e0/solve/quests/startup-refusal-cleanup-custody"
+    },
+    {
+      "id": "storage-reservation-lost-outcome-idempotency",
+      "sealedAt": "125bb12e761ef48e7f7b5387540e524a8c6c1c80",
+      "terminalStatuses": [],
+      "requiredProof": "solve/quests/storage-reservation-lost-outcome-idempotency/evidence/receipt.json",
+      "sourceUrl": "https://github.com/psvensson/lagrange/tree/a1c3cde54fcb46471791062bcae4a6000ae484e0/solve/quests/storage-reservation-lost-outcome-idempotency"
+    },
+    {
+      "id": "tx1-single-path-alpha",
+      "sealedAt": "e6d43bc1acb128a2b83ac89c77a3ec400e7edb1f",
+      "terminalStatuses": [],
+      "requiredProof": "solve/quests/tx1-single-path-alpha/evidence/receipt.json",
+      "sourceUrl": "https://github.com/psvensson/lagrange/tree/a1c3cde54fcb46471791062bcae4a6000ae484e0/solve/quests/tx1-single-path-alpha"
+    },
+    {
+      "id": "wasm-creation-genesis",
+      "sealedAt": "f6c3698be77043ddd19e3a2a923a6d0ac6d2a9a9",
+      "terminalStatuses": [],
+      "requiredProof": "solve/quests/wasm-creation-genesis/evidence/receipt.json",
+      "sourceUrl": "https://github.com/psvensson/lagrange/tree/a1c3cde54fcb46471791062bcae4a6000ae484e0/solve/quests/wasm-creation-genesis"
+    },
+    {
+      "id": "wasm-writer-slots-v1",
+      "sealedAt": "cdcb9c95f4bdb90e709ed4d20058b51cb193625f",
+      "terminalStatuses": [],
+      "requiredProof": "solve/quests/wasm-writer-slots-v1/evidence/receipt.json",
+      "sourceUrl": "https://github.com/psvensson/lagrange/tree/a1c3cde54fcb46471791062bcae4a6000ae484e0/solve/quests/wasm-writer-slots-v1"
+    },
+    {
+      "id": "zero-liferaft-active-runtime",
+      "sealedAt": "0023e74ae4a0ab1df199ca8557a14c45fc4e6340",
+      "terminalStatuses": [],
+      "requiredProof": "solve/quests/zero-liferaft-active-runtime/evidence/receipt.json",
+      "sourceUrl": "https://github.com/psvensson/lagrange/tree/a1c3cde54fcb46471791062bcae4a6000ae484e0/solve/quests/zero-liferaft-active-runtime"
+    }
+  ],
+  "importedFiles": [
+    {
+      "path": "solve/epics/raft-rs-full-cutover.md",
+      "sourceSha256": "272a17b4821c4a9f88bc58b45de5055570f5e362f1964718fb09dd25b7f9860e",
+      "bytes": 47129,
+      "importedSha256": "c168f11b67f7b74780b44989cf2d169d04a86f5f9c9cb51c998553fbd1ac5c52",
+      "localPresentationOrAppendedFindingChanged": true
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/HANDOVER-2026-10-18-cloud.md",
+      "sourceSha256": "7ad3e06a708cc883acf4ece5f7bca6cc188ed128b175334f205390337a02269e",
+      "bytes": 21201,
+      "importedSha256": "7ad3e06a708cc883acf4ece5f7bca6cc188ed128b175334f205390337a02269e",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/closeout-plan-2026-10-17.md",
+      "sourceSha256": "fd80e3f62880173ada6f16ec5df8b876601b8dd3fd620f0f1d4d4e2822d6b1f8",
+      "bytes": 52905,
+      "importedSha256": "0dc06f2b1f055781aa78f288716f94d2b78d87e79423eca5158db0b4b1bc43ed",
+      "localPresentationOrAppendedFindingChanged": true
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/execution-lanes-2026-10-18.md",
+      "sourceSha256": "95b80abcc58f0b5289a18beb1d9d611de20e3adf0762adabeb99c433e5eeb7f2",
+      "bytes": 13683,
+      "importedSha256": "95b80abcc58f0b5289a18beb1d9d611de20e3adf0762adabeb99c433e5eeb7f2",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/harnessd-tracking-2026-10-18.md",
+      "sourceSha256": "09588af61085d56a64647cebeae03507108aaa1b3a697fab28cf8c6481d86d88",
+      "bytes": 9194,
+      "importedSha256": "7736391dbc4ef58eb9466db71d93b30fce78da04d937da0dec26159b0e69201a",
+      "localPresentationOrAppendedFindingChanged": true
+    },
+    {
+      "path": "solve/quests/cutover-transition-authority-review/evidence/receipt.json",
+      "sourceSha256": "a11a9a962090fca5f3c12a64cfb4202117f91c0e7d9d521b69f8e38b986782aa",
+      "bytes": 3439,
+      "importedSha256": "a11a9a962090fca5f3c12a64cfb4202117f91c0e7d9d521b69f8e38b986782aa",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/cutover-transition-authority-review/log.ndjson",
+      "sourceSha256": "cee55be2b7f3178dece4f6fab84633cdcce4993b75c2681a968f67e20fbc751d",
+      "bytes": 14008,
+      "importedSha256": "cee55be2b7f3178dece4f6fab84633cdcce4993b75c2681a968f67e20fbc751d",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/cutover-transition-authority-review/quest.json",
+      "sourceSha256": "e54bf9d7aff974a09a5eff090e559ac011d157bbd14898e04936acf07ef8b56a",
+      "bytes": 4689,
+      "importedSha256": "e54bf9d7aff974a09a5eff090e559ac011d157bbd14898e04936acf07ef8b56a",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/failed-create-cleanup-settlement-separation/evidence/receipt.json",
+      "sourceSha256": "18db1a585082368819689fc643e67de87cd1af9f3d17e552c84e7f53b382c3fb",
+      "bytes": 4950,
+      "importedSha256": "18db1a585082368819689fc643e67de87cd1af9f3d17e552c84e7f53b382c3fb",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/failed-create-cleanup-settlement-separation/log.ndjson",
+      "sourceSha256": "ae7cdd9d41a529cf8a7a51473f9632a0c556d5935b1bf7a1a1845ec034ec3ac6",
+      "bytes": 29585,
+      "importedSha256": "ae7cdd9d41a529cf8a7a51473f9632a0c556d5935b1bf7a1a1845ec034ec3ac6",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/failed-create-cleanup-settlement-separation/quest.json",
+      "sourceSha256": "3b32b2d313852bd4d160ef5b54abc2e860dd61ddcb2eba21e61464d20b7d7c77",
+      "bytes": 4925,
+      "importedSha256": "3b32b2d313852bd4d160ef5b54abc2e860dd61ddcb2eba21e61464d20b7d7c77",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/failed-create-target-authoritative-cleanup/evidence/receipt.json",
+      "sourceSha256": "e9178982fe5e14337ac268f8387c055857fb61614ee5b0fc0f7b586feac45ec3",
+      "bytes": 3909,
+      "importedSha256": "e9178982fe5e14337ac268f8387c055857fb61614ee5b0fc0f7b586feac45ec3",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/failed-create-target-authoritative-cleanup/log.ndjson",
+      "sourceSha256": "f275d416378abc6c91612141dedaa80d62f625a80ed02a2920293283b372804a",
+      "bytes": 28151,
+      "importedSha256": "f275d416378abc6c91612141dedaa80d62f625a80ed02a2920293283b372804a",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/failed-create-target-authoritative-cleanup/quest.json",
+      "sourceSha256": "ceef0cf55c451f51235c26f365615a474c00ec467402c2e0677f4ae175521141",
+      "bytes": 3251,
+      "importedSha256": "ceef0cf55c451f51235c26f365615a474c00ec467402c2e0677f4ae175521141",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/message-group-c2-orphan-removal-alpha/evidence/receipt.json",
+      "sourceSha256": "4b6470bd073b319c7f1898257954fdeb5c7719f7af0e10123ecac84ec000a7d6",
+      "bytes": 2630,
+      "importedSha256": "4b6470bd073b319c7f1898257954fdeb5c7719f7af0e10123ecac84ec000a7d6",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/message-group-c2-orphan-removal-alpha/log.ndjson",
+      "sourceSha256": "95c0a2465bd682ab6ded7c585b52d9b4a578ff5fa2d66510a60e86dde2c50981",
+      "bytes": 12879,
+      "importedSha256": "95c0a2465bd682ab6ded7c585b52d9b4a578ff5fa2d66510a60e86dde2c50981",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/message-group-c2-orphan-removal-alpha/quest.json",
+      "sourceSha256": "cf456f1ccc6a96b021e1c3bab8e9c9f0a98ae2c8ab5678e3ed43b27bfb3119f8",
+      "bytes": 4256,
+      "importedSha256": "cf456f1ccc6a96b021e1c3bab8e9c9f0a98ae2c8ab5678e3ed43b27bfb3119f8",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/message-group-fresh-identity-membership/evidence/receipt.json",
+      "sourceSha256": "d96925157216874ddf872485b24e0253f7603c0e8b8ac3bd41b40a8d2a7e14eb",
+      "bytes": 4564,
+      "importedSha256": "d96925157216874ddf872485b24e0253f7603c0e8b8ac3bd41b40a8d2a7e14eb",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/message-group-fresh-identity-membership/log.ndjson",
+      "sourceSha256": "866d860e71e07de8d716be1ab3e9ac6235067dee001544be6a78aab5d0e3dff1",
+      "bytes": 139487,
+      "importedSha256": "866d860e71e07de8d716be1ab3e9ac6235067dee001544be6a78aab5d0e3dff1",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/message-group-fresh-identity-membership/quest.json",
+      "sourceSha256": "be0560030eb18c50ae175ab3d96be3f33ad9dec6c98cfe1041de2409e2e6f41c",
+      "bytes": 10813,
+      "importedSha256": "be0560030eb18c50ae175ab3d96be3f33ad9dec6c98cfe1041de2409e2e6f41c",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/participant-release-held-recovery-continuation/evidence/receipt.json",
+      "sourceSha256": "82e1c4b473b5c9e96d63557ec64ac9c16b53c94b90084f6ab5e1138ff6925c3f",
+      "bytes": 4223,
+      "importedSha256": "82e1c4b473b5c9e96d63557ec64ac9c16b53c94b90084f6ab5e1138ff6925c3f",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/participant-release-held-recovery-continuation/log.ndjson",
+      "sourceSha256": "11151070d7f57c706fe1e1616279aa1af99e1e6884757979acad4fba8632af13",
+      "bytes": 23802,
+      "importedSha256": "11151070d7f57c706fe1e1616279aa1af99e1e6884757979acad4fba8632af13",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/participant-release-held-recovery-continuation/quest.json",
+      "sourceSha256": "0a81766613c3aaa867e15c17e49afb0d78abc45a625ede56c60ec57b0d0e23bc",
+      "bytes": 4054,
+      "importedSha256": "0a81766613c3aaa867e15c17e49afb0d78abc45a625ede56c60ec57b0d0e23bc",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/participant-release-owner-cycle-removal/evidence/receipt.json",
+      "sourceSha256": "861823138135565f1de33d2cd9499ccff8c5d1d0afda018219d643b93a5a67c8",
+      "bytes": 1480,
+      "importedSha256": "861823138135565f1de33d2cd9499ccff8c5d1d0afda018219d643b93a5a67c8",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/participant-release-owner-cycle-removal/log.ndjson",
+      "sourceSha256": "cffd1103b6f38b877ec83886565d72c5dcd81760d552c30e6b9338230817196c",
+      "bytes": 5070,
+      "importedSha256": "cffd1103b6f38b877ec83886565d72c5dcd81760d552c30e6b9338230817196c",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/participant-release-owner-cycle-removal/quest.json",
+      "sourceSha256": "41219b016c925a7fe05e1297b7cfee5931f727dc94e765ed2005cd16818b1922",
+      "bytes": 3118,
+      "importedSha256": "41219b016c925a7fe05e1297b7cfee5931f727dc94e765ed2005cd16818b1922",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/partition-deferred-evaluation-obligation-scheduler/evidence/receipt.json",
+      "sourceSha256": "9a17de0a87f93451aee6351fe7b09f8bf60b4b63a66180b2c5c99c97a879b4fc",
+      "bytes": 868,
+      "importedSha256": "9a17de0a87f93451aee6351fe7b09f8bf60b4b63a66180b2c5c99c97a879b4fc",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/partition-deferred-evaluation-obligation-scheduler/log.ndjson",
+      "sourceSha256": "bfbb0ac766f70018f7937525fad7f7facb2cffe53637ca43c66fc9d55f279885",
+      "bytes": 10650,
+      "importedSha256": "bfbb0ac766f70018f7937525fad7f7facb2cffe53637ca43c66fc9d55f279885",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/partition-deferred-evaluation-obligation-scheduler/quest.json",
+      "sourceSha256": "e914335ffdfa6466d4c27fb8cf4f086802a2e0a0c0017af1041abd90aa68da63",
+      "bytes": 2665,
+      "importedSha256": "e914335ffdfa6466d4c27fb8cf4f086802a2e0a0c0017af1041abd90aa68da63",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/partition-replication-restart-attempt-handoff/evidence/receipt.json",
+      "sourceSha256": "642cdcb6a1d5db8a93e2dc1145dd0a150d14d817f93f4094763cda6c4ae64bbb",
+      "bytes": 912,
+      "importedSha256": "642cdcb6a1d5db8a93e2dc1145dd0a150d14d817f93f4094763cda6c4ae64bbb",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/partition-replication-restart-attempt-handoff/log.ndjson",
+      "sourceSha256": "46d8190a02b1e51869fc7d9193cd5f83a0dde2e4975a179179f6b98684ce6629",
+      "bytes": 43469,
+      "importedSha256": "46d8190a02b1e51869fc7d9193cd5f83a0dde2e4975a179179f6b98684ce6629",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/partition-replication-restart-attempt-handoff/quest.json",
+      "sourceSha256": "04d1e46d9b909397038e61b48337cc30491acf98641d00135feccebe3ea38278",
+      "bytes": 3309,
+      "importedSha256": "04d1e46d9b909397038e61b48337cc30491acf98641d00135feccebe3ea38278",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/public-binding-two-partition-harness/evidence/receipt.json",
+      "sourceSha256": "9d1e19b0863081d60347a87a9446b9fe922af212fd498f39c679cc484072a781",
+      "bytes": 3195,
+      "importedSha256": "9d1e19b0863081d60347a87a9446b9fe922af212fd498f39c679cc484072a781",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/public-binding-two-partition-harness/log.ndjson",
+      "sourceSha256": "0d838115dc79613f10371897b4235961fafea05385a906f7609f33c257e49d7e",
+      "bytes": 19931,
+      "importedSha256": "0d838115dc79613f10371897b4235961fafea05385a906f7609f33c257e49d7e",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/public-binding-two-partition-harness/quest.json",
+      "sourceSha256": "02e1b16e67db98ab432c813206afeb01e283a0749db501a701533876f3e0f520",
+      "bytes": 3727,
+      "importedSha256": "02e1b16e67db98ab432c813206afeb01e283a0749db501a701533876f3e0f520",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/raft-rs-single-path-partition-cutover/evidence/receipt.json",
+      "sourceSha256": "d23714986be33e64436dba15ab72b227d4ff1303b88af5adf8213d39b976d12c",
+      "bytes": 3240,
+      "importedSha256": "d23714986be33e64436dba15ab72b227d4ff1303b88af5adf8213d39b976d12c",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/raft-rs-single-path-partition-cutover/log.ndjson",
+      "sourceSha256": "8763d9302a03a34a97ca99d4f7094e80acf7db94ebde3e41f4f7b8b6f1d0a009",
+      "bytes": 26141,
+      "importedSha256": "8763d9302a03a34a97ca99d4f7094e80acf7db94ebde3e41f4f7b8b6f1d0a009",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/raft-rs-single-path-partition-cutover/quest.json",
+      "sourceSha256": "e8543019f2c5944f1fa0c088b51a133a593570bc6d5ea3448a2bca2a99d3889d",
+      "bytes": 4872,
+      "importedSha256": "e8543019f2c5944f1fa0c088b51a133a593570bc6d5ea3448a2bca2a99d3889d",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/replica-cleanup-host-custody/evidence/receipt.json",
+      "sourceSha256": "3463df79954507e0213f3edaeb07e48aae562dc2e0dd650d7f2bb632d873af42",
+      "bytes": 543,
+      "importedSha256": "3463df79954507e0213f3edaeb07e48aae562dc2e0dd650d7f2bb632d873af42",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/replica-cleanup-host-custody/log.ndjson",
+      "sourceSha256": "e4139c72920914abefa3af2bf1bb25b77601c0dc5b5408884a24cd60978793d5",
+      "bytes": 4323,
+      "importedSha256": "e4139c72920914abefa3af2bf1bb25b77601c0dc5b5408884a24cd60978793d5",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/replica-cleanup-host-custody/quest.json",
+      "sourceSha256": "795473eb80897f9424f2317f92dbbb20c5240f3beae134b1047b3f54126d80dd",
+      "bytes": 1745,
+      "importedSha256": "795473eb80897f9424f2317f92dbbb20c5240f3beae134b1047b3f54126d80dd",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/replica-lifecycle-durable-generation/log.ndjson",
+      "sourceSha256": "70bd9552d07d7383edde7d3fbe66ba129c7f53514f6dfc7fd418793c99831a4e",
+      "bytes": 47100,
+      "importedSha256": "70bd9552d07d7383edde7d3fbe66ba129c7f53514f6dfc7fd418793c99831a4e",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/replica-lifecycle-durable-generation/quest.json",
+      "sourceSha256": "fd316ae1919640d97051bb4d1ad2edca3a0675f4c9cecb61b23be704167f79ba",
+      "bytes": 4453,
+      "importedSha256": "fd316ae1919640d97051bb4d1ad2edca3a0675f4c9cecb61b23be704167f79ba",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/replica-opening-history/evidence/receipt.json",
+      "sourceSha256": "cedfe9a68446c7a6584393686955340da861315fe96a3a11ae380e747124db39",
+      "bytes": 801,
+      "importedSha256": "cedfe9a68446c7a6584393686955340da861315fe96a3a11ae380e747124db39",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/replica-opening-history/log.ndjson",
+      "sourceSha256": "968290be3ddbbb170292a673ab05e941eda6a64047f40123c99e3a8158309217",
+      "bytes": 2303,
+      "importedSha256": "968290be3ddbbb170292a673ab05e941eda6a64047f40123c99e3a8158309217",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/replica-opening-history/quest.json",
+      "sourceSha256": "d37a784bc53481fdef765d84436996e23c0036512acf291024cf98708e099139",
+      "bytes": 2264,
+      "importedSha256": "d37a784bc53481fdef765d84436996e23c0036512acf291024cf98708e099139",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/replicated-transaction-decision-and-apply/evidence/receipt.json",
+      "sourceSha256": "44432b320c4751cf590cd74cfefc197556e74df93c3d663a9b9b5ef894dc5c0d",
+      "bytes": 16492,
+      "importedSha256": "44432b320c4751cf590cd74cfefc197556e74df93c3d663a9b9b5ef894dc5c0d",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/replicated-transaction-decision-and-apply/log.ndjson",
+      "sourceSha256": "8133add53b336ad2f47c4babffa652a950f4589297a008461737ec479c3ff56b",
+      "bytes": 381048,
+      "importedSha256": "8133add53b336ad2f47c4babffa652a950f4589297a008461737ec479c3ff56b",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/replicated-transaction-decision-and-apply/quest.json",
+      "sourceSha256": "fb4dea7c7bc98b57dd6afaf2a195412d2b67fbd2f8d490539f8c8fbd64c7193f",
+      "bytes": 3519,
+      "importedSha256": "fb4dea7c7bc98b57dd6afaf2a195412d2b67fbd2f8d490539f8c8fbd64c7193f",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/rs-raft-admitted-inbound-liveness/evidence/receipt.json",
+      "sourceSha256": "cd6d590c173abf609ec65dda54b2715fa4971fc9ccc98295bfe785d40968aea4",
+      "bytes": 1746,
+      "importedSha256": "cd6d590c173abf609ec65dda54b2715fa4971fc9ccc98295bfe785d40968aea4",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/rs-raft-admitted-inbound-liveness/log.ndjson",
+      "sourceSha256": "18fde8551551cc701c4e50cb64a86e7529d029797335e87d4d460b7ace20442a",
+      "bytes": 1196,
+      "importedSha256": "18fde8551551cc701c4e50cb64a86e7529d029797335e87d4d460b7ace20442a",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/rs-raft-admitted-inbound-liveness/quest.json",
+      "sourceSha256": "b25c280c11beb29c1c4a0137238a7ddb4cb89abd2f38c96c93d62487b97cd896",
+      "bytes": 4231,
+      "importedSha256": "b25c280c11beb29c1c4a0137238a7ddb4cb89abd2f38c96c93d62487b97cd896",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/runtime-captured-inbound-extent/evidence/receipt.json",
+      "sourceSha256": "52e1ba53bd3040d9fd351c8736af197e3b22f62d8dbcbf84745f67a0afefaaaf",
+      "bytes": 1806,
+      "importedSha256": "52e1ba53bd3040d9fd351c8736af197e3b22f62d8dbcbf84745f67a0afefaaaf",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/runtime-captured-inbound-extent/log.ndjson",
+      "sourceSha256": "81422fb033eee2eec791b5815c0c3f8b74a64090c5718daa4a937284acf0a26e",
+      "bytes": 11434,
+      "importedSha256": "81422fb033eee2eec791b5815c0c3f8b74a64090c5718daa4a937284acf0a26e",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/runtime-captured-inbound-extent/quest.json",
+      "sourceSha256": "193516223dc8c26916ce261427127fdda93f595ccd5f6a2d91eb80319bd9b2da",
+      "bytes": 2304,
+      "importedSha256": "193516223dc8c26916ce261427127fdda93f595ccd5f6a2d91eb80319bd9b2da",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/runtime-ordering-completion-consumer-proof/evidence/receipt.json",
+      "sourceSha256": "fe6e076282c9e2a46ed2d70ae0dab830586030bfd2286b10c0dc57465bf20faf",
+      "bytes": 1597,
+      "importedSha256": "fe6e076282c9e2a46ed2d70ae0dab830586030bfd2286b10c0dc57465bf20faf",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/runtime-ordering-completion-consumer-proof/log.ndjson",
+      "sourceSha256": "39edc85034e1e4d348ba65c28363b6e866da6c5638c4c8287332c73be444fefa",
+      "bytes": 9157,
+      "importedSha256": "39edc85034e1e4d348ba65c28363b6e866da6c5638c4c8287332c73be444fefa",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/runtime-ordering-completion-consumer-proof/quest.json",
+      "sourceSha256": "c4cc6824a6c57cc44adbe2b109ed015db0432263f7005f883816c037317afbcf",
+      "bytes": 2277,
+      "importedSha256": "c4cc6824a6c57cc44adbe2b109ed015db0432263f7005f883816c037317afbcf",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/seed-control-current-proof-amortization/evidence/receipt.json",
+      "sourceSha256": "e4f93163b4ac319fc176804d0d89f305d748bdcbbdf3a23246b2fb45d0daf249",
+      "bytes": 1208,
+      "importedSha256": "e4f93163b4ac319fc176804d0d89f305d748bdcbbdf3a23246b2fb45d0daf249",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/seed-control-current-proof-amortization/log.ndjson",
+      "sourceSha256": "b2a1c204c756427b59e341a3b577ea4ac06b8bfd480e277bf520f35f14c35b4b",
+      "bytes": 9744,
+      "importedSha256": "b2a1c204c756427b59e341a3b577ea4ac06b8bfd480e277bf520f35f14c35b4b",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/seed-control-current-proof-amortization/quest.json",
+      "sourceSha256": "1dfb0b1b8024ddba157453f3cef343cc6081bd0e9bf28aac55b9085b627faf2c",
+      "bytes": 4445,
+      "importedSha256": "1dfb0b1b8024ddba157453f3cef343cc6081bd0e9bf28aac55b9085b627faf2c",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/evidence/receipt.json",
+      "sourceSha256": "31e258896dd3b7bfb7bc8bc6df677b82d21201ade2c6f1158589dc8c3190f9ef",
+      "bytes": 1727,
+      "importedSha256": "31e258896dd3b7bfb7bc8bc6df677b82d21201ade2c6f1158589dc8c3190f9ef",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/log.ndjson",
+      "sourceSha256": "2c1d5aeb248136719fece7f26f184b312cfa3ccad5c1aeeca576a764a45ea24f",
+      "bytes": 82528,
+      "importedSha256": "2c1d5aeb248136719fece7f26f184b312cfa3ccad5c1aeeca576a764a45ea24f",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/seed-participant-release-applied-position-barrier/quest.json",
+      "sourceSha256": "ee7a35c058ac1dd439e6cf247ac68c9490b86d0f0d31e9f4842fff7eb7820611",
+      "bytes": 5952,
+      "importedSha256": "ee7a35c058ac1dd439e6cf247ac68c9490b86d0f0d31e9f4842fff7eb7820611",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/receipt.json",
+      "sourceSha256": "a52e3af147599e5e7f4133700913525d1a6a4c4c151cc72216df6e79d3577a57",
+      "bytes": 4862,
+      "importedSha256": "a52e3af147599e5e7f4133700913525d1a6a4c4c151cc72216df6e79d3577a57",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/log.ndjson",
+      "sourceSha256": "6fe3c3e8a38d68f46f5ceab075373347068c958e1ca56de51f0d0b344be54ec9",
+      "bytes": 12924,
+      "importedSha256": "6fe3c3e8a38d68f46f5ceab075373347068c958e1ca56de51f0d0b344be54ec9",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/seed-participant-release-failure-projection-alpha/quest.json",
+      "sourceSha256": "2e576c3e3f14c1f1a59d8ade8225bf4cf4474244b05f5b5028dcd99a3483e9ed",
+      "bytes": 7387,
+      "importedSha256": "2e576c3e3f14c1f1a59d8ade8225bf4cf4474244b05f5b5028dcd99a3483e9ed",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/seed-participant-release-native-startup-census/evidence/receipt.json",
+      "sourceSha256": "6b4b11db80093a07ec34a6b9368873e217eb66c14052bc6e13d1a65a6f96b201",
+      "bytes": 1865,
+      "importedSha256": "6b4b11db80093a07ec34a6b9368873e217eb66c14052bc6e13d1a65a6f96b201",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/seed-participant-release-native-startup-census/log.ndjson",
+      "sourceSha256": "2b0f6b8e8d6209b30c24ddc2b669f87650436551340e203c36191fdecfa5face",
+      "bytes": 9893,
+      "importedSha256": "2b0f6b8e8d6209b30c24ddc2b669f87650436551340e203c36191fdecfa5face",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/seed-participant-release-native-startup-census/quest.json",
+      "sourceSha256": "5a473e2ea7cbf162818393988eb3906c3ef187d0d03637909689e9298e818ea8",
+      "bytes": 4484,
+      "importedSha256": "5a473e2ea7cbf162818393988eb3906c3ef187d0d03637909689e9298e818ea8",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/seed-registration-election-priority/evidence/receipt.json",
+      "sourceSha256": "388cef47110702854e8fedf8de49dc96517098253a562abd3f57e6c8723bbaa5",
+      "bytes": 4312,
+      "importedSha256": "388cef47110702854e8fedf8de49dc96517098253a562abd3f57e6c8723bbaa5",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/seed-registration-election-priority/log.ndjson",
+      "sourceSha256": "27a4562f9e2bbd13eac95533c16621b9a53cd9d517217a52a1d174e50c5f6027",
+      "bytes": 7259,
+      "importedSha256": "27a4562f9e2bbd13eac95533c16621b9a53cd9d517217a52a1d174e50c5f6027",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/seed-registration-election-priority/quest.json",
+      "sourceSha256": "61ef41468ce848bd9bb9f2688db93c6e6412eff110b65d33574a9d08b810797d",
+      "bytes": 3132,
+      "importedSha256": "61ef41468ce848bd9bb9f2688db93c6e6412eff110b65d33574a9d08b810797d",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/seed-release-once-per-partition-cohort/evidence/receipt.json",
+      "sourceSha256": "89697d89af5093f2d7d9b0d034e76f33fc5ce0abfb66beb6cd355357b72afd9c",
+      "bytes": 1629,
+      "importedSha256": "89697d89af5093f2d7d9b0d034e76f33fc5ce0abfb66beb6cd355357b72afd9c",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/seed-release-once-per-partition-cohort/log.ndjson",
+      "sourceSha256": "22ef59af96b8d57e0be929c698ac0decfc2916ad13bb253d8a3938b02fad7952",
+      "bytes": 1175,
+      "importedSha256": "22ef59af96b8d57e0be929c698ac0decfc2916ad13bb253d8a3938b02fad7952",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/seed-release-once-per-partition-cohort/quest.json",
+      "sourceSha256": "59a3857ff7697ca6719c1693ee665da5834b1ca3ff5466271083aa856802ac14",
+      "bytes": 4452,
+      "importedSha256": "59a3857ff7697ca6719c1693ee665da5834b1ca3ff5466271083aa856802ac14",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/snapshot-lifecycle-staging-boundary/evidence/receipt.json",
+      "sourceSha256": "cf84da52ceb42370efbd844a5edc7a054ecd4d16ec268e06c1c7c3f8dbd0e3f7",
+      "bytes": 744,
+      "importedSha256": "cf84da52ceb42370efbd844a5edc7a054ecd4d16ec268e06c1c7c3f8dbd0e3f7",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/snapshot-lifecycle-staging-boundary/log.ndjson",
+      "sourceSha256": "ecdf48c529a1e12413707a34cbb71f8ac13eb74ec1156c9d20f02344ffb1dd25",
+      "bytes": 1474,
+      "importedSha256": "ecdf48c529a1e12413707a34cbb71f8ac13eb74ec1156c9d20f02344ffb1dd25",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/snapshot-lifecycle-staging-boundary/quest.json",
+      "sourceSha256": "23516640439885e33ba5b2b6e97b770cbf731980cbe5c9111ebeb494e4dcded4",
+      "bytes": 1481,
+      "importedSha256": "23516640439885e33ba5b2b6e97b770cbf731980cbe5c9111ebeb494e4dcded4",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/snapshot-receiver-admission/evidence/receipt.json",
+      "sourceSha256": "10d84e99ccc398843df7b7cb011ec86bbf668e5210dd4e3cfb79c35c122a51a5",
+      "bytes": 597,
+      "importedSha256": "10d84e99ccc398843df7b7cb011ec86bbf668e5210dd4e3cfb79c35c122a51a5",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/snapshot-receiver-admission/log.ndjson",
+      "sourceSha256": "c3a0c90521fbdaf1c19e425af2fd00eca926cf29f6b5d25837b7a651acb77f8b",
+      "bytes": 2793,
+      "importedSha256": "c3a0c90521fbdaf1c19e425af2fd00eca926cf29f6b5d25837b7a651acb77f8b",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/snapshot-receiver-admission/quest.json",
+      "sourceSha256": "995a1f8acf603db063dec33fbe7629510e86307a979623e17ac9f2b197f5595b",
+      "bytes": 1531,
+      "importedSha256": "995a1f8acf603db063dec33fbe7629510e86307a979623e17ac9f2b197f5595b",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/startup-refusal-cleanup-custody/evidence/receipt.json",
+      "sourceSha256": "98c211d112b544a6374899ccc768c034bc52f48610357cde4a9dfaf3ab87b5c3",
+      "bytes": 829,
+      "importedSha256": "98c211d112b544a6374899ccc768c034bc52f48610357cde4a9dfaf3ab87b5c3",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/startup-refusal-cleanup-custody/log.ndjson",
+      "sourceSha256": "3699cbbdf5e4abef8a2e7515191bd40438f9403c50032b283345e0b6218bb78c",
+      "bytes": 6141,
+      "importedSha256": "3699cbbdf5e4abef8a2e7515191bd40438f9403c50032b283345e0b6218bb78c",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/startup-refusal-cleanup-custody/quest.json",
+      "sourceSha256": "3824bbd76a347b9ca75df147d8c23d17302d153eb12bf6616d7383d0d0a3d2d8",
+      "bytes": 1938,
+      "importedSha256": "3824bbd76a347b9ca75df147d8c23d17302d153eb12bf6616d7383d0d0a3d2d8",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/storage-reservation-lost-outcome-idempotency/evidence/receipt.json",
+      "sourceSha256": "99eb3421504b9a684f6ec123b71c3a6490fadd72df97de95da5f5ebe5e456606",
+      "bytes": 4421,
+      "importedSha256": "99eb3421504b9a684f6ec123b71c3a6490fadd72df97de95da5f5ebe5e456606",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/storage-reservation-lost-outcome-idempotency/log.ndjson",
+      "sourceSha256": "9e4b7222ec4ad7c532d50395deefb9a9fe9f2b1110e96b6f1df280c631d4d980",
+      "bytes": 41947,
+      "importedSha256": "9e4b7222ec4ad7c532d50395deefb9a9fe9f2b1110e96b6f1df280c631d4d980",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/storage-reservation-lost-outcome-idempotency/quest.json",
+      "sourceSha256": "ffa3b4920dea02899a75119cc7a9210d06e95f9aa3aae3faaf55da5d9ce59e43",
+      "bytes": 3280,
+      "importedSha256": "ffa3b4920dea02899a75119cc7a9210d06e95f9aa3aae3faaf55da5d9ce59e43",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/tx1-single-path-alpha/evidence/receipt.json",
+      "sourceSha256": "13652bd92e9abd2451808ac9c90333afa7ac7230dcdf6e2337375b29901c6ddb",
+      "bytes": 4258,
+      "importedSha256": "13652bd92e9abd2451808ac9c90333afa7ac7230dcdf6e2337375b29901c6ddb",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/tx1-single-path-alpha/log.ndjson",
+      "sourceSha256": "c4088d746c4e843660c83f957a12f78820658d4eb5c6fa3983ca3b4734b1f38c",
+      "bytes": 29381,
+      "importedSha256": "c4088d746c4e843660c83f957a12f78820658d4eb5c6fa3983ca3b4734b1f38c",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/tx1-single-path-alpha/quest.json",
+      "sourceSha256": "3a74093d506ec9ec457748976b06e4145b3c7258c588b1e53f2f13894803de53",
+      "bytes": 3844,
+      "importedSha256": "3a74093d506ec9ec457748976b06e4145b3c7258c588b1e53f2f13894803de53",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/receipt.json",
+      "sourceSha256": "99a9c6a59f384e7510fd4918d8fc0a07ac722c7570fc032eaab1f4468578aca2",
+      "bytes": 1837,
+      "importedSha256": "99a9c6a59f384e7510fd4918d8fc0a07ac722c7570fc032eaab1f4468578aca2",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/recovery-20261017/activation-prerequisite-audit.md",
+      "sourceSha256": "da057c3af346187f595456add986f10b49e728c9857b53808aaecef2c1f84774",
+      "bytes": 26650,
+      "importedSha256": "da057c3af346187f595456add986f10b49e728c9857b53808aaecef2c1f84774",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/recovery-20261017/u1-correction-proposal.md",
+      "sourceSha256": "90d98bb2bae217faaeff848200bc684ccfc20a9ac4c2c1a22fc8b759b8a61d34",
+      "bytes": 7401,
+      "importedSha256": "90d98bb2bae217faaeff848200bc684ccfc20a9ac4c2c1a22fc8b759b8a61d34",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/recovery-20261017/u1-inventory-continuation-contract-v2.md",
+      "sourceSha256": "b871e38a5307933e32c085e55e47b0a650c42319da85073b67e028116594858f",
+      "bytes": 29687,
+      "importedSha256": "b871e38a5307933e32c085e55e47b0a650c42319da85073b67e028116594858f",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/recovery-20261017/u1-reservation-finality-bounded-verdict.md",
+      "sourceSha256": "257a6177e931bbbcc0f1d586418ef6ad7f279049aa9fcf6df23f7a8aed58e6a8",
+      "bytes": 5799,
+      "importedSha256": "257a6177e931bbbcc0f1d586418ef6ad7f279049aa9fcf6df23f7a8aed58e6a8",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/recovery-20261017/u2-owner-plan.md",
+      "sourceSha256": "04de84990ce635de6f23f33152bd08fc69c58d739546c91bb08b45635440db2a",
+      "bytes": 18029,
+      "importedSha256": "04de84990ce635de6f23f33152bd08fc69c58d739546c91bb08b45635440db2a",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/recovery-20261017/u2-progress-bound-amendment-draft.md",
+      "sourceSha256": "a10c9cfe06dd179181ed32e095fc8685ba6157d7cbf5b8ad743de7ff1ba4d6cc",
+      "bytes": 8451,
+      "importedSha256": "a10c9cfe06dd179181ed32e095fc8685ba6157d7cbf5b8ad743de7ff1ba4d6cc",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/correction-design-review.md",
+      "sourceSha256": "1b9295a3d4e29beec1107adf6dfb9b778244fcf66358a1d3fb5d7eeacadde5d9",
+      "bytes": 7631,
+      "importedSha256": "1b9295a3d4e29beec1107adf6dfb9b778244fcf66358a1d3fb5d7eeacadde5d9",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/verdict.md",
+      "sourceSha256": "aa5ec206809b76613f55b7547b318a3d4994757d7379d71dbd83fcc5c9b2f168",
+      "bytes": 58904,
+      "importedSha256": "aa5ec206809b76613f55b7547b318a3d4994757d7379d71dbd83fcc5c9b2f168",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/log.ndjson",
+      "sourceSha256": "de90c56d2c5e16780ff84fbe0b4c4346c0194d4538695cb635ae0d77bdfd621e",
+      "bytes": 63387,
+      "importedSha256": "9bea9c78d943109f207bf132b1c27d840d9709948291afaeeb58b840348bd9f4",
+      "localPresentationOrAppendedFindingChanged": true
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/quest.json",
+      "sourceSha256": "8abb6047248e56341a1f9d703a79f9725dae8323b42722d3acd782ee78b72944",
+      "bytes": 1807,
+      "importedSha256": "8abb6047248e56341a1f9d703a79f9725dae8323b42722d3acd782ee78b72944",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/wasm-writer-slots-v1/evidence/receipt.json",
+      "sourceSha256": "040e1fc34e3ccaad823befcbf23c2fb46f3db773c558e380e006a2e39fa4abf4",
+      "bytes": 1829,
+      "importedSha256": "040e1fc34e3ccaad823befcbf23c2fb46f3db773c558e380e006a2e39fa4abf4",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/wasm-writer-slots-v1/log.ndjson",
+      "sourceSha256": "e336dcbca1df3c037bb0128fe30de03ead4b7d13285c9e2574ea44d0c961c159",
+      "bytes": 6382,
+      "importedSha256": "e336dcbca1df3c037bb0128fe30de03ead4b7d13285c9e2574ea44d0c961c159",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/wasm-writer-slots-v1/quest.json",
+      "sourceSha256": "01dfb70ef931eec70e4333643abf5567d14d23bc3e4b77b8b0508e46fb1ce1c6",
+      "bytes": 1868,
+      "importedSha256": "01dfb70ef931eec70e4333643abf5567d14d23bc3e4b77b8b0508e46fb1ce1c6",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/zero-liferaft-active-runtime/evidence/receipt.json",
+      "sourceSha256": "b5430a53d4981e3f76e998d919fc38219c21c27af5bcc59c97d88bd7ccd5726a",
+      "bytes": 5190,
+      "importedSha256": "b5430a53d4981e3f76e998d919fc38219c21c27af5bcc59c97d88bd7ccd5726a",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/zero-liferaft-active-runtime/log.ndjson",
+      "sourceSha256": "3e193857238514f0ad8fe7b497e9f9c0664d6e0ae5acd80450a23b89de1836ad",
+      "bytes": 638250,
+      "importedSha256": "3e193857238514f0ad8fe7b497e9f9c0664d6e0ae5acd80450a23b89de1836ad",
+      "localPresentationOrAppendedFindingChanged": false
+    },
+    {
+      "path": "solve/quests/zero-liferaft-active-runtime/quest.json",
+      "sourceSha256": "d2eba295aedcab73e0392fbb00d48f39a43ecce2ef71ad46e6ca984c87b85244",
+      "bytes": 5160,
+      "importedSha256": "d2eba295aedcab73e0392fbb00d48f39a43ecce2ef71ad46e6ca984c87b85244",
+      "localPresentationOrAppendedFindingChanged": false
+    }
+  ],
+  "archivedPlanning": [
+    {
+      "originalPath": "roadmap.md",
+      "archivePath": "solve/archive/plans/primary-before-20261018/roadmap.md",
+      "originalSha256": "7fb5a3ca493a87d3da8515ef23c0f2fa6bedd3237275a5ce9a9f804d20ceb479",
+      "originalBytes": 17930,
+      "prefixBytes": 362
+    },
+    {
+      "originalPath": "solve/epics/raft-rs-full-cutover.md",
+      "archivePath": "solve/archive/plans/primary-before-20261018/raft-rs-full-cutover.md",
+      "originalSha256": "b928980ebaddcb47ec650468ee0d8547e74379c59006e07dc5ae0eaf139e786a",
+      "originalBytes": 14283,
+      "prefixBytes": 367
+    }
+  ],
+  "pinnedExternalLinks": [
+    {
+      "document": "solve/epics/raft-rs-full-cutover.md",
+      "relativeTarget": "../../docs/development/adversarial-risk-review-2026-10-10.md",
+      "sourcePath": "docs/development/adversarial-risk-review-2026-10-10.md"
+    },
+    {
+      "document": "solve/epics/raft-rs-full-cutover.md",
+      "relativeTarget": "raft-rs-full-cutover/local-priorities-2026-10-10.md",
+      "sourcePath": "solve/epics/raft-rs-full-cutover/local-priorities-2026-10-10.md"
+    },
+    {
+      "document": "solve/epics/raft-rs-full-cutover.md",
+      "relativeTarget": "../quests/replicated-transaction-decision-and-apply/owner-decisions-2026-10-10.md",
+      "sourcePath": "solve/quests/replicated-transaction-decision-and-apply/owner-decisions-2026-10-10.md"
+    },
+    {
+      "document": "solve/epics/raft-rs-full-cutover.md",
+      "relativeTarget": "raft-rs-full-cutover/local-priorities-2026-10-10.md#3-next-new-safety-unit-transaction-leg-a-then-leg-b",
+      "sourcePath": "solve/epics/raft-rs-full-cutover/local-priorities-2026-10-10.md"
+    },
+    {
+      "document": "solve/epics/raft-rs-full-cutover.md",
+      "relativeTarget": "raft-rs-full-cutover/contract-first-2026-10-08.md",
+      "sourcePath": "solve/epics/raft-rs-full-cutover/contract-first-2026-10-08.md"
+    },
+    {
+      "document": "solve/epics/raft-rs-full-cutover.md",
+      "relativeTarget": "raft-rs-full-cutover/quest-records/replace-source-removal-owner/f2-amendment-group-retirement-2026-10-04.md",
+      "sourcePath": "solve/epics/raft-rs-full-cutover/quest-records/replace-source-removal-owner/f2-amendment-group-retirement-2026-10-04.md"
+    },
+    {
+      "document": "solve/epics/raft-rs-full-cutover.md",
+      "relativeTarget": "raft-rs-full-cutover/quest-records/replace-source-removal-owner/design-workflow-record-change-store-2026-10-05.md",
+      "sourcePath": "solve/epics/raft-rs-full-cutover/quest-records/replace-source-removal-owner/design-workflow-record-change-store-2026-10-05.md"
+    }
+  ],
+  "historicalBrowsing": "Archive wrappers identify superseded scheduling; original documents remain byte-for-byte suffixes and are outside active epic/Quest discovery.",
+  "relocatedHistoricalRecords": [
+    {
+      "previousPath": "solve/quests/replica-lifecycle-durable-generation/authority-census.md",
+      "historicalPath": "solve/epics/raft-rs-full-cutover/quest-records/replica-lifecycle-durable-generation/authority-census.md",
+      "sha256": "a11ba6c56ad3f4cb97dcbc4339a55af324f4469f572e0f43d523f12a09b632a0",
+      "bytes": 41750,
+      "sourceCommit": "a1c3cde54fcb46471791062bcae4a6000ae484e0"
+    },
+    {
+      "previousPath": "solve/quests/replica-lifecycle-durable-generation/changed-src-ledger.md",
+      "historicalPath": "solve/epics/raft-rs-full-cutover/quest-records/replica-lifecycle-durable-generation/changed-src-ledger.md",
+      "sha256": "72cb2e703de9c31ea2e71b8591d469a33aaf42a0d7e43fe94617692c98c1f0c6",
+      "bytes": 35940,
+      "sourceCommit": "a1c3cde54fcb46471791062bcae4a6000ae484e0"
+    }
+  ]
+}

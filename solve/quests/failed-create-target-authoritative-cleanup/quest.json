@@ -1,0 +1,48 @@
+{
+  "schema": "solve-quest/2",
+  "id": "failed-create-target-authoritative-cleanup",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "One OperationWorkflowOwner decision, bound to the exact durable create attempt and authoritative replica lifecycle generation, governs both ADD/REPLACE terminal-failure admission and failed-target cleanup. A live or unresolved target is never removed from projected cache state; an admitted-but-closed target is removable only after positive generation-matched FAILED evidence; stale FAILED, absent, mismatched, and unavailable observations cannot authorize a terminal failure or cleanup.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/failed-create-target-authoritative-cleanup/evidence/receipt.json",
+      "requiredReceipts": [
+        "authoritative-active-vs-failed-paired-cleanup",
+        "failed-generation-cannot-cross-create-retry",
+        "admission-observation-cannot-race-activation",
+        "failed-lifecycle-precedes-terminal-outcome",
+        "unavailable-and-absent-never-authorize-cleanup",
+        "owner-interaction-and-recovery-replay"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "single-semantic-owner",
+      "statement": "OperationWorkflowOwner owns one typed authoritative create-target terminal and cleanup decision. ReplicaHandler supplies durable lifecycle evidence, UnifiedRebalancer consumes the decision, and neither planner nor cache projection may independently infer cleanup eligibility."
+    },
+    {
+      "id": "attempt-and-generation-fenced",
+      "statement": "A FAILED lifecycle observation authorizes only the exact durable create attempt and replica incarnation that produced it. The permitted FAILED to CREATING retry for a never-opened replica cannot race a stale failure admission or cleanup into a later live generation."
+    },
+    {
+      "id": "positive-authority-only",
+      "statement": "Only positive authoritative, exact-target lifecycle evidence may authorize terminal failure or cleanup. UNAVAILABLE, mismatched, and absent observations are typed non-eligibility; cache rows and committed-membership projections never substitute for lifecycle authority."
+    },
+    {
+      "id": "failure-order-and-retry-owner",
+      "statement": "ReplicaHandler fences the failed runtime and confirms the exact durable FAILED transition before emitting a terminal create-failure outcome. If persistence is unresolved, an existing named level-triggered owner must retain and re-drive the obligation; no timeout increase, fallback writer, or one-shot wake is allowed."
+    },
+    {
+      "id": "paired-production-witness",
+      "statement": "The same production route proves projected SYNCING plus authoritative ACTIVE is retained, projected SYNCING plus exact authoritative FAILED is cleaned, a stale FAILED cannot cross FAILED to CREATING retry, and an observation paused before activation cannot later commit FAILED."
+    },
+    {
+      "id": "independent-verification",
+      "statement": "Every source attempt requires independent verification newer than the attempt and recorded with verifier subagent:<id> before landing."
+    }
+  ],
+  "sealedAt": "79d16909296d88397fb277da95138a23c37f3dd9"
+}

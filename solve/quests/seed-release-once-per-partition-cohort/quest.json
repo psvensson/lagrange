@@ -1,0 +1,55 @@
+{
+  "schema": "solve-quest/2",
+  "id": "seed-release-once-per-partition-cohort",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "The seed bootstrap's one ordered release pass must ask the existing partition cutover owner once per distinct partition cohort, not once per local replica service. Each authentic release still inspects, pauses, enables, observes, validates the complete actual current member cohort, performs current control-owner checks before and after, and resumes under the one original seed shared deadline. Remove only duplicate cohort intents, never any semantic safety validation.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/seed-release-once-per-partition-cohort/evidence/receipt.json",
+      "requiredReceipts": [
+        "observed-repeated-seed-cohort-intents",
+        "engaged-same-host-old-source-negative",
+        "candidate-one-intent-current-membership-proof",
+        "fresh-seed-original-1000-5000-ms-and-interaction",
+        "independent-review-and-composed-static-gates"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "one-owner-per-intent",
+      "statement": "The seed bootstrap service owns ordering and initiation of fresh-seed release; the existing replica-handler partition cutover owns all per-cohort state, work, current leadership, safety, origin, control pre/post checks and OPEN. Selection at seed may only remove duplicate partition IDs from its ordered local services; do not cache previous CUT_OVER, OPEN or control admission, issue broader tokens, infer permission from local replicas, or add any parallel release driver."
+    },
+    {
+      "id": "same-shared-deadline",
+      "statement": "Retain original timeSource, startMs and one absolute deadline for the full ordered distinct-partition pass. Preserve original 1000ms and 5000ms test fixture configurations, request retry conditions, clock projections and failure classification. A healthy expired deadline remains red and cannot be renewed per cohort or test."
+    },
+    {
+      "id": "engagement-and-serialization",
+      "statement": "Observe real local service registry of 135 entries / 45 partitions and actual routed partition RELEASE traffic. Exactly one intent per distinct partitionId in original first-seen sorted order, after SQL_TRANSACTIONS control first; still inspect three current replicas through cutover owner. Do not change per-replica service registration, partition services Map keys, or background/lifecycle recovery subscriptions."
+    },
+    {
+      "id": "source-negative-and-controls",
+      "statement": "Retain immutable old repeated-source red with identical test bytes and same physical host before accepting repair. A proof must engage multiple local replicas per partition, at least two distinct partitions and actual complete current cohort; vacuous no-service/invalid-host/stub-only success cannot prove full bootstrap. The causal source-only negative may be fixture-level for duplicate startup invocation only; it cannot stand for native/distributed bootstrap."
+    },
+    {
+      "id": "bounded-evidence",
+      "statement": "Read existing original MessageRouter.deliver trace and its complete raw TAP without creating a parallel observer or changing original source-test promises. Census at 1000ms showed 694 matched/completed deliveries, 28 control releases, 13 non-control releases across 5 other partition names (3 each for four partitions), dropped/capture/unfinished all zero; no timeout/budget ratchet or artificial clock advance. Preserve original evidence."
+    },
+    {
+      "id": "review-and-recovery",
+      "statement": "Run actual original fresh-seed bodies at the unchanged shared budget, plus release protocol, applied-position, recovery, native uninstrumented V10, TX1/TX2, control and affected startup interactions. Require independent category-complete source review newer than last implementation, exact-candidate metadata and static/corpus, and real locked lab proof before any canonical Quest landing or main. If one-intent correction is insufficient, keep remaining startup failure red and investigate existing nested control owner before altering it."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "formation-circularity",
+    "retry-loops",
+    "concurrency-serialization",
+    "harness-fidelity",
+    "admission-gating"
+  ],
+  "sealedAt": "4431a5e94b4128f91576911a76071b0d03bbf962"
+}

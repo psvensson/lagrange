@@ -1,0 +1,31 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "snapshot-receiver-admission",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "surviving-receiver-refusal",
+      "passed": false
+    },
+    {
+      "id": "fresh-and-never-opened-import",
+      "passed": false
+    },
+    {
+      "id": "pre-swap-and-restart-revalidation",
+      "passed": false
+    },
+    {
+      "id": "symbol-limited-owner-boundary",
+      "passed": false
+    },
+    {
+      "id": "native-controls-and-regressions",
+      "passed": false
+    },
+    {
+      "id": "independent-review-and-gates",
+      "passed": false
+    }
+  ]
+}

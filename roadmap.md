@@ -21,7 +21,32 @@ recovery; typed split-key comparison; durable dissolution witnesses; fenced
 abort parity; batched merge backfill; the durable split/merge overlap guard;
 and one configuration authority for split/merge thresholds.
 
-## Now - 0.2 Stable Core: make the existing public path credible
+## Now - rs-raft cutover, recovery and merge readiness
+
+The active priority is completing the rs-raft work through independently verified
+recovery, production activation, certification and the main-merge gates. This
+supersedes the previous immediate scheduling in this checkout as of 2026-10-18.
+The broader feature sequence and sealed acceptance criteria remain unchanged.
+
+Start with the [current primary planning index](solve/epics/raft-rs-full-cutover/current-primary-planning-2026-10-18.md)
+and the [rs-raft epic](solve/epics/raft-rs-full-cutover.md). The epic contains the
+current lane table; its handover and lane register identify the exact execution
+branches, dependencies and next checkpoints. U1 remains independently **REJECTED**.
+
+This checkout now holds current planning and historical proof records. Its
+production/test files remain the earlier local implementation, including preserved
+staged work. Imported SOLVED records and stored receipts concern their recorded
+source commits; they do not certify these local implementation bytes. Execute each
+lane at its explicitly selected base and obtain fresh applicable verification.
+
+The [previous roadmap](solve/archive/plans/primary-before-20261018/roadmap.md)
+and [previous rs-raft scheduling](solve/archive/plans/primary-before-20261018/raft-rs-full-cutover.md)
+are retained as historical planning, outside active epic/Quest discovery. They
+are available for context in Harnessd's planning document view, not as new tasks.
+
+## Planned - 0.2 Stable Core follow-on work
+
+The following prior immediate work is deferred behind the rs-raft priority above.
 
 The service compiler and public HTTP-to-distributed-call path exist. The next
 work is to make their useful envelope larger and their evidence easier to trust:

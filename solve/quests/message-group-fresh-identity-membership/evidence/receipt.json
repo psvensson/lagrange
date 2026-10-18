@@ -1,0 +1,65 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "message-group-fresh-identity-membership",
+  "status": "fail",
+  "generatedAt": "2026-10-07T09:26:48.435Z",
+  "testFileDigests": {},
+  "receipts": [
+    {
+      "id": "fresh-identity-permanent-registry-and-membership-lane",
+      "passed": false,
+      "command": "npm run test:file -- test/rebalancer/message-group-membership-operation-lane.test.js test/rebalancer/message-group-fresh-identity-two-replace.test.js test/raft/raft-rs-backend/peer-identity.test.js",
+      "detail": "Red: current planner parks every message-group membership change and no authoritative fresh-identity lane exists.",
+      "testFile": "test/rebalancer/message-group-membership-operation-lane.test.js"
+    },
+    {
+      "id": "committed-learner-real-state-transfer-and-create-fence",
+      "passed": false,
+      "command": "npm run test:file -- test/node/message-group-service-handler-membership.test.js test/node/message-group-create-admission-recovery.test.js test/message-group/message-group-fresh-learner-snapshot.test.js test/raft/raft-rs-backend/bootstrap-committed-membership.test.js",
+      "detail": "Red: direct CREATE is correctly refused, while no operation-authorized committed-learner CREATE and real state-transfer path exists.",
+      "testFile": "test/message-group/message-group-fresh-learner-snapshot.test.js"
+    },
+    {
+      "id": "atomic-leader-proof-and-committed-promotion",
+      "passed": false,
+      "command": "npm run test:file -- test/message-group/message-group-fresh-learner-promotion.test.js test/node/message-group-service-handler-membership.test.js",
+      "detail": "Red: no production message-group ADD_LEARNER caller or one-turn leader-owned promotion operation exists.",
+      "testFile": "test/message-group/message-group-fresh-learner-promotion.test.js"
+    },
+    {
+      "id": "serial-replace-handoff-and-source-retention",
+      "passed": false,
+      "command": "npm run test:file -- test/rebalancer/message-group-fresh-identity-two-replace.test.js test/rebalancer/message-group-membership-operation-lane.test.js test/message-group/message-group-replace-removal-fence.test.js",
+      "detail": "Red: R1 and R2 cannot traverse the parked planner into serial learner/promotion/handoff/removal ownership.",
+      "testFile": "test/rebalancer/message-group-fresh-identity-two-replace.test.js"
+    },
+    {
+      "id": "separated-membership-obligation-and-terminal-settlement",
+      "passed": false,
+      "command": "npm run test:file -- test/rebalancer/message-group-membership-operation-lane.test.js test/rebalancer/message-group-fresh-identity-two-replace.test.js",
+      "detail": "Red: no durable post-terminal exact learner-removal obligation retains only the membership lane.",
+      "testFile": "test/rebalancer/message-group-membership-operation-lane.test.js"
+    },
+    {
+      "id": "committed-and-source-own-absence-exact-cleanup",
+      "passed": false,
+      "command": "npm run test:file -- test/message-group/message-group-replace-removal-fence.test.js test/node/replica-removal-consensus-exit.test.js",
+      "detail": "Red: message-group removal can stop/delete without the required leader/quorum and source-own absence proofs.",
+      "testFile": "test/message-group/message-group-replace-removal-fence.test.js"
+    },
+    {
+      "id": "lost-answer-restart-pruning-and-stale-disk-recovery",
+      "passed": false,
+      "command": "npm run test:file -- test/node/message-group-create-admission-recovery.test.js test/rebalancer/message-group-membership-operation-lane.test.js test/message-group/message-group-replace-removal-fence.test.js test/message-group/message-group-fresh-learner-snapshot.test.js",
+      "detail": "Red: the durable phase, permanent peer mapping, restart scan and stale removed-disk refusal do not yet exist end to end.",
+      "testFile": "test/node/message-group-create-admission-recovery.test.js"
+    },
+    {
+      "id": "distinct-offseed-seedloss-and-owner-censuses",
+      "passed": false,
+      "command": "npm run test:file -- test/integration/message-group-fresh-identity-replacement.integration.test.js test/rebalancer/message-group-membership-change-parked.test.js test/node/message-group-service-handler.test.js test/rebalancer/message-group-fresh-identity-two-replace.test.js",
+      "detail": "Red: B4/C5 cannot be created, so mg-1 cannot form an off-seed quorum or recover SQL routing, CDC and cache after seed storage loss.",
+      "testFile": "test/integration/message-group-fresh-identity-replacement.integration.test.js"
+    }
+  ]
+}
