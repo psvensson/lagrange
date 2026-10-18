@@ -5,7 +5,8 @@ import {runtimeServiceConsensusIdentity} from '../rebalancer/runtime-service-rep
 import {RUNTIME_KIND, UNIFIED_SERVICE_TYPE, SERVICE_LIFECYCLE_OPERATION,
   SERVICE_OPERATION_STATE as OP_STATE} from '../constants/index.js';
 import {SERVICE_INSTANCE_LIMIT as LIMIT, SERVICE_INSTANCE_OUTCOME as OUTCOME,
-  SERVICE_INSTANCE_PHASE as PHASE} from '../constants/service-instance.js';
+  SERVICE_INSTANCE_PHASE as PHASE, SERVICE_INSTANCE_RESERVATION_REFUSAL as REFUSAL} from
+  '../constants/service-instance.js';
 import {WASM_OPERATION_COL as COL} from '../wasm-service/wasm-meta-models-constants.js';
 import {buildGetOperationSQL, buildRetainedCreationOperationSQL,
   buildRetainedCreationAdmissionSQL, buildRetainedCreationOpeningSQL, transitionOperation} from
@@ -45,11 +46,6 @@ const RESULT = Object.freeze({
 });
 const TERMINAL = new Set([OP_STATE.COMPLETED, OP_STATE.FAILED, OP_STATE.CANCELLED]);
 const LIVE_PHASES = new Set([PHASE.ADMITTED, PHASE.PUBLISHED]);
-// Owner reservation answers that seal a request: no slot is or can be
-// admitted for it (reserveResourceState's refusals; R2-A, R3-E).
-const SEALED_RESERVATION_REFUSALS = new Set([OUTCOME.STALE_BINDING,
-  OUTCOME.HISTORY_UNAVAILABLE, OUTCOME.CONFLICT, OUTCOME.CONTENT_CONFLICT,
-  OUTCOME.CAPACITY_EXHAUSTED, OUTCOME.INVALID_EXPECTED_STATE, OUTCOME.TARGET_ALREADY_OWNED]);
 // A terminal row's answer carries its state (R1-D, R3-D): a REMOVE reads
 // COMPLETED and CANCELLED as done, FAILED as a typed failure.
 function terminalAnswer(row) {
@@ -342,15 +338,32 @@ async function cancelPendingCreation(manager, identity, refusal) {
   const row = await writeAndObserve(manager, query, identity.operationId);
   requireObserved(row);
   confirmIntentRow(row, identity);
+  if (TERMINAL.has(row[COL.STATE]) && row[COL.STATE] !== OP_STATE.CANCELLED) {
+    return terminalAnswer(row);
+  }
   requireInstance(row[COL.STATE] === OP_STATE.CANCELLED, OUTCOME.UNKNOWN);
   return {outcome: RESULT.CANCELLED, operationId: identity.operationId, reason: refusal.outcome};
+}
+// REMOVE consumes resource finality, while a journal terminal result remains
+// journal authority. A missing or unresolved proof always retains the debt.
+async function reserveForRemoval(manager, intent, identity) {
+  const admission = await reserveAndRetain(manager, intent, identity);
+  switch (admission.outcome) {
+  case OUTCOME.ADMITTED:
+  case RESULT.TERMINAL_OPERATION:
+    return admission;
+  default:
+    return admission.reservationRefusal === REFUSAL.SEALED ?
+      await cancelPendingCreation(manager, identity, admission) :
+      {outcome: OUTCOME.UNKNOWN, reason: admission.reason ?? admission.outcome};
+  }
 }
 /**
  * A REMOVE-time resolution of a PENDING creation's reservation with the SAME
  * request (design RECOVERY-DESIGN-20261017 R2-A, R3-E): a journal read and the
  * idempotent reservation, without runtime policy. ADMITTED persists the token;
- * a sealed refusal cancels the row in the same call; UNAVAILABLE/UNKNOWN pass
- * through and the row stays PENDING.
+ * only an owner-supplied SEALED refusal cancels the row in the same call.
+ * Every unresolved refusal leaves PENDING and answers UNKNOWN with its reason.
  * @param {Object} manager - The ServiceLifecycleManager.
  * @param {string} operationId - The creation's operation id.
  * @return {Promise<Object>} ADMISSION_RETAINED {intent, token}, CANCELLED, or
@@ -368,10 +381,7 @@ async function resolveRetainedReservation(manager, operationId) {
     if (TERMINAL.has(row[COL.STATE])) return terminalAnswer(row);
     let token = retainedToken(row, intent);
     if (token === null) {
-      const admission = await reserveAndRetain(manager, intent, identity);
-      if (SEALED_RESERVATION_REFUSALS.has(admission.outcome)) {
-        return await cancelPendingCreation(manager, identity, admission);
-      }
+      const admission = await reserveForRemoval(manager, intent, identity);
       if (admission.outcome !== OUTCOME.ADMITTED) return admission;
       token = admission.token;
     }

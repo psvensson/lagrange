@@ -28,6 +28,7 @@ import {RUNTIME_SERVICE_HANDLER_ERROR_MSG, RUNTIME_SERVICE_CREATION_WAKE_OUTCOME
   '../../src/node/runtime-service-handler-constants.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {serializeServiceDefinition} from '../../src/wasm-service/wasm-service-models.js';
+import {selectInstanceState} from '../../src/control-plane/owners/service-instance-state.js';
 
 const QUIET = {debug() {}, info() {}, warn() {}, error() {}};
 const NODE_ID = 'host-1';
@@ -1031,3 +1032,91 @@ describe('recovery unit 1 (design RECOVERY-DESIGN-20261017): the handler side', 
     assert.equal(w.runtime.calls.length, 0, 'nothing of the cancelled request is retired');
   });
 });
+
+async function temporaryReservationBlocker(w, condition) {
+  const f = w.metadata;
+  const binding = f.intent.consensusBinding;
+  if (condition === 'STALE_BINDING') {
+    const request = f.request(binding.selectionVersion, 73, binding.incarnation);
+    const revision = await f.primary.catalogOwner.getCreationRevision(
+      request.revisionId, request.tenantId);
+    const future = selectInstanceState(f.state(), request, revision).result.binding;
+    f.intent.consensusBinding = future;
+    return async () => {
+      const selected = await f.primary.selectConsensusInstance(request);
+      assert.equal(selected.outcome, 'SELECTED');
+      assert.deepEqual(selected.binding, future, 'future binding equals the real later receipt');
+    };
+  }
+  const slot = condition === 'TARGET_ALREADY_OWNED' ? 3 : 0;
+  if (condition === 'INVALID_EXPECTED_STATE') f.intent.consensusSlotRequest.expectedOrdinal = 1;
+  const blocker = await f.primary.reserveInstanceResource(binding,
+    f.slotRequest(slot, 0, 'f1-existing-blocker', 0));
+  assert.equal(blocker.outcome, 'ADMITTED');
+  return async () => {
+    assert.equal((await f.primary.closeInstanceResource(binding, blocker.token)).outcome, 'CLOSED');
+  };
+}
+
+for (const condition of ['TARGET_ALREADY_OWNED', 'INVALID_EXPECTED_STATE', 'STALE_BINDING']) {
+  test(`F1 handler REMOVE holds ${condition} and retires only after original token persistence`,
+    async (t) => {
+      const w = await world(t);
+      const f = w.metadata;
+      const unblock = await temporaryReservationBlocker(w, condition);
+      const reserve = f.primary.reserveInstanceResource.bind(f.primary);
+      const arrived = Promise.withResolvers();
+      const release = Promise.withResolvers();
+      let delayed = false;
+      f.primary.reserveInstanceResource = async (...args) => {
+        if (args[1].operationId === w.operationId && !delayed) {
+          delayed = true;
+          arrived.resolve();
+          await release.promise;
+        }
+        return reserve(...args);
+      };
+      t.after(release.resolve);
+      const original = f.prepare();
+      await arrived.promise;
+      const before = f.row();
+      w.handler.registerExistingReplica({replicaId: w.replicaId, entityId: f.serviceId,
+        status: ReplicaStatus.HELD, operationId: w.operationId});
+      const remove = removeRequest(f.serviceId, w.replicaId, 'f1-remove');
+      await w.handler.handleRemoveReplica(remove);
+      await drain(w.handler);
+      const held = lastOutcome(w);
+      const pending = f.row();
+      const effectsBeforeAdmission = w.runtime.calls.length;
+      await unblock();
+      release.resolve();
+      const admitted = await original;
+      t.diagnostic(JSON.stringify({condition, held, pending, admitted, row: f.row()}));
+      assert.equal(held.outcomeType, EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_REMOVE_HELD,
+        'NONFINAL_RESERVATION_DID_NOT_HOLD_REMOVE');
+      assert.deepEqual(pending, before, 'REMOVE_LOST_OR_MUTATED_THE_ORIGINAL_PENDING_OBLIGATION');
+      assert.equal(effectsBeforeAdmission, 0, 'REMOVE_RETIRED_AN_UNRESOLVED_RESERVATION');
+      assert.equal(admitted.outcome, 'ADMISSION_RETAINED');
+      assert.deepEqual(JSON.parse(f.row().admission_json), admitted.token);
+      let retirements = 0;
+      w.runtime.stop = async (handle) => {
+        // The runtime is scripted; the token/row ordering and resource close
+        // below use real owners. This is not native physical-retirement proof.
+        retirements += 1;
+        assert.deepEqual(handle.consensusCreation.token, admitted.token);
+        assert.deepEqual(JSON.parse(f.row().admission_json), admitted.token,
+          'RETIREMENT_PRECEDED_EXACT_TOKEN_PERSISTENCE');
+        const closed = await f.primary.closeInstanceResource(f.intent.consensusBinding,
+          admitted.token);
+        assert.equal(closed.outcome, 'CLOSED');
+        return {outcome: 'CLOSED', retired: true, closed: true};
+      };
+      await w.handler.handleRemoveReplica(remove);
+      await drain(w.handler);
+      assertRemoveCompleted(w);
+      assert.equal(retirements, 1);
+      assert.equal(f.row().state, 'completed');
+      assert.equal((await f.primary.resolveInstanceResource(f.intent.consensusBinding,
+        admitted.token)).phase, 'CLOSED', 'AN_ADMITTED_RESOURCE_WAS_ABANDONED');
+    });
+}

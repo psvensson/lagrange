@@ -4,6 +4,8 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createCreationSqliteFixture} from './service-instance-creation-sqlite-fixture.js';
 import {SERVICE_INSTANCE_LIMIT} from '../../src/constants/service-instance.js';
+import {emptyInstanceState, selectInstanceState} from
+  '../../src/control-plane/owners/service-instance-state.js';
 
 function selected(result) {
   assert.equal(result.outcome, 'SELECTED');
@@ -564,3 +566,145 @@ test('CAS-A8 an absent affected-row count is UNKNOWN after one submission, never
     assert.equal(submissions, 1, 'AN_ABSENT_COUNT_WAS_RESUBMITTED');
     assert.deepEqual(f.row(), before);
   });
+
+function reservationRefusal(result, outcome, finality) {
+  assert.equal(result.outcome, outcome);
+  assert.equal(result.reservationRefusal, finality, 'RESOURCE_OWNER_REFUSAL_FINALITY_MISSING');
+  assert.equal(result.token, undefined, 'A_REFUSAL_CARRIED_AN_ADMISSION');
+}
+
+test('F1 ServiceDefinitionsOwner distinguishes a never-selected future binding from an absent old one',
+  async (t) => {
+    const f = await createCreationSqliteFixture(t);
+    const request = f.request();
+    const revision = await f.primary.catalogOwner.getCreationRevision(
+      request.revisionId, request.tenantId);
+    const future = selectInstanceState(emptyInstanceState(request.tenantId), request,
+      revision).result.binding;
+    reservationRefusal(await f.primary.reserveInstanceResource(future, f.slotRequest()),
+      'STALE_BINDING', 'UNRESOLVED');
+    assert.equal(f.row(), null, 'FUTURE_BINDING_REFUSAL_CREATED_AUTHORITY');
+    const binding = selected(await f.primary.selectConsensusInstance(request));
+    assert.deepEqual(binding, future, 'the later real selection is the exact future binding');
+    const token = admitted(await f.primary.reserveInstanceResource(binding, f.slotRequest()));
+    assert.equal((await f.primary.closeInstanceResource(binding, token)).outcome, 'CLOSED');
+    selected(await f.primary.selectConsensusInstance(f.request(1, 2, binding.incarnation)));
+    const before = f.row();
+    reservationRefusal(await f.primary.reserveInstanceResource(binding, f.slotRequest()),
+      'STALE_BINDING', 'SEALED');
+    assert.deepEqual(f.row(), before, 'an absent old binding cannot become selected again');
+  });
+
+test('F1 ServiceDefinitionsOwner seals only immutable ordinal facts and preserves exact CLOSED admission',
+  async (t) => {
+    const f = await createCreationSqliteFixture(t);
+    const binding = selected(await f.primary.selectConsensusInstance(f.request()));
+    const request = f.slotRequest();
+    const first = admitted(await f.primary.reserveInstanceResource(binding, request));
+    const before = f.row();
+    const conflict = await f.primary.reserveInstanceResource(binding,
+      {...request, operationId: 'different-winner'});
+    reservationRefusal(conflict, 'CONFLICT', 'SEALED');
+    assert.deepEqual(conflict.winnerToken, first);
+    reservationRefusal(await f.primary.reserveInstanceResource(binding,
+      {...request, nodeId: 'different-body'}), 'CONTENT_CONFLICT', 'SEALED');
+    for (const expectedOrdinal of [1, 2]) {
+      reservationRefusal(await f.primary.reserveInstanceResource(binding,
+        {...request, expectedOrdinal}), 'INVALID_EXPECTED_STATE', 'UNRESOLVED');
+    }
+    reservationRefusal(await f.primary.reserveInstanceResource(binding,
+      {...request, expectedOrdinal: Number.MAX_SAFE_INTEGER}), 'CAPACITY_EXHAUSTED', 'SEALED');
+    assert.deepEqual(f.row(), before, 'all refusals preserve the exact authoritative row');
+    assert.equal((await f.primary.closeInstanceResource(binding, first)).outcome, 'CLOSED');
+    assert.deepEqual(await f.primary.reserveInstanceResource(binding, request),
+      {outcome: 'ADMITTED', phase: 'CLOSED', token: first}, 'EXACT_CLOSED_ADMISSION_WAS_REFUSED');
+    const secondRequest = {...request, expectedOrdinal: 1, operationId: 'second-ordinal'};
+    const second = admitted(await f.primary.reserveInstanceResource(binding, secondRequest));
+    reservationRefusal(await f.primary.reserveInstanceResource(binding, request),
+      'HISTORY_UNAVAILABLE', 'SEALED');
+    selected(await f.primary.selectConsensusInstance(f.request(1, 2, binding.incarnation)));
+    assert.deepEqual(await f.primary.reserveInstanceResource(binding, secondRequest),
+      {outcome: 'ADMITTED', phase: 'ADMITTED', token: second},
+      'EXACT_RETIRING_ADMISSION_WAS_REFUSED');
+    reservationRefusal(await f.primary.reserveInstanceResource(binding,
+      {...secondRequest, expectedOrdinal: 2}), 'STALE_BINDING', 'SEALED');
+    assert.equal((await f.primary.closeInstanceResource(binding, second)).outcome, 'CLOSED');
+    assert.deepEqual(await f.primary.reserveInstanceResource(binding, secondRequest),
+      {outcome: 'ADMITTED', phase: 'CLOSED', token: second},
+      'EXACT_RETIRING_CLOSED_ADMISSION_WAS_REFUSED');
+  });
+
+test('F1 ServiceDefinitionsOwner leaves temporary target occupancy unresolved until real closure',
+  async (t) => {
+    const f = await createCreationSqliteFixture(t);
+    const binding = selected(await f.primary.selectConsensusInstance(f.request()));
+    const blocker = admitted(await f.primary.reserveInstanceResource(binding,
+      f.slotRequest(1, 0, 'occupied-target', 0)));
+    reservationRefusal(await f.primary.reserveInstanceResource(binding, f.slotRequest()),
+      'TARGET_ALREADY_OWNED', 'UNRESOLVED');
+    assert.equal((await f.primary.closeInstanceResource(binding, blocker)).outcome, 'CLOSED');
+    admitted(await f.primary.reserveInstanceResource(binding, f.slotRequest()));
+  });
+
+test('F1 ServiceDefinitionsOwner capture, validation and admitted-slot encoding failures are unresolved',
+  async (t) => {
+    const f = await createCreationSqliteFixture(t);
+    const binding = selected(await f.primary.selectConsensusInstance(f.request()));
+    const request = f.slotRequest();
+    const cyclic = {...request};
+    cyclic.self = cyclic;
+    const longId = 'x'.repeat(SERVICE_INSTANCE_LIMIT.IDENTIFIER);
+    const tooLargeSlot = {...request, operationId: longId, replicaId: longId, nodeId: longId};
+    const before = f.row();
+    for (const value of [cyclic, {...request, slot: -1}, {...request, extra: true},
+      {...request, nodeId: 'x'.repeat(SERVICE_INSTANCE_LIMIT.SLOT_BYTES)}, tooLargeSlot]) {
+      reservationRefusal(await f.primary.reserveInstanceResource(binding, value),
+        'INVALID_REQUEST', 'UNRESOLVED');
+    }
+    for (const value of [{...binding, selectionVersion: 0}, {...binding, extra: true},
+      {...binding, tenantId: ''}]) {
+      reservationRefusal(await f.primary.reserveInstanceResource(value, request),
+        'INVALID_REQUEST', 'UNRESOLVED');
+    }
+    assert.deepEqual(f.row(), before, 'capture and encoding failures cannot mutate resource state');
+  });
+
+for (const failure of ['unavailable', 'corrupt']) {
+  test(`F1 ServiceDefinitionsOwner ${failure} resource observation never proves finality`, async (t) => {
+    const f = await createCreationSqliteFixture(t);
+    const binding = selected(await f.primary.selectConsensusInstance(f.request()));
+    if (failure === 'unavailable') {
+      f.setGatewayReadFault('owner-a', new Error('RESOURCE_OBSERVATION_UNAVAILABLE'));
+    } else {
+      f.db.prepare('UPDATE service_instances SET state = ? WHERE service_id = ?')
+        .run('invalid-json', f.serviceId);
+    }
+    const before = f.row();
+    reservationRefusal(await f.primary.reserveInstanceResource(binding, f.slotRequest()),
+      failure === 'unavailable' ? 'UNAVAILABLE' : 'CORRUPT_STATE', 'UNRESOLVED');
+    assert.deepEqual(f.row(), before);
+  });
+}
+
+for (const submission of ['unknown', 'zero', 'unknown-read-fails', 'zero-read-fails']) {
+  test(`F1 ServiceDefinitionsOwner ${submission} reservation submission carries no finality`,
+    async (t) => {
+      const f = await createCreationSqliteFixture(t);
+      const binding = selected(await f.primary.selectConsensusInstance(f.request()));
+      let calls = 0;
+      const zero = submission.startsWith('zero');
+      const readFails = submission.endsWith('read-fails');
+      f.primary.getGateway().updateSystemTableRow = async () => {
+        calls += 1;
+        if (readFails) f.setGatewayReadFault('owner-a', new Error('REREAD_UNAVAILABLE'));
+        return zero ? {success: true, affectedRows: 0} : {success: true};
+      };
+      const before = f.row();
+      const result = await f.primary.reserveInstanceResource(binding, f.slotRequest());
+      reservationRefusal(result, zero ? (readFails ? 'UNAVAILABLE' : 'STATE_CHANGED') : 'UNKNOWN',
+        'UNRESOLVED');
+      if (!zero && readFails) assert.equal(result.reason, 'UNAVAILABLE');
+      assert.equal(calls, zero && !readFails ? SERVICE_INSTANCE_LIMIT.RESOURCES : 1);
+      assert.deepEqual(f.row(), before, 'AN_UNRESOLVED_SUBMISSION_CHANGED_AUTHORITY');
+    });
+}

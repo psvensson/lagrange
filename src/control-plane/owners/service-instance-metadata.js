@@ -7,14 +7,15 @@
 // submissions in total. Selection stays single-shot (it never re-decides).
 import {TABLES} from '../../constants/index.js';
 import {SERVICE_INSTANCE_ACTION as ACTION, SERVICE_INSTANCE_LIMIT as LIMIT,
-  SERVICE_INSTANCE_OUTCOME as OUTCOME, SERVICE_INSTANCE_PHASE as PHASE, SERVICE_INSTANCE_DECISION as DECISION} from
+  SERVICE_INSTANCE_OUTCOME as OUTCOME, SERVICE_INSTANCE_PHASE as PHASE,
+  SERVICE_INSTANCE_DECISION as DECISION, SERVICE_INSTANCE_RESERVATION_REFUSAL as REFUSAL} from
   '../../constants/service-instance.js';
 import {SERVICE_INSTALL_CATALOG_ERROR_CODE} from './service-install-catalog-contract.js';
 import {SystemMetadataOwnerBase} from './system-metadata-owner-base.js';
 import {ServiceInstanceContractError, requireInstance, instanceIdentifier,
   captureInstanceJson, captureSelectionRequest, encodeInstanceJson, instanceFailure} from
   './service-instance-contract.js';
-import {emptyInstanceState, decodeInstanceState, selectionHistory, selectionAdmission,
+import {validateBinding, emptyInstanceState, decodeInstanceState, selectionHistory, selectionAdmission,
   validCreationLineage, selectInstanceState, validSlotRequest, reserveResourceState,
   resolveResourceState, changeResourceState, validResourceToken} from './service-instance-state.js';
 
@@ -196,13 +197,21 @@ async function mutateResource(owner, binding, input, options, decide) {
   }
 }
 async function reserveInstanceResource(owner, value, request, options = {}) {
+  let result;
   try {
     const captured = captureResourceInput(value, request, validSlotRequest);
-    return await mutateResource(owner, captured.binding, captured.input,
+    requireInstance(instanceIdentifier(captured.binding.tenantId));
+    validateBinding(captured.binding, {tenantId: captured.binding.tenantId,
+      serviceDefinitionId: captured.binding.serviceDefinitionId});
+    result = await mutateResource(owner, captured.binding, captured.input,
       options, reserveResourceState);
   } catch (error) {
-    return instanceFailure(error);
+    result = instanceFailure(error);
   }
+  // Only reserveResourceState supplies SEALED. Every other negative public
+  // result explicitly retains uncertainty, including failed capture/encoding.
+  return result.outcome === OUTCOME.ADMITTED ? result : {...result,
+    reservationRefusal: result.reservationRefusal ?? REFUSAL.UNRESOLVED};
 }
 async function resolveInstanceResource(owner, value, token, options = {}) {
   try {

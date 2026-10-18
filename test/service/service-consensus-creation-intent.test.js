@@ -407,7 +407,8 @@ for (const condition of ['TARGET_ALREADY_OWNED', 'INVALID_EXPECTED_STATE']) {
     const resource = f.state().selected.resources[request.slot];
     t.diagnostic(JSON.stringify({condition, resolution, rowAfterResolution, originalResult,
       finalJournalState: finalRow.state, admissionJson: finalRow.admission_json,
-      finalResource: resource, inventory: await f.manager().recoverPendingOperations({resolveServiceContext: () => null})}));
+      finalResource: resource,
+      inventory: await f.manager().recoverPendingOperations({resolveServiceContext: () => null})}));
     assert.ok(!(finalRow.state === 'cancelled' && resource.phase === 'ADMITTED' &&
       resource.token.operationId === request.operationId),
     'CANCELLED_JOURNAL_WITH_DELAYED_ADMITTED_RESOURCE: unresolved obligation lost');
@@ -420,7 +421,8 @@ test('independent U1: STALE_BINDING before the exact future selection is not a s
   const f = await createOriginFixture(t);
   const previous = f.intent.consensusBinding;
   const nextRequest = f.request(previous.selectionVersion, 73, previous.incarnation);
-  const revision = await f.primary.catalogOwner.getCreationRevision(nextRequest.revisionId, nextRequest.tenantId);
+  const revision = await f.primary.catalogOwner.getCreationRevision(
+    nextRequest.revisionId, nextRequest.tenantId);
   const predicted = selectInstanceState(f.state(), nextRequest, revision).result.binding;
   // This is a syntactically valid immutable intent. Predicting the deterministic
   // binding grants no authority: the real owner refuses it until the selection.
@@ -454,4 +456,110 @@ test('independent U1: STALE_BINDING before the exact future selection is not a s
   assert.ok(!(finalRow.state === 'cancelled' && resource.phase === 'ADMITTED' &&
     resource.token.operationId === request.operationId),
   'FUTURE_BINDING_CANCELLED_BEFORE_EXACT_REQUEST_BECAME_ADMISSIBLE');
+});
+
+async function pendingReservation(f) {
+  const reserve = f.primary.reserveInstanceResource.bind(f.primary);
+  f.primary.reserveInstanceResource = async () => {
+    throw new Error('ORIGINAL_RESERVATION_UNAVAILABLE');
+  };
+  assert.equal((await f.prepare()).outcome, 'UNKNOWN');
+  assert.equal(f.row().state, 'pending');
+  f.primary.reserveInstanceResource = reserve;
+  return reserve;
+}
+
+test('F1 REMOVE-time resolution fails closed for untagged or UNRESOLVED owner refusals', async (t) => {
+  const f = await createOriginFixture(t);
+  const reserve = await pendingReservation(f);
+  const before = f.row();
+  const manager = f.manager();
+  manager._enforceRuntimePolicy = () => {
+    assert.fail('REMOVE_RESOLUTION_USED_FRESH_RUNTIME_POLICY');
+  };
+  const outcomes = ['STALE_BINDING', 'HISTORY_UNAVAILABLE', 'CONFLICT', 'CONTENT_CONFLICT',
+    'CAPACITY_EXHAUSTED', 'INVALID_EXPECTED_STATE', 'TARGET_ALREADY_OWNED', 'INVALID_REQUEST',
+    'CORRUPT_STATE', 'STATE_CHANGED', 'UNKNOWN', 'UNAVAILABLE'];
+  for (const outcome of outcomes) {
+    for (const tag of [{}, {reservationRefusal: 'UNRESOLVED'}]) {
+      f.primary.reserveInstanceResource = async () => ({outcome, ...tag});
+      assert.deepEqual(await manager.resolveRetainedReservation(before.operation_id),
+        {outcome: 'UNKNOWN', reason: outcome}, 'CALLER_RECONSTRUCTED_FINALITY_FROM_OUTCOME');
+      assert.deepEqual(f.row(), before, 'NONFINAL_REFUSAL_CHANGED_ORIGINAL_JOURNAL_BYTES');
+    }
+  }
+  f.primary.reserveInstanceResource = reserve;
+  const retained = await manager.resolveRetainedReservation(before.operation_id);
+  assert.equal(retained.outcome, 'ADMISSION_RETAINED');
+  assert.deepEqual(JSON.parse(f.row().admission_json), retained.token,
+    'EXACT_TOKEN_NOT_PERSISTED_BEFORE_RETURN');
+  assert.equal(f.row().intent_json, before.intent_json);
+  assert.equal(f.row().state, 'in_progress');
+});
+
+test('F1 irrevocably absent old binding permits exact positive cancellation and terminal reread',
+  async (t) => {
+    const f = await createOriginFixture(t);
+    await pendingReservation(f);
+    const before = f.row();
+    const binding = f.intent.consensusBinding;
+    assert.equal((await f.primary.selectConsensusInstance(
+      f.request(binding.selectionVersion, 2, binding.incarnation))).outcome, 'SELECTED');
+    const refusal = await f.primary.reserveInstanceResource(binding, f.intent.consensusSlotRequest);
+    assert.deepEqual(refusal, {outcome: 'STALE_BINDING', reservationRefusal: 'SEALED'});
+    const manager = f.manager();
+    manager._enforceRuntimePolicy = () => {
+      assert.fail('CANCELLATION_USED_FRESH_RUNTIME_POLICY');
+    };
+    const result = await manager.resolveRetainedReservation(before.operation_id);
+    assert.deepEqual(result, {outcome: 'RESERVATION_CANCELLED',
+      operationId: before.operation_id, reason: 'STALE_BINDING'});
+    assert.equal(f.row().state, 'cancelled');
+    assert.equal(f.row().intent_json, before.intent_json);
+    assert.equal(f.row().admission_json, null);
+    assert.deepEqual(JSON.parse(f.row().error), {reason: 'STALE_BINDING'});
+    assert.deepEqual(await manager.resolveRetainedReservation(before.operation_id),
+      {outcome: 'TERMINAL_OPERATION', rowState: 'cancelled'});
+  });
+
+for (const write of ['admission', 'cancellation']) {
+  for (const terminal of ['completed', 'failed']) {
+    test(`F1 ${write} reread preserves concurrently observed ${terminal} journal authority`,
+      async (t) => {
+        const f = await createOriginFixture(t);
+        await pendingReservation(f);
+        const before = f.row();
+        if (write === 'cancellation') {
+          assert.equal((await f.primary.reserveInstanceResource(f.intent.consensusBinding,
+            {...f.intent.consensusSlotRequest, operationId: 'ordinal-winner'})).outcome,
+          'ADMITTED');
+        }
+        const manager = f.manager();
+        manager.setOperationWriter(async (sql, params) => {
+          // Fault seam: another writer's terminal transition wins before our
+          // exact expected-state mutation. The reread must expose that state.
+          f.db.prepare('UPDATE wasm_operations SET state = ? WHERE operation_id = ?')
+            .run(terminal, before.operation_id);
+          return f.writer(sql, params);
+        });
+        assert.deepEqual(await manager.resolveRetainedReservation(before.operation_id),
+          {outcome: 'TERMINAL_OPERATION', rowState: terminal},
+          'CONCURRENT_TERMINAL_JOURNAL_WAS_NORMALIZED_TO_RESOURCE_UNCERTAINTY');
+        assert.equal(f.row().intent_json, before.intent_json);
+        assert.equal(f.row().state, terminal);
+      });
+  }
+}
+
+test('F1 corrupt retained identity remains a journal error, never resource UNKNOWN', async (t) => {
+  const f = await createOriginFixture(t);
+  await pendingReservation(f);
+  const id = f.row().operation_id;
+  f.db.prepare('UPDATE wasm_operations SET tenant_id = ? WHERE operation_id = ?')
+    .run('foreign-tenant', id);
+  const before = f.row();
+  const reserves = f.events.filter((event) => event.kind === 'reserve').length;
+  assert.deepEqual(await f.manager().resolveRetainedReservation(id), {outcome: 'CONTENT_CONFLICT'});
+  assert.deepEqual(f.row(), before);
+  assert.equal(f.events.filter((event) => event.kind === 'reserve').length, reserves);
 });

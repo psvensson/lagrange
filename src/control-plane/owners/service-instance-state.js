@@ -1,7 +1,8 @@
 // R2 deterministic state decisions. Only the enclosing metadata row CAS commits
 // these transitions. No clock, cache, local lock, or physical completion inference.
 import {SERVICE_INSTANCE_ACTION as ACTION, SERVICE_INSTANCE_LIMIT as LIMIT,
-  SERVICE_INSTANCE_OUTCOME as OUTCOME, SERVICE_INSTANCE_PHASE as PHASE, SERVICE_INSTANCE_DECISION as DECISION} from
+  SERVICE_INSTANCE_OUTCOME as OUTCOME, SERVICE_INSTANCE_PHASE as PHASE,
+  SERVICE_INSTANCE_DECISION as DECISION, SERVICE_INSTANCE_RESERVATION_REFUSAL as REFUSAL} from
   '../../constants/service-instance.js';
 import {WASM_WRITER_PROFILE} from '../../wasm-service/wasm-writer-profile.js';
 import {deriveServiceDefinitionId} from '../../service/service-lifecycle-command-identity.js';
@@ -209,27 +210,37 @@ function findInstance(state, binding) {
 function resourceResult(resource) {
   return {outcome: OUTCOME.ADMITTED, phase: resource.phase, token: resource.token};
 }
+function resourceRefusal(outcome, finality, details = {}) {
+  return {result: {...details, outcome, reservationRefusal: finality}};
+}
 function reserveResourceState(state, binding, request) {
   const instance = findInstance(state, binding);
-  if (!instance) return {result: {outcome: OUTCOME.STALE_BINDING}};
+  if (!instance) {
+    // Retained selection versions never decrease; a future binding has not
+    // been excluded just because its selection has not happened yet.
+    return resourceRefusal(OUTCOME.STALE_BINDING, binding.selectionVersion <= state.version ?
+      REFUSAL.SEALED : REFUSAL.UNRESOLVED);
+  }
   const resource = instance.resources[request.slot];
   const ordinal = request.expectedOrdinal + 1;
-  if (ordinal < resource.ordinal) return {result: {outcome: OUTCOME.HISTORY_UNAVAILABLE}};
+  if (ordinal < resource.ordinal) {
+    return resourceRefusal(OUTCOME.HISTORY_UNAVAILABLE, REFUSAL.SEALED);
+  }
   if (ordinal === resource.ordinal) {
     if (request.operationId !== resource.token.operationId) {
-      return {result: {outcome: OUTCOME.CONFLICT, winnerToken: resource.token}};
+      return resourceRefusal(OUTCOME.CONFLICT, REFUSAL.SEALED, {winnerToken: resource.token});
     }
-    return {result: same(resource.request, request) ? resourceResult(resource) :
-      {outcome: OUTCOME.CONTENT_CONFLICT}};
+    return same(resource.request, request) ? {result: resourceResult(resource)} :
+      resourceRefusal(OUTCOME.CONTENT_CONFLICT, REFUSAL.SEALED);
   }
-  if (instance !== state.selected) return {result: {outcome: OUTCOME.STALE_BINDING}};
-  if (!instanceCounter(ordinal)) return {result: {outcome: OUTCOME.CAPACITY_EXHAUSTED}};
+  if (instance !== state.selected) return resourceRefusal(OUTCOME.STALE_BINDING, REFUSAL.SEALED);
+  if (!instanceCounter(ordinal)) return resourceRefusal(OUTCOME.CAPACITY_EXHAUSTED, REFUSAL.SEALED);
   if (request.expectedOrdinal !== resource.ordinal || resource.phase !== PHASE.CLOSED) {
-    return {result: {outcome: OUTCOME.INVALID_EXPECTED_STATE}};
+    return resourceRefusal(OUTCOME.INVALID_EXPECTED_STATE, REFUSAL.UNRESOLVED);
   }
   if (instance.resources.some((slot) => slot.phase !== PHASE.CLOSED &&
       slot.request.replicaId === request.replicaId)) {
-    return {result: {outcome: OUTCOME.TARGET_ALREADY_OWNED}};
+    return resourceRefusal(OUTCOME.TARGET_ALREADY_OWNED, REFUSAL.UNRESOLVED);
   }
   const admitted = {ordinal, phase: PHASE.ADMITTED,
     request, token: resourceToken(binding, request)};
