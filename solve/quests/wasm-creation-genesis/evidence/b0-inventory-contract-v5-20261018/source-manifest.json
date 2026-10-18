@@ -1,0 +1,470 @@
+{
+  "schema": "b0-design-review-manifest/2",
+  "phase": "DESIGN_REVIEW_READY",
+  "approval": false,
+  "sourceCommit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870",
+  "planningBase": "a1c3cde54fcb46471791062bcae4a6000ae484e0",
+  "sourceTestDiff": [],
+  "reviewSubjects": [
+    {
+      "path": "inventory-contract-v5.md",
+      "sha256": "3fab96dc955bc5e15dc70607de645092d566621cf0de74a3e122676c42e164d2",
+      "bytes": 62090
+    },
+    {
+      "path": "oracle-matrix-v5.md",
+      "sha256": "cfbb35827f080231e87f7f8690194e802e3fcde4c3dc10ff269b851f3b786693",
+      "bytes": 30825
+    },
+    {
+      "path": "guiding-review-request.md",
+      "sha256": "2b5de68c5bbd81759a6f8acea1c7da385a897433170eebba53fcbe169d82e2a6",
+      "bytes": 3892
+    },
+    {
+      "path": "first-executable-b1-inputs.md",
+      "sha256": "e44722c5dd1f7514077015c47e3ac1dcd2ad7a1ce9a541069ed57ac08eb99d17",
+      "bytes": 6853
+    },
+    {
+      "path": "source-owner-map.md",
+      "sha256": "a7effcc2ce46737c991c8bffedd73755f9dfa0f82a76041e90358955971c516d",
+      "bytes": 7766
+    }
+  ],
+  "sourceOwners": [
+    {
+      "path": "src/node/runtime-service-handler.js",
+      "sha256": "80b4ff13b9db69a6dc7df48ad300d71c66d6727bb960c6cad50d3c9aeed0516e",
+      "bytes": 29811,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/node/runtime-service-handler-constants.js",
+      "sha256": "a588ea3b18f2e7343f80e6be6af10e8f9bd67111baed04b3724990bd4f934a0e",
+      "bytes": 4960,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/node/runtime-service-restart-inventory.js",
+      "sha256": "45dd2bb3ff6d9ac6e5def76ea49e1be9a5ee6f4bced38a3d83a90439c61b1bf7",
+      "bytes": 8502,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/node/runtime-service-bound-creation-route.js",
+      "sha256": "5a645f8119d75669e3babdc2d41f64b45449fbf1c99527d6c31f8ed21e42d815",
+      "bytes": 23384,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/service/service-lifecycle-manager.js",
+      "sha256": "1cb886ec28eda6bd93c43c586ed9c7796f60d4ca48b157576573c4ea01bf7d6a",
+      "bytes": 22158,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/service/service-lifecycle-recovery.js",
+      "sha256": "8ddaeb9cddc4ea0adc98e8d36c7bb1ce0576e29998021d7ffa51c724ef90d70c",
+      "bytes": 11725,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/service/service-lifecycle-operations.js",
+      "sha256": "ec9b5028ba7fd21da60fbf112f8651ab61b826650ab78fdd6f4b1d84395f1918",
+      "bytes": 12198,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/service/service-consensus-creation-intent.js",
+      "sha256": "da66aaba9508406286618eb420a7bee2ea989ad5ade5cb3213965906e94f6a1e",
+      "bytes": 22857,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/service/service-consensus-bootstrap.js",
+      "sha256": "a39451be84a7416571f29c025c57462e35a1245dcfbfae1fd1a5b7598e5911f1",
+      "bytes": 12018,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/service/adapters/runtime-service-adapter.js",
+      "sha256": "e6f52c4cde5e6efa0e2b105259ea583ec4a54558fece1af179619c6284af5fe4",
+      "bytes": 3979,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/wasm-service/operation-lifecycle.js",
+      "sha256": "8fe33b6c2930a795be86318d5db423f28be3c406383747d7e89c8dd93820260d",
+      "bytes": 9524,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/wasm-service/wasm-service-lifecycle.js",
+      "sha256": "3a76887e125da2bb242712182c93db01d0a4ea3ba6a2c7dce2f624b1a4ecfc74",
+      "bytes": 28039,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/wasm-service/wasm-creation-retirement.js",
+      "sha256": "a5443e8ea15ad1e9d7405053fa11473f91f9bc1730974301c59001b772d34543",
+      "bytes": 8417,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/wasm-service/wasm-creation-opening.js",
+      "sha256": "67f531f34df55d320c698cf4b91da10944f1256c6da6885fe1a4a7b913a44d7c",
+      "bytes": 20230,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/runtime/service-runtime-consensus-publication.js",
+      "sha256": "1f0f0ede0f7f4072f5744273b7a8e8e4d1a7a2b0657472a1f9416acdf366142f",
+      "bytes": 6922,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/runtime/service-runtime-lifecycle.js",
+      "sha256": "e51d56440f97eeb4a183df7b76165dc22abbb175023f47a9ad93f78977a7b706",
+      "bytes": 25810,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/runtime/service-runtime-consensus-bootstrap.js",
+      "sha256": "824839b816dbc3068f881ed723ad796a5e30b12533fdddf1872e49be41b5e0bf",
+      "bytes": 3572,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/runtime/wasm-component-driver.js",
+      "sha256": "784ba0bcc4bf018be3115c9a06bb7b943879b3ba1dced4493bba73903186e850",
+      "bytes": 24587,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/runtime/wasm-component-driver-consensus.js",
+      "sha256": "c490bd48bee715fdc72ca1f760cbcceade184ffaf5df5b58c833bbe49f34bbc4",
+      "bytes": 7042,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/runtime/wasm-component-driver-shutdown-methods.js",
+      "sha256": "b1bb74f60d580c8313aab623a29a8d9c6ff98c454107d9a317664b1c2dd5e29b",
+      "bytes": 1851,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/control-plane/owners/service-instance-state.js",
+      "sha256": "b84f68e170c0fc862883cc21178e630c42ff2d359e2a302ddbcfad3d390f5fac",
+      "bytes": 16267,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/control-plane/owners/service-instance-metadata.js",
+      "sha256": "62cb2191b7168aa05c6c5faa0b70a0d7b1ecf3474f97fb5c6dd18a270d6d8793",
+      "bytes": 11911,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/storage/data-directory-process-owner.js",
+      "sha256": "46ceabee8eb770347f5723cf19628b547d24423a630d89a4166ff8cbbd44922b",
+      "bytes": 2584,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/lagrange-runtime-startup.js",
+      "sha256": "cbe0c4ea766eacacd4dab194470725f82a3ec2085977f6e51a83a0ea00ff3e28",
+      "bytes": 27768,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "test/wasm-service/bound-creation-handler-embedding-fixture.js",
+      "sha256": "fae23bc1c01d42b70d1020bdfd4670cbef256d2d58812221529aaeec774d5515",
+      "bytes": 18854,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "test/wasm-service/bound-creation-restart.integration.test.js",
+      "sha256": "c119088d3bdf146a9c86786fb1fc097ff11654bf86b5cbc31270d8bb2916baea",
+      "bytes": 34448,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "test/node/runtime-service-bound-route.test.js",
+      "sha256": "01abc5783a372c06ab7a390f4401dfe5d07cb3250081ac02cd1f189eb747118b",
+      "bytes": 55157,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "test/shards/impact-contracts.json",
+      "sha256": "c57c080eaa42d5f4df841efe653612fe643a3ebcf1b197f6f6a0237a3ff9904a",
+      "bytes": 142865,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/control-plane/owners/replica-operations-owner.js",
+      "sha256": "707da2ea649f8e9929c90e368728b7f75c0e06de15bc73f7ca12293107df1cff",
+      "bytes": 1301,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/rebalancer/operation-workflow-dispatch-response-reconcile.js",
+      "sha256": "dbed631a189fdd7cad624b69de6c252fa8bfedecc9efef8a66ed00572c911a9d",
+      "bytes": 44656,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/rebalancer/replica-operation-constants.js",
+      "sha256": "f177f0440966e9028ec63f53c47743047333cb8d323b3d263f79b428bf29b08f",
+      "bytes": 4641,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/rebalancer/replica-operation-step-policy.js",
+      "sha256": "1cc0143211472e7949f16b9497ebae2e243fafc60ba1dcc6ffb53200c2ead4b1",
+      "bytes": 20720,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/rebalancer/replica-status.js",
+      "sha256": "abf05b6704b7d5790b0fc5c380b9147413a43e53a1a1d0f39c80f8340d008625",
+      "bytes": 9070,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/rebalancer/replica-operation-repository-row-methods.js",
+      "sha256": "00d096eee7b29c34f1c127842dc9fc90c8f9df7bf6737e401178a2d7d0e053c4",
+      "bytes": 17575,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
+      "sha256": "7242896a8a04b6a2e5e53230d57ef42e0d8811017ba32fe1782356f96b65bebe",
+      "bytes": 7152,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/rebalancer/replica-operation-repository-mutation-update-methods.js",
+      "sha256": "61510a487c228485ef21d23dcad98c54d90710d42c98d8136d274a86974c057f",
+      "bytes": 22219,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/rebalancer/replica-operation-repository-mutation-persistence-methods.js",
+      "sha256": "13af058d340bb1735ddd4dd5738d56bf7bab576b1c62dbc6e32db877e41a8d13",
+      "bytes": 27592,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/rebalancer/replica-operation-repository-constants.js",
+      "sha256": "01d8ae0dd89a284903ff8e175991c73a13e941dae9dbcbf8f02a2921d50625ec",
+      "bytes": 1285,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/node/replica-create-admission-owner.js",
+      "sha256": "f6ce9f6fe427fdf5978f04f36a660295d3677307e997dd68375dc49f5fd9c3ba",
+      "bytes": 27442,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/bootstrap/system-table-runtime-schema-definitions.js",
+      "sha256": "76e87b3e7d746c672613a5dd40f2cf9ead44105f32c8a74e3e3371bf7410366c",
+      "bytes": 28642,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/wasm-service/wasm-meta-models-constants.js",
+      "sha256": "68391a26f01f36095ddc7cb7b0825707a3a853057abe91b50922bae214507f8b",
+      "bytes": 4672,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/bootstrap/shared/runtime-service-handler-setup.js",
+      "sha256": "10cfd82adfcfc2dfed9f7e65575f378a00410c93bace1de7fdf8bcd2110e5299",
+      "bytes": 7282,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/bootstrap/shared/guarded-runtime-service-handler.js",
+      "sha256": "7dff9e725bc23812c568cdd50c11b514e2254ed8924881053e8f1c85a2856da2",
+      "bytes": 1710,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    },
+    {
+      "path": "src/bootstrap/shared/startup-service-lifecycle-owner.js",
+      "sha256": "71dd34ea85fa6f1034b189b490befbc6222bc836963ee7943a8750aa44914a59",
+      "bytes": 3674,
+      "commit": "a251ce4fd9c980a78c0fd33d8a5f873161f90870"
+    }
+  ],
+  "preservedInputs": [
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/recovery-20261017/u1-inventory-continuation-contract-v2.md",
+      "sha256": "b871e38a5307933e32c085e55e47b0a650c42319da85073b67e028116594858f",
+      "bytes": 29687,
+      "commit": "a1c3cde54fcb46471791062bcae4a6000ae484e0"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/correction-design-review.md",
+      "sha256": "1b9295a3d4e29beec1107adf6dfb9b778244fcf66358a1d3fb5d7eeacadde5d9",
+      "bytes": 7631,
+      "commit": "a1c3cde54fcb46471791062bcae4a6000ae484e0"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/verdict.md",
+      "sha256": "aa5ec206809b76613f55b7547b318a3d4994757d7379d71dbd83fcc5c9b2f168",
+      "bytes": 58904,
+      "commit": "a1c3cde54fcb46471791062bcae4a6000ae484e0"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/independent-witnesses-complete.patch",
+      "sha256": "51dafdbdb8c8b5438d3ca679e014a3038160c09f92a339040b4206ef3890367e",
+      "bytes": 21080,
+      "commit": "a1c3cde54fcb46471791062bcae4a6000ae484e0"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/recovery-20261017/u1-reservation-finality-bounded-verdict.md",
+      "sha256": "257a6177e931bbbcc0f1d586418ef6ad7f279049aa9fcf6df23f7a8aed58e6a8",
+      "bytes": 5799,
+      "commit": "a1c3cde54fcb46471791062bcae4a6000ae484e0"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/recovery-20261017/u1-correction-proposal.md",
+      "sha256": "90d98bb2bae217faaeff848200bc684ccfc20a9ac4c2c1a22fc8b759b8a61d34",
+      "bytes": 7401,
+      "commit": "a1c3cde54fcb46471791062bcae4a6000ae484e0"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/quest.json",
+      "sha256": "8abb6047248e56341a1f9d703a79f9725dae8323b42722d3acd782ee78b72944",
+      "bytes": 1807,
+      "commit": "a1c3cde54fcb46471791062bcae4a6000ae484e0"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/ACTIVATION-DISCOVERY-DESIGN-20261017.md",
+      "sha256": "a7f637cfabfb9921e64b9423aa3dbbf630c146976b3ef1c71a6fe7f3232292a3",
+      "bytes": 76675,
+      "commit": "a1c3cde54fcb46471791062bcae4a6000ae484e0"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/RECOVERY-DESIGN-20261017.md",
+      "sha256": "179efd62c174146fd34c29cd78e5f4b304b346aea67dd841ba5076e8fc069183",
+      "bytes": 68916,
+      "commit": "a1c3cde54fcb46471791062bcae4a6000ae484e0"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/inventory-overlap.js.txt",
+      "sha256": "39ce56073ce06f8f96b0413841d367cd6b6b2f90f591c78dd613b5cf5f7978b1",
+      "bytes": 1387,
+      "commit": "a1c3cde54fcb46471791062bcae4a6000ae484e0"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/restart-races.js.txt",
+      "sha256": "f5497f321ed4173eea36af800a4ebe10a87324360c1cb9aaf2097c525a20d9eb",
+      "bytes": 3197,
+      "commit": "a1c3cde54fcb46471791062bcae4a6000ae484e0"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/reservation-future-binding.js.txt",
+      "sha256": "850c76318895bdda10743f6cd49b087a8d36f4feb0d8e42dbe8180e0a9f85b48",
+      "bytes": 2290,
+      "commit": "a1c3cde54fcb46471791062bcae4a6000ae484e0"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/reservation-races.js.txt",
+      "sha256": "d793b1bc6f0b6d8543fbbade7c92e387ab7ee0209a1838d54df9f7a4dee298ae",
+      "bytes": 2723,
+      "commit": "a1c3cde54fcb46471791062bcae4a6000ae484e0"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/retirement-shutdown.js.txt",
+      "sha256": "362a2091049035517c6ac81e6e81439a92bf7c6737c8e5f80613aad32a403c1a",
+      "bytes": 1953,
+      "commit": "a1c3cde54fcb46471791062bcae4a6000ae484e0"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/mutation-direct-controls.js.txt",
+      "sha256": "6508b8a00f69d0f50a6957a5b3906014cf757950210ec8a43aeb69462d297c7a",
+      "bytes": 2340,
+      "commit": "a1c3cde54fcb46471791062bcae4a6000ae484e0"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/older-reenter-inventory.js.txt",
+      "sha256": "a928fa9c79d13b73023d457454a839842650de41205bfa872ebfca39284c4bb1",
+      "bytes": 2022,
+      "commit": "a1c3cde54fcb46471791062bcae4a6000ae484e0"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/inventory-owner-read-control.js.txt",
+      "sha256": "d52906a4be2113f94578f345d63cddf9b0cab32007b8768c566916e352af3b2d",
+      "bytes": 703,
+      "commit": "a1c3cde54fcb46471791062bcae4a6000ae484e0"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/recovery-20261017/verifier-recovery-u1-cloud/independent/predecessor-successor-inventory.js.txt",
+      "sha256": "b4ad257dd85fcd0e421133db97ff937f864a719efa559feab939de5a675a9d0e",
+      "bytes": 3149,
+      "commit": "a1c3cde54fcb46471791062bcae4a6000ae484e0"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/b0-inventory-contract-20261018/inventory-contract-v3.md",
+      "sha256": "cf420d78fd66a2453293c709167f4fcabe111a177116e9af93fc3a64ee81e2cc",
+      "bytes": 40066,
+      "commit": "8d4145064671a5b400e12eb226ffddf0b22b97b7"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/b0-inventory-contract-20261018/oracle-matrix-v3.md",
+      "sha256": "f7325da12df3d9d74cf3c7679a74a76d212fccbb94594ccc2d3e01db691994e4",
+      "bytes": 20588,
+      "commit": "8d4145064671a5b400e12eb226ffddf0b22b97b7"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/b0-inventory-contract-20261018/source-manifest.json",
+      "sha256": "1d3617577b4734bd75db959688ecebeeaae59b57f29dc7e05b673fa427b615c7",
+      "bytes": 13561,
+      "commit": "8d4145064671a5b400e12eb226ffddf0b22b97b7"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/b0-inventory-contract-20261018/independent-review-v3.md",
+      "sha256": "7c34c42a2c86a5b05d3ec6df87b67d28babcd34f5bd4416ec72176e45516fb81",
+      "bytes": 14630
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/b0-inventory-contract-v4-20261018/inventory-contract-v4.md",
+      "sha256": "0be7069afbc314743cab7223670d685552e1f3e2b8a67a0cc0d37fe22a9ddf1c",
+      "bytes": 57487,
+      "commit": "f21875950648a2a3fe1c1e50330d53012be18a31"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/b0-inventory-contract-v4-20261018/oracle-matrix-v4.md",
+      "sha256": "2384126db7bdf0430979ea4707efc3a0602958e152efa0771746ef9876a01d07",
+      "bytes": 28085,
+      "commit": "f21875950648a2a3fe1c1e50330d53012be18a31"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/b0-inventory-contract-v4-20261018/source-manifest.json",
+      "sha256": "cb4df6a9f1e1e2c736d064d51682ac7306f957baf8f82995d74b0091a2662aa5",
+      "bytes": 18298,
+      "commit": "f21875950648a2a3fe1c1e50330d53012be18a31"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/b0-inventory-contract-v4-20261018/independent-review-v4.md",
+      "sha256": "68adea662a4c0ddd52b68bcd69b9eaf83387f324a33027cb64837b2f90ac65cb",
+      "bytes": 15194
+    }
+  ],
+  "dynamicTestsRun": false,
+  "productionChanges": false,
+  "taskV2Created": false,
+  "harnessdDispatchAuthority": false,
+  "originalU1Verdict": "REJECT",
+  "originalV2Review": "INCOMPLETE / REVISE",
+  "version": 5,
+  "supersedes": {
+    "commit": "f21875950648a2a3fe1c1e50330d53012be18a31",
+    "verdict": "REVISE",
+    "verdictSha256": "68adea662a4c0ddd52b68bcd69b9eaf83387f324a33027cb64837b2f90ac65cb"
+  },
+  "parentScopeDecision": "2026-10-18 root: include ordinary durable REMOVE target/custody in B1; no component-only or activation-deferred correctness substitute."
+}
