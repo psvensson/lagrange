@@ -1,0 +1,20 @@
+{
+  "schema": "b0-phase-record/1",
+  "phase": "DESIGN_APPROVED_AWAITING_TEST_ONLY_CHECKPOINT",
+  "reviewedCommit": "62170a9f68aa5e666298f7459046c248ca423516",
+  "contractSha256": "3fab96dc955bc5e15dc70607de645092d566621cf0de74a3e122676c42e164d2",
+  "oracleSha256": "cfbb35827f080231e87f7f8690194e802e3fcde4c3dc10ff269b851f3b786693",
+  "independentVerdict": {
+    "path": "independent-review-v5.md",
+    "sha256": "1a79006d51184d94a189ede3a44a05a92a65637612b54123379fde83c6aff31d",
+    "reviewer": "subagent:/root/rsraft_a0_readiness",
+    "scope": "APPROVE_DESIGN_ORACLE_ONLY"
+  },
+  "b1ImplementationAccepted": false,
+  "testOnlyCheckpointComplete": false,
+  "dynamicTestsRun": false,
+  "harnessdTaskAccepted": false,
+  "harnessdProven": false,
+  "originalU1Verdict": "REJECT",
+  "nextUnit": "Test-only expected-red B inventory witness checkpoint; B1 requires its independent approval and serialized A1 shared owner inputs."
+}
