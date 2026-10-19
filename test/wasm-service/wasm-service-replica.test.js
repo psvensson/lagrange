@@ -106,8 +106,11 @@ function createReplica(options) {
 
 const BASE64 = 'base64';
 
+// Mirror the application-transaction owner's deferred-effects interface, not an
+// obsolete array. Test owners must decide when the successful commit fires.
 function committedRecord(command, index = 1) {
-  return {command, index, term: 1, effects: []};
+  return {command, index, term: 1,
+    effects: {afterCommit: [], afterRollback: []}};
 }
 
 function kvSet(sessionId, key, text) {
@@ -381,9 +384,16 @@ describe('WasmServiceReplica', () => {
 
     it('advances the safety interval applied index from the record', () => {
       const replica = createReplica(defaultOpts());
-      replica.applyCommittedEntry(committedRecord(kvSet('s1', 'k1', 'v1'), 42));
+      const committed = committedRecord(kvSet('s1', 'k1', 'v1'), 42);
+      const beforeCommit = replica.safetyInterval.localAppliedIndex;
+      replica.applyCommittedEntry(committed);
       assert.deepStrictEqual(
         replica.kvStore.get('s1', 'k1'), Buffer.from('v1'));
+      assert.equal(replica.safetyInterval.localAppliedIndex, beforeCommit,
+        'APPLIED_INDEX_PUBLISHED_BEFORE_COMMITTED_TRANSACTION_SETTLED');
+      assert.equal(committed.effects.afterCommit.length, 1,
+        'the application registered exactly one successful-commit effect');
+      for (const effect of committed.effects.afterCommit) effect();
       assert.equal(
         replica.safetyInterval.localAppliedIndex, 42,
       );
