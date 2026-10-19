@@ -539,9 +539,9 @@ describe('RuntimeServiceHandler handleRemoveReplica', () => {
           replica_id: legacyReplicaId, type: 'REPLACE', workflow_step: 'COMPLETED'}],
       });
       const {handler, lifecycle} = createHandler({cache,
-      legacyRemovalAuthority: async ({entityId}) =>
-        ({outcome: entityId === 'sys-postgres-wire' ?
-          'ADMITTED' : 'CONTENT_CONFLICT'}),
+      legacyRemovalAuthority: async ({operationId, entityId}) =>
+        ({outcome: operationId === 'original-legacy-cleanup' &&
+          entityId === 'sys-postgres-wire' ? 'ADMITTED' : 'CONTENT_CONFLICT'}),
     });
       const answer = await handler.handleRemoveReplica({
         [ReplicaOperationField.OPERATION_ID]: 'forged-legacy-cleanup',
@@ -556,6 +556,20 @@ describe('RuntimeServiceHandler handleRemoveReplica', () => {
         'UNRELATED_ENTITY_CLAIM_STOPPED_A_LEGACY_RESOURCE');
       assert.equal(handler.inProgressOperations.size, 0,
         'REFUSED_LEGACY_CLEANUP_LEFT_AN_ADMITTED_EXECUTION');
+      assert.equal(handler.getLocalReplica(legacyReplicaId), undefined,
+        'REFUSED_REQUEST_POISONED_THE_CACHED_ENTITY_ID');
+      const valid = await handler.handleRemoveReplica({
+        [ReplicaOperationField.OPERATION_ID]: 'original-legacy-cleanup',
+        [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
+        [ReplicaOperationField.REPLICA_ID]: legacyReplicaId,
+      });
+      assert.equal(valid.status, ReplicaOperationResponseStatus.INITIATED,
+        'ORIGINAL_OWNER_CLEANUP_WAS_BLOCKED_BY_PRIOR_WRONG_ENTITY');
+      await flushImmediate();
+      await flushImmediate();
+      assert.equal(lifecycle.calls.filter((call) =>
+        call.method === 'stopReplica').length, 1,
+      'ORIGINAL_ENTITY_CLEANUP_LOST_OR_DOUBLED_STOP');
     });
 
   it('refuses a pre-canonical REMOVE when its memo falsely names a bound creation',
