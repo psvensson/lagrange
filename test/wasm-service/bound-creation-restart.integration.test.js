@@ -365,7 +365,8 @@ describe('recovery unit 1: host restart of bound creations (inventory, memo, re-
     assert.deepEqual([lastOutcome(host).errorCode, lastOutcome(host).deferRetry],
       ['TERMINAL_OPERATION', undefined]);
     assert.deepEqual([memoOf(host).status, memoOf(host).operationId, memoOf(host).deferRetry],
-      [ReplicaStatus.FAILED, creationId(host), undefined]);
+      [ReplicaStatus.REMOVED, creationId(host), undefined],
+      'A_TERMINAL_DUPLICATE_CANNOT_REOPEN_A_REMOVED_MEMO');
     const completedBefore = count(host, OUTCOME.RUNTIME_SERVICE_REMOVE_COMPLETED);
     await e.dispatch(host, TYPE.REMOVE_REPLICA, 'remove-p-r8-again');
     await e.settle(() => count(host, OUTCOME.RUNTIME_SERVICE_REMOVE_COMPLETED) ===
@@ -436,7 +437,8 @@ describe('recovery unit 1: host restart of bound creations (inventory, memo, re-
     'between the memo write and the re-entry finds the memo; one re-entry', async (t) => {
     const e = await hostsOf(t);
     const host = e.hosts[1];
-    await e.retain(host);
+    const retained = await e.retain(host);
+    assert.equal(retained.outcome, 'ADMISSION_RETAINED');
     const restarted = await e.restartHost(host, {inventory: false});
     for (const type of [TYPE.CREATE_REPLICA, TYPE.REMOVE_REPLICA]) {
       const reply = await e.dispatch(restarted, type);
@@ -448,7 +450,7 @@ describe('recovery unit 1: host restart of bound creations (inventory, memo, re-
     restarted.inventory = await restarted.handler.recoverRetainedCreations();
     const wake = restarted.handler.onCreationWake(e.serviceId, {
       reason: RECONCILE_REASON.CREATION_GENESIS_OBSERVED,
-      binding: host.intent.consensusBinding, token: {operationId: creationId(host)}});
+      binding: host.intent.consensusBinding, token: retained.token});
     assert.equal(wake.outcome, 'QUEUED', 'the memo was written before the re-entry');
     await e.settle(() => count(restarted, OUTCOME.RUNTIME_SERVICE_CREATE_HELD) > 0, 'held');
     assert.deepEqual(resumes, [creationId(host)], 'exactly one re-entry');
@@ -1101,7 +1103,7 @@ for (const conflict of [false, true]) {
       });
       if (conflict) {
         await assert.rejects(host.handler.recoverRetainedCreations(),
-          {code: 'CORRUPT_STATE'}, 'CONFLICTING_OBSERVATIONS_WERE_ORDERED_INTO_A_WINNER');
+          {outcome: 'CORRUPT_STATE'}, 'CONFLICTING_OBSERVATIONS_WERE_ORDERED_INTO_A_WINNER');
         await inventoryTurns();
         assert.equal(readyOpened, false);
         assert.equal(host.handler.localReplicas.size, 0);
