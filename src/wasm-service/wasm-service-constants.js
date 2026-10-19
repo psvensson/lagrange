@@ -1,5 +1,14 @@
 import {NUM, SERVICE_READ_LOCALITY} from '../constants/index.js';
 
+// Synchronous physical-owner observation of one exact retained creation.
+const WASM_CREATION_CURRENT = Object.freeze({
+  CURRENT: 'CURRENT', ABSENT: 'ABSENT', DIFFERENT: 'DIFFERENT', UNAVAILABLE: 'UNAVAILABLE',
+});
+// Physical finality does not discharge the original creation journal.
+const WASM_CREATION_RETIREMENT_FINALITY = Object.freeze({
+  FINAL: 'FINAL', UNRESOLVED: 'UNRESOLVED',
+});
+
 const WASM_SERVICE_SUBSYSTEM = Object.freeze({
   REPLICA: 'wasm-service-replica',
   EXECUTOR: 'wasm-service-executor',
@@ -239,6 +248,8 @@ const WASM_SERVICE_DEFAULT = Object.freeze({
 });
 
 export {
+  WASM_CREATION_CURRENT,
+  WASM_CREATION_RETIREMENT_FINALITY,
   WASM_SERVICE_SUBSYSTEM,
   READ_CONSISTENCY_MODE,
   WRITE_CONSISTENCY_MODE,

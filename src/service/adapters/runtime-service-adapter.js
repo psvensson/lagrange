@@ -124,6 +124,13 @@ class RuntimeServiceAdapter extends ServiceTypeAdapter {
     return typeof runtime.inspectRetainedCreation === 'function' ?
       runtime.inspectRetainedCreation(owned) : super.inspectRetainedCreation(owned);
   }
+
+  /** Forward the physical owner's observation without an asynchronous gap. */
+  observeCurrentCreation(owned) {
+    const runtime = this._serviceRuntimeLifecycle;
+    return typeof runtime.observeCurrentCreation === 'function' ?
+      runtime.observeCurrentCreation(owned) : super.observeCurrentCreation(owned);
+  }
 }
 
 export {RuntimeServiceAdapter};

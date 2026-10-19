@@ -218,6 +218,13 @@ function buildListOperationsSQL(tenantId, state) {
   return {sql, params};
 }
 
+/** One authoritative journal observation for all unfinished lifecycle work. */
+function buildRecoverableOperationsSQL() {
+  return {sql: `${SQL.SELECT} * FROM ${TABLES.WASM_OPERATIONS} ${SQL.WHERE} ` +
+    `${WO_COL.STATE} ${SQL.IN} ($1, $2)`,
+  params: [WASM_OPERATION_STATE.PENDING, WASM_OPERATION_STATE.IN_PROGRESS]};
+}
+
 /**
  * Build SQL to check for an existing operation by idempotency key.
  * @param {string} tenantId - Tenant identifier.
@@ -294,5 +301,6 @@ export {
   transitionOperation,
   buildGetOperationSQL,
   buildListOperationsSQL,
+  buildRecoverableOperationsSQL,
   buildIdempotencyCheckSQL,
 };

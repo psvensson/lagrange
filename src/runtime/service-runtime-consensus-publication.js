@@ -16,6 +16,9 @@ import {runtimeServiceConsensusIdentity} from '../rebalancer/runtime-service-rep
 import {getOrCreateCauseId} from '../utils/cause-id.js';
 import {isRetainedStateProjection} from './service-runtime-state-projection-handoff.js';
 import {WASM_SERVICES_ROW_MARK as MARK} from '../wasm-service/wasm-service-serving-state.js';
+import {WASM_CREATION_CURRENT as CURRENT} from '../wasm-service/wasm-service-constants.js';
+import {WASM_CREATION_RETIREMENT_FINALITY as FINALITY} from
+  '../wasm-service/wasm-service-constants.js';
 
 // Why a PUBLISHED bound replica is not (yet) discoverable.
 const CONSENSUS_PROJECTION = Object.freeze({
@@ -23,8 +26,10 @@ const CONSENSUS_PROJECTION = Object.freeze({
   HOST_UNAVAILABLE: 'ENDPOINT_HOST_UNAVAILABLE',
   SERVICES_ROW_FAILED: 'SERVICES_ROW_PROJECTION_FAILED',
   SERVICES_ROW_RETAINED: 'SERVICES_ROW_PROJECTION_RETAINED',
+  SERVICES_ROW_UNAVAILABLE: 'SERVICES_ROW_PROJECTION_UNAVAILABLE',
   ENDPOINT_WRITE_FAILED: 'ENDPOINT_WRITE_FAILED',
   NOT_MARKED: 'SERVICES_ROW_NOT_MARKED',
+  CURRENT_CREATION_UNAVAILABLE: 'CURRENT_CREATION_UNAVAILABLE',
 });
 // The serving-state mark answers (wasm-service-serving-state.js) that mean the
 // row is PRESENT for exactly this creation.
@@ -85,6 +90,10 @@ function markPresent(driver, descriptor, serviceType, token) {
 async function projectPublishedConsensus(owner, driver, bound, confirmed) {
   const unprojected = (projection) =>
     ({...confirmed, status: CONSENSUS_BOOTSTRAP.PUBLISHED_UNPROJECTED, projection});
+  const current = () => typeof driver.observeCurrentCreation === 'function' &&
+    driver.observeCurrentCreation({consensusCreation: bound.origin}).outcome === CURRENT.CURRENT;
+  const stale = () => unprojected({outcome: CONSENSUS_PROJECTION.CURRENT_CREATION_UNAVAILABLE});
+  if (!current()) return stale();
   if (!owner._stateProjectionWriter || !owner._endpointWriter) {
     return unprojected({outcome: CONSENSUS_PROJECTION.WRITER_ABSENT});
   }
@@ -95,10 +104,12 @@ async function projectPublishedConsensus(owner, driver, bound, confirmed) {
   const physical = physicalIdentity(bound.origin);
   const causeId = getOrCreateCauseId(bound.origin.operationId);
   const row = await projectServicesRow(owner, bound, physical, host, causeId);
+  if (!current()) return stale();
   if (row.outcome !== undefined) return unprojected(row);
   const endpointRefusal = await writeEndpoint(owner, bound, physical, {host,
     port: confirmed.port, consensusBinding: bound.origin.intent.consensusBinding,
     consensusResourceToken: bound.origin.token}, causeId);
+  if (!current()) return stale();
   if (endpointRefusal !== null) return unprojected(endpointRefusal);
   const mark = markPresent(driver, bound.descriptor, row.serviceType, bound.origin.token);
   return mark.outcome === undefined ? {...confirmed, projection: mark} : unprojected(mark);
@@ -107,8 +118,8 @@ async function projectPublishedConsensus(owner, driver, bound, confirmed) {
 /**
  * Retire one bound replica: its endpoint row by physical id first (no
  * logical resolution), then the driver's exact retirement, then on CLOSED the
- * services row's STOPPED projection (row delete by identity). Custody of an
- * unresolved CLOSED keeps the row; the typed result flows back.
+ * services row's STOPPED projection (row delete by identity). Physical
+ * finality and an unresolved projection are returned independently.
  * @param {Object} owner - The ServiceRuntimeLifecycle.
  * @param {Object} driver - The bound replica's driver.
  * @param {{origin: Object, descriptor: Object}} bound - The captured bootstrap.
@@ -120,11 +131,29 @@ async function withdrawRetiredConsensus(owner, driver, bound) {
     {consensusBinding: bound.origin.intent.consensusBinding});
   const result = await driver.stop({definition: bound.descriptor,
     serviceId: bound.descriptor.serviceId, consensusCreation: bound.origin});
-  if (result?.closed === true) {
-    await owner._projectReplicaState(physical.replicaId, bound.descriptor,
-      RUNTIME_REPLICA_STATUS.STOPPED, {node_id: physical.nodeId});
+  const retired = {...result, endpointRemoval: endpointRemoval ?? null};
+  if (result?.finality !== FINALITY.FINAL) return retired;
+  const unprojected = (projection) =>
+    ({...retired, status: CONSENSUS_BOOTSTRAP.RETIRED_UNPROJECTED, projection});
+  if (!owner._stateProjectionWriter) {
+    return unprojected({outcome: CONSENSUS_PROJECTION.WRITER_ABSENT});
   }
-  return {...result, endpointRemoval: endpointRemoval ?? null};
+  try {
+    const projected = await owner._projectReplicaState(physical.replicaId, bound.descriptor,
+      RUNTIME_REPLICA_STATUS.STOPPED, {node_id: physical.nodeId});
+    // The general projection owner returns undefined for a swallowed
+    // non-ACTIVE write failure. Only a returned STOPPED row proves this step.
+    if (projected?.stateRow?.status !== RUNTIME_REPLICA_STATUS.STOPPED) {
+      return unprojected({outcome: CONSENSUS_PROJECTION.SERVICES_ROW_UNAVAILABLE});
+    }
+    if (isRetainedStateProjection(projected.projectionResult)) {
+      return unprojected({outcome: CONSENSUS_PROJECTION.SERVICES_ROW_RETAINED});
+    }
+    return retired;
+  } catch (error) {
+    return unprojected({outcome: CONSENSUS_PROJECTION.SERVICES_ROW_FAILED,
+      error: error.message, errorCode: error.code ?? null});
+  }
 }
 
 export {projectPublishedConsensus, withdrawRetiredConsensus};

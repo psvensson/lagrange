@@ -8,11 +8,12 @@
  *
  * @module runtime/wasm-component-driver-consensus
  */
-import {captureConsensusBootstrap, CONSENSUS_BOOTSTRAP} from
+import {captureConsensusBootstrap, consensusBootstrapDescriptor, CONSENSUS_BOOTSTRAP} from
   '../service/service-consensus-bootstrap.js';
 import {instanceDigest} from '../control-plane/owners/service-instance-contract.js';
+import {WASM_CREATION_CURRENT as CURRENT} from '../wasm-service/wasm-service-constants.js';
 import {SERVICE_INSTANCE_OUTCOME} from '../constants/service-instance.js';
-import {START_STATUS} from './runtime-driver.js';
+import {PREPARE_STATUS, START_STATUS} from './runtime-driver.js';
 import {DriverLifecycleError} from './runtime-driver-errors.js';
 import {WASM_COMPONENT_ERROR, DRIVER_ACTION, DRIVER_SEPARATOR, buildDriverStatusResult} from
   './wasm-component-driver-vocabulary.js';
@@ -21,6 +22,26 @@ import {WASM_SERVICES_ROW_MARK} from '../wasm-service/wasm-service-serving-state
 function startFailure(detail) {
   return buildDriverStatusResult(START_STATUS.FAILED,
     `${WASM_COMPONENT_ERROR.START_REPLICA_FAILED}${DRIVER_SEPARATOR.DETAIL}${detail}`);
+}
+
+function prepareBoundReplica(driver, lifecycle, definition, serviceId, context) {
+  try {
+    const {origin, descriptor} = captureConsensusBootstrap(definition, context);
+    const app = JSON.parse(origin.intent.descriptor.runtimeConfig).definition;
+    lifecycle.createReplica({...app, serviceId}, {consensusCreation: origin,
+      consensusOpeningOwner: context.consensusOpeningOwner});
+    if (observeBoundCurrentCreation(driver, {consensusCreation: origin}).outcome !==
+        CURRENT.CURRENT) {
+      return {status: PREPARE_STATUS.FAILED, error: SERVICE_INSTANCE_OUTCOME.UNAVAILABLE};
+    }
+    driver._lifecycles.set(serviceId, lifecycle);
+    driver._prepared.set(serviceId, descriptor);
+    return {status: PREPARE_STATUS.READY};
+  } catch (cause) {
+    return buildDriverStatusResult(PREPARE_STATUS.FAILED,
+      `${cause.code || WASM_COMPONENT_ERROR.CREATE_REPLICA_FAILED}` +
+        `${DRIVER_SEPARATOR.DETAIL}${cause.message}`);
+  }
 }
 
 // A bound start answer is exactly one of these; anything else is FAILED.
@@ -39,7 +60,7 @@ function boundStartKind(startResult) {
   ].find(([matches]) => matches)[1];
 }
 
-function projectBoundStart(driver, startResult, serviceId) {
+function projectBoundStart(driver, startResult, serviceId, origin, replicaContext) {
   const kind = boundStartKind(startResult);
   if (kind === BOUND_START.NO_RESULT) {
     return buildDriverStatusResult(START_STATUS.FAILED,
@@ -52,6 +73,12 @@ function projectBoundStart(driver, startResult, serviceId) {
   case BOUND_START.HELD:
     return {status: CONSENSUS_BOOTSTRAP.HELD, ...bound};
   case BOUND_START.PUBLISHED:
+    if (observeBoundCurrentCreation(driver, {consensusCreation: origin}).outcome !==
+        CURRENT.CURRENT) {
+      return {...startFailure(SERVICE_INSTANCE_OUTCOME.UNAVAILABLE),
+        outcome: SERVICE_INSTANCE_OUTCOME.UNAVAILABLE};
+    }
+    driver._replicaContexts.set(serviceId, replicaContext);
     driver._running.add(serviceId);
     return {status: CONSENSUS_BOOTSTRAP.PUBLISHED, started: true, bootstrapped: true,
       port: startResult.port, host: startResult.host, ...bound};
@@ -74,11 +101,18 @@ function projectBoundStart(driver, startResult, serviceId) {
  */
 async function startBoundReplica(driver, lifecycle, replicaContext, serviceId) {
   try {
-    const {origin} = captureConsensusBootstrap(driver._prepared.get(serviceId), replicaContext);
+    const {origin, descriptor} = captureConsensusBootstrap(replicaContext.definition,
+      replicaContext);
+    if (instanceDigest(driver._prepared.get(serviceId)) !== instanceDigest(descriptor) ||
+        observeBoundCurrentCreation(driver, {consensusCreation: origin}).outcome !==
+          CURRENT.CURRENT) {
+      return {...startFailure(SERVICE_INSTANCE_OUTCOME.CONTENT_CONFLICT),
+        outcome: SERVICE_INSTANCE_OUTCOME.CONTENT_CONFLICT};
+    }
     const app = JSON.parse(origin.intent.descriptor.runtimeConfig).definition;
     const startResult = await lifecycle.startReplica(serviceId,
       {handlerFunctionId: app.handlerFunctionId});
-    return projectBoundStart(driver, startResult, serviceId);
+    return projectBoundStart(driver, startResult, serviceId, origin, replicaContext);
   } catch (cause) {
     return startFailure(cause.message);
   }
@@ -86,7 +120,9 @@ async function startBoundReplica(driver, lifecycle, replicaContext, serviceId) {
 
 function clearRetiredBookkeeping(driver, serviceId, origin) {
   const prepared = driver._prepared.get(serviceId);
-  if (instanceDigest(prepared?.consensusResourceToken ?? null) !== instanceDigest(origin.token)) {
+  const descriptor = consensusBootstrapDescriptor(origin);
+  if (instanceDigest(prepared ?? null) !== instanceDigest(descriptor) ||
+      observeBoundCurrentCreation(driver, {consensusCreation: origin}).outcome !== CURRENT.ABSENT) {
     return;
   }
   driver._running.delete(serviceId);
@@ -146,5 +182,11 @@ function inspectBoundRetainedCreation(driver, owned) {
   return lifecycle.inspectLocalCreation(owned?.consensusCreation);
 }
 
+function observeBoundCurrentCreation(driver, owned) {
+  const lifecycle = driver._wasmServiceLifecycle;
+  return typeof lifecycle?.observeCurrentCreation === 'function' ?
+    lifecycle.observeCurrentCreation(owned?.consensusCreation) : {outcome: CURRENT.UNAVAILABLE};
+}
+
 export {startBoundReplica, retireBoundReplica, markBoundServicesRowPresent,
-  inspectBoundRetainedCreation};
+  inspectBoundRetainedCreation, observeBoundCurrentCreation, prepareBoundReplica};

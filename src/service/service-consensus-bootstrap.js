@@ -10,6 +10,9 @@ import {CONSENSUS_CREATION_OPENING, captureConsensusCreationIntent,
   completeConsensusCreation, prepareConsensusCreation, recoverConsensusCreation} from
   './service-consensus-creation-intent.js';
 import {WASM_SERVICE_LIFECYCLE_REFUSAL} from '../wasm-service/wasm-service-constants.js';
+import {projectCreationReplicaState} from './service-lifecycle-state-record.js';
+import {WASM_CREATION_RETIREMENT_FINALITY as FINALITY} from
+  '../wasm-service/wasm-service-constants.js';
 
 const CONSENSUS_BOOTSTRAP = Object.freeze({
   HELD: 'BOOTSTRAPPED_HELD', ADMISSION: 'ADMISSION_RETAINED',
@@ -20,6 +23,8 @@ const CONSENSUS_BOOTSTRAP = Object.freeze({
   // (design ACTIVATION-DISCOVERY-DESIGN-20261017 RV1.3/RV2.3): never retired,
   // the manager keeps STARTING and a re-drive re-projects.
   PUBLISHED_UNPROJECTED: 'PUBLISHED_UNPROJECTED',
+  // Physical retirement is final; discovery withdrawal is still owed.
+  RETIRED_UNPROJECTED: 'RETIRED_UNPROJECTED',
   CONTEXT_REQUIRED: 'CONSENSUS_CREATION_CONTEXT_REQUIRED',
   SERVING_UNAVAILABLE: 'CONSENSUS_SERVING_NOT_IMPLEMENTED',
 });
@@ -121,14 +126,20 @@ async function retireConsensusCreation(manager, handle) {
     const {origin, descriptor} = captureConsensusBootstrap(handle?.definition, handle);
     operationId = origin.operationId;
     const adapter = manager._resolveAdapter(UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE);
-    manager._replicaStateById.set(descriptor.replicaId, SERVICE_LIFECYCLE_STATE.STOPPING);
+    projectCreationReplicaState(manager, {consensusCreation: origin},
+      SERVICE_LIFECYCLE_STATE.STOPPING);
     const result = await adapter.stopReplica({definition: descriptor, consensusCreation: origin,
       consensusOpeningOwner: handle.consensusOpeningOwner ?? manager});
-    if (result?.closed !== true) return {...result, operationId};
-    manager._replicaStateById.set(descriptor.replicaId, SERVICE_LIFECYCLE_STATE.STOPPED);
-    // The creation row completes at CLOSED, after the STOPPED projection the
-    // runtime ran (design RECOVERY-DESIGN-20261017 R1-D step 4): one CAS.
-    return {...result, operationId, completion: await completeConsensusCreation(manager, origin)};
+    if (result?.finality !== FINALITY.FINAL) return {...result, operationId};
+    projectCreationReplicaState(manager, {consensusCreation: origin},
+      SERVICE_LIFECYCLE_STATE.STOPPED);
+    if (result.status === CONSENSUS_BOOTSTRAP.RETIRED_UNPROJECTED) {
+      return {...result, operationId};
+    }
+    // Only the runtime's completed STOPPED projection permits the original
+    // journal CAS. Physical finality alone leaves that debt unresolved.
+    return {...result, operationId,
+      completion: await completeConsensusCreation(manager, origin, result)};
   } catch (error) {
     const failure = instanceFailure(error);
     return operationId === null ? failure :
@@ -152,7 +163,7 @@ async function confirmPublishedAuthority(manager, owned, confirmed) {
     // A confirmed PUBLISHED_UNPROJECTED keeps STARTING: serving, not yet
     // discoverable; never RUNNING and never retired (design Revision 4, F-1).
     if (confirmed.status === CONSENSUS_BOOTSTRAP.PUBLISHED) {
-      manager._replicaStateById.set(owned.definition.replicaId, SERVICE_LIFECYCLE_STATE.RUNNING);
+      projectCreationReplicaState(manager, owned, SERVICE_LIFECYCLE_STATE.RUNNING);
     }
     return confirmed;
   case AUTHORITY.CONTRADICTED:
@@ -173,8 +184,8 @@ async function continueRetainedCreation(manager, retained) {
     const adapter = manager._resolveAdapter(UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE);
     const owned = {definition: descriptor, consensusCreation: retained,
       consensusOpeningOwner: manager};
-    manager._replicaStateById.set(descriptor.replicaId, SERVICE_LIFECYCLE_STATE.STARTING);
     await adapter.createReplica(owned);
+    projectCreationReplicaState(manager, owned, SERVICE_LIFECYCLE_STATE.STARTING);
     const result = await adapter.startReplica(owned);
     const confirmed = confirmConsensusBootstrapResult(result, retained);
     // The creation row stays IN_PROGRESS for a PUBLISHED answer too: the

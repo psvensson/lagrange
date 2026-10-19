@@ -1,10 +1,10 @@
 import {WasmCreationReconciliation} from './wasm-creation-reconciliation.js';
 import {captureWasmCreation, inspectRetainedWasmCreation} from './wasm-creation-opening.js';
 import {boundStartResult} from './wasm-creation-publication.js';
-import {retireWasmCreation} from './wasm-creation-retirement.js';
+import {admitWasmRetirement, observeCurrentWasmCreation} from './wasm-creation-custody.js';
 import {SERVICE_INSTANCE_OUTCOME} from '../constants/service-instance.js';
-import {markServicesRowPresent, WASM_SERVICES_ROW_MARK} from './wasm-service-serving-state.js';
 import {instanceDigest} from '../control-plane/owners/service-instance-contract.js';
+import {markServicesRowPresent, WASM_SERVICES_ROW_MARK} from './wasm-service-serving-state.js';
 /**
  * WasmServiceLifecycle — manages creation, startup, and
  * shutdown of WasmServiceReplica instances from service
@@ -24,6 +24,7 @@ import {assertFoundingReplicaSet} from './wasm-service-consensus-port.js';
 import {buildEndpointRecord} from './service-endpoint-builder.js';
 import {WRITER_ACTION, WRITER_STATUS, WRITER_REASON} from './wasm-writer-profile.js';
 import {
+  WASM_CREATION_CURRENT,
   WASM_SERVICE_SUBSYSTEM,
   WASM_SERVICE_LOG_MSG,
   WASM_SERVICE_ERROR_MSG,
@@ -90,10 +91,6 @@ function lifecycleRefusal(code, message, serviceId) {
   return error;
 }
 
-function sameLiveCreation(current, creation) {
-  return creation !== null && current?.live && current.consensusCreation !== null &&
-    instanceDigest(current.consensusCreation) === instanceDigest(creation);
-}
 function physicalReplicaIdentity(creation, replicaConfig, serviceId) {
   return creation === null ? {...replicaConfig, groupId: serviceId} : creation.identity;
 }
@@ -121,6 +118,7 @@ class WasmServiceLifecycle {
     /** @type {Map<string, WasmServiceReplica>} */
     this.activeReplicas = new Map();
     this.retiringReplicas = new Set();
+    this.creationRetirements = new Map();
 
     /** @type {Map<string, Object>} */
     this.startDiagnostics = new Map();
@@ -215,8 +213,8 @@ class WasmServiceLifecycle {
    *   directory's, never the caller's.
    * A replica still starting or ready for the serviceId is never replaced
    * (that would orphan it): creation is refused typed (REPLICA_LIVE) until
-   * its stop has begun; a successor created while the old replica stops
-   * takes the entry, and the old stop then leaves it in place.
+   * its stop has begun. A generic successor can take the entry while the
+   * old replica stops; a bound successor waits for stop settlement.
    * @return {WasmServiceReplica} The created replica.
    */
   createReplica(serviceDefinition, replicaConfig) {
@@ -227,7 +225,8 @@ class WasmServiceLifecycle {
         WASM_SERVICE_ERROR_MSG.REPLICA_RETIRED, serviceId);
     }
     const current = this.activeReplicas.get(serviceId);
-    if (sameLiveCreation(current, creation)) return current;
+    if (creation !== null && this.observeCurrentCreation(creation).outcome ===
+        WASM_CREATION_CURRENT.CURRENT) return current;
     // Successor fence (design D4'): a bound creation opens only after every
     // stop of an instance for this serviceId has settled, so no second
     // instance can open a file a retirement is about to tombstone.
@@ -235,7 +234,11 @@ class WasmServiceLifecycle {
       replica.serviceDefinitionId === serviceId &&
       (creation !== null || replica !== current || replica.lifecycleState ===
         WASM_SERVICE_REPLICA_STATE.CLEANUP_REQUIRED));
-    if (current?.live || priorStop) {
+    const boundCustody = creation !== null && ((current?.lifecycleState ===
+      WASM_SERVICE_REPLICA_STATE.STOPPING) ||
+      [...this.creationRetirements.values()].some((entry) =>
+        entry.origin.intent.descriptor.serviceId === serviceId));
+    if (current?.live || priorStop || boundCustody) {
       throw lifecycleRefusal(WASM_SERVICE_LIFECYCLE_REFUSAL.REPLICA_LIVE,
         WASM_SERVICE_ERROR_MSG.REPLICA_LIVE, serviceId);
     }
@@ -348,7 +351,9 @@ class WasmServiceLifecycle {
 
     // A replica whose stop began is retired: refused before any port is
     // allocated for it, so no allocate/release pair can outlive it.
-    if (RETIRED_REPLICA_STATES.has(replica.lifecycleState)) {
+    if (RETIRED_REPLICA_STATES.has(replica.lifecycleState) ||
+        (replica.consensusCreation !== null && this.observeCurrentCreation(
+          replica.consensusCreation).outcome !== WASM_CREATION_CURRENT.CURRENT)) {
       return this.refuseStart(serviceId, startOptions, {
         code: WASM_SERVICE_LIFECYCLE_REFUSAL.REPLICA_RETIRED,
         error: WASM_SERVICE_ERROR_MSG.REPLICA_RETIRED,
@@ -424,13 +429,16 @@ class WasmServiceLifecycle {
    * @private
    */
   async continueBoundStart(serviceId, startOptions, replica) {
+    const current = () => this.activeReplicas.get(serviceId) === replica &&
+      this.observeCurrentCreation(replica.consensusCreation).outcome ===
+        WASM_CREATION_CURRENT.CURRENT;
+    const refused = () => this.refuseStart(serviceId, startOptions, {
+      code: WASM_SERVICE_LIFECYCLE_REFUSAL.STOPPED_DURING_START,
+      error: WASM_SERVICE_ERROR_MSG.STOPPED_DURING_START,
+    }, replica);
+    if (!current()) return refused();
     const run = await replica.creationReconciliation.request();
-    if (!replica.initialized || this.activeReplicas.get(serviceId) !== replica) {
-      return this.refuseStart(serviceId, startOptions, {
-        code: WASM_SERVICE_LIFECYCLE_REFUSAL.STOPPED_DURING_START,
-        error: WASM_SERVICE_ERROR_MSG.STOPPED_DURING_START,
-      }, replica);
-    }
+    if (!replica.initialized || !current()) return refused();
     return boundStartResult(replica, run, this.endpointHost);
   }
 
@@ -447,6 +455,8 @@ class WasmServiceLifecycle {
   enableServicesRowPublication(serviceId, serviceType, consensusResourceToken) {
     const replica = this.activeReplicas.get(serviceId);
     if (!replica || replica.consensusCreation === null ||
+        this.observeCurrentCreation(replica.consensusCreation).outcome !==
+          WASM_CREATION_CURRENT.CURRENT ||
         instanceDigest(replica.consensusCreation.token) !==
           instanceDigest(consensusResourceToken ?? null)) {
       return {outcome: WASM_SERVICES_ROW_MARK.NOT_REGISTERED};
@@ -481,7 +491,12 @@ class WasmServiceLifecycle {
    * @return {Promise<Object>} The typed retirement result.
    */
   retireReplica(creation) {
-    return retireWasmCreation(this, creation);
+    return admitWasmRetirement(this, creation);
+  }
+
+  /** Synchronous exact physical observation; never an effect permit across await. */
+  observeCurrentCreation(creation) {
+    return observeCurrentWasmCreation(this, creation);
   }
 
   /**
@@ -749,8 +764,10 @@ class WasmServiceLifecycle {
     this.consensusClosing = true;
     const serviceIds = new Set([...this.activeReplicas.keys(),
       ...[...this.retiringReplicas].map((replica) => replica.serviceDefinitionId)]);
-    const outcomes = await Promise.allSettled([...serviceIds].map((serviceId) =>
-      this.stopReplica(serviceId)));
+    const outcomes = await Promise.allSettled([
+      ...[...this.creationRetirements.values()].map((entry) => entry.promise),
+      ...[...serviceIds].map((serviceId) => this.stopReplica(serviceId)),
+    ]);
     const failures = outcomes.filter((outcome) => outcome.status === STOP_REJECTED)
       .map((outcome) => outcome.reason);
     if (failures.length === 1) throw failures[0];

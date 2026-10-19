@@ -6,6 +6,7 @@ import {
   ServiceTypeAdapterNotImplementedError,
   assertKnownServiceType,
 } from './service-lifecycle-errors.js';
+import {WASM_CREATION_CURRENT} from '../wasm-service/wasm-service-constants.js';
 
 const LOCAL_STR_SERVICETYPEADAPTER_IS_ABSTRACT_AND_CANNO = 'ServiceTypeAdapter is abstract and cannot be instantiated directly';
 const LOCAL_STR_SERVICETYPE = 'serviceType';
@@ -102,6 +103,11 @@ class ServiceTypeAdapter {
    */
   async inspectRetainedCreation(_owned) {
     return {outcome: SERVICE_TYPE_ADAPTER_INSPECTION.UNSUPPORTED};
+  }
+
+  /** Synchronous exact current-creation observation, unavailable by default. */
+  observeCurrentCreation(_owned) {
+    return {outcome: WASM_CREATION_CURRENT.UNAVAILABLE};
   }
 }
 

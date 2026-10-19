@@ -19,13 +19,14 @@ import {RECONCILE_REASON} from '../workflow/reconcile-queue-constants.js';
 import {tombstoneWasmCreationLocal, WASM_CREATION_RETIREMENT as RETIREMENT} from
   './wasm-creation-opening.js';
 import {deliverWasmCreationWake} from './wasm-creation-wake.js';
-import {WASM_SERVICE_LIFECYCLE_REFUSAL as REFUSAL, WASM_SERVICE_NO_FAILURE as NO_FAILURE,
+import {WASM_CREATION_RETIREMENT_FINALITY as FINALITY, WASM_SERVICE_LIFECYCLE_REFUSAL as REFUSAL, WASM_SERVICE_NO_FAILURE as NO_FAILURE,
   WASM_SERVICE_SHUTDOWN_INTENT as INTENT} from './wasm-service-constants.js';
 
 // Local outcomes after which nothing local can serve or reopen this resource.
 const RETIRED_LOCALLY = new Set([RETIREMENT.RETIRED, RETIREMENT.ALREADY,
   RETIREMENT.CREATION_STORAGE_MISSING]);
 const OWNER_METHODS = ['releaseInstanceResource', 'closeInstanceResource'];
+const EXACT_TOMBSTONE = new Set([RETIREMENT.RETIRED, RETIREMENT.ALREADY]);
 
 function captureRetirement(lifecycle, value) {
   const intent = captureConsensusCreationIntent(value?.intent);
@@ -140,10 +141,14 @@ async function closeRetired(lifecycle, {retired, owner}, {release, tombstone}) {
   const close = await settleOwner(() => owner.closeInstanceResource(
     retired.intent.consensusBinding, retired.token));
   return close.outcome === OUTCOME.CLOSED ?
-    {outcome: OUTCOME.CLOSED, retired: true, closed: true, release, tombstone, close,
+    {outcome: OUTCOME.CLOSED, retired: true, closed: true, finality: FINALITY.FINAL,
+      release, tombstone, close,
       wake: deliverWasmCreationWake(lifecycle, retired,
         RECONCILE_REASON.CREATION_RESOURCE_CLOSED)} :
-    {outcome: RETIREMENT.CLOSE_UNRESOLVED, retired: true, closed: false, release, tombstone,
+    {outcome: RETIREMENT.CLOSE_UNRESOLVED, retired: true, closed: false,
+      finality: close.outcome === OUTCOME.HISTORY_UNAVAILABLE &&
+        EXACT_TOMBSTONE.has(tombstone.outcome) ? FINALITY.FINAL : FINALITY.UNRESOLVED,
+      release, tombstone,
       close};
 }
 
@@ -155,14 +160,18 @@ async function closeRetired(lifecycle, {retired, owner}, {release, tombstone}) {
  */
 async function retireWasmCreation(lifecycle, value) {
   const retirement = captureOrRefuse(lifecycle, value);
-  if (retirement.refusal !== undefined) return retirement.refusal;
+  if (retirement.refusal !== undefined) {
+    return {...retirement.refusal, finality: FINALITY.UNRESOLVED};
+  }
   const local = await retireLocally(lifecycle, retirement);
   switch (local.state) {
   case LOCAL_RETIREMENT.BLOCKED:
     return {outcome: REFUSAL.RETIREMENT_BLOCKED_CLEANUP_REQUIRED, retired: false, closed: false,
+      finality: FINALITY.UNRESOLVED,
       release: local.release, failure: local.failure};
   case LOCAL_RETIREMENT.REFUSED:
     return {outcome: local.tombstone.outcome, retired: false, closed: false,
+      finality: FINALITY.UNRESOLVED,
       release: local.release, tombstone: local.tombstone};
   default:
     return closeRetired(lifecycle, retirement, local);

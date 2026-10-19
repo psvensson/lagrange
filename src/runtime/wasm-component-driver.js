@@ -1,4 +1,4 @@
-import {hasConsensusCreation, captureConsensusBootstrap, CONSENSUS_BOOTSTRAP} from
+import {hasConsensusCreation, CONSENSUS_BOOTSTRAP} from
   '../service/service-consensus-bootstrap.js';
 /**
  * Wasm_Component_Driver — runtime driver for WASM component
@@ -58,7 +58,7 @@ import {
 import {WASM_COMPONENT_ERROR, DRIVER_ACTION, DRIVER_SEPARATOR, buildDriverStatusResult} from
   './wasm-component-driver-vocabulary.js';
 import {startBoundReplica, retireBoundReplica, markBoundServicesRowPresent,
-  inspectBoundRetainedCreation} from
+  inspectBoundRetainedCreation, observeBoundCurrentCreation, prepareBoundReplica} from
   './wasm-component-driver-consensus.js';
 
 // --- Driver-specific constants ---
@@ -342,18 +342,14 @@ class WasmComponentDriver extends RuntimeDriver {
         WASM_COMPONENT_ERROR.CONSENSUS_LIFECYCLE_REQUIRED,
       );
     }
+    if (hasConsensusCreation(definition)) {
+      return prepareBoundReplica(this, lifecycle, definition, serviceId, context);
+    }
     try {
-      if (hasConsensusCreation(definition)) {
-        const {origin} = captureConsensusBootstrap(definition, context);
-        const app = JSON.parse(origin.intent.descriptor.runtimeConfig).definition;
-        lifecycle.createReplica({...app, serviceId}, {consensusCreation: origin,
-          consensusOpeningOwner: context.consensusOpeningOwner});
-      } else {
-        lifecycle.createReplica(definition, {
-          replicaId: definition[FIELD.REPLICA_ID],
-          replicaIds: definition[FIELD.REPLICA_IDS],
-        });
-      }
+      lifecycle.createReplica(definition, {
+        replicaId: definition[FIELD.REPLICA_ID],
+        replicaIds: definition[FIELD.REPLICA_IDS],
+      });
     } catch (cause) {
       return buildDriverStatusResult(
         PREPARE_STATUS.FAILED,
@@ -531,6 +527,11 @@ class WasmComponentDriver extends RuntimeDriver {
    */
   inspectRetainedCreation(owned) {
     return inspectBoundRetainedCreation(this, owned);
+  }
+
+  /** Synchronous physical observation, independent of prepared bookkeeping. */
+  observeCurrentCreation(owned) {
+    return observeBoundCurrentCreation(this, owned);
   }
 
   /**

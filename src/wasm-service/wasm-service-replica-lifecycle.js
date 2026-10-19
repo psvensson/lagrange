@@ -317,6 +317,12 @@ async function retireReplica(replica, handler, starting, activityFailure, shutdo
  * @return {Promise<void>}
  */
 async function shutdownWasmServiceReplica(replica, stopActivity, retirement) {
+  // A retirement joining an orderly stop cannot claim that stop tombstones.
+  // It still retains the debt if the joined cleanup fails and is retried.
+  if (replica.lifecycleState !== STATE.STOPPED &&
+      retirement.intent === WASM_SERVICE_SHUTDOWN_INTENT.RETIRE_RESOURCE) {
+    replica.retainedShutdownIntent ??= retirement;
+  }
   switch (replica.lifecycleState) {
   case STATE.STOPPING:
     return replica.lifecycleSettlement;
@@ -331,6 +337,7 @@ async function shutdownWasmServiceReplica(replica, stopActivity, retirement) {
   replica.lifecycleState = STATE.STOPPING;
   replica.creationReconciliation?.closeAdmission();
   replica.lifecycleSettlement = promise;
+  const shutdownIntent = replica.retainedShutdownIntent ?? retirement;
   const handler = replica.transportHandler;
   let activityFailure = NO_FAILURE;
   try {
@@ -340,7 +347,7 @@ async function shutdownWasmServiceReplica(replica, stopActivity, retirement) {
   }
   // Joiners already see this settlement. Retirement proceeds even if an
   // activity stop failed, but cannot then claim every obligation completed.
-  retireReplica(replica, handler, starting, activityFailure, retirement).then(resolve, reject);
+  retireReplica(replica, handler, starting, activityFailure, shutdownIntent).then(resolve, reject);
   return promise;
 }
 

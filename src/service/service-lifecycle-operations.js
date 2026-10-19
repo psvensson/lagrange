@@ -156,7 +156,7 @@ async function completeLifecycleOperation(
 
 async function recordLifecycleFailure(manager, details, error) {
   if (details.replicaId) {
-    manager._replicaStateById.set(
+    manager._setGenericReplicaState(
       details.replicaId,
       SERVICE_LIFECYCLE_STATE.FAILED,
     );
@@ -242,7 +242,7 @@ async function createReplica(manager, definition, context = {}, options = {}) {
       definition: canonicalDefinition,
       context,
     });
-    manager._replicaStateById.set(
+    manager._setGenericReplicaState(
       fields.replicaId,
       SERVICE_LIFECYCLE_STATE.CREATED,
     );
@@ -287,7 +287,7 @@ async function applyReplicaOperationSteps(
         currentState,
         step.enteringState,
       );
-      manager._replicaStateById.set(fields.replicaId, step.enteringState);
+      manager._setGenericReplicaState(fields.replicaId, step.enteringState);
     }
     result = await adapter[step.adapterMethod](replicaHandle, context);
     manager._assertTransition(
@@ -296,7 +296,7 @@ async function applyReplicaOperationSteps(
       step.enteringState,
       step.completedState,
     );
-    manager._replicaStateById.set(fields.replicaId, step.completedState);
+    manager._setGenericReplicaState(fields.replicaId, step.completedState);
     currentState = step.completedState;
   }
   return result;
@@ -310,7 +310,7 @@ async function beginReplicaStateTransition(
 ) {
   switch (spec.stateUpdateTiming) {
   case REPLICA_STATE_UPDATE_TIMING.BEFORE_JOURNAL_START:
-    manager._replicaStateById.set(fields.replicaId, spec.enteringState);
+    manager._setGenericReplicaState(fields.replicaId, spec.enteringState);
     await transitionJournalToInProgress(
       manager,
       operation,
@@ -325,7 +325,7 @@ async function beginReplicaStateTransition(
       fields.serviceId,
       spec.lifecycleOperation,
     );
-    manager._replicaStateById.set(fields.replicaId, spec.enteringState);
+    manager._setGenericReplicaState(fields.replicaId, spec.enteringState);
     break;
   }
 }

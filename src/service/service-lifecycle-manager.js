@@ -7,13 +7,12 @@ import {
   SERVICE_DESCRIPTOR_FIELD,
   SERVICE_LIFECYCLE_STATE,
   SERVICE_LIFECYCLE_TRANSITIONS,
-  SERVICE_OPERATION_STATE,
   SUBSYSTEM,
   UNIFIED_SERVICE_TYPE,
 } from '../constants/index.js';
 import {
   buildIdempotencyCheckSQL,
-  buildListOperationsSQL,
+  buildRecoverableOperationsSQL,
   createOperation,
   transitionOperation,
 } from '../wasm-service/operation-lifecycle.js';
@@ -47,6 +46,13 @@ import {claimConsensusCreationOpening, prepareConsensusCreation, readRetainedCre
 
 import {bootstrapConsensusCreation, resumeConsensusCreation} from
   './service-consensus-bootstrap.js';
+import {recordGenericReplicaState} from './service-lifecycle-state-record.js';
+import {captureInstanceJson, instanceDigest, requireInstance, instanceFailure} from
+  '../control-plane/owners/service-instance-contract.js';
+import {SERVICE_INSTANCE_OUTCOME as INSTANCE_OUTCOME, SERVICE_INSTANCE_LIMIT as INSTANCE_LIMIT} from
+  '../constants/service-instance.js';
+
+import {WASM_CREATION_CURRENT} from '../wasm-service/wasm-service-constants.js';
 
 const DEFAULT_DIAGNOSTICS_LIMIT = 100;
 const MAX_DIAGNOSTICS_LIMIT = 500;
@@ -75,7 +81,7 @@ const MAX_DIAGNOSTICS_LIMIT = 500;
     /** @type {Function|null} */ this._idempotencyReader = null;
     /** @type {Function|null} */ this._recoveryReader = null;
     /** @type {Function} */ this._runtimePolicyCheck = allowRuntimeLifecyclePolicy;
-    /** @type {Map<string, string>} */ this._replicaStateById = new Map();
+    /** @type {Map<string, Object>} */ this._replicaStateById = new Map();
     /** @type {Map<string, number>} */ this._adapterSelectionCountByType = new Map();
     /** @type {Object[]} */ this._recentOperations = [];
     /** @type {Object} */ this._metrics = {
@@ -190,7 +196,11 @@ const MAX_DIAGNOSTICS_LIMIT = 500;
    * @return {string}
    */ getReplicaState(serviceContext) {
     const {replicaId} = resolveServiceFields(serviceContext);
-    return this._replicaStateById.get(replicaId) || SERVICE_LIFECYCLE_STATE.CREATED;
+    return this._replicaStateById.get(replicaId)?.state || SERVICE_LIFECYCLE_STATE.CREATED;
+  }
+  /** Generic paths write the same record shape as creation projections. */
+  _setGenericReplicaState(replicaId, state) {
+    recordGenericReplicaState(this, replicaId, state);
   }
   /**
    * List registered service types.
@@ -523,13 +533,20 @@ const MAX_DIAGNOSTICS_LIMIT = 500;
     if (!this._recoveryReader) {
       throw new TypeError(LIFECYCLE_MGR_MSG.RECOVERY_READER_REQUIRED);
     }
-    const pendingQuery = buildListOperationsSQL(undefined, SERVICE_OPERATION_STATE.PENDING);
-    const inProgressQuery = buildListOperationsSQL(undefined, SERVICE_OPERATION_STATE.IN_PROGRESS);
-    const [pendingRows, inProgressRows] = await Promise.all([
-      this._recoveryReader(pendingQuery.sql, pendingQuery.params),
-      this._recoveryReader(inProgressQuery.sql, inProgressQuery.params),
-    ]);
-    const rows = [...(pendingRows || []), ...(inProgressRows || [])];
+    const query = buildRecoverableOperationsSQL();
+    const observed = await this._recoveryReader(query.sql, query.params);
+    requireInstance(Array.isArray(observed), INSTANCE_OUTCOME.CORRUPT_STATE);
+    const unique = new Map();
+    for (const row of observed) {
+      const captured = captureInstanceJson(row, INSTANCE_LIMIT.STATE_BYTES);
+      const operationId = captured.operation_id ?? captured.operationId;
+      requireInstance(typeof operationId === 'string', INSTANCE_OUTCOME.CORRUPT_STATE);
+      const prior = unique.get(operationId);
+      requireInstance(prior === undefined || instanceDigest(prior) === instanceDigest(captured),
+        INSTANCE_OUTCOME.CORRUPT_STATE);
+      unique.set(operationId, captured);
+    }
+    const rows = [...unique.values()];
     rows.sort((left, right) => {
       const leftCreatedAt = Number(left.created_at ?? left.createdAt ?? 0);
       const rightCreatedAt = Number(right.created_at ?? right.createdAt ?? 0);
@@ -578,6 +595,15 @@ const MAX_DIAGNOSTICS_LIMIT = 500;
   async inspectRetainedCreation(owned) {
     const adapter = this._resolveAdapter(UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE);
     return adapter.inspectRetainedCreation(owned);
+  }
+  /** Ask the same physical owner synchronously; a projection is never authority. */
+  observeCurrentCreation(owned) {
+    try {
+      const adapter = this._resolveAdapter(UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE);
+      return adapter.observeCurrentCreation(owned);
+    } catch (error) {
+      return {outcome: WASM_CREATION_CURRENT.UNAVAILABLE, reason: instanceFailure(error).outcome};
+    }
   }
   /** Recover one retained creation by operation id and continue it, in one pass. */
   async resumeConsensusCreation(operationId, context = {}) {

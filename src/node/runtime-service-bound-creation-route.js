@@ -5,8 +5,8 @@
 // the creation, RV5.2 memo custody, RV5.3 wake corrections; Revision 6: RV6.1
 // one writer of the creation link, RV6.2-RV6.4 replies to a retained memo;
 // Revision 7: RV7.1 the deferral flag, RV7.2 only a live creation re-enters,
-// RV7.3 a named ACTIVE memo answers a foreign request CONTENT_CONFLICT). Explicit-context functions over the
-// handler. Routing keys on the manager's journal (a retained creation answers
+// RV7.3 a named ACTIVE memo answers a foreign request CONTENT_CONFLICT).
+// Explicit-context functions over the handler. Routing keys on the manager's journal (a retained creation answers
 // ADMISSION_RETAINED-class); only the refusal class of a CREATE that names no
 // retained creation keys on the definition row. The handler memo is volatile;
 // the manager's creation row is the authority, a services row only a hint.
@@ -23,9 +23,19 @@ import {CONSENSUS_BOOTSTRAP, consensusBootstrapDescriptor} from
   '../service/service-consensus-bootstrap.js';
 import {CONSENSUS_CREATION_RESULT as CREATION} from
   '../service/service-consensus-creation-intent.js';
-import {WASM_CREATION_RETIREMENT as RETIREMENT} from '../wasm-service/wasm-creation-opening.js';
+import {WASM_CREATION_RETIREMENT_FINALITY as FINALITY} from
+  '../wasm-service/wasm-service-constants.js';
+import {WASM_CREATION_CURRENT as CURRENT} from '../wasm-service/wasm-service-constants.js';
+import {captureRetainedCreationOrigin, sameRetainedCreation} from
+  '../service/service-consensus-creation-origin.js';
+import {instanceDigest} from '../control-plane/owners/service-instance-contract.js';
+import {matchesCreationRequest, matchesCreationWake, replicaExecution, currentExecution,
+  retainedCreationPlan, executionRefusal, inProgressReply, installExecution, releaseExecution,
+  joinRetirementObserver} from './runtime-service-creation-execution.js';
 import {RECONCILE_REASON} from '../workflow/reconcile-queue-constants.js';
-import {RUNTIME_SERVICE_CREATION_WAKE_OUTCOME as WAKE,
+import {RUNTIME_SERVICE_CREATION_MEMO as MEMO,
+  RUNTIME_SERVICE_RESTART_ACTION as ACTION, RUNTIME_SERVICE_RESTART_PLAN_STATE as PLAN_STATE,
+  RUNTIME_SERVICE_CREATION_WAKE_OUTCOME as WAKE,
   RUNTIME_SERVICE_HANDLER_ERROR_MSG as HANDLER_ERROR,
   RUNTIME_SERVICE_HANDLER_LOG_MSG as LOG} from './runtime-service-handler-constants.js';
 
@@ -46,7 +56,8 @@ const RESUME_OUTCOME = new Map([[CREATION.INTENT_NOT_FOUND, DECISION.UNROUTED],
 // RV3.3 REMOVE table: the journal-only read, then the retirement answer. A
 // NOT_ADMITTED read resolves the reservation first (design
 // RECOVERY-DESIGN-20261017 R2-A), never answers COMPLETED by itself.
-const READ_DECISION = new Map([[OUTCOME.UNAVAILABLE, DECISION.DEFERRED]]);
+const READ_DECISION = new Map([[OUTCOME.UNAVAILABLE, DECISION.DEFERRED],
+  [OUTCOME.UNKNOWN, DECISION.DEFERRED]]);
 // R2-A, R3-E: the REMOVE-time reservation resolution's answers.
 const RESOLUTION_DECISION = new Map([[CREATION.CANCELLED, DECISION.COMPLETED],
   [OUTCOME.UNAVAILABLE, DECISION.HELD], [OUTCOME.UNKNOWN, DECISION.HELD]]);
@@ -105,19 +116,30 @@ function namesCreation(memo) {
   return typeof memo?.operationId === 'string';
 }
 
-// RV5.2: a nameless settle writes the memo only when the current memo names
-// no creation; a creation-naming memo is left as it is (the outcome is still
-// emitted under the request's id).
-function writesMemo(handler, replicaId, decision) {
-  return decision.names || !namesCreation(handler.localReplicas.get(replicaId));
+// Current physical registration is observed immediately before a named
+// projection. A failed historical attempt never takes another origin's memo.
+function writesMemo(handler, entry, decision) {
+  const memo = handler.localReplicas.get(entry.replicaId);
+  if (!decision.names || entry.origin === undefined) {
+    return !namesCreation(memo) && memo?.status !== MEMO.CONTINUATION_PENDING;
+  }
+  const observed = handler.serviceLifecycleManager.observeCurrentCreation(
+    {consensusCreation: entry.origin});
+  if (observed.outcome === CURRENT.CURRENT) return true;
+  if (observed.outcome === CURRENT.DIFFERENT || decision.kind === DECISION.ACTIVE ||
+      decision.kind === DECISION.HELD) return false;
+  return memo?.status !== MEMO.CONTINUATION_PENDING && (!namesCreation(memo) ||
+    (memo.operationId === entry.operationId &&
+      (memo.origin === undefined || sameRetainedCreation(memo.origin, entry.origin))));
 }
 
-function settleCreation(handler, {operationId, entityId, replicaId}, decision) {
-  const named = decision.names ? {operationId} : {};
-  // RV7.1: a deferral is recorded on the memo with the outcome's own flag; a
-  // permanent failure records none.
+function settleCreation(handler, params, decision, entry) {
+  if (!currentExecution(handler, entry)) return;
+  const {operationId, entityId, replicaId} = params;
+  const named = decision.names ? {operationId, origin: entry.origin} : {};
   const deferral = decision.kind === DECISION.DEFERRED ? {deferRetry: true} : {};
-  const writes = writesMemo(handler, replicaId, decision);
+  const writes = writesMemo(handler, entry, decision);
+  if (!currentExecution(handler, entry)) return;
   const memo = (status) => writes && handler.localReplicas.set(replicaId,
     {replicaId, entityId, status, ...named, ...deferral});
   const fields = {operationId, replicaId, entityId, nodeId: handler.nodeId};
@@ -139,76 +161,138 @@ function settleCreation(handler, {operationId, entityId, replicaId}, decision) {
   }
 }
 
-function trackBoundCreation(handler, {operationId, entityId, replicaId}) {
-  handler.inProgressOperations.set(operationId, {
-    type: ReplicaOperationMessageType.CREATE_REPLICA, replicaId, entityId,
-    startedAt: Date.now(), wakePending: false,
-  });
+function finishCreationPlan(entry, decision) {
+  const plan = entry.plan;
+  if (plan === undefined) return;
+  if (entry.origin !== undefined) plan.origin = entry.origin;
+  plan.lastDecision = decision;
+  plan.journalComplete ||= decision.journalComplete === true;
+  plan.state = plan.journalComplete ? PLAN_STATE.SETTLED : PLAN_STATE.WAITING;
+  if (decision.result !== undefined) plan.retirement = decision.result;
+  plan.queued ||= !plan.journalComplete && decision.kind === DECISION.HELD &&
+    plan.action === ACTION.REENTER && (entry.wakePending || plan.wakePending);
+  plan.wakePending = false;
 }
 
-// One re-entry of a retained creation, scheduled after the caller's turn
-// (never awaited inside a wake: the wake is delivered from inside a run).
-function scheduleBoundReentry(handler, params) {
-  trackBoundCreation(handler, params);
+function scheduleBoundReentry(handler, params, plan) {
+  const memo = handler.localReplicas.get(params.replicaId);
+  const origin = plan?.origin ??
+    (memo?.operationId === params.operationId ? memo.origin : undefined);
+  const entry = installExecution(handler, params, ReplicaOperationMessageType.CREATE_REPLICA,
+    {origin, plan, forceHydration: plan?.journalComplete === true});
+  if (entry === undefined) {
+    if (plan !== undefined && !plan.journalComplete &&
+        plan.state !== PLAN_STATE.RUNNING) plan.queued = true;
+    return false;
+  }
   setImmediate(() => {
-    routeRuntimeServiceCreate(handler, params).catch((error) => {
+    if (!currentExecution(handler, entry)) return;
+    routeRuntimeServiceCreate(handler, params, entry).catch((error) => {
       handler.logger.error(LOG.ASYNC_CREATE_FAILED, {operationId: params.operationId,
         replicaId: params.replicaId, error: error.message});
     });
   });
+  return true;
 }
 
-// Release the operation's in-flight entry; a wake recorded while it ran is
-// consumed by exactly one further re-entry of a creation still HELD.
-function releaseBoundCreation(handler, params) {
-  const entry = handler.inProgressOperations.get(params.operationId);
-  handler.inProgressOperations.delete(params.operationId);
-  const memo = handler.localReplicas.get(params.replicaId);
-  if (entry?.wakePending === true && memo?.status === ReplicaStatus.HELD) {
-    scheduleBoundReentry(handler, params);
+const HYDRATION = Object.freeze({ORIGIN: 'ORIGIN', UNROUTED: 'UNROUTED', DECIDED: 'DECIDED'});
+const CREATE_ROUTE = Object.freeze({BOUND: 'BOUND', GENERIC: 'GENERIC'});
+function hydratedDecision(answer) {
+  if (answer.outcome === CREATION.INTENT_NOT_FOUND || answer.outcome === OUTCOME.UNAVAILABLE ||
+      answer.outcome === OUTCOME.UNKNOWN) return {kind: HYDRATION.UNROUTED, answer};
+  return {kind: HYDRATION.DECIDED, decision: {kind: DECISION.FAILED,
+    errorCode: resumeCode(answer), names: true,
+    journalComplete: answer.outcome === CREATION.TERMINAL_OPERATION}};
+}
+
+async function hydrateCreation(handler, params, entry) {
+  let answer;
+  if (entry.origin !== undefined && !entry.forceHydration) {
+    answer = {outcome: CREATION.ADMISSION_RETAINED, ...entry.origin};
+  } else {
+    answer = await handler.serviceLifecycleManager.readRetainedCreation(params.operationId);
+    if (!currentExecution(handler, entry)) return undefined;
   }
+  if (answer.outcome !== CREATION.ADMISSION_RETAINED && answer.outcome !== CREATION.NOT_ADMITTED) {
+    return hydratedDecision(answer);
+  }
+  const origin = captureRetainedCreationOrigin(answer);
+  if (!matchesCreationRequest(handler, origin, params)) {
+    return {kind: HYDRATION.DECIDED, decision: {kind: DECISION.FAILED,
+      errorCode: OUTCOME.CONTENT_CONFLICT, names: false}};
+  }
+  entry.origin = origin;
+  return {kind: HYDRATION.ORIGIN};
 }
 
-/**
- * The CREATE order of RV2.2: resume the retained creation first; a
- * retained-class answer is the bound route regardless of the cache row; an
- * unrouted answer (not found, unavailable) classifies the definition row: a
- * bound class is refused or deferred typed, any other class takes the
- * existing generic path unchanged.
- * @param {Object} handler - The RuntimeServiceHandler.
- * @param {Object} params - {operationId, entityId, replicaId}.
- * @return {Promise<void>}
- */
-async function routeRuntimeServiceCreate(handler, params) {
+function retainResumeAdmission(entry, answer) {
+  if (entry.origin === undefined || answer.consensusResourceToken === undefined) return;
+  const origin = captureRetainedCreationOrigin(
+    {...entry.origin, token: answer.consensusResourceToken});
+  if (instanceDigest(answer.consensusBinding) !== instanceDigest(origin.intent.consensusBinding) ||
+      (entry.origin.token !== null && !sameRetainedCreation(entry.origin, origin))) {
+    const error = new Error(OUTCOME.CONTENT_CONFLICT);
+    error.code = OUTCOME.CONTENT_CONFLICT;
+    throw error;
+  }
+  entry.origin = origin;
+}
+
+async function createRouteDecision(handler, params, entry) {
+  const hydration = await hydrateCreation(handler, params, entry);
+  if (!currentExecution(handler, entry)) return;
+  switch (hydration.kind) {
+  case HYDRATION.UNROUTED:
+    return isBoundClassDefinition(handler.resolveServiceDefinition(params.entityId)) ?
+      {route: CREATE_ROUTE.BOUND,
+        decision: {...unroutedDecision(hydration.answer), names: false}} :
+      {route: CREATE_ROUTE.GENERIC};
+  case HYDRATION.DECIDED:
+    return {route: CREATE_ROUTE.BOUND, decision: hydration.decision};
+  default:
+    break;
+  }
+  const answer = await handler.serviceLifecycleManager.resumeConsensusCreation(
+    params.operationId, {nodeId: handler.nodeId});
+  if (!currentExecution(handler, entry)) return;
+  retainResumeAdmission(entry, answer);
+  const kind = decideResume(answer);
+  const decision = kind === DECISION.UNROUTED ? {...unroutedDecision(answer), names: true} :
+    {kind, errorCode: resumeCode(answer), names: true,
+      journalComplete: answer.outcome === CREATION.TERMINAL_OPERATION};
+  return {route: CREATE_ROUTE.BOUND, decision};
+}
+
+async function routeRuntimeServiceCreate(handler, params, installed) {
+  const entry = installed ?? handler.inProgressOperations.get(params.operationId);
+  if (!currentExecution(handler, entry)) return;
   let generic = false;
-  // RV5.2: the request's id names the memo only once the resume answered a
-  // retained class; the catch path before that is nameless.
-  let retainedAnswer = false;
+  let decision;
   try {
-    const answer = await handler.serviceLifecycleManager.resumeConsensusCreation(
-      params.operationId, {nodeId: handler.nodeId});
-    const kind = decideResume(answer);
-    if (kind !== DECISION.UNROUTED) {
-      retainedAnswer = true;
-      settleCreation(handler, params, {kind, errorCode: resumeCode(answer), names: true});
+    const routed = await createRouteDecision(handler, params, entry);
+    if (!currentExecution(handler, entry)) return;
+    generic = routed.route === CREATE_ROUTE.GENERIC;
+    if (generic) {
+      await handler.createGenericReplicaAsync(params, entry);
       return;
     }
-    if (!isBoundClassDefinition(handler.resolveServiceDefinition(params.entityId))) {
-      generic = true;
-      await handler.createGenericReplicaAsync(params);
-      return;
-    }
-    settleCreation(handler, params, {...unroutedDecision(answer), names: false});
+    decision = routed.decision;
+    settleCreation(handler, params, decision, entry);
   } catch (error) {
-    settleCreation(handler, params, {kind: DECISION.DEFERRED,
-      errorCode: error?.code ?? OUTCOME.UNKNOWN, names: retainedAnswer});
+    decision = {kind: DECISION.DEFERRED, errorCode: error?.code ?? OUTCOME.UNKNOWN,
+      names: entry.origin !== undefined};
+    settleCreation(handler, params, decision, entry);
   } finally {
-    if (!generic) releaseBoundCreation(handler, params);
+    if (!generic && currentExecution(handler, entry)) {
+      if (decision !== undefined) finishCreationPlan(entry, decision);
+      if (entry.plan === undefined && entry.wakePending && decision?.kind === DECISION.HELD) {
+        const memo = handler.localReplicas.get(entry.replicaId);
+        if (memo?.status === ReplicaStatus.HELD && memo.operationId === entry.operationId &&
+            sameRetainedCreation(memo.origin, entry.origin)) memo.wakePending = true;
+      }
+      releaseExecution(handler, entry);
+    }
   }
-}
-
-function inProgressReply(handler, replicaId) {
-  return {status: ReplicaOperationResponseStatus.IN_PROGRESS, replicaId, nodeId: handler.nodeId};
 }
 
 /**
@@ -233,7 +317,7 @@ function reenterRetainedCreation(handler, existing, params) {
   }
   const creation = {operationId: existing.operationId,
     entityId: params.entityId, replicaId: params.replicaId};
-  if (!handler.inProgressOperations.has(creation.operationId)) {
+  if (replicaExecution(handler, creation.replicaId) === undefined) {
     scheduleBoundReentry(handler, creation);
   }
   handler.logger.info(LOG.CREATE_IN_PROGRESS, {replicaId: params.replicaId,
@@ -246,8 +330,9 @@ function reenterRetainedCreation(handler, existing, params) {
 // deferred typed under the request's id; nothing is routed and the nameless
 // settle leaves the memo (RV5.2); the next REMOVE re-drives the retirement.
 function deferDuringRetirement(handler, existing, params) {
-  settleCreation(handler, params, {kind: DECISION.DEFERRED,
-    errorCode: HANDLER_ERROR.RETIREMENT_IN_PROGRESS, names: false});
+  handler.emitExecutorOutcome(EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_FAILED,
+    params.operationId, WORKFLOW_STEP.FAILED, failureOptions(params.replicaId,
+      {kind: DECISION.DEFERRED, errorCode: HANDLER_ERROR.RETIREMENT_IN_PROGRESS}));
   return inProgressReply(handler, params.replicaId);
 }
 
@@ -301,158 +386,313 @@ function replyToRetainedMemo(handler, existing, params) {
   return reply ? reply(handler, existing, params) : null;
 }
 
-// What one wake finds on this node (RV2.4, RV3.5), in decision order.
-const WAKE_TARGET = Object.freeze({
-  IN_FLIGHT: 'IN_FLIGHT', ABSENT: 'ABSENT', SETTLED: 'SETTLED', HELD: 'HELD',
-});
-// Design RECOVERY-DESIGN-20261017 R4-A rule 2, R5-A: a GRANT_HELD wake whose
-// detail is grant.outcome UNAVAILABLE is RECORDED for any memo and leaves no
-// pending wake: a re-entry would only re-read the same unavailable owner. The
-// rule keys on the reason AND the wake's detail, never on a serving state.
+// A wake proves only an exact local target. It never installs an admission
+// token and never turns RESOURCE_CLOSED or an unavailable grant into CREATE.
 function unavailableGrantWake(wake) {
   return wake?.reason === RECONCILE_REASON.CREATION_GRANT_HELD &&
     wake.grant?.outcome === OUTCOME.UNAVAILABLE;
 }
 
-function leavesPendingWake(found) {
-  return PENDING_WAKE_REASONS.has(found.diagnostic.reason) && !found.unavailableGrant;
-}
-
-const WAKE_ACTION = Object.freeze({
-  [WAKE_TARGET.IN_FLIGHT]: (handler, found) => {
-    if (leavesPendingWake(found)) found.inFlight.wakePending = true;
-    return WAKE.RECORDED;
-  },
-  [WAKE_TARGET.ABSENT]: (handler, found) => {
-    handler.logger.warn(LOG.CREATION_WAKE_NO_LOCAL_OPERATION, {...found.diagnostic,
-      nodeId: handler.nodeId});
-    return WAKE.NO_LOCAL_OPERATION;
-  },
-  [WAKE_TARGET.SETTLED]: () => WAKE.RECORDED,
-  [WAKE_TARGET.HELD]: (handler, found) => {
-    scheduleBoundReentry(handler, {operationId: found.diagnostic.operationId,
-      entityId: found.memo.entityId, replicaId: found.memo.replicaId});
-    return WAKE.QUEUED;
-  },
-});
-
-function findWakeTarget(handler, serviceDefinitionId, wake) {
+function matchingWakeTarget(handler, serviceDefinitionId, wake) {
   const operationId = wake?.token?.operationId;
-  const inFlight = handler.inProgressOperations.get(operationId);
-  const memo = [...handler.localReplicas.values()].find((entry) =>
-    entry?.operationId === operationId && entry.entityId === serviceDefinitionId);
-  // RV5.3: a wake that names no operation matches nothing local.
-  const target = [
-    [typeof operationId !== 'string', WAKE_TARGET.ABSENT],
-    [inFlight?.type === ReplicaOperationMessageType.CREATE_REPLICA &&
-      inFlight.entityId === serviceDefinitionId, WAKE_TARGET.IN_FLIGHT],
-    [memo === undefined, WAKE_TARGET.ABSENT],
-    [wake.reason === RECONCILE_REASON.CREATION_RESOURCE_CLOSED ||
-      memo?.status !== ReplicaStatus.HELD || unavailableGrantWake(wake), WAKE_TARGET.SETTLED],
-    [true, WAKE_TARGET.HELD],
+  if (typeof operationId !== 'string') return undefined;
+  const plan = retainedCreationPlan(handler, operationId);
+  if (plan !== undefined) {
+    return matchesCreationWake(plan.origin, serviceDefinitionId, wake) ? {plan} : undefined;
+  }
+  const entry = handler.inProgressOperations.get(operationId);
+  if (entry !== undefined && matchesCreationWake(entry.origin, serviceDefinitionId, wake)) {
+    return {entry};
+  }
+  const memo = [...handler.localReplicas.values()].find((item) =>
+    item.operationId === operationId &&
+    matchesCreationWake(item.origin, serviceDefinitionId, wake));
+  return memo === undefined ? undefined : {memo};
+}
+
+const WAKE_ACTION = Object.freeze({NONE: 'NONE', RECORD: 'RECORD', EXECUTION: 'EXECUTION',
+  PLAN: 'PLAN', MEMO: 'MEMO'});
+function creationWakeAction(handler, serviceDefinitionId, wake) {
+  const found = handler.stopped ? undefined :
+    matchingWakeTarget(handler, serviceDefinitionId, wake);
+  const plan = found?.plan;
+  const entry = found?.entry ?? (plan === undefined ? undefined :
+    handler.inProgressOperations.get(plan.creation.operationId));
+  const memo = found?.memo;
+  const action = [
+    [found === undefined, WAKE_ACTION.NONE],
+    [!PENDING_WAKE_REASONS.has(wake?.reason) || unavailableGrantWake(wake), WAKE_ACTION.RECORD],
+    [entry?.type === ReplicaOperationMessageType.CREATE_REPLICA &&
+      matchesCreationWake(entry.origin, serviceDefinitionId, wake), WAKE_ACTION.EXECUTION],
+    [plan !== undefined && (plan.action !== ACTION.REENTER || plan.journalComplete ||
+      plan.lastDecision?.kind === DECISION.FAILED), WAKE_ACTION.RECORD],
+    [plan !== undefined, WAKE_ACTION.PLAN],
+    [memo?.status === ReplicaStatus.HELD, WAKE_ACTION.MEMO],
+    [true, WAKE_ACTION.RECORD],
   ].find(([matches]) => matches)[1];
-  return {target, inFlight, memo, unavailableGrant: unavailableGrantWake(wake),
-    diagnostic: {serviceDefinitionId, operationId, reason: wake?.reason,
-      grantOutcome: wake?.grant?.outcome ?? null}};
+  return {action, entry, plan, memo};
 }
 
-/**
- * The node-local creation wake consumer (RV2.4): enqueue-only. A wake for an
- * operation in flight is recorded on it; a HELD creation is re-entered once;
- * a wake naming no local operation is the typed NO_LOCAL_OPERATION.
- * @param {Object} handler
- * @param {string} serviceDefinitionId
- * @param {Object} wake - {reason, binding, token}.
- * @return {{outcome: string}}
- */
 function consumeCreationWake(handler, serviceDefinitionId, wake) {
-  const found = findWakeTarget(handler, serviceDefinitionId, wake);
-  return {outcome: WAKE_ACTION[found.target](handler, found)};
+  const {action, entry, plan, memo} = creationWakeAction(handler, serviceDefinitionId, wake);
+  switch (action) {
+  case WAKE_ACTION.NONE:
+    if (!handler.stopped) {
+      handler.logger.warn(LOG.CREATION_WAKE_NO_LOCAL_OPERATION,
+        {serviceDefinitionId, operationId: wake?.token?.operationId, nodeId: handler.nodeId});
+    }
+    return {outcome: WAKE.NO_LOCAL_OPERATION};
+  case WAKE_ACTION.EXECUTION:
+    entry.wakePending = true;
+    return {outcome: WAKE.RECORDED};
+  case WAKE_ACTION.PLAN:
+    plan.wakePending = true;
+    if (plan.state !== PLAN_STATE.RUNNING) {
+      plan.queued = true;
+      handler.resumeRestartPlans(plan.creation.replicaId);
+    }
+    return {outcome: WAKE.QUEUED};
+  case WAKE_ACTION.MEMO:
+    memo.wakePending = true;
+    resumeHeldMemoWake(handler, memo.replicaId);
+    return {outcome: WAKE.QUEUED};
+  default:
+    return {outcome: WAKE.RECORDED};
+  }
 }
 
-// RV3.3 REMOVE table over the retirement answer, in decision order. A
-// HISTORY_UNAVAILABLE close of a durable tombstone means the slot was reused
-// at a later ordinal: nothing of this creation can be live (recorded).
-const RETIREMENT_DECISIONS = Object.freeze([
-  [(result) => result?.closed === true, () => ({kind: DECISION.COMPLETED})],
-  [(result) => result?.outcome === RETIREMENT.CLOSE_UNRESOLVED && result.retired === true &&
-    result.close?.outcome === OUTCOME.HISTORY_UNAVAILABLE, () => ({kind: DECISION.COMPLETED})],
-  [(result) => PERMANENT_RETIREMENT_REFUSALS.has(result?.outcome),
-    (result) => ({kind: DECISION.FAILED, errorCode: result.outcome})],
-  [() => true, (result) => ({kind: DECISION.HELD, errorCode: result?.outcome ?? OUTCOME.UNKNOWN})],
-]);
+function resumeHeldMemoWake(handler, replicaId) {
+  const memo = handler.localReplicas.get(replicaId);
+  if (handler.stopped || memo?.wakePending !== true || memo.status !== ReplicaStatus.HELD ||
+      memo.origin === undefined || replicaExecution(handler, replicaId) !== undefined) return;
+  const origin = captureRetainedCreationOrigin(memo.origin);
+  const observation = handler.serviceLifecycleManager.observeCurrentCreation(
+    {consensusCreation: origin});
+  if (observation.outcome !== CURRENT.CURRENT || handler.stopped ||
+      handler.localReplicas.get(replicaId) !== memo || memo.status !== ReplicaStatus.HELD ||
+      memo.operationId !== origin.operationId || !sameRetainedCreation(memo.origin, origin)) return;
+  if (scheduleBoundReentry(handler, {operationId: origin.operationId, entityId: memo.entityId,
+    replicaId})) memo.wakePending = false;
+}
 
+// Physical finality is consumed once across runtime, manager and handler.
+// It cannot settle a REMOVE until its original creation journal is confirmed.
 function decideRetirement(result) {
-  return RETIREMENT_DECISIONS.find(([matches]) => matches(result))[1](result);
+  const kind = [
+    [result?.finality === FINALITY.FINAL &&
+      result.completion?.outcome === CREATION.ROW_COMPLETED, DECISION.COMPLETED],
+    [PERMANENT_RETIREMENT_REFUSALS.has(result?.outcome), DECISION.FAILED],
+    [true, DECISION.HELD],
+  ].find(([matches]) => matches)[1];
+  const errorCode = kind === DECISION.FAILED ? result.outcome :
+    result?.completion?.outcome ?? result?.projection?.outcome ??
+      result?.status ?? result?.outcome ?? OUTCOME.UNKNOWN;
+  return {kind, result, ...(kind === DECISION.COMPLETED ? {journalComplete: true} : {errorCode})};
 }
 
 function terminalOrTable(answer, table) {
-  const kind = answer.outcome === CREATION.TERMINAL_OPERATION ?
-    TERMINAL_REMOVAL.get(answer.rowState) : table.get(answer.outcome);
-  return {kind: kind ?? DECISION.FAILED, errorCode: answer.reason ?? answer.outcome};
+  const terminal = answer.outcome === CREATION.TERMINAL_OPERATION;
+  const kind = terminal ? TERMINAL_REMOVAL.get(answer.rowState) : table.get(answer.outcome);
+  return {kind: kind ?? DECISION.FAILED, errorCode: answer.reason ?? answer.outcome,
+    journalComplete: terminal || answer.outcome === CREATION.CANCELLED};
 }
 
-// The creation a REMOVE retires: the journal-only read; a PENDING row's
-// reservation is resolved with the same request first (R2-A, R3-E).
-async function retainedForRemoval(manager, creationOperationId) {
+function stoppedRemovalDecision() {
+  return {kind: DECISION.HELD, errorCode: HANDLER_ERROR.HANDLER_STOPPED};
+}
+
+function classifyRetainedRemoval(answer, table) {
+  return answer.outcome === CREATION.ADMISSION_RETAINED ? {retained: answer} :
+    {decision: terminalOrTable(answer, table)};
+}
+
+async function retainedForRemoval(manager, creationOperationId, live) {
   const retained = await manager.readRetainedCreation(creationOperationId);
+  if (!live()) return {decision: stoppedRemovalDecision()};
   if (retained.outcome !== CREATION.NOT_ADMITTED) {
-    return retained.outcome === CREATION.ADMISSION_RETAINED ? {retained} :
-      {decision: terminalOrTable(retained, READ_DECISION)};
+    return classifyRetainedRemoval(retained, READ_DECISION);
   }
   const resolved = await manager.resolveRetainedReservation(creationOperationId);
-  return resolved.outcome === CREATION.ADMISSION_RETAINED ? {retained: resolved} :
-    {decision: terminalOrTable(resolved, RESOLUTION_DECISION)};
+  return live() ? classifyRetainedRemoval(resolved, RESOLUTION_DECISION) :
+    {decision: stoppedRemovalDecision()};
 }
 
-async function decideBoundRemoval(handler, creationOperationId, reason) {
+function matchesRemovalOrigin(handler, entry, creationOperationId, origin) {
+  if (entry === undefined) return true;
+  const target = {...entry.params, operationId: creationOperationId};
+  return matchesCreationRequest(handler, origin, target) && (entry.origin === undefined ||
+    (instanceDigest(entry.origin.intent) === instanceDigest(origin.intent) &&
+    (entry.origin.token === null || sameRetainedCreation(entry.origin, origin))));
+}
+
+async function decideBoundRemoval(handler, creationOperationId, reason, entry) {
   const manager = handler.serviceLifecycleManager;
-  const {retained, decision} = await retainedForRemoval(manager, creationOperationId);
+  const live = () => entry === undefined ? !handler.stopped : currentExecution(handler, entry);
+  const {retained, decision} = await retainedForRemoval(manager, creationOperationId, live);
+  if (!live()) return stoppedRemovalDecision();
   if (decision !== undefined) return decision;
+  const origin = captureRetainedCreationOrigin(retained);
+  if (!matchesRemovalOrigin(handler, entry, creationOperationId, origin)) {
+    return {kind: DECISION.FAILED, errorCode: OUTCOME.CONTENT_CONFLICT};
+  }
+  if (entry !== undefined) entry.origin = origin;
   return decideRetirement(await manager.stopReplica({
     definition: consensusBootstrapDescriptor(retained), consensusCreation: retained,
     consensusOpeningOwner: manager}, {nodeId: handler.nodeId, reason}));
 }
 
-function settleRemoval(handler, {operationId, entityId, replicaId}, decision) {
+function maySettleRemovalMemo(handler, entry, memo) {
+  if (memo?.operationId !== entry.creationOperationId || entry.origin === undefined ||
+      (memo.origin !== undefined && !sameRetainedCreation(memo.origin, entry.origin))) return false;
+  const current = handler.serviceLifecycleManager.observeCurrentCreation(
+    {consensusCreation: entry.origin});
+  return current.outcome === CURRENT.CURRENT || current.outcome === CURRENT.ABSENT;
+}
+
+function settleRemoval(handler, params, decision, entry) {
+  if (!currentExecution(handler, entry)) return;
+  const {operationId, entityId, replicaId} = params;
   const memo = handler.localReplicas.get(replicaId);
+  const writes = maySettleRemovalMemo(handler, entry, memo);
+  if (!currentExecution(handler, entry)) return;
   const fields = {operationId, replicaId, entityId, nodeId: handler.nodeId};
   if (decision.kind === DECISION.COMPLETED) {
-    handler.localReplicas.set(replicaId, {...memo, status: ReplicaStatus.REMOVED});
-    handler.emitExecutorOutcome(EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_REMOVE_COMPLETED,
-      operationId, WORKFLOW_STEP.REMOVED, {replicaId});
+    if (writes) handler.localReplicas.set(replicaId, {...memo, status: ReplicaStatus.REMOVED});
+    if (entry.silent !== true || params === entry.observer) {
+      handler.emitExecutorOutcome(EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_REMOVE_COMPLETED,
+        operationId, WORKFLOW_STEP.REMOVED, {replicaId});
+    }
     handler.logger.info(LOG.REMOVE_COMPLETED, fields);
-  } else if (decision.kind === DECISION.HELD) {
-    // Custody stays: the memo stays REMOVING, so the next REMOVE re-drives.
-    handler.emitExecutorOutcome(EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_REMOVE_HELD,
-      operationId, WORKFLOW_STEP.STOPPING, {replicaId});
+  } else if (decision.kind === DECISION.HELD || decision.kind === DECISION.DEFERRED) {
+    if (entry.silent !== true || params === entry.observer) {
+      handler.emitExecutorOutcome(EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_REMOVE_HELD,
+        operationId, WORKFLOW_STEP.STOPPING, {replicaId});
+    }
     handler.logger.warn(LOG.REMOVE_HELD, {...fields, outcome: decision.errorCode});
   } else {
-    handler.localReplicas.set(replicaId, {...memo, status: ReplicaStatus.FAILED});
-    handler.emitExecutorOutcome(EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_REMOVE_FAILED,
-      operationId, WORKFLOW_STEP.FAILED, failureOptions(replicaId, decision));
+    if (writes) handler.localReplicas.set(replicaId, {...memo, status: ReplicaStatus.FAILED});
+    if (entry.silent !== true || params === entry.observer) {
+      handler.emitExecutorOutcome(EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_REMOVE_FAILED,
+        operationId, WORKFLOW_STEP.FAILED, failureOptions(replicaId, decision));
+    }
     handler.logger.error(LOG.REMOVE_FAILED, {...fields, error: decision.errorCode});
   }
 }
 
-/**
- * The bound REMOVE of RV2.1: the creation the memo names is read journal-only
- * and retired through the manager's bound STOP; never recovered for CREATE.
- * @param {Object} handler
- * @param {Object} params - {operationId, entityId, replicaId, reason}.
- * @param {string} creationOperationId - The retained creation's operation id.
- * @return {Promise<void>}
- */
-async function routeBoundRemoval(handler, params, creationOperationId) {
+async function routeBoundRemoval(handler, params, creationOperationId, installed) {
+  const entry = installed ?? handler.inProgressOperations.get(params.operationId);
+  if (!currentExecution(handler, entry)) return;
   let decision;
   try {
-    decision = await decideBoundRemoval(handler, creationOperationId, params.reason);
+    decision = await decideBoundRemoval(handler, creationOperationId, params.reason, entry);
   } catch (error) {
     decision = {kind: DECISION.HELD, errorCode: error?.code ?? OUTCOME.UNKNOWN};
-  } finally {
-    handler.inProgressOperations.delete(params.operationId);
   }
-  settleRemoval(handler, params, decision);
+  if (!currentExecution(handler, entry)) return;
+  finishCreationPlan(entry, decision);
+  settleRemoval(handler, params, decision, entry);
+  if (entry.observer !== undefined) settleRemoval(handler, entry.observer, decision, entry);
+  releaseExecution(handler, entry);
+}
+
+function queueBoundRemoval(handler, entry) {
+  setImmediate(() => {
+    if (!currentExecution(handler, entry)) return;
+    routeBoundRemoval(handler, entry.params, entry.creationOperationId, entry).catch((error) => {
+      handler.logger.error(LOG.ASYNC_REMOVE_FAILED, {operationId: entry.operationId,
+        error: error.message});
+      if (currentExecution(handler, entry)) {
+        finishCreationPlan(entry, {kind: DECISION.HELD, errorCode: error?.code ?? OUTCOME.UNKNOWN});
+        releaseExecution(handler, entry);
+      }
+    });
+  });
+}
+
+const RESTART_REDRIVE_REASON = 'restart_retirement_redrive';
+function scheduleRetiredCreation(handler, plan) {
+  const params = {...plan.creation, reason: RESTART_REDRIVE_REASON};
+  const entry = installExecution(handler, params, ReplicaOperationMessageType.REMOVE_REPLICA,
+    {origin: plan.origin, plan, silent: true, creationOperationId: plan.creation.operationId});
+  if (entry === undefined) {
+    plan.queued = true;
+    return false;
+  }
+  queueBoundRemoval(handler, entry);
+  return true;
+}
+
+function admitBoundRemoval(handler, params, memo) {
+  const creationOperationId = memo.operationId;
+  const busy = replicaExecution(handler, params.replicaId);
+  if (busy !== undefined) {
+    return busy.type === ReplicaOperationMessageType.REMOVE_REPLICA ?
+      joinRetirementObserver(handler, busy, params, creationOperationId) :
+      executionRefusal(handler);
+  }
+  const plan = retainedCreationPlan(handler, creationOperationId);
+  const entry = installExecution(handler, params, ReplicaOperationMessageType.REMOVE_REPLICA,
+    {origin: plan?.origin ?? memo.origin, plan, creationOperationId});
+  if (entry === undefined) return executionRefusal(handler);
+  if (plan !== undefined) plan.action = ACTION.REDRIVE;
+  handler.localReplicas.set(params.replicaId, {...memo, status: ReplicaStatus.REMOVING});
+  handler.retryRetiredPlans(params.replicaId);
+  queueBoundRemoval(handler, entry);
+  return {status: memo.status === ReplicaStatus.REMOVING ?
+    ReplicaOperationResponseStatus.IN_PROGRESS : ReplicaOperationResponseStatus.INITIATED,
+  operationId: params.operationId, replicaId: params.replicaId, nodeId: handler.nodeId};
+}
+
+function replicaReply(status, fields) {
+  return {status, ...fields};
+}
+
+function replyToExistingReplica(handler, existing, params) {
+  const {operationId, replicaId} = params;
+  if (existing?.operationId === operationId && existing.origin !== undefined &&
+        !matchesCreationRequest(handler, existing.origin, params)) {
+    return executionRefusal(handler, OUTCOME.CONTENT_CONFLICT, false);
+  }
+  const status = existing?.status;
+  if (status === ReplicaStatus.ACTIVE) {
+    handler.logger.info(
+      LOG.CREATE_ALREADY_ACTIVE,
+      {replicaId, nodeId: handler.nodeId},
+    );
+    if (!refuseForeignCreation(handler, existing, {operationId, replicaId})) {
+      handler.emitExecutorOutcome(
+        EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_ACTIVE,
+        operationId,
+        WORKFLOW_STEP.ACTIVE,
+        {replicaId},
+      );
+    }
+    return replicaReply(
+      ReplicaOperationResponseStatus.ALREADY_EXISTS,
+      {
+        replicaId,
+        nodeId: handler.nodeId,
+      },
+    );
+  }
+  const retainedReply = replyToRetainedMemo(handler, existing, params);
+  if (retainedReply) {
+    return retainedReply;
+  }
+  if (status === ReplicaStatus.CREATING) {
+    handler.logger.info(
+      LOG.CREATE_IN_PROGRESS,
+      {replicaId, nodeId: handler.nodeId},
+    );
+    return replicaReply(
+      ReplicaOperationResponseStatus.IN_PROGRESS,
+      {
+        replicaId,
+        nodeId: handler.nodeId,
+      },
+    );
+  }
+  return null;
 }
 
 /**
@@ -468,4 +708,5 @@ function rowCreationHint(row) {
 
 export {routeRuntimeServiceCreate, replyToRetainedMemo, refuseForeignCreation, namesCreation,
   consumeCreationWake, routeBoundRemoval, rowCreationHint, decideBoundRemoval,
-  scheduleBoundReentry, BOUND_DECISION};
+  scheduleBoundReentry, scheduleRetiredCreation, admitBoundRemoval, resumeHeldMemoWake,
+  replyToExistingReplica, BOUND_DECISION};

@@ -287,7 +287,7 @@ function retainedRowAnswer(row, operationId) {
   confirmIntentRow(row, journalIdentity(intent));
   if (TERMINAL.has(row[COL.STATE])) return terminalAnswer(row);
   const token = retainedToken(row, intent);
-  return token === null ? {outcome: RESULT.NOT_ADMITTED, operationId} :
+  return token === null ? {outcome: RESULT.NOT_ADMITTED, operationId, intent, token: null} :
     {outcome: RESULT.ADMISSION_RETAINED, operationId, intent, token};
 }
 function isConsensusCreationRow(row) {
@@ -398,12 +398,13 @@ async function resolveRetainedReservation(manager, operationId) {
  * @param {Object} origin - The retained creation ({intent, token}).
  * @return {Promise<{outcome: string}>} CREATION_ROW_COMPLETED or a typed outcome.
  */
-async function completeConsensusCreation(manager, origin) {
+async function completeConsensusCreation(manager, origin, retirement) {
   try {
     requireDependencies(manager);
     const identity = journalIdentity(origin.intent);
     const query = transitionOperation(identity.operationId, OP_STATE.IN_PROGRESS,
-      OP_STATE.COMPLETED, {closed: true});
+      OP_STATE.COMPLETED, {closed: retirement.closed === true,
+        finality: retirement.finality, reason: retirement.close?.outcome});
     const row = await writeAndObserve(manager, query, identity.operationId);
     requireObserved(row);
     confirmIntentRow(row, identity);

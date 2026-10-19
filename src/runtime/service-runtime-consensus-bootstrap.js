@@ -6,6 +6,8 @@ import {requireInstance} from '../control-plane/owners/service-instance-contract
 import {captureConsensusCreationIntent} from '../service/service-consensus-creation-intent.js';
 import {SERVICE_TYPE_ADAPTER_INSPECTION as OUTCOME} from '../service/service-type-adapter.js';
 import {PREPARE_STATUS} from './runtime-driver.js';
+import {WASM_CREATION_CURRENT} from '../wasm-service/wasm-service-constants.js';
+import {instanceFailure} from '../control-plane/owners/service-instance-contract.js';
 import {projectPublishedConsensus, withdrawRetiredConsensus} from
   './service-runtime-consensus-publication.js';
 
@@ -58,5 +60,16 @@ async function inspectConsensusBootstrap(owner, owned) {
   return typeof driver.inspectRetainedCreation === 'function' ?
     driver.inspectRetainedCreation(owned) : {outcome: OUTCOME.UNSUPPORTED};
 }
+
+function observeCurrentConsensusCreation(owner, owned) {
+  try {
+    const intent = captureConsensusCreationIntent(owned?.consensusCreation?.intent);
+    const driver = owner._resolveDriver(intent.descriptor.runtimeKind);
+    return typeof driver.observeCurrentCreation === 'function' ?
+      driver.observeCurrentCreation(owned) : {outcome: WASM_CREATION_CURRENT.UNAVAILABLE};
+  } catch (error) {
+    return {outcome: WASM_CREATION_CURRENT.UNAVAILABLE, reason: instanceFailure(error).outcome};
+  }
+}
 export {prepareConsensusBootstrap, startConsensusBootstrap, retireConsensusBootstrap,
-  inspectConsensusBootstrap};
+  inspectConsensusBootstrap, observeCurrentConsensusCreation};

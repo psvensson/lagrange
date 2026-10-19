@@ -1114,3 +1114,208 @@ for (const conflict of [false, true]) {
       }
     });
 }
+
+// U1's ordinary-memo clarification: F was inventoried before J existed. J is
+// therefore represented only by its real HELD memo when an explicit F retry
+// takes the canonical gate. All origin, journal and physical setup is C6;
+// only F's manager continuation is paused at its existing owner boundary.
+const MEMO_WAKE_REPEATS = 6;
+const FUTURE_WAKE_REQUEST_NONCE = 97;
+const SUCCESSOR_WAKE_REQUEST_NONCE = 98;
+async function ordinaryHeldBehindFuture(t) {
+  const e = await hostsOf(t);
+  const original = e.hosts[1];
+  const futureId = 'memo-wake-future';
+  const request = e.metadata.request(1, FUTURE_WAKE_REQUEST_NONCE,
+    original.intent.consensusBinding.incarnation);
+  const revision = await e.metadata.primary.catalogOwner.getCreationRevision(
+    request.revisionId, request.tenantId);
+  const {selectInstanceState} = await import(
+    '../../src/control-plane/owners/service-instance-state.js');
+  const predicted = selectInstanceState(e.metadata.state(), request, revision).result.binding;
+  assert.equal((await original.manager.prepareConsensusCreation(
+    e.intentFor(original.slot, predicted, futureId))).outcome, 'STALE_BINDING');
+  const host = await e.restartHost(original, {inventory: false});
+  host.inventory = await host.handler.recoverRetainedCreations();
+  await e.settle();
+  assert.deepEqual(host.inventory.map((plan) => plan.creation.operationId), [futureId]);
+  const retained = await e.retain(host);
+  assert.equal(retained.outcome, 'ADMISSION_RETAINED');
+  assert.equal((await e.dispatch(host, TYPE.CREATE_REPLICA)).status, REPLY.INITIATED);
+  await e.settle(() => memoOf(host)?.status === ReplicaStatus.HELD, 'ordinary J held');
+  const memo = memoOf(host);
+  assert.equal(memo.operationId, creationId(host));
+  const replica = e.replicaOf(host);
+  const release = Promise.withResolvers();
+  const resumes = [];
+  let entered = false;
+  const resume = host.manager.resumeConsensusCreation.bind(host.manager);
+  host.manager.resumeConsensusCreation = async (operationId, ...args) => {
+    resumes.push(operationId);
+    if (operationId === futureId && !entered) {
+      entered = true;
+      await release.promise;
+    }
+    return resume(operationId, ...args);
+  };
+  try {
+    assert.equal((await e.dispatch(host, TYPE.CREATE_REPLICA, futureId)).status, REPLY.IN_PROGRESS);
+    await inventoryTurns();
+    assert.equal(entered, true, 'EXACT_F_RETRY_DID_NOT_ENTER_ITS_OWNER');
+    const wake = {reason: RECONCILE_REASON.CREATION_GENESIS_OBSERVED,
+      binding: retained.intent.consensusBinding, token: retained.token};
+    return {e, host, futureId, retained, memo, replica, release, resumes, wake};
+  } catch (error) {
+    release.resolve();
+    throw error;
+  }
+}
+
+function queueOrdinaryMemoWake(witness) {
+  const {e, host, futureId, memo, wake} = witness;
+  for (let repeat = 0; repeat < MEMO_WAKE_REPEATS; repeat += 1) {
+    assert.equal(host.handler.onCreationWake(e.serviceId, wake).outcome, 'QUEUED');
+  }
+  assert.equal(memo.wakePending, true, 'ORDINARY_J_WAKE_WAS_LOST_BEHIND_F');
+  const entry = host.handler.inProgressOperations.get(futureId);
+  assert.equal(entry.wakePending, false, 'J_WAKE_MUTATED_F_EXECUTION');
+  assert.equal(host.inventory[0].wakePending, false, 'J_WAKE_MUTATED_F_PLAN');
+  assert.equal(host.inventory[0].origin.token, null, 'J_WAKE_ADOPTED_ITS_TOKEN_INTO_F');
+}
+
+test('U1 memo wake: real HELD J retains one wake behind exact F through handler gate release',
+  async (t) => {
+    const witness = await ordinaryHeldBehindFuture(t);
+    const {e, host, futureId, retained, memo, replica, release, resumes, wake} = witness;
+    const rowsBefore = e.rows('wasm_operations');
+    try {
+      const foreign = {...wake, token: {...wake.token, operationId: 'foreign-memo-wake'}};
+      assert.equal(host.handler.onCreationWake(e.serviceId, foreign).outcome,
+        'NO_LOCAL_OPERATION');
+      assert.notEqual(memo.wakePending, true);
+      assert.equal(host.handler.onCreationWake(e.serviceId, {...wake,
+        reason: RECONCILE_REASON.CREATION_GRANT_HELD,
+        grant: {outcome: 'UNAVAILABLE'}}).outcome, 'RECORDED');
+      assert.notEqual(memo.wakePending, true);
+      assert.equal(host.handler.onCreationWake(e.serviceId, {...wake,
+        reason: RECONCILE_REASON.CREATION_RESOURCE_CLOSED}).outcome, 'RECORDED');
+      assert.notEqual(memo.wakePending, true);
+      await inventoryTurns();
+      assert.deepEqual(resumes, [futureId], 'NONQUALIFYING_WAKE_RESUMED_J');
+      queueOrdinaryMemoWake(witness);
+      await inventoryTurns();
+      assert.deepEqual(resumes, [futureId], 'J_BYPASSED_F_CANONICAL_GATE');
+      release.resolve();
+      await e.settle();
+      assert.deepEqual(resumes, [futureId, creationId(host)],
+        'GATE_RELEASE_DID_NOT_CONSUME_EXACTLY_ONE_ORIGINAL_J_WAKE');
+      assert.strictEqual(e.replicaOf(host), replica);
+      assert.equal(memoOf(host)?.operationId, creationId(host));
+      assert.equal(memoOf(host)?.status, ReplicaStatus.HELD);
+      assert.deepEqual(JSON.parse(rowOf(e, host).admission_json), retained.token);
+      assert.deepEqual(e.rows('wasm_operations'), rowsBefore,
+        'WAKE_CREATED_A_NEW_JOURNAL_OR_CHANGED_ORIGINAL_RESERVATION');
+    } finally {
+      release.resolve();
+      await inventoryTurns();
+    }
+  });
+
+for (const replacement of ['memo', 'physical']) {
+  test(`U1 memo wake: ${replacement} replacement refuses stale J admission at gate settlement`,
+    async (t) => {
+      const witness = await ordinaryHeldBehindFuture(t);
+      const {e, host, memo, release, resumes} = witness;
+      try {
+        queueOrdinaryMemoWake(witness);
+        let physical = e.replicaOf(host);
+        if (replacement === 'memo') {
+          // LABELLED volatile replacement seam through the handler's existing
+          // registration API. The replacement never inherits the old bit.
+          host.handler.registerExistingReplica({...memo, wakePending: false});
+        } else {
+          // A real successor is admitted and materialized by the lower
+          // owners while the old handler continuation is suspended.
+          await host.lifecycle.stopReplica(e.serviceId);
+          const selected = await e.metadata.primary.selectConsensusInstance(
+            e.metadata.request(1, SUCCESSOR_WAKE_REQUEST_NONCE,
+              host.intent.consensusBinding.incarnation));
+          assert.equal(selected.outcome, 'SELECTED');
+          const successorId = 'memo-wake-physical-successor';
+          const admitted = await host.manager.prepareConsensusCreation(
+            e.intentFor(host.slot, selected.binding, successorId));
+          assert.equal(admitted.outcome, 'ADMISSION_RETAINED');
+          assert.equal((await host.manager.resumeConsensusCreation(successorId,
+            {nodeId: host.nodeId})).status, 'BOOTSTRAPPED_HELD');
+          physical = e.replicaOf(host);
+          assert.notStrictEqual(physical, witness.replica);
+        }
+        const replacementMemo = memoOf(host);
+        const prepared = host.driver._prepared.get(e.serviceId);
+        const state = structuredClone(host.manager._replicaStateById.get(replicaIdOf(host)));
+        release.resolve();
+        await e.settle();
+        assert.equal(resumes.filter((operationId) => operationId === creationId(host)).length, 0,
+          'STALE_ORDINARY_J_WAKE_ENTERED_AFTER_REPLACEMENT');
+        assert.strictEqual(memoOf(host), replacementMemo, 'STALE_WAKE_REWROTE_CANONICAL_MEMO');
+        assert.strictEqual(e.replicaOf(host), physical, 'STALE_WAKE_REPLACED_PHYSICAL_OWNER');
+        assert.strictEqual(host.driver._prepared.get(e.serviceId), prepared,
+          'STALE_WAKE_REWROTE_SUCCESSOR_PREPARATION');
+        assert.deepEqual(host.manager._replicaStateById.get(replicaIdOf(host)), state,
+          'STALE_WAKE_REWROTE_SUCCESSOR_LIFECYCLE_STATE');
+      } finally {
+        release.resolve();
+        await inventoryTurns();
+      }
+    });
+}
+// Mutation controls for the lab: removing memo.wakePending retention must fail
+// ORDINARY_J_WAKE_WAS_LOST_BEHIND_F. Removing the CURRENT admission fence must
+// fail STALE_ORDINARY_J_WAKE_ENTERED_AFTER_REPLACEMENT in the physical case.
+
+// The coordinator-owned half of the shared gate: the entry's captured
+// creationOperationId is part of duplicate identity, not its raw params.
+test('U1 gate: coordinator-first exact REMOVE repeats share one retirement and one outcome',
+  async (t) => {
+    const e = await publishedGroup(t);
+    const host = e.hosts[1];
+    const removeId = 'coordinator-first-remove';
+    const foreignId = 'coordinator-first-foreign';
+    const release = Promise.withResolvers();
+    let stops = 0;
+    const stop = host.manager.stopReplica.bind(host.manager);
+    host.manager.stopReplica = async (...args) => {
+      stops += 1;
+      await release.promise;
+      return stop(...args);
+    };
+    try {
+      assert.equal((await e.dispatch(host, TYPE.REMOVE_REPLICA, removeId)).status, REPLY.INITIATED);
+      await inventoryTurns();
+      assert.equal(stops, 1, 'COORDINATOR_REMOVE_DID_NOT_REACH_ORIGINAL_OWNER');
+      for (let repeat = 0; repeat < MEMO_WAKE_REPEATS; repeat += 1) {
+        assert.equal((await e.dispatch(host, TYPE.REMOVE_REPLICA, removeId)).status,
+          REPLY.IN_PROGRESS, 'IDENTICAL_COORDINATOR_REQUEST_LOST_ITS_CAPTURED_TARGET');
+      }
+      const changed = await host.handler.handleRemoveReplica(
+        {...e.request(host, TYPE.REMOVE_REPLICA, removeId), reason: 'different-remove-reason'});
+      assert.deepEqual([changed.status, changed.errorCode, changed.deferRetry],
+        [REPLY.ERROR, 'CONTENT_CONFLICT', false]);
+      const foreign = await e.dispatch(host, TYPE.REMOVE_REPLICA, foreignId);
+      assert.deepEqual([foreign.status, foreign.deferRetry], [REPLY.ERROR, true],
+        'FOREIGN_COORDINATOR_REQUEST_WAS_UNBOUNDEDLY_ADMITTED');
+      await inventoryTurns();
+      assert.equal(stops, 1, 'DUPLICATE_COORDINATOR_REMOVE_ENTERED_ANOTHER_STOP');
+      release.resolve();
+      await e.settle(() => rowOf(e, host).state === 'completed', 'coordinator retirement');
+      const outcomes = host.outcomes.filter((outcome) => outcome.operationId === removeId);
+      assert.deepEqual(outcomes.map((outcome) => outcome.outcomeType),
+        [OUTCOME.RUNTIME_SERVICE_REMOVE_COMPLETED], 'COALESCED_REMOVE_EMITTED_MULTIPLE_OUTCOMES');
+      assert.equal(host.outcomes.some((outcome) => outcome.operationId === foreignId), false);
+      assert.equal(e.rows('wasm_operations').some((row) => row.operation_id === removeId), false,
+        'REMOVE_MINTED_A_REPLACEMENT_JOURNAL');
+    } finally {
+      release.resolve();
+      await inventoryTurns();
+    }
+  });

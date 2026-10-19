@@ -91,6 +91,16 @@ const RUNTIME_SERVICE_HANDLER_ERROR_MSG = Object.freeze({
   CORRUPT_LOCAL_MEMO: 'runtime_service_corrupt_local_memo',
   // A message before the restart inventory is applied (RECOVERY-DESIGN R1-H, R2-F).
   NOT_READY: 'runtime_service_not_ready',
+  HANDLER_STOPPED: 'runtime_service_handler_stopped',
+  CREATION_CONTINUATION_PENDING: 'runtime_service_creation_continuation_pending',
+});
+
+const RUNTIME_SERVICE_CREATION_MEMO = Object.freeze({
+  CONTINUATION_PENDING: 'CREATION_CONTINUATION_PENDING',
+});
+const RUNTIME_SERVICE_RESTART_ACTION = Object.freeze({REENTER: 'REENTER', REDRIVE: 'REDRIVE'});
+const RUNTIME_SERVICE_RESTART_PLAN_STATE = Object.freeze({
+  INITIAL: 'INITIAL', RUNNING: 'RUNNING', WAITING: 'WAITING', SETTLED: 'SETTLED',
 });
 
 // The node-local creation wake consumer's answers (design RV2.4, RV3.5).
@@ -105,6 +115,9 @@ const RUNTIME_SERVICE_HANDLER_WORKFLOW = Object.freeze({
 });
 
 export {
+  RUNTIME_SERVICE_CREATION_MEMO,
+  RUNTIME_SERVICE_RESTART_ACTION,
+  RUNTIME_SERVICE_RESTART_PLAN_STATE,
   RUNTIME_SERVICE_CREATION_WAKE_OUTCOME,
   RUNTIME_SERVICE_HANDLER_ADDRESS,
   RUNTIME_SERVICE_HANDLER_ERROR_MSG,

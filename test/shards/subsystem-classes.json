@@ -28,7 +28,7 @@
   "censusSize": 2410,
   "digest": "fnv1a32-746dd8da",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-7dcf9869",
+  "observationDigest": "fnv1a32-ad0ff911",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -4665,6 +4665,7 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/owners/service-instance-state.js",
         "src/service/service-lifecycle-command-contract.js"
       ]
     },
@@ -5865,7 +5866,6 @@
     },
     "test/distributed/harness/__tests__/comparative-efficiency-movielens-grouped-reduce.test.js": {
       "files": [
-        "data/examples/movielens-100k/u.data",
         "test/distributed/harness/benchmark-capacity-heterogeneous-observation.js"
       ]
     },
@@ -7114,9 +7114,6 @@
       ]
     },
     "test/examples/movielens-public-request-evidence-artifacts.test.js": {
-      "files": [
-        "data/examples/movielens-100k/u.data"
-      ],
       "directories": [
         "examples/service-data-affinity"
       ]
@@ -13494,7 +13491,6 @@
     },
     "test/scripts/change-proof-boundary.test.js": {
       "files": [
-        "data/examples/movielens-100k/u.data",
         "package-lock.json",
         "package.json",
         "scripts/checks/git-process-environment.js",
@@ -13523,7 +13519,6 @@
     },
     "test/scripts/change-proof-collection-safety.test.js": {
       "files": [
-        "data/examples/movielens-100k/u.data",
         "package-lock.json",
         "package.json",
         "scripts/checks/git-process-environment.js",
@@ -13566,7 +13561,6 @@
     },
     "test/scripts/change-proof-own-authority.test.js": {
       "files": [
-        "data/examples/movielens-100k/u.data",
         "package-lock.json",
         "package.json",
         "scripts/checks/git-process-environment.js",
@@ -14214,7 +14208,6 @@
     "test/scripts/home-lab-cli-guidelines.test.js": {
       "files": [
         "Dockerfile",
-        "data/examples/movielens-100k/u.data",
         "package-lock.json",
         "package.json",
         "scripts/check-guideline-decision-boundaries-baseline.json",
@@ -14402,7 +14395,6 @@
       "files": [
         ".github/workflows/full-corpus-canary.yml",
         "Dockerfile",
-        "data/examples/movielens-100k/u.data",
         "package-lock.json",
         "package.json",
         "scripts/checks/wait-for-thermal-headroom.js",
@@ -14441,7 +14433,6 @@
     "test/scripts/lab-test-base.test.js": {
       "files": [
         "Dockerfile",
-        "data/examples/movielens-100k/u.data",
         "package-lock.json",
         "package.json",
         "scripts/checks/impact-proof-cone-constants.js",
@@ -14469,7 +14460,6 @@
     "test/scripts/lab-worker-provisioning.test.js": {
       "files": [
         ".github/workflows/full-corpus-canary.yml",
-        "data/examples/movielens-100k/u.data",
         "package-lock.json",
         "package.json",
         "scripts/checks/wait-for-thermal-headroom.js",
@@ -14495,7 +14485,6 @@
         ".githooks/pre-push",
         ".github/workflows/full-corpus-canary.yml",
         ".gitignore",
-        "data/examples/movielens-100k/u.data",
         "data/formation-health/trend.ndjson",
         "examples/service-data-affinity/download-movielens.js",
         "package-lock.json",
@@ -14798,7 +14787,6 @@
       "directories": [
         ".githooks",
         "data",
-        "data/examples/movielens-100k",
         "data/formation-health",
         "data/releases",
         "solve",
@@ -14810,7 +14798,6 @@
         ".githooks/pre-push",
         ".taprc",
         "CHANGELOG.md",
-        "data/examples/movielens-100k/u.data",
         "docs/development/solver-runbook.md",
         "examples/service-data-affinity/download-movielens.js",
         "package-lock.json",
@@ -15000,7 +14987,6 @@
     },
     "test/scripts/run-classified-test-files.test.js": {
       "files": [
-        "data/examples/movielens-100k/u.data",
         "package-lock.json",
         "package.json",
         "scripts/checks/wait-for-thermal-headroom.js",
@@ -15154,7 +15140,6 @@
     "test/scripts/scenario-certification-consumers.test.js": {
       "files": [
         "Dockerfile",
-        "data/examples/movielens-100k/u.data",
         "data/formation-health/trend.ndjson",
         "examples/service-data-affinity/run-affinity-demo.js",
         "package-lock.json",
@@ -15194,7 +15179,6 @@
     "test/scripts/scenario-refused-outcome-consumers.test.js": {
       "files": [
         "Dockerfile",
-        "data/examples/movielens-100k/u.data",
         "package-lock.json",
         "package.json",
         "scripts/checks/wait-for-thermal-headroom.js",
@@ -15235,7 +15219,6 @@
     },
     "test/scripts/select-change-tests.test.js": {
       "files": [
-        "data/examples/movielens-100k/u.data",
         "docs/steering/rules.md",
         "package-lock.json",
         "package.json",
@@ -15270,7 +15253,6 @@
     },
     "test/scripts/selection-golden-corpus.test.js": {
       "files": [
-        "data/examples/movielens-100k/u.data",
         "package-lock.json",
         "package.json",
         "scripts/checks/wait-for-thermal-headroom.js",
@@ -15420,7 +15402,6 @@
     },
     "test/scripts/test-placement-lab-split.test.js": {
       "files": [
-        "data/examples/movielens-100k/u.data",
         "package-lock.json",
         "package.json",
         "scripts/checks/wait-for-thermal-headroom.js",
@@ -15440,7 +15421,6 @@
     "test/scripts/test-placement.test.js": {
       "files": [
         "README.md",
-        "data/examples/movielens-100k/u.data",
         "package-lock.json",
         "package.json",
         "scripts/checks/wait-for-thermal-headroom.js",
@@ -15455,7 +15435,6 @@
         "test/shards/primary-classes.json"
       ],
       "directories": [
-        "data/examples",
         "data/storage-load",
         "test"
       ],
@@ -16165,6 +16144,7 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/constants/index.js",
         "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/owners/service-instance-state.js",
         "src/entrypoint-startup-acquisition-ledger.js",
         "src/query/runtime-replica-state-projection.js",
         "src/raft/raft-operation-port-constants.js",
