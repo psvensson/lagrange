@@ -100,6 +100,44 @@ async function advanceHistory(e) {
   }
 }
 
+test('U1 services-row publication: a current retained origin admits one PRESENT mark',
+  async (t) => {
+    const {e, host, retained, replica} = await preparedHost(t);
+    assert.equal(current(host, retained), 'CURRENT',
+      'the real retained origin is current through its physical owner');
+    assert.deepEqual({...replica.servicesRow}, {state: 'ABSENT', serviceType: null});
+
+    const token = retained.token;
+    // Exact token identity is necessary but never sufficient: the
+    // physical owner validates the whole retained creation first.
+    const stale = {...token, operationId: `${token.operationId}-other`};
+    replica.pendingRoleUpdate = null;
+    assert.equal(host.lifecycle.enableServicesRowPublication(e.serviceId,
+      'runtime_service', stale).outcome, 'NOT_REGISTERED',
+    'WRONG_TOKEN_MARKED_CURRENT_REPLICA_PRESENT');
+    assert.deepEqual({...replica.servicesRow}, {state: 'ABSENT', serviceType: null});
+    assert.equal(replica.pendingRoleUpdate, null, 'REFUSED_MARK_QUEUED_ROLE_EFFECT');
+
+    // The runtime's completion call after row projection: the local latch
+    // records service_type and publishes the role once for this exact token.
+    assert.equal(host.lifecycle.enableServicesRowPublication(e.serviceId,
+      'runtime_service', token).outcome, 'PRESENT');
+    assert.deepEqual({...replica.servicesRow},
+      {state: 'PRESENT', serviceType: 'runtime_service'});
+    replica.pendingRoleUpdate = null;
+    assert.equal(host.lifecycle.enableServicesRowPublication(e.serviceId,
+      'runtime_service', token).outcome, 'ALREADY_PRESENT');
+    assert.equal(replica.pendingRoleUpdate, null, 'PRESENT_LATCH_REPLAYED_THE_ROLE');
+
+    const stopping = replica.shutdown();
+    assert.equal(current(host, retained), 'UNAVAILABLE',
+      'STOPPING never grants publication after its shutdown fence');
+    assert.equal(host.lifecycle.enableServicesRowPublication(e.serviceId,
+      'runtime_service', token).outcome, 'NOT_REGISTERED',
+    'STOPPING_REPLICA_REPUBLISHED_AFTER_FENCE');
+    await stopping;
+  });
+
 test('U1 physical owner: CREATED, STARTING and READY are current; fenced objects remain held',
   async (t) => {
     const {e, host, retained, owned, replica} = await preparedHost(t);
