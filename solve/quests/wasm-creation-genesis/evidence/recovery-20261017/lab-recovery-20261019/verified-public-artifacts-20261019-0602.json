@@ -1,0 +1,51 @@
+{
+  "createdAt": "2026-10-19T06:02:41.024524+00:00",
+  "scope": "new public #295 original candidate failure and #316 Set B adjacent parent PASS; excludes private session state",
+  "artifacts": [
+    {
+      "path": "/workspace/scratch/bbe36181774b/lab-recovery/lab-295-executor.log",
+      "bytes": 144456,
+      "sha256": "64502dbe564e80b7bff067aeaec3dd173f349c6045f0b04acefc56ed0f3e1c2d"
+    },
+    {
+      "path": "/workspace/scratch/bbe36181774b/lab-recovery/lab-295-original-receipt.json",
+      "bytes": 10187,
+      "sha256": "0e520df1b12596892d629742a6d9cff63bead770f37a66368822dd0ae3b386d0"
+    },
+    {
+      "path": "/workspace/scratch/bbe36181774b/lab-recovery/lab-295-failure-analysis.json",
+      "bytes": 26387,
+      "sha256": "34eba88be5b53c0432bc7f786fc77bf12d21444490dc58ca65e99fb7b624155f"
+    },
+    {
+      "path": "/workspace/scratch/bbe36181774b/lab-recovery/u1-candidate-v2-first-failure-20261019.md",
+      "bytes": 7085,
+      "sha256": "58815dd825c8238366adbbf52705ba93499068b7ff06d23b67a74cbccbf5ded9"
+    },
+    {
+      "path": "/workspace/scratch/bbe36181774b/lab-recovery/lab-316-executor.log",
+      "bytes": 1315,
+      "sha256": "b4e63ba0d5b0c9edeb335d67c163bb7bfaf51b91dcd315c32f72b8e5240a525d"
+    },
+    {
+      "path": "/workspace/scratch/bbe36181774b/lab-recovery/lab-316-original-receipt.json",
+      "bytes": 2426,
+      "sha256": "c7a07804610f82e842c0435cbf822e6ce57fda2c0174d49370ca8379cab611fe"
+    },
+    {
+      "path": "/workspace/scratch/bbe36181774b/lab-recovery/lab-316-request-and-control.json",
+      "bytes": 4439,
+      "sha256": "1b7c23fa3da844264255511961b8e6c30acfd5f5f7d5f66088db7df31d87cb81"
+    },
+    {
+      "path": "/workspace/scratch/bbe36181774b/lab-recovery/set-b-parent-child-source-verification.json",
+      "bytes": 2570,
+      "sha256": "5b295e8e566636876ed62380f93b0d83cbecb748ea580ba18022061d2b2dad8d"
+    },
+    {
+      "path": "/workspace/scratch/bbe36181774b/lab-recovery/set-b-adjacent-boundary-results-20261019.md",
+      "bytes": 5388,
+      "sha256": "ea071bebf4b5b1dc3c9fa2276549bb3e2f7bf5ad59055142a03419efd522e33d"
+    }
+  ]
+}

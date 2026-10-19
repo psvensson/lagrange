@@ -1,0 +1,1616 @@
+lab test: tv-dator: ordinary, exclusive (11 files) cores=12 mem=15.4GiB speed x1.46
+[tv-dator] placement-shell=1002157
+[tv-dator] placement-head=8596850d0c323dd410a5705576d30ec414c106e9
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11
+[tv-dator] placement-pid=1002579
+[tv-dator] # test-files planned=11
+[tv-dator] classified lane ordinary: 7 file(s), jobs=4
+[tv-dator] thermal: ok cpu 57C (coretemp/Package id 0) nvme 45C (nvme/Sensor 1)
+[tv-dator] not ok test/service/service-consensus-creation-intent.test.js (39 assertions, 928ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] TAP version 13
+[tv-dator] # Subtest: ServiceLifecycleManager persists original intent before reservation and token before return
+[tv-dator] ok 1 - ServiceLifecycleManager persists original intent before reservation and token before return
+[tv-dator]   ---
+[tv-dator]   duration_ms: 70.789796
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # {"scope":"component intent-before-reservation","boundaries":[{"kind":"intent","intentRetained":false},{"kind":"reserve","intentRetained":true,"outcome":"ADMITTED","token":{"bindingDigest":"cdcd3a9e121a3177b3b3e618ffb2229683b9ad49bd1303e8acea10c2e8eeb8cf","slot":0,"ordinal":1,"operationId":"operation-0","bodyDigest":"7c4a89464b8684baafbdb0a3fc809484c4050e821c88fd6ec5cf10d00f6c53e5"}},{"kind":"admission","intentRetained":false}],"ordinal":1}
+[tv-dator] # Subtest: ServiceLifecycleManager redelivery retains one origin and never reserves another ordinal
+[tv-dator] ok 2 - ServiceLifecycleManager redelivery retains one origin and never reserves another ordinal
+[tv-dator]   ---
+[tv-dator]   duration_ms: 11.584227
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: ServiceLifecycleManager recovers lost reservation from its original durable request
+[tv-dator] ok 3 - ServiceLifecycleManager recovers lost reservation from its original durable request
+[tv-dator]   ---
+[tv-dator]   duration_ms: 10.139455
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: ServiceLifecycleManager resolves an applied intent write with lost reply
+[tv-dator] ok 4 - ServiceLifecycleManager resolves an applied intent write with lost reply
+[tv-dator]   ---
+[tv-dator]   duration_ms: 10.368124
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: ServiceLifecycleManager resolves an applied admission write with lost reply
+[tv-dator] ok 5 - ServiceLifecycleManager resolves an applied admission write with lost reply
+[tv-dator]   ---
+[tv-dator]   duration_ms: 7.753686
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: ServiceLifecycleManager refuses reservation when intent write did not persist
+[tv-dator] ok 6 - ServiceLifecycleManager refuses reservation when intent write did not persist
+[tv-dator]   ---
+[tv-dator]   duration_ms: 7.803365
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: ServiceLifecycleManager retains the original request when admission persistence fails
+[tv-dator] ok 7 - ServiceLifecycleManager retains the original request when admission persistence fails
+[tv-dator]   ---
+[tv-dator]   duration_ms: 10.97938
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: ServiceLifecycleManager captures original intent before its first awaited read
+[tv-dator] ok 8 - ServiceLifecycleManager captures original intent before its first awaited read
+[tv-dator]   ---
+[tv-dator]   duration_ms: 8.607824
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: ServiceLifecycleManager rejects changed descriptor under a retained operation ID
+[tv-dator] ok 9 - ServiceLifecycleManager rejects changed descriptor under a retained operation ID
+[tv-dator]   ---
+[tv-dator]   duration_ms: 7.726486
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: ServiceLifecycleManager recovery does not replace original intent with current resolver data
+[tv-dator] ok 10 - ServiceLifecycleManager recovery does not replace original intent with current resolver data
+[tv-dator]   ---
+[tv-dator]   duration_ms: 6.626023
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: R5-A successor (:113-126): the scan inventories a PENDING row and reserves nothing; the re-entry resolves the same request
+[tv-dator] ok 11 - R5-A successor (:113-126): the scan inventories a PENDING row and reserves nothing; the re-entry resolves the same request
+[tv-dator]   ---
+[tv-dator]   duration_ms: 7.799172
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: ServiceLifecycleManager never revives CLOSED resource from retained admission
+[tv-dator] ok 12 - ServiceLifecycleManager never revives CLOSED resource from retained admission
+[tv-dator]   ---
+[tv-dator]   duration_ms: 7.356753
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: ServiceLifecycleManager completed journal is history, not a new effect grant
+[tv-dator] ok 13 - ServiceLifecycleManager completed journal is history, not a new effect grant
+[tv-dator]   ---
+[tv-dator]   duration_ms: 5.250659
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: ServiceLifecycleManager cancelled journal is history, not a new effect grant
+[tv-dator] ok 14 - ServiceLifecycleManager cancelled journal is history, not a new effect grant
+[tv-dator]   ---
+[tv-dator]   duration_ms: 5.230247
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: ServiceLifecycleManager failed journal is history, not a new effect grant
+[tv-dator] ok 15 - ServiceLifecycleManager failed journal is history, not a new effect grant
+[tv-dator]   ---
+[tv-dator]   duration_ms: 8.215092
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: ServiceLifecycleManager refuses forged persisted admission rather than borrowing another token
+[tv-dator] ok 16 - ServiceLifecycleManager refuses forged persisted admission rather than borrowing another token
+[tv-dator]   ---
+[tv-dator]   duration_ms: 5.512234
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: ServiceLifecycleManager absent or unavailable journal cannot invent recovery intent
+[tv-dator] ok 17 - ServiceLifecycleManager absent or unavailable journal cannot invent recovery intent
+[tv-dator]   ---
+[tv-dator]   duration_ms: 3.7678
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: ServiceLifecycleManager requires durable journal capabilities before resource admission
+[tv-dator] ok 18 - ServiceLifecycleManager requires durable journal capabilities before resource admission
+[tv-dator]   ---
+[tv-dator]   duration_ms: 4.224288
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: ServiceLifecycleManager malformed or oversized intent allocates no journal or reservation
+[tv-dator] ok 19 - ServiceLifecycleManager malformed or oversized intent allocates no journal or reservation
+[tv-dator]   ---
+[tv-dator]   duration_ms: 4.086419
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: ServiceLifecycleManager concurrent identical delivery converges on one original operation and token
+[tv-dator] ok 20 - ServiceLifecycleManager concurrent identical delivery converges on one original operation and token
+[tv-dator]   ---
+[tv-dator]   duration_ms: 8.326227
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: ServiceLifecycleManager validates descriptor lineage before retaining a new request
+[tv-dator] ok 21 - ServiceLifecycleManager validates descriptor lineage before retaining a new request
+[tv-dator]   ---
+[tv-dator]   duration_ms: 4.173093
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: SystemTableCache projects actual intent/admission columns without granting lifecycle completion
+[tv-dator] ok 22 - SystemTableCache projects actual intent/admission columns without granting lifecycle completion
+[tv-dator]   ---
+[tv-dator]   duration_ms: 6.41252
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: ServiceLifecycleManager damaged bound journal cannot fall through to old unbound recovery
+[tv-dator] ok 23 - ServiceLifecycleManager damaged bound journal cannot fall through to old unbound recovery
+[tv-dator]   ---
+[tv-dator]   duration_ms: 6.576266
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: R5-A successor (:222-230): a corrupt journal row is an INVENTORIED CORRUPT_STATE entry with reentry false
+[tv-dator] ok 24 - R5-A successor (:222-230): a corrupt journal row is an INVENTORIED CORRUPT_STATE entry with reentry false
+[tv-dator]   ---
+[tv-dator]   duration_ms: 7.206827
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: ServiceLifecycleManager unavailable resource resolution after retention stays UNKNOWN
+[tv-dator] ok 25 - ServiceLifecycleManager unavailable resource resolution after retention stays UNKNOWN
+[tv-dator]   ---
+[tv-dator]   duration_ms: 8.54143
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: R5-A successor (:232-239): an unreachable owner after retention is ADMISSION_RETAINED with phase UNAVAILABLE (answered or thrown)
+[tv-dator] ok 26 - R5-A successor (:232-239): an unreachable owner after retention is ADMISSION_RETAINED with phase UNAVAILABLE (answered or thrown)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 8.822318
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: ServiceLifecycleManager does not erase bound descriptor fields into legacy physical CREATE
+[tv-dator] ok 27 - ServiceLifecycleManager does not erase bound descriptor fields into legacy physical CREATE
+[tv-dator]   ---
+[tv-dator]   duration_ms: 6.029917
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: recovery R2-E the restart scan is total: a malformed row fails alone, the creation row after it is still inventoried
+[tv-dator] not ok 28 - recovery R2-E the restart scan is total: a malformed row fails alone, the creation row after it is still inventoried
+[tv-dator]   ---
+[tv-dator]   duration_ms: 5.324995
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/service/service-consensus-creation-intent.test.js:341:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: 'CORRUPT_STATE'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   stack: |-
+[tv-dator]     requireInstance (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/src/control-plane/owners/service-instance-contract.js:23:25)
+[tv-dator]     ServiceLifecycleManager._readRecoverableOperations (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/src/service/service-lifecycle-manager.js:543:7)
+[tv-dator]     async recoverPendingOperations (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/src/service/service-lifecycle-recovery.js:322:25)
+[tv-dator]     async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/service/service-consensus-creation-intent.test.js:351:19)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: recovery R1-D/R3-D the TERMINAL answer carries the row state
+[tv-dator] ok 29 - recovery R1-D/R3-D the TERMINAL answer carries the row state
+[tv-dator]   ---
+[tv-dator]   duration_ms: 16.567427
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: independent U1: TARGET_ALREADY_OWNED is not a sealed reservation refusal under a delayed original request
+[tv-dator] ok 30 - independent U1: TARGET_ALREADY_OWNED is not a sealed reservation refusal under a delayed original request
+[tv-dator]   ---
+[tv-dator]   duration_ms: 8.862379
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # {"condition":"TARGET_ALREADY_OWNED","resolution":{"outcome":"UNKNOWN","reason":"TARGET_ALREADY_OWNED"},"rowAfterResolution":"pending","originalResult":{"outcome":"ADMISSION_RETAINED","operationId":"operation-0","intent":{"consensusBinding":{"definitionDigest":"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8","format":1,"foundingPeers":[{"nodeId":"host-1","replicaId":"founder-1"},{"nodeId":"host-2","replicaId":"founder-2"},{"nodeId":"host-3","replicaId":"founder-3"}],"incarnation":"0dc6dc73122fc1996bb646966cf8d4fa93335e71b26cb7031aa67b2eade4cd11","profileDigest":"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7","requestDigest":"a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d","requestId":{"expectedVersion":0,"nonce":"0000000000000000000000000000000000000000000000000000000000000001","serviceDefinitionId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c"},"revisionDigest":"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7","revisionId":"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38","selectionVersion":1,"serviceDefinitionId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","tenantId":"creation-test-tenant"},"consensusSlotRequest":{"expectedOrdinal":0,"nodeId":"host-1","operationId":"operation-0","replicaId":"founder-1","slot":0},"descriptor":{"replicaCount":3,"replicaId":"founder-1","runtimeConfig":"{\\"definition\\":{\\"serviceName\\":\\"creation-test-service\\",\\"handlerFunctionId\\":\\"creation-test-handler\\",\\"readConsistency\\":\\"strong\\",\\"writeConsistency\\":\\"strong\\",\\"safetyIntervalMs\\":0}}","runtimeKind":"wasm_component","runtimeRef":"fixture/component@1.0.0","serviceId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","serviceType":"runtime_service","tenantId":"creation-test-tenant"},"format":1},"token":{"bindingDigest":"cdcd3a9e121a3177b3b3e618ffb2229683b9ad49bd1303e8acea10c2e8eeb8cf","bodyDigest":"7c4a89464b8684baafbdb0a3fc809484c4050e821c88fd6ec5cf10d00f6c53e5","operationId":"operation-0","ordinal":1,"slot":0},"phase":"ADMITTED"},"finalJournalState":"in_progress","admissionJson":"{\\"bindingDigest\\":\\"cdcd3a9e121a3177b3b3e618ffb2229683b9ad49bd1303e8acea10c2e8eeb8cf\\",\\"bodyDigest\\":\\"7c4a89464b8684baafbdb0a3fc809484c4050e821c88fd6ec5cf10d00f6c53e5\\",\\"operationId\\":\\"operation-0\\",\\"ordinal\\":1,\\"slot\\":0}","finalResource":{"ordinal":1,"phase":"ADMITTED","request":{"expectedOrdinal":0,"nodeId":"host-1","operationId":"operation-0","replicaId":"founder-1","slot":0},"token":{"bindingDigest":"cdcd3a9e121a3177b3b3e618ffb2229683b9ad49bd1303e8acea10c2e8eeb8cf","bodyDigest":"7c4a89464b8684baafbdb0a3fc809484c4050e821c88fd6ec5cf10d00f6c53e5","operationId":"operation-0","ordinal":1,"slot":0}},"inventory":[{"status":"INVENTORIED","operationId":"operation-0","intent":{"consensusBinding":{"definitionDigest":"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8","format":1,"foundingPeers":[{"nodeId":"host-1","replicaId":"founder-1"},{"nodeId":"host-2","replicaId":"founder-2"},{"nodeId":"host-3","replicaId":"founder-3"}],"incarnation":"0dc6dc73122fc1996bb646966cf8d4fa93335e71b26cb7031aa67b2eade4cd11","profileDigest":"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7","requestDigest":"a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d","requestId":{"expectedVersion":0,"nonce":"0000000000000000000000000000000000000000000000000000000000000001","serviceDefinitionId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c"},"revisionDigest":"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7","revisionId":"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38","selectionVersion":1,"serviceDefinitionId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","tenantId":"creation-test-tenant"},"consensusSlotRequest":{"expectedOrdinal":0,"nodeId":"host-1","operationId":"operation-0","replicaId":"founder-1","slot":0},"descriptor":{"replicaCount":3,"replicaId":"founder-1","runtimeConfig":"{\\"definition\\":{\\"serviceName\\":\\"creation-test-service\\",\\"handlerFunctionId\\":\\"creation-test-handler\\",\\"readConsistency\\":\\"strong\\",\\"writeConsistency\\":\\"strong\\",\\"safetyIntervalMs\\":0}}","runtimeKind":"wasm_component","runtimeRef":"fixture/component@1.0.0","serviceId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","serviceType":"runtime_service","tenantId":"creation-test-tenant"},"format":1},"token":{"bindingDigest":"cdcd3a9e121a3177b3b3e618ffb2229683b9ad49bd1303e8acea10c2e8eeb8cf","bodyDigest":"7c4a89464b8684baafbdb0a3fc809484c4050e821c88fd6ec5cf10d00f6c53e5","operationId":"operation-0","ordinal":1,"slot":0},"rowState":"in_progress","opening":null,"nodeId":"host-1"}]}
+[tv-dator] # Subtest: independent U1: INVALID_EXPECTED_STATE is not a sealed reservation refusal under a delayed original request
+[tv-dator] ok 31 - independent U1: INVALID_EXPECTED_STATE is not a sealed reservation refusal under a delayed original request
+[tv-dator]   ---
+[tv-dator]   duration_ms: 14.627242
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # {"condition":"INVALID_EXPECTED_STATE","resolution":{"outcome":"UNKNOWN","reason":"INVALID_EXPECTED_STATE"},"rowAfterResolution":"pending","originalResult":{"outcome":"ADMISSION_RETAINED","operationId":"operation-0","intent":{"consensusBinding":{"definitionDigest":"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8","format":1,"foundingPeers":[{"nodeId":"host-1","replicaId":"founder-1"},{"nodeId":"host-2","replicaId":"founder-2"},{"nodeId":"host-3","replicaId":"founder-3"}],"incarnation":"0dc6dc73122fc1996bb646966cf8d4fa93335e71b26cb7031aa67b2eade4cd11","profileDigest":"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7","requestDigest":"a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d","requestId":{"expectedVersion":0,"nonce":"0000000000000000000000000000000000000000000000000000000000000001","serviceDefinitionId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c"},"revisionDigest":"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7","revisionId":"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38","selectionVersion":1,"serviceDefinitionId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","tenantId":"creation-test-tenant"},"consensusSlotRequest":{"expectedOrdinal":1,"nodeId":"host-1","operationId":"operation-0","replicaId":"founder-1","slot":0},"descriptor":{"replicaCount":3,"replicaId":"founder-1","runtimeConfig":"{\\"definition\\":{\\"serviceName\\":\\"creation-test-service\\",\\"handlerFunctionId\\":\\"creation-test-handler\\",\\"readConsistency\\":\\"strong\\",\\"writeConsistency\\":\\"strong\\",\\"safetyIntervalMs\\":0}}","runtimeKind":"wasm_component","runtimeRef":"fixture/component@1.0.0","serviceId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","serviceType":"runtime_service","tenantId":"creation-test-tenant"},"format":1},"token":{"bindingDigest":"cdcd3a9e121a3177b3b3e618ffb2229683b9ad49bd1303e8acea10c2e8eeb8cf","bodyDigest":"f29179bc7f03806ac8016903e151da8ea908d88f7677f649c1a901d7a452fb3f","operationId":"operation-0","ordinal":2,"slot":0},"phase":"ADMITTED"},"finalJournalState":"in_progress","admissionJson":"{\\"bindingDigest\\":\\"cdcd3a9e121a3177b3b3e618ffb2229683b9ad49bd1303e8acea10c2e8eeb8cf\\",\\"bodyDigest\\":\\"f29179bc7f03806ac8016903e151da8ea908d88f7677f649c1a901d7a452fb3f\\",\\"operationId\\":\\"operation-0\\",\\"ordinal\\":2,\\"slot\\":0}","finalResource":{"ordinal":2,"phase":"ADMITTED","request":{"expectedOrdinal":1,"nodeId":"host-1","operationId":"operation-0","replicaId":"founder-1","slot":0},"token":{"bindingDigest":"cdcd3a9e121a3177b3b3e618ffb2229683b9ad49bd1303e8acea10c2e8eeb8cf","bodyDigest":"f29179bc7f03806ac8016903e151da8ea908d88f7677f649c1a901d7a452fb3f","operationId":"operation-0","ordinal":2,"slot":0}},"inventory":[{"status":"INVENTORIED","operationId":"operation-0","intent":{"consensusBinding":{"definitionDigest":"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8","format":1,"foundingPeers":[{"nodeId":"host-1","replicaId":"founder-1"},{"nodeId":"host-2","replicaId":"founder-2"},{"nodeId":"host-3","replicaId":"founder-3"}],"incarnation":"0dc6dc73122fc1996bb646966cf8d4fa93335e71b26cb7031aa67b2eade4cd11","profileDigest":"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7","requestDigest":"a103209cc01c91ba2c31d4e9effbc2e410d430d258c76f25b7357497077f2d7d","requestId":{"expectedVersion":0,"nonce":"0000000000000000000000000000000000000000000000000000000000000001","serviceDefinitionId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c"},"revisionDigest":"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7","revisionId":"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38","selectionVersion":1,"serviceDefinitionId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","tenantId":"creation-test-tenant"},"consensusSlotRequest":{"expectedOrdinal":1,"nodeId":"host-1","operationId":"operation-0","replicaId":"founder-1","slot":0},"descriptor":{"replicaCount":3,"replicaId":"founder-1","runtimeConfig":"{\\"definition\\":{\\"serviceName\\":\\"creation-test-service\\",\\"handlerFunctionId\\":\\"creation-test-handler\\",\\"readConsistency\\":\\"strong\\",\\"writeConsistency\\":\\"strong\\",\\"safetyIntervalMs\\":0}}","runtimeKind":"wasm_component","runtimeRef":"fixture/component@1.0.0","serviceId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","serviceType":"runtime_service","tenantId":"creation-test-tenant"},"format":1},"token":{"bindingDigest":"cdcd3a9e121a3177b3b3e618ffb2229683b9ad49bd1303e8acea10c2e8eeb8cf","bodyDigest":"f29179bc7f03806ac8016903e151da8ea908d88f7677f649c1a901d7a452fb3f","operationId":"operation-0","ordinal":2,"slot":0},"rowState":"in_progress","opening":null,"nodeId":"host-1"}]}
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] # Subtest: independent U1: STALE_BINDING before the exact future selection is not a sealed reservation refusal
+[tv-dator] ok 32 - independent U1: STALE_BINDING before the exact future selection is not a sealed reservation refusal
+[tv-dator]   ---
+[tv-dator]   duration_ms: 18.180623
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # {"resolution":{"outcome":"UNKNOWN","reason":"STALE_BINDING"},"originalResult":{"outcome":"ADMISSION_RETAINED","operationId":"operation-0","intent":{"consensusBinding":{"definitionDigest":"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8","format":1,"foundingPeers":[{"nodeId":"host-1","replicaId":"founder-1"},{"nodeId":"host-2","replicaId":"founder-2"},{"nodeId":"host-3","replicaId":"founder-3"}],"incarnation":"6b734fff76ca06b44ab240fef073ee2b7bdcd0c7f12f181802ec8ee793542824","profileDigest":"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7","requestDigest":"6ea871cda1c74b9a28bdbea5838358eaa06d86c38017a7a6ddd696726da0d027","requestId":{"expectedVersion":1,"nonce":"0000000000000000000000000000000000000000000000000000000000000049","serviceDefinitionId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c"},"revisionDigest":"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7","revisionId":"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38","selectionVersion":2,"serviceDefinitionId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","tenantId":"creation-test-tenant"},"consensusSlotRequest":{"expectedOrdinal":0,"nodeId":"host-1","operationId":"operation-0","replicaId":"founder-1","slot":0},"descriptor":{"replicaCount":3,"replicaId":"founder-1","runtimeConfig":"{\\"definition\\":{\\"serviceName\\":\\"creation-test-service\\",\\"handlerFunctionId\\":\\"creation-test-handler\\",\\"readConsistency\\":\\"strong\\",\\"writeConsistency\\":\\"strong\\",\\"safetyIntervalMs\\":0}}","runtimeKind":"wasm_component","runtimeRef":"fixture/component@1.0.0","serviceId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","serviceType":"runtime_service","tenantId":"creation-test-tenant"},"format":1},"token":{"bindingDigest":"51961ea8af7b4fec7d93515cebbc6323cd9b868c1f0da91274cbd6ab270fe47f","bodyDigest":"7c4a89464b8684baafbdb0a3fc809484c4050e821c88fd6ec5cf10d00f6c53e5","operationId":"operation-0","ordinal":1,"slot":0},"phase":"ADMITTED"},"finalJournalState":"in_progress","admissionJson":"{\\"bindingDigest\\":\\"51961ea8af7b4fec7d93515cebbc6323cd9b868c1f0da91274cbd6ab270fe47f\\",\\"bodyDigest\\":\\"7c4a89464b8684baafbdb0a3fc809484c4050e821c88fd6ec5cf10d00f6c53e5\\",\\"operationId\\":\\"operation-0\\",\\"ordinal\\":1,\\"slot\\":0}","resource":{"ordinal":1,"phase":"ADMITTED","request":{"expectedOrdinal":0,"nodeId":"host-1","operationId":"operation-0","replicaId":"founder-1","slot":0},"token":{"bindingDigest":"51961ea8af7b4fec7d93515cebbc6323cd9b868c1f0da91274cbd6ab270fe47f","bodyDigest":"7c4a89464b8684baafbdb0a3fc809484c4050e821c88fd6ec5cf10d00f6c53e5","operationId":"operation-0","ordinal":1,"slot":0}}}
+[tv-dator] # Subtest: F1 REMOVE-time resolution fails closed for untagged or UNRESOLVED owner refusals
+[tv-dator] ok 33 - F1 REMOVE-time resolution fails closed for untagged or UNRESOLVED owner refusals
+[tv-dator]   ---
+[tv-dator]   duration_ms: 10.316404
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: F1 irrevocably absent old binding permits exact positive cancellation and terminal reread
+[tv-dator] ok 34 - F1 irrevocably absent old binding permits exact positive cancellation and terminal reread
+[tv-dator]   ---
+[tv-dator]   duration_ms: 7.355953
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: F1 admission reread preserves concurrently observed completed journal authority
+[tv-dator] ok 35 - F1 admission reread preserves concurrently observed completed journal authority
+[tv-dator]   ---
+[tv-dator]   duration_ms: 5.116841
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: F1 admission reread preserves concurrently observed failed journal authority
+[tv-dator] ok 36 - F1 admission reread preserves concurrently observed failed journal authority
+[tv-dator]   ---
+[tv-dator]   duration_ms: 5.23147
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: F1 cancellation reread preserves concurrently observed completed journal authority
+[tv-dator] ok 37 - F1 cancellation reread preserves concurrently observed completed journal authority
+[tv-dator]   ---
+[tv-dator]   duration_ms: 5.471764
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: F1 cancellation reread preserves concurrently observed failed journal authority
+[tv-dator] ok 38 - F1 cancellation reread preserves concurrently observed failed journal authority
+[tv-dator]   ---
+[tv-dator]   duration_ms: 7.431656
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: F1 corrupt retained identity remains a journal error, never resource UNKNOWN
+[tv-dator] ok 39 - F1 corrupt retained identity remains a journal error, never resource UNKNOWN
+[tv-dator]   ---
+[tv-dator]   duration_ms: 4.184238
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] 1..39
+[tv-dator] # tests 39
+[tv-dator] # suites 0
+[tv-dator] # pass 38
+[tv-dator] # fail 1
+[tv-dator] # cancelled 0
+[tv-dator] # skipped 0
+[tv-dator] # todo 0
+[tv-dator] # duration_ms 376.808338
+[tv-dator] # time=928ms
+[tv-dator] ok test/control-plane/service-instance-creation-cas.test.js (31 assertions, 1030ms)
+[tv-dator] ok test/runtime/service-runtime-consensus-publication.test.js (16 assertions, 1033ms)
+[tv-dator] ok test/wasm-service/operation-lifecycle.test.js (34 assertions, 225ms)
+[tv-dator] not ok test/node/runtime-service-bound-route.test.js (62 assertions, 1293ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 13
+[tv-dator] # Subtest: stage 1c: RuntimeServiceHandler bound CREATE route (RV2.2, RV3.2, RV3.3)
+[tv-dator]     # Subtest: C6-1 a retained creation answering HELD -> memo HELD + CREATE_HELD at the CREATING step
+[tv-dator]     ok 1 - C6-1 a retained creation answering HELD -> memo HELD + CREATE_HELD at the CREATING step
+[tv-dator]       ---
+[tv-dator]       duration_ms: 107.839616
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: PUBLISHED_UNPROJECTED keeps the memo HELD; a confirmed PUBLISHED answers ACTIVE
+[tv-dator]     ok 2 - PUBLISHED_UNPROJECTED keeps the memo HELD; a confirmed PUBLISHED answers ACTIVE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 30.577583
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: Revision 4: a PUBLISHED_UNPROJECTED answer for an ungranted slot is contradicted and retired
+[tv-dator]     ok 3 - Revision 4: a PUBLISHED_UNPROJECTED answer for an ungranted slot is contradicted and retired
+[tv-dator]       ---
+[tv-dator]       duration_ms: 30.895563
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: UNKNOWN after retention is the handler-typed deferral: CREATE_FAILED + deferRetry, memo FAILED
+[tv-dator]     ok 4 - UNKNOWN after retention is the handler-typed deferral: CREATE_FAILED + deferRetry, memo FAILED
+[tv-dator]       ---
+[tv-dator]       duration_ms: 15.808458
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: TERMINAL_OPERATION is a permanent CREATE_FAILED with its code (slot not live)
+[tv-dator]     ok 5 - TERMINAL_OPERATION is a permanent CREATE_FAILED with its code (slot not live)
+[tv-dator]       ---
+[tv-dator]       duration_ms: 9.649144
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: C6-4 a definitive INTENT_NOT_FOUND for a bound-class definition is BOUND_ROUTE_REQUIRED
+[tv-dator]     ok 6 - C6-4 a definitive INTENT_NOT_FOUND for a bound-class definition is BOUND_ROUTE_REQUIRED
+[tv-dator]       ---
+[tv-dator]       duration_ms: 5.112573
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: C6-5 an unavailable journal read defers a bound-class CREATE; never NOT_FOUND
+[tv-dator]     ok 7 - C6-5 an unavailable journal read defers a bound-class CREATE; never NOT_FOUND
+[tv-dator]       ---
+[tv-dator]       duration_ms: 6.315965
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: a native_js definition with no retained creation takes the generic path, journal or not
+[tv-dator]     ok 8 - a native_js definition with no retained creation takes the generic path, journal or not
+[tv-dator]       ---
+[tv-dator]       duration_ms: 11.474077
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: cell (a) production-shaped manager (no journal): native_js and Cell generic, bound-class deferred
+[tv-dator]     ok 9 - cell (a) production-shaped manager (no journal): native_js and Cell generic, bound-class deferred
+[tv-dator]       ---
+[tv-dator]       duration_ms: 6.060408
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     1..9
+[tv-dator] ok 1 - stage 1c: RuntimeServiceHandler bound CREATE route (RV2.2, RV3.2, RV3.3)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 225.509604
+[tv-dator]   type: 'suite'
+[tv-dator]   ...
+[tv-dator] # Subtest: stage 1c: HELD re-entry and the node-local wake consumer (RV2.4, RV3.5)
+[tv-dator]     # Subtest: F9 a duplicate CREATE while a HELD re-entry is in flight starts no second resume
+[tv-dator]     not ok 1 - F9 a duplicate CREATE while a HELD re-entry is in flight starts no second resume
+[tv-dator]       ---
+[tv-dator]       duration_ms: 10.970466
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/node/runtime-service-bound-route.test.js:348:3'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         Expected values to be strictly equal:
+[tv-dator]         + actual - expected
+[tv-dator]         
+[tv-dator]         + 'error'
+[tv-dator]         - 'in_progress'
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected: 'in_progress'
+[tv-dator]       actual: 'error'
+[tv-dator]       operator: 'strictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/node/runtime-service-bound-route.test.js:363:14)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async Promise.all (index 0)
+[tv-dator]         async Suite.run (node:internal/test_runner/test:1442:7)
+[tv-dator]         async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]       ...
+[tv-dator]     # Subtest: a wake naming the HELD operation re-enters once; a wake during it is recorded and consumed
+[tv-dator]     ok 2 - a wake naming the HELD operation re-enters once; a wake during it is recorded and consumed
+[tv-dator]       ---
+[tv-dator]       duration_ms: 15.708227
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: C6-10 a wake naming no local operation answers NO_LOCAL_OPERATION and runs nothing
+[tv-dator]     ok 3 - C6-10 a wake naming no local operation answers NO_LOCAL_OPERATION and runs nothing
+[tv-dator]       ---
+[tv-dator]       duration_ms: 6.328334
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     1..3
+[tv-dator] not ok 2 - stage 1c: HELD re-entry and the node-local wake consumer (RV2.4, RV3.5)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 33.362694
+[tv-dator]   type: 'suite'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/node/runtime-service-bound-route.test.js:347:1'
+[tv-dator]   failureType: 'subtestsFailed'
+[tv-dator]   error: '1 subtest failed'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   ...
+[tv-dator] # Subtest: stage 1c round 3: the HELD creation keeps custody (RV5.1, RV5.2, RV5.3)
+[tv-dator]     # Subtest: RV5.1 a CREATE under another operation id for a HELD replica keeps the memo creation, re-enters it once, emits under its id; the next REMOVE is bound
+[tv-dator]     ok 1 - RV5.1 a CREATE under another operation id for a HELD replica keeps the memo creation, re-enters it once, emits under its id; the next REMOVE is bound
+[tv-dator]       ---
+[tv-dator]       duration_ms: 12.604822
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: RV5.1 a wake during that re-entry is RECORDED on the creation in-flight entry; no second resume runs beside it
+[tv-dator]     ok 2 - RV5.1 a wake during that re-entry is RECORDED on the creation in-flight entry; no second resume runs beside it
+[tv-dator]       ---
+[tv-dator]       duration_ms: 11.840162
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: RV5.2 a BOUND_ROUTE_REQUIRED refusal for a request naming no creation leaves a HELD memo untouched (outcome under the request id)
+[tv-dator]     not ok 3 - RV5.2 a BOUND_ROUTE_REQUIRED refusal for a request naming no creation leaves a HELD memo untouched (outcome under the request id)
+[tv-dator]       ---
+[tv-dator]       duration_ms: 8.920673
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/node/runtime-service-bound-route.test.js:473:3'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         Expected values to be strictly deep-equal:
+[tv-dator]         + actual - expected
+[tv-dator]         
+[tv-dator]           [
+[tv-dator]         +   'RUNTIME_SERVICE_CREATE_HELD',
+[tv-dator]         +   'operation-0',
+[tv-dator]         +   undefined
+[tv-dator]         -   'RUNTIME_SERVICE_CREATE_FAILED',
+[tv-dator]         -   'another-operation-id',
+[tv-dator]         -   'runtime_service_bound_route_required'
+[tv-dator]           ]
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected:
+[tv-dator]         0: 'RUNTIME_SERVICE_CREATE_FAILED'
+[tv-dator]         1: 'another-operation-id'
+[tv-dator]         2: 'runtime_service_bound_route_required'
+[tv-dator]       actual:
+[tv-dator]         0: 'RUNTIME_SERVICE_CREATE_HELD'
+[tv-dator]         1: 'operation-0'
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/node/runtime-service-bound-route.test.js:480:12)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]       ...
+[tv-dator]     # Subtest: RV5.2 the catch path before the resume answers a retained class leaves a creation-naming memo untouched
+[tv-dator]     not ok 4 - RV5.2 the catch path before the resume answers a retained class leaves a creation-naming memo untouched
+[tv-dator]       ---
+[tv-dator]       duration_ms: 7.12853
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/node/runtime-service-bound-route.test.js:485:3'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         the emitter fault was injected
+[tv-dator]         
+[tv-dator]         false !== true
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected: true
+[tv-dator]       actual: false
+[tv-dator]       operator: 'strictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/node/runtime-service-bound-route.test.js:499:12)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]       ...
+[tv-dator]     # Subtest: RV5.3 a wake without a token operation id is NO_LOCAL_OPERATION, never matched to a nameless memo
+[tv-dator]     ok 5 - RV5.3 a wake without a token operation id is NO_LOCAL_OPERATION, never matched to a nameless memo
+[tv-dator]       ---
+[tv-dator]       duration_ms: 5.288915
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: RV5.3 a RESOURCE_CLOSED wake during the first START is recorded and re-enters nothing
+[tv-dator]     not ok 6 - RV5.3 a RESOURCE_CLOSED wake during the first START is recorded and re-enters nothing
+[tv-dator]       ---
+[tv-dator]       duration_ms: 5.638319
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/node/runtime-service-bound-route.test.js:519:3'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         Expected values to be strictly equal:
+[tv-dator]         + actual - expected
+[tv-dator]         
+[tv-dator]         + 'NO_LOCAL_OPERATION'
+[tv-dator]         - 'RECORDED'
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected: 'RECORDED'
+[tv-dator]       actual: 'NO_LOCAL_OPERATION'
+[tv-dator]       operator: 'strictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/node/runtime-service-bound-route.test.js:526:14)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]       ...
+[tv-dator]     # Subtest: RV6.3 (P5) a CREATE under another id while the memo is REMOVING keeps the creation, is deferred typed with RETIREMENT_IN_PROGRESS, and the re-REMOVE is bound and completes
+[tv-dator]     ok 7 - RV6.3 (P5) a CREATE under another id while the memo is REMOVING keeps the creation, is deferred typed with RETIREMENT_IN_PROGRESS, and the re-REMOVE is bound and completes
+[tv-dator]       ---
+[tv-dator]       duration_ms: 9.644992
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: RV6.1 the in-progress tracker never writes a creation-naming memo: a CREATE after a completed bound REMOVE is tracked only and its refusal leaves the memo
+[tv-dator]     ok 8 - RV6.1 the in-progress tracker never writes a creation-naming memo: a CREATE after a completed bound REMOVE is tracked only and its refusal leaves the memo
+[tv-dator]       ---
+[tv-dator]       duration_ms: 14.422907
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: RV6.2 (P6) a CREATE under another id while the memo is a named deferral keeps the creation, re-enters it once under its id, and the next REMOVE is bound
+[tv-dator]     ok 9 - RV6.2 (P6) a CREATE under another id while the memo is a named deferral keeps the creation, re-enters it once under its id, and the next REMOVE is bound
+[tv-dator]       ---
+[tv-dator]       duration_ms: 10.820996
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: RV6.2 the same-id retry of a named deferral re-enters it once
+[tv-dator]     not ok 10 - RV6.2 the same-id retry of a named deferral re-enters it once
+[tv-dator]       ---
+[tv-dator]       duration_ms: 7.80151
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/node/runtime-service-bound-route.test.js:615:3'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         Expected values to be strictly deep-equal:
+[tv-dator]         + actual - expected
+[tv-dator]         
+[tv-dator]           [
+[tv-dator]             'in_progress',
+[tv-dator]         +   'error'
+[tv-dator]         -   'in_progress'
+[tv-dator]           ]
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected:
+[tv-dator]         0: 'in_progress'
+[tv-dator]         1: 'in_progress'
+[tv-dator]       actual:
+[tv-dator]         0: 'in_progress'
+[tv-dator]         1: 'error'
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/node/runtime-service-bound-route.test.js:621:12)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]       ...
+[tv-dator]     # Subtest: RV6.4 (P8) a nameless HELD memo answers the ERROR reply with CORRUPT_LOCAL_MEMO, memo untouched, nothing emitted
+[tv-dator]     ok 11 - RV6.4 (P8) a nameless HELD memo answers the ERROR reply with CORRUPT_LOCAL_MEMO, memo untouched, nothing emitted
+[tv-dator]       ---
+[tv-dator]       duration_ms: 6.490756
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: RV7.2 (P14) a permanently failed named memo does not capture a CREATE under another id: the request proceeds under its own id; an unrouted request is refused, memo untouched
+[tv-dator]     not ok 12 - RV7.2 (P14) a permanently failed named memo does not capture a CREATE under another id: the request proceeds under its own id; an unrouted request is refused, memo untouched
+[tv-dator]       ---
+[tv-dator]       duration_ms: 7.436623
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/node/runtime-service-bound-route.test.js:660:3'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         the request was routed under its own id
+[tv-dator]         + actual - expected
+[tv-dator]         
+[tv-dator]         + []
+[tv-dator]         - [
+[tv-dator]         -   'another-operation-id'
+[tv-dator]         - ]
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected:
+[tv-dator]         0: 'another-operation-id'
+[tv-dator]       actual:
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/node/runtime-service-bound-route.test.js:668:12)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]       ...
+[tv-dator]     # Subtest: RV7.2 (P15) I retired, a late duplicate of I answers RESOURCE_CLOSED, then J founder CREATE for the same canonical replica resumes J and the memo is named J
+[tv-dator]     not ok 13 - RV7.2 (P15) I retired, a late duplicate of I answers RESOURCE_CLOSED, then J founder CREATE for the same canonical replica resumes J and the memo is named J
+[tv-dator]       ---
+[tv-dator]       duration_ms: 19.00299
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/node/runtime-service-bound-route.test.js:675:3'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         Expected values to be strictly deep-equal:
+[tv-dator]         + actual - expected
+[tv-dator]         
+[tv-dator]           [
+[tv-dator]         +   'removed',
+[tv-dator]         -   'failed',
+[tv-dator]             'operation-0',
+[tv-dator]             undefined,
+[tv-dator]             'TERMINAL_OPERATION'
+[tv-dator]           ]
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected:
+[tv-dator]         0: 'failed'
+[tv-dator]         1: 'operation-0'
+[tv-dator]         3: 'TERMINAL_OPERATION'
+[tv-dator]       actual:
+[tv-dator]         0: 'removed'
+[tv-dator]         1: 'operation-0'
+[tv-dator]         3: 'TERMINAL_OPERATION'
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/node/runtime-service-bound-route.test.js:694:12)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]       ...
+[tv-dator]     # Subtest: RV7.1 a DEFERRED settle records deferRetry:true, a permanent one does not; only the flagged memo re-enters
+[tv-dator]     not ok 14 - RV7.1 a DEFERRED settle records deferRetry:true, a permanent one does not; only the flagged memo re-enters
+[tv-dator]       ---
+[tv-dator]       duration_ms: 19.103082
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/node/runtime-service-bound-route.test.js:717:3'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         routed under the request id
+[tv-dator]         + actual - expected
+[tv-dator]         
+[tv-dator]         + []
+[tv-dator]         - [
+[tv-dator]         -   'operation-0'
+[tv-dator]         - ]
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected:
+[tv-dator]         0: 'operation-0'
+[tv-dator]       actual:
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/node/runtime-service-bound-route.test.js:728:12)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]       ...
+[tv-dator]     # Subtest: RV7.3 a named ACTIVE memo and a request under a different id: ALREADY_EXISTS, CREATE_FAILED CONTENT_CONFLICT under the request, never CREATE_ACTIVE, memo untouched
+[tv-dator]     ok 15 - RV7.3 a named ACTIVE memo and a request under a different id: ALREADY_EXISTS, CREATE_FAILED CONTENT_CONFLICT under the request, never CREATE_ACTIVE, memo untouched
+[tv-dator]       ---
+[tv-dator]       duration_ms: 10.344848
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: RV7.3 the same-id duplicate of a named ACTIVE memo still emits CREATE_ACTIVE
+[tv-dator]     ok 16 - RV7.3 the same-id duplicate of a named ACTIVE memo still emits CREATE_ACTIVE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 10.515184
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: RV6.3/RV6.4 codes at the handler constants owner
+[tv-dator]     ok 17 - RV6.3/RV6.4 codes at the handler constants owner
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.109618
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     1..17
+[tv-dator] not ok 3 - stage 1c round 3: the HELD creation keeps custody (RV5.1, RV5.2, RV5.3)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 168.48649
+[tv-dator]   type: 'suite'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/node/runtime-service-bound-route.test.js:398:1'
+[tv-dator]   failureType: 'subtestsFailed'
+[tv-dator]   error: '7 subtests failed'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   ...
+[tv-dator] # Subtest: stage 1c: bound REMOVE route (RV2.1, RV3.3 REMOVE table)
+[tv-dator]     # Subtest: closed:true retires through the manager bound STOP and completes
+[tv-dator]     ok 1 - closed:true retires through the manager bound STOP and completes
+[tv-dator]       ---
+[tv-dator]       duration_ms: 7.772411
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: a HISTORY_UNAVAILABLE close of a durable tombstone completes (slot reused later)
+[tv-dator]     ok 2 - a HISTORY_UNAVAILABLE close of a durable tombstone completes (slot reused later)
+[tv-dator]       ---
+[tv-dator]       duration_ms: 7.302544
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: a permanent refusal is REMOVE_FAILED with its code
+[tv-dator]     ok 3 - a permanent refusal is REMOVE_FAILED with its code
+[tv-dator]       ---
+[tv-dator]       duration_ms: 7.337738
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: C6-8/cell (b) closed:false -> REMOVE_HELD, memo REMOVING; the next REMOVE resolves
+[tv-dator]     ok 4 - C6-8/cell (b) closed:false -> REMOVE_HELD, memo REMOVING; the next REMOVE resolves
+[tv-dator]       ---
+[tv-dator]       duration_ms: 10.404381
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: cell (c) a REMOVE whose creation row is PENDING completes and reserves nothing
+[tv-dator]     ok 5 - cell (c) a REMOVE whose creation row is PENDING completes and reserves nothing
+[tv-dator]       ---
+[tv-dator]       duration_ms: 6.661111
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: C6-9 after a handler restart the services row hint (replica_id, create_attempt_token) recovers the creation
+[tv-dator]     ok 6 - C6-9 after a handler restart the services row hint (replica_id, create_attempt_token) recovers the creation
+[tv-dator]       ---
+[tv-dator]       duration_ms: 6.420645
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     1..6
+[tv-dator] ok 4 - stage 1c: bound REMOVE route (RV2.1, RV3.3 REMOVE table)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 46.296474
+[tv-dator]   type: 'suite'
+[tv-dator]   ...
+[tv-dator] # Subtest: stage 1c: readRetainedCreation, the journal-only REMOVE read (RV2.1, RV3.3 N2)
+[tv-dator]     # Subtest: result table over the real journal
+[tv-dator]     ok 1 - result table over the real journal
+[tv-dator]       ---
+[tv-dator]       duration_ms: 5.650895
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: a PENDING row answers NOT_ADMITTED; an unwired manager answers UNAVAILABLE
+[tv-dator]     ok 2 - a PENDING row answers NOT_ADMITTED; an unwired manager answers UNAVAILABLE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 3.810502
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     1..2
+[tv-dator] ok 5 - stage 1c: readRetainedCreation, the journal-only REMOVE read (RV2.1, RV3.3 N2)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 9.575596
+[tv-dator]   type: 'suite'
+[tv-dator]   ...
+[tv-dator] # Subtest: stage 1c: shared vocabulary (RV3.6, RV3.8)
+[tv-dator]     # Subtest: HELD is a valid, peer-excluded, non-terminal status; HELD outcomes are UPDATE_STEP
+[tv-dator]     ok 1 - HELD is a valid, peer-excluded, non-terminal status; HELD outcomes are UPDATE_STEP
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.162317
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     1..1
+[tv-dator] ok 6 - stage 1c: shared vocabulary (RV3.6, RV3.8)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0.215123
+[tv-dator]   type: 'suite'
+[tv-dator]   ...
+[tv-dator] # Subtest: recovery unit 1 (design RECOVERY-DESIGN-20261017): the handler side
+[tv-dator]     # Subtest: R1-H/R2-F a handler that awaits its restart inventory answers NOT_READY with deferRetry and emits nothing; after recoverRetainedCreations it routes normally
+[tv-dator]     ok 1 - R1-H/R2-F a handler that awaits its restart inventory answers NOT_READY with deferRetry and emits nothing; after recoverRetainedCreations it routes normally
+[tv-dator]       ---
+[tv-dator]       duration_ms: 8.383616
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: R4-A rule 2 / R5-A a GRANT_HELD wake whose grant is UNAVAILABLE is RECORDED for a HELD memo and leaves no pending wake in flight; another GRANT_HELD still re-enters
+[tv-dator]     ok 2 - R4-A rule 2 / R5-A a GRANT_HELD wake whose grant is UNAVAILABLE is RECORDED for a HELD memo and leaves no pending wake in flight; another GRANT_HELD still re-enters
+[tv-dator]       ---
+[tv-dator]       duration_ms: 13.100347
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: R1-B/R3-C the open's typed code: a permanent code is a permanent CREATE_FAILED, UNAVAILABLE the named deferral, a transient lifecycle code stays today's deferral
+[tv-dator]     ok 3 - R1-B/R3-C the open's typed code: a permanent code is a permanent CREATE_FAILED, UNAVAILABLE the named deferral, a transient lifecycle code stays today's deferral
+[tv-dator]       ---
+[tv-dator]       duration_ms: 17.530709
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: R3-D a REMOVE of a CANCELLED creation is REMOVE_COMPLETED; of a FAILED one REMOVE_FAILED typed
+[tv-dator]     ok 4 - R3-D a REMOVE of a CANCELLED creation is REMOVE_COMPLETED; of a FAILED one REMOVE_FAILED typed
+[tv-dator]       ---
+[tv-dator]       duration_ms: 12.306565
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: R2-A/R3-E a REMOVE of a PENDING row whose owner seals the request CANCELS the row (never FAILED) and completes; an unreachable owner holds it PENDING
+[tv-dator]     ok 5 - R2-A/R3-E a REMOVE of a PENDING row whose owner seals the request CANCELS the row (never FAILED) and completes; an unreachable owner holds it PENDING
+[tv-dator]       ---
+[tv-dator]       duration_ms: 7.008199
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     1..5
+[tv-dator] ok 7 - recovery unit 1 (design RECOVERY-DESIGN-20261017): the handler side
+[tv-dator]   ---
+[tv-dator]   duration_ms: 58.664743
+[tv-dator]   type: 'suite'
+[tv-dator]   ...
+[tv-dator] # Subtest: F1 handler REMOVE holds TARGET_ALREADY_OWNED and retires only after original token persistence
+[tv-dator] ok 8 - F1 handler REMOVE holds TARGET_ALREADY_OWNED and retires only after original token persistence
+[tv-dator]   ---
+[tv-dator]   duration_ms: 13.23388
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # {"condition":"TARGET_ALREADY_OWNED","held":{"outcomeType":"RUNTIME_SERVICE_REMOVE_HELD","operationId":"f1-remove","workflowStep":"STOPPING","timestamp":1792388909963,"replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r1"},"pending":{"intent_json":"{\\"consensusBinding\\":{\\"definitionDigest\\":\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\",\\"format\\":1,\\"foundingPeers\\":[{\\"nodeId\\":\\"host-1\\",\\"replicaId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r1\\"},{\\"nodeId\\":\\"host-2\\",\\"replicaId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2\\"},{\\"nodeId\\":\\"host-3\\",\\"replicaId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r3\\"}],\\"incarnation\\":\\"78205e871b734ae92b11d89f133ce135b12bd668ed8058ba91e8b6cab73c33be\\",\\"profileDigest\\":\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\",\\"requestDigest\\":\\"4922f30ac3d982c239f4a931cc882e6029ad7b802682d2c1c605cd14c9a3fb85\\",\\"requestId\\":{\\"expectedVersion\\":0,\\"nonce\\":\\"0000000000000000000000000000000000000000000000000000000000000001\\",\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\"},\\"revisionDigest\\":\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\",\\"revisionId\\":\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\",\\"selectionVersion\\":1,\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",\\"tenantId\\":\\"creation-test-tenant\\"},\\"consensusSlotRequest\\":{\\"expectedOrdinal\\":0,\\"nodeId\\":\\"host-1\\",\\"operationId\\":\\"operation-0\\",\\"replicaId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r1\\",\\"slot\\":0},\\"descriptor\\":{\\"replicaCount\\":3,\\"replicaId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r1\\",\\"runtimeConfig\\":\\"{\\\\\\"definition\\\\\\":{\\\\\\"serviceName\\\\\\":\\\\\\"creation-test-service\\\\\\",\\\\\\"handlerFunctionId\\\\\\":\\\\\\"creation-test-handler\\\\\\",\\\\\\"readConsistency\\\\\\":\\\\\\"strong\\\\\\",\\\\\\"writeConsistency\\\\\\":\\\\\\"strong\\\\\\",\\\\\\"safetyIntervalMs\\\\\\":0}}\\",\\"runtimeKind\\":\\"wasm_component\\",\\"runtimeRef\\":\\"fixture/component@1.0.0\\",\\"serviceId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",\\"serviceType\\":\\"runtime_service\\",\\"tenantId\\":\\"creation-test-tenant\\"},\\"format\\":1}","admission_json":null,"opening_json":null,"operation_id":"operation-0","tenant_id":"creation-test-tenant","command":"consensus-create:service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","idempotency_key":null,"state":"pending","result":"{}","error":"{}","created_at":1792388909961,"updated_at":1792388909961},"admitted":{"outcome":"ADMISSION_RETAINED","operationId":"operation-0","intent":{"consensusBinding":{"definitionDigest":"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8","format":1,"foundingPeers":[{"nodeId":"host-1","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r1"},{"nodeId":"host-2","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2"},{"nodeId":"host-3","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r3"}],"incarnation":"78205e871b734ae92b11d89f133ce135b12bd668ed8058ba91e8b6cab73c33be","profileDigest":"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7","requestDigest":"4922f30ac3d982c239f4a931cc882e6029ad7b802682d2c1c605cd14c9a3fb85","requestId":{"expectedVersion":0,"nonce":"0000000000000000000000000000000000000000000000000000000000000001","serviceDefinitionId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c"},"revisionDigest":"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7","revisionId":"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38","selectionVersion":1,"serviceDefinitionId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","tenantId":"creation-test-tenant"},"consensusSlotRequest":{"expectedOrdinal":0,"nodeId":"host-1","operationId":"operation-0","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r1","slot":0},"descriptor":{"replicaCount":3,"replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r1","runtimeConfig":"{\\"definition\\":{\\"serviceName\\":\\"creation-test-service\\",\\"handlerFunctionId\\":\\"creation-test-handler\\",\\"readConsistency\\":\\"strong\\",\\"writeConsistency\\":\\"strong\\",\\"safetyIntervalMs\\":0}}","runtimeKind":"wasm_component","runtimeRef":"fixture/component@1.0.0","serviceId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","serviceType":"runtime_service","tenantId":"creation-test-tenant"},"format":1},"token":{"bindingDigest":"624a8d2075675706a8b52b4fd0ae768b575ab38e1ac287f17e8b115d94ec64ac","bodyDigest":"086f0ef7a5423f6479f534f02192025685d887b4201c72d170195711f3c3c680","operationId":"operation-0","ordinal":1,"slot":0},"phase":"ADMITTED"},"row":{"intent_json":"{\\"consensusBinding\\":{\\"definitionDigest\\":\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\",\\"format\\":1,\\"foundingPeers\\":[{\\"nodeId\\":\\"host-1\\",\\"replicaId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r1\\"},{\\"nodeId\\":\\"host-2\\",\\"replicaId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2\\"},{\\"nodeId\\":\\"host-3\\",\\"replicaId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r3\\"}],\\"incarnation\\":\\"78205e871b734ae92b11d89f133ce135b12bd668ed8058ba91e8b6cab73c33be\\",\\"profileDigest\\":\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\",\\"requestDigest\\":\\"4922f30ac3d982c239f4a931cc882e6029ad7b802682d2c1c605cd14c9a3fb85\\",\\"requestId\\":{\\"expectedVersion\\":0,\\"nonce\\":\\"0000000000000000000000000000000000000000000000000000000000000001\\",\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\"},\\"revisionDigest\\":\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\",\\"revisionId\\":\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\",\\"selectionVersion\\":1,\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",\\"tenantId\\":\\"creation-test-tenant\\"},\\"consensusSlotRequest\\":{\\"expectedOrdinal\\":0,\\"nodeId\\":\\"host-1\\",\\"operationId\\":\\"operation-0\\",\\"replicaId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r1\\",\\"slot\\":0},\\"descriptor\\":{\\"replicaCount\\":3,\\"replicaId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r1\\",\\"runtimeConfig\\":\\"{\\\\\\"definition\\\\\\":{\\\\\\"serviceName\\\\\\":\\\\\\"creation-test-service\\\\\\",\\\\\\"handlerFunctionId\\\\\\":\\\\\\"creation-test-handler\\\\\\",\\\\\\"readConsistency\\\\\\":\\\\\\"strong\\\\\\",\\\\\\"writeConsistency\\\\\\":\\\\\\"strong\\\\\\",\\\\\\"safetyIntervalMs\\\\\\":0}}\\",\\"runtimeKind\\":\\"wasm_component\\",\\"runtimeRef\\":\\"fixture/component@1.0.0\\",\\"serviceId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",\\"serviceType\\":\\"runtime_service\\",\\"tenantId\\":\\"creation-test-tenant\\"},\\"format\\":1}","admission_json":"{\\"bindingDigest\\":\\"624a8d2075675706a8b52b4fd0ae768b575ab38e1ac287f17e8b115d94ec64ac\\",\\"bodyDigest\\":\\"086f0ef7a5423f6479f534f02192025685d887b4201c72d170195711f3c3c680\\",\\"operationId\\":\\"operation-0\\",\\"ordinal\\":1,\\"slot\\":0}","opening_json":null,"operation_id":"operation-0","tenant_id":"creation-test-tenant","command":"consensus-create:service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","idempotency_key":null,"state":"in_progress","result":"{}","error":"{}","created_at":1792388909961,"updated_at":1792388909965}}
+[tv-dator] # Subtest: F1 handler REMOVE holds INVALID_EXPECTED_STATE and retires only after original token persistence
+[tv-dator] ok 9 - F1 handler REMOVE holds INVALID_EXPECTED_STATE and retires only after original token persistence
+[tv-dator]   ---
+[tv-dator]   duration_ms: 12.167238
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # {"condition":"INVALID_EXPECTED_STATE","held":{"outcomeType":"RUNTIME_SERVICE_REMOVE_HELD","operationId":"f1-remove","workflowStep":"STOPPING","timestamp":1792388909976,"replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r1"},"pending":{"intent_json":"{\\"consensusBinding\\":{\\"definitionDigest\\":\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\",\\"format\\":1,\\"foundingPeers\\":[{\\"nodeId\\":\\"host-1\\",\\"replicaId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r1\\"},{\\"nodeId\\":\\"host-2\\",\\"replicaId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2\\"},{\\"nodeId\\":\\"host-3\\",\\"replicaId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r3\\"}],\\"incarnation\\":\\"78205e871b734ae92b11d89f133ce135b12bd668ed8058ba91e8b6cab73c33be\\",\\"profileDigest\\":\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\",\\"requestDigest\\":\\"4922f30ac3d982c239f4a931cc882e6029ad7b802682d2c1c605cd14c9a3fb85\\",\\"requestId\\":{\\"expectedVersion\\":0,\\"nonce\\":\\"0000000000000000000000000000000000000000000000000000000000000001\\",\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\"},\\"revisionDigest\\":\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\",\\"revisionId\\":\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\",\\"selectionVersion\\":1,\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",\\"tenantId\\":\\"creation-test-tenant\\"},\\"consensusSlotRequest\\":{\\"expectedOrdinal\\":1,\\"nodeId\\":\\"host-1\\",\\"operationId\\":\\"operation-0\\",\\"replicaId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r1\\",\\"slot\\":0},\\"descriptor\\":{\\"replicaCount\\":3,\\"replicaId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r1\\",\\"runtimeConfig\\":\\"{\\\\\\"definition\\\\\\":{\\\\\\"serviceName\\\\\\":\\\\\\"creation-test-service\\\\\\",\\\\\\"handlerFunctionId\\\\\\":\\\\\\"creation-test-handler\\\\\\",\\\\\\"readConsistency\\\\\\":\\\\\\"strong\\\\\\",\\\\\\"writeConsistency\\\\\\":\\\\\\"strong\\\\\\",\\\\\\"safetyIntervalMs\\\\\\":0}}\\",\\"runtimeKind\\":\\"wasm_component\\",\\"runtimeRef\\":\\"fixture/component@1.0.0\\",\\"serviceId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",\\"serviceType\\":\\"runtime_service\\",\\"tenantId\\":\\"creation-test-tenant\\"},\\"format\\":1}","admission_json":null,"opening_json":null,"operation_id":"operation-0","tenant_id":"creation-test-tenant","command":"consensus-create:service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","idempotency_key":null,"state":"pending","result":"{}","error":"{}","created_at":1792388909975,"updated_at":1792388909975},"admitted":{"outcome":"ADMISSION_RETAINED","operationId":"operation-0","intent":{"consensusBinding":{"definitionDigest":"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8","format":1,"foundingPeers":[{"nodeId":"host-1","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r1"},{"nodeId":"host-2","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2"},{"nodeId":"host-3","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r3"}],"incarnation":"78205e871b734ae92b11d89f133ce135b12bd668ed8058ba91e8b6cab73c33be","profileDigest":"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7","requestDigest":"4922f30ac3d982c239f4a931cc882e6029ad7b802682d2c1c605cd14c9a3fb85","requestId":{"expectedVersion":0,"nonce":"0000000000000000000000000000000000000000000000000000000000000001","serviceDefinitionId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c"},"revisionDigest":"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7","revisionId":"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38","selectionVersion":1,"serviceDefinitionId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","tenantId":"creation-test-tenant"},"consensusSlotRequest":{"expectedOrdinal":1,"nodeId":"host-1","operationId":"operation-0","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r1","slot":0},"descriptor":{"replicaCount":3,"replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r1","runtimeConfig":"{\\"definition\\":{\\"serviceName\\":\\"creation-test-service\\",\\"handlerFunctionId\\":\\"creation-test-handler\\",\\"readConsistency\\":\\"strong\\",\\"writeConsistency\\":\\"strong\\",\\"safetyIntervalMs\\":0}}","runtimeKind":"wasm_component","runtimeRef":"fixture/component@1.0.0","serviceId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","serviceType":"runtime_service","tenantId":"creation-test-tenant"},"format":1},"token":{"bindingDigest":"624a8d2075675706a8b52b4fd0ae768b575ab38e1ac287f17e8b115d94ec64ac","bodyDigest":"815b5fb3a261fab2225174598e1e6df4d23227c36c921f035097cf79942c593d","operationId":"operation-0","ordinal":2,"slot":0},"phase":"ADMITTED"},"row":{"intent_json":"{\\"consensusBinding\\":{\\"definitionDigest\\":\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\",\\"format\\":1,\\"foundingPeers\\":[{\\"nodeId\\":\\"host-1\\",\\"replicaId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r1\\"},{\\"nodeId\\":\\"host-2\\",\\"replicaId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2\\"},{\\"nodeId\\":\\"host-3\\",\\"replicaId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r3\\"}],\\"incarnation\\":\\"78205e871b734ae92b11d89f133ce135b12bd668ed8058ba91e8b6cab73c33be\\",\\"profileDigest\\":\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\",\\"requestDigest\\":\\"4922f30ac3d982c239f4a931cc882e6029ad7b802682d2c1c605cd14c9a3fb85\\",\\"requestId\\":{\\"expectedVersion\\":0,\\"nonce\\":\\"0000000000000000000000000000000000000000000000000000000000000001\\",\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\"},\\"revisionDigest\\":\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\",\\"revisionId\\":\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\",\\"selectionVersion\\":1,\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",\\"tenantId\\":\\"creation-test-tenant\\"},\\"consensusSlotRequest\\":{\\"expectedOrdinal\\":1,\\"nodeId\\":\\"host-1\\",\\"operationId\\":\\"operation-0\\",\\"replicaId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r1\\",\\"slot\\":0},\\"descriptor\\":{\\"replicaCount\\":3,\\"replicaId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r1\\",\\"runtimeConfig\\":\\"{\\\\\\"definition\\\\\\":{\\\\\\"serviceName\\\\\\":\\\\\\"creation-test-service\\\\\\",\\\\\\"handlerFunctionId\\\\\\":\\\\\\"creation-test-handler\\\\\\",\\\\\\"readConsistency\\\\\\":\\\\\\"strong\\\\\\",\\\\\\"writeConsistency\\\\\\":\\\\\\"strong\\\\\\",\\\\\\"safetyIntervalMs\\\\\\":0}}\\",\\"runtimeKind\\":\\"wasm_component\\",\\"runtimeRef\\":\\"fixture/component@1.0.0\\",\\"serviceId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",\\"serviceType\\":\\"runtime_service\\",\\"tenantId\\":\\"creation-test-tenant\\"},\\"format\\":1}","admission_json":"{\\"bindingDigest\\":\\"624a8d2075675706a8b52b4fd0ae768b575ab38e1ac287f17e8b115d94ec64ac\\",\\"bodyDigest\\":\\"815b5fb3a261fab2225174598e1e6df4d23227c36c921f035097cf79942c593d\\",\\"operationId\\":\\"operation-0\\",\\"ordinal\\":2,\\"slot\\":0}","opening_json":null,"operation_id":"operation-0","tenant_id":"creation-test-tenant","command":"consensus-create:service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","idempotency_key":null,"state":"in_progress","result":"{}","error":"{}","created_at":1792388909975,"updated_at":1792388909978}}
+[tv-dator] # Subtest: F1 handler REMOVE holds STALE_BINDING and retires only after original token persistence
+[tv-dator] ok 10 - F1 handler REMOVE holds STALE_BINDING and retires only after original token persistence
+[tv-dator]   ---
+[tv-dator]   duration_ms: 13.096939
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # {"condition":"STALE_BINDING","held":{"outcomeType":"RUNTIME_SERVICE_REMOVE_HELD","operationId":"f1-remove","workflowStep":"STOPPING","timestamp":1792388909989,"replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r1"},"pending":{"intent_json":"{\\"consensusBinding\\":{\\"definitionDigest\\":\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\",\\"format\\":1,\\"foundingPeers\\":[{\\"nodeId\\":\\"host-1\\",\\"replicaId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r1\\"},{\\"nodeId\\":\\"host-2\\",\\"replicaId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2\\"},{\\"nodeId\\":\\"host-3\\",\\"replicaId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r3\\"}],\\"incarnation\\":\\"558d1a5630a3e5ff582e29dbb8b2c7d6c944b51cdb10f62d4fc66c37b598da81\\",\\"profileDigest\\":\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\",\\"requestDigest\\":\\"b72357444298fef7506321b05251da6ec72673ab7672f502efe9acbef6e45af3\\",\\"requestId\\":{\\"expectedVersion\\":1,\\"nonce\\":\\"0000000000000000000000000000000000000000000000000000000000000049\\",\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\"},\\"revisionDigest\\":\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\",\\"revisionId\\":\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\",\\"selectionVersion\\":2,\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",\\"tenantId\\":\\"creation-test-tenant\\"},\\"consensusSlotRequest\\":{\\"expectedOrdinal\\":0,\\"nodeId\\":\\"host-1\\",\\"operationId\\":\\"operation-0\\",\\"replicaId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r1\\",\\"slot\\":0},\\"descriptor\\":{\\"replicaCount\\":3,\\"replicaId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r1\\",\\"runtimeConfig\\":\\"{\\\\\\"definition\\\\\\":{\\\\\\"serviceName\\\\\\":\\\\\\"creation-test-service\\\\\\",\\\\\\"handlerFunctionId\\\\\\":\\\\\\"creation-test-handler\\\\\\",\\\\\\"readConsistency\\\\\\":\\\\\\"strong\\\\\\",\\\\\\"writeConsistency\\\\\\":\\\\\\"strong\\\\\\",\\\\\\"safetyIntervalMs\\\\\\":0}}\\",\\"runtimeKind\\":\\"wasm_component\\",\\"runtimeRef\\":\\"fixture/component@1.0.0\\",\\"serviceId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",\\"serviceType\\":\\"runtime_service\\",\\"tenantId\\":\\"creation-test-tenant\\"},\\"format\\":1}","admission_json":null,"opening_json":null,"operation_id":"operation-0","tenant_id":"creation-test-tenant","command":"consensus-create:service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","idempotency_key":null,"state":"pending","result":"{}","error":"{}","created_at":1792388909986,"updated_at":1792388909986},"admitted":{"outcome":"ADMISSION_RETAINED","operationId":"operation-0","intent":{"consensusBinding":{"definitionDigest":"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8","format":1,"foundingPeers":[{"nodeId":"host-1","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r1"},{"nodeId":"host-2","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2"},{"nodeId":"host-3","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r3"}],"incarnation":"558d1a5630a3e5ff582e29dbb8b2c7d6c944b51cdb10f62d4fc66c37b598da81","profileDigest":"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7","requestDigest":"b72357444298fef7506321b05251da6ec72673ab7672f502efe9acbef6e45af3","requestId":{"expectedVersion":1,"nonce":"0000000000000000000000000000000000000000000000000000000000000049","serviceDefinitionId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c"},"revisionDigest":"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7","revisionId":"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38","selectionVersion":2,"serviceDefinitionId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","tenantId":"creation-test-tenant"},"consensusSlotRequest":{"expectedOrdinal":0,"nodeId":"host-1","operationId":"operation-0","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r1","slot":0},"descriptor":{"replicaCount":3,"replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r1","runtimeConfig":"{\\"definition\\":{\\"serviceName\\":\\"creation-test-service\\",\\"handlerFunctionId\\":\\"creation-test-handler\\",\\"readConsistency\\":\\"strong\\",\\"writeConsistency\\":\\"strong\\",\\"safetyIntervalMs\\":0}}","runtimeKind":"wasm_component","runtimeRef":"fixture/component@1.0.0","serviceId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","serviceType":"runtime_service","tenantId":"creation-test-tenant"},"format":1},"token":{"bindingDigest":"9cb943fa06063f837731c8d5b1ebb105db488ac08a688249fc30b45772c82b5d","bodyDigest":"086f0ef7a5423f6479f534f02192025685d887b4201c72d170195711f3c3c680","operationId":"operation-0","ordinal":1,"slot":0},"phase":"ADMITTED"},"row":{"intent_json":"{\\"consensusBinding\\":{\\"definitionDigest\\":\\"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8\\",\\"format\\":1,\\"foundingPeers\\":[{\\"nodeId\\":\\"host-1\\",\\"replicaId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r1\\"},{\\"nodeId\\":\\"host-2\\",\\"replicaId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2\\"},{\\"nodeId\\":\\"host-3\\",\\"replicaId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r3\\"}],\\"incarnation\\":\\"558d1a5630a3e5ff582e29dbb8b2c7d6c944b51cdb10f62d4fc66c37b598da81\\",\\"profileDigest\\":\\"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7\\",\\"requestDigest\\":\\"b72357444298fef7506321b05251da6ec72673ab7672f502efe9acbef6e45af3\\",\\"requestId\\":{\\"expectedVersion\\":1,\\"nonce\\":\\"0000000000000000000000000000000000000000000000000000000000000049\\",\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\"},\\"revisionDigest\\":\\"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7\\",\\"revisionId\\":\\"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38\\",\\"selectionVersion\\":2,\\"serviceDefinitionId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",\\"tenantId\\":\\"creation-test-tenant\\"},\\"consensusSlotRequest\\":{\\"expectedOrdinal\\":0,\\"nodeId\\":\\"host-1\\",\\"operationId\\":\\"operation-0\\",\\"replicaId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r1\\",\\"slot\\":0},\\"descriptor\\":{\\"replicaCount\\":3,\\"replicaId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r1\\",\\"runtimeConfig\\":\\"{\\\\\\"definition\\\\\\":{\\\\\\"serviceName\\\\\\":\\\\\\"creation-test-service\\\\\\",\\\\\\"handlerFunctionId\\\\\\":\\\\\\"creation-test-handler\\\\\\",\\\\\\"readConsistency\\\\\\":\\\\\\"strong\\\\\\",\\\\\\"writeConsistency\\\\\\":\\\\\\"strong\\\\\\",\\\\\\"safetyIntervalMs\\\\\\":0}}\\",\\"runtimeKind\\":\\"wasm_component\\",\\"runtimeRef\\":\\"fixture/component@1.0.0\\",\\"serviceId\\":\\"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c\\",\\"serviceType\\":\\"runtime_service\\",\\"tenantId\\":\\"creation-test-tenant\\"},\\"format\\":1}","admission_json":"{\\"bindingDigest\\":\\"9cb943fa06063f837731c8d5b1ebb105db488ac08a688249fc30b45772c82b5d\\",\\"bodyDigest\\":\\"086f0ef7a5423f6479f534f02192025685d887b4201c72d170195711f3c3c680\\",\\"operationId\\":\\"operation-0\\",\\"ordinal\\":1,\\"slot\\":0}","opening_json":null,"operation_id":"operation-0","tenant_id":"creation-test-tenant","command":"consensus-create:service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","idempotency_key":null,"state":"in_progress","result":"{}","error":"{}","created_at":1792388909986,"updated_at":1792388909991}}
+[tv-dator] # Subtest: U1 v3 deferred immutable-origin hydration
+[tv-dator]     # Subtest: first ACK is nonblocking; pre-hydration wakes are absent, actual first-start wakes match
+[tv-dator]     ok 1 - first ACK is nonblocking; pre-hydration wakes are absent, actual first-start wakes match
+[tv-dator]       ---
+[tv-dator]       duration_ms: 7.372478
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: a hydration read settling after shutdown cannot admit work or settle another entry
+[tv-dator]     ok 2 - a hydration read settling after shutdown cannot admit work or settle another entry
+[tv-dator]       ---
+[tv-dator]       duration_ms: 6.411914
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: a hydration read settling after replacement cannot admit work or settle another entry
+[tv-dator]     ok 3 - a hydration read settling after replacement cannot admit work or settle another entry
+[tv-dator]       ---
+[tv-dator]       duration_ms: 6.568948
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: failed bound hydration retains the original row; explicit retry resumes after owner returns
+[tv-dator]     ok 4 - failed bound hydration retains the original row; explicit retry resumes after owner returns
+[tv-dator]       ---
+[tv-dator]       duration_ms: 10.706491
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: hydrated immutable envelope mismatch refuses before resume or physical preparation
+[tv-dator]     ok 5 - hydrated immutable envelope mismatch refuses before resume or physical preparation
+[tv-dator]       ---
+[tv-dator]       duration_ms: 8.001415
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     1..5
+[tv-dator] ok 11 - U1 v3 deferred immutable-origin hydration
+[tv-dator]   ---
+[tv-dator]   duration_ms: 39.39159
+[tv-dator]   type: 'suite'
+[tv-dator]   ...
+[tv-dator] # Subtest: U1 gate: CREATE on another replica cannot reuse the startup REMOVE observer ID
+[tv-dator] ok 12 - U1 gate: CREATE on another replica cannot reuse the startup REMOVE observer ID
+[tv-dator]   ---
+[tv-dator]   duration_ms: 8.512394
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: U1 gate: REMOVE on another replica cannot reuse the startup REMOVE observer ID
+[tv-dator] ok 13 - U1 gate: REMOVE on another replica cannot reuse the startup REMOVE observer ID
+[tv-dator]   ---
+[tv-dator]   duration_ms: 9.207919
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: U1 v3 hydration: a PENDING wake is only an immutable-request hint, never token adoption
+[tv-dator] ok 14 - U1 v3 hydration: a PENDING wake is only an immutable-request hint, never token adoption
+[tv-dator]   ---
+[tv-dator]   duration_ms: 8.861807
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] 1..14
+[tv-dator] # tests 54
+[tv-dator] # suites 8
+[tv-dator] # pass 46
+[tv-dator] # fail 8
+[tv-dator] # cancelled 0
+[tv-dator] # skipped 0
+[tv-dator] # todo 0
+[tv-dator] # duration_ms 653.416698
+[tv-dator] # time=1293ms
+[tv-dator] ok test/service/service-lifecycle-manager.test.js (26 assertions, 354ms)
+[tv-dator] not ok test/node/runtime-service-handler.test.js (39 assertions, 499ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 13
+[tv-dator] # Subtest: RuntimeServiceHandler initialization
+[tv-dator]     # Subtest: throws when serviceLifecycleManager is missing
+[tv-dator]     ok 1 - throws when serviceLifecycleManager is missing
+[tv-dator]       ---
+[tv-dator]       duration_ms: 29.946576
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: throws when cdcIntegrationService is missing
+[tv-dator]     ok 2 - throws when cdcIntegrationService is missing
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.303365
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: throws when systemTableCache is missing
+[tv-dator]     ok 3 - throws when systemTableCache is missing
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.173656
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: initializes successfully with all dependencies
+[tv-dator]     ok 4 - initializes successfully with all dependencies
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.288646
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     1..4
+[tv-dator] ok 1 - RuntimeServiceHandler initialization
+[tv-dator]   ---
+[tv-dator]   duration_ms: 31.424175
+[tv-dator]   type: 'suite'
+[tv-dator]   ...
+[tv-dator] # Subtest: RuntimeServiceHandler handleCreateReplica
+[tv-dator]     # Subtest: returns error when required fields are missing
+[tv-dator]     ok 1 - returns error when required fields are missing
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.570316
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: returns INITIATED for valid create request
+[tv-dator]     ok 2 - returns INITIATED for valid create request
+[tv-dator]       ---
+[tv-dator]       duration_ms: 2.506256
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: rejects non-canonical dispatched identities before lifecycle effects
+[tv-dator]     ok 3 - rejects non-canonical dispatched identities before lifecycle effects
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.4243
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: returns ALREADY_EXISTS for active replica
+[tv-dator]     ok 4 - returns ALREADY_EXISTS for active replica
+[tv-dator]       ---
+[tv-dator]       duration_ms: 1.47062
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: returns IN_PROGRESS for creating replica
+[tv-dator]     ok 5 - returns IN_PROGRESS for creating replica
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.352916
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: returns IN_PROGRESS for duplicate operation ID
+[tv-dator]     ok 6 - returns IN_PROGRESS for duplicate operation ID
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.275567
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: a CREATE over a nameless FAILED or REMOVING memo takes the generic path (RV6.1-RV6.3)
+[tv-dator]     ok 7 - a CREATE over a nameless FAILED or REMOVING memo takes the generic path (RV6.1-RV6.3)
+[tv-dator]       ---
+[tv-dator]       duration_ms: 6.085812
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: calls lifecycle create + start without direct workflow-step persistence
+[tv-dator]     ok 8 - calls lifecycle create + start without direct workflow-step persistence
+[tv-dator]       ---
+[tv-dator]       duration_ms: 1.506671
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator] {"level":50,"time":"2026-10-19T05:48:30.236Z","nodeId":"unknown","pid":1002627,"subsystem":"runtime-service-handler","operationId":"op-1","replicaId":"sys-postgres-wire-r1","entityId":"sys-postgres-wire","error":"bind failed","nodeId":"unknown","contextNodeId":"test-node","msg":"Runtime service replica creation failed"}
+[tv-dator]     # Subtest: transitions to FAILED when lifecycle throws
+[tv-dator]     ok 9 - transitions to FAILED when lifecycle throws
+[tv-dator]       ---
+[tv-dator]       duration_ms: 5.336089
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator] {"level":50,"time":"2026-10-19T05:48:30.240Z","nodeId":"unknown","pid":1002627,"subsystem":"runtime-service-handler","operationId":"op-1","replicaId":"sys-postgres-wire-r1","entityId":"sys-postgres-wire","error":"Service definition not found: sys-postgres-wire","nodeId":"unknown","contextNodeId":"test-node","msg":"Runtime service replica creation failed"}
+[tv-dator]     # Subtest: fails when service definition not found
+[tv-dator]     ok 10 - fails when service definition not found
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.913442
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     1..10
+[tv-dator] ok 2 - RuntimeServiceHandler handleCreateReplica
+[tv-dator]   ---
+[tv-dator]   duration_ms: 20.071336
+[tv-dator]   type: 'suite'
+[tv-dator]   ...
+[tv-dator] # Subtest: RuntimeServiceHandler handleRemoveReplica
+[tv-dator]     # Subtest: returns error when required fields are missing
+[tv-dator]     ok 1 - returns error when required fields are missing
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.316184
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: returns NOT_FOUND when replica does not exist
+[tv-dator]     ok 2 - returns NOT_FOUND when replica does not exist
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.23064
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: returns INITIATED for valid remove request
+[tv-dator]     ok 3 - returns INITIATED for valid remove request
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.261203
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: reconstructs a persisted legacy target after handler restart before removal
+[tv-dator]     not ok 4 - reconstructs a persisted legacy target after handler restart before removal
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.817914
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/node/runtime-service-handler.test.js:472:3'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         Expected values to be strictly equal:
+[tv-dator]         + actual - expected
+[tv-dator]         
+[tv-dator]         + 'error'
+[tv-dator]         - 'initiated'
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected: 'initiated'
+[tv-dator]       actual: 'error'
+[tv-dator]       operator: 'strictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/node/runtime-service-handler.test.js:501:12)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]       ...
+[tv-dator]     # Subtest: returns IN_PROGRESS for removing replica
+[tv-dator]     ok 5 - returns IN_PROGRESS for removing replica
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.263062
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: resumes stalled removing replica when no removal task is active
+[tv-dator]     ok 6 - resumes stalled removing replica when no removal task is active
+[tv-dator]       ---
+[tv-dator]       duration_ms: 1.822059
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: returns COMPLETED for already removed replica
+[tv-dator]     ok 7 - returns COMPLETED for already removed replica
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.193262
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: calls lifecycle stop without direct workflow-step persistence
+[tv-dator]     ok 8 - calls lifecycle stop without direct workflow-step persistence
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.627751
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator] {"level":50,"time":"2026-10-19T05:48:30.246Z","nodeId":"unknown","pid":1002627,"subsystem":"runtime-service-handler","operationId":"op-1","replicaId":"sys-postgres-wire-r1","entityId":"sys-postgres-wire","error":"stop failed","nodeId":"unknown","contextNodeId":"test-node","msg":"Runtime service replica removal failed"}
+[tv-dator]     # Subtest: transitions to FAILED when stop throws
+[tv-dator]     ok 9 - transitions to FAILED when stop throws
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.660681
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     1..9
+[tv-dator] not ok 3 - RuntimeServiceHandler handleRemoveReplica
+[tv-dator]   ---
+[tv-dator]   duration_ms: 5.521963
+[tv-dator]   type: 'suite'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/node/runtime-service-handler.test.js:431:1'
+[tv-dator]   failureType: 'subtestsFailed'
+[tv-dator]   error: '1 subtest failed'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   ...
+[tv-dator] # Subtest: RuntimeServiceHandler handleMessage dispatch
+[tv-dator]     # Subtest: dispatches CREATE_REPLICA messages
+[tv-dator]     ok 1 - dispatches CREATE_REPLICA messages
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.392937
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: dispatches REMOVE_REPLICA messages
+[tv-dator]     ok 2 - dispatches REMOVE_REPLICA messages
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.225586
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: returns error for unknown message type
+[tv-dator]     ok 3 - returns error for unknown message type
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.131906
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     1..3
+[tv-dator] ok 4 - RuntimeServiceHandler handleMessage dispatch
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0.84095
+[tv-dator]   type: 'suite'
+[tv-dator]   ...
+[tv-dator] # Subtest: RuntimeServiceHandler router registration
+[tv-dator]     # Subtest: registers handler at correct address
+[tv-dator]     ok 1 - registers handler at correct address
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.208254
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: unregisters handler from router
+[tv-dator]     ok 2 - unregisters handler from router
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.136627
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: registered handler returns acknowledged response
+[tv-dator]     ok 3 - registered handler returns acknowledged response
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.201321
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     1..3
+[tv-dator] ok 5 - RuntimeServiceHandler router registration
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0.625211
+[tv-dator]   type: 'suite'
+[tv-dator]   ...
+[tv-dator] # Subtest: RuntimeServiceHandler REPLACE operation flow
+[tv-dator]     # Subtest: handles REPLACE add phase as CREATE_REPLICA
+[tv-dator]     ok 1 - handles REPLACE add phase as CREATE_REPLICA
+[tv-dator]       ---
+[tv-dator]       duration_ms: 1.811296
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: handles REPLACE remove phase as REMOVE_REPLICA
+[tv-dator]     ok 2 - handles REPLACE remove phase as REMOVE_REPLICA
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.601449
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     1..2
+[tv-dator] ok 6 - RuntimeServiceHandler REPLACE operation flow
+[tv-dator]   ---
+[tv-dator]   duration_ms: 2.513046
+[tv-dator]   type: 'suite'
+[tv-dator]   ...
+[tv-dator] # Subtest: RuntimeServiceHandler shutdown
+[tv-dator]     # Subtest: clears all state on shutdown
+[tv-dator]     ok 1 - clears all state on shutdown
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.165547
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     1..1
+[tv-dator] ok 7 - RuntimeServiceHandler shutdown
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0.214488
+[tv-dator]   type: 'suite'
+[tv-dator]   ...
+[tv-dator] 1..7
+[tv-dator] # tests 32
+[tv-dator] # suites 7
+[tv-dator] # pass 31
+[tv-dator] # fail 1
+[tv-dator] # cancelled 0
+[tv-dator] # skipped 0
+[tv-dator] # todo 0
+[tv-dator] # duration_ms 69.128849
+[tv-dator] # time=499ms
+[tv-dator] # test-files total=7 pass=4 fail=3 assertions=247
+[tv-dator] classified lane exclusive: 4 file(s), jobs=1
+[tv-dator] thermal: ok cpu 57C (coretemp/Package id 0) nvme 43C (nvme/Sensor 1)
+[tv-dator] ok test/service/service-consensus-creation-recovery.integration.test.js (2 assertions, 1237ms)
+[tv-dator] ok test/wasm-service/bound-creation-handler-embedding.integration.test.js (3 assertions, 1474ms)
+[tv-dator] ok test/wasm-service/bound-creation-physical-custody.integration.test.js (14 assertions, 2325ms)
+[tv-dator] not ok test/wasm-service/bound-creation-restart.integration.test.js (41 assertions, 9350ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] TAP version 13
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] # Subtest: recovery unit 1: host restart of bound creations (inventory, memo, re-entry)
+[tv-dator]     # Subtest: P-R1 host: a retained creation with no local file is ABSENT_UNCLAIMED, memo HELD, one re-entry under its id; a REMOVE afterwards routes bound and completes
+[tv-dator]     ok 1 - P-R1 host: a retained creation with no local file is ABSENT_UNCLAIMED, memo HELD, one re-entry under its id; a REMOVE afterwards routes bound and completes
+[tv-dator]       ---
+[tv-dator]       duration_ms: 229.452416
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator]     # Subtest: P-R1b host: a claim without its file (ABSENT_CLAIMED) is a permanent CREATION_STORAGE_MISSING, never a FRESH reopen; a REMOVE closes the slot
+[tv-dator]     ok 2 - P-R1b host: a claim without its file (ABSENT_CLAIMED) is a permanent CREATION_STORAGE_MISSING, never a FRESH reopen; a REMOVE closes the slot
+[tv-dator]       ---
+[tv-dator]       duration_ms: 127.81648
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator]     # Subtest: P-R4 host: local ADMITTED + metadata PUBLISHED (the grant CAS reply lost, owner reachable): reopen HELD, the re-grant is idempotent, SERVING and ACTIVE
+[tv-dator]     ok 3 - P-R4 host: local ADMITTED + metadata PUBLISHED (the grant CAS reply lost, owner reachable): reopen HELD, the re-grant is idempotent, SERVING and ACTIVE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 334.486338
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator]     # Subtest: P-R5 host: retired-not-closed (CLOSE_UNRESOLVED) before the restart: inventory RETIRED, memo REMOVING, an in-flight REMOVE entry, the re-drive closes, projects STOPPED, completes the row and emits NO outcome
+[tv-dator]     ok 4 - P-R5 host: retired-not-closed (CLOSE_UNRESOLVED) before the restart: inventory RETIRED, memo REMOVING, an in-flight REMOVE entry, the re-drive closes, projects STOPPED, completes the row and emits NO outcome
+[tv-dator]       ---
+[tv-dator]       duration_ms: 275.279066
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator]     # Subtest: P-R6 host: metadata RELEASING, crash before the tombstone: the re-entry is a permanent RESOURCE_CLOSED; the next REMOVE retires by path, closes and completes
+[tv-dator]     ok 5 - P-R6 host: metadata RELEASING, crash before the tombstone: the re-entry is a permanent RESOURCE_CLOSED; the next REMOVE retires by path, closes and completes
+[tv-dator]       ---
+[tv-dator]       duration_ms: 270.816891
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator]     # Subtest: P-R7 host: a crash after each of the five retirement steps (R1-D) recovers idempotently
+[tv-dator]     not ok 6 - P-R7 host: a crash after each of the five retirement steps (R1-D) recovers idempotently
+[tv-dator]       ---
+[tv-dator]       duration_ms: 1237.833973
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/wasm-service/bound-creation-restart.integration.test.js:292:3'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: 'host-2 RUNTIME_SERVICE_REMOVE_COMPLETED: did not settle within the declared rounds'
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       operator: 'fail'
+[tv-dator]       stack: |-
+[tv-dator]         e.settle (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/wasm-service/bound-creation-handler-embedding-fixture.js:333:12)
+[tv-dator]         async removeAndSettle (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/wasm-service/bound-creation-restart.integration.test.js:146:3)
+[tv-dator]         async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/wasm-service/bound-creation-restart.integration.test.js:331:7)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]       ...
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator]     # Subtest: P-R8 in-process: a COMPLETED creation row re-enters as the permanent TERMINAL memo, its REMOVE is REMOVE_COMPLETED; after a host restart the same REMOVE is NOT_FOUND (recorded honest answer)
+[tv-dator]     not ok 7 - P-R8 in-process: a COMPLETED creation row re-enters as the permanent TERMINAL memo, its REMOVE is REMOVE_COMPLETED; after a host restart the same REMOVE is NOT_FOUND (recorded honest answer)
+[tv-dator]       ---
+[tv-dator]       duration_ms: 272.189087
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/wasm-service/bound-creation-restart.integration.test.js:356:3'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         Expected values to be strictly deep-equal:
+[tv-dator]         + actual - expected
+[tv-dator]         
+[tv-dator]           [
+[tv-dator]         +   'removed',
+[tv-dator]         -   'failed',
+[tv-dator]             'operation-2',
+[tv-dator]             undefined
+[tv-dator]           ]
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected:
+[tv-dator]         0: 'failed'
+[tv-dator]         1: 'operation-2'
+[tv-dator]       actual:
+[tv-dator]         0: 'removed'
+[tv-dator]         1: 'operation-2'
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/wasm-service/bound-creation-restart.integration.test.js:367:12)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]       ...
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator]     # Subtest: P-R9 host: CREATION_STORAGE_MISSING, CORRUPT_STATE and CONTENT_CONFLICT (a copied file) are permanent typed memos, no reopen, no tombstone inferred; a REMOVE closes only the storage-missing slot
+[tv-dator]     ok 8 - P-R9 host: CREATION_STORAGE_MISSING, CORRUPT_STATE and CONTENT_CONFLICT (a copied file) are permanent typed memos, no reopen, no tombstone inferred; a REMOVE closes only the storage-missing slot
+[tv-dator]       ---
+[tv-dator]       duration_ms: 334.780121
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: P-R11 host: a message before ready is NOT_READY + deferRetry, nothing emitted; a wake between the memo write and the re-entry finds the memo; one re-entry
+[tv-dator]     not ok 9 - P-R11 host: a message before ready is NOT_READY + deferRetry, nothing emitted; a wake between the memo write and the re-entry finds the memo; one re-entry
+[tv-dator]       ---
+[tv-dator]       duration_ms: 90.234549
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/wasm-service/bound-creation-restart.integration.test.js:435:3'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         the memo was written before the re-entry
+[tv-dator]         + actual - expected
+[tv-dator]         
+[tv-dator]         + 'NO_LOCAL_OPERATION'
+[tv-dator]         - 'QUEUED'
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected: 'QUEUED'
+[tv-dator]       actual: 'NO_LOCAL_OPERATION'
+[tv-dator]       operator: 'strictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/wasm-service/bound-creation-restart.integration.test.js:452:12)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]       ...
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator]     # Subtest: P-R12 host: a PENDING row: the REMOVE resolves the reservation first (applied -> retired, sealed -> CANCELLED, unavailable -> HELD); a restart re-enters PENDING, never CANCELLED
+[tv-dator]     not ok 10 - P-R12 host: a PENDING row: the REMOVE resolves the reservation first (applied -> retired, sealed -> CANCELLED, unavailable -> HELD); a restart re-enters PENDING, never CANCELLED
+[tv-dator]       ---
+[tv-dator]       duration_ms: 99.395092
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/wasm-service/bound-creation-restart.integration.test.js:459:3'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         Expected values to be strictly equal:
+[tv-dator]         + actual - expected
+[tv-dator]         
+[tv-dator]         + 'runtime_service_retirement_in_progress'
+[tv-dator]         - 'TERMINAL_OPERATION'
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected: 'TERMINAL_OPERATION'
+[tv-dator]       actual: 'runtime_service_retirement_in_progress'
+[tv-dator]       operator: 'strictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/wasm-service/bound-creation-restart.integration.test.js:503:12)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]       ...
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator]     # Subtest: P-R12c host: the REMOVE-time resolution persisted the token, crash before CLOSED: the restart re-enters a HELD founder and the REMOVE retry retires it (no orphan)
+[tv-dator]     ok 11 - P-R12c host: the REMOVE-time resolution persisted the token, crash before CLOSED: the restart re-enters a HELD founder and the REMOVE retry retires it (no orphan)
+[tv-dator]       ---
+[tv-dator]       duration_ms: 132.31781
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator]     # Subtest: P-R13 host: two hosts restart over the shared journal; each inventory holds only its own node's creation
+[tv-dator]     ok 12 - P-R13 host: two hosts restart over the shared journal; each inventory holds only its own node's creation
+[tv-dator]       ---
+[tv-dator]       duration_ms: 214.044562
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator]     # Subtest: P-R14 host: a REMOVE racing the restart re-entry takes custody: the re-entry is not started, the creation link survives, one REMOVE_COMPLETED
+[tv-dator]     ok 13 - P-R14 host: a REMOVE racing the restart re-entry takes custody: the re-entry is not started, the creation link survives, one REMOVE_COMPLETED
+[tv-dator]       ---
+[tv-dator]       duration_ms: 161.284579
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator]     # Subtest: P-R15 process custody: no second composition runs the inventory while the owner lock is held; a failed startup cleanup keeps the lock (ledger path, labelled)
+[tv-dator]     ok 14 - P-R15 process custody: no second composition runs the inventory while the owner lock is held; a failed startup cleanup keeps the lock (ledger path, labelled)
+[tv-dator]       ---
+[tv-dator]       duration_ms: 183.775943
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     1..14
+[tv-dator] not ok 1 - recovery unit 1: host restart of bound creations (inventory, memo, re-entry)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 3965.560563
+[tv-dator]   type: 'suite'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/wasm-service/bound-creation-restart.integration.test.js:163:1'
+[tv-dator]   failureType: 'subtestsFailed'
+[tv-dator]   error: '4 subtests failed'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   ...
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] # Subtest: recovery unit 1: typed open-time refusals reach the handler (R1-B, R3-B)
+[tv-dator]     # Subtest: R3-B an open-time UNAVAILABLE of a RETAINED creation is the NAMED deferral, decided by the opening module on its own owner read; distinct from the UNROUTED row
+[tv-dator]     ok 1 - R3-B an open-time UNAVAILABLE of a RETAINED creation is the NAMED deferral, decided by the opening module on its own owner read; distinct from the UNROUTED row
+[tv-dator]       ---
+[tv-dator]       duration_ms: 81.222698
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     1..1
+[tv-dator] ok 2 - recovery unit 1: typed open-time refusals reach the handler (R1-B, R3-B)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 81.367149
+[tv-dator]   type: 'suite'
+[tv-dator]   ...
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] # Subtest: independent U1: an inventory suspended across shutdown cannot restart a resource after process custody transfers
+[tv-dator] ok 3 - independent U1: an inventory suspended across shutdown cannot restart a resource after process custody transfers
+[tv-dator]   ---
+[tv-dator]   duration_ms: 106.334254
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # {"oldStopped":true,"resumedAfterCustodyTransfer":[],"oldInFlight":[],"newCompositionOwnsDirectory":true}
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] # Subtest: independent U1: RETIRED restart redrive and coordinator REMOVE share one in-flight retirement
+[tv-dator] ok 4 - independent U1: RETIRED restart redrive and coordinator REMOVE share one in-flight retirement
+[tv-dator]   ---
+[tv-dator]   duration_ms: 261.562619
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # {"concurrentEntries":1,"totalEntries":1,"outcomes":[{"outcomeType":"RUNTIME_SERVICE_REMOVE_COMPLETED","operationId":"independent-concurrent-remove","workflowStep":"REMOVED","timestamp":1792388920651,"replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2"}],"rowState":"completed"}
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] # Subtest: independent U1: overlapping startup inventories cannot overwrite an ACTIVE creation with a stale HELD memo
+[tv-dator] not ok 5 - independent U1: overlapping startup inventories cannot overwrite an ACTIVE creation with a stale HELD memo
+[tv-dator]   ---
+[tv-dator]   duration_ms: 233.234931
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/wasm-service/bound-creation-restart.integration.test.js:709:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: "Cannot read properties of null (reading 'raft')"
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   name: 'TypeError'
+[tv-dator]   stack: |-
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/wasm-service/bound-creation-handler-embedding-fixture.js:342:58
+[tv-dator]     Array.map (<anonymous>)
+[tv-dator]     e.form (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/wasm-service/bound-creation-handler-embedding-fixture.js:342:33)
+[tv-dator]     async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/wasm-service/bound-creation-restart.integration.test.js:736:3)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] # Subtest: independent U1: shutdown cannot release process custody while an admitted by-path retirement is paused
+[tv-dator] ok 6 - independent U1: shutdown cannot release process custody while an admitted by-path retirement is paused
+[tv-dator]   ---
+[tv-dator]   duration_ms: 231.432213
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # {"custodyReleasedWhileRetirementPending":false,"newCompositionOwnsDirectory":false,"retired":{"outcome":"CLOSED","retired":true,"closed":true,"finality":"FINAL","release":{"outcome":"RELEASING","phase":"RELEASING","token":{"bindingDigest":"624a8d2075675706a8b52b4fd0ae768b575ab38e1ac287f17e8b115d94ec64ac","bodyDigest":"1fa54d33b7281621301d9d6c094c22355497732252468c0e54f67231d2c12762","operationId":"operation-1","ordinal":1,"slot":1}},"tombstone":{"outcome":"RETIRED"},"close":{"outcome":"CLOSED","phase":"CLOSED","token":{"bindingDigest":"624a8d2075675706a8b52b4fd0ae768b575ab38e1ac287f17e8b115d94ec64ac","bodyDigest":"1fa54d33b7281621301d9d6c094c22355497732252468c0e54f67231d2c12762","operationId":"operation-1","ordinal":1,"slot":1}},"wake":{"outcome":"DELIVERED"}},"localPhaseAfterRelease":"RETIRED","resourcePhase":"CLOSED"}
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] # Subtest: independent U1: predecessor-first inventory preserves both predecessor cleanup and successor reentry
+[tv-dator] ok 7 - independent U1: predecessor-first inventory preserves both predecessor cleanup and successor reentry
+[tv-dator]   ---
+[tv-dator]   duration_ms: 310.259578
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # {"order":"predecessor-first","plans":[["operation-1","RETIRED","REDRIVE"],["z-successor-1","ABSENT_UNCLAIMED","REENTER"]],"resumes":["z-successor-1"],"memo":{"replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2","entityId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","status":"held","operationId":"z-successor-1","origin":{"operationId":"z-successor-1","intent":{"consensusBinding":{"definitionDigest":"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8","format":1,"foundingPeers":[{"nodeId":"host-1","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r1"},{"nodeId":"host-2","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2"},{"nodeId":"host-3","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r3"}],"incarnation":"424bd54337aa6b3d55391de0c1015946231b8a6b208a8ce43dc6f7a3193139cc","profileDigest":"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7","requestDigest":"ceb0def64afebc9bd3a3a604f59812ed8107f2d4416f77d8c8e0390de92877db","requestId":{"expectedVersion":1,"nonce":"000000000000000000000000000000000000000000000000000000000000005b","serviceDefinitionId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c"},"revisionDigest":"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7","revisionId":"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38","selectionVersion":2,"serviceDefinitionId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","tenantId":"creation-test-tenant"},"consensusSlotRequest":{"expectedOrdinal":0,"nodeId":"host-2","operationId":"z-successor-1","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2","slot":1},"descriptor":{"replicaCount":3,"replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2","runtimeConfig":"{\\"definition\\":{\\"serviceName\\":\\"creation-test-service\\",\\"handlerFunctionId\\":\\"creation-test-handler\\",\\"readConsistency\\":\\"strong\\",\\"writeConsistency\\":\\"strong\\",\\"safetyIntervalMs\\":0}}","runtimeKind":"wasm_component","runtimeRef":"creation-test-handler","serviceId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","serviceType":"runtime_service","tenantId":"creation-test-tenant"},"format":1},"token":{"bindingDigest":"a99ec669d770a6f2565036c875c18fcc4070a8b91b9a182b896c1a9d56b3ce7a","bodyDigest":"8dd476735100d916a304d72d2643e94c9cd404b2babadc84c0677087749257d5","operationId":"z-successor-1","ordinal":1,"slot":1}}},"predecessorRow":"completed","successorRow":"in_progress","outcomes":[{"outcomeType":"RUNTIME_SERVICE_CREATE_HELD","operationId":"z-successor-1","workflowStep":"CREATING","timestamp":1792388921429,"replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2"}]}
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] # Subtest: independent U1: successor-first inventory preserves both predecessor cleanup and successor reentry
+[tv-dator] ok 8 - independent U1: successor-first inventory preserves both predecessor cleanup and successor reentry
+[tv-dator]   ---
+[tv-dator]   duration_ms: 312.097833
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # {"order":"successor-first","plans":[["a-successor-1","ABSENT_UNCLAIMED","REENTER"],["operation-1","RETIRED","REDRIVE"]],"resumes":["a-successor-1"],"memo":{"replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2","entityId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","status":"held","operationId":"a-successor-1","origin":{"operationId":"a-successor-1","intent":{"consensusBinding":{"definitionDigest":"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8","format":1,"foundingPeers":[{"nodeId":"host-1","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r1"},{"nodeId":"host-2","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2"},{"nodeId":"host-3","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r3"}],"incarnation":"424bd54337aa6b3d55391de0c1015946231b8a6b208a8ce43dc6f7a3193139cc","profileDigest":"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7","requestDigest":"ceb0def64afebc9bd3a3a604f59812ed8107f2d4416f77d8c8e0390de92877db","requestId":{"expectedVersion":1,"nonce":"000000000000000000000000000000000000000000000000000000000000005b","serviceDefinitionId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c"},"revisionDigest":"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7","revisionId":"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38","selectionVersion":2,"serviceDefinitionId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","tenantId":"creation-test-tenant"},"consensusSlotRequest":{"expectedOrdinal":0,"nodeId":"host-2","operationId":"a-successor-1","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2","slot":1},"descriptor":{"replicaCount":3,"replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2","runtimeConfig":"{\\"definition\\":{\\"serviceName\\":\\"creation-test-service\\",\\"handlerFunctionId\\":\\"creation-test-handler\\",\\"readConsistency\\":\\"strong\\",\\"writeConsistency\\":\\"strong\\",\\"safetyIntervalMs\\":0}}","runtimeKind":"wasm_component","runtimeRef":"creation-test-handler","serviceId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","serviceType":"runtime_service","tenantId":"creation-test-tenant"},"format":1},"token":{"bindingDigest":"a99ec669d770a6f2565036c875c18fcc4070a8b91b9a182b896c1a9d56b3ce7a","bodyDigest":"949fdf2c207c1c730302c68bf2de532ac99c651a6cf54bc5d949f0543b98360e","operationId":"a-successor-1","ordinal":1,"slot":1}}},"predecessorRow":"completed","successorRow":"in_progress","outcomes":[{"outcomeType":"RUNTIME_SERVICE_CREATE_HELD","operationId":"a-successor-1","workflowStep":"CREATING","timestamp":1792388921734,"replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2"}]}
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] # Subtest: independent U1: predecessor-first older ABSENT reentry cannot hide the successor
+[tv-dator] ok 9 - independent U1: predecessor-first older ABSENT reentry cannot hide the successor
+[tv-dator]   ---
+[tv-dator]   duration_ms: 138.887643
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # {"order":"predecessor-first","plans":[["operation-1","ABSENT_UNCLAIMED","REENTER"],["z-live-1","ABSENT_UNCLAIMED","REENTER"]],"resumes":["operation-1","z-live-1"],"memo":{"replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2","entityId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","status":"held","operationId":"z-live-1","origin":{"operationId":"z-live-1","intent":{"consensusBinding":{"definitionDigest":"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8","format":1,"foundingPeers":[{"nodeId":"host-1","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r1"},{"nodeId":"host-2","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2"},{"nodeId":"host-3","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r3"}],"incarnation":"d562cc7ef6e1a069dbdabe2bf1a1b28ba7515e9095d9139326e6a5a7d21682b0","profileDigest":"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7","requestDigest":"307ba5a26f7eff7049a256005a7b69c5eb97342fbaaab4c9aa0c38b11bd43f46","requestId":{"expectedVersion":1,"nonce":"000000000000000000000000000000000000000000000000000000000000005c","serviceDefinitionId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c"},"revisionDigest":"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7","revisionId":"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38","selectionVersion":2,"serviceDefinitionId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","tenantId":"creation-test-tenant"},"consensusSlotRequest":{"expectedOrdinal":0,"nodeId":"host-2","operationId":"z-live-1","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2","slot":1},"descriptor":{"replicaCount":3,"replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2","runtimeConfig":"{\\"definition\\":{\\"serviceName\\":\\"creation-test-service\\",\\"handlerFunctionId\\":\\"creation-test-handler\\",\\"readConsistency\\":\\"strong\\",\\"writeConsistency\\":\\"strong\\",\\"safetyIntervalMs\\":0}}","runtimeKind":"wasm_component","runtimeRef":"creation-test-handler","serviceId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","serviceType":"runtime_service","tenantId":"creation-test-tenant"},"format":1},"token":{"bindingDigest":"5170347ccba84e63b2eb48356f8b9ddaf14981e94a36fd176b633b69c09c3448","bodyDigest":"0f8f2bda3d067bf5002f75d6f0f99490ea0212aeef334af21da012b5fa0c6a17","operationId":"z-live-1","ordinal":1,"slot":1}}}}
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] # Subtest: independent U1: successor-first older ABSENT reentry cannot hide the successor
+[tv-dator] ok 10 - independent U1: successor-first older ABSENT reentry cannot hide the successor
+[tv-dator]   ---
+[tv-dator]   duration_ms: 159.929595
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # {"order":"successor-first","plans":[["a-live-1","ABSENT_UNCLAIMED","REENTER"],["operation-1","ABSENT_UNCLAIMED","REENTER"]],"resumes":["a-live-1","operation-1"],"memo":{"replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2","entityId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","status":"held","operationId":"a-live-1","origin":{"operationId":"a-live-1","intent":{"consensusBinding":{"definitionDigest":"3bc60e4846c47def52841554c86a8183be89df058705f8205b2db4b3bc9214a8","format":1,"foundingPeers":[{"nodeId":"host-1","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r1"},{"nodeId":"host-2","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2"},{"nodeId":"host-3","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r3"}],"incarnation":"d562cc7ef6e1a069dbdabe2bf1a1b28ba7515e9095d9139326e6a5a7d21682b0","profileDigest":"fb42342e9054c153ac2135734c2119099c7b57f7173215d5bb91f60b61ea9ac7","requestDigest":"307ba5a26f7eff7049a256005a7b69c5eb97342fbaaab4c9aa0c38b11bd43f46","requestId":{"expectedVersion":1,"nonce":"000000000000000000000000000000000000000000000000000000000000005c","serviceDefinitionId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c"},"revisionDigest":"f1733296bcee7796327c22a4c5a9fcb2e886bd5c902c1c53baa6fc6002fa45e7","revisionId":"service-revision-69595c470d2a07d85483a86369997bd9368f72f6452fef7a40a4af86146ebc38","selectionVersion":2,"serviceDefinitionId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","tenantId":"creation-test-tenant"},"consensusSlotRequest":{"expectedOrdinal":0,"nodeId":"host-2","operationId":"a-live-1","replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2","slot":1},"descriptor":{"replicaCount":3,"replicaId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c-r2","runtimeConfig":"{\\"definition\\":{\\"serviceName\\":\\"creation-test-service\\",\\"handlerFunctionId\\":\\"creation-test-handler\\",\\"readConsistency\\":\\"strong\\",\\"writeConsistency\\":\\"strong\\",\\"safetyIntervalMs\\":0}}","runtimeKind":"wasm_component","runtimeRef":"creation-test-handler","serviceId":"service-definition-9ec410f77c6b69530de6253e3528746a2e6ca17b66c69a3fdfc15123a2858e9c","serviceType":"runtime_service","tenantId":"creation-test-tenant"},"format":1},"token":{"bindingDigest":"5170347ccba84e63b2eb48356f8b9ddaf14981e94a36fd176b633b69c09c3448","bodyDigest":"d040db924399daa7348ae2ffa74652b807b790bb2bc793a0095e825bb5682339","operationId":"a-live-1","ordinal":1,"slot":1}}}}
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] # Subtest: independent U1 control: restart invokes the retained operation id without a scan identity
+[tv-dator] ok 11 - independent U1 control: restart invokes the retained operation id without a scan identity
+[tv-dator]   ---
+[tv-dator]   duration_ms: 125.691341
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] # Subtest: independent U1 control: a RETIRED startup plan enters one bound stop
+[tv-dator] ok 12 - independent U1 control: a RETIRED startup plan enters one bound stop
+[tv-dator]   ---
+[tv-dator]   duration_ms: 251.979742
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] # Subtest: independent U1 control: a corrupt local record yields REMOVE_FAILED after the actual stop settles
+[tv-dator] ok 13 - independent U1 control: a corrupt local record yields REMOVE_FAILED after the actual stop settles
+[tv-dator]   ---
+[tv-dator]   duration_ms: 257.798246
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] # Subtest: U1 v3 D1: original future CREATE retries itself while held belongs to J
+[tv-dator] ok 14 - U1 v3 D1: original future CREATE retries itself while held belongs to J
+[tv-dator]   ---
+[tv-dator]   duration_ms: 167.710939
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] # Subtest: U1 v3 D1: original future CREATE retries itself while active belongs to J
+[tv-dator] ok 15 - U1 v3 D1: original future CREATE retries itself while active belongs to J
+[tv-dator]   ---
+[tv-dator]   duration_ms: 294.122556
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] # Subtest: U1 v3: a local inspection suspended past shutdown has no late handler effect
+[tv-dator] ok 16 - U1 v3: a local inspection suspended past shutdown has no late handler effect
+[tv-dator]   ---
+[tv-dator]   duration_ms: 109.465347
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] # Subtest: U1 v3: RETIRED physical closure keeps startup debt until original journal confirms
+[tv-dator] ok 17 - U1 v3: RETIRED physical closure keeps startup debt until original journal confirms
+[tv-dator]   ---
+[tv-dator]   duration_ms: 269.644665
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: U1 v3: one journal SELECT observes a PENDING-to-IN_PROGRESS transition once
+[tv-dator] ok 18 - U1 v3: one journal SELECT observes a PENDING-to-IN_PROGRESS transition once
+[tv-dator]   ---
+[tv-dator]   duration_ms: 72.152275
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] # Subtest: U1 v3: duplicate journal observation is folded by identity
+[tv-dator] ok 19 - U1 v3: duplicate journal observation is folded by identity
+[tv-dator]   ---
+[tv-dator]   duration_ms: 110.400093
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: U1 v3: duplicate journal observation is refused by identity
+[tv-dator] not ok 20 - U1 v3: duplicate journal observation is refused by identity
+[tv-dator]   ---
+[tv-dator]   duration_ms: 101.851496
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/wasm-service/bound-creation-restart.integration.test.js:1084:3'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: 'CONFLICTING_OBSERVATIONS_WERE_ORDERED_INTO_A_WINNER'
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected:
+[tv-dator]     code: 'CORRUPT_STATE'
+[tv-dator]   actual:
+[tv-dator]     outcome: 'CORRUPT_STATE'
+[tv-dator]   error: 'CORRUPT_STATE'
+[tv-dator]   stack: |-
+[tv-dator]     requireInstance (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/src/control-plane/owners/service-instance-contract.js:23:25)
+[tv-dator]     ServiceLifecycleManager._readRecoverableOperations (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/src/service/service-lifecycle-manager.js:545:7)
+[tv-dator]     async recoverPendingOperations (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/src/service/service-lifecycle-recovery.js:322:25)
+[tv-dator]     async inventoryAttempt (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/src/node/runtime-service-restart-inventory.js:146:19)
+[tv-dator]     async waitForActual (node:assert:644:5)
+[tv-dator]     async Function.rejects (node:assert:767:25)
+[tv-dator]     async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/wasm-service/bound-creation-restart.integration.test.js:1103:9)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   operator: 'rejects'
+[tv-dator]   stack: |-
+[tv-dator]     async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8596850d0c32-mveu26c6-1012626/test/wasm-service/bound-creation-restart.integration.test.js:1103:9)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] # Subtest: U1 memo wake: real HELD J retains one wake behind exact F through handler gate release
+[tv-dator] ok 21 - U1 memo wake: real HELD J retains one wake behind exact F through handler gate release
+[tv-dator]   ---
+[tv-dator]   duration_ms: 120.839467
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] # Subtest: U1 memo wake: memo replacement refuses stale J admission at gate settlement
+[tv-dator] ok 22 - U1 memo wake: memo replacement refuses stale J admission at gate settlement
+[tv-dator]   ---
+[tv-dator]   duration_ms: 123.621617
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] # Subtest: U1 memo wake: physical replacement refuses stale J admission at gate settlement
+[tv-dator] ok 23 - U1 memo wake: physical replacement refuses stale J admission at gate settlement
+[tv-dator]   ---
+[tv-dator]   duration_ms: 133.968784
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] # Subtest: U1 gate: coordinator-first exact REMOVE repeats share one retirement and one outcome
+[tv-dator] ok 24 - U1 gate: coordinator-first exact REMOVE repeats share one retirement and one outcome
+[tv-dator]   ---
+[tv-dator]   duration_ms: 238.725622
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] CDC integration service initialized { nodeId: 'owner-a', hasSqlQueryEngine: true }
+[tv-dator] # Subtest: U1 retirement identity: changed full body with the active token has no owner or file effect
+[tv-dator] ok 25 - U1 retirement identity: changed full body with the active token has no owner or file effect
+[tv-dator]   ---
+[tv-dator]   duration_ms: 133.55717
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: U1 projection debt: the actual stopped projection owner cannot complete an old journal
+[tv-dator] ok 26 - U1 projection debt: the actual stopped projection owner cannot complete an old journal
+[tv-dator]   ---
+[tv-dator]   duration_ms: 236.584736
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] 1..26
+[tv-dator] # tests 39
+[tv-dator] # suites 2
+[tv-dator] # pass 33
+[tv-dator] # fail 6
+[tv-dator] # cancelled 0
+[tv-dator] # skipped 0
+[tv-dator] # todo 0
+[tv-dator] # duration_ms 8556.196946
+[tv-dator] # time=9350ms
+[tv-dator] # test-files total=4 pass=3 fail=1 assertions=60
+lab test: tv-dator: # test-files total=11 pass=7 fail=4 assertions=307
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=11 pass=7 fail=4 assertions=307
