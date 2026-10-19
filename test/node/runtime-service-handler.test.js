@@ -539,10 +539,10 @@ describe('RuntimeServiceHandler handleRemoveReplica', () => {
           replica_id: legacyReplicaId, type: 'REPLACE', workflow_step: 'COMPLETED'}],
       });
       const {handler, lifecycle} = createHandler({cache,
-      legacyRemovalAuthority: async ({operationId, entityId}) =>
-        ({outcome: operationId === 'original-legacy-cleanup' &&
-          entityId === 'sys-postgres-wire' ? 'ADMITTED' : 'CONTENT_CONFLICT'}),
-    });
+        legacyRemovalAuthority: async ({operationId, entityId}) =>
+          ({outcome: operationId === 'original-legacy-cleanup' &&
+            entityId === 'sys-postgres-wire' ? 'ADMITTED' : 'CONTENT_CONFLICT'}),
+      });
       const answer = await handler.handleRemoveReplica({
         [ReplicaOperationField.OPERATION_ID]: 'forged-legacy-cleanup',
         [ReplicaOperationField.ENTITY_ID]: 'unrelated-runtime',
@@ -663,6 +663,8 @@ describe('RuntimeServiceHandler handleRemoveReplica', () => {
         'STALE_REMOVE_REPLACED_SUCCESSOR_MEMO');
       assert.equal(lifecycle.calls.filter((call) => call.method === 'stopReplica').length, 0,
         'STALE_ADMITTED_REMOVE_STOPPED_SUCCESSOR_AFTER_QUEUE_HANDOFF');
+      assert.equal(handler.inProgressOperations.size, 0,
+        'SUPERSEDED_QUEUED_REMOVE_RETAINED_EXECUTION_GATE');
     });
 
   // LABELLED AWAIT CUT: the old generic lifecycle STOP has entered but not
@@ -706,6 +708,46 @@ describe('RuntimeServiceHandler handleRemoveReplica', () => {
         'LABELLED_STOP_WAS_NOT_EXERCISED');
       assert.deepEqual(emitted, [],
         'OLD_STOP_COMPLETION_ESCAPED_AFTER_SUCCESSOR_TOOK_CUSTODY');
+      assert.equal(handler.inProgressOperations.size, 0,
+        'SUPERSEDED_SETTLED_REMOVE_RETAINED_EXECUTION_GATE');
+    });
+
+  it('admits successor cleanup after a superseded queued REMOVE releases its gate',
+    async () => {
+      const replicaId = 'replace-replica-successor-cleanup';
+      const entityId = 'sys-postgres-wire';
+      const emitted = [];
+      const cache = createMockCache({services: [{service_id: replicaId,
+        service_type: 'runtime_service', node_id: 'test-node', status: ReplicaStatus.ACTIVE}]});
+      const {handler, lifecycle} = createHandler({cache,
+        executorOutcomeEmitter: {emitOutcome: (...args) => emitted.push(args)},
+        legacyRemovalAuthority: async () => ({outcome: 'ADMITTED'})});
+      const request = (operationId) => ({
+        [ReplicaOperationField.OPERATION_ID]: operationId,
+        [ReplicaOperationField.ENTITY_ID]: entityId,
+        [ReplicaOperationField.REPLICA_ID]: replicaId,
+      });
+      const first = await handler.handleRemoveReplica(request('superseded-remove'));
+      assert.equal(first.status, ReplicaOperationResponseStatus.INITIATED);
+      // Same labelled queue cut as above, with the production generic memo
+      // shape. A later independently admitted REMOVE owns this successor.
+      const successor = {replicaId, entityId, status: ReplicaStatus.ACTIVE};
+      handler.localReplicas.set(replicaId, successor);
+      await flushImmediate();
+      await flushImmediate();
+      assert.strictEqual(handler.getLocalReplica(replicaId), successor);
+      assert.deepEqual(lifecycle.calls, [], 'SUPERSEDED_REMOVE_REACHED_PHYSICAL_STOP');
+      assert.deepEqual(emitted, [], 'SUPERSEDED_REMOVE_EMITTED_TERMINAL_OUTCOME');
+      const next = await handler.handleRemoveReplica(request('successor-remove'));
+      assert.equal(next.status, ReplicaOperationResponseStatus.INITIATED,
+        'SUPERSEDED_REMOVE_GATE_BLOCKED_SUCCESSOR_CLEANUP');
+      await flushImmediate();
+      await flushImmediate();
+      assert.equal(handler.getLocalReplica(replicaId).status, ReplicaStatus.REMOVED);
+      assert.equal(lifecycle.calls.filter((call) => call.method === 'stopReplica').length, 1);
+      assert.equal(emitted.length, 1);
+      assert.equal(emitted[0][1], 'successor-remove');
+      assert.equal(handler.inProgressOperations.size, 0);
     });
 
   it('refuses a pre-canonical REMOVE when its memo falsely names a bound creation',

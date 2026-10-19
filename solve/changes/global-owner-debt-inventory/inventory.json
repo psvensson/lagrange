@@ -5,13 +5,13 @@
     "inputs": [
       {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 423511,
-        "sha256": "caa3f1362575c08264480d17d6455d04fa119a8cb5905c681fad440687bb7be3"
+        "bytes": 426280,
+        "sha256": "3e23344f3b1f70ddb9518e9f87fc2071bba940ea5f6523ff63adbad1ab239c64"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
-        "bytes": 35054,
-        "sha256": "9c7896579ca14e7714077273f7ec504f0742755d0cbd0fc50f355940e05d7868"
+        "bytes": 35266,
+        "sha256": "0438eabb166426580233e158e08192bbb04460f70b408cfe1cce8c7df33d8f5c"
       },
       {
         "path": "test-output/analysis/madge-circular-src-scripts-test.json",
@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2979231,
-        "sha256": "2fe03d77f80df518001e98f216bdd6c064ca2792a446daf93113b8c77bbb1881"
+        "bytes": 2984783,
+        "sha256": "8ec1fdb1eb3abc2cced5e39120b1609c3d4537bf88316f785bcd91b671b5decc"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -30,7 +30,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "2be94b193cac13c23e0b78436b7bcef409c464dd67b42c2d4c03772ce7873f67"
+        "sha256": "37059ec5af860c6e42d1d29cc1e2f56982abd608881d9f8c7755b507b2d47507"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "bb4b17bb9b9006440a3f811164acb442022f0c74845143e872aad7db1cb14d74"
+        "sha256": "550b8f2d1c6705a93e8ac68a4a2655d22a1d85e18c79a33b8f2c7677be35bba5"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,28 +62,28 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "f60f776fb885b014d3edfbd2cb888ddfd661103b05ebd2bafaefa6c58c9799b5"
+    "inputDigest": "84eb83bba27593e82b7efcdbeba84a441737c01d61a370b9e09bd90a15e455e2"
   },
   "reconciliation": {
     "complexity": {
       "identity": {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 423511,
-        "sha256": "caa3f1362575c08264480d17d6455d04fa119a8cb5905c681fad440687bb7be3"
+        "bytes": 426280,
+        "sha256": "3e23344f3b1f70ddb9518e9f87fc2071bba940ea5f6523ff63adbad1ab239c64"
       },
-      "declaredCount": 1793,
-      "observedCount": 1793,
-      "assignedCount": 1793
+      "declaredCount": 1806,
+      "observedCount": 1806,
+      "assignedCount": 1806
     },
     "cognitive": {
       "identity": {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
-        "bytes": 35054,
-        "sha256": "9c7896579ca14e7714077273f7ec504f0742755d0cbd0fc50f355940e05d7868"
+        "bytes": 35266,
+        "sha256": "0438eabb166426580233e158e08192bbb04460f70b408cfe1cce8c7df33d8f5c"
       },
-      "declaredCount": 152,
-      "observedCount": 152,
-      "assignedCount": 152
+      "declaredCount": 153,
+      "observedCount": 153,
+      "assignedCount": 153
     },
     "fileSize": {
       "authority": {
@@ -99,8 +99,8 @@
         "source": 27,
         "test": 21
       },
-      "observedCount": 47,
-      "assignedCount": 47
+      "observedCount": 46,
+      "assignedCount": 46
     },
     "duplication": [
       {
@@ -112,7 +112,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "2be94b193cac13c23e0b78436b7bcef409c464dd67b42c2d4c03772ce7873f67"
+          "sha256": "37059ec5af860c6e42d1d29cc1e2f56982abd608881d9f8c7755b507b2d47507"
         },
         "cloneGroups": 47,
         "duplicatedLines": 1462,
@@ -130,13 +130,13 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "bb4b17bb9b9006440a3f811164acb442022f0c74845143e872aad7db1cb14d74"
+          "sha256": "550b8f2d1c6705a93e8ac68a4a2655d22a1d85e18c79a33b8f2c7677be35bba5"
         },
-        "cloneGroups": 698,
-        "duplicatedLines": 26458,
-        "sourceCloneTouches": 1396,
-        "sourceDuplicatedLineTouches": 52916,
-        "nonzeroSourceCount": 452,
+        "cloneGroups": 697,
+        "duplicatedLines": 26432,
+        "sourceCloneTouches": 1394,
+        "sourceDuplicatedLineTouches": 52864,
+        "nonzeroSourceCount": 450,
         "touchMultiplicity": 2
       }
     ],
@@ -167,35 +167,35 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2979231,
-        "sha256": "2fe03d77f80df518001e98f216bdd6c064ca2792a446daf93113b8c77bbb1881"
+        "bytes": 2984783,
+        "sha256": "8ec1fdb1eb3abc2cced5e39120b1609c3d4537bf88316f785bcd91b671b5decc"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "f31befc1f67cc91671c12e2d96f49c459578ea8c964104e251b7dedd256f16f2",
-      "moduleCount": 5497,
-      "edgeCount": 28528,
+      "sourceDigest": "5abc8a9aaf60ae387a142a27ad07188450e4313b084547ceefb56c8bda5d0d30",
+      "moduleCount": 5504,
+      "edgeCount": 28599,
       "unresolvedCount": 36
     }
   },
   "assignment": {
-    "sourceSignalCount": 2542,
-    "assignedSignalCount": 2542,
-    "uniqueAssignmentCount": 2542,
-    "digest": "50a987f4c2826da3ee26a60c1f744052fbc0abbec3486349c0477b922be01534"
+    "sourceSignalCount": 2553,
+    "assignedSignalCount": 2553,
+    "uniqueAssignmentCount": 2553,
+    "digest": "8327fd0f2605446e71f38288dba0bbf17c926f314839d4e75a615b1a22870a62"
   },
   "signalCounts": {
-    "cognitive": 152,
-    "complexity": 1793,
-    "duplication": 511,
-    "fileSize": 47,
+    "cognitive": 153,
+    "complexity": 1806,
+    "duplication": 509,
+    "fileSize": 46,
     "lintExclusion": 39
   },
   "summary": {
-    "filesWithDebt": 1313,
+    "filesWithDebt": 1314,
     "rankedBoundaryCount": 115,
     "semanticBoundaryCount": 20,
     "fallbackBoundaryCount": 95,
@@ -595,34 +595,6 @@
       ]
     },
     {
-      "key": "area:test/node",
-      "owner": null,
-      "boundary": "test/node",
-      "classification": "test-owner-area",
-      "ownerAreas": [
-        "test/node"
-      ],
-      "fileCount": 37,
-      "signalCount": 38,
-      "complexity": 3,
-      "cognitive": 0,
-      "oversizedFiles": 0,
-      "duplicatedLines": 2126,
-      "cloneTouches": 55,
-      "cycleGroups": 0,
-      "lintExclusions": 2,
-      "importIn": 7,
-      "importOut": 259,
-      "score": 230.6,
-      "topPaths": [
-        "test/node/timeout-triggered-failures.property.test.js",
-        "test/node/replica-recovery-service.test.js",
-        "test/node/replica-state-machine.test.js",
-        "test/node/node-reintegration-service.test.js",
-        "test/node/replica-handler-cache-state.test.js"
-      ]
-    },
-    {
       "key": "semantic:query_executor_owner/query_execution_workflow",
       "owner": "query_executor_owner",
       "boundary": "query_execution_workflow",
@@ -648,6 +620,34 @@
         "src/query/query-executor-partition-delivery.js",
         "src/query/query-executor-write-retry-routing.js",
         "src/query/query-executor-partition-routing-snapshot.js"
+      ]
+    },
+    {
+      "key": "area:test/node",
+      "owner": null,
+      "boundary": "test/node",
+      "classification": "test-owner-area",
+      "ownerAreas": [
+        "test/node"
+      ],
+      "fileCount": 36,
+      "signalCount": 36,
+      "complexity": 3,
+      "cognitive": 0,
+      "oversizedFiles": 0,
+      "duplicatedLines": 2074,
+      "cloneTouches": 53,
+      "cycleGroups": 0,
+      "lintExclusions": 2,
+      "importIn": 7,
+      "importOut": 250,
+      "score": 225.4,
+      "topPaths": [
+        "test/node/timeout-triggered-failures.property.test.js",
+        "test/node/replica-recovery-service.test.js",
+        "test/node/replica-state-machine.test.js",
+        "test/node/node-reintegration-service.test.js",
+        "test/node/replica-handler-cache-state.test.js"
       ]
     },
     {
@@ -959,6 +959,34 @@
       ]
     },
     {
+      "key": "area:src/node",
+      "owner": null,
+      "boundary": "src/node",
+      "classification": "owner-area-fallback",
+      "ownerAreas": [
+        "src/node"
+      ],
+      "fileCount": 11,
+      "signalCount": 22,
+      "complexity": 21,
+      "cognitive": 1,
+      "oversizedFiles": 0,
+      "duplicatedLines": 0,
+      "cloneTouches": 0,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 232,
+      "importOut": 127,
+      "score": 92,
+      "topPaths": [
+        "src/node/runtime-service-bound-creation-route.js",
+        "src/node/runtime-service-handler.js",
+        "src/node/failure-detector.js",
+        "src/node/replica-state-machine-recovery.js",
+        "src/node/message-group-service-handler.js"
+      ]
+    },
+    {
       "key": "area:test/topology",
       "owner": null,
       "boundary": "test/topology",
@@ -1210,31 +1238,31 @@
       ]
     },
     {
-      "key": "area:src/node",
+      "key": "area:src/wasm-service",
       "owner": null,
-      "boundary": "src/node",
+      "boundary": "src/wasm-service",
       "classification": "owner-area-fallback",
       "ownerAreas": [
-        "src/node"
+        "src/wasm-service"
       ],
       "fileCount": 10,
-      "signalCount": 13,
-      "complexity": 12,
+      "signalCount": 15,
+      "complexity": 14,
       "cognitive": 0,
-      "oversizedFiles": 1,
-      "duplicatedLines": 0,
-      "cloneTouches": 0,
+      "oversizedFiles": 0,
+      "duplicatedLines": 41,
+      "cloneTouches": 1,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 230,
-      "importOut": 111,
-      "score": 60,
+      "importIn": 68,
+      "importOut": 66,
+      "score": 60.1,
       "topPaths": [
-        "src/node/runtime-service-handler.js",
-        "src/node/failure-detector.js",
-        "src/node/replica-state-machine-recovery.js",
-        "src/node/message-group-service-handler.js",
-        "src/node/node-reintegration-reconciliation.js"
+        "src/wasm-service/module-manifest-models.js",
+        "src/wasm-service/wasm-executor.js",
+        "src/wasm-service/wasm-service-lifecycle.js",
+        "src/wasm-service/wasm-service-models.js",
+        "src/wasm-service/wasm-writer-state.js"
       ]
     },
     {
@@ -1321,31 +1349,31 @@
       ]
     },
     {
-      "key": "area:src/wasm-service",
+      "key": "area:src/service",
       "owner": null,
-      "boundary": "src/wasm-service",
+      "boundary": "src/service",
       "classification": "owner-area-fallback",
       "ownerAreas": [
-        "src/wasm-service"
+        "src/service"
       ],
-      "fileCount": 9,
-      "signalCount": 13,
-      "complexity": 12,
+      "fileCount": 7,
+      "signalCount": 10,
+      "complexity": 9,
       "cognitive": 0,
-      "oversizedFiles": 0,
-      "duplicatedLines": 41,
-      "cloneTouches": 1,
+      "oversizedFiles": 1,
+      "duplicatedLines": 0,
+      "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 60,
-      "importOut": 52,
-      "score": 52.1,
+      "importIn": 29,
+      "importOut": 45,
+      "score": 48,
       "topPaths": [
-        "src/wasm-service/module-manifest-models.js",
-        "src/wasm-service/wasm-executor.js",
-        "src/wasm-service/wasm-service-models.js",
-        "src/wasm-service/wasm-writer-state.js",
-        "src/wasm-service/wasm-service-replica.js"
+        "src/service/installable-service-artifact-resolver.js",
+        "src/service/service-descriptor.js",
+        "src/service/service-lifecycle-manager.js",
+        "src/service/service-reconciler.js",
+        "src/service/replicated-service-topology.js"
       ]
     },
     {
@@ -1456,34 +1484,6 @@
         "src/runtime/endpoint-sync-controller.js",
         "src/runtime/endpoint-sync-k8s-client.js",
         "src/runtime/endpoint-sync-source-query.js"
-      ]
-    },
-    {
-      "key": "area:src/service",
-      "owner": null,
-      "boundary": "src/service",
-      "classification": "owner-area-fallback",
-      "ownerAreas": [
-        "src/service"
-      ],
-      "fileCount": 7,
-      "signalCount": 9,
-      "complexity": 8,
-      "cognitive": 0,
-      "oversizedFiles": 1,
-      "duplicatedLines": 0,
-      "cloneTouches": 0,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 29,
-      "importOut": 40,
-      "score": 44,
-      "topPaths": [
-        "src/service/installable-service-artifact-resolver.js",
-        "src/service/service-descriptor.js",
-        "src/service/service-reconciler.js",
-        "src/service/replicated-service-topology.js",
-        "src/service/service-dispatcher.js"
       ]
     },
     {
@@ -1812,6 +1812,32 @@
       ]
     },
     {
+      "key": "semantic:replica_dispatch_owner/replica_dispatch_workflow",
+      "owner": "replica_dispatch_owner",
+      "boundary": "replica_dispatch_workflow",
+      "classification": "declared-owner-rule",
+      "ownerAreas": [
+        "src/control-plane"
+      ],
+      "fileCount": 3,
+      "signalCount": 7,
+      "complexity": 7,
+      "cognitive": 0,
+      "oversizedFiles": 0,
+      "duplicatedLines": 0,
+      "cloneTouches": 0,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 23,
+      "importOut": 16,
+      "score": 28,
+      "topPaths": [
+        "src/control-plane/replica-dispatch-service-dispatch-observation-methods.js",
+        "src/control-plane/replica-dispatch-service-lifecycle.js",
+        "src/control-plane/replica-dispatch-service.js"
+      ]
+    },
+    {
       "key": "area:src/transport",
       "owner": null,
       "boundary": "src/transport",
@@ -1836,32 +1862,6 @@
         "src/transport/node-address-resolution.js",
         "src/transport/websocket-transport.js",
         "src/transport/router-server-manager.js"
-      ]
-    },
-    {
-      "key": "semantic:replica_dispatch_owner/replica_dispatch_workflow",
-      "owner": "replica_dispatch_owner",
-      "boundary": "replica_dispatch_workflow",
-      "classification": "declared-owner-rule",
-      "ownerAreas": [
-        "src/control-plane"
-      ],
-      "fileCount": 3,
-      "signalCount": 6,
-      "complexity": 6,
-      "cognitive": 0,
-      "oversizedFiles": 0,
-      "duplicatedLines": 0,
-      "cloneTouches": 0,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 23,
-      "importOut": 11,
-      "score": 24,
-      "topPaths": [
-        "src/control-plane/replica-dispatch-service-dispatch-observation-methods.js",
-        "src/control-plane/replica-dispatch-service-lifecycle.js",
-        "src/control-plane/replica-dispatch-service.js"
       ]
     },
     {
