@@ -410,7 +410,7 @@ class RuntimeServiceHandler extends EventEmitter {
     });
   }
 
-  recoverLocalReplicaForRemoval(replicaId, entityId) {
+  recoverLocalReplicaForRemoval(replicaId, entityId, {publish = true} = {}) {
     if (typeof this.systemTableCache?.get !== 'function') {
       return null;
     }
@@ -436,7 +436,7 @@ class RuntimeServiceHandler extends EventEmitter {
       status: row.status || ReplicaStatus.ACTIVE,
       ...rowCreationHint(row),
     };
-    this.localReplicas.set(replicaId, recoveredReplica);
+    if (publish) this.localReplicas.set(replicaId, recoveredReplica);
     return recoveredReplica;
   }
 
@@ -486,9 +486,11 @@ class RuntimeServiceHandler extends EventEmitter {
       return executionRefusal(this, CREATION_OUTCOME.CONTENT_CONFLICT, false);
     }
 
-    const replica =
-      this.localReplicas.get(replicaId) ||
-      this.recoverLocalReplicaForRemoval(replicaId, entityId);
+    // Observe a candidate without installing caller-supplied entity identity.
+    // A refused opaque request must not poison a later legitimate cleanup.
+    const originalMemo = this.localReplicas.get(replicaId);
+    const replica = originalMemo ||
+      this.recoverLocalReplicaForRemoval(replicaId, entityId, {publish: false});
     if (!replica) {
       this.logger.warn(
         RUNTIME_SERVICE_HANDLER_LOG_MSG.REMOVE_NOT_FOUND,
@@ -526,9 +528,12 @@ class RuntimeServiceHandler extends EventEmitter {
         return executionRefusal(this, conflict ?
           CREATION_OUTCOME.CONTENT_CONFLICT : CREATION_OUTCOME.UNAVAILABLE, !conflict);
       }
-      if (this.stopped || this.localReplicas.get(replicaId) !== replica) {
+      if (this.stopped || this.localReplicas.get(replicaId) !== originalMemo) {
         return notReadyReply(this);
       }
+    }
+    if (originalMemo === undefined) {
+      this.localReplicas.set(replicaId, replica);
     }
     if (replica.status === RUNTIME_SERVICE_CREATION_MEMO.CONTINUATION_PENDING) {
       return executionRefusal(this,
