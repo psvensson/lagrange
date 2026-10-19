@@ -258,6 +258,24 @@ async function tombstoneRetiringReplica(replica, retirement) {
  * @return {Promise<void>}
  */
 async function retireReplica(replica, handler, starting, activityFailure, shutdownIntent) {
+  // The shutdown caller has already fenced admission and snapshotted this
+  // exact registration. Invoke the identity owner's retirement *now*, before
+  // joining any asynchronous opening or reconciliation. For a WASM service
+  // handler lane is null, so unregisterExact executes in this call stack.
+  // Attach both settlement handlers immediately: an early transport failure
+  // must stay owned while the opening/reconciliation joins are still pending.
+  const retirement = {
+    address: replica.unifiedAddress,
+    replicaId: replica.replicaId,
+  };
+  const handlerRetirement = retireReplicaTransportHandler({
+    ...retirement,
+    transport: replica.transport,
+    handler,
+    lane: null,
+  }).then(
+    (outcome) => ({outcome}),
+    (error) => ({error}));
   try {
     if (starting) {
       // The failed open releases its own handles first; its error belongs
@@ -269,21 +287,10 @@ async function retireReplica(replica, handler, starting, activityFailure, shutdo
     } catch (error) {
       activityFailure = joinFailure(activityFailure, error);
     }
-    // Exact-identity retirement (owner decision N2): a successor's handler
-    // at the same address is never removed. No replica-lifecycle activation
-    // binds a WASM service handler, so there is no effect section to wait on.
-    const retirement = {
-      address: replica.unifiedAddress,
-      replicaId: replica.replicaId,
-    };
-    const outcome = await retireReplicaTransportHandler({
-      ...retirement,
-      transport: replica.transport,
-      handler,
-      lane: null,
-    });
-    reportReplicaHandlerRetirement(replica.logger, retirement, outcome);
-    requireReplicaHandlerRetirement(outcome);
+    const settled = await handlerRetirement;
+    if ('error' in settled) throw settled.error;
+    reportReplicaHandlerRetirement(replica.logger, retirement, settled.outcome);
+    requireReplicaHandlerRetirement(settled.outcome);
     if (replica.transportHandler === handler) {
       replica.transportHandler = null;
     }
