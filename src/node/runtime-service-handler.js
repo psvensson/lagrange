@@ -22,7 +22,7 @@ import {
   ReplicaStatus} from
   '../rebalancer/replica-status.js';
 import {
-  buildRuntimeServiceTargetClaimKey,
+  buildRuntimeServiceTargetClaimKey, runtimeServiceReplicaBelongsToEntity,
 } from '../rebalancer/runtime-service-replica-identity.js';
 import {consumeCreationWake, namesCreation, replyToExistingReplica,
   routeBoundRemoval, routeRuntimeServiceCreate, rowCreationHint, admitBoundRemoval} from
@@ -80,6 +80,9 @@ class RuntimeServiceHandler extends EventEmitter {
     options.serviceLifecycleManager || null;
     this.serviceRuntimeLifecycle =
       options.serviceRuntimeLifecycle || null;
+    this.legacyRemovalAuthority =
+      typeof options.legacyRemovalAuthority === 'function' ?
+        options.legacyRemovalAuthority : null;
     this.rpcClient = null;
     this.requestBindingRouteResolver =
       options.requestBindingRouteResolver ||
@@ -500,14 +503,32 @@ class RuntimeServiceHandler extends EventEmitter {
       );
     }
 
-    // Target-claim identity is the durable ADD/REPLACE allocation contract,
-    // not proof of REMOVE authorization. The existing operation owner may
-    // retire a persisted pre-canonical generic target by its exact local row;
-    // bound creations must still carry canonical identity and their journal.
     if (replica.entityId !== entityId ||
         (namesCreation(replica) &&
           buildRuntimeServiceTargetClaimKey(replicaId, entityId) === null)) {
       return executionRefusal(this, CREATION_OUTCOME.CONTENT_CONFLICT, false);
+    }
+    // An opaque historical target's services row is only custody evidence.
+    // Before any generic STOP consume the *original* operation owner's exact
+    // durable identity, not the incoming request's unverified entity claim.
+    if (!namesCreation(replica) &&
+        !runtimeServiceReplicaBelongsToEntity(replicaId, entityId)) {
+      let authorization;
+      try {
+        authorization = await this.legacyRemovalAuthority?.({
+          operationId, entityId, replicaId, nodeId: this.nodeId,
+        });
+      } catch {
+        authorization = {outcome: CREATION_OUTCOME.UNAVAILABLE};
+      }
+      if (authorization?.outcome !== CREATION_OUTCOME.ADMITTED) {
+        const conflict = authorization?.outcome === CREATION_OUTCOME.CONTENT_CONFLICT;
+        return executionRefusal(this, conflict ?
+          CREATION_OUTCOME.CONTENT_CONFLICT : CREATION_OUTCOME.UNAVAILABLE, !conflict);
+      }
+      if (this.stopped || this.localReplicas.get(replicaId) !== replica) {
+        return notReadyReply(this);
+      }
     }
     if (replica.status === RUNTIME_SERVICE_CREATION_MEMO.CONTINUATION_PENDING) {
       return executionRefusal(this,

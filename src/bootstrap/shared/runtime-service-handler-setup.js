@@ -121,6 +121,7 @@ class RuntimeServiceHandlerSetup {
       partitionServicesProvider,
       rpcClient,
       executorOutcomeEmitter,
+      legacyRemovalAuthority,
     } = options;
 
     if (!nodeId) {
@@ -183,6 +184,7 @@ class RuntimeServiceHandlerSetup {
       callBindingRouteResolver,
       partitionServicesProvider,
       executorOutcomeEmitter,
+      legacyRemovalAuthority,
     });
 
     runtimeServiceHandler.initialize();
