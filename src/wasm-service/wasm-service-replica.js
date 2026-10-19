@@ -346,8 +346,7 @@ class WasmServiceReplica extends EventEmitter {
     } else {
       result = applyCommittedCommand(this.kvStore, committed);
     }
-    committed.effects.afterCommit.push(() =>
-      this.safetyInterval.updateLocalAppliedIndex(committed.index));
+    this.safetyInterval.updateLocalAppliedIndex(committed.index);
     return result;
   }
 
