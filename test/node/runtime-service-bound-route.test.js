@@ -470,11 +470,26 @@ describe('stage 1c round 3: the HELD creation keeps custody (RV5.1, RV5.2, RV5.3
       'the re-entry, then the recorded wake consumed once, both under the creation id');
   });
 
+  test('RV5.2 an unadmitted internal route has no permission to emit or overwrite custody',
+    async (t) => {
+      const {w, held} = await heldWorld(t);
+      const priorOutcomes = w.outcomes.length;
+      await w.handler.createReplicaAsync({operationId: OTHER_OPERATION,
+        entityId: w.metadata.serviceId, replicaId: w.replicaId});
+      assert.strictEqual(w.handler.getLocalReplica(w.replicaId), held,
+        'UNADMITTED_ROUTE_CHANGED_ORIGINAL_MEMO');
+      assert.equal(w.outcomes.length, priorOutcomes,
+        'UNADMITTED_ROUTE_EMITTED_OUTCOME');
+    });
+
   test('RV5.2 a BOUND_ROUTE_REQUIRED refusal for a request naming no creation leaves a HELD memo ' +
     'untouched (outcome under the request id)', async (t) => {
     const {w, held} = await heldWorld(t);
-    await w.handler.createReplicaAsync({operationId: OTHER_OPERATION,
-      entityId: w.metadata.serviceId, replicaId: w.replicaId});
+    const params = {operationId: OTHER_OPERATION,
+      entityId: w.metadata.serviceId, replicaId: w.replicaId};
+    const entry = w.handler.trackCreateRequest(held, params);
+    assert.ok(entry, 'THE_INTERNAL_ROUTE_NEEDS_AN_ADMITTED_EXECUTION');
+    await w.handler.createReplicaAsync(params, entry);
     assert.strictEqual(w.handler.getLocalReplica(w.replicaId), held, 'NAMELESS_SETTLE_OVERWROTE_MEMO');
     const outcome = lastOutcome(w);
     assert.deepEqual([outcome.outcomeType, outcome.operationId, outcome.errorCode],
@@ -494,8 +509,11 @@ describe('stage 1c round 3: the HELD creation keeps custody (RV5.1, RV5.2, RV5.3
       }
       return emit(...args);
     };
-    await w.handler.createReplicaAsync({operationId: OTHER_OPERATION,
-      entityId: w.metadata.serviceId, replicaId: w.replicaId});
+    const params = {operationId: OTHER_OPERATION,
+      entityId: w.metadata.serviceId, replicaId: w.replicaId};
+    const entry = w.handler.trackCreateRequest(held, params);
+    assert.ok(entry, 'THE_INTERNAL_ROUTE_NEEDS_AN_ADMITTED_EXECUTION');
+    await w.handler.createReplicaAsync(params, entry);
     assert.equal(faulted, true, 'the emitter fault was injected');
     assert.strictEqual(w.handler.getLocalReplica(w.replicaId), held, 'CATCH_PATH_NAMED_THE_REQUEST');
     const outcome = lastOutcome(w);
@@ -516,7 +534,7 @@ describe('stage 1c round 3: the HELD creation keeps custody (RV5.1, RV5.2, RV5.3
     }
   });
 
-  test('RV5.3 a RESOURCE_CLOSED wake during the first START is recorded and re-enters nothing',
+  test('RV5.3 a RESOURCE_CLOSED wake before first-start hydration is not a local operation',
     async (t) => {
       const w = await world(t);
       const retained = await w.metadata.prepare();
@@ -525,7 +543,8 @@ describe('stage 1c round 3: the HELD creation keeps custody (RV5.1, RV5.2, RV5.3
       assert.equal(reply.status, ReplicaOperationResponseStatus.INITIATED);
       assert.equal(w.handler.onCreationWake(w.metadata.serviceId, {
         reason: 'creation_resource_closed', binding: retained.intent.consensusBinding,
-        token: retained.token}).outcome, RUNTIME_SERVICE_CREATION_WAKE_OUTCOME.RECORDED);
+        token: retained.token}).outcome, RUNTIME_SERVICE_CREATION_WAKE_OUTCOME.NO_LOCAL_OPERATION,
+        'NO_ORIGIN_WAS_HYDRATED_BEFORE_FIRST_START');
       await drain(w.handler);
       assert.equal(w.handler.getLocalReplica(w.replicaId).status, ReplicaStatus.HELD);
       assert.equal(boundStarts(w), 1, 'CLOSED_WAKE_REENTERED');
@@ -665,7 +684,7 @@ describe('stage 1c round 3: the HELD creation keeps custody (RV5.1, RV5.2, RV5.3
     const reply = await create(w, w.metadata.serviceId, w.replicaId, OTHER_OPERATION);
     assert.equal(reply.status, ReplicaOperationResponseStatus.INITIATED,
       'A_DEAD_CREATION_CAPTURED_THE_REQUEST');
-    assert.deepEqual(resumed.ids, [OTHER_OPERATION], 'the request was routed under its own id');
+    assert.deepEqual(resumed.ids, [], 'UNROUTED_JOURNAL_WAS_SENT_TO_RESUME');
     assert.strictEqual(w.handler.getLocalReplica(w.replicaId), terminal);
     assert.deepEqual([lastOutcome(w).outcomeType, lastOutcome(w).operationId,
       lastOutcome(w).errorCode], [EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_FAILED,
@@ -692,7 +711,8 @@ describe('stage 1c round 3: the HELD creation keeps custody (RV5.1, RV5.2, RV5.3
     // assert.deepEqual([dead.status, dead.operationId, dead.deferRetry, lastOutcome(w).errorCode],
     //   [ReplicaStatus.FAILED, w.operationId, undefined, 'RESOURCE_CLOSED']);
     assert.deepEqual([dead.status, dead.operationId, dead.deferRetry, lastOutcome(w).errorCode],
-      [ReplicaStatus.FAILED, w.operationId, undefined, 'TERMINAL_OPERATION']);
+      [ReplicaStatus.REMOVED, w.operationId, undefined, 'TERMINAL_OPERATION'],
+        'RETIRED_MEMO_MUST_NOT_REOPEN_ON_A_LATE_DUPLICATE');
     assert.equal(w.metadata.row().state, 'completed', 'the REMOVE completed the creation row');
     const successor = await owner.selectConsensusInstance(
       w.metadata.request(1, 2, binding.incarnation));
@@ -725,7 +745,7 @@ describe('stage 1c round 3: the HELD creation keeps custody (RV5.1, RV5.2, RV5.3
     const permanentResumes = trackResumes(p);
     assert.equal((await create(p)).status, ReplicaOperationResponseStatus.INITIATED,
       'PERMANENT_FAILURE_REENTERED');
-    assert.deepEqual(permanentResumes.ids, [p.operationId], 'routed under the request id');
+    assert.deepEqual(permanentResumes.ids, [], 'TERMINAL_JOURNAL_GRANTED_A_NEW_RESUME');
     assert.equal(lastOutcome(p).errorCode, 'TERMINAL_OPERATION');
   });
 
