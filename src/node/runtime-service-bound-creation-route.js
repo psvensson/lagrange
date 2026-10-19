@@ -547,7 +547,7 @@ async function decideBoundRemoval(handler, creationOperationId, reason, entry) {
 
 function maySettleRemovalMemo(handler, entry, memo, decision) {
   if (memo?.operationId !== entry.creationOperationId || entry.origin === undefined ||
-      memo.origin === undefined || !sameRetainedCreation(memo.origin, entry.origin)) return false;
+      (memo.origin !== undefined && !sameRetainedCreation(memo.origin, entry.origin))) return false;
   // A sealed, re-read PENDING -> CANCELLED journal transition proves that
   // this exact creation never acquired a token. It can complete its own
   // memo without asking the physical owner to invent a tokenless observation.
@@ -556,7 +556,8 @@ function maySettleRemovalMemo(handler, entry, memo, decision) {
   if (decision.kind === DECISION.COMPLETED &&
       decision.journalAnswer?.outcome === CREATION.CANCELLED &&
       decision.journalAnswer.operationId === entry.creationOperationId &&
-      entry.origin.token === null && memo.origin.token === null) return true;
+      entry.origin.token === null && memo.origin !== undefined &&
+      memo.origin.token === null) return true;
   const current = handler.serviceLifecycleManager.observeCurrentCreation(
     {consensusCreation: entry.origin});
   return current.outcome === CURRENT.CURRENT || current.outcome === CURRENT.ABSENT;
