@@ -508,9 +508,7 @@ class RuntimeServiceHandler extends EventEmitter {
       return executionRefusal(this,
         RUNTIME_SERVICE_HANDLER_ERROR_MSG.CREATION_CONTINUATION_PENDING);
     }
-    // A removed *bound* memo still owns its original journal obligation.
-    // Do not silently reroute an idempotent REMOVE through generic cleanup.
-    if (namesCreation(replica)) {
+    if (namesCreation(replica) && replica.status !== ReplicaStatus.REMOVED) {
       return admitBoundRemoval(this, params, replica);
     }
     return admitGenericRemoval(this, params, replica);

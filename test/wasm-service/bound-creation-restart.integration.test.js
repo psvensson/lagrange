@@ -497,9 +497,10 @@ describe('recovery unit 1: host restart of bound creations (inventory, memo, re-
     assert.equal(rowOf(e, sealed).state, 'cancelled');
     assert.equal(JSON.parse(rowOf(e, sealed).error).reason, 'CONFLICT');
     assert.equal(slotPhase(e, sealed), 'ADMITTED', 'the foreign request keeps its slot');
-    assert.deepEqual([memoOf(sealed).status, memoOf(sealed).operationId],
-      [ReplicaStatus.REMOVED, creationId(sealed)],
-      'SEALED_CANCELLED_CREATION_LEFT_A_PHANTOM_RETIREMENT');
+    assert.deepEqual([memoOf(sealed).status, memoOf(sealed).operationId,
+      memoOf(sealed).deferRetry],
+    [ReplicaStatus.FAILED, creationId(sealed), undefined],
+    'SEALED_CANCELLED_CREATION_LEFT_A_RETRYABLE_PHANTOM_RETIREMENT');
     e.metadata.setGatewayReadFault('owner-a', new Error(FAULT));
     await removeAndSettle(e, unavailable, 'remove-unavailable', OUTCOME.RUNTIME_SERVICE_REMOVE_HELD);
     e.metadata.setGatewayReadFault('owner-a', null);
@@ -509,7 +510,8 @@ describe('recovery unit 1: host restart of bound creations (inventory, memo, re-
     await e.dispatch(sealed, TYPE.CREATE_REPLICA);
     await e.settle(() => count(sealed, OUTCOME.RUNTIME_SERVICE_CREATE_FAILED) === 2, 'terminal');
     assert.equal(lastOutcome(sealed).errorCode, 'TERMINAL_OPERATION');
-    assert.equal(memoOf(sealed).status, ReplicaStatus.REMOVED,
+    assert.deepEqual([memoOf(sealed).status, memoOf(sealed).deferRetry],
+      [ReplicaStatus.FAILED, undefined],
       'TERMINAL_CREATE_REVIVED_CANCELLED_LOCAL_CUSTODY');
     await removeAndSettle(e, sealed, 'remove-sealed-again', OUTCOME.RUNTIME_SERVICE_REMOVE_COMPLETED);
     assert.equal(count(sealed, OUTCOME.RUNTIME_SERVICE_REMOVE_COMPLETED), 2);

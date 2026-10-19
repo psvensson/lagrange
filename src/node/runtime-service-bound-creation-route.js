@@ -545,19 +545,23 @@ async function decideBoundRemoval(handler, creationOperationId, reason, entry) {
     consensusOpeningOwner: manager}, {nodeId: handler.nodeId, reason}));
 }
 
+// A sealed PENDING -> CANCELLED CAS belongs to the journal owner. Its original
+// creation never had a physical token; neither a cache nor a physical caller
+// may derive this proof from a generic FAILED/UNKNOWN result. The caller also
+// must still hold exactly the memo for the journaled creation.
+function journalCancelledBeforeAdmission(entry, memo, decision) {
+  return decision.kind === DECISION.COMPLETED &&
+    decision.journalAnswer?.outcome === CREATION.CANCELLED &&
+    decision.journalAnswer.operationId === entry.creationOperationId &&
+    entry.origin?.token === null && memo?.origin?.token === null &&
+    memo.operationId === entry.creationOperationId &&
+    sameRetainedCreation(memo.origin, entry.origin);
+}
+
 function maySettleRemovalMemo(handler, entry, memo, decision) {
   if (memo?.operationId !== entry.creationOperationId || entry.origin === undefined ||
       (memo.origin !== undefined && !sameRetainedCreation(memo.origin, entry.origin))) return false;
-  // A sealed, re-read PENDING -> CANCELLED journal transition proves that
-  // this exact creation never acquired a token. It can complete its own
-  // memo without asking the physical owner to invent a tokenless observation.
-  // No FAILED/UNKNOWN/UNAVAILABLE result, terminal guess or successor can
-  // use this exception.
-  if (decision.kind === DECISION.COMPLETED &&
-      decision.journalAnswer?.outcome === CREATION.CANCELLED &&
-      decision.journalAnswer.operationId === entry.creationOperationId &&
-      entry.origin.token === null && memo.origin !== undefined &&
-      memo.origin.token === null) return true;
+  if (journalCancelledBeforeAdmission(entry, memo, decision)) return true;
   const current = handler.serviceLifecycleManager.observeCurrentCreation(
     {consensusCreation: entry.origin});
   return current.outcome === CURRENT.CURRENT || current.outcome === CURRENT.ABSENT;
@@ -571,7 +575,18 @@ function settleRemoval(handler, params, decision, entry) {
   if (!currentExecution(handler, entry)) return;
   const fields = {operationId, replicaId, entityId, nodeId: handler.nodeId};
   if (decision.kind === DECISION.COMPLETED) {
-    if (writes) handler.localReplicas.set(replicaId, {...memo, status: ReplicaStatus.REMOVED});
+    if (writes) {
+      // A permanently cancelled, never-admitted CREATE did not retire a
+      // physical resource. Keep its original terminal identity for bounded
+      // re-reads, but do not let its prior deferral resume again.
+      if (journalCancelledBeforeAdmission(entry, memo, decision)) {
+        const terminal = {...memo, status: ReplicaStatus.FAILED};
+        delete terminal.deferRetry;
+        handler.localReplicas.set(replicaId, terminal);
+      } else {
+        handler.localReplicas.set(replicaId, {...memo, status: ReplicaStatus.REMOVED});
+      }
+    }
     if (entry.silent !== true || params === entry.observer) {
       handler.emitExecutorOutcome(EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_REMOVE_COMPLETED,
         operationId, WORKFLOW_STEP.REMOVED, {replicaId});
@@ -649,11 +664,7 @@ function admitBoundRemoval(handler, params, memo) {
     {origin: plan?.origin ?? memo.origin, plan, creationOperationId});
   if (entry === undefined) return executionRefusal(handler);
   if (plan !== undefined) plan.action = ACTION.REDRIVE;
-  // A duplicate REMOVE may validate terminal journal finality, but it must
-  // never revive the already-retired local memo while doing so.
-  if (memo.status !== ReplicaStatus.REMOVED) {
-    handler.localReplicas.set(params.replicaId, {...memo, status: ReplicaStatus.REMOVING});
-  }
+  handler.localReplicas.set(params.replicaId, {...memo, status: ReplicaStatus.REMOVING});
   handler.retryRetiredPlans(params.replicaId);
   queueBoundRemoval(handler, entry);
   return {status: memo.status === ReplicaStatus.REMOVING ?
