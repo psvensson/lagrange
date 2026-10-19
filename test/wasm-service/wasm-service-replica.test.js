@@ -701,6 +701,43 @@ describe('WasmServiceReplica', () => {
         sessionId: 's', key: 'k'}}), {error: WASM_SERVICE_ERROR_MSG.SERVICE_NOT_READY});
     });
 
+    // U1 negative control: the old implementation awaited reconciliation
+    // before unregisterExact, leaving its original handler addressable in
+    // the interval after the shutdown admission fence.
+    it('retires the exact transport handler synchronously at shutdown call', async () => {
+      const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'wasm-sync-retire-'));
+      const router = new MessageRouter({
+        bootIncarnation: TEST_BOOT_INCARNATION,
+        nodeId: 'node-1',
+        wsPort: 0,
+      });
+      await router.initialize({startServer: false});
+      const replica = new WasmServiceReplica(defaultOpts({
+        transport: router,
+        dbPath: path.join(directory, 'replica.db'),
+      }));
+      let stopping = null;
+      try {
+        await replica.initialize();
+        const address = replica.unifiedAddress;
+        const original = replica.transportHandler;
+        assert.equal(typeof original, 'function');
+        assert.strictEqual(router.getRegisteredHandler(address), original);
+        stopping = replica.shutdown();
+        assert.equal(replica.lifecycleState, WASM_SERVICE_REPLICA_STATE.STOPPING);
+        assert.equal(replica.db?.open, true,
+          'closing admission is earlier than completing physical release');
+        assert.equal(router.getRegisteredHandler(address), null,
+          'OLD_EXACT_HANDLER_SURVIVED_SYNCHRONOUS_SHUTDOWN_FENCE');
+        await stopping;
+        assert.equal(replica.lifecycleState, WASM_SERVICE_REPLICA_STATE.STOPPED);
+      } finally {
+        await Promise.allSettled([stopping ?? replica.shutdown()]);
+        await router.shutdown?.();
+        fs.rmSync(directory, {recursive: true, force: true});
+      }
+    });
+
     // Owner decision N2: a replica retires only the exact handler it
     // registered. A delayed shutdown of an old instance must not remove a
     // successor's handler registered at the same address.
