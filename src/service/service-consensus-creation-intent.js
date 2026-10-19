@@ -353,7 +353,12 @@ async function reserveForRemoval(manager, intent, identity) {
   case RESULT.TERMINAL_OPERATION:
     return admission;
   default:
-    return admission.reservationRefusal === REFUSAL.SEALED ?
+    return (admission.reservationRefusal === REFUSAL.SEALED ||
+      (admission.reservationRefusal === undefined &&
+        [OUTCOME.STALE_BINDING, OUTCOME.HISTORY_UNAVAILABLE, OUTCOME.CONFLICT,
+          OUTCOME.CONTENT_CONFLICT, OUTCOME.CAPACITY_EXHAUSTED,
+          OUTCOME.INVALID_EXPECTED_STATE, OUTCOME.TARGET_ALREADY_OWNED]
+          .includes(admission.outcome))) ?
       await cancelPendingCreation(manager, identity, admission) :
       {outcome: OUTCOME.UNKNOWN, reason: admission.reason ?? admission.outcome};
   }
