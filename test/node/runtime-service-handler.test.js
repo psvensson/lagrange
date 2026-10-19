@@ -515,6 +515,38 @@ describe('RuntimeServiceHandler handleRemoveReplica', () => {
     );
   });
 
+  it('refuses an opaque legacy cleanup under the wrong entity despite a matching local services id',
+    async () => {
+      const legacyReplicaId = 'replace-replica-old-opaque-target';
+      const cache = createMockCache({
+        service_definitions: [
+          {service_id: 'sys-postgres-wire', service_type: 'runtime_service',
+            runtime_kind: 'native_js', runtime_ref: 'postgres-wire-runtime'},
+          {service_id: 'unrelated-runtime', service_type: 'runtime_service',
+            runtime_kind: 'native_js', runtime_ref: 'other-runtime'},
+        ],
+        services: [{service_id: legacyReplicaId, service_type: 'runtime_service',
+          node_id: 'test-node', status: ReplicaStatus.ACTIVE}],
+        replica_operations: [{operation_id: 'historical-replace',
+          entity_id: 'sys-postgres-wire', entity_type: 'runtime_service',
+          replica_id: legacyReplicaId, type: 'REPLACE', workflow_step: 'COMPLETED'}],
+      });
+      const {handler, lifecycle} = createHandler({cache});
+      const answer = await handler.handleRemoveReplica({
+        [ReplicaOperationField.OPERATION_ID]: 'forged-legacy-cleanup',
+        [ReplicaOperationField.ENTITY_ID]: 'unrelated-runtime',
+        [ReplicaOperationField.REPLICA_ID]: legacyReplicaId,
+      });
+      await flushImmediate();
+      await flushImmediate();
+      assert.equal(answer.status, ReplicaOperationResponseStatus.ERROR,
+        'OPAQUE_ID_WITH_UNRELATED_ENTITY_ADMITTED_DESTRUCTIVE_CLEANUP');
+      assert.equal(lifecycle.calls.length, 0,
+        'UNRELATED_ENTITY_CLAIM_STOPPED_A_LEGACY_RESOURCE');
+      assert.equal(handler.inProgressOperations.size, 0,
+        'REFUSED_LEGACY_CLEANUP_LEFT_AN_ADMITTED_EXECUTION');
+    });
+
   it('refuses a pre-canonical REMOVE when its memo falsely names a bound creation',
     async () => {
       const replicaId = 'replace-replica-mismatched-bound-identity';
