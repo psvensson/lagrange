@@ -14,7 +14,8 @@ import {RUNTIME_REPLICA_STATUS} from '../constants/runtime.js';
 import {CONSENSUS_BOOTSTRAP} from '../service/service-consensus-bootstrap.js';
 import {runtimeServiceConsensusIdentity} from '../rebalancer/runtime-service-replica-identity.js';
 import {getOrCreateCauseId} from '../utils/cause-id.js';
-import {isRetainedStateProjection} from './service-runtime-state-projection-handoff.js';
+import {isRetainedStateProjection, isStoppedStateProjection} from
+  './service-runtime-state-projection-handoff.js';
 import {WASM_SERVICES_ROW_MARK as MARK} from '../wasm-service/wasm-service-serving-state.js';
 import {WASM_CREATION_CURRENT as CURRENT} from '../wasm-service/wasm-service-constants.js';
 import {WASM_CREATION_RETIREMENT_FINALITY as FINALITY} from
@@ -23,6 +24,7 @@ import {WASM_CREATION_RETIREMENT_FINALITY as FINALITY} from
 // Why a PUBLISHED bound replica is not (yet) discoverable.
 const CONSENSUS_PROJECTION = Object.freeze({
   WRITER_ABSENT: 'PROJECTION_WRITER_ABSENT',
+  WRITER_STOPPED: 'PROJECTION_WRITER_STOPPED',
   HOST_UNAVAILABLE: 'ENDPOINT_HOST_UNAVAILABLE',
   SERVICES_ROW_FAILED: 'SERVICES_ROW_PROJECTION_FAILED',
   SERVICES_ROW_RETAINED: 'SERVICES_ROW_PROJECTION_RETAINED',
@@ -141,10 +143,13 @@ async function withdrawRetiredConsensus(owner, driver, bound) {
   try {
     const projected = await owner._projectReplicaState(physical.replicaId, bound.descriptor,
       RUNTIME_REPLICA_STATUS.STOPPED, {node_id: physical.nodeId});
-    // The general projection owner returns undefined for a swallowed
-    // non-ACTIVE write failure. Only a returned STOPPED row proves this step.
+    // The wrapper may echo the requested row even when its actual writer is
+    // stopped. A retained or stopped owner has not completed this projection.
     if (projected?.stateRow?.status !== RUNTIME_REPLICA_STATUS.STOPPED) {
       return unprojected({outcome: CONSENSUS_PROJECTION.SERVICES_ROW_UNAVAILABLE});
+    }
+    if (isStoppedStateProjection(projected.projectionResult)) {
+      return unprojected({outcome: CONSENSUS_PROJECTION.WRITER_STOPPED});
     }
     if (isRetainedStateProjection(projected.projectionResult)) {
       return unprojected({outcome: CONSENSUS_PROJECTION.SERVICES_ROW_RETAINED});

@@ -8,6 +8,8 @@ import {OwnerKeyReconcileQueue} from
   '../workflow/owner-key-reconcile-queue.js';
 import {projectRuntimeReplicaServicesRow} from
   './runtime-replica-state-projection.js';
+import {RUNTIME_REPLICA_STATE_PROJECTION_STATE} from
+  '../runtime/service-runtime-state-projection-handoff.js';
 
 const RUNTIME_REPLICA_STATE_PROJECTION_EVENT = Object.freeze({
   ACCEPTED: 'runtime_replica_state_projection_accepted',
@@ -15,11 +17,6 @@ const RUNTIME_REPLICA_STATE_PROJECTION_EVENT = Object.freeze({
   RETRYING: 'runtime_replica_state_projection_retrying',
   FAILED: 'runtime_replica_state_projection_failed',
   SHUTDOWN: 'runtime_replica_state_projection_shutdown',
-});
-
-const RUNTIME_REPLICA_STATE_PROJECTION_STATE = Object.freeze({
-  RETAINED: 'retained',
-  STOPPED: 'stopped',
 });
 
 const PROJECTION_OWNER_NAME = 'runtime-replica-state-projection-owner';

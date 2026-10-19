@@ -11,6 +11,7 @@
 // the activation quest's owner; RV2.6 permits authoring from the keys).
 import {describe, test} from 'node:test';
 import assert from 'node:assert/strict';
+import {isDeepStrictEqual} from 'node:util';
 import {createOriginFixture} from '../service/service-consensus-creation-fixture.js';
 import {RuntimeServiceHandler} from '../../src/node/runtime-service-handler.js';
 import {RuntimeServiceAdapter} from '../../src/service/adapters/runtime-service-adapter.js';
@@ -67,6 +68,12 @@ function cacheOf(rows) {
 // equality checks run unchanged.
 function scriptedRuntime() {
   const runtime = {calls: [], starts: [], stops: []};
+  let currentCreation = null;
+  const origin = (handle) => {
+    const creation = handle?.consensusCreation;
+    return creation ? {operationId: creation.operationId, intent: creation.intent,
+      token: creation.token} : null;
+  };
   const bound = (handle) => ({consensusBinding: handle.consensusCreation.intent.consensusBinding,
     consensusResourceToken: handle.consensusCreation.token});
   const STARTS = {
@@ -89,7 +96,14 @@ function scriptedRuntime() {
     async prepare(definition, context) {
       runtime.calls.push({kind: 'prepare', bound: Boolean(context?.consensusCreation),
         definition});
+      if (context?.consensusCreation) currentCreation = structuredClone(origin(context));
       return {status: 'READY'};
+    },
+    // Scripted physical-owner contract only. The independent native custody
+    // file verifies the actual lifecycle's complete intent/token/state rules.
+    observeCurrentCreation(handle) {
+      if (currentCreation === null) return {outcome: 'ABSENT'};
+      return {outcome: isDeepStrictEqual(currentCreation, origin(handle)) ? 'CURRENT' : 'DIFFERENT'};
     },
     async start(handle) {
       runtime.calls.push({kind: 'start', bound: Boolean(handle?.consensusCreation)});
@@ -98,7 +112,12 @@ function scriptedRuntime() {
     },
     async stop(handle) {
       runtime.calls.push({kind: 'stop', bound: Boolean(handle?.consensusCreation)});
-      return runtime.stops.shift() ?? {outcome: 'CLOSED', retired: true, closed: true};
+      const result = runtime.stops.shift() ??
+        {outcome: 'CLOSED', retired: true, closed: true, finality: 'FINAL'};
+      if (result.retired === true && isDeepStrictEqual(currentCreation, origin(handle))) {
+        currentCreation = null;
+      }
+      return result;
     },
     async health() {
       return {status: 'healthy'};
@@ -213,14 +232,14 @@ describe('stage 1c: RuntimeServiceHandler bound CREATE route (RV2.2, RV3.2, RV3.
       await create(w);
       assert.equal(w.handler.getLocalReplica(w.replicaId).status, ReplicaStatus.HELD);
       assert.equal(lastOutcome(w).outcomeType, EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_HELD);
-      assert.equal(w.manager._replicaStateById.get(w.replicaId), 'starting',
+      assert.equal(w.manager._replicaStateById.get(w.replicaId).state, 'starting',
         'a confirmed PUBLISHED_UNPROJECTED keeps STARTING (Revision 4)');
       w.runtime.starts.push('PUBLISHED');
       const reply = await create(w);
       assert.equal(reply.status, ReplicaOperationResponseStatus.IN_PROGRESS,
         'a duplicate CREATE while HELD re-enters and answers IN_PROGRESS (C6-3)');
       assert.equal(w.handler.getLocalReplica(w.replicaId).status, ReplicaStatus.ACTIVE);
-      assert.equal(w.manager._replicaStateById.get(w.replicaId), 'running');
+      assert.equal(w.manager._replicaStateById.get(w.replicaId).state, 'running');
       assert.deepEqual([lastOutcome(w).outcomeType, lastOutcome(w).workflowStep],
         [EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_ACTIVE, WORKFLOW_STEP.ACTIVE]);
     });
@@ -236,7 +255,7 @@ describe('stage 1c: RuntimeServiceHandler bound CREATE route (RV2.2, RV3.2, RV3.
       assert.equal(outcome.errorCode, 'CONTENT_CONFLICT');
       assert.ok(w.runtime.calls.some((call) => call.kind === 'stop' && call.bound),
         'the contradicted resource was retired by its creation');
-      assert.notEqual(w.manager._replicaStateById.get(w.replicaId), 'running');
+      assert.notEqual(w.manager._replicaStateById.get(w.replicaId)?.state, 'running');
     });
 
   test('UNKNOWN after retention is the handler-typed deferral: CREATE_FAILED + deferRetry, memo FAILED',
@@ -529,7 +548,8 @@ describe('stage 1c round 3: the HELD creation keeps custody (RV5.1, RV5.2, RV5.3
   async (t) => {
     const {w} = await heldWorld(t);
     w.runtime.stops.push({outcome: 'CLOSE_UNRESOLVED', retired: true, closed: false,
-      close: {outcome: 'UNKNOWN'}}, {outcome: 'CLOSED', retired: true, closed: true});
+      finality: 'UNRESOLVED', close: {outcome: 'UNKNOWN'}},
+    {outcome: 'CLOSED', retired: true, closed: true, finality: 'FINAL'});
     await w.handler.handleRemoveReplica(removeRequest(w.metadata.serviceId, w.replicaId, 'rm-p5'));
     await drain(w.handler);
     const removing = w.handler.getLocalReplica(w.replicaId);
@@ -766,7 +786,8 @@ describe('stage 1c: bound REMOVE route (RV2.1, RV3.3 REMOVE table)', () => {
   }
 
   test('closed:true retires through the manager bound STOP and completes', async (t) => {
-    const {w, reply} = await heldThenRemove(t, [{outcome: 'CLOSED', retired: true, closed: true}]);
+    const {w, reply} = await heldThenRemove(t, [{outcome: 'CLOSED', retired: true, closed: true,
+      finality: 'FINAL'}]);
     assert.equal(reply.status, ReplicaOperationResponseStatus.INITIATED);
     assert.ok(w.runtime.calls.some((call) => call.kind === 'stop' && call.bound),
       'the REMOVE reached the bound retirement, never the generic stop');
@@ -777,13 +798,14 @@ describe('stage 1c: bound REMOVE route (RV2.1, RV3.3 REMOVE table)', () => {
   test('a HISTORY_UNAVAILABLE close of a durable tombstone completes (slot reused later)',
     async (t) => {
       const {w} = await heldThenRemove(t, [{outcome: 'CLOSE_UNRESOLVED', retired: true,
-        closed: false, close: {outcome: 'HISTORY_UNAVAILABLE'}}]);
+        closed: false, finality: 'FINAL', tombstone: {outcome: 'ALREADY'},
+        close: {outcome: 'HISTORY_UNAVAILABLE'}}]);
       assertRemoveCompleted(w);
     });
 
   test('a permanent refusal is REMOVE_FAILED with its code', async (t) => {
     const {w} = await heldThenRemove(t, [{outcome: 'INVALID_LINEAGE', retired: false,
-      closed: false}]);
+      closed: false, finality: 'UNRESOLVED'}]);
     const outcome = lastOutcome(w);
     assert.equal(outcome.outcomeType, EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_REMOVE_FAILED);
     assert.equal(outcome.errorCode, 'INVALID_LINEAGE');
@@ -792,8 +814,8 @@ describe('stage 1c: bound REMOVE route (RV2.1, RV3.3 REMOVE table)', () => {
   test('C6-8/cell (b) closed:false -> REMOVE_HELD, memo REMOVING; the next REMOVE resolves',
     async (t) => {
       const {w} = await heldThenRemove(t, [{outcome: 'CLOSE_UNRESOLVED', retired: true,
-        closed: false, close: {outcome: 'UNKNOWN'}}, {outcome: 'CLOSED', retired: true,
-        closed: true}]);
+        closed: false, finality: 'UNRESOLVED', close: {outcome: 'UNKNOWN'}},
+      {outcome: 'CLOSED', retired: true, closed: true, finality: 'FINAL'}]);
       assert.deepEqual([lastOutcome(w).outcomeType, lastOutcome(w).workflowStep],
         [EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_REMOVE_HELD, WORKFLOW_STEP.STOPPING]);
       assert.equal(w.handler.getLocalReplica(w.replicaId).status, ReplicaStatus.REMOVING);
@@ -1109,7 +1131,7 @@ for (const condition of ['TARGET_ALREADY_OWNED', 'INVALID_EXPECTED_STATE', 'STAL
         const closed = await f.primary.closeInstanceResource(f.intent.consensusBinding,
           admitted.token);
         assert.equal(closed.outcome, 'CLOSED');
-        return {outcome: 'CLOSED', retired: true, closed: true};
+        return {outcome: 'CLOSED', retired: true, closed: true, finality: 'FINAL'};
       };
       await w.handler.handleRemoveReplica(remove);
       await drain(w.handler);
@@ -1174,7 +1196,9 @@ describe('U1 v3 deferred immutable-origin hydration', () => {
         };
         let resumes = 0;
         const resume = w.manager.resumeConsensusCreation.bind(w.manager);
-        w.manager.resumeConsensusCreation = (...args) => { resumes += 1; return resume(...args); };
+        w.manager.resumeConsensusCreation = (...args) => {
+          resumes += 1; return resume(...args);
+        };
         await w.handler.handleCreateReplica(createRequest(w.metadata.serviceId, w.replicaId,
           w.operationId));
         await hydrationTurns();
@@ -1203,10 +1227,14 @@ describe('U1 v3 deferred immutable-origin hydration', () => {
       const before = w.metadata.db.prepare('SELECT * FROM wasm_operations WHERE operation_id = ?')
         .get(w.operationId);
       const reader = w.manager._idempotencyReader;
-      w.manager._idempotencyReader = async () => { throw new Error('HYDRATION_READER_UNAVAILABLE'); };
+      w.manager._idempotencyReader = async () => {
+        throw new Error('HYDRATION_READER_UNAVAILABLE');
+      };
       let resumes = 0;
       const resume = w.manager.resumeConsensusCreation.bind(w.manager);
-      w.manager.resumeConsensusCreation = (...args) => { resumes += 1; return resume(...args); };
+      w.manager.resumeConsensusCreation = (...args) => {
+        resumes += 1; return resume(...args);
+      };
       await create(w);
       assert.equal(resumes, 0, 'failed hydration was followed by a blind bound resume');
       assert.deepEqual(w.runtime.calls, []);
@@ -1227,7 +1255,9 @@ describe('U1 v3 deferred immutable-origin hydration', () => {
       consensusBinding: {...retained.intent.consensusBinding, version: 999}};
     let resumes = 0;
     const resume = w.manager.resumeConsensusCreation.bind(w.manager);
-    w.manager.resumeConsensusCreation = (...args) => { resumes += 1; return resume(...args); };
+    w.manager.resumeConsensusCreation = (...args) => {
+      resumes += 1; return resume(...args);
+    };
     await w.handler.handleCreateReplica(request);
     await drain(w.handler);
     assert.equal(resumes, 0);
@@ -1235,6 +1265,67 @@ describe('U1 v3 deferred immutable-origin hydration', () => {
     assert.equal(lastOutcome(w).errorCode, 'CONTENT_CONFLICT');
   });
 });
+
+// Consumer identity witnesses: the journal/handler/executor are real; the
+// local RETIRED inspection remains explicitly scripted at the runtime seam.
+// This does not claim a native physical tombstone or process-custody result.
+for (const operation of ['CREATE', 'REMOVE']) {
+  test(`U1 gate: ${operation} on another replica cannot reuse the startup REMOVE observer ID`,
+    async (t) => {
+      const w = await world(t);
+      const otherReplicaId = `${NATIVE_ENTITY}-r1`;
+      await create(w, NATIVE_ENTITY, otherReplicaId, 'independent-other-create');
+      assert.equal(w.handler.getLocalReplica(otherReplicaId).status, ReplicaStatus.ACTIVE,
+        'the ordinary generic route actually established the other ACTIVE memo');
+      assert.equal((await w.metadata.prepare()).outcome, 'ADMISSION_RETAINED');
+      w.runtime.inspectRetainedCreation = () => ({outcome: 'RETIRED'});
+      const entered = Promise.withResolvers();
+      const release = Promise.withResolvers();
+      const stop = w.manager.stopReplica.bind(w.manager);
+      let stops = 0;
+      w.manager.stopReplica = async (...args) => {
+        stops += 1;
+        entered.resolve();
+        await release.promise;
+        return stop(...args);
+      };
+      const observerId = 'independent-shared-observer';
+      try {
+        await w.handler.recoverRetainedCreations();
+        await entered.promise;
+        const request = removeRequest(w.metadata.serviceId, w.replicaId, observerId);
+        const joined = await w.handler.handleRemoveReplica(request);
+        assert.equal(joined.status, ReplicaOperationResponseStatus.IN_PROGRESS,
+          'the coordinator joined the exact startup retirement');
+        const original = w.handler.inProgressOperations.get(w.operationId);
+        assert.equal(original.observer.operationId, observerId,
+          'the request is held in the one bounded observer, not its own execution slot');
+        const memo = structuredClone(w.handler.getLocalReplica(otherReplicaId));
+        const outcomes = structuredClone(w.outcomes);
+        const effects = w.runtime.calls.length;
+        const conflicted = operation === 'CREATE' ?
+          await w.handler.handleCreateReplica(createRequest(NATIVE_ENTITY, otherReplicaId,
+            observerId)) :
+          await w.handler.handleRemoveReplica(removeRequest(NATIVE_ENTITY, otherReplicaId,
+            observerId));
+        assert.deepEqual([conflicted.status, conflicted.errorCode, conflicted.deferRetry],
+          [ReplicaOperationResponseStatus.ERROR, 'CONTENT_CONFLICT', false],
+          'OBSERVER_OPERATION_ID_ATTACHED_TO_ANOTHER_REPLICA');
+        await hydrationTurns();
+        assert.deepEqual(w.handler.getLocalReplica(otherReplicaId), memo);
+        assert.deepEqual(w.outcomes, outcomes, 'CONFLICTING_OBSERVER_ID_EARNED_AN_EXECUTOR_RESULT');
+        assert.equal(w.runtime.calls.length, effects);
+        assert.equal(stops, 1, 'CONFLICTING_OBSERVER_ID_STARTED_ANOTHER_OWNER_EFFECT');
+        assert.strictEqual(w.handler.inProgressOperations.get(w.operationId), original);
+        assert.equal(original.observer.operationId, observerId);
+      } finally {
+        release.resolve();
+        await drain(w.handler);
+      }
+      assert.equal(w.outcomes.filter((outcome) => outcome.operationId === observerId).length, 1,
+        'only the admitted coordinator receives the original retirement result');
+    });
+}
 
 
 test('U1 v3 hydration: a PENDING wake is only an immutable-request hint, never token adoption',

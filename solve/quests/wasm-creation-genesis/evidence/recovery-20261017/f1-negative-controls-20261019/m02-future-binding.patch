@@ -1,0 +1,14 @@
+diff --git a/src/control-plane/owners/service-instance-state.js b/src/control-plane/owners/service-instance-state.js
+index 27a6e3e51..2cbe8cc16 100644
+--- a/src/control-plane/owners/service-instance-state.js
++++ b/src/control-plane/owners/service-instance-state.js
+@@ -218,8 +218,7 @@ function reserveResourceState(state, binding, request) {
+   if (!instance) {
+     // Retained selection versions never decrease; a future binding has not
+     // been excluded just because its selection has not happened yet.
+-    return resourceRefusal(OUTCOME.STALE_BINDING, binding.selectionVersion <= state.version ?
+-      REFUSAL.SEALED : REFUSAL.UNRESOLVED);
++    return resourceRefusal(OUTCOME.STALE_BINDING, REFUSAL.SEALED);
+   }
+   const resource = instance.resources[request.slot];
+   const ordinal = request.expectedOrdinal + 1;

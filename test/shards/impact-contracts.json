@@ -1125,7 +1125,7 @@
       ]
     },
     "service-consensus-retained-native-bootstrap": {
-      "description": "The original CREATE journal retains first-opening identity and hands one bound operation through manager, adapter and runtime to instance-qualified native WASM opening. Common B, exact local file and resource token are checked before native bootstrap. One per-replica OwnerKeyReconcileQueue continuation, entered by explicit START and by native role and applied-progress events, constructs the binding-owned INIT, requires a validated native committed founding membership observation, then grants the exact admitted slot through the ServiceDefinitionsOwner PUBLISHED CAS and records the grant durably in the receiver-local creation record before serving is enabled (serving = state AND READY, one fence for bound and unbound replicas). Retirement is keyed by the retained creation: it fences user admission at call, attempts metadata RELEASING without blocking, writes the local RETIRED tombstone durably and only then requests metadata CLOSED; an unresolved CLOSED keeps custody with the caller's retained creation. The lifecycle hands typed, enqueue-only wakes to the operation owner. Bound replicas still publish no endpoint, services row, ACTIVE projection or nested journal, and the creation row stays IN_PROGRESS. Native RF3 evidence uses explicitly component-level metadata/journal adapters; it does not prove distributed metadata, cross-node wake delivery or process-loss recovery.",
+      "description": "The original CREATE journal retains full immutable intent, admission token and first-opening identity across the manager, adapter, runtime and instance-qualified native WASM owner. Common B, exact local file and resource token are validated before bootstrap. Native committed INIT and founding-membership evidence enable only the metadata owner PUBLISHED grant, durably recorded locally before serving. U1 v3 and addenda expose one physical CURRENT/ABSENT/DIFFERENT/UNAVAILABLE observation to fence canonical state and driver projections without changing physical .live custody. Exact retirement admission is registered before collaborator invocation, retains cleanup intent and is joined before directory release; reused operation IDs require the same full origin. One physical FINAL fact requires acknowledged CLOSED or exact RETIRED tombstone plus HISTORY_UNAVAILABLE. Physical finality does not complete the journal: the original operation retains STOPPED-projection and authoritative completion debt independently. A retained, absent, failed or stopped projection writer cannot supply completion. Bootstrap creates no nested journal or discovery publication; the existing runtime projector owns subsequent exact-instance discovery. C6 uses real native resources with component metadata/journal adapters; distributed metadata, production A5 retained-to-applied continuation, cross-node wake delivery and process-loss recovery remain separate evidence.",
       "owners": [
         "src/service/service-consensus-bootstrap.js",
         "src/service/service-consensus-creation-intent.js",
@@ -1164,7 +1164,15 @@
         "src/control-plane/owners/service-instance-state.js",
         "src/runtime/wasm-component-driver-consensus.js",
         "src/runtime/wasm-component-driver-vocabulary.js",
-        "src/service/service-lifecycle-operations.js"
+        "src/service/service-lifecycle-operations.js",
+        "src/service/service-consensus-creation-origin.js",
+        "src/service/service-lifecycle-state-record.js",
+        "src/service/service-lifecycle-recovery.js",
+        "src/service/service-type-adapter.js",
+        "src/runtime/service-runtime-consensus-publication.js",
+        "src/runtime/service-runtime-state-projection-handoff.js",
+        "src/query/runtime-replica-state-projection-owner.js",
+        "src/wasm-service/wasm-creation-custody.js"
       ],
       "tests": [
         "test/wasm-service/wasm-retained-bootstrap.integration.test.js",
@@ -1178,22 +1186,50 @@
         "test/wasm-service/wasm-creation-publication.integration.test.js",
         "test/wasm-service/wasm-creation-local-record.test.js",
         "test/wasm-service/wasm-creation-bound-native.test.js",
-        "test/control-plane/service-instance-creation-cas.test.js"
+        "test/control-plane/service-instance-creation-cas.test.js",
+        "test/wasm-service/bound-creation-physical-custody.integration.test.js",
+        "test/wasm-service/bound-creation-restart.integration.test.js",
+        "test/runtime/service-runtime-consensus-publication.test.js"
       ]
     },
     "runtime-service-bound-creation-route": {
-      "description": "A node's RuntimeServiceHandler routes a bound CREATE through the manager's one-pass resume of the retained creation (recover + continue) and a bound REMOVE through the journal-only read and the manager's bound STOP; the consensus bootstrap and its runtime publication answer the typed HELD / PUBLISHED_UNPROJECTED / PUBLISHED shapes the route maps, project the services and endpoint rows and mark PRESENT by exact token. A HELD re-entry resumes the memo's creation, never the request (design RV5.1). Recovery stage (design RECOVERY-DESIGN-20261017 R1-A, R1-E, R1-H): the handler's restart inventory applies the manager's one scan through the same route (memos first, then ready, then one re-entry per creation or a silent RETIRED re-drive).",
+      "description": "U1 v3 and its addenda make one PENDING/IN_PROGRESS journal observation into exact per-origin continuation plans under one irreversible handler lifetime. Known retained requests route by full origin before the current memo; collisions preserve all plans and expose CONTINUATION_PENDING. Bound CREATE, coordinator REMOVE and silent startup retirement share the existing canonical replica execution gate, including one bounded startup retirement observer and global request-ID conflict checks. Prompt CREATE acknowledgment precedes journal-only hydration; a wake never adopts its token. Matching qualifying wakes retain at most one bit per plan or ordinary HELD memo and reenter only after gate settlement and immediate physical CURRENT. Canonical handler/manager/driver state cannot be rewritten by a historical or stale origin. Physical FINAL, exact STOPPED projection and authoritative original-journal completion are separate ordered obligations; retained, failed, absent or stopped projection replies keep RETIRED_UNPROJECTED and its original debt. The C6 handler, restart and physical-custody witnesses cover this complete interaction; the real asynchronous projection receipt continuation remains activation A5.",
       "owners": [
         "src/node/runtime-service-bound-creation-route.js",
         "src/node/runtime-service-restart-inventory.js",
         "src/service/service-consensus-bootstrap.js",
-        "src/runtime/service-runtime-consensus-publication.js"
+        "src/runtime/service-runtime-consensus-publication.js",
+        "src/node/runtime-service-handler.js",
+        "src/node/runtime-service-handler-constants.js",
+        "src/node/runtime-service-creation-execution.js",
+        "src/node/runtime-service-generic-replica.js",
+        "src/node/runtime-service-message-dispatch.js",
+        "src/service/service-consensus-creation-origin.js",
+        "src/service/service-consensus-creation-intent.js",
+        "src/service/service-lifecycle-manager.js",
+        "src/service/service-lifecycle-recovery.js",
+        "src/service/service-lifecycle-state-record.js",
+        "src/service/service-lifecycle-operations.js",
+        "src/service/service-type-adapter.js",
+        "src/service/adapters/runtime-service-adapter.js",
+        "src/runtime/service-runtime-consensus-bootstrap.js",
+        "src/runtime/service-runtime-lifecycle-operation-methods.js",
+        "src/runtime/service-runtime-state-projection-handoff.js",
+        "src/query/runtime-replica-state-projection-owner.js",
+        "src/runtime/wasm-component-driver-consensus.js",
+        "src/runtime/wasm-component-driver.js",
+        "src/wasm-service/wasm-creation-custody.js",
+        "src/wasm-service/wasm-creation-retirement.js",
+        "src/wasm-service/wasm-service-lifecycle.js",
+        "src/wasm-service/wasm-service-constants.js"
       ],
       "tests": [
         "test/wasm-service/bound-creation-handler-embedding.integration.test.js",
         "test/wasm-service/bound-creation-restart.integration.test.js",
         "test/node/runtime-service-bound-route.test.js",
-        "test/runtime/service-runtime-consensus-publication.test.js"
+        "test/runtime/service-runtime-consensus-publication.test.js",
+        "test/wasm-service/bound-creation-physical-custody.integration.test.js",
+        "test/node/runtime-service-handler.test.js"
       ]
     }
   },
@@ -2339,7 +2375,7 @@
       ]
     },
     "service-consensus-retained-native-bootstrap": {
-      "description": "Retained original intent, first-use identity, native common-root admission and exhaustive cleanup form one bound creation boundary; neither old metadata history, missing files nor native startup can manufacture serving permission. Applied INIT and committed founding-membership evidence are consumed from their existing owners, and only the metadata owner's PUBLISHED grant, durably copied into the receiver-local record, opens serving; retirement records RETIRED locally before the metadata CLOSED it requests.",
+      "description": "Original full creation identity, physical CURRENT admission, exact retirement custody and ordered projection/journal debt are one owner interaction under U1 v3 and its addenda. The manager/driver consumes physical facts without deriving them from memos or booleans; the physical owner retains every admitted cleanup through shutdown. CLOSED or exact RETIRED plus unavailable history establishes physical finality only. A stopped projection owner performs no write, so its result cannot discharge the original journal. Native C6 custody and restart witnesses pair both sides; production A5 projection completion is not supplied by their direct writer.",
       "contract": "service-consensus-retained-native-bootstrap",
       "endpoints": [
         {
@@ -2358,7 +2394,14 @@
             "src/bootstrap/system-table-runtime-schema-definitions.js",
             "src/service/service-lifecycle-operations.js",
             "src/runtime/wasm-component-driver-consensus.js",
-            "src/runtime/wasm-component-driver-vocabulary.js"
+            "src/runtime/wasm-component-driver-vocabulary.js",
+            "src/service/service-consensus-creation-origin.js",
+            "src/service/service-lifecycle-state-record.js",
+            "src/service/service-lifecycle-recovery.js",
+            "src/service/service-type-adapter.js",
+            "src/runtime/service-runtime-consensus-publication.js",
+            "src/runtime/service-runtime-state-projection-handoff.js",
+            "src/query/runtime-replica-state-projection-owner.js"
           ]
         },
         {
@@ -2387,7 +2430,8 @@
             "src/wasm-service/wasm-service-serving-state.js",
             "src/wasm-service/wasm-service-constants.js",
             "src/control-plane/owners/service-instance-state.js",
-            "src/workflow/reconcile-queue-constants.js"
+            "src/workflow/reconcile-queue-constants.js",
+            "src/wasm-service/wasm-creation-custody.js"
           ]
         }
       ],
@@ -2398,31 +2442,58 @@
         "test/wasm-service/wasm-creation-reconciliation.test.js",
         "test/wasm-service/wasm-creation-reconciliation.integration.test.js",
         "test/wasm-service/wasm-creation-publication.integration.test.js",
-        "test/wasm-service/wasm-creation-local-record.test.js"
+        "test/wasm-service/wasm-creation-local-record.test.js",
+        "test/wasm-service/bound-creation-physical-custody.integration.test.js",
+        "test/wasm-service/bound-creation-restart.integration.test.js"
       ]
     },
     "runtime-service-bound-creation-route": {
-      "description": "The handler's bound route and the consensus bootstrap / runtime publication it consumes change together: the route's decision tables key on the bootstrap's answer shapes, and the C6 embedding (real handler, manager, runtime and native lifecycle on three hosts) is the paired witness (design RV5.6, HANDOFF C6).",
+      "description": "The exact retained-plan handler, canonical execution gate and full-origin wake matching consume the same physical-currentness and retirement/debt contract supplied by manager, runtime, driver and physical custody owners. U1 v3 supersedes last-row-wins and current-memo authority: old origins retain their own journals and cannot retarget a successor. Gate/observer identity, immediate CURRENT projection fences, raw physical FINAL and unresolved STOPPED/journal debt change and are reviewed together. Real C6 restart and custody cases pair those owners, while bound-route consumer cases cover acknowledgment and bounded request observers. Production A5 retained-to-applied behavior is explicitly outside this proof.",
       "endpoints": [
         {
           "id": "handler-bound-creation-route",
           "owners": [
             "src/node/runtime-service-bound-creation-route.js",
-            "src/node/runtime-service-restart-inventory.js"
+            "src/node/runtime-service-restart-inventory.js",
+            "src/node/runtime-service-handler.js",
+            "src/node/runtime-service-handler-constants.js",
+            "src/node/runtime-service-creation-execution.js",
+            "src/node/runtime-service-generic-replica.js",
+            "src/node/runtime-service-message-dispatch.js"
           ]
         },
         {
           "id": "consensus-bootstrap-and-publication",
           "owners": [
             "src/service/service-consensus-bootstrap.js",
-            "src/runtime/service-runtime-consensus-publication.js"
+            "src/runtime/service-runtime-consensus-publication.js",
+            "src/service/service-consensus-creation-origin.js",
+            "src/service/service-consensus-creation-intent.js",
+            "src/service/service-lifecycle-manager.js",
+            "src/service/service-lifecycle-recovery.js",
+            "src/service/service-lifecycle-state-record.js",
+            "src/service/service-lifecycle-operations.js",
+            "src/service/service-type-adapter.js",
+            "src/service/adapters/runtime-service-adapter.js",
+            "src/runtime/service-runtime-consensus-bootstrap.js",
+            "src/runtime/service-runtime-lifecycle-operation-methods.js",
+            "src/runtime/service-runtime-state-projection-handoff.js",
+            "src/query/runtime-replica-state-projection-owner.js",
+            "src/runtime/wasm-component-driver-consensus.js",
+            "src/runtime/wasm-component-driver.js",
+            "src/wasm-service/wasm-creation-custody.js",
+            "src/wasm-service/wasm-creation-retirement.js",
+            "src/wasm-service/wasm-service-lifecycle.js",
+            "src/wasm-service/wasm-service-constants.js"
           ]
         }
       ],
       "contract": "runtime-service-bound-creation-route",
       "witnessTests": [
         "test/wasm-service/bound-creation-handler-embedding.integration.test.js",
-        "test/wasm-service/bound-creation-restart.integration.test.js"
+        "test/wasm-service/bound-creation-restart.integration.test.js",
+        "test/wasm-service/bound-creation-physical-custody.integration.test.js",
+        "test/node/runtime-service-bound-route.test.js"
       ]
     }
   }

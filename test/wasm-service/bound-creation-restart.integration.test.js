@@ -1319,3 +1319,90 @@ test('U1 gate: coordinator-first exact REMOVE repeats share one retirement and o
       await inventoryTurns();
     }
   });
+
+test('U1 retirement identity: changed full body with the active token has no owner or file effect',
+  async (t) => {
+    const e = await heldGroup(t);
+    const host = e.hosts[1];
+    const replica = e.replicaOf(host);
+    const changed = structuredClone(host.retained);
+    changed.intent.descriptor.runtimeRef += '-changed-body';
+    const {captureConsensusCreationIntent} = await import(
+      '../../src/service/service-consensus-creation-intent.js');
+    assert.deepEqual(captureConsensusCreationIntent(changed.intent), changed.intent,
+      'the changed body remains a valid intent; this is an identity refusal');
+    const before = {record: localRecord(host), journal: rowOf(e, host),
+      phase: slotPhase(e, host), state: replica.lifecycleState};
+    const owner = e.metadata.primary;
+    const releaseResource = owner.releaseInstanceResource;
+    let releases = 0;
+    owner.releaseInstanceResource = (...args) => {
+      releases += 1;
+      return Reflect.apply(releaseResource, owner, args);
+    };
+    try {
+      const result = await host.lifecycle.retireReplica(changed);
+      assert.equal(releases, 0, 'CHANGED_BODY_ENTERED_RESOURCE_RELEASE_BEFORE_ORIGIN_CHECK');
+      assert.deepEqual([result.outcome, result.finality, result.closed],
+        ['CONTENT_CONFLICT', 'UNRESOLVED', false], 'CHANGED_BODY_RETIRED_THE_ACTIVE_ORIGIN');
+      assert.strictEqual(e.replicaOf(host), replica);
+      assert.equal(replica.lifecycleState, before.state);
+      assert.equal(replica.db.open, true, 'CHANGED_BODY_DROPPED_PHYSICAL_CUSTODY');
+      assert.deepEqual(localRecord(host), before.record, 'CHANGED_BODY_TOMBSTONED_THE_OPEN_FILE');
+      assert.deepEqual(rowOf(e, host), before.journal);
+      assert.equal(slotPhase(e, host), before.phase);
+    } finally {
+      owner.releaseInstanceResource = releaseResource;
+    }
+  });
+
+test('U1 projection debt: the actual stopped projection owner cannot complete an old journal',
+  async (t) => {
+    const e = await publishedGroup(t);
+    const host = e.hosts[1];
+    const {RuntimeReplicaStateProjectionOwner} = await import(
+      '../../src/query/runtime-replica-state-projection-owner.js');
+    const {consensusBootstrapDescriptor} = await import(
+      '../../src/service/service-consensus-bootstrap.js');
+    const projector = new RuntimeReplicaStateProjectionOwner({
+      servicesOwner: host.owners.services, hostNodeId: host.nodeId});
+    projector.shutdown();
+    const originalWriter = host.runtime._stateProjectionWriter;
+    const receipts = [];
+    host.runtime.setStateProjectionWriter((...args) => {
+      const receipt = projector.submit(...args);
+      receipts.push(receipt);
+      return receipt;
+    });
+    const context = {definition: consensusBootstrapDescriptor(host.retained),
+      consensusCreation: host.retained, consensusOpeningOwner: host.manager};
+    const row = servicesRow(e, host);
+    const journal = rowOf(e, host);
+    const journalCount = e.rows('wasm_operations').length;
+    assert.equal(row.status, 'active', 'real native publication created the row');
+    assert.equal(journal.state, 'in_progress');
+    try {
+      const result = await host.manager.stopReplica(context, {nodeId: host.nodeId});
+      assert.equal(result.finality, 'FINAL', 'real physical retirement completed');
+      assert.equal(result.closed, true);
+      assert.equal(slotPhase(e, host), 'CLOSED');
+      assert.equal(localRecord(host).phase, 'RETIRED');
+      assert.equal(receipts.length, 1);
+      assert.deepEqual([receipts[0].retained, receipts[0].state], [false, 'stopped'],
+        'the production stopped owner returned its actual zero-effect answer');
+      assert.deepEqual(servicesRow(e, host), row, 'STOPPED_OWNER_UNEXPECTEDLY_PROJECTED_A_ROW');
+      assert.deepEqual(rowOf(e, host), journal, 'STOPPED_OWNER_FORGED_ORIGINAL_JOURNAL_COMPLETION');
+      assert.equal(e.rows('wasm_operations').length, journalCount);
+      assert.equal(result.status, 'RETIRED_UNPROJECTED');
+      assert.equal(result.projection.outcome, 'PROJECTION_WRITER_STOPPED');
+    } finally {
+      host.runtime.setStateProjectionWriter(originalWriter);
+    }
+    // The embedding's direct writer has its own completed-write contract.
+    // This retry does not claim an A5 RETAINED-to-APPLIED continuation.
+    const retried = await host.manager.stopReplica(context, {nodeId: host.nodeId});
+    assert.equal(retried.completion.outcome, 'CREATION_ROW_COMPLETED');
+    assertRetiredAndCompleted(e, host);
+    assert.equal(e.rows('wasm_operations').length, journalCount,
+      'RESTORED_WRITER_REPLACED_THE_ORIGINAL_JOURNAL');
+  });
