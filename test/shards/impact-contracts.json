@@ -1193,7 +1193,7 @@
       ]
     },
     "runtime-service-bound-creation-route": {
-      "description": "U1 v3 and its addenda make one PENDING/IN_PROGRESS journal observation into exact per-origin continuation plans under one irreversible handler lifetime. Known retained requests route by full origin before the current memo; collisions preserve all plans and expose CONTINUATION_PENDING. Bound CREATE, coordinator REMOVE and silent startup retirement share the existing canonical replica execution gate, including one bounded startup retirement observer and global request-ID conflict checks. Prompt CREATE acknowledgment precedes journal-only hydration; a wake never adopts its token. Matching qualifying wakes retain at most one bit per plan or ordinary HELD memo and reenter only after gate settlement and immediate physical CURRENT. Canonical handler/manager/driver state cannot be rewritten by a historical or stale origin. Physical FINAL, exact STOPPED projection and authoritative original-journal completion are separate ordered obligations; retained, failed, absent or stopped projection replies keep RETIRED_UNPROJECTED and its original debt. The C6 handler, restart and physical-custody witnesses cover this complete interaction; the real asynchronous projection receipt continuation remains activation A5.",
+      "description": "U1 v3 and its addenda make one PENDING/IN_PROGRESS journal observation into exact per-origin continuation plans under one irreversible handler lifetime. Known retained requests route by full origin before the current memo; collisions preserve all plans and expose CONTINUATION_PENDING. Bound CREATE, coordinator REMOVE and silent startup retirement share the existing canonical replica execution gate, including one bounded startup retirement observer and global request-ID conflict checks. Prompt CREATE acknowledgment precedes journal-only hydration; a wake never adopts its token. Matching qualifying wakes retain at most one bit per plan or ordinary HELD memo and reenter only after gate settlement and immediate physical CURRENT. Canonical handler/manager/driver state cannot be rewritten by a historical or stale origin. Physical FINAL, exact STOPPED projection and authoritative original-journal completion are separate ordered obligations; retained, failed, absent or stopped projection replies keep RETIRED_UNPROJECTED and its original debt. The C6 handler, restart and physical-custody witnesses cover this complete interaction; the real asynchronous projection receipt continuation remains activation A5. Legacy REMOVE consumes the original operation through the existing repository with OWNER_RPC_REQUIRED and requireAbsenceConfirmation; unavailable authority leaves cleanup retryable. Bootstrap passes that dispatch authority to the handler. An admitted generic removal retains its exact local memo until STOP settles and releases its own execution even when that memo is superseded. Handler and strict-dispatch witnesses cover this consumer contract with a scripted repository, not native authority execution.",
       "owners": [
         "src/node/runtime-service-bound-creation-route.js",
         "src/node/runtime-service-restart-inventory.js",
@@ -1221,7 +1221,13 @@
         "src/wasm-service/wasm-creation-custody.js",
         "src/wasm-service/wasm-creation-retirement.js",
         "src/wasm-service/wasm-service-lifecycle.js",
-        "src/wasm-service/wasm-service-constants.js"
+        "src/wasm-service/wasm-service-constants.js",
+        "src/bootstrap/shared/guarded-runtime-service-handler.js",
+        "src/bootstrap/shared/runtime-service-handler-setup.js",
+        "src/control-plane/replica-dispatch-service.js",
+        "src/rebalancer/replica-operation-repository.js",
+        "src/rebalancer/replica-operation-repository-read-methods.js",
+        "src/rebalancer/replica-operation-repository-visibility-methods.js"
       ],
       "tests": [
         "test/wasm-service/bound-creation-handler-embedding.integration.test.js",
@@ -1229,7 +1235,8 @@
         "test/node/runtime-service-bound-route.test.js",
         "test/runtime/service-runtime-consensus-publication.test.js",
         "test/wasm-service/bound-creation-physical-custody.integration.test.js",
-        "test/node/runtime-service-handler.test.js"
+        "test/node/runtime-service-handler.test.js",
+        "test/control-plane/replica-dispatch-reservation-identity.test.js"
       ]
     }
   },
@@ -2459,7 +2466,9 @@
             "src/node/runtime-service-handler-constants.js",
             "src/node/runtime-service-creation-execution.js",
             "src/node/runtime-service-generic-replica.js",
-            "src/node/runtime-service-message-dispatch.js"
+            "src/node/runtime-service-message-dispatch.js",
+            "src/bootstrap/shared/guarded-runtime-service-handler.js",
+            "src/bootstrap/shared/runtime-service-handler-setup.js"
           ]
         },
         {
@@ -2493,7 +2502,37 @@
         "test/wasm-service/bound-creation-handler-embedding.integration.test.js",
         "test/wasm-service/bound-creation-restart.integration.test.js",
         "test/wasm-service/bound-creation-physical-custody.integration.test.js",
-        "test/node/runtime-service-bound-route.test.js"
+        "test/node/runtime-service-bound-route.test.js",
+        "test/node/runtime-service-handler.test.js"
+      ]
+    },
+    "runtime-service-legacy-removal-authority": {
+      "description": "The runtime handler and its bootstrap binding consume the original REMOVE operation through the dispatch service and existing repository strict-read and absence-classification owners. OWNER_RPC_REQUIRED and requireAbsenceConfirmation must remain paired: an unresolved owner read cannot become absence. Unavailable authority leaves cleanup retryable. A late authorization answer or queued STOP cannot admit physical work after its local memo is replaced; a late STOP result cannot overwrite the successor memo. Generic REMOVE retains its admitted memo while executing and releases only its exact execution entry when the attempt settles. Handler and strict-dispatch witnesses cover these consumer guarantees with a scripted repository; they do not prove native authority execution.",
+      "endpoints": [
+        {
+          "id": "legacy-removal-consumer",
+          "owners": [
+            "src/node/runtime-service-handler.js",
+            "src/node/runtime-service-generic-replica.js",
+            "src/node/runtime-service-creation-execution.js",
+            "src/bootstrap/shared/guarded-runtime-service-handler.js",
+            "src/bootstrap/shared/runtime-service-handler-setup.js"
+          ]
+        },
+        {
+          "id": "legacy-removal-operation-authority",
+          "owners": [
+            "src/control-plane/replica-dispatch-service.js",
+            "src/rebalancer/replica-operation-repository.js",
+            "src/rebalancer/replica-operation-repository-read-methods.js",
+            "src/rebalancer/replica-operation-repository-visibility-methods.js"
+          ]
+        }
+      ],
+      "contract": "runtime-service-bound-creation-route",
+      "witnessTests": [
+        "test/node/runtime-service-handler.test.js",
+        "test/control-plane/replica-dispatch-reservation-identity.test.js"
       ]
     }
   }

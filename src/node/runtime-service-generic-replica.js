@@ -109,8 +109,8 @@ function currentRemovalMemo(handler, entry) {
 async function removeGenericReplica(handler, {
   operationId, entityId, replicaId, reason,
 }, entry) {
-  if (!currentRemovalMemo(handler, entry)) return;
   try {
+    if (!currentRemovalMemo(handler, entry)) return;
     const definition = handler.resolveServiceDefinition(entityId);
     const replicaHandle = {
       serviceId: replicaId,
