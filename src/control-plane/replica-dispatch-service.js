@@ -37,6 +37,28 @@ function unregisterMessageGroupHandlers(mgService, handlers) {
   );
 }
 
+function matchesLegacyRuntimeRemoval(operation, {operationId, entityId, replicaId, nodeId}) {
+  return operation.operationId === operationId &&
+    operation.type === OperationType.REMOVE &&
+    operation.entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE &&
+    operation.entityId === entityId &&
+    operation.replicaId === replicaId &&
+    operation.targetNodeId === nodeId &&
+    operation.workflowStep !== WORKFLOW_STEP.PENDING &&
+    isIncompleteOperationRowStep(operation.type, operation.workflowStep);
+}
+
+// Classify the existing owner's strict observation without acquiring authority.
+function classifyLegacyRuntimeRemoval(observation, target) {
+  const operation = observation?.operation;
+  if (!operation) {
+    return {outcome: observation?.deferredOutcome ?
+      LEGACY_AUTHORITY.UNAVAILABLE : LEGACY_AUTHORITY.CONTENT_CONFLICT};
+  }
+  return {outcome: matchesLegacyRuntimeRemoval(operation, target) ?
+    LEGACY_AUTHORITY.ADMITTED : LEGACY_AUTHORITY.CONTENT_CONFLICT};
+}
+
 class ReplicaDispatchService extends ReplicaDispatchReadinessCapture {
   /**
    * A pre-canonical target's services row has no provable entity binding.
@@ -59,19 +81,8 @@ class ReplicaDispatchService extends ReplicaDispatchReadinessCapture {
     } catch {
       return {outcome: LEGACY_AUTHORITY.UNAVAILABLE};
     }
-    const operation = observation?.operation;
-    if (!operation) return {outcome: observation?.deferredOutcome ?
-      LEGACY_AUTHORITY.UNAVAILABLE : LEGACY_AUTHORITY.CONTENT_CONFLICT};
-    const matches = operation.operationId === operationId &&
-      operation.type === OperationType.REMOVE &&
-      operation.entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE &&
-      operation.entityId === entityId &&
-      operation.replicaId === replicaId &&
-      operation.targetNodeId === nodeId &&
-      operation.workflowStep !== WORKFLOW_STEP.PENDING &&
-      isIncompleteOperationRowStep(operation.type, operation.workflowStep);
-    return {outcome: matches ? LEGACY_AUTHORITY.ADMITTED :
-      LEGACY_AUTHORITY.CONTENT_CONFLICT};
+    return classifyLegacyRuntimeRemoval(observation,
+      {operationId, entityId, replicaId, nodeId});
   }
 
   isControlMessage(payload) {

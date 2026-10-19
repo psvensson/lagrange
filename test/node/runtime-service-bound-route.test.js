@@ -544,7 +544,7 @@ describe('stage 1c round 3: the HELD creation keeps custody (RV5.1, RV5.2, RV5.3
       assert.equal(w.handler.onCreationWake(w.metadata.serviceId, {
         reason: 'creation_resource_closed', binding: retained.intent.consensusBinding,
         token: retained.token}).outcome, RUNTIME_SERVICE_CREATION_WAKE_OUTCOME.NO_LOCAL_OPERATION,
-        'NO_ORIGIN_WAS_HYDRATED_BEFORE_FIRST_START');
+      'NO_ORIGIN_WAS_HYDRATED_BEFORE_FIRST_START');
       await drain(w.handler);
       assert.equal(w.handler.getLocalReplica(w.replicaId).status, ReplicaStatus.HELD);
       assert.equal(boundStarts(w), 1, 'CLOSED_WAKE_REENTERED');
@@ -712,7 +712,7 @@ describe('stage 1c round 3: the HELD creation keeps custody (RV5.1, RV5.2, RV5.3
     //   [ReplicaStatus.FAILED, w.operationId, undefined, 'RESOURCE_CLOSED']);
     assert.deepEqual([dead.status, dead.operationId, dead.deferRetry, lastOutcome(w).errorCode],
       [ReplicaStatus.REMOVED, w.operationId, undefined, 'TERMINAL_OPERATION'],
-        'RETIRED_MEMO_MUST_NOT_REOPEN_ON_A_LATE_DUPLICATE');
+      'RETIRED_MEMO_MUST_NOT_REOPEN_ON_A_LATE_DUPLICATE');
     assert.equal(w.metadata.row().state, 'completed', 'the REMOVE completed the creation row');
     const successor = await owner.selectConsensusInstance(
       w.metadata.request(1, 2, binding.incarnation));

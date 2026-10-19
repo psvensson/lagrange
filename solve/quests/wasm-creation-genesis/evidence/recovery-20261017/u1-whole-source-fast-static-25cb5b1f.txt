@@ -1,0 +1,29 @@
+proof range: 381750de29af647d446b19adedf1da53eb712093..HEAD (flag)
+changed paths: 714 (51 JavaScript)
+  ok  13202ms  test:deps
+  ok   3625ms  audit:shards
+  ok   3219ms  test:metrics:scoped
+  FAIL   2666ms  eslint(51 changed)
+  ok    592ms  audit:runtime-grammar
+  ok    319ms  audit:doc-ascii
+  ok    286ms  test:metadata-gateway:audit
+  ok    271ms  audit:impact-contracts
+  ok    212ms  audit:roadmap-authority
+  ok    186ms  audit:doc-audience
+  ok    174ms  audit:current-capabilities
+  ok    155ms  audit:cli-docs
+  ok    154ms  audit:closure-ledger
+  ok    132ms  audit:service-portability-claims
+FAIL eslint(51 changed)
+/workspace/scratch/580a63fb23ca/lagrange/src/control-plane/replica-dispatch-service.js
+  63:21  error  Expected { after 'if' condition  curly
+
+/workspace/scratch/580a63fb23ca/lagrange/test/node/runtime-service-bound-route.test.js
+  547:1  error  Expected indentation of 6 spaces but found 8  indent
+  715:1  error  Expected indentation of 6 spaces but found 8  indent
+
+✖ 3 problems (3 errors, 0 warnings)
+  3 errors and 0 warnings potentially fixable with the `--fix` option.
+
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+fast-static: FAIL in 25193ms

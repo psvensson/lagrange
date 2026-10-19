@@ -1,0 +1,164 @@
+{
+  "baseline_commit": "8c9b14141f89872938d21cc35472b262929818d6",
+  "baseline_issue": "https://github.com/psvensson/lagrange-lab/issues/247",
+  "comparison_method": "Exact UTF-8 region bytes, markers retained; no whitespace normalization",
+  "regions": [
+    {
+      "region": "native-helper-prefix",
+      "start_marker": null,
+      "end_marker": "describe('recovery unit 1:",
+      "baseline_sha256": "0bc97ee57b07a135d3f443acbbc74e96cd81bb19b683351d2afe75b5a3651c78",
+      "current_sha256": "0bc97ee57b07a135d3f443acbbc74e96cd81bb19b683351d2afe75b5a3651c78",
+      "baseline_bytes": 6530,
+      "current_bytes": 6530,
+      "byte_identical": true
+    },
+    {
+      "region": "journal-read-shutdown",
+      "start_marker": "test('independent U1: an inventory suspended",
+      "end_marker": "\ntest('independent U1: RETIRED restart",
+      "baseline_sha256": "7de09997c7db89cf03f49e407912c414212236939feae7a5c32e70ca410d96c9",
+      "current_sha256": "7de09997c7db89cf03f49e407912c414212236939feae7a5c32e70ca410d96c9",
+      "baseline_bytes": 1610,
+      "current_bytes": 1610,
+      "byte_identical": true
+    },
+    {
+      "region": "startup-first-retirement-gate",
+      "start_marker": "test('independent U1: RETIRED restart",
+      "end_marker": "\n// Independent live-versus-restart",
+      "baseline_sha256": "82f5afc6d6670cc3bda05dba0903427d3adbece70a0fd0279f0fa8cb8b1d51ac",
+      "current_sha256": "82f5afc6d6670cc3bda05dba0903427d3adbece70a0fd0279f0fa8cb8b1d51ac",
+      "baseline_bytes": 1506,
+      "current_bytes": 1506,
+      "byte_identical": true
+    },
+    {
+      "region": "coalesced-startup",
+      "start_marker": "test('independent U1: overlapping startup",
+      "end_marker": "\n// An admitted by-path",
+      "baseline_sha256": "822859bde2d912825da6da55f190b738f1b5b2bf747b4e7b26789e2ba246c5d5",
+      "current_sha256": "42ace95b40571393a3bb82a15b7700ff04397c37d29aba8a6db2cadc54977a6f",
+      "baseline_bytes": 1862,
+      "current_bytes": 2235,
+      "byte_identical": false
+    },
+    {
+      "region": "historical-debt-orders",
+      "start_marker": "// Two retained creations",
+      "end_marker": "\n// The same canonical-replica",
+      "baseline_sha256": "8df8d01a7e52efac38cb1d01658872f712deaf817f1ca54de3de4d7b435c7960",
+      "current_sha256": "8df8d01a7e52efac38cb1d01658872f712deaf817f1ca54de3de4d7b435c7960",
+      "baseline_bytes": 3154,
+      "current_bytes": 3154,
+      "byte_identical": true
+    },
+    {
+      "region": "older-absent-orders",
+      "start_marker": "// The same canonical-replica",
+      "end_marker": "\n// Direct behavioral observations",
+      "baseline_sha256": "b725dc31d9822d3377e9bac9f05389c3126248f30d354d39305e07ce9219eebb",
+      "current_sha256": "b725dc31d9822d3377e9bac9f05389c3126248f30d354d39305e07ce9219eebb",
+      "baseline_bytes": 2028,
+      "current_bytes": 2028,
+      "byte_identical": true
+    },
+    {
+      "region": "future-D1-held-active",
+      "start_marker": "for (const memoStatus of",
+      "end_marker": "\ntest('U1 v3: a local inspection",
+      "baseline_sha256": "04052f31d4821548bcd77c3ac9fb3d4f7881d63def51ff271eaa83d9dc0f20ee",
+      "current_sha256": "04052f31d4821548bcd77c3ac9fb3d4f7881d63def51ff271eaa83d9dc0f20ee",
+      "baseline_bytes": 3740,
+      "current_bytes": 3740,
+      "byte_identical": true
+    },
+    {
+      "region": "local-read-shutdown",
+      "start_marker": "test('U1 v3: a local inspection",
+      "end_marker": "\ntest('U1 v3: RETIRED physical closure",
+      "baseline_sha256": "6619619ec859caf10d5ece39be0f0070fbce02e221de17709720a0fc2301122c",
+      "current_sha256": "6619619ec859caf10d5ece39be0f0070fbce02e221de17709720a0fc2301122c",
+      "baseline_bytes": 1421,
+      "current_bytes": 1421,
+      "byte_identical": true
+    },
+    {
+      "region": "one-journal-select",
+      "start_marker": "test('U1 v3: one journal SELECT",
+      "end_marker": "\nfor (const conflict of",
+      "baseline_sha256": "3785a6a3c9155e95118895f40fd12f98e587b0e9dc6dc2a54ff43beb27a8d8b4",
+      "current_sha256": "3785a6a3c9155e95118895f40fd12f98e587b0e9dc6dc2a54ff43beb27a8d8b4",
+      "baseline_bytes": 1460,
+      "current_bytes": 1460,
+      "byte_identical": true
+    }
+  ],
+  "current_files": [
+    {
+      "path": "src/node/runtime-service-restart-inventory.js",
+      "bytes": 7794,
+      "sha256": "44dcac34efec16d4991b6433e1fb8a807f86a4201f41568c894d55c688197e20"
+    },
+    {
+      "path": "src/node/runtime-service-creation-execution.js",
+      "bytes": 7204,
+      "sha256": "f7a68bd547d33128e410915ec4bda6c4cb944fa89df444a0a246fdd8fc96988e"
+    },
+    {
+      "path": "src/node/runtime-service-bound-creation-route.js",
+      "bytes": 35748,
+      "sha256": "133b5f1e4068aa1b1352f1c6305dc547bced68ef0d3eaa151e11d50634d5b98f"
+    },
+    {
+      "path": "src/node/runtime-service-handler.js",
+      "bytes": 25465,
+      "sha256": "f18d08ab364da40004c5c432aa404bca50d991ad565df7b3f79b8c32426d4f07"
+    },
+    {
+      "path": "src/service/service-lifecycle-manager.js",
+      "bytes": 24248,
+      "sha256": "a4c724584dd066346ad58e9625127adb4728d1877726b59d33208eb23c0b6306"
+    },
+    {
+      "path": "src/service/service-lifecycle-recovery.js",
+      "bytes": 12065,
+      "sha256": "0583978e87c2108de121a295157489e97731dea0308a69ad52993a82ee8d655b"
+    },
+    {
+      "path": "src/wasm-service/operation-lifecycle.js",
+      "bytes": 9882,
+      "sha256": "d5135aa12006dd254cf614eff542891bf8be03fc6737e819d1036092ce9e37c9"
+    },
+    {
+      "path": "src/service/service-lifecycle-state-record.js",
+      "bytes": 1568,
+      "sha256": "25a1d5ea97780205dac204801d097c882365eedd47b99d3f99489653be1fb9f2"
+    },
+    {
+      "path": "test/wasm-service/bound-creation-restart.integration.test.js",
+      "bytes": 75475,
+      "sha256": "197cf1610af6b779dfed1edb60c86faa31b882b47967b4b493a5963e29c1f945"
+    },
+    {
+      "path": "test/wasm-service/bound-creation-handler-embedding-fixture.js",
+      "bytes": 18854,
+      "sha256": "fae23bc1c01d42b70d1020bdfd4670cbef256d2d58812221529aaeec774d5515"
+    },
+    {
+      "path": "test/node/runtime-service-bound-route.test.js",
+      "bytes": 72848,
+      "sha256": "66e7f0a7ffcdeb0a94f3d05762f513c455435c794127830e8a3498fc520e5dc4",
+      "earlier_snapshot_sha256": "2f85d7a2891b66b90261b510452bbf9f717f3710dad983739c413957b2a967be",
+      "observed_diff": "Two indentation-only corrections in bound-route test versus HEAD/#383, inspected explicitly."
+    },
+    {
+      "path": "test/node/runtime-service-handler.test.js",
+      "bytes": 41932,
+      "sha256": "e6fb5b6b658fa855ecabe22689c7e3d7896e783fe68ed7a19a17dc961cb77fe3"
+    }
+  ],
+  "observed_head": "25cb5b1fb487485f2789d63d9b0fcb150788890c",
+  "observed_at": "2026-10-19T16:21:35Z",
+  "bounded_scope": "Source/evidence map only; no new test or mutant execution."
+}
