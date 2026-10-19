@@ -353,9 +353,9 @@ test('recovery R2-E the restart scan is total: a malformed row fails alone, the 
   assert.equal(results[1].operationId, f.intent.consensusSlotRequest.operationId);
 });
 
-// A collision in one operation ID poisons that ID without discarding
-// unrelated journal work. No contender is allowed to resume.
-test('recovery R2-E conflicting duplicate ID is isolated from later creation', async (t) => {
+// Duplicate observations with one identity and divergent content are an
+// integrity violation: do not admit either contender or open readiness.
+test('recovery R2-E conflicting duplicate ID fails closed before resume', async (t) => {
   const f = await createOriginFixture(t);
   await f.prepare();
   const manager = f.manager();
@@ -363,12 +363,12 @@ test('recovery R2-E conflicting duplicate ID is isolated from later creation', a
     const rows = await f.reader(sql, params);
     return [...rows, {...rows[0], command: 'start:conflicting-service'}];
   });
-  const results = await manager.recoverPendingOperations({resolveServiceContext: async () => {
-    throw new Error('a conflicting row must not reach a resolver');
-  }});
-  assert.equal(results.length, 1);
-  assert.equal(results[0].status, 'failed');
-  assert.equal(results[0].error, 'CORRUPT_STATE');
+  await assert.rejects(
+    manager.recoverPendingOperations({resolveServiceContext: async () => {
+      throw new Error('a conflicting row must not reach a resolver');
+    }}),
+    {outcome: 'CORRUPT_STATE'},
+  );
 });
 
 // Design RECOVERY-DESIGN-20261017 R1-D, R3-D: a terminal row's answer

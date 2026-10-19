@@ -559,13 +559,13 @@ const MAX_DIAGNOSTICS_LIMIT = 500;
         continue;
       }
       const prior = unique.get(operationId);
-      if (captured === null || prior?.__recoveryCorrupt ||
-          (prior !== undefined && instanceDigest(prior) !== instanceDigest(captured))) {
-        unique.set(operationId, corrupt(operationId, prior?.created_at ??
-          captured?.created_at ?? 0));
-      } else if (prior === undefined) {
-        unique.set(operationId, captured);
-      }
+      // A repeated ID with divergent content is a storage-integrity error,
+      // not an independent row failure. Never choose one contender.
+      requireInstance(prior === undefined ||
+        (captured !== null && prior.__recoveryCorrupt !== true &&
+          instanceDigest(prior) === instanceDigest(captured)),
+      INSTANCE_OUTCOME.CORRUPT_STATE);
+      unique.set(operationId, captured ?? corrupt(operationId, row?.created_at ?? 0));
     }
     const rows = [...unkeyed, ...unique.values()];
     rows.sort((left, right) => {
