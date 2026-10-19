@@ -665,6 +665,49 @@ describe('RuntimeServiceHandler handleRemoveReplica', () => {
         'STALE_ADMITTED_REMOVE_STOPPED_SUCCESSOR_AFTER_QUEUE_HANDOFF');
     });
 
+  // LABELLED AWAIT CUT: the old generic lifecycle STOP has entered but not
+  // settled, and a successor now holds this local replica identity. Only the
+  // physical owner can claim whether the old STOP affected a physical object;
+  // the handler must never publish old completion over the new holder.
+  it('does not publish stale generic REMOVE after STOP settles behind a successor',
+    async () => {
+      const replicaId = 'replace-replica-late-stop-completion';
+      const cache = createMockCache({services: [{service_id: replicaId,
+        service_type: 'runtime_service', node_id: 'test-node', status: ReplicaStatus.ACTIVE}]});
+      const started = Promise.withResolvers();
+      const continueStop = Promise.withResolvers();
+      const emitted = [];
+      const lifecycle = createMockLifecycleManager();
+      const stop = lifecycle.stopReplica.bind(lifecycle);
+      lifecycle.stopReplica = async (...args) => {
+        started.resolve();
+        await continueStop.promise;
+        return stop(...args);
+      };
+      const {handler} = createHandler({cache, lifecycle,
+        executorOutcomeEmitter: {emitOutcome: (...args) => emitted.push(args)},
+        legacyRemovalAuthority: async () => ({outcome: 'ADMITTED'})});
+      const answer = await handler.handleRemoveReplica({
+        [ReplicaOperationField.OPERATION_ID]: 'old-remove-before-successor',
+        [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
+        [ReplicaOperationField.REPLICA_ID]: replicaId,
+      });
+      assert.equal(answer.status, ReplicaOperationResponseStatus.INITIATED);
+      await started.promise;
+      const successor = {replicaId, entityId: 'sys-postgres-wire',
+        status: ReplicaStatus.ACTIVE, operationId: 'newer-creation'};
+      handler.localReplicas.set(replicaId, successor);
+      continueStop.resolve();
+      await flushImmediate();
+      await flushImmediate();
+      assert.strictEqual(handler.getLocalReplica(replicaId), successor,
+        'OLD_STOP_SETTLED_AND_OVERWROTE_SUCCESSOR_MEMO');
+      assert.equal(lifecycle.calls.filter((call) => call.method === 'stopReplica').length, 1,
+        'LABELLED_STOP_WAS_NOT_EXERCISED');
+      assert.deepEqual(emitted, [],
+        'OLD_STOP_COMPLETION_ESCAPED_AFTER_SUCCESSOR_TOOK_CUSTODY');
+    });
+
   it('refuses a pre-canonical REMOVE when its memo falsely names a bound creation',
     async () => {
       const replicaId = 'replace-replica-mismatched-bound-identity';
