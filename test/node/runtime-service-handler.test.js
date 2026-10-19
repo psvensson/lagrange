@@ -572,6 +572,72 @@ describe('RuntimeServiceHandler handleRemoveReplica', () => {
       'ORIGINAL_ENTITY_CLEANUP_LOST_OR_DOUBLED_STOP');
     });
 
+  it('defers opaque legacy REMOVE without authority, then retries the exact original',
+    async () => {
+      const replicaId = 'replace-replica-owner-temporarily-unavailable';
+      const cache = createMockCache({services: [{service_id: replicaId,
+        service_type: 'runtime_service', node_id: 'test-node', status: ReplicaStatus.ACTIVE}]});
+      let ownerAnswer = 'UNAVAILABLE';
+      const {handler, lifecycle} = createHandler({cache,
+        legacyRemovalAuthority: async ({operationId, entityId, replicaId: id, nodeId}) => ({
+          outcome: operationId === 'original-owner-remove' &&
+            entityId === 'sys-postgres-wire' && id === replicaId && nodeId === 'test-node' ?
+            ownerAnswer : 'CONTENT_CONFLICT',
+        }),
+      });
+      const request = {
+        [ReplicaOperationField.OPERATION_ID]: 'original-owner-remove',
+        [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
+        [ReplicaOperationField.REPLICA_ID]: replicaId,
+      };
+      const deferred = await handler.handleRemoveReplica(request);
+      assert.deepEqual([deferred.status, deferred.deferRetry],
+        [ReplicaOperationResponseStatus.ERROR, true],
+        'UNAVAILABLE_OWNER_WAS_MISTAKEN_FOR_PERMISSION_OR_PERMANENT_ABSENCE');
+      assert.equal(handler.getLocalReplica(replicaId), undefined);
+      assert.deepEqual(lifecycle.calls, []);
+      ownerAnswer = 'ADMITTED';
+      const admitted = await handler.handleRemoveReplica(request);
+      assert.equal(admitted.status, ReplicaOperationResponseStatus.INITIATED);
+      await flushImmediate();
+      await flushImmediate();
+      assert.equal(lifecycle.calls.filter((entry) =>
+        entry.method === 'stopReplica').length, 1,
+      'RETURNING_OWNER_DID_NOT_ALLOW_EXACT_ORIGINAL_CLEANUP');
+    });
+
+  it('does not stop a successor when legacy owner read returns after replacement',
+    async () => {
+      const replicaId = 'replace-replica-late-owner-answer';
+      const cache = createMockCache({services: [{service_id: replicaId,
+        service_type: 'runtime_service', node_id: 'test-node', status: ReplicaStatus.ACTIVE}]});
+      const entered = Promise.withResolvers();
+      const released = Promise.withResolvers();
+      const {handler, lifecycle} = createHandler({cache,
+        legacyRemovalAuthority: async () => {
+          entered.resolve();
+          await released.promise;
+          return {outcome: 'ADMITTED'};
+        },
+      });
+      const pending = handler.handleRemoveReplica({
+        [ReplicaOperationField.OPERATION_ID]: 'old-retirement',
+        [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
+        [ReplicaOperationField.REPLICA_ID]: replicaId,
+      });
+      await entered.promise;
+      const successor = {replicaId, entityId: 'sys-postgres-wire',
+        status: ReplicaStatus.ACTIVE, operationId: 'successor-creation'};
+      handler.localReplicas.set(replicaId, successor);
+      released.resolve();
+      const refused = await pending;
+      assert.deepEqual([refused.status, refused.deferRetry],
+        [ReplicaOperationResponseStatus.ERROR, true],
+        'LATE_OLD_OWNER_ANSWER_RETIRED_SUCCESSOR');
+      assert.strictEqual(handler.getLocalReplica(replicaId), successor);
+      assert.deepEqual(lifecycle.calls, [], 'STALE_POST_AWAIT_OWNER_STOPPED_SUCCESSOR');
+    });
+
   it('refuses a pre-canonical REMOVE when its memo falsely names a bound creation',
     async () => {
       const replicaId = 'replace-replica-mismatched-bound-identity';
