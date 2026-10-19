@@ -1266,6 +1266,67 @@ describe('U1 v3 deferred immutable-origin hydration', () => {
   });
 });
 
+// Consumer identity witnesses: the journal/handler/executor are real; the
+// local RETIRED inspection remains explicitly scripted at the runtime seam.
+// This does not claim a native physical tombstone or process-custody result.
+for (const operation of ['CREATE', 'REMOVE']) {
+  test(`U1 gate: ${operation} on another replica cannot reuse the startup REMOVE observer ID`,
+    async (t) => {
+      const w = await world(t);
+      const otherReplicaId = `${NATIVE_ENTITY}-r1`;
+      await create(w, NATIVE_ENTITY, otherReplicaId, 'independent-other-create');
+      assert.equal(w.handler.getLocalReplica(otherReplicaId).status, ReplicaStatus.ACTIVE,
+        'the ordinary generic route actually established the other ACTIVE memo');
+      assert.equal((await w.metadata.prepare()).outcome, 'ADMISSION_RETAINED');
+      w.runtime.inspectRetainedCreation = () => ({outcome: 'RETIRED'});
+      const entered = Promise.withResolvers();
+      const release = Promise.withResolvers();
+      const stop = w.manager.stopReplica.bind(w.manager);
+      let stops = 0;
+      w.manager.stopReplica = async (...args) => {
+        stops += 1;
+        entered.resolve();
+        await release.promise;
+        return stop(...args);
+      };
+      const observerId = 'independent-shared-observer';
+      try {
+        await w.handler.recoverRetainedCreations();
+        await entered.promise;
+        const request = removeRequest(w.metadata.serviceId, w.replicaId, observerId);
+        const joined = await w.handler.handleRemoveReplica(request);
+        assert.equal(joined.status, ReplicaOperationResponseStatus.IN_PROGRESS,
+          'the coordinator joined the exact startup retirement');
+        const original = w.handler.inProgressOperations.get(w.operationId);
+        assert.equal(original.observer.operationId, observerId,
+          'the request is held in the one bounded observer, not its own execution slot');
+        const memo = structuredClone(w.handler.getLocalReplica(otherReplicaId));
+        const outcomes = structuredClone(w.outcomes);
+        const effects = w.runtime.calls.length;
+        const conflicted = operation === 'CREATE' ?
+          await w.handler.handleCreateReplica(createRequest(NATIVE_ENTITY, otherReplicaId,
+            observerId)) :
+          await w.handler.handleRemoveReplica(removeRequest(NATIVE_ENTITY, otherReplicaId,
+            observerId));
+        assert.deepEqual([conflicted.status, conflicted.errorCode, conflicted.deferRetry],
+          [ReplicaOperationResponseStatus.ERROR, 'CONTENT_CONFLICT', false],
+          'OBSERVER_OPERATION_ID_ATTACHED_TO_ANOTHER_REPLICA');
+        await hydrationTurns();
+        assert.deepEqual(w.handler.getLocalReplica(otherReplicaId), memo);
+        assert.deepEqual(w.outcomes, outcomes, 'CONFLICTING_OBSERVER_ID_EARNED_AN_EXECUTOR_RESULT');
+        assert.equal(w.runtime.calls.length, effects);
+        assert.equal(stops, 1, 'CONFLICTING_OBSERVER_ID_STARTED_ANOTHER_OWNER_EFFECT');
+        assert.strictEqual(w.handler.inProgressOperations.get(w.operationId), original);
+        assert.equal(original.observer.operationId, observerId);
+      } finally {
+        release.resolve();
+        await drain(w.handler);
+      }
+      assert.equal(w.outcomes.filter((outcome) => outcome.operationId === observerId).length, 1,
+        'only the admitted coordinator receives the original retirement result');
+    });
+}
+
 
 test('U1 v3 hydration: a PENDING wake is only an immutable-request hint, never token adoption',
   async (t) => {
