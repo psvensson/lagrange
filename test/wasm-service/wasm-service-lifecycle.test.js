@@ -798,22 +798,21 @@ describe('WasmServiceLifecycle', () => {
   });
 
   describe('enableServicesRowPublication (RV3.4, RV5.4)', () => {
-    it('after PRESENT a second mark for its own token answers ALREADY_PRESENT ' +
-      'and leaves pendingRoleUpdate untouched', () => {
+    it('refuses a token-only stand-in without verified physical creation ownership', () => {
       const lifecycle = makeLifecycle();
       const replica = lifecycle.createReplica(makeServiceDef(), makeReplicaConfig());
       const token = {operationId: 'op-1', ordinal: 0};
-      // A stand-in bound creation: the mark reads only the creation's token.
+      // Previously this synthetic token could mark PRESENT by itself.
+      // U1 makes the full retained origin and its physical owner mandatory.
       replica.consensusCreation = {token};
+      replica.pendingRoleUpdate = null;
       try {
         assert.equal(lifecycle.enableServicesRowPublication('svc-1', 'runtime_service',
-          token).outcome, WASM_SERVICES_ROW_MARK.PRESENT);
+          token).outcome, WASM_SERVICES_ROW_MARK.NOT_REGISTERED,
+        'TOKEN_ONLY_STAND_IN_BYPASSED_PHYSICAL_CURRENTNESS');
         assert.deepEqual({...replica.servicesRow},
-          {state: 'PRESENT', serviceType: 'runtime_service'});
-        replica.pendingRoleUpdate = null;
-        assert.equal(lifecycle.enableServicesRowPublication('svc-1', 'runtime_service',
-          token).outcome, WASM_SERVICES_ROW_MARK.ALREADY_PRESENT);
-        assert.equal(replica.pendingRoleUpdate, null, 'PRESENT_LATCH_REPLAYED_THE_ROLE');
+          {state: 'ABSENT', serviceType: null});
+        assert.equal(replica.pendingRoleUpdate, null, 'REFUSED_MARK_QUEUED_ROLE_EFFECT');
       } finally {
         replica.consensusCreation = null;
       }
