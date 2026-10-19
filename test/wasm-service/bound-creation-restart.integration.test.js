@@ -356,9 +356,9 @@ describe('recovery unit 1: host restart of bound creations (inventory, memo, re-
     }
   });
 
-  test('P-R8 in-process: a COMPLETED creation row re-enters as the permanent TERMINAL memo, ' +
-    'its REMOVE is REMOVE_COMPLETED; after a host restart the same REMOVE is NOT_FOUND ' +
-    '(recorded honest answer)', async (t) => {
+  test('P-R8 in-process: terminal creation does not reopen physical custody; ' +
+    'idempotent REMOVE returns COMPLETED synchronously with no duplicate outcome, ' +
+    'and after restart missing physical custody is NOT_FOUND', async (t) => {
     const e = await publishedGroup(t);
     const host = e.hosts[2];
     await removeAndSettle(e, host, 'remove-p-r8', OUTCOME.RUNTIME_SERVICE_REMOVE_COMPLETED);
@@ -371,10 +371,15 @@ describe('recovery unit 1: host restart of bound creations (inventory, memo, re-
       [ReplicaStatus.REMOVED, creationId(host), undefined],
       'A_TERMINAL_DUPLICATE_CANNOT_REOPEN_A_REMOVED_MEMO');
     const completedBefore = count(host, OUTCOME.RUNTIME_SERVICE_REMOVE_COMPLETED);
-    await e.dispatch(host, TYPE.REMOVE_REPLICA, 'remove-p-r8-again');
-    await e.settle(() => count(host, OUTCOME.RUNTIME_SERVICE_REMOVE_COMPLETED) ===
-      completedBefore + 1, 'idempotent REMOVE of a COMPLETED row');
+    const repeated = await e.dispatch(host, TYPE.REMOVE_REPLICA, 'remove-p-r8-again');
+    assert.equal(repeated.status, REPLY.COMPLETED,
+      'a new coordinator REMOVE consumes the already-completed synchronous reply');
+    await e.settle();
+    assert.equal(count(host, OUTCOME.RUNTIME_SERVICE_REMOVE_COMPLETED), completedBefore,
+      'ALREADY_TERMINAL_REMOVE_EMITTED_A_SECOND_COMPLETION_OUTCOME');
     assert.equal(count(host, OUTCOME.RUNTIME_SERVICE_REMOVE_FAILED), 0);
+    assert.equal(rowOf(e, host).state, 'completed',
+      'A_DUPLICATE_REMOVE_REOPENED_THE_ORIGINAL_CREATION_JOURNAL');
     const restarted = await e.restartHost(host);
     assert.deepEqual(restarted.inventory, [], 'a COMPLETED row is not an inventory entry');
     assert.equal((await e.dispatch(restarted, TYPE.REMOVE_REPLICA, 'remove-p-r8-late')).status,
