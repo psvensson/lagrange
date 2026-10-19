@@ -1,0 +1,19 @@
+{
+  "url": "https://github.com/psvensson/lagrange-lab/issues/290#issuecomment-6260427961",
+  "result": {
+    "schema": "lagrange-lab-result/v1",
+    "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+    "request_id": "bee1be0df14a365badd2ef990232de74",
+    "request_sha256": "42835443567beaae4f277c2b5667810cc8e610d2283aeba23137fa4833e7e89c",
+    "status": "COMPLETE",
+    "recorded_at": "2026-10-19T05:33:28Z",
+    "result": {
+      "chunk_sha256": "c3cea8f6138949096a3686e4ca2e44f4b40e7e5c8c3ee272f06c2745dd12d344",
+      "job_id": "e950f281d938f6b0686cd3fd2ec81088",
+      "offset": 32000,
+      "redacted": true,
+      "returned_bytes": 86,
+      "text": "reports/test-results-tv-dator.ndjson\n# test-files total=1 pass=0 fail=1 assertions=39\n"
+    }
+  }
+}

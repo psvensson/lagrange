@@ -1,0 +1,22 @@
+lab test: tv-dator: ordinary (3 files) cores=12 mem=15.4GiB speed x1.44
+[tv-dator] placement-shell=978125
+[tv-dator] placement-head=77a888af01f13e30052135075964c6508b1d0b24
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11
+[tv-dator] placement-pid=978544
+[tv-dator] # test-files planned=3
+[tv-dator] classified lane ordinary: 3 file(s), jobs=4
+[tv-dator] thermal: ok cpu 59C (coretemp/Package id 0) nvme 43C (nvme/Sensor 1)
+[tv-dator] ok test/service/service-consensus-creation-intent.test.js (39 assertions, 846ms)
+[tv-dator] ok test/control-plane/service-instance-creation-cas.test.js (31 assertions, 909ms)
+[tv-dator] ok test/node/runtime-service-bound-route.test.js (53 assertions, 1018ms)
+[tv-dator] # test-files total=3 pass=3 fail=0 assertions=123
+lab test: tv-dator: # test-files total=3 pass=3 fail=0 assertions=123
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=3 pass=3 fail=0 assertions=123

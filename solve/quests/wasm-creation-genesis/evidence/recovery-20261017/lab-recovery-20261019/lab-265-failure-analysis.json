@@ -1,0 +1,49 @@
+{
+  "issue": 265,
+  "source_sha": "48349777471f8cdb7c7c46020d1703960404116a",
+  "log_bytes": 32086,
+  "log_sha256": "051a1c6c7ea6db1d9df38dfabea5398b1295db6ce3c23a987eaad7d4dd9a2edc",
+  "chunks": [
+    {
+      "issue": 286,
+      "url": "https://github.com/psvensson/lagrange-lab/issues/286#issuecomment-6260413584",
+      "offset": 0,
+      "bytes": 8000,
+      "chunk_sha256": "f45c2c31ae33463ccfcae07c362c71d2db8b439a484962f1f73820a92da134f0"
+    },
+    {
+      "issue": 287,
+      "url": "https://github.com/psvensson/lagrange-lab/issues/287#issuecomment-6260413877",
+      "offset": 8000,
+      "bytes": 8000,
+      "chunk_sha256": "1e02968f4ac87a1f9d7fd2faa7bf0b71a919a8568a2a42793017e132c66316c4"
+    },
+    {
+      "issue": 288,
+      "url": "https://github.com/psvensson/lagrange-lab/issues/288#issuecomment-6260420822",
+      "offset": 16000,
+      "bytes": 8000,
+      "chunk_sha256": "a85e4ecbd102b6a3a593a00788f7f27cdcbe516409ed8e76d27ed6d7d3be7e50"
+    },
+    {
+      "issue": 289,
+      "url": "https://github.com/psvensson/lagrange-lab/issues/289#issuecomment-6260421156",
+      "offset": 24000,
+      "bytes": 8000,
+      "chunk_sha256": "a029d9ee15bd08c580664357919be47bdb4fc2989729c5bd44972826e47ff488"
+    },
+    {
+      "issue": 290,
+      "url": "https://github.com/psvensson/lagrange-lab/issues/290#issuecomment-6260427961",
+      "offset": 32000,
+      "bytes": 86,
+      "chunk_sha256": "c3cea8f6138949096a3686e4ca2e44f4b40e7e5c8c3ee272f06c2745dd12d344"
+    }
+  ],
+  "failed_leaf_tests": [
+    {
+      "name": "F1 REMOVE-time resolution fails closed for untagged or UNRESOLVED owner refusals",
+      "details": "  duration_ms: 4.338525\n  type: 'test'\n  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/48349777471f-mvet6tnn-977930/test/service/service-consensus-creation-intent.test.js:472:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    CALLER_RECONSTRUCTED_FINALITY_FROM_OUTCOME\n    + actual - expected\n    \n      {\n    +   operationId: 'operation-0',\n    +   outcome: 'RESERVATION_CANCELLED',\n    -   outcome: 'UNKNOWN',\n        reason: 'STALE_BINDING'\n      }\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    outcome: 'UNKNOWN'\n    reason: 'STALE_BINDING'\n  actual:\n    outcome: 'RESERVATION_CANCELLED'\n    operationId: 'operation-0'\n    reason: 'STALE_BINDING'\n  operator: 'deepStrictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/48349777471f-mvet6tnn-977930/test/service/service-consensus-creation-intent.test.js:486:14)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)"
+    }
+  ]
+}

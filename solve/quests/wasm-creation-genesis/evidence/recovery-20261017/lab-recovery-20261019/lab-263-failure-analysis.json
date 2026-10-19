@@ -1,0 +1,42 @@
+{
+  "issue": 263,
+  "source_sha": "b4dd1c2dddc9da21539078f243fcae4ad90055a0",
+  "log_bytes": 29403,
+  "log_sha256": "855a3b04cbcf61e7b60018963d95900f729802ab1ea9bd53101501dc3641570c",
+  "chunks": [
+    {
+      "issue": 282,
+      "url": "https://github.com/psvensson/lagrange-lab/issues/282#issuecomment-6260398357",
+      "offset": 0,
+      "bytes": 8000,
+      "chunk_sha256": "1f2bfc2c1f135363af26ea394edce135c32849e1c2ae1fda5c19ea8959867152"
+    },
+    {
+      "issue": 283,
+      "url": "https://github.com/psvensson/lagrange-lab/issues/283#issuecomment-6260398696",
+      "offset": 8000,
+      "bytes": 8000,
+      "chunk_sha256": "e6c0e126584b2ea426e0714bab8a81904763b0a7e02e5f99f1b05f7a7876e824"
+    },
+    {
+      "issue": 284,
+      "url": "https://github.com/psvensson/lagrange-lab/issues/284#issuecomment-6260405811",
+      "offset": 16000,
+      "bytes": 8000,
+      "chunk_sha256": "00ecf2524a66fff469e11577121a79f941aa31cc2b60cd56c9a9dfeb239b0742"
+    },
+    {
+      "issue": 285,
+      "url": "https://github.com/psvensson/lagrange-lab/issues/285#issuecomment-6260406144",
+      "offset": 24000,
+      "bytes": 5403,
+      "chunk_sha256": "90144506926a50aa1496aa088f4a4322304218f86b2827bcf3f98359c55b387a"
+    }
+  ],
+  "failed_leaf_tests": [
+    {
+      "name": "independent U1: STALE_BINDING before the exact future selection is not a sealed reservation refusal",
+      "details": "  duration_ms: 16.104542\n  type: 'test'\n  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/b4dd1c2dddc9-mvet591t-975753/test/service/service-consensus-creation-intent.test.js:419:1'\n  failureType: 'testCodeFailure'\n  error: 'FUTURE_BINDING_CANCELLED_BEFORE_EXACT_REQUEST_BECAME_ADMISSIBLE'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: '=='\n  stack: |-\n    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/b4dd1c2dddc9-mvet591t-975753/test/service/service-consensus-creation-intent.test.js:456:10)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)"
+    }
+  ]
+}

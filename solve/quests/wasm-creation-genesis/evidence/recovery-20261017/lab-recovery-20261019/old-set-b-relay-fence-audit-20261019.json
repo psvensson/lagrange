@@ -1,0 +1,211 @@
+{
+  "recordedAt": "2026-10-19T05:39:00Z",
+  "repository": "psvensson/harnessd-control",
+  "issue": 3,
+  "issueState": "open",
+  "requestId": "332dacf2-b14a-43de-a6f4-bf1a2703d324",
+  "finding": "ACCEPTED_NONRELAYABLE_BY_RETIRED_GENERATION_NOT_TERMINAL_TEST_PROOF",
+  "sourceInterpretation": {
+    "repository": "psvensson/harnessd",
+    "sourceSha": "863e622aab74e46149b24c6c46e0370c7f35cb67",
+    "files": [
+      "src/cloud-session-lifecycle.js",
+      "src/cloud-test-intents.js",
+      "src/cloud-work-relay.js"
+    ],
+    "basis": [
+      "Accepted ATTENTION/NOT_RUN remains in the relay's durable pending list; NOT_RUN is the default without lab proof, not terminal closure.",
+      "Exact old intent is signed for session8bdd3838-3b17-460c-869b-9ec681fbf588 generation1. New same project/role/agent sessiond30801bb-9f75-4221-89d9-769681c74259 generation5 is positively attached.",
+      "Admission of a later same-scope generation requires every prior live session be RETIRED; generation and proof-replay fences are monotone and retained.",
+      "Renewal calls assertCloudSessionCurrent and cannot revive an expired/retired session. Lab preparation and submission reauthorize the exact immutable old session.",
+      "Latest original status has no physical lab request or issue, and CLOUD_SESSION_FENCED. This exact old signed intent cannot acquire new dispatch under the current owner protocol."
+    ]
+  },
+  "comments": [
+    {
+      "id": 6248588270,
+      "url": "https://github.com/psvensson/harnessd-control/issues/3#issuecomment-6248588270",
+      "result": {
+        "protocol": "harnessd-cloud-key-v1",
+        "registrationNonce": "7aa7b72bb16828fe11f18990b8595ba2",
+        "publicKey": "MCowBQYDK2VwAyEAUhY++CHMSkHT25CcGmUnXo/DvTnLtMHS51ulibNKGWw="
+      }
+    },
+    {
+      "id": 6248768908,
+      "url": "https://github.com/psvensson/harnessd-control/issues/3#issuecomment-6248768908",
+      "result": {
+        "protocol": "harnessd-cloud-challenge-v1",
+        "controlRepo": "psvensson/harnessd-control",
+        "issueNumber": 3,
+        "issueBodySha256": "f33ff3db809a3f6b910634dcd7775ca26e52b693e3df39a0200ebcfefd8326ec",
+        "issueAuthor": "psvensson",
+        "projectRepo": "psvensson/lagrange",
+        "requestedRole": "GUIDING",
+        "observedHead": "2b863e4f300fc8ebdfb80e2752606187eed1436c",
+        "registrationNonce": "7aa7b72bb16828fe11f18990b8595ba2",
+        "keyCommentId": 6248588270,
+        "keyCommentSha256": "3ce08f65c48475750deb441aab0c386d27a03435537525eb5c7fd01982a6e62a",
+        "publicKey": "MCowBQYDK2VwAyEAUhY++CHMSkHT25CcGmUnXo/DvTnLtMHS51ulibNKGWw=",
+        "publicKeySha256": "bedc2a3ca94b2bc26ccc36e73dd11699abb4c594f7e2a3b6bfc6fea4ce45f7ab",
+        "challengeId": "3683371c1d03e5540b85b73b611b7ce5ee56e46e1d024e56af1cbe7ad84630eb",
+        "issuedAt": 1792319388044,
+        "expiresAt": 1792319688044
+      }
+    },
+    {
+      "id": 6248772497,
+      "url": "https://github.com/psvensson/harnessd-control/issues/3#issuecomment-6248772497",
+      "result": {
+        "protocol": "harnessd-cloud-proof-v1",
+        "challengeId": "3683371c1d03e5540b85b73b611b7ce5ee56e46e1d024e56af1cbe7ad84630eb",
+        "signature": "1+Fnd4l7FpOBFelDS0lqMoRBcxC8gOz1GfYTX7uH3lgbFHXYAAFYCgGgLG54Kperoe0IuZ8kOqphjNJEt41/AA=="
+      }
+    },
+    {
+      "id": 6248774266,
+      "url": "https://github.com/psvensson/harnessd-control/issues/3#issuecomment-6248774266",
+      "result": {
+        "protocol": "harnessd-cloud-session-attached-v1",
+        "issueNumber": 3,
+        "sessionId": "8bdd3838-3b17-460c-869b-9ec681fbf588",
+        "generation": 1,
+        "agentId": "cloud-29cd230ce997899be8c95a95",
+        "agentRevision": 1,
+        "projectRepo": "psvensson/lagrange",
+        "role": "GUIDING",
+        "leaseUntilMs": 1792320625066,
+        "note": "This acknowledges only an ephemeral key-bound session; no work has been authorized."
+      }
+    },
+    {
+      "id": 6248774339,
+      "url": "https://github.com/psvensson/harnessd-control/issues/3#issuecomment-6248774339",
+      "result": {
+        "protocol": "harnessd-cloud-test-grants-v1",
+        "sessionId": "8bdd3838-3b17-460c-869b-9ec681fbf588",
+        "generation": 1,
+        "accessRevision": 5,
+        "projectWork": {
+          "grantId": "8df8d578fd72c0d3450294d57eae55d852b1744409d715984d9fafb4de10d509",
+          "grantRevision": 5,
+          "projectRepo": "psvensson/lagrange",
+          "profiles": [
+            "raft-smoke",
+            "repo-tests"
+          ]
+        },
+        "grants": [],
+        "truncated": false
+      }
+    },
+    {
+      "id": 6248779358,
+      "url": "https://github.com/psvensson/harnessd-control/issues/3#issuecomment-6248779358",
+      "result": {
+        "protocol": "harnessd-cloud-heartbeat-v1",
+        "sessionId": "8bdd3838-3b17-460c-869b-9ec681fbf588",
+        "generation": 1,
+        "sequence": 1,
+        "claimedAtMs": 1792319461177,
+        "signature": "IjjTFN7+an0tFH+mpXjpS3r1aX3pcexC4loNC+nUgXp+pvuyULs3vD2+PWJcDMnuCry+f3/3l91DGcpuUcASCQ=="
+      }
+    },
+    {
+      "id": 6248831277,
+      "url": "https://github.com/psvensson/harnessd-control/issues/3#issuecomment-6248831277",
+      "result": {
+        "protocol": "harnessd-cloud-heartbeat-v1",
+        "sessionId": "8bdd3838-3b17-460c-869b-9ec681fbf588",
+        "generation": 1,
+        "sequence": 2,
+        "claimedAtMs": 1792319818987,
+        "signature": "kFUYsM0AQzgdlTbrI1HxVSBKHENpPLK1N9WInRfzvIR6EsIUR+C0l43zKPYB7hjQIPTq32K50NunNepT7S69CA=="
+      }
+    },
+    {
+      "id": 6248868808,
+      "url": "https://github.com/psvensson/harnessd-control/issues/3#issuecomment-6248868808",
+      "result": {
+        "protocol": "harnessd-cloud-test-intent-v2",
+        "requestId": "332dacf2-b14a-43de-a6f4-bf1a2703d324",
+        "sessionId": "8bdd3838-3b17-460c-869b-9ec681fbf588",
+        "generation": 1,
+        "grantId": "8df8d578fd72c0d3450294d57eae55d852b1744409d715984d9fafb4de10d509",
+        "grantRevision": 5,
+        "accessRevision": 5,
+        "sourceSha": "c425ef42e18236ff1187e1112a971588bb02b496",
+        "testFiles": [
+          "test/raft/raft-rs-backend/operation-port-boundary.test.js",
+          "test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js",
+          "test/wasm-service/wasm-service-replica.test.js"
+        ],
+        "prNumber": null,
+        "optionsIssueNumber": null,
+        "issuedAtMs": 1792320083139,
+        "profile": "repo-tests",
+        "sourceRef": "refs/heads/probe/rs-raft-set-b-c425ef42-20261018-harnessd",
+        "host": "tv-dator",
+        "signature": "GU16ZlxH9Pc6tmJxOmhADMIkRWxr1ulh6D9W3XvIK4tGzB0JQTlKEYqddVnEBAXA7oeMiZAfd0ntzBQmKCcMDg=="
+      }
+    },
+    {
+      "id": 6248871310,
+      "url": "https://github.com/psvensson/harnessd-control/issues/3#issuecomment-6248871310",
+      "result": {
+        "protocol": "harnessd-cloud-test-status-v1",
+        "requestId": "332dacf2-b14a-43de-a6f4-bf1a2703d324",
+        "planId": "332dacf2-b14a-43de-a6f4-bf1a2703d324",
+        "labRequestId": null,
+        "issueNumber": null,
+        "status": "ATTENTION",
+        "outcome": "NOT_RUN",
+        "host": null,
+        "reason": "LAB_DISPATCH_FLEET_READER_REQUIRED"
+      }
+    },
+    {
+      "id": 6248881098,
+      "url": "https://github.com/psvensson/harnessd-control/issues/3#issuecomment-6248881098",
+      "result": {
+        "protocol": "harnessd-cloud-test-status-v1",
+        "requestId": "332dacf2-b14a-43de-a6f4-bf1a2703d324",
+        "planId": "332dacf2-b14a-43de-a6f4-bf1a2703d324",
+        "labRequestId": null,
+        "issueNumber": null,
+        "status": "ATTENTION",
+        "outcome": "NOT_RUN",
+        "host": null,
+        "reason": "CLOUD_TEST_SESSION_SCOPE"
+      }
+    },
+    {
+      "id": 6249012326,
+      "url": "https://github.com/psvensson/harnessd-control/issues/3#issuecomment-6249012326",
+      "result": {
+        "protocol": "harnessd-cloud-test-status-v1",
+        "requestId": "332dacf2-b14a-43de-a6f4-bf1a2703d324",
+        "planId": "332dacf2-b14a-43de-a6f4-bf1a2703d324",
+        "labRequestId": null,
+        "issueNumber": null,
+        "status": "ATTENTION",
+        "outcome": "NOT_RUN",
+        "host": null,
+        "reason": "CLOUD_SESSION_FENCED"
+      }
+    }
+  ],
+  "newSameScopeAttachment": {
+    "protocol": "harnessd-cloud-session-attached-v1",
+    "issueNumber": 12,
+    "sessionId": "d30801bb-9f75-4221-89d9-769681c74259",
+    "generation": 5,
+    "agentId": "cloud-29cd230ce997899be8c95a95",
+    "agentRevision": 1,
+    "projectRepo": "psvensson/lagrange",
+    "role": "GUIDING",
+    "leaseUntilMs": 1792387592219,
+    "note": "This acknowledges only an ephemeral key-bound session; no work has been authorized."
+  },
+  "evidenceLimit": "Nonrelayability is inferred from authoritative old generation1 fencing, positive same-scope generation5 attachment, and the inspected monotone lifecycle/dispatch contract. No terminal test proof was fabricated; the old accepted intent remains retained and untouched."
+}

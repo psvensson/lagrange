@@ -1,0 +1,87 @@
+{
+  "issue": 266,
+  "source_sha": "9f815cf46f72cfdcd5d9ca4c7f95b23d6ace55b4",
+  "log_bytes": 21658,
+  "log_sha256": "d51446519aec15e4a14ecfe7101bddaf4ced1fee3385c463aea337145ec57cda",
+  "chunks": [
+    {
+      "issue": 291,
+      "url": "https://github.com/psvensson/lagrange-lab/issues/291#issuecomment-6260428280",
+      "offset": 0,
+      "bytes": 8000,
+      "chunk_sha256": "5e389aea7f61d107289355eb31b4903982b7301491e1c2b43226c3fbcae8e9b4"
+    },
+    {
+      "issue": 292,
+      "url": "https://github.com/psvensson/lagrange-lab/issues/292#issuecomment-6260435266",
+      "offset": 8000,
+      "bytes": 8000,
+      "chunk_sha256": "de347452686841314d731f8f84e90294178e431531101349963c58f5a86cef0e"
+    },
+    {
+      "issue": 293,
+      "url": "https://github.com/psvensson/lagrange-lab/issues/293#issuecomment-6260435594",
+      "offset": 16000,
+      "bytes": 5658,
+      "chunk_sha256": "5cd753a95b191b7459fbc6d0473951ff6b793e967687ff93235985b0a1cc635a"
+    }
+  ],
+  "failed_leaf_tests": [
+    {
+      "name": "U1 physical owner: CREATED, STARTING and READY are current; fenced objects remain held",
+      "details": "  duration_ms: 95.743064\n  type: 'test'\n  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/9f815cf46f72-mvet80o9-979677/test/wasm-service/bound-creation-physical-custody.integration.test.js:102:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    PHYSICAL_OWNER_CURRENTNESS_OBSERVATION_MISSING\n    + actual - expected\n    \n    + 'undefined'\n    - 'function'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'function'\n  actual: 'undefined'\n  operator: 'strictEqual'\n  stack: |-\n    current (file:///home/peter/projects/lagrange/test-output/placement-worktrees/9f815cf46f72-mvet80o9-979677/test/wasm-service/bound-creation-physical-custody.integration.test.js:60:10)\n    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/9f815cf46f72-mvet80o9-979677/test/wasm-service/bound-creation-physical-custody.integration.test.js:107:18)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)"
+    },
+    {
+      "name": "U1 physical owner: full intent identity is compared even when the token is identical",
+      "details": "  duration_ms: 54.380641\n  type: 'test'\n  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/9f815cf46f72-mvet80o9-979677/test/wasm-service/bound-creation-physical-custody.integration.test.js:131:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    PHYSICAL_OWNER_CURRENTNESS_OBSERVATION_MISSING\n    + actual - expected\n    \n    + 'undefined'\n    - 'function'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'function'\n  actual: 'undefined'\n  operator: 'strictEqual'\n  stack: |-\n    current (file:///home/peter/projects/lagrange/test-output/placement-worktrees/9f815cf46f72-mvet80o9-979677/test/wasm-service/bound-creation-physical-custody.integration.test.js:60:10)\n    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/9f815cf46f72-mvet80o9-979677/test/wasm-service/bound-creation-physical-custody.integration.test.js:135:18)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)"
+    },
+    {
+      "name": "U1 physical owner: actual failed cleanup is unavailable while its resource custody stays live",
+      "details": "  duration_ms: 82.904023\n  type: 'test'\n  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/9f815cf46f72-mvet80o9-979677/test/wasm-service/bound-creation-physical-custody.integration.test.js:141:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    PHYSICAL_OWNER_CURRENTNESS_OBSERVATION_MISSING\n    + actual - expected\n    \n    + 'undefined'\n    - 'function'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'function'\n  actual: 'undefined'\n  operator: 'strictEqual'\n  stack: |-\n    current (file:///home/peter/projects/lagrange/test-output/placement-worktrees/9f815cf46f72-mvet80o9-979677/test/wasm-service/bound-creation-physical-custody.integration.test.js:60:10)\n    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/9f815cf46f72-mvet80o9-979677/test/wasm-service/bound-creation-physical-custody.integration.test.js:154:20)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)"
+    },
+    {
+      "name": "U1 retirement custody: registration precedes a synchronously reentrant shutdown",
+      "details": "  duration_ms: 60.630697\n  type: 'test'\n  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/9f815cf46f72-mvet80o9-979677/test/wasm-service/bound-creation-physical-custody.integration.test.js:162:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    REENTRANT_SHUTDOWN_MISSED_ADMITTED_RETIREMENT\n    \n    true !== false\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: false\n  actual: true\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/9f815cf46f72-mvet80o9-979677/test/wasm-service/bound-creation-physical-custody.integration.test.js:180:12)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)"
+    },
+    {
+      "name": "U1 retirement custody: equal requests coalesce and an operation-id body collision is refused",
+      "details": "  duration_ms: 70.072295\n  type: 'test'\n  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/9f815cf46f72-mvet80o9-979677/test/wasm-service/bound-creation-physical-custody.integration.test.js:195:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    DUPLICATE_OR_CONFLICTING_RETIREMENT_ENTERED_OWNER_AGAIN\n    \n    22 !== 1\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1\n  actual: 22\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/9f815cf46f72-mvet80o9-979677/test/wasm-service/bound-creation-physical-custody.integration.test.js:220:14)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)"
+    },
+    {
+      "name": "U1 retirement custody: shutdown retry preserves a failed retirement tombstone obligation",
+      "details": "  duration_ms: 59.706139\n  type: 'test'\n  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/9f815cf46f72-mvet80o9-979677/test/wasm-service/bound-creation-physical-custody.integration.test.js:233:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    SHUTDOWN_RETRY_DROPPED_THE_ADMITTED_RETIREMENT_INTENT\n    + actual - expected\n    \n    + 'ADMITTED'\n    - 'RETIRED'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'RETIRED'\n  actual: 'ADMITTED'\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/9f815cf46f72-mvet80o9-979677/test/wasm-service/bound-creation-physical-custody.integration.test.js:252:12)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)"
+    },
+    {
+      "name": "U1 retirement custody: joining an ordinary stop retains debt when that stop fails",
+      "details": "  duration_ms: 68.576398\n  type: 'test'\n  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/9f815cf46f72-mvet80o9-979677/test/wasm-service/bound-creation-physical-custody.integration.test.js:258:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    JOINED_ORDINARY_STOP_DROPPED_THE_ADMITTED_RETIREMENT_INTENT\n    + actual - expected\n    \n    + 'ADMITTED'\n    - 'RETIRED'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'RETIRED'\n  actual: 'ADMITTED'\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/9f815cf46f72-mvet80o9-979677/test/wasm-service/bound-creation-physical-custody.integration.test.js:300:12)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)"
+    },
+    {
+      "name": "U1 physical admission: a directly stopping object blocks a second bound object",
+      "details": "  duration_ms: 78.42542\n  type: 'test'\n  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/9f815cf46f72-mvet80o9-979677/test/wasm-service/bound-creation-physical-custody.integration.test.js:306:1'\n  failureType: 'testCodeFailure'\n  error: 'Missing expected exception: DIRECT_STOPPING_OBJECT_DID_NOT_FENCE_BOUND_RECREATION'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected:\n    code: 'wasm_service_replica_live'\n  operator: 'throws'\n  stack: |-\n    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/9f815cf46f72-mvet80o9-979677/test/wasm-service/bound-creation-physical-custody.integration.test.js:324:14)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)"
+    },
+    {
+      "name": "U1 retirement finality: lost metadata history with RETIRED storage",
+      "details": "  duration_ms: 72.477019\n  type: 'test'\n  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/9f815cf46f72-mvet80o9-979677/test/wasm-service/bound-creation-physical-custody.integration.test.js:340:3'\n  failureType: 'testCodeFailure'\n  error: |-\n    EXACT_RETIRED_HISTORY_DID_NOT_PROVE_PHYSICAL_FINALITY\n    + actual - expected\n    \n    + undefined\n    - 'FINAL'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'FINAL'\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/9f815cf46f72-mvet80o9-979677/test/wasm-service/bound-creation-physical-custody.integration.test.js:355:14)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)"
+    },
+    {
+      "name": "U1 retirement finality: lost metadata history with missing storage",
+      "details": "  duration_ms: 44.208948\n  type: 'test'\n  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/9f815cf46f72-mvet80o9-979677/test/wasm-service/bound-creation-physical-custody.integration.test.js:340:3'\n  failureType: 'testCodeFailure'\n  error: |-\n    STORAGE_ABSENCE_WAS_MISTAKEN_FOR_A_RETIRED_TOMBSTONE\n    + actual - expected\n    \n    + undefined\n    - 'UNRESOLVED'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'UNRESOLVED'\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/9f815cf46f72-mvet80o9-979677/test/wasm-service/bound-creation-physical-custody.integration.test.js:355:14)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)"
+    },
+    {
+      "name": "U1 driver admission: a stale prepared origin cannot start the physically current successor",
+      "details": "  duration_ms: 66.694331\n  type: 'test'\n  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/9f815cf46f72-mvet80o9-979677/test/wasm-service/bound-creation-physical-custody.integration.test.js:361:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + 'BOOTSTRAPPED_HELD'\n    - 'failed'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'failed'\n  actual: 'BOOTSTRAPPED_HELD'\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/9f815cf46f72-mvet80o9-979677/test/wasm-service/bound-creation-physical-custody.integration.test.js:388:12)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)"
+    },
+    {
+      "name": "U1 retirement debt: throw STOPPED projection cannot complete the original journal",
+      "details": "  duration_ms: 264.624915\n  type: 'test'\n  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/9f815cf46f72-mvet80o9-979677/test/wasm-service/bound-creation-physical-custody.integration.test.js:412:3'\n  failureType: 'testCodeFailure'\n  error: |-\n    ORIGINAL_JOURNAL_COMPLETED_BEFORE_ITS_STOPPED_PROJECTION\n    + actual - expected\n    \n    + 'completed'\n    - 'in_progress'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'in_progress'\n  actual: 'completed'\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/9f815cf46f72-mvet80o9-979677/test/wasm-service/bound-creation-physical-custody.integration.test.js:444:16)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)"
+    },
+    {
+      "name": "U1 retirement debt: retained STOPPED projection cannot complete the original journal",
+      "details": "  duration_ms: 227.120312\n  type: 'test'\n  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/9f815cf46f72-mvet80o9-979677/test/wasm-service/bound-creation-physical-custody.integration.test.js:412:3'\n  failureType: 'testCodeFailure'\n  error: |-\n    ORIGINAL_JOURNAL_COMPLETED_BEFORE_ITS_STOPPED_PROJECTION\n    + actual - expected\n    \n    + 'completed'\n    - 'in_progress'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'in_progress'\n  actual: 'completed'\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/9f815cf46f72-mvet80o9-979677/test/wasm-service/bound-creation-physical-custody.integration.test.js:444:16)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)"
+    },
+    {
+      "name": "U1 retirement debt: absent STOPPED projection cannot complete the original journal",
+      "details": "  duration_ms: 212.515019\n  type: 'test'\n  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/9f815cf46f72-mvet80o9-979677/test/wasm-service/bound-creation-physical-custody.integration.test.js:412:3'\n  failureType: 'testCodeFailure'\n  error: |-\n    ORIGINAL_JOURNAL_COMPLETED_BEFORE_ITS_STOPPED_PROJECTION\n    + actual - expected\n    \n    + 'completed'\n    - 'in_progress'\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 'in_progress'\n  actual: 'completed'\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/9f815cf46f72-mvet80o9-979677/test/wasm-service/bound-creation-physical-custody.integration.test.js:444:16)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)"
+    }
+  ]
+}

@@ -1,0 +1,220 @@
+{
+  "reviewer": "subagent:/root/f1_independent_review",
+  "verdict": "APPROVE_BOUNDED_F1_EXECUTED_GATE",
+  "base": "77a888af01f13e30052135075964c6508b1d0b24",
+  "baseTree": "240db7714a4979c87aea8f70d28e20e9119f7359",
+  "baseProductionTree": "e0414db30f6d4dbd253e019fe0b0d02d27891024",
+  "frozenTestTree": "ddbddb24eaa9cf720425fc175ef7b54665ccefce",
+  "localBehavioralExecution": false,
+  "remoteTreeProvenance": "Root /root reported connector create_tree/create_commit/create_branch success and exact local/remote full-tree equality. This reviewer has not independently fetched remote objects.",
+  "sourceVerdict": {
+    "path": "f1-review/u1-f1-independent-source-verdict-20261019.md",
+    "bytes": 17844,
+    "sha256": "d919a4e780442013bfbea82025c866665bf12f5122f7263134c73ab493d18ab0"
+  },
+  "controlPublicationManifest": {
+    "path": "f1-review/u1-f1-negative-controls-published-manifest-20261019.json",
+    "bytes": 6467,
+    "sha256": "1196850dc00f6cd96376adcc55a8beb5f02b5d13df964293a5276b932f829b09"
+  },
+  "frozenTests": {
+    "test/control-plane/service-instance-creation-cas.test.js": {
+      "gitBlob": "84cb3bb5f697b42a6811986fb9b1f2b31637dc08",
+      "bytes": 38527,
+      "sha256": "89c957763a687fda76dd0ab25b8cda7eec31dcd831dfafa595c734fd2e81cead"
+    },
+    "test/service/service-consensus-creation-intent.test.js": {
+      "gitBlob": "25f4c9b31e9a3c3da927a3db375252a2d07dd46d",
+      "bytes": 28553,
+      "sha256": "f307c5996759cf401df56fc344b4a82905213bb7fe22dede99a0182062fcb7fc"
+    },
+    "test/node/runtime-service-bound-route.test.js": {
+      "gitBlob": "f54ce4a72f86b27743d82d2a34fab2400c59e645",
+      "bytes": 59541,
+      "sha256": "86db89475ed02c1362b0560c05cd4c22159cf56d145cdfb9bce97edd46ae6358"
+    }
+  },
+  "positive": {
+    "issue": 235,
+    "source": "77a888af01f13e30052135075964c6508b1d0b24",
+    "requestId": "e7e09dcb4fdcba1a0d30d41d037ff259",
+    "requestSha256": "10f5a1714247c99b32f7d6b3fe6a669e65c08a634b5eef844c279e551a456b39",
+    "receipt": {
+      "path": "lab-recovery/lab-235-result.json",
+      "bytes": 2242,
+      "sha256": "ea514851f609b796de5330345fac97bc92d78bb7761f6c52b445d4d9abc3fba4"
+    },
+    "log": {
+      "path": "lab-recovery/lab-235-executor.log",
+      "bytes": 1304,
+      "sha256": "a1372b5c0421f99197126ba7a70d587a49d64e9e8a439ae71dee711849bb3824"
+    },
+    "reportedFiles": 3,
+    "reportedPassingFiles": 3,
+    "reportedAssertions": 123,
+    "exitCode": 0,
+    "host": "tv-dator",
+    "finishedAt": "2026-10-18T20:19:53Z",
+    "classification": "POSITIVE_PASS"
+  },
+  "controls": [
+    {
+      "id": "m01-occupancy",
+      "issue": 262,
+      "branch": "probe/u1-f1-negative-occupancy-20261019",
+      "remoteSource": "6dd2690d494ef959a6f94712281a2703581eebb5",
+      "localSource": "18ad499cd060a8358211c14e3af1ec0c9e796970",
+      "tree": "b2ec430f4f9ad169d4e9e45cc6e80655e6efd632",
+      "frozenTestTree": "ddbddb24eaa9cf720425fc175ef7b54665ccefce",
+      "sourceOnlyChangedPaths": [
+        "src/control-plane/owners/service-instance-state.js"
+      ],
+      "sourceSha256": "10cc90168e34fe7b9c7390ea0046648e9770017c2a0dafa48bb13f9a305813a5",
+      "requestId": "aec74bb83bd22df29b7571219be90751",
+      "requestSha256": "740bc7f5237a8bd1d5332f401f76a77a7d303540a882eaaafd08210aae86207d",
+      "receipt": {
+        "path": "lab-recovery/lab-262-original-receipt.json",
+        "bytes": 9826,
+        "sha256": "5e7658937261cb9445c213caaab33fad6dd0500422809b09233f7da4d36acf67"
+      },
+      "log": {
+        "path": "lab-recovery/lab-262-executor.log",
+        "bytes": 23938,
+        "sha256": "ea33b44ba655790999fe980f59fd5a8dbd28511cdfb75573ff4408004446251e"
+      },
+      "labAnalysis": {
+        "path": "lab-recovery/lab-262-failure-analysis.json",
+        "bytes": 2868,
+        "sha256": "7857c94e3ac6156da5ad07fac2a62232687ca53045686698ace1a0b977703b88"
+      },
+      "reportedTests": 39,
+      "passed": 37,
+      "failed": 2,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0,
+      "exitCode": 1,
+      "finishedAt": "2026-10-19T05:21:10Z",
+      "observedFailures": [
+        {
+          "number": 30,
+          "test": "independent U1: TARGET_ALREADY_OWNED is not a sealed reservation refusal under a delayed original request"
+        },
+        {
+          "number": 31,
+          "test": "independent U1: INVALID_EXPECTED_STATE is not a sealed reservation refusal under a delayed original request"
+        }
+      ],
+      "expectedAssertions": [
+        "CANCELLED_JOURNAL_WITH_DELAYED_ADMITTED_RESOURCE: unresolved obligation lost"
+      ],
+      "classification": "EXPECTED_NEGATIVE_CONTROL_ACCEPTED",
+      "positivePopulation": false
+    },
+    {
+      "id": "m02-future-binding",
+      "issue": 263,
+      "branch": "probe/u1-f1-negative-future-binding-20261019",
+      "remoteSource": "b4dd1c2dddc9da21539078f243fcae4ad90055a0",
+      "localSource": "c714730d1be051b42332ef54c86eebe38556b307",
+      "tree": "49cad114c5551b11d5ef6fdb4482efed94ead53b",
+      "frozenTestTree": "ddbddb24eaa9cf720425fc175ef7b54665ccefce",
+      "sourceOnlyChangedPaths": [
+        "src/control-plane/owners/service-instance-state.js"
+      ],
+      "sourceSha256": "f684de66437ef93ad370992e4e0ba25073d1b4ab14938c16d7f5e776b2a37ade",
+      "requestId": "c5b282c6be733f98d74d44e07885c286",
+      "requestSha256": "0a580dcd15c97e14a95ef6249302454da2819960f78281982c3fbe1e37b8039d",
+      "receipt": {
+        "path": "lab-recovery/lab-263-original-receipt.json",
+        "bytes": 9725,
+        "sha256": "da303ff5611e6bd7284a1a08f8a9442b0a05a8e49e7b1abeb6090323c0f90a7c"
+      },
+      "log": {
+        "path": "lab-recovery/lab-263-executor.log",
+        "bytes": 29403,
+        "sha256": "855a3b04cbcf61e7b60018963d95900f729802ab1ea9bd53101501dc3641570c"
+      },
+      "labAnalysis": {
+        "path": "lab-recovery/lab-263-failure-analysis.json",
+        "bytes": 2176,
+        "sha256": "5dccc859eed5bc4c21670fafd6975d3b4f61af1fd22a6d7ce31f5be25acdfae5"
+      },
+      "reportedTests": 39,
+      "passed": 38,
+      "failed": 1,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0,
+      "exitCode": 1,
+      "finishedAt": "2026-10-19T05:22:51Z",
+      "observedFailures": [
+        {
+          "number": 32,
+          "test": "independent U1: STALE_BINDING before the exact future selection is not a sealed reservation refusal"
+        }
+      ],
+      "expectedAssertions": [
+        "FUTURE_BINDING_CANCELLED_BEFORE_EXACT_REQUEST_BECAME_ADMISSIBLE"
+      ],
+      "classification": "EXPECTED_NEGATIVE_CONTROL_ACCEPTED",
+      "positivePopulation": false
+    },
+    {
+      "id": "m03-outcome-inference",
+      "issue": 265,
+      "branch": "probe/u1-f1-negative-outcome-inference-20261019",
+      "remoteSource": "48349777471f8cdb7c7c46020d1703960404116a",
+      "localSource": "d8eddeb06fd583255f28d3c5b432f20ddf0690c0",
+      "tree": "63239f9ffc0db2411d8c057af8acc99814ea63b3",
+      "frozenTestTree": "ddbddb24eaa9cf720425fc175ef7b54665ccefce",
+      "sourceOnlyChangedPaths": [
+        "src/service/service-consensus-creation-intent.js"
+      ],
+      "sourceSha256": "86ec3567bbf1ebc41855c438cd70461e15db746915ac66e363dc5db48e23061e",
+      "requestId": "e950f281d938f6b0686cd3fd2ec81088",
+      "requestSha256": "741e4c6862759dd210ccc4ea048cb86500a1105f835c61a12059f11d5213a820",
+      "receipt": {
+        "path": "lab-recovery/lab-265-original-receipt.json",
+        "bytes": 9785,
+        "sha256": "ac5beb4cbc7e349928b7823140f973745c99efb825a1cd02dd0574db321f8e80"
+      },
+      "log": {
+        "path": "lab-recovery/lab-265-executor.log",
+        "bytes": 32086,
+        "sha256": "051a1c6c7ea6db1d9df38dfabea5398b1295db6ce3c23a987eaad7d4dd9a2edc"
+      },
+      "labAnalysis": {
+        "path": "lab-recovery/lab-265-failure-analysis.json",
+        "bytes": 2749,
+        "sha256": "3c1d7ba9a1c385a279ff785393711d6a26c027feba7b1360ade2dabb6e49ca6b"
+      },
+      "reportedTests": 39,
+      "passed": 38,
+      "failed": 1,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0,
+      "exitCode": 1,
+      "finishedAt": "2026-10-19T05:24:07Z",
+      "observedFailures": [
+        {
+          "number": 33,
+          "test": "F1 REMOVE-time resolution fails closed for untagged or UNRESOLVED owner refusals"
+        }
+      ],
+      "expectedAssertions": [
+        "CALLER_RECONSTRUCTED_FINALITY_FROM_OUTCOME"
+      ],
+      "classification": "EXPECTED_NEGATIVE_CONTROL_ACCEPTED",
+      "positivePopulation": false
+    }
+  ],
+  "limits": [
+    "Only F1 at77a888af; no combined U1/U2/activation/merge/release approval.",
+    "Positive corpus has3 complete files. Each negative control selected the1 full unchanged intent file.",
+    "Control failures are deliberate and excluded from the positive population.",
+    "Evidence is component SQLite/journal and scripted physical handler interaction; not distributed metadata or process-loss proof.",
+    "Remote tree equality was reported by root; reviewer independently checked local control trees and original lab source placements/log hashes."
+  ]
+}

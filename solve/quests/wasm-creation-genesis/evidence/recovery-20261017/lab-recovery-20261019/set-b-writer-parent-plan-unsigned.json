@@ -1,0 +1,19 @@
+{
+  "kind": "unsigned-plan-only",
+  "projectRepo": "psvensson/lagrange",
+  "profile": "repo-tests",
+  "host": "tv-dator",
+  "sourceSha": "26cded6cb74594b8d38bce24e6a862302b605e23",
+  "sourceRef": null,
+  "proposedRef": "refs/heads/probe/rs-raft-set-b-writer-parent-26cded6-20261019",
+  "requestId": null,
+  "testFiles": [
+    "test/raft/raft-rs-backend/operation-port-boundary.test.js",
+    "test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js",
+    "test/wasm-service/wasm-service-replica.test.js"
+  ],
+  "oldIntent": "332dacf2-b14a-43de-a6f4-bf1a2703d324",
+  "oldIntentDisposition": "Accepted durable plan remains nonterminal; exact generation1 is retired and cannot authorize a new dispatch. See old-set-b-relay-fence-audit-20261019.json. Original intent remains untouched.",
+  "signingGate": "After U1 focused request; root explicitly reviews old-intent fencing evidence and authorizes this distinct boundary measurement, publishes an exact same-repository branch at the source SHA, then supplies its actual ref. No UUID has been allocated and no payload has been signed or posted.",
+  "purpose": "Measure the exact writer-freeze parent within the remaining measured Set B good9ff61abd/bad9b53962f boundary. Source/test/runner census is explanatory context, not substitute execution."
+}

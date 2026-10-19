@@ -1,0 +1,114 @@
+{
+  "recorded_at": "2026-10-19T05:21:47Z",
+  "invalid_requests": [
+    {
+      "issue": 249,
+      "request_id": "18414902331d6bf121b093e4f2c545",
+      "request_sha256": "ee13026f39a05e11e281a23aba299999d9f105d183aed893e23806fc83f828e2",
+      "reason": "request_id has30hex characters, required32; title therefore outside exact protocol",
+      "operation": "evidence",
+      "observed_receipt": "none",
+      "source_execution": false
+    },
+    {
+      "issue": 250,
+      "request_id": "39ba19ff2b140a6135d69a34a0645b",
+      "request_sha256": "8c1d84d141cc284ca6ec21ff99cf9d05ea374c434a93ef4e5252b11a4e93afc1",
+      "reason": "request_id has30hex characters, required32; title therefore outside exact protocol",
+      "operation": "evidence",
+      "observed_receipt": "none",
+      "source_execution": false
+    },
+    {
+      "issue": 251,
+      "request_id": "c8199813f4f2a3582aaf0b38171f51",
+      "request_sha256": "45d728c1ae510ed196ffff527dce6ced7e3faa4e3cad401f6e3f0e15d496ac21",
+      "reason": "request_id has30hex characters, required32; title therefore outside exact protocol",
+      "operation": "evidence",
+      "observed_receipt": "none",
+      "source_execution": false
+    },
+    {
+      "issue": 252,
+      "request_id": "fab2162116c1b4acd929a91c86e9c5",
+      "request_sha256": "536f45f0dcbd01665ce1292e03fdf6b3b7a28282434e6a2257946d1d12f5c0e3",
+      "reason": "request_id has30hex characters, required32; title therefore outside exact protocol",
+      "operation": "evidence",
+      "observed_receipt": "none",
+      "source_execution": false
+    },
+    {
+      "issue": 253,
+      "request_id": "2c9e4648732167fffa338e0c46aa30",
+      "request_sha256": "6ce93d3095dc5bdff3382a3ddf6dc857078f6bc5116b6efd4430b2b1ca3faf0d",
+      "reason": "request_id has30hex characters, required32; title therefore outside exact protocol",
+      "operation": "evidence",
+      "observed_receipt": "none",
+      "source_execution": false
+    },
+    {
+      "issue": 254,
+      "request_id": "c5370e03d4a38d5928ae4098d41cfb",
+      "request_sha256": "16f1d3d27df07c77a21ac5c101f1903a2f636123b0908d6ba8498999f87cfd48",
+      "reason": "request_id has30hex characters, required32; title therefore outside exact protocol",
+      "operation": "evidence",
+      "observed_receipt": "none",
+      "source_execution": false
+    },
+    {
+      "issue": 255,
+      "request_id": "106a669eb0ea981f638f9473f78296",
+      "request_sha256": "7cf4d6426a6f3840c0abb34e6c1215b6f6fc6a37ff941d41aafbf5bd998a8820",
+      "reason": "request_id has30hex characters, required32; title therefore outside exact protocol",
+      "operation": "evidence",
+      "observed_receipt": "none",
+      "source_execution": false
+    },
+    {
+      "issue": 256,
+      "request_id": "38941087f86f38d7f72dd4516b3aef",
+      "request_sha256": "5addaca6c91ceaba5a818cf53c6f2d728f6701e0ee19482e4f88b47b0c5d6d0c",
+      "reason": "request_id has30hex characters, required32; title therefore outside exact protocol",
+      "operation": "evidence",
+      "observed_receipt": "none",
+      "source_execution": false
+    },
+    {
+      "issue": 257,
+      "request_id": "9547fefc82ebe33aae4150f1516f9c",
+      "request_sha256": "215101039ac086e1d07d9a10c93ded02793274fac5b4b0f50cb74618e9a595fa",
+      "reason": "request_id has30hex characters, required32; title therefore outside exact protocol",
+      "operation": "evidence",
+      "observed_receipt": "none",
+      "source_execution": false
+    },
+    {
+      "issue": 258,
+      "request_id": "6b607b2c8262f8bdc272ac71f24d61",
+      "request_sha256": "0a0400c8e628bc0daf007cd47904fb5b23ec1058e54c13b8d6a10cbffb584a6c",
+      "reason": "request_id has30hex characters, required32; title therefore outside exact protocol",
+      "operation": "evidence",
+      "observed_receipt": "none",
+      "source_execution": false
+    },
+    {
+      "issue": 259,
+      "request_id": "4bfe9ce25815ea2f5b65c030cd0201",
+      "request_sha256": "838d5bc0b8f1e54dabc7b6362df7de61d20abb7d04feb6e46c962fdf1dd3cc07",
+      "reason": "request_id has30hex characters, required32; title therefore outside exact protocol",
+      "operation": "evidence",
+      "observed_receipt": "none",
+      "source_execution": false
+    },
+    {
+      "issue": 260,
+      "request_id": "3b1427b8adafab068ffd38332f9bca",
+      "request_sha256": "0857c4dbee8cc173610784f860a464bf02004b8a84ca8059c7a3b2919eda7e3d",
+      "reason": "request_id has30hex characters, required32; title therefore outside exact protocol",
+      "operation": "evidence",
+      "observed_receipt": "none",
+      "source_execution": false
+    }
+  ],
+  "disposition": "Preserved unchanged; replacement operations are bounded nonexecuting evidence reads only."
+}

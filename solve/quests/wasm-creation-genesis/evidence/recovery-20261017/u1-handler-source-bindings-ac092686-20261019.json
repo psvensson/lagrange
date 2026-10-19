@@ -1,0 +1,257 @@
+{
+  "reviewer": "agent:/root",
+  "subjectSha": "ac092686975dd22b4843be8df8e2e1d3663c0b7f",
+  "equivalentLocalSha": "ed9c5ccc72873e9fd49b55d0ed523ec281beca5c",
+  "fullTree": "17a66242048c7d8d782290c05297703ddafeb457",
+  "sourceTree": "10a9c9d676d5b71e1b5d522f84882c596440e26a",
+  "testTree": "b251c60c3aad02069895b82e411fca0b6d9db69a",
+  "scope": "handler/inventory/gate source review; complete changed source bound, physical half independently reviewed",
+  "files": [
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/recovery-20261017/u1-hydration-independent-design-verdict-20261018.md",
+      "blob": "7d66f6d80e1593fe2b0b77f0556d388462bfb890",
+      "bytes": 4842,
+      "sha256": "d28417b1531bc857fa0f81436b52e9d52f4740d2b9e04ed7dc87f350477f5aa0"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/recovery-20261017/u1-inventory-continuation-contract-v3-addendum.md",
+      "blob": "e9d9a8d1907c3fe7f2daaced1b61409bba61da20",
+      "bytes": 7859,
+      "sha256": "401f90a5f09a3056573ee1d8ab8b57cee6135c721355295e0e1506ceb93303ae"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/recovery-20261017/u1-inventory-continuation-contract-v3.md",
+      "blob": "2bf19c8a950a327be395ced40b39377d3227f755",
+      "bytes": 46626,
+      "sha256": "6f010cc376fd3ff6bd0d7d07892636967eb3ad343915364f4c80a35c5450c048"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/recovery-20261017/u1-inventory-v3-hydration-addendum.md",
+      "blob": "34c243c15b428a123cb38a382ba55b6e6019e7f2",
+      "bytes": 6479,
+      "sha256": "b0d9146f17b22b0e2bda3d4c27981f4a3a10a65812c3a050c87dfb6298e326ee"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/recovery-20261017/u1-inventory-v3-physical-current-state-clarification.md",
+      "blob": "f8ab403de2a872c396b66973a585e3abcbdb9d73",
+      "bytes": 3225,
+      "sha256": "64f1b2173b71717fefe031ae8ddb976d190ea577e8d5ea9401ff432632645534"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/recovery-20261017/u1-ordinary-memo-wake-clarification-20261019.md",
+      "blob": "c2e5d37d557adb209f7f8b7b2b4a27046ed0c3d7",
+      "bytes": 3711,
+      "sha256": "0953fc2add0be34c019c6356db67e3cba5905bec8153484ec3af5c4750898274"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/recovery-20261017/u1-retirement-projection-debt-clarification-20261019.md",
+      "blob": "a7422593184bdeef15153e2850e94b9fd774ac02",
+      "bytes": 2981,
+      "sha256": "339fb399f23e9c91c41482bcafd07e81da541e3c06ec724c87e0667d9c6b637a"
+    },
+    {
+      "path": "solve/quests/wasm-creation-genesis/evidence/recovery-20261017/u1-retirement-projection-stopped-owner-addendum-20261019.md",
+      "blob": "5ac29c59fe8381a90ef2810689153691b3a2d847",
+      "bytes": 2022,
+      "sha256": "e527031c5dba7e5c61fa2b420dd58c9b205616e5d07ab28111501abb973088d3"
+    },
+    {
+      "path": "src/node/runtime-service-bound-creation-route.js",
+      "blob": "e2e4045875f0a8e9a1e9af6513bcff9176b42709",
+      "bytes": 34189,
+      "sha256": "1c07e4b7913a41fb526ad2bce22ed72b3154de8f84d9cef9ae4883d72d10367d"
+    },
+    {
+      "path": "src/node/runtime-service-creation-execution.js",
+      "blob": "428f7874eb4a6eeb5e99ebf959dd27b714f4736b",
+      "bytes": 6663,
+      "sha256": "b45c3a20a17dcd1139191bc8651295d99e1b561f5d48883a182770b60470b52f"
+    },
+    {
+      "path": "src/node/runtime-service-generic-replica.js",
+      "blob": "bef6867517a1515d8755d6f58857c91f2369c5ea",
+      "bytes": 6622,
+      "sha256": "f845774f652c28a18195d6e2a8783ba088fe989ade75c5b27ad710a99d043288"
+    },
+    {
+      "path": "src/node/runtime-service-handler-constants.js",
+      "blob": "61ab47358c0901d9b9da8c6647b33fb535cdba61",
+      "bytes": 5558,
+      "sha256": "aa592d0cb178f2ff2b8f9e21189c09b5f38e4ce1b61193a8c7de7ff062de642b"
+    },
+    {
+      "path": "src/node/runtime-service-handler.js",
+      "blob": "b77e8845f2bf024c65fba7a6e67b95c730587f56",
+      "bytes": 23882,
+      "sha256": "627ebefcb789f9398efebdce85bced2a108798d7ce8c3514515c8e493af4a029"
+    },
+    {
+      "path": "src/node/runtime-service-message-dispatch.js",
+      "blob": "12e0f3e39b86480a5a9bb106d5cd78f670e77ab4",
+      "bytes": 1965,
+      "sha256": "c601d53eb5b2a59e42e9ef5a260849b671772132951fea9cb0228563500aea25"
+    },
+    {
+      "path": "src/node/runtime-service-restart-inventory.js",
+      "blob": "edf07783daa6d6dd1fe5f0162ff6cd031695c330",
+      "bytes": 7794,
+      "sha256": "44dcac34efec16d4991b6433e1fb8a807f86a4201f41568c894d55c688197e20"
+    },
+    {
+      "path": "src/query/runtime-replica-state-projection-owner.js",
+      "blob": "d4f8d2ddcf94bfd10d112205395e87696bb3b4fe",
+      "bytes": 5595,
+      "sha256": "6b04778ccb1225d3e0d42329ac764ceff7623317369c65f0fc92fb6556ba4f4d"
+    },
+    {
+      "path": "src/runtime/service-runtime-consensus-bootstrap.js",
+      "blob": "d1338f7278c3e5795655a89da8cc459726cf9c09",
+      "bytes": 4274,
+      "sha256": "adf37fa6eb4dba9680d5fd79c9da4e0838033011c77a35fa42e6ac69e0cd9dae"
+    },
+    {
+      "path": "src/runtime/service-runtime-consensus-publication.js",
+      "blob": "2379c5c6106178d0099df8595d4dcbda4d93791d",
+      "bytes": 8788,
+      "sha256": "82533d9c688f9c306f243f57f1c9ee3c1e14d4f7457c8c2abab13a0c07e496fd"
+    },
+    {
+      "path": "src/runtime/service-runtime-lifecycle-operation-methods.js",
+      "blob": "366189b978d778c763e9ca119c3a3c768c47379f",
+      "bytes": 24686,
+      "sha256": "62395c8a3f99b6d75912b823bf1c7e0a01ff2a2a4804fdeb3456864a3b349027"
+    },
+    {
+      "path": "src/runtime/service-runtime-state-projection-handoff.js",
+      "blob": "92bed31b70208528b89e0afaac836848f51a37f7",
+      "bytes": 1203,
+      "sha256": "4f0b1d7dd7b9e6ab68180b984df7920ccb2a854d53bf214b45f252340b585244"
+    },
+    {
+      "path": "src/runtime/wasm-component-driver-consensus.js",
+      "blob": "0a74e97683ca08b0a56d8e139b1183543b86b59e",
+      "bytes": 9293,
+      "sha256": "b3065d582982d581af810134bf3d74168818b253b83c3c113b84d392b461a0c3"
+    },
+    {
+      "path": "src/runtime/wasm-component-driver.js",
+      "blob": "831f0e391f2e04548ad56c98cf482ce1cdf45909",
+      "bytes": 24535,
+      "sha256": "fa68a54e9b27026683946c35b10b031e3da8012f7e97fee05651b276d41ec3d7"
+    },
+    {
+      "path": "src/service/adapters/runtime-service-adapter.js",
+      "blob": "c93f67749f6cd50f5e8d817788faa51335b9b15f",
+      "bytes": 4297,
+      "sha256": "a87ab433bd045a4d062f4180cb34422adcce4a456aeb82d671e27d4c63af3821"
+    },
+    {
+      "path": "src/service/service-consensus-bootstrap.js",
+      "blob": "aa96f19768b53480058968dce3cc145833c1f05c",
+      "bytes": 12477,
+      "sha256": "1b60a815cb70106d797a9b4e6e5b9767ce59ecbfbe5fc316e8504c98fd2008cd"
+    },
+    {
+      "path": "src/service/service-consensus-creation-intent.js",
+      "blob": "2f169ef5e110e22dcf938ac1bccebf3fbb52c1ea",
+      "bytes": 23296,
+      "sha256": "19f996fc5c079db1a01096ad4d657a1ee8c4d53db1c63bcd6ffb75e18db4ed3d"
+    },
+    {
+      "path": "src/service/service-consensus-creation-origin.js",
+      "blob": "e0db1c35775dd0d504f51836c4910f8a470e724f",
+      "bytes": 1507,
+      "sha256": "dc58147401b2c244fa16a3e678110758ce27e71f9b198fca3f1f15bac85efbd8"
+    },
+    {
+      "path": "src/service/service-lifecycle-manager.js",
+      "blob": "10afb25f59c6d8bfaf0f05e7dbd7d1d3bd1d909c",
+      "bytes": 23463,
+      "sha256": "0805555d92237d6480c1081ee82719d84a9f06424dd6ea54297a0a884ec7173b"
+    },
+    {
+      "path": "src/service/service-lifecycle-operations.js",
+      "blob": "ca24dec11ac476721f2e3f85edbc072fac337994",
+      "bytes": 12210,
+      "sha256": "28ccb909c22dc0f291a599b16294b51318a689283404e033cf87536ded96fef1"
+    },
+    {
+      "path": "src/service/service-lifecycle-recovery.js",
+      "blob": "a448f0163cdb1816bd1569093bc3967de1b25ea5",
+      "bytes": 11745,
+      "sha256": "bbad8158e8bdebb078588dcaca483b1d4fef25b7dc7e5ba3c8cba89c5dbd637a"
+    },
+    {
+      "path": "src/service/service-lifecycle-state-record.js",
+      "blob": "b119cfaf2aaf0acd226d9970183e921c1afdee0c",
+      "bytes": 1568,
+      "sha256": "25a1d5ea97780205dac204801d097c882365eedd47b99d3f99489653be1fb9f2"
+    },
+    {
+      "path": "src/service/service-type-adapter.js",
+      "blob": "f6a0540b75ef751d04b8bbdc235a81c980897083",
+      "bytes": 3264,
+      "sha256": "c0aad936ea4d3c69d13c5fea296eb86ef1f2f8da8117c67ab01e41fbf81ac45d"
+    },
+    {
+      "path": "src/wasm-service/operation-lifecycle.js",
+      "blob": "a14444bf3ac52d30ef918cc17f037b206bbaddf1",
+      "bytes": 9882,
+      "sha256": "d5135aa12006dd254cf614eff542891bf8be03fc6737e819d1036092ce9e37c9"
+    },
+    {
+      "path": "src/wasm-service/wasm-creation-custody.js",
+      "blob": "3a4ac40e6dd11e33c4b55a4654fc0bbf60decae1",
+      "bytes": 3848,
+      "sha256": "f24645c771d848563a5767221a84749b037106ae0b654774ef30b07b3808c297"
+    },
+    {
+      "path": "src/wasm-service/wasm-creation-retirement.js",
+      "blob": "271cab77b9aee0503c4e0aa62fe34dfe9295329c",
+      "bytes": 8849,
+      "sha256": "dc1f2b1671cb5042fcb24579a69cce6e4fec84117ecc9e0254bfd3f9930c290d"
+    },
+    {
+      "path": "src/wasm-service/wasm-service-constants.js",
+      "blob": "a7eb078c9f625091113e186a6d9fdeaefa2d626f",
+      "bytes": 10947,
+      "sha256": "5bff8501999b9a7676166b3c24efd66ced20a02efa2ec18ab84f85ddcd9bdfbc"
+    },
+    {
+      "path": "src/wasm-service/wasm-service-lifecycle.js",
+      "blob": "374e1cd49089e8fcc435ad7b7b872988fa415a67",
+      "bytes": 29025,
+      "sha256": "1b416375caa9ceb5dc9eb876cdf766e11bb286fc8da1237260700ebef3a0b417"
+    },
+    {
+      "path": "src/wasm-service/wasm-service-replica-lifecycle.js",
+      "blob": "581444bfae0092391e7ef9d2f1b5f62138910e3f",
+      "bytes": 14428,
+      "sha256": "67f0a0e576d8f76c9c5d6181fb21704de8c0341d7beedceb0003c3eaeaf464a5"
+    },
+    {
+      "path": "test/node/runtime-service-bound-route.test.js",
+      "blob": "6faccaee75f9a1b8a32b471f23d09146e60ebe4b",
+      "bytes": 71848,
+      "sha256": "6480b49014d758e80350122d2f2e79ece507f2fc4301ee42ad735668011bd936"
+    },
+    {
+      "path": "test/shards/impact-contracts.json",
+      "blob": "d76083d41166a96664a9d71ff905e94db34bc913",
+      "bytes": 148252,
+      "sha256": "f1898994f6391d04b7b939f7b5d881b8a57d1f77153862bef84a7bc66cbd2aff"
+    },
+    {
+      "path": "test/wasm-service/bound-creation-physical-custody.integration.test.js",
+      "blob": "e7f4638a6d2b8353267d2efb3c5af9723682239e",
+      "bytes": 22311,
+      "sha256": "fa02bf81ef0e12dcef88a4be502bc3cec59e4fa6541cb59291136f0b1e618cad"
+    },
+    {
+      "path": "test/wasm-service/bound-creation-restart.integration.test.js",
+      "blob": "9759e9fe2327e66c4ba35017bc90a6e7e763c15a",
+      "bytes": 74056,
+      "sha256": "b3ca1df74d97b89badb59fd73247a0a0d445295406d1820c59908e440a3dbfae"
+    }
+  ]
+}
