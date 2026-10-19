@@ -743,6 +743,12 @@ test('independent U1: overlapping startup inventories cannot overwrite an ACTIVE
   release.resolve();
   const [firstPlans, secondPlans] = await Promise.all([first, second]);
   host.inventory = firstPlans;
+  // Restart inventory publishes the memo and schedules physical re-entry on
+  // the next turn. The formation helper dereferences all three Raft replicas;
+  // require that prerequisite explicitly rather than dereferencing null.
+  // If recovery loses its wake, this bounded settle stays red.
+  await e.settle(() => e.hosts.every((candidate) => e.replicaOf(candidate) !== null),
+    'startup inventory did not materialize the required physical replicas');
   await e.form();
   await e.settle(() => memoOf(host)?.status === ReplicaStatus.ACTIVE, 'inventory reached ACTIVE');
   const before = {...memoOf(host)};
