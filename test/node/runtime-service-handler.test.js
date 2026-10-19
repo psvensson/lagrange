@@ -638,6 +638,33 @@ describe('RuntimeServiceHandler handleRemoveReplica', () => {
       assert.deepEqual(lifecycle.calls, [], 'STALE_POST_AWAIT_OWNER_STOPPED_SUCCESSOR');
     });
 
+  // WITNESS ONLY: this is the handler's post-admission/pre-STOP queue cut.
+  // A direct local replacement is a labelled race seam, not proof that a
+  // production REPLACE currently exercises this exact scheduling interleave.
+  it('does not STOP a successor installed after admitted legacy REMOVE but before queued STOP',
+    async () => {
+      const replicaId = 'replace-replica-old-before-stop';
+      const cache = createMockCache({services: [{service_id: replicaId,
+        service_type: 'runtime_service', node_id: 'test-node', status: ReplicaStatus.ACTIVE}]});
+      const {handler, lifecycle} = createHandler({cache,
+        legacyRemovalAuthority: async () => ({outcome: 'ADMITTED'})});
+      const removed = await handler.handleRemoveReplica({
+        [ReplicaOperationField.OPERATION_ID]: 'original-legacy-remove',
+        [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
+        [ReplicaOperationField.REPLICA_ID]: replicaId,
+      });
+      assert.equal(removed.status, ReplicaOperationResponseStatus.INITIATED);
+      const successor = {replicaId, entityId: 'sys-postgres-wire',
+        status: ReplicaStatus.ACTIVE, operationId: 'successor-creation'};
+      handler.localReplicas.set(replicaId, successor);
+      await flushImmediate();
+      await flushImmediate();
+      assert.strictEqual(handler.getLocalReplica(replicaId), successor,
+        'STALE_REMOVE_REPLACED_SUCCESSOR_MEMO');
+      assert.equal(lifecycle.calls.filter((call) => call.method === 'stopReplica').length, 0,
+        'STALE_ADMITTED_REMOVE_STOPPED_SUCCESSOR_AFTER_QUEUE_HANDOFF');
+    });
+
   it('refuses a pre-canonical REMOVE when its memo falsely names a bound creation',
     async () => {
       const replicaId = 'replace-replica-mismatched-bound-identity';
