@@ -326,9 +326,12 @@ describe('recovery unit 1: host restart of bound creations (inventory, memo, re-
       if (crash === 'tombstone') crashOnce(e.metadata.primary, 'closeInstanceResource');
       if (crash === 'closed') closeAppliedReplyLost(e);
       if (crash === 'stopped') e.metadata.setJournalFault('before-admission');
-      const settled = crash === 'stopped' ? OUTCOME.RUNTIME_SERVICE_REMOVE_COMPLETED :
-        OUTCOME.RUNTIME_SERVICE_REMOVE_HELD;
-      await removeAndSettle(e, host, `remove-${crash}`, settled);
+      // Even after a successful physical STOPPED projection, a failed
+      // original-journal completion must leave the REMOVE obligation HELD.
+      await removeAndSettle(e, host, `remove-${crash}`,
+        OUTCOME.RUNTIME_SERVICE_REMOVE_HELD);
+      assert.equal(count(host, OUTCOME.RUNTIME_SERVICE_REMOVE_COMPLETED), 0,
+        `${crash}: PHYSICAL_FINALITY_WAS_MISTAKEN_FOR_JOURNAL_COMPLETION`);
       e.metadata.setGatewayReadFault('owner-a', null);
       e.metadata.setJournalFault(null);
       assert.equal(slotPhase(e, host), crash === 'tombstone' ? 'RELEASING' : 'CLOSED', crash);
@@ -494,6 +497,9 @@ describe('recovery unit 1: host restart of bound creations (inventory, memo, re-
     assert.equal(rowOf(e, sealed).state, 'cancelled');
     assert.equal(JSON.parse(rowOf(e, sealed).error).reason, 'CONFLICT');
     assert.equal(slotPhase(e, sealed), 'ADMITTED', 'the foreign request keeps its slot');
+    assert.deepEqual([memoOf(sealed).status, memoOf(sealed).operationId],
+      [ReplicaStatus.REMOVED, creationId(sealed)],
+      'SEALED_CANCELLED_CREATION_LEFT_A_PHANTOM_RETIREMENT');
     e.metadata.setGatewayReadFault('owner-a', new Error(FAULT));
     await removeAndSettle(e, unavailable, 'remove-unavailable', OUTCOME.RUNTIME_SERVICE_REMOVE_HELD);
     e.metadata.setGatewayReadFault('owner-a', null);
@@ -503,6 +509,8 @@ describe('recovery unit 1: host restart of bound creations (inventory, memo, re-
     await e.dispatch(sealed, TYPE.CREATE_REPLICA);
     await e.settle(() => count(sealed, OUTCOME.RUNTIME_SERVICE_CREATE_FAILED) === 2, 'terminal');
     assert.equal(lastOutcome(sealed).errorCode, 'TERMINAL_OPERATION');
+    assert.equal(memoOf(sealed).status, ReplicaStatus.REMOVED,
+      'TERMINAL_CREATE_REVIVED_CANCELLED_LOCAL_CUSTODY');
     await removeAndSettle(e, sealed, 'remove-sealed-again', OUTCOME.RUNTIME_SERVICE_REMOVE_COMPLETED);
     assert.equal(count(sealed, OUTCOME.RUNTIME_SERVICE_REMOVE_COMPLETED), 2);
     assert.equal(count(sealed, OUTCOME.RUNTIME_SERVICE_REMOVE_FAILED), 0, 'NEVER_REMOVE_FAILED');
