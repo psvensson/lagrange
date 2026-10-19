@@ -536,17 +536,38 @@ const MAX_DIAGNOSTICS_LIMIT = 500;
     const query = buildRecoverableOperationsSQL();
     const observed = await this._recoveryReader(query.sql, query.params);
     requireInstance(Array.isArray(observed), INSTANCE_OUTCOME.CORRUPT_STATE);
+    // An invalid journal row is a failed row, not a failed restart scan.
+    // Conflicting rows for one operation ID cannot authorize either effect.
     const unique = new Map();
+    const unkeyed = [];
+    const corrupt = (operationId, createdAt = 0) => ({
+      operation_id: operationId,
+      created_at: createdAt,
+      __recoveryCorrupt: true,
+    });
     for (const row of observed) {
-      const captured = captureInstanceJson(row, INSTANCE_LIMIT.STATE_BYTES);
-      const operationId = captured.operation_id ?? captured.operationId;
-      requireInstance(typeof operationId === 'string', INSTANCE_OUTCOME.CORRUPT_STATE);
+      let captured;
+      try {
+        captured = captureInstanceJson(row, INSTANCE_LIMIT.STATE_BYTES);
+      } catch {
+        captured = null;
+      }
+      const operationId = captured?.operation_id ?? captured?.operationId ??
+        row?.operation_id ?? row?.operationId;
+      if (typeof operationId !== 'string' || operationId.length === 0) {
+        unkeyed.push(corrupt(null));
+        continue;
+      }
       const prior = unique.get(operationId);
-      requireInstance(prior === undefined || instanceDigest(prior) === instanceDigest(captured),
-        INSTANCE_OUTCOME.CORRUPT_STATE);
-      unique.set(operationId, captured);
+      if (captured === null || prior?.__recoveryCorrupt ||
+          (prior !== undefined && instanceDigest(prior) !== instanceDigest(captured))) {
+        unique.set(operationId, corrupt(operationId, prior?.created_at ??
+          captured?.created_at ?? 0));
+      } else if (prior === undefined) {
+        unique.set(operationId, captured);
+      }
     }
-    const rows = [...unique.values()];
+    const rows = [...unkeyed, ...unique.values()];
     rows.sort((left, right) => {
       const leftCreatedAt = Number(left.created_at ?? left.createdAt ?? 0);
       const rightCreatedAt = Number(right.created_at ?? right.createdAt ?? 0);

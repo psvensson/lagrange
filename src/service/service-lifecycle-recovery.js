@@ -3,6 +3,7 @@ import {
   SERVICE_LIFECYCLE_STATE,
   SERVICE_OPERATION_STATE,
 } from '../constants/index.js';
+import {SERVICE_INSTANCE_OUTCOME as INSTANCE_OUTCOME} from '../constants/service-instance.js';
 import {
   LIFECYCLE_MGR_MSG,
   SERVICE_LIFECYCLE_LOG,
@@ -95,6 +96,12 @@ async function failRecoveryJournalState(manager, {
 }
 
 async function recoverOperationRow(manager, operationRow, resolveServiceContext, defaultContext) {
+  if (operationRow?.__recoveryCorrupt === true) {
+    return buildRecoveryResult(RECOVERY_RESULT_STATUS.FAILED, {
+      operationId: operationRow.operation_id ?? null,
+      error: INSTANCE_OUTCOME.CORRUPT_STATE,
+    });
+  }
   // A consensus creation row answers its journal half only (design
   // RECOVERY-DESIGN-20261017 R1-A, R2-G): no metadata read, no reservation,
   // no effect; its node re-enters it under its own id.
