@@ -133,6 +133,7 @@ function createHandler(overrides = {}) {
     cdcIntegrationService: cdc,
     serviceLifecycleManager: lifecycle,
     executorOutcomeEmitter: overrides.executorOutcomeEmitter || null,
+    legacyRemovalAuthority: overrides.legacyRemovalAuthority,
   });
   handler.initialize();
   return {handler, cache, cdc, lifecycle};
@@ -490,7 +491,13 @@ describe('RuntimeServiceHandler handleRemoveReplica', () => {
         },
       ],
     });
-    const {handler, lifecycle} = createHandler({cache});
+    const {handler, lifecycle} = createHandler({cache,
+      legacyRemovalAuthority: async ({operationId, entityId, replicaId, nodeId}) =>
+        ({outcome: operationId === 'legacy-runtime-target-cleanup-op' &&
+          entityId === 'sys-postgres-wire' &&
+          replicaId === legacyReplicaId && nodeId === 'test-node' ?
+          'ADMITTED' : 'CONTENT_CONFLICT'}),
+    });
 
     const response = await handler.handleRemoveReplica({
       [ReplicaOperationField.OPERATION_ID]:
@@ -531,7 +538,11 @@ describe('RuntimeServiceHandler handleRemoveReplica', () => {
           entity_id: 'sys-postgres-wire', entity_type: 'runtime_service',
           replica_id: legacyReplicaId, type: 'REPLACE', workflow_step: 'COMPLETED'}],
       });
-      const {handler, lifecycle} = createHandler({cache});
+      const {handler, lifecycle} = createHandler({cache,
+      legacyRemovalAuthority: async ({entityId}) =>
+        ({outcome: entityId === 'sys-postgres-wire' ?
+          'ADMITTED' : 'CONTENT_CONFLICT'}),
+    });
       const answer = await handler.handleRemoveReplica({
         [ReplicaOperationField.OPERATION_ID]: 'forged-legacy-cleanup',
         [ReplicaOperationField.ENTITY_ID]: 'unrelated-runtime',

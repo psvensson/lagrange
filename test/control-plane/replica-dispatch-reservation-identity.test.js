@@ -10,6 +10,8 @@ import {
   OPERATION_RESERVATION_ATTEMPT_OUTCOME,
 } from '../../src/rebalancer/operation-reservation-attempt-outcome.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
+  '../../src/control-plane/control-plane-system-table-gateway-constants.js';
 import {
   createCoordinatorWithStorage,
   createTrackingSqlEngine,
@@ -182,3 +184,46 @@ test('dispatch projection preserves unbound identity and rejects malformed ' +
   dispatchService.stop();
   t.end();
 });
+
+// A dispatch projection cannot authorize an opaque physical target's entity.
+// This readonly gate consumes the actual operation repository owner.
+test('legacy REMOVE takes original entity and generation from strict owner observation',
+  async (t) => {
+    const operationId = 'legacy-original-remove';
+    const replicaId = 'replace-replica-historical-opaque';
+    const original = buildRuntimeServiceOperation({
+      operationId, type: OperationType.REMOVE, targetClaimKey: null,
+      replicaId, workflowStep: WORKFLOW_STEP.SENDING,
+    });
+    let row = original;
+    let unavailable = false;
+    const reads = [];
+    const dispatch = Object.create(ReplicaDispatchService.prototype);
+    dispatch.rebalanceCoordinator = {repository: {
+      async queryAuthoritativeOperationVisibilityObservation(id, options) {
+        reads.push({id, options});
+        return unavailable ? {operation: null, deferredOutcome: {retryAfterMs: 100}} :
+          {operation: row, deferredOutcome: null};
+      },
+    }};
+    const request = {operationId, entityId: SERVICE_ID, replicaId, nodeId: TARGET_NODE_ID};
+    t.equal((await dispatch.authorizeLegacyRuntimeRemoval(request)).outcome, 'ADMITTED');
+    t.equal(reads[0].options.authoritativeReadMode,
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+      'projection or local cache cannot authorize physical deletion');
+    row = {...original, entityId: 'wrong-service'};
+    t.equal((await dispatch.authorizeLegacyRuntimeRemoval(request)).outcome,
+      'CONTENT_CONFLICT', 'owner refuses caller entity mismatch');
+    row = {...original, targetNodeId: 'different-node'};
+    t.equal((await dispatch.authorizeLegacyRuntimeRemoval(request)).outcome,
+      'CONTENT_CONFLICT', 'owner refuses foreign physical host');
+    row = {...original, workflowStep: WORKFLOW_STEP.REMOVED};
+    t.equal((await dispatch.authorizeLegacyRuntimeRemoval(request)).outcome,
+      'CONTENT_CONFLICT', 'terminal operation grants no new physical STOP');
+    row = null;
+    t.equal((await dispatch.authorizeLegacyRuntimeRemoval(request)).outcome,
+      'CONTENT_CONFLICT', 'confirmed owner absence is not permission');
+    unavailable = true;
+    t.equal((await dispatch.authorizeLegacyRuntimeRemoval(request)).outcome,
+      'UNAVAILABLE', 'temporarily missing owner leaves cleanup retryable');
+  });
