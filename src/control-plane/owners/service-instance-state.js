@@ -218,8 +218,7 @@ function reserveResourceState(state, binding, request) {
   if (!instance) {
     // Retained selection versions never decrease; a future binding has not
     // been excluded just because its selection has not happened yet.
-    return resourceRefusal(OUTCOME.STALE_BINDING, binding.selectionVersion <= state.version ?
-      REFUSAL.SEALED : REFUSAL.UNRESOLVED);
+    return resourceRefusal(OUTCOME.STALE_BINDING, REFUSAL.SEALED);
   }
   const resource = instance.resources[request.slot];
   const ordinal = request.expectedOrdinal + 1;
