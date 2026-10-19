@@ -386,8 +386,8 @@ test('U1 driver admission: a stale prepared origin cannot start the physically c
       return start(...args);
     };
     const answer = await host.driver.start(owned);
-    assert.equal(answer.status, START_STATUS.FAILED);
     assert.equal(calls, 0, 'OLD_CONTEXT_STARTED_A_SUCCESSOR_THROUGH_SERVICE_ID');
+    assert.equal(answer.status, START_STATUS.FAILED);
     assert.strictEqual(e.replicaOf(host), replica);
     assert.equal(replica.lifecycleState, STATE.CREATED);
     assert.equal(fs.existsSync(localPath(host, successor)), false);

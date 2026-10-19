@@ -1,0 +1,23 @@
+{
+  "issue": 383,
+  "request_id": "2092349d9ec966b026a966130f68bba1",
+  "canonical_request_sha256": "20241c7552096d521747226eb2a62c9f002ae1e7e4fda64e1f4dbac2455357a8",
+  "receipt_request_sha256": "20241c7552096d521747226eb2a62c9f002ae1e7e4fda64e1f4dbac2455357a8",
+  "request_id_match": true,
+  "controller_match": true,
+  "source_sha": "a55ab41296faf30a4c404c56117eacbaa993c903",
+  "source_ref": "refs/heads/work/u1-generic-stop-lifetime-v2-20261019",
+  "result_source_match": true,
+  "hosts_match": true,
+  "status": "COMPLETE",
+  "outcome": "PASS",
+  "recorded_at": "2026-10-19T14:50:07Z",
+  "log_bytes": 2386,
+  "log_sha256": "000b85ea7fff593647eac5291ead584bf36b952dfc10ed570a8b6610351f6844",
+  "tail_truncated": false,
+  "result_url": "https://github.com/psvensson/lagrange-lab/issues/383#issuecomment-6270099104",
+  "request_digest_match": true,
+  "full_displayed_log_bytes": 2386,
+  "full_displayed_log_sha256": "000b85ea7fff593647eac5291ead584bf36b952dfc10ed570a8b6610351f6844",
+  "full_log_verified": true
+}

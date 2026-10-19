@@ -1,0 +1,19 @@
+<!-- lagrange-lab-result:a5b0246d074b909d3e8b842961ce3c16:COMPLETE -->
+```json
+{
+  "schema": "lagrange-lab-result/v1",
+  "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+  "request_id": "a5b0246d074b909d3e8b842961ce3c16",
+  "request_sha256": "58fe57447e7ed93f785bf5fe3f8b87546fd251ad181fcaca36ffdc5c3b292333",
+  "status": "COMPLETE",
+  "recorded_at": "2026-10-19T15:49:53Z",
+  "result": {
+    "chunk_sha256": "fb8a17fa7980d24fa49c343eddcbf79a71ee8437336e5247719d0cee9b63d440",
+    "job_id": "68f1e6da25b531657fe905c5cb116937",
+    "offset": 16000,
+    "redacted": true,
+    "returned_bytes": 2583,
+    "text": "ovo-laptop]     ok 2 - unregisters handler from router\n[lenovo-laptop]       ---\n[lenovo-laptop]       duration_ms: 0.30852\n[lenovo-laptop]       type: 'test'\n[lenovo-laptop]       ...\n[lenovo-laptop]     # Subtest: registered handler returns acknowledged response\n[lenovo-laptop]     ok 3 - registered handler returns acknowledged response\n[lenovo-laptop]       ---\n[lenovo-laptop]       duration_ms: 0.464406\n[lenovo-laptop]       type: 'test'\n[lenovo-laptop]       ...\n[lenovo-laptop]     1..3\n[lenovo-laptop] ok 5 - RuntimeServiceHandler router registration\n[lenovo-laptop]   ---\n[lenovo-laptop]   duration_ms: 1.337339\n[lenovo-laptop]   type: 'suite'\n[lenovo-laptop]   ...\n[lenovo-laptop] # Subtest: RuntimeServiceHandler REPLACE operation flow\n[lenovo-laptop]     # Subtest: handles REPLACE add phase as CREATE_REPLICA\n[lenovo-laptop]     ok 1 - handles REPLACE add phase as CREATE_REPLICA\n[lenovo-laptop]       ---\n[lenovo-laptop]       duration_ms: 7.138607\n[lenovo-laptop]       type: 'test'\n[lenovo-laptop]       ...\n[lenovo-laptop]     # Subtest: handles REPLACE remove phase as REMOVE_REPLICA\n[lenovo-laptop]     ok 2 - handles REPLACE remove phase as REMOVE_REPLICA\n[lenovo-laptop]       ---\n[lenovo-laptop]       duration_ms: 0.955777\n[lenovo-laptop]       type: 'test'\n[lenovo-laptop]       ...\n[lenovo-laptop]     1..2\n[lenovo-laptop] ok 6 - RuntimeServiceHandler REPLACE operation flow\n[lenovo-laptop]   ---\n[lenovo-laptop]   duration_ms: 8.328939\n[lenovo-laptop]   type: 'suite'\n[lenovo-laptop]   ...\n[lenovo-laptop] # Subtest: RuntimeServiceHandler shutdown\n[lenovo-laptop]     # Subtest: clears all state on shutdown\n[lenovo-laptop]     ok 1 - clears all state on shutdown\n[lenovo-laptop]       ---\n[lenovo-laptop]       duration_ms: 0.299024\n[lenovo-laptop]       type: 'test'\n[lenovo-laptop]       ...\n[lenovo-laptop]     1..1\n[lenovo-laptop] ok 7 - RuntimeServiceHandler shutdown\n[lenovo-laptop]   ---\n[lenovo-laptop]   duration_ms: 0.383959\n[lenovo-laptop]   type: 'suite'\n[lenovo-laptop]   ...\n[lenovo-laptop] 1..7\n[lenovo-laptop] # tests 39\n[lenovo-laptop] # suites 7\n[lenovo-laptop] # pass 37\n[lenovo-laptop] # fail 2\n[lenovo-laptop] # cancelled 0\n[lenovo-laptop] # skipped 0\n[lenovo-laptop] # todo 0\n[lenovo-laptop] # duration_ms 116.103047\n[lenovo-laptop] # time=688ms\n[lenovo-laptop] # test-files total=1 pass=0 fail=1 assertions=46\nlab test: lenovo-laptop: # test-files total=1 pass=0 fail=1 assertions=46\nlab test: lenovo-laptop: results copied to test-output/reports/test-results-lenovo-laptop.ndjson\n# test-files total=1 pass=0 fail=1 assertions=46\n"
+  }
+}
+```

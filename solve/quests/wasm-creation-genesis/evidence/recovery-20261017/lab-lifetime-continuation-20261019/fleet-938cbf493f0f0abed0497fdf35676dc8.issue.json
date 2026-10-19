@@ -1,0 +1,30 @@
+{
+  "issue": {
+    "url": "https://github.com/psvensson/lagrange-lab/issues/385",
+    "title": "[lab-job] 938cbf493f0f0abed0497fdf35676dc8",
+    "issue_number": 385,
+    "body": "{\"schema\":\"lagrange-lab-job/v1\",\"controller_id\":\"b4a2e06c193c44b09f1b67d02e8d80f4\",\"request_id\":\"938cbf493f0f0abed0497fdf35676dc8\",\"operation\":\"lab-fleet-observe\",\"created_at\":\"2026-10-19T15:33:25Z\",\"expires_at\":\"2026-10-19T15:38:25.000Z\"}",
+    "state": "open",
+    "user": {
+      "login": "psvensson",
+      "name": "psvensson",
+      "email": null,
+      "avatar_url": "https://avatars.githubusercontent.com/u/39554?v=4",
+      "id": 39554
+    },
+    "assignees": null,
+    "labels": null,
+    "milestone": null,
+    "state_reason": null,
+    "comments": 2,
+    "created_at": "2026-10-19T15:34:09Z",
+    "updated_at": "2026-10-19T15:34:34Z",
+    "closed_at": null,
+    "display_url": "https://github.com/psvensson/lagrange-lab/issues/385",
+    "display_title": "[lab-job] 938cbf493f0f0abed0497fdf35676dc8"
+  },
+  "url": "https://github.com/psvensson/lagrange-lab/issues/385",
+  "title": "[lab-job] 938cbf493f0f0abed0497fdf35676dc8",
+  "display_url": "https://github.com/psvensson/lagrange-lab/issues/385",
+  "display_title": "[lab-job] 938cbf493f0f0abed0497fdf35676dc8"
+}

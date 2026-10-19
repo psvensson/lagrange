@@ -1,0 +1,10 @@
+{
+  "issue": 384,
+  "request_id": "9fa37da60a242243973d21d19540c354",
+  "computed_request_sha256": "21a40e58b48d6816aa67e459a072d5cf1d7e95d1278f7afefcb3c83a049df197",
+  "receipt_request_sha256": "21a40e58b48d6816aa67e459a072d5cf1d7e95d1278f7afefcb3c83a049df197",
+  "digest_match": true,
+  "controller_match": true,
+  "request_id_match": true,
+  "status": "COMPLETE"
+}

@@ -1,0 +1,18 @@
+{
+  "issue": 393,
+  "request_id": "a5b0246d074b909d3e8b842961ce3c16",
+  "canonical_request_sha256": "58fe57447e7ed93f785bf5fe3f8b87546fd251ad181fcaca36ffdc5c3b292333",
+  "receipt_request_sha256": "58fe57447e7ed93f785bf5fe3f8b87546fd251ad181fcaca36ffdc5c3b292333",
+  "request_id_match": true,
+  "controller_match": true,
+  "status": "COMPLETE",
+  "recorded_at": "2026-10-19T15:49:53Z",
+  "job_id_match": true,
+  "offset_match": true,
+  "length_match": true,
+  "displayed_sha256": "fb8a17fa7980d24fa49c343eddcbf79a71ee8437336e5247719d0cee9b63d440",
+  "receipt_chunk_sha256": "fb8a17fa7980d24fa49c343eddcbf79a71ee8437336e5247719d0cee9b63d440",
+  "chunk_hash_match": true,
+  "result_url": "https://github.com/psvensson/lagrange-lab/issues/393#issuecomment-6271300944",
+  "request_digest_match": true
+}

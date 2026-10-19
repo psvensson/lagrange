@@ -1,0 +1,34 @@
+{
+  "source_issue": 387,
+  "job_id": "68f1e6da25b531657fe905c5cb116937",
+  "source_sha": "f1fc732f22de834c4bce064ac8f6bad213ddf20c",
+  "expected_log_bytes": 18583,
+  "reconstructed_log_bytes": 18583,
+  "expected_log_sha256": "72b6013ae4ac1c9a08937a325d3eba6ec2de290b536b1c8c6c80b1a605994038",
+  "reconstructed_log_sha256": "72b6013ae4ac1c9a08937a325d3eba6ec2de290b536b1c8c6c80b1a605994038",
+  "length_match": true,
+  "full_hash_match": true,
+  "chunk_issues": [
+    391,
+    392,
+    393
+  ],
+  "verified_chunks": [
+    {
+      "issue": 391,
+      "offset": 0,
+      "length": 8000
+    },
+    {
+      "issue": 392,
+      "offset": 8000,
+      "length": 8000
+    },
+    {
+      "issue": 393,
+      "offset": 16000,
+      "length": 2583
+    }
+  ],
+  "scope": "Each failed test's first failing assertion only; late-STOP settlement test 9 passes."
+}

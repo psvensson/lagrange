@@ -1,0 +1,150 @@
+lab test: lenovo-laptop: ordinary (1 files) cores=8 mem=15.5GiB speed x2.26
+[lenovo-laptop] placement-shell=1894620
+[lenovo-laptop] placement-head=f1fc732f22de834c4bce064ac8f6bad213ddf20c
+[lenovo-laptop] placement-link=node_modules
+[lenovo-laptop] placement-link=data/examples
+[lenovo-laptop] placement-link=data/partitions
+[lenovo-laptop] placement-link=tools/alloy-6.2.0
+[lenovo-laptop] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[lenovo-laptop] placement-link=tools/tla2tools.jar
+[lenovo-laptop] placement-prepared=import-graph
+[lenovo-laptop] placement-env=factor:2.3 mode:local retry:0 timeout: lanecap:7
+[lenovo-laptop] placement-pid=1895004
+[lenovo-laptop] # test-files planned=1
+[lenovo-laptop] classified lane ordinary: 1 file(s), jobs=4
+[lenovo-laptop] thermal: ok cpu 50C (coretemp/Package id 0) nvme unmeasured
+[lenovo-laptop] not ok test/node/runtime-service-handler.test.js (46 assertions, 688ms)
+[lenovo-laptop] # TAP assertions failed; test process exited 1
+[lenovo-laptop] TAP version 13
+[lenovo-laptop] # Subtest: RuntimeServiceHandler initialization
+[lenovo-laptop]     # Subtest: throws when serviceLifecycleManager is missing
+[lenovo-laptop]     ok 1 - throws when serviceLifecycleManager is missing
+[lenovo-laptop]       ---
+[lenovo-laptop]       duration_ms: 51.658465
+[lenovo-laptop]       type: 'test'
+[lenovo-laptop]       ...
+[lenovo-laptop]     # Subtest: throws when cdcIntegrationService is missing
+[lenovo-laptop]     ok 2 - throws when cdcIntegrationService is missing
+[lenovo-laptop]       ---
+[lenovo-laptop]       duration_ms: 0.451588
+[lenovo-laptop]       type: 'test'
+[lenovo-laptop]       ...
+[lenovo-laptop]     # Subtest: throws when systemTableCache is missing
+[lenovo-laptop]     ok 3 - throws when systemTableCache is missing
+[lenovo-laptop]       ---
+[lenovo-laptop]       duration_ms: 0.293506
+[lenovo-laptop]       type: 'test'
+[lenovo-laptop]       ...
+[lenovo-laptop]     # Subtest: initializes successfully with all dependencies
+[lenovo-laptop]     ok 4 - initializes successfully with all dependencies
+[lenovo-laptop]       ---
+[lenovo-laptop]       duration_ms: 0.470941
+[lenovo-laptop]       type: 'test'
+[lenovo-laptop]       ...
+[lenovo-laptop]     1..4
+[lenovo-laptop] ok 1 - RuntimeServiceHandler initialization
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 54.0419
+[lenovo-laptop]   type: 'suite'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: RuntimeServiceHandler handleCreateReplica
+[lenovo-laptop]     # Subtest: returns error when required fields are missing
+[lenovo-laptop]     ok 1 - returns error when required fields are missing
+[lenovo-laptop]       ---
+[lenovo-laptop]       duration_ms: 0.907247
+[lenovo-laptop]       type: 'test'
+[lenovo-laptop]       ...
+[lenovo-laptop]     # Subtest: returns INITIATED for valid create request
+[lenovo-laptop]     ok 2 - returns INITIATED for valid create request
+[lenovo-laptop]       ---
+[lenovo-laptop]       duration_ms: 1.233677
+[lenovo-laptop]       type: 'test'
+[lenovo-laptop]       ...
+[lenovo-laptop]     # Subtest: rejects non-canonical dispatched identities before lifecycle effects
+[lenovo-laptop]     ok 3 - rejects non-canonical dispatched identities before lifecycle effects
+[lenovo-laptop]       ---
+[lenovo-laptop]       duration_ms: 0.636626
+[lenovo-laptop]       type: 'test'
+[lenovo-laptop]       ...
+[lenovo-laptop]     # Subtest: returns ALREADY_EXISTS for active replica
+[lenovo-laptop]     ok 4 - returns ALREADY_EXISTS for active replica
+[lenovo-laptop]       ---
+[lenovo-laptop]       duration_ms: 1.816657
+[lenovo-laptop]       type: 'test'
+[lenovo-laptop]       ...
+[lenovo-laptop]     # Subtest: returns IN_PROGRESS for creating replica
+[lenovo-laptop]     ok 5 - returns IN_PROGRESS for creating replica
+[lenovo-laptop]       ---
+[lenovo-laptop]       duration_ms: 0.54218
+[lenovo-laptop]       type: 'test'
+[lenovo-laptop]       ...
+[lenovo-laptop]     # Subtest: returns IN_PROGRESS for duplicate operation ID
+[lenovo-laptop]     ok 6 - returns IN_PROGRESS for duplicate operation ID
+[lenovo-laptop]       ---
+[lenovo-laptop]       duration_ms: 0.416037
+[lenovo-laptop]       type: 'test'
+[lenovo-laptop]       ...
+[lenovo-laptop]     # Subtest: a CREATE over a nameless FAILED or REMOVING memo takes the generic path (RV6.1-RV6.3)
+[lenovo-laptop]     ok 7 - a CREATE over a nameless FAILED or REMOVING memo takes the generic path (RV6.1-RV6.3)
+[lenovo-laptop]       ---
+[lenovo-laptop]       duration_ms: 9.482891
+[lenovo-laptop]       type: 'test'
+[lenovo-laptop]       ...
+[lenovo-laptop]     # Subtest: calls lifecycle create + start without direct workflow-step persistence
+[lenovo-laptop]     ok 8 - calls lifecycle create + start without direct workflow-step persistence
+[lenovo-laptop]       ---
+[lenovo-laptop]       duration_ms: 1.355097
+[lenovo-laptop]       type: 'test'
+[lenovo-laptop]       ...
+[lenovo-laptop] {"level":50,"time":"2026-10-19T15:42:25.184Z","nodeId":"unknown","pid":1895019,"subsystem":"runtime-service-handler","operationId":"op-1","replicaId":"sys-postgres-wire-r1","entityId":"sys-postgres-wire","error":"bind failed","nodeId":"unknown","contextNodeId":"test-node","msg":"Runtime service replica creation failed"}
+[lenovo-laptop]     # Subtest: transitions to FAILED when lifecycle throws
+[lenovo-laptop]     ok 9 - transitions to FAILED when lifecycle throws
+[lenovo-laptop]       ---
+[lenovo-laptop]       duration_ms: 2.439097
+[lenovo-laptop]       type: 'test'
+[lenovo-laptop]       ...
+[lenovo-laptop] {"level":50,"time":"2026-10-19T15:42:25.186Z","nodeId":"unknown","pid":1895019,"subsystem":"runtime-service-handler","operationId":"op-1","replicaId":"sys-postgres-wire-r1","entityId":"sys-postgres-wire","error":"Service definition not found: sys-postgres-wire","nodeId":"unknown","contextNodeId":"test-node","msg":"Runtime service replica creation failed"}
+[lenovo-laptop]     # Subtest: fails when service definition not found
+[lenovo-laptop]     ok 10 - fails when service definition not found
+[lenovo-laptop]       ---
+[lenovo-laptop]       duration_ms: 1.015944
+[lenovo-laptop]       type: 'test'
+[lenovo-laptop]       ...
+[lenovo-laptop]     1..10
+[lenovo-laptop] ok 2 - RuntimeServiceHandler handleCreateReplica
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 20.64993
+[lenovo-laptop]   type: 'suite'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: RuntimeServiceHandler handleRemoveReplica
+[lenovo-laptop]     # Subtest: returns error when required fields are missing
+[lenovo-laptop]     ok 1 - returns error when required fields are missing
+[lenovo-laptop]       ---
+[lenovo-laptop]       duration_ms: 0.517149
+[lenovo-laptop]       type: 'test'
+[lenovo-laptop]       ...
+[lenovo-laptop]     # Subtest: returns NOT_FOUND when replica does not exist
+[lenovo-laptop]     ok 2 - returns NOT_FOUND when replica does not exist
+[lenovo-laptop]       ---
+[lenovo-laptop]       duration_ms: 0.384293
+[lenovo-laptop]       type: 'test'
+[lenovo-laptop]       ...
+[lenovo-laptop]     # Subtest: returns INITIATED for valid remove request
+[lenovo-laptop]     ok 3 - returns INITIATED for valid remove request
+[lenovo-laptop]       ---
+[lenovo-laptop]       duration_ms: 0.421655
+[lenovo-laptop]       type: 'test'
+[lenovo-laptop]       ...
+[lenovo-laptop]     # Subtest: reconstructs a persisted legacy target after handler restart before removal
+[lenovo-laptop]     ok 4 - reconstructs a persisted legacy target after handler restart before removal
+[lenovo-laptop]       ---
+[lenovo-laptop]       duration_ms: 2.653023
+[lenovo-laptop]       type: 'test'
+[lenovo-laptop]       ...
+[lenovo-laptop]     # Subtest: refuses an opaque legacy cleanup under the wrong entity despite a matching local services id
+[lenovo-laptop]     ok 5 - refuses an opaque legacy cleanup under the wrong entity despite a matching local services id
+[lenovo-laptop]       ---
+[lenovo-laptop]       duration_ms: 1.041203
+[lenovo-laptop]       type: 'test'
+[lenovo-laptop]       ...
+[lenovo-laptop]     # Subtest: defers opaqu

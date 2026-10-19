@@ -1,0 +1,25 @@
+{
+  "schema": "lagrange-lab-result/v1",
+  "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+  "request_id": "2092349d9ec966b026a966130f68bba1",
+  "request_sha256": "20241c7552096d521747226eb2a62c9f002ae1e7e4fda64e1f4dbac2455357a8",
+  "status": "COMPLETE",
+  "recorded_at": "2026-10-19T14:50:07Z",
+  "result": {
+    "exit_code": 0,
+    "finished_at": "2026-10-19T14:50:07Z",
+    "hosts_requested": [
+      "tv-dator"
+    ],
+    "local_run_directory": "/home/peter/.local/state/lagrange-lab/runs/2092349d9ec966b026a966130f68bba1",
+    "log_bytes": 2386,
+    "log_sha256": "000b85ea7fff593647eac5291ead584bf36b952dfc10ed570a8b6610351f6844",
+    "log_tail": "lab test: tv-dator: ordinary, exclusive (12 files) cores=12 mem=15.4GiB speed x1.42\n[tv-dator] placement-shell=1033571\n[tv-dator] placement-head=a55ab41296faf30a4c404c56117eacbaa993c903\n[tv-dator] placement-link=node_modules\n[tv-dator] placement-link=data/examples\n[tv-dator] placement-link=data/partitions\n[tv-dator] placement-link=tools/alloy-6.2.0\n[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz\n[tv-dator] placement-link=tools/tla2tools.jar\n[tv-dator] placement-prepared=import-graph\n[tv-dator] placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11\n[tv-dator] placement-pid=1033989\n[tv-dator] # test-files planned=12\n[tv-dator] classified lane ordinary: 8 file(s), jobs=4\n[tv-dator] thermal: ok cpu 65C (coretemp/Package id 0) nvme 44C (nvme/Sensor 1)\n[tv-dator] ok test/runtime/service-runtime-consensus-publication.test.js (16 assertions, 957ms)\n[tv-dator] ok test/control-plane/replica-dispatch-reservation-identity.test.js (24 assertions, 1150ms)\n[tv-dator] ok test/control-plane/service-instance-creation-cas.test.js (31 assertions, 1195ms)\n[tv-dator] ok test/node/runtime-service-bound-route.test.js (63 assertions, 1278ms)\n[tv-dator] ok test/service/service-lifecycle-manager.test.js (26 assertions, 374ms)\n[tv-dator] ok test/wasm-service/operation-lifecycle.test.js (34 assertions, 287ms)\n[tv-dator] ok test/node/runtime-service-handler.test.js (45 assertions, 566ms)\n[tv-dator] ok test/service/service-consensus-creation-intent.test.js (40 assertions, 886ms)\n[tv-dator] # test-files total=8 pass=8 fail=0 assertions=279\n[tv-dator] classified lane exclusive: 4 file(s), jobs=1\n[tv-dator] thermal: ok cpu 62C (coretemp/Package id 0) nvme 44C (nvme/Sensor 1)\n[tv-dator] ok test/service/service-consensus-creation-recovery.integration.test.js (2 assertions, 1251ms)\n[tv-dator] ok test/wasm-service/bound-creation-handler-embedding.integration.test.js (3 assertions, 1502ms)\n[tv-dator] ok test/wasm-service/bound-creation-physical-custody.integration.test.js (14 assertions, 2307ms)\n[tv-dator] ok test/wasm-service/bound-creation-restart.integration.test.js (41 assertions, 9291ms)\n[tv-dator] # test-files total=4 pass=4 fail=0 assertions=60\nlab test: tv-dator: # test-files total=12 pass=12 fail=0 assertions=339\nlab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson\n# test-files total=12 pass=12 fail=0 assertions=339\n",
+    "operation": "test-files",
+    "outcome": "PASS",
+    "reason": null,
+    "scope": "executor result; not independent verification or merge certification",
+    "source_sha": "a55ab41296faf30a4c404c56117eacbaa993c903",
+    "tail_truncated": false
+  }
+}

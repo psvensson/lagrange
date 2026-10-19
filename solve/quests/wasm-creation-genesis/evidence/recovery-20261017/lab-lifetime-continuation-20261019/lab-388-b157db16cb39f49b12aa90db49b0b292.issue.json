@@ -1,0 +1,30 @@
+{
+  "issue": {
+    "url": "https://github.com/psvensson/lagrange-lab/issues/388",
+    "title": "[lab-job] b157db16cb39f49b12aa90db49b0b292",
+    "issue_number": 388,
+    "body": "{\"controller_id\":\"b4a2e06c193c44b09f1b67d02e8d80f4\",\"created_at\":\"2026-10-19T15:39:17Z\",\"expires_at\":\"2026-10-19T19:39:17Z\",\"job_id\":\"db8d3f56c92d10ed9638c5e53fba40d8\",\"length\":8000,\"offset\":0,\"operation\":\"evidence\",\"request_id\":\"b157db16cb39f49b12aa90db49b0b292\",\"schema\":\"lagrange-lab-job/v1\"}",
+    "state": "open",
+    "user": {
+      "login": "psvensson",
+      "name": "psvensson",
+      "email": null,
+      "avatar_url": "https://avatars.githubusercontent.com/u/39554?v=4",
+      "id": 39554
+    },
+    "assignees": null,
+    "labels": null,
+    "milestone": null,
+    "state_reason": null,
+    "comments": 1,
+    "created_at": "2026-10-19T15:41:36Z",
+    "updated_at": "2026-10-19T15:41:56Z",
+    "closed_at": null,
+    "display_url": "https://github.com/psvensson/lagrange-lab/issues/388",
+    "display_title": "[lab-job] b157db16cb39f49b12aa90db49b0b292"
+  },
+  "url": "https://github.com/psvensson/lagrange-lab/issues/388",
+  "title": "[lab-job] b157db16cb39f49b12aa90db49b0b292",
+  "display_url": "https://github.com/psvensson/lagrange-lab/issues/388",
+  "display_title": "[lab-job] b157db16cb39f49b12aa90db49b0b292"
+}

@@ -1,0 +1,141 @@
+paque legacy REMOVE without authority, then retries the exact original
+[lenovo-laptop]     ok 6 - defers opaque legacy REMOVE without authority, then retries the exact original
+[lenovo-laptop]       ---
+[lenovo-laptop]       duration_ms: 1.561224
+[lenovo-laptop]       type: 'test'
+[lenovo-laptop]       ...
+[lenovo-laptop]     # Subtest: does not stop a successor when legacy owner read returns after replacement
+[lenovo-laptop]     ok 7 - does not stop a successor when legacy owner read returns after replacement
+[lenovo-laptop]       ---
+[lenovo-laptop]       duration_ms: 0.670347
+[lenovo-laptop]       type: 'test'
+[lenovo-laptop]       ...
+[lenovo-laptop]     # Subtest: does not STOP a successor installed after admitted legacy REMOVE but before queued STOP
+[lenovo-laptop]     not ok 8 - does not STOP a successor installed after admitted legacy REMOVE but before queued STOP
+[lenovo-laptop]       ---
+[lenovo-laptop]       duration_ms: 2.361846
+[lenovo-laptop]       type: 'test'
+[lenovo-laptop]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/610ae6c2b192-mvfdecbg-1773727/test/node/runtime-service-handler.test.js:644:3'
+[lenovo-laptop]       failureType: 'testCodeFailure'
+[lenovo-laptop]       error: |-
+[lenovo-laptop]         STALE_REMOVE_REPLACED_SUCCESSOR_MEMO
+[lenovo-laptop]         + actual - expected
+[lenovo-laptop]         
+[lenovo-laptop]           {
+[lenovo-laptop]             entityId: 'sys-postgres-wire',
+[lenovo-laptop]         -   operationId: 'successor-creation',
+[lenovo-laptop]             replicaId: 'replace-replica-old-before-stop',
+[lenovo-laptop]         +   status: 'removed'
+[lenovo-laptop]         -   status: 'active'
+[lenovo-laptop]           }
+[lenovo-laptop]         
+[lenovo-laptop]       code: 'ERR_ASSERTION'
+[lenovo-laptop]       name: 'AssertionError'
+[lenovo-laptop]       expected:
+[lenovo-laptop]         replicaId: 'replace-replica-old-before-stop'
+[lenovo-laptop]         entityId: 'sys-postgres-wire'
+[lenovo-laptop]         status: 'active'
+[lenovo-laptop]         operationId: 'successor-creation'
+[lenovo-laptop]       actual:
+[lenovo-laptop]         replicaId: 'replace-replica-old-before-stop'
+[lenovo-laptop]         entityId: 'sys-postgres-wire'
+[lenovo-laptop]         status: 'removed'
+[lenovo-laptop]       operator: 'strictEqual'
+[lenovo-laptop]       stack: |-
+[lenovo-laptop]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/610ae6c2b192-mvfdecbg-1773727/test/node/runtime-service-handler.test.js:662:14)
+[lenovo-laptop]         async Test.run (node:internal/test_runner/test:1054:7)
+[lenovo-laptop]         async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+[lenovo-laptop]       ...
+[lenovo-laptop]     # Subtest: does not publish stale generic REMOVE after STOP settles behind a successor
+[lenovo-laptop]     not ok 9 - does not publish stale generic REMOVE after STOP settles behind a successor
+[lenovo-laptop]       ---
+[lenovo-laptop]       duration_ms: 1.695087
+[lenovo-laptop]       type: 'test'
+[lenovo-laptop]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/610ae6c2b192-mvfdecbg-1773727/test/node/runtime-service-handler.test.js:672:3'
+[lenovo-laptop]       failureType: 'testCodeFailure'
+[lenovo-laptop]       error: |-
+[lenovo-laptop]         OLD_STOP_SETTLED_AND_OVERWROTE_SUCCESSOR_MEMO
+[lenovo-laptop]         + actual - expected
+[lenovo-laptop]         
+[lenovo-laptop]           {
+[lenovo-laptop]             entityId: 'sys-postgres-wire',
+[lenovo-laptop]         -   operationId: 'newer-creation',
+[lenovo-laptop]             replicaId: 'replace-replica-late-stop-completion',
+[lenovo-laptop]         +   status: 'removed'
+[lenovo-laptop]         -   status: 'active'
+[lenovo-laptop]           }
+[lenovo-laptop]         
+[lenovo-laptop]       code: 'ERR_ASSERTION'
+[lenovo-laptop]       name: 'AssertionError'
+[lenovo-laptop]       expected:
+[lenovo-laptop]         replicaId: 'replace-replica-late-stop-completion'
+[lenovo-laptop]         entityId: 'sys-postgres-wire'
+[lenovo-laptop]         status: 'active'
+[lenovo-laptop]         operationId: 'newer-creation'
+[lenovo-laptop]       actual:
+[lenovo-laptop]         replicaId: 'replace-replica-late-stop-completion'
+[lenovo-laptop]         entityId: 'sys-postgres-wire'
+[lenovo-laptop]         status: 'removed'
+[lenovo-laptop]       operator: 'strictEqual'
+[lenovo-laptop]       stack: |-
+[lenovo-laptop]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/610ae6c2b192-mvfdecbg-1773727/test/node/runtime-service-handler.test.js:703:14)
+[lenovo-laptop]         async Test.run (node:internal/test_runner/test:1054:7)
+[lenovo-laptop]         async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+[lenovo-laptop]       ...
+[lenovo-laptop]     # Subtest: refuses a pre-canonical REMOVE when its memo falsely names a bound creation
+[lenovo-laptop]     ok 10 - refuses a pre-canonical REMOVE when its memo falsely names a bound creation
+[lenovo-laptop]       ---
+[lenovo-laptop]       duration_ms: 0.293642
+[lenovo-laptop]       type: 'test'
+[lenovo-laptop]       ...
+[lenovo-laptop]     # Subtest: returns IN_PROGRESS for removing replica
+[lenovo-laptop]     ok 11 - returns IN_PROGRESS for removing replica
+[lenovo-laptop]       ---
+[lenovo-laptop]       duration_ms: 0.303575
+[lenovo-laptop]       type: 'test'
+[lenovo-laptop]       ...
+[lenovo-laptop]     # Subtest: resumes stalled removing replica when no removal task is active
+[lenovo-laptop]     ok 12 - resumes stalled removing replica when no removal task is active
+[lenovo-laptop]       ---
+[lenovo-laptop]       duration_ms: 1.358854
+[lenovo-laptop]       type: 'test'
+[lenovo-laptop]       ...
+[lenovo-laptop]     # Subtest: returns COMPLETED for already removed replica
+[lenovo-laptop]     ok 13 - returns COMPLETED for already removed replica
+[lenovo-laptop]       ---
+[lenovo-laptop]       duration_ms: 0.241566
+[lenovo-laptop]       type: 'test'
+[lenovo-laptop]       ...
+[lenovo-laptop]     # Subtest: calls lifecycle stop without direct workflow-step persistence
+[lenovo-laptop]     ok 14 - calls lifecycle stop without direct workflow-step persistence
+[lenovo-laptop]       ---
+[lenovo-laptop]       duration_ms: 1.547948
+[lenovo-laptop]       type: 'test'
+[lenovo-laptop]       ...
+[lenovo-laptop] {"level":50,"time":"2026-10-19T14:50:00.660Z","nodeId":"unknown","pid":1893688,"subsystem":"runtime-service-handler","operationId":"op-1","replicaId":"sys-postgres-wire-r1","entityId":"sys-postgres-wire","error":"stop failed","nodeId":"unknown","contextNodeId":"test-node","msg":"Runtime service replica removal failed"}
+[lenovo-laptop]     # Subtest: transitions to FAILED when stop throws
+[lenovo-laptop]     ok 15 - transitions to FAILED when stop throws
+[lenovo-laptop]       ---
+[lenovo-laptop]       duration_ms: 6.886072
+[lenovo-laptop]       type: 'test'
+[lenovo-laptop]       ...
+[lenovo-laptop]     1..15
+[lenovo-laptop] not ok 3 - RuntimeServiceHandler handleRemoveReplica
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 23.055558
+[lenovo-laptop]   type: 'suite'
+[lenovo-laptop]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/610ae6c2b192-mvfdecbg-1773727/test/node/runtime-service-handler.test.js:432:1'
+[lenovo-laptop]   failureType: 'subtestsFailed'
+[lenovo-laptop]   error: '2 subtests failed'
+[lenovo-laptop]   code: 'ERR_TEST_FAILURE'
+[lenovo-laptop]   ...
+[lenovo-laptop] # Subtest: RuntimeServiceHandler handleMessage dispatch
+[lenovo-laptop]     # Subtest: dispatches CREATE_REPLICA messages
+[lenovo-laptop]     ok 1 - dispatches CREATE_REPLICA messages
+[lenovo-laptop]       ---
+[lenovo-laptop]       duration_ms: 0.962899
+[lenovo-laptop]       type: 'test'
+[lenovo-laptop]       ...
+[lenovo-laptop]     # Subtest: dispatches REMOVE_REPLICA messages
+[lenovo-laptop]     ok 2 - dispatches REMOVE_REPLICA messages
+[lenovo-laptop]  
