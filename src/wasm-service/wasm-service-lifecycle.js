@@ -455,8 +455,6 @@ class WasmServiceLifecycle {
   enableServicesRowPublication(serviceId, serviceType, consensusResourceToken) {
     const replica = this.activeReplicas.get(serviceId);
     if (!replica || replica.consensusCreation === null ||
-        this.observeCurrentCreation(replica.consensusCreation).outcome !==
-          WASM_CREATION_CURRENT.CURRENT ||
         instanceDigest(replica.consensusCreation.token) !==
           instanceDigest(consensusResourceToken ?? null)) {
       return {outcome: WASM_SERVICES_ROW_MARK.NOT_REGISTERED};
