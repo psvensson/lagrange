@@ -5,7 +5,7 @@ import {SERVICE_INSTANCE_LIMIT as LIMIT, SERVICE_INSTANCE_OUTCOME as OUTCOME} fr
 import {captureInstanceJson, instanceDigest} from
   '../control-plane/owners/service-instance-contract.js';
 import {matchesInstanceResourceToken} from '../control-plane/owners/service-instance-state.js';
-import {ReplicaOperationResponseStatus as REPLY} from
+import {ReplicaOperationMessageType as MESSAGE_TYPE, ReplicaOperationResponseStatus as REPLY} from
   '../rebalancer/replica-operation-constants.js';
 import {RUNTIME_SERVICE_HANDLER_ERROR_MSG as ERROR,
   RUNTIME_SERVICE_RESTART_PLAN_STATE as PLAN_STATE} from './runtime-service-handler-constants.js';
@@ -75,6 +75,14 @@ function executionRequestConflict(handler, params, type) {
   const entry = executionForRequest(handler, params.operationId);
   if (entry === undefined) return false;
   const request = entry.observer?.operationId === params.operationId ? entry.observer : entry;
+  // A restart-created entry deliberately has no inbound request envelope. Its
+  // original journaled creation, not an empty synthetic envelope, is the
+  // authority for an exact duplicate of that same in-flight CREATE.
+  if (entry.type === type && type === MESSAGE_TYPE.CREATE_REPLICA &&
+      request === entry && entry.origin !== undefined &&
+      entry.params?.request === undefined && params.request !== undefined) {
+    return !matchesCreationRequest(handler, entry.origin, params);
+  }
   return entry.type !== type || !sameExecutionRequest(request, params);
 }
 
