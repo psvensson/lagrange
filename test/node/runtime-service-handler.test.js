@@ -74,8 +74,11 @@ function createMockLifecycleManager(options = {}) {
   return {
     calls,
     // The production-shaped manager without a journal (design
-    // ACTIVATION-DISCOVERY-DESIGN-20261017 Revision 3 RV2.2): every CREATE first resumes
-    // its retained creation, which this manager answers UNAVAILABLE.
+    // ACTIVATION-DISCOVERY-DESIGN-20261017 Revision 3 RV2.2, with U1 v3
+    // hydration): the journal-only read is UNAVAILABLE before any resume.
+    async readRetainedCreation() {
+      return {outcome: 'UNAVAILABLE'};
+    },
     async resumeConsensusCreation() {
       return {outcome: 'UNAVAILABLE'};
     },

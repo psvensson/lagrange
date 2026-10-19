@@ -17,6 +17,10 @@ import {WASM_SERVICE_REPLICA_STATE as STATE} from
 import {runtimeServiceConsensusIdentity} from
   '../../src/rebalancer/runtime-service-replica-identity.js';
 import {captureConsensusCreationIntent} from '../../src/service/service-consensus-creation-intent.js';
+import {ReplicaOperationMessageType as MESSAGE} from
+  '../../src/rebalancer/replica-operation-constants.js';
+import {EXECUTOR_OUTCOME_TYPE as EXECUTOR} from
+  '../../src/rebalancer/executor-outcome-constants.js';
 
 const TURNS = 4;
 const CLEANUP_FAULT = 'INDEPENDENT_EXACT_HANDLER_RETIREMENT_FAILURE';
@@ -43,6 +47,13 @@ async function preparedHost(t) {
   const {e, host, owned} = world;
   assert.equal((await host.driver.prepare(owned.definition, owned)).status, PREPARE_STATUS.READY);
   return {...world, replica: e.replicaOf(host)};
+}
+
+function createExact(host, retained) {
+  const definition = JSON.parse(retained.intent.descriptor.runtimeConfig).definition;
+  return host.lifecycle.createReplica(
+    {...definition, serviceId: retained.intent.descriptor.serviceId},
+    {consensusCreation: retained, consensusOpeningOwner: host.manager});
 }
 
 function current(host, retained) {
@@ -244,6 +255,87 @@ test('U1 retirement custody: shutdown retry preserves a failed retirement tombst
     assert.equal(e.replicaOf(host), null);
   });
 
+test('U1 retirement custody: joining an ordinary stop retains debt when that stop fails',
+  async (t) => {
+    const {e, host, retained, replica} = await preparedHost(t);
+    await replica.initialize();
+    const shutdown = replica.creationReconciliation.shutdown.bind(replica.creationReconciliation);
+    const entered = Promise.withResolvers();
+    const release = Promise.withResolvers();
+    // LABELLED SEAM: pause the actual ordinary shutdown before the real exact
+    // handler retirement fails. The later request must retain its own debt.
+    replica.creationReconciliation.shutdown = async () => {
+      entered.resolve();
+      await release.promise;
+      return shutdown();
+    };
+    const unregister = e.transport.unregisterExact;
+    e.transport.unregisterExact = () => {
+      throw new Error(CLEANUP_FAULT);
+    };
+    const stopping = replica.shutdown().then(() => null, (error) => error);
+    let retirement;
+    let result;
+    try {
+      await entered.promise;
+      assert.equal(replica.lifecycleState, STATE.STOPPING);
+      retirement = host.lifecycle.retireReplica(retained);
+      await turns();
+      assert.equal(e.metadata.state().selected.resources[host.slot].phase, 'RELEASING',
+        'the real retirement reached its owner while the ordinary stop was paused');
+      release.resolve();
+      assert.equal((await stopping)?.message, CLEANUP_FAULT);
+      result = await retirement;
+    } finally {
+      release.resolve();
+      replica.creationReconciliation.shutdown = shutdown;
+      e.transport.unregisterExact = unregister;
+      await Promise.allSettled([stopping, retirement]);
+    }
+    assert.equal(result.retired, false);
+    assert.equal(replica.lifecycleState, STATE.CLEANUP_REQUIRED);
+    assert.equal(replica.db.open, true);
+    assert.equal(localRecord(host, retained).phase, 'ADMITTED');
+    await host.lifecycle.shutdownAll();
+    assert.equal(localRecord(host, retained).phase, 'RETIRED',
+      'JOINED_ORDINARY_STOP_DROPPED_THE_ADMITTED_RETIREMENT_INTENT');
+    assert.equal(replica.db, null);
+    assert.equal(e.replicaOf(host), null);
+  });
+
+test('U1 physical admission: a directly stopping object blocks a second bound object',
+  async (t) => {
+    const {e, host, retained, replica} = await preparedHost(t);
+    await replica.initialize();
+    const shutdown = replica.creationReconciliation.shutdown.bind(replica.creationReconciliation);
+    const entered = Promise.withResolvers();
+    const release = Promise.withResolvers();
+    replica.creationReconciliation.shutdown = async () => {
+      entered.resolve();
+      await release.promise;
+      return shutdown();
+    };
+    const stopping = replica.shutdown();
+    try {
+      await entered.promise;
+      assert.equal(replica.lifecycleState, STATE.STOPPING);
+      assert.equal(host.lifecycle.retiringReplicas.has(replica), false,
+        'direct ordinary shutdown has not passed through lifecycle retirement');
+      assert.throws(() => createExact(host, retained), {code: 'wasm_service_replica_live'},
+        'DIRECT_STOPPING_OBJECT_DID_NOT_FENCE_BOUND_RECREATION');
+      assert.strictEqual(e.replicaOf(host), replica, 'the held object keeps physical registration');
+      assert.equal(replica.db.open, true, 'its original database is still held');
+    } finally {
+      release.resolve();
+      replica.creationReconciliation.shutdown = shutdown;
+      await stopping;
+    }
+    await host.lifecycle.stopReplica(e.serviceId);
+    const successor = createExact(host, retained);
+    assert.notStrictEqual(successor, replica, 'settled ordinary cleanup permits explicit recreation');
+    assert.equal(successor.lifecycleState, STATE.CREATED);
+  });
+
 for (const opened of [true, false]) {
   test(`U1 retirement finality: lost metadata history with ${opened ? 'RETIRED' : 'missing'} storage`,
     async (t) => {
@@ -299,3 +391,71 @@ test('U1 driver admission: a stale prepared origin cannot start the physically c
     assert.equal(replica.lifecycleState, STATE.CREATED);
     assert.equal(fs.existsSync(localPath(host, successor)), false);
   });
+
+async function publishedWorld(t) {
+  const e = await embedding(t);
+  for (let slot = 0; slot < 3; slot += 1) {
+    const host = await e.addHost(slot);
+    host.retained = await e.retain(host);
+    assert.equal(host.retained.outcome, 'ADMISSION_RETAINED');
+  }
+  for (const host of e.hosts) await e.dispatch(host, MESSAGE.CREATE_REPLICA);
+  const eachAnswered = (type) => e.hosts.every((host) => e.outcomeTypes(host).includes(type));
+  await e.settle(() => eachAnswered(EXECUTOR.RUNTIME_SERVICE_CREATE_HELD), 'custody founders held');
+  await e.form();
+  await e.settle(() => eachAnswered(EXECUTOR.RUNTIME_SERVICE_CREATE_ACTIVE),
+    'custody founders published');
+  return e;
+}
+
+for (const fault of ['throw', 'retained', 'absent']) {
+  test(`U1 retirement debt: ${fault} STOPPED projection cannot complete the original journal`,
+    async (t) => {
+      const e = await publishedWorld(t);
+      const host = e.hosts[0];
+      const retained = host.retained;
+      const physical = runtimeServiceConsensusIdentity(retained.intent.consensusBinding,
+        retained.intent.consensusSlotRequest);
+      const originalRow = () => e.metadata.db.prepare(
+        'SELECT * FROM wasm_operations WHERE operation_id = ?').get(retained.operationId);
+      const serviceRow = () => e.rows('services').find((row) =>
+        row.service_id === physical.replicaId);
+      assert.equal(serviceRow().status, 'active', 'real native publication created the old row');
+      assert.equal(originalRow().state, 'in_progress');
+      const journalCount = e.rows('wasm_operations').length;
+      const writer = host.runtime._stateProjectionWriter;
+      let calls = 0;
+      // LABELLED SEAM: only the exact old STOPPED projection is withheld.
+      // The native publication, local retirement and metadata close are real.
+      host.runtime._stateProjectionWriter = fault === 'absent' ? null : async (...args) => {
+        if (args[0] !== physical.replicaId || args[1].status !== 'stopped') return writer(...args);
+        calls += 1;
+        if (fault === 'throw') throw new Error('INDEPENDENT_STOPPED_PROJECTION_FAILURE');
+        return {retained: true};
+      };
+      const owned = {definition: consensusBootstrapDescriptor(retained),
+        consensusCreation: retained, consensusOpeningOwner: host.manager};
+      let result;
+      try {
+        result = await host.manager.stopReplica(owned);
+        assert.equal(e.metadata.state().selected.resources[host.slot].phase, 'CLOSED');
+        assert.equal(localRecord(host, retained).phase, 'RETIRED');
+        assert.equal(serviceRow().status, 'active', 'the withheld services effect remains owed');
+        assert.equal(originalRow().state, 'in_progress',
+          'ORIGINAL_JOURNAL_COMPLETED_BEFORE_ITS_STOPPED_PROJECTION');
+        assert.equal(result.finality, 'FINAL', 'physical finality remains separately visible');
+        assert.equal(result.status, 'RETIRED_UNPROJECTED');
+        assert.equal(result.completion, undefined);
+        assert.equal(calls, fault === 'absent' ? 0 : 1);
+      } finally {
+        host.runtime._stateProjectionWriter = writer;
+      }
+      const retried = await host.manager.stopReplica(owned);
+      assert.equal(retried.completion.outcome, 'CREATION_ROW_COMPLETED');
+      assert.equal(originalRow().state, 'completed');
+      assert.equal(serviceRow(), undefined);
+      assert.equal(e.rows('wasm_operations').length, journalCount, 'no generic STOP journal');
+      assert.ok(e.rows('wasm_operations').filter((row) => row.operation_id !== retained.operationId)
+        .every((row) => row.state === 'in_progress'), 'other original journals stay live');
+    });
+}

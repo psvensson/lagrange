@@ -232,14 +232,14 @@ describe('stage 1c: RuntimeServiceHandler bound CREATE route (RV2.2, RV3.2, RV3.
       await create(w);
       assert.equal(w.handler.getLocalReplica(w.replicaId).status, ReplicaStatus.HELD);
       assert.equal(lastOutcome(w).outcomeType, EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_HELD);
-      assert.equal(w.manager._replicaStateById.get(w.replicaId), 'starting',
+      assert.equal(w.manager._replicaStateById.get(w.replicaId).state, 'starting',
         'a confirmed PUBLISHED_UNPROJECTED keeps STARTING (Revision 4)');
       w.runtime.starts.push('PUBLISHED');
       const reply = await create(w);
       assert.equal(reply.status, ReplicaOperationResponseStatus.IN_PROGRESS,
         'a duplicate CREATE while HELD re-enters and answers IN_PROGRESS (C6-3)');
       assert.equal(w.handler.getLocalReplica(w.replicaId).status, ReplicaStatus.ACTIVE);
-      assert.equal(w.manager._replicaStateById.get(w.replicaId), 'running');
+      assert.equal(w.manager._replicaStateById.get(w.replicaId).state, 'running');
       assert.deepEqual([lastOutcome(w).outcomeType, lastOutcome(w).workflowStep],
         [EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_ACTIVE, WORKFLOW_STEP.ACTIVE]);
     });
@@ -255,7 +255,7 @@ describe('stage 1c: RuntimeServiceHandler bound CREATE route (RV2.2, RV3.2, RV3.
       assert.equal(outcome.errorCode, 'CONTENT_CONFLICT');
       assert.ok(w.runtime.calls.some((call) => call.kind === 'stop' && call.bound),
         'the contradicted resource was retired by its creation');
-      assert.notEqual(w.manager._replicaStateById.get(w.replicaId), 'running');
+      assert.notEqual(w.manager._replicaStateById.get(w.replicaId)?.state, 'running');
     });
 
   test('UNKNOWN after retention is the handler-typed deferral: CREATE_FAILED + deferRetry, memo FAILED',

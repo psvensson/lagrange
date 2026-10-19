@@ -9,6 +9,7 @@
 // native lifecycle (the native embedding is the C6 integration file).
 import {describe, test} from 'node:test';
 import assert from 'node:assert/strict';
+import {isDeepStrictEqual} from 'node:util';
 import {createOriginFixture} from '../service/service-consensus-creation-fixture.js';
 import {SYSTEM_TABLE_SCHEMAS, generateCreateTableSQL} from
   '../../src/bootstrap/system-table-schemas-constants.js';
@@ -31,14 +32,22 @@ const HOST = 'host-1.lab.test';
 const PORT = 9101;
 const BOOT_INCARNATION = 11;
 
+function retainedOrigin(creation) {
+  return creation ? {operationId: creation.operationId, intent: creation.intent,
+    token: creation.token} : null;
+}
+
 class ScriptedConsensusDriver extends RuntimeDriver {
-  constructor() {
+  constructor(creation) {
     super('wasm_component');
     this.starts = [];
     this.stops = [];
     this.marks = [];
     this.markAnswer = 'PRESENT';
     this.events = null;
+    // This projection fixture starts with a prepared scripted physical
+    // creation. Native custody and its state predicate have separate tests.
+    this.currentCreation = structuredClone(retainedOrigin(creation));
   }
   async prepare() {
     return {status: 'ready'};
@@ -52,9 +61,18 @@ class ScriptedConsensusDriver extends RuntimeDriver {
     return {status: 'PUBLISHED', started: true, port: PORT,
       ...(next === 'NO_HOST' ? {} : {host: HOST}), ...bound};
   }
-  async stop() {
+  observeCurrentCreation(context) {
+    if (this.currentCreation === null) return {outcome: 'ABSENT'};
+    return {outcome: isDeepStrictEqual(this.currentCreation,
+      retainedOrigin(context.consensusCreation)) ? 'CURRENT' : 'DIFFERENT'};
+  }
+  async stop(context) {
     this.events?.push('driver-stop');
-    return this.stops.shift() ?? {outcome: 'CLOSED', retired: true, closed: true};
+    const result = this.stops.shift() ??
+      {outcome: 'CLOSED', retired: true, closed: true, finality: 'FINAL'};
+    if (result.retired === true && isDeepStrictEqual(this.currentCreation,
+      retainedOrigin(context.consensusCreation))) this.currentCreation = null;
+    return result;
   }
   async health() {
     return {status: 'healthy'};
@@ -83,7 +101,7 @@ async function world(t, {bootIncarnation = BOOT_INCARNATION, endpoints = true,
   const retained = await metadata.prepare();
   assert.equal(retained.outcome, 'ADMISSION_RETAINED');
   const owners = metadata.owner(NODE_ID);
-  const driver = new ScriptedConsensusDriver();
+  const driver = new ScriptedConsensusDriver(retained);
   const registry = new RuntimeDriverRegistry();
   registry.register(driver);
   const runtime = new ServiceRuntimeLifecycle(registry);
@@ -226,7 +244,8 @@ describe('stage 1c: bound retirement withdraws exactly this replica\'s rows (RV1
   test('closed:false keeps the services row (custody stays with the creation)', async (t) => {
     const w = await world(t);
     assert.equal((await w.runtime.start(w.handle)).status, 'PUBLISHED');
-    w.driver.stops.push({outcome: 'CLOSE_UNRESOLVED', retired: true, closed: false});
+    w.driver.stops.push({outcome: 'CLOSE_UNRESOLVED', retired: true, closed: false,
+      finality: 'UNRESOLVED'});
     const result = await w.runtime.stop(w.handle);
     assert.equal(result.closed, false);
     assert.equal(w.rows('services').length, 1);
