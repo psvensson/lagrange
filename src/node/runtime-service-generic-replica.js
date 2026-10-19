@@ -96,10 +96,20 @@ async function createGenericReplica(handler, params, entry) {
   }
 }
 
+// The existing admitted execution is the only holder of this local memo
+// until the generic STOP settles. In-flight identity alone is not sufficient:
+// another local generation can replace a replicaId while STOP is queued or
+// waiting on the adapter. A late old continuation must not stop or publish
+// over that successor.
+function currentRemovalMemo(handler, entry) {
+  return currentExecution(handler, entry) && entry?.admittedMemo !== undefined &&
+    handler.localReplicas.get(entry.replicaId) === entry.admittedMemo;
+}
+
 async function removeGenericReplica(handler, {
   operationId, entityId, replicaId, reason,
 }, entry) {
-  if (!currentExecution(handler, entry)) return;
+  if (!currentRemovalMemo(handler, entry)) return;
   try {
     const definition = handler.resolveServiceDefinition(entityId);
     const replicaHandle = {
@@ -111,10 +121,13 @@ async function removeGenericReplica(handler, {
       ...(definition || {}),
     };
 
+    // This is the last synchronous fence before invoking an irreversible
+    // physical STOP. The owner may have replaced the memo after scheduling.
+    if (!currentRemovalMemo(handler, entry)) return;
     await handler.serviceLifecycleManager.stopReplica(
       replicaHandle, {nodeId: handler.nodeId, reason},
     );
-    if (!currentExecution(handler, entry)) return;
+    if (!currentRemovalMemo(handler, entry)) return;
 
     handler.localReplicas.set(replicaId, {
       replicaId, entityId, status: ReplicaStatus.REMOVED,
@@ -133,7 +146,7 @@ async function removeGenericReplica(handler, {
       {operationId, replicaId, entityId, nodeId: handler.nodeId},
     );
   } catch (error) {
-    if (!currentExecution(handler, entry)) return;
+    if (!currentRemovalMemo(handler, entry)) return;
     handler.localReplicas.set(replicaId, {
       replicaId, entityId, status: ReplicaStatus.FAILED,
     });
@@ -172,7 +185,9 @@ function admitGenericRemoval(handler, params, replica) {
   }
   const entry = handler.trackReplicaRemovalOperation(params);
   if (entry === undefined) return executionRefusal(handler);
-  handler.localReplicas.set(replicaId, {...replica, status: ReplicaStatus.REMOVING});
+  const admittedMemo = {...replica, status: ReplicaStatus.REMOVING};
+  entry.admittedMemo = admittedMemo;
+  handler.localReplicas.set(replicaId, admittedMemo);
   handler.startRemoveReplicaAsync(params, entry);
   return {status: replica.status === ReplicaStatus.REMOVING ?
     ReplicaOperationResponseStatus.IN_PROGRESS : ReplicaOperationResponseStatus.INITIATED,
