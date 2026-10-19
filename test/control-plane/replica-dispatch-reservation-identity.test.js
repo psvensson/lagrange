@@ -186,8 +186,9 @@ test('dispatch projection preserves unbound identity and rejects malformed ' +
 });
 
 // A dispatch projection cannot authorize an opaque physical target's entity.
-// This readonly gate consumes the actual operation repository owner.
-test('legacy REMOVE takes original entity and generation from strict owner observation',
+// This dispatch consumer uses a scripted repository seam and checks the
+// original-operation read contract before consuming its typed observations.
+test('legacy REMOVE dispatch consumer requests strict original-operation observation',
   async (t) => {
     const operationId = 'legacy-original-remove';
     const replicaId = 'replace-replica-historical-opaque';
@@ -208,9 +209,13 @@ test('legacy REMOVE takes original entity and generation from strict owner obser
     }};
     const request = {operationId, entityId: SERVICE_ID, replicaId, nodeId: TARGET_NODE_ID};
     t.equal((await dispatch.authorizeLegacyRuntimeRemoval(request)).outcome, 'ADMITTED');
+    t.equal(reads[0].id, operationId,
+      'legacy authority reads the exact original operation');
     t.equal(reads[0].options.authoritativeReadMode,
       CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
       'projection or local cache cannot authorize physical deletion');
+    t.equal(reads[0].options.requireAbsenceConfirmation, true,
+      'a failed owner read must remain distinct from confirmed absence');
     row = {...original, entityId: 'wrong-service'};
     t.equal((await dispatch.authorizeLegacyRuntimeRemoval(request)).outcome,
       'CONTENT_CONFLICT', 'owner refuses caller entity mismatch');
