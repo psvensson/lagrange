@@ -515,6 +515,27 @@ describe('RuntimeServiceHandler handleRemoveReplica', () => {
     );
   });
 
+  it('refuses a pre-canonical REMOVE when its memo falsely names a bound creation',
+    async () => {
+      const replicaId = 'replace-replica-mismatched-bound-identity';
+      const {handler, lifecycle} = createHandler();
+      handler.localReplicas.set(replicaId, {
+        replicaId, entityId: 'sys-postgres-wire', operationId: 'bound-original',
+        status: ReplicaStatus.ACTIVE,
+      });
+      const memo = handler.getLocalReplica(replicaId);
+      const response = await handler.handleRemoveReplica({
+        [ReplicaOperationField.OPERATION_ID]: 'cleanup-attempt',
+        [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
+        [ReplicaOperationField.REPLICA_ID]: replicaId,
+      });
+      assert.equal(response.status, ReplicaOperationResponseStatus.ERROR);
+      assert.equal(response.deferRetry, false);
+      assert.deepEqual(lifecycle.calls, [], 'AN_OPAQUE_ID_WAS_GIVEN_BOUND_STOP_AUTHORITY');
+      assert.strictEqual(handler.getLocalReplica(replicaId), memo,
+        'REFUSED_CLEANUP_OVERWROTE_ANOTHER_CREATION');
+    });
+
   it('returns IN_PROGRESS for removing replica', async () => {
     const {handler} = createHandler();
     handler.localReplicas.set('sys-postgres-wire-r1', {

@@ -500,8 +500,13 @@ class RuntimeServiceHandler extends EventEmitter {
       );
     }
 
+    // Target-claim identity is the durable ADD/REPLACE allocation contract,
+    // not proof of REMOVE authorization. The existing operation owner may
+    // retire a persisted pre-canonical generic target by its exact local row;
+    // bound creations must still carry canonical identity and their journal.
     if (replica.entityId !== entityId ||
-        buildRuntimeServiceTargetClaimKey(replicaId, entityId) === null) {
+        (namesCreation(replica) &&
+          buildRuntimeServiceTargetClaimKey(replicaId, entityId) === null)) {
       return executionRefusal(this, CREATION_OUTCOME.CONTENT_CONFLICT, false);
     }
     if (replica.status === RUNTIME_SERVICE_CREATION_MEMO.CONTINUATION_PENDING) {
