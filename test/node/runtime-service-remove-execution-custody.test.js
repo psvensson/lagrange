@@ -12,7 +12,8 @@ import {ReplicaOperationField as FIELD, ReplicaOperationMessageType as TYPE,
 import {EXECUTOR_OUTCOME_TYPE as OUTCOME} from
   '../../src/rebalancer/executor-outcome-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
-import {SERVICE_INSTANCE_OUTCOME} from '../../src/constants/service-instance.js';
+import {CONSENSUS_CREATION_RESULT as CREATION} from
+  '../../src/service/service-consensus-creation-intent.js';
 import {createOriginFixture} from '../service/service-consensus-creation-fixture.js';
 
 const QUIET = {debug() {}, info() {}, warn() {}, error() {}};
@@ -183,7 +184,7 @@ test('U1 execution: silent bound retirement captures original target and one obs
       calls.push(handle);
       entered.resolve();
       await release.promise;
-      return {finality: 'FINAL', completion: {outcome: 'ROW_COMPLETED'}};
+      return {finality: 'FINAL', completion: {outcome: CREATION.ROW_COMPLETED}};
     };
     manager.observeCurrentCreation = () => ({outcome: 'ABSENT'});
     const entityId = journal.intent.descriptor.serviceId;
