@@ -4,6 +4,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {test} from 'node:test';
+import {isDeepStrictEqual} from 'node:util';
 import Database from 'better-sqlite3';
 
 import {BOOTSTRAP_CLEANUP_STEP, BOOTSTRAP_PHASE, CLEANUP_RESULT} from
@@ -12,8 +13,6 @@ import {DURABLE_EVIDENCE_STATE, MEMBERSHIP_OWNER_REASON} from
   '../../src/bootstrap/rejoin-hints-constants.js';
 import {MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR} from
   '../../src/message-group/message-group-service-row-owner.js';
-import {participantReleaseAdmissionOf} from
-  '../../src/partition/partition-participant-transaction-pause.js';
 import {readPartitionWriteOrigin} from
   '../../src/partition/partition-participant-transaction-store.js';
 import {
@@ -21,6 +20,7 @@ import {
   PARTICIPANT_RELEASE_ACTION as ACTION,
   PARTICIPANT_RELEASE_ADMISSION as ADMISSION,
   PARTICIPANT_RELEASE_MISSING_FACT as MISSING,
+  PARTICIPANT_RELEASE_TRIGGER as TRIGGER,
 } from '../../src/partition/partition-participant-transaction-cutover-constants.js';
 import {CONTROL_PARTITION, SEED_RELEASE_BUDGET_MS,
   withSeedReleaseFailureCustody} from
@@ -34,6 +34,37 @@ function errorIncludes(error, expected) {
   if (error?.cause && errorIncludes(error.cause, expected)) return true;
   return Array.isArray(error?.errors) &&
     error.errors.some((nested) => errorIncludes(nested, expected));
+}
+
+function belongsToSelectedAttempt(request, selected) {
+  return request.partitionId === selected.request.partitionId &&
+    request.release?.releaseId === selected.request.release.releaseId &&
+    isDeepStrictEqual(request.attempt, selected.request.attempt);
+}
+
+function assertSelectedAttemptDeliveries(host) {
+  const selected = host.selected;
+  const freshIntents = host.deliveries.filter(({request}) =>
+    request.action === ACTION.RELEASE && request.trigger === TRIGGER.FRESH_SEED);
+  assert.ok(freshIntents.length >= 2,
+    'the real fresh seed delivered control and dependent RELEASE intents');
+  assert.ok(freshIntents.every(({request}) =>
+    request.deadlineAtMs === selected.request.deadlineAtMs),
+  'fresh-seed intents, including nested control, retain the original shared deadline');
+  assert.ok(freshIntents.includes(selected.seedIntent));
+  const attemptDeliveries = host.deliveries.filter(({request}) =>
+    belongsToSelectedAttempt(request, selected));
+  assert.equal(attemptDeliveries.filter(({request}) =>
+    request.action === ACTION.ENABLE).length, 1);
+  assert.equal(attemptDeliveries.some(({request}) =>
+    [ACTION.OBSERVE_APPLIED_POSITION, ACTION.RESUME].includes(request.action)), false,
+  'the selected expired attempt cannot dispatch applied observation or RESUME');
+  assert.ok(freshIntents.some(({request, answer}) =>
+    request.partitionId === CONTROL_PARTITION && answer?.outcome === OUTCOME.CUT_OVER),
+  'the actual fresh-seed control cohort completed its release first');
+  assert.equal(selected.seedIntent.answer?.missingFact, MISSING.RELEASE_DEADLINE);
+  assert.equal(selected.seedIntent.answer?.phase, ACTION.OBSERVE_APPLIED_POSITION,
+    'the selected fresh-seed refusal follows real ENABLE and precedes observation dispatch');
 }
 
 function assertCommittedExpiryEngaged(host) {
@@ -56,38 +87,24 @@ function assertCommittedExpiryEngaged(host) {
   assert.equal(service.timeSource, host.selected.serviceClock);
   assert.equal(host.bootstrap.nodeService.getTimeSource(), host.selected.nodeClock,
     'the treatment changes only handler time; native and node clocks remain intact');
-  assert.ok(host.deliveries.every(({request: delivered}) =>
-    delivered.deadlineAtMs === request.deadlineAtMs),
-  'all actual release deliveries retain the original shared deadline');
-  assert.equal(host.deliveries.filter(({request: delivered}) =>
-    delivered.action === ACTION.ENABLE &&
-    delivered.partitionId === request.partitionId).length, 1);
-  assert.ok(host.deliveries.some(({request: delivered, answer: observed}) =>
-    delivered.partitionId === CONTROL_PARTITION &&
-    delivered.action === ACTION.RELEASE && observed?.outcome === OUTCOME.CUT_OVER),
-  'the actual control cohort completed its release first');
-  assert.equal(host.deliveries.some(({request: delivered}) =>
-    delivered.partitionId === request.partitionId &&
-    [ACTION.OBSERVE_APPLIED_POSITION, ACTION.RESUME].includes(delivered.action)), false,
-  'expiry prevents dependent applied-observation and RESUME dispatch');
-  assert.equal(participantReleaseAdmissionOf(service).state, ADMISSION.CLOSED);
+  assertSelectedAttemptDeliveries(host);
+  assert.equal(host.selected.admissionAfterEnable.state, ADMISSION.CLOSED,
+    'the selected ENABLE answer precedes any serving admission');
+  assert.equal(service.isShutdown, true, 'failed startup has closed the old service lifetime');
   assert.equal(host.result.success, false);
   assert.ok(host.result.error.startsWith(FAILURE_PREFIX), host.result.error);
   const primary = JSON.parse(host.result.error.slice(FAILURE_PREFIX.length));
   assert.equal(primary.answer.outcome, OUTCOME.UNAVAILABLE);
   assert.equal(primary.answer.missingFact, MISSING.RELEASE_DEADLINE);
-  const firstRefusal = host.deliveries.find(({request: delivered, answer: observed}) =>
-    delivered.action === ACTION.RELEASE && delivered.partitionId === request.partitionId &&
-    observed?.outcome === OUTCOME.UNAVAILABLE)?.answer;
-  assert.equal(firstRefusal?.missingFact, MISSING.RELEASE_DEADLINE);
-  assert.equal(firstRefusal?.phase, ACTION.OBSERVE_APPLIED_POSITION,
-    'the actual first refusal occurred after native ENABLE, before observation dispatch');
   assert.ok(host.closeCalls.length > 0, 'real cleanup reached the injected native close');
   assert.equal(host.closeCalls.every((call) => call.db === db), true);
   assert.equal(db.open, true);
   assert.equal(service.db, db);
   assert.deepEqual(readPartitionWriteOrigin(db), after,
     'failed cleanup leaves the committed origin on the exact retained connection');
+  assert.ok(host.nativeDatabases.some((entry) => entry.db === db));
+  assert.ok(host.nativeDatabases.some((entry) => entry.kind === 'message-group'),
+    'teardown retains the already acquired message-group DB identities too');
 }
 
 function assertRegistrationCleanup(host) {

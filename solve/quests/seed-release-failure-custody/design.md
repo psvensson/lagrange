@@ -128,3 +128,19 @@ witness measures the actual failure/cleanup sequence.
 Only failure-result/event consumers receive the new cleanup observation.
 Startup still observes `success: false`; the observation grants no retry,
 reopen, release or placement permission.
+
+## Exact SQL reference discharge
+
+Independent physical-owner review found three references to the acquired SQL
+engine: bootstrap, CDC and `SeedRuntimeBridgeOwner`'s acquisition cache.
+Cleanup delegates omit the setter currently requested by
+`shutdownSqlQueryEngine`; merely adding a plain setter would still leave the
+bridge returning the stopped engine.
+
+After the existing helper successfully awaits shutdown, an exact-engine
+release delegate must clear bootstrap and bridge references only when each
+still equals the captured engine. CDC retains its existing exact comparison.
+The bridge's release method discharges its own cache; it does not run a second
+shutdown algorithm. Rejection retains all references for same-owner retry.
+The focused SQL witness checks both rejection/retry and a replacement
+installed while old shutdown is pending.

@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 
@@ -162,4 +163,77 @@ test('Bootstrap cleanup retains a replacement installed while an exact old close
     await service.seedCleanupHandler.shutdownServiceMap(options);
     t.equal(successorCloses, 1, 'a new cleanup attempt owns the current object');
     t.equal(services.size, 0, 'successful release discharges the exact object');
+  });
+
+test('Bootstrap SQL cleanup retains all exact engine references on rejection and retries',
+  async (t) => {
+    const service = new BootstrapService({
+      bootIncarnation: 1,
+      nodeId: 'sql-cleanup-retry-node',
+      nodeAddress: 'localhost:8080',
+    });
+    service.logger = createSilentLogger();
+    const failure = new Error('SQL shutdown still pending');
+    const calls = [];
+    let rejectShutdown = true;
+    const engine = {async shutdown() {
+      calls.push('engine');
+      if (rejectShutdown) throw failure;
+    }};
+    const cdc = {sqlQueryEngine: engine, markShuttingDown() {
+      calls.push('cdc');
+    }};
+    service.sqlQueryEngine = engine;
+    service.seedRuntimeBridgeOwner.sqlQueryEngine = engine;
+    service.cdcIntegrationService = cdc;
+    const cleanup = service.seedCleanupHandler;
+    await assert.rejects(cleanup.shutdownSqlQueryEngine(cleanup.delegates),
+      (error) => error === failure);
+    t.equal(service.sqlQueryEngine, engine);
+    t.equal(service.seedRuntimeBridgeOwner.sqlQueryEngine, engine);
+    t.equal(cdc.sqlQueryEngine, engine);
+    rejectShutdown = false;
+    await cleanup.shutdownSqlQueryEngine(cleanup.delegates);
+    t.same(calls, ['cdc', 'engine', 'cdc', 'engine'],
+      'each attempt marks CDC before the same engine shutdown');
+    t.equal(service.sqlQueryEngine, null, 'successful shutdown releases bootstrap reference');
+    t.equal(service.seedRuntimeBridgeOwner.sqlQueryEngine, null,
+      'successful shutdown releases the acquisition owner cache');
+    t.equal(cdc.sqlQueryEngine, null, 'successful shutdown releases the captured CDC reference');
+  });
+
+test('Bootstrap SQL cleanup cannot clear a replacement engine after an old shutdown',
+  async (t) => {
+    const service = new BootstrapService({
+      bootIncarnation: 1,
+      nodeId: 'sql-cleanup-identity-node',
+      nodeAddress: 'localhost:8080',
+    });
+    service.logger = createSilentLogger();
+    const entered = Promise.withResolvers();
+    const settle = Promise.withResolvers();
+    let successorShutdowns = 0;
+    const old = {async shutdown() {
+      entered.resolve();
+      await settle.promise;
+    }};
+    const successor = {async shutdown() {
+      successorShutdowns += 1;
+    }};
+    const cdc = {sqlQueryEngine: old, markShuttingDown() {}};
+    service.sqlQueryEngine = old;
+    service.seedRuntimeBridgeOwner.sqlQueryEngine = old;
+    service.cdcIntegrationService = cdc;
+    const cleanup = service.seedCleanupHandler;
+    const attempt = cleanup.shutdownSqlQueryEngine(cleanup.delegates);
+    await entered.promise;
+    service.sqlQueryEngine = successor;
+    service.seedRuntimeBridgeOwner.sqlQueryEngine = successor;
+    cdc.sqlQueryEngine = successor;
+    settle.resolve();
+    await attempt;
+    t.equal(service.sqlQueryEngine, successor);
+    t.equal(service.seedRuntimeBridgeOwner.sqlQueryEngine, successor);
+    t.equal(cdc.sqlQueryEngine, successor);
+    t.equal(successorShutdowns, 0, 'the old attempt only shuts down its captured engine');
   });

@@ -21,11 +21,14 @@ import {clearRegisteredControlPlaneSystemTableGateway} from
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {LogsTableService} from '../../src/logging/logs-table-service.js';
 import {NodeService} from '../../src/node/node-service.js';
+import {participantReleaseAdmissionOf} from
+  '../../src/partition/partition-participant-transaction-pause.js';
 import {readPartitionWriteOrigin} from
   '../../src/partition/partition-participant-transaction-store.js';
 import {
   PARTICIPANT_RELEASE_ACTION as ACTION,
   PARTICIPANT_RELEASE_RESULT_FIELD,
+  PARTICIPANT_RELEASE_TRIGGER as TRIGGER,
   PARTICIPANT_RELEASE_TYPE,
 } from '../../src/partition/partition-participant-transaction-cutover-constants.js';
 import {ServiceThreadManager} from '../../src/threading/service-thread-manager.js';
@@ -80,9 +83,27 @@ function observeMethod(host, owner, key, label) {
   });
 }
 
+function captureNativeDatabases(host, bootstrap) {
+  for (const [kind, services] of [
+    ['partition', bootstrap.partitionServices],
+    ['message-group', bootstrap.messageGroupServices],
+  ]) {
+    for (const [replicaId, service] of services) {
+      if (service.db === null || service.db === undefined ||
+          host.nativeDatabases.some((entry) => entry.db === service.db)) continue;
+      host.nativeDatabases.push({kind, replicaId, service, db: service.db,
+        dbPath: service.dbPath, nodeId: bootstrap.nodeId});
+    }
+  }
+}
+
 function captureRegistrationOwners(host) {
   if (host.handler !== null) return;
   const bootstrap = host.bootstrap;
+  captureNativeDatabases(host, bootstrap);
+  assert.equal(host.nativeDatabases.length,
+    bootstrap.partitionServices.size + bootstrap.messageGroupServices.size,
+    'every already acquired native service has its exact captured database');
   host.handler = bootstrap.replicaHandler;
   host.cdc = bootstrap.cdcIntegrationService;
   host.engine = bootstrap.sqlQueryEngine ?? host.cdc?.sqlQueryEngine;
@@ -101,10 +122,21 @@ function captureRegistrationOwners(host) {
   observeMethod(host, host.engine, 'shutdown', 'engine.shutdown');
 }
 
-function beginSelectedEnable(host, request) {
+function selectedSeedIntent(host, request) {
+  if (host.selected !== null || request.action !== ACTION.ENABLE ||
+      request.partitionId === CONTROL_PARTITION) return null;
+  return host.deliveries.findLast((record) => !record.settled &&
+    record.request.action === ACTION.RELEASE &&
+    record.request.trigger === TRIGGER.FRESH_SEED &&
+    record.request.partitionId === request.partitionId &&
+    record.request.deadlineAtMs === request.attempt?.deadlineAtMs &&
+    record.request.targetBuildDigest === request.release?.targetBuildDigest) ?? null;
+}
+
+function beginSelectedEnable(host, request, seedIntent) {
   const service = host.handler.localServices.get(request.replicaId);
   assert.ok(service, 'the registered ENABLE names an actual hosted replica');
-  host.selected = {request, service, db: service.db, dbPath: service.dbPath,
+  host.selected = {request, seedIntent, service, db: service.db, dbPath: service.dbPath,
     before: readPartitionWriteOrigin(service.db), after: null,
     answer: null, settledAtMs: null, serviceClock: service.timeSource,
     nodeClock: host.bootstrap.nodeService.getTimeSource()};
@@ -115,6 +147,7 @@ function settleSelectedEnable(host, response) {
   selected.answer = response[PARTICIPANT_RELEASE_RESULT_FIELD];
   selected.after = readPartitionWriteOrigin(selected.db);
   selected.settledAtMs = host.originalHandlerClock.now();
+  selected.admissionAfterEnable = participantReleaseAdmissionOf(selected.service);
   host.restoreClose = substitute(host, selected.db, 'close', function(...args) {
     host.closeCalls.push({db: this, args});
     throw host.closeFailure;
@@ -126,15 +159,15 @@ function settleSelectedEnable(host, response) {
 function deliverParticipant(host, router, original, args) {
   const request = args[1];
   captureRegistrationOwners(host);
-  const record = {request, answer: null, error: null};
+  const record = {request, answer: null, error: null, settled: false};
   host.deliveries.push(record);
-  const selected = host.selected === null &&
-    request.action === ACTION.ENABLE && request.partitionId !== CONTROL_PARTITION;
-  if (selected) beginSelectedEnable(host, request);
+  const seedIntent = selectedSeedIntent(host, request);
+  if (seedIntent !== null) beginSelectedEnable(host, request, seedIntent);
   const operation = Reflect.apply(original, router, args);
   return Promise.resolve(operation).then((response) => {
     record.answer = response[PARTICIPANT_RELEASE_RESULT_FIELD];
-    if (!selected) return response;
+    record.settled = true;
+    if (seedIntent === null) return response;
     try {
       return settleSelectedEnable(host, response);
     } catch (error) {
@@ -143,6 +176,7 @@ function deliverParticipant(host, router, original, args) {
     }
   }, (error) => {
     record.error = error;
+    record.settled = true;
     throw error;
   });
 }
@@ -167,8 +201,11 @@ function observeCreationRefusals(host, bootstrap) {
     const phase = bootstrap[owner];
     const original = phase[method];
     substitute(host, phase, method, function(...args) {
-      const retain = (error) => host.creationRefusals.push({owner, method, error,
-        phase: bootstrap.phase, definition: args[0]?.definition});
+      const retain = (error) => {
+        captureNativeDatabases(host, bootstrap);
+        host.creationRefusals.push({owner, method, error,
+          phase: bootstrap.phase, definition: args[0]?.definition});
+      };
       let operation;
       try {
         operation = Reflect.apply(original, this, args);
@@ -176,7 +213,7 @@ function observeCreationRefusals(host, bootstrap) {
         retain(error);
         throw error;
       }
-      void operation.then(() => {}, retain);
+      void operation.then(() => captureNativeDatabases(host, bootstrap), retain);
       return operation;
     });
   }
@@ -226,6 +263,7 @@ async function closeFixture(host) {
   // This is the existing owner, never evidence that top-level retry worked.
   for (const bootstrap of [host.replacement, host.bootstrap]) {
     if (bootstrap === null) continue;
+    captureNativeDatabases(host, bootstrap);
     await attemptCleanup(failures, 'existing seed cleanup owner',
       () => bootstrap.seedCleanupHandler.cleanup());
     await attemptCleanup(failures, 'node shutdown', () => bootstrap.nodeService.shutdown());
@@ -234,9 +272,11 @@ async function closeFixture(host) {
     () => ServiceThreadManager.getInstance().shutdown());
   await attemptCleanup(failures, 'logs shutdown', () => LogsTableService.getInstance().shutdown());
   await attemptCleanup(failures, 'logging shutdown', () => LoggingService.getInstance().shutdown());
-  if (host.selected?.db.open === true) {
-    failures.push(new Error('Exact native database remains open; retained directory ' +
-      host.directory));
+  for (const entry of host.nativeDatabases) {
+    if (entry.db.open === false) continue;
+    failures.push(new Error('Native database close is unproven: ' +
+      `${entry.kind} ${entry.nodeId}/${entry.replicaId} ${entry.dbPath}; ` +
+      `retained directory ${host.directory}`));
   }
   if (failures.length > 0) {
     throw new AggregateError(failures, `Fixture cleanup failed; retained ${host.directory}`);
@@ -257,6 +297,7 @@ async function withSeedReleaseFailureCustody(measure) {
     bootstrap: null, replacement: null, handler: null, selected: null,
     deliveries: [], restorations: [], lifecycle: [], closeCalls: [],
     observerFailures: [], creationRefusals: [], failureEvents: [],
+    nativeDatabases: [],
     forcedAtMs: null, closeFailure: new Error('witness exact native close failure'),
   };
   let failure = null;
