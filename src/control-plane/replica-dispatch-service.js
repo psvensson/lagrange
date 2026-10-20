@@ -54,7 +54,6 @@ class ReplicaDispatchService extends ReplicaDispatchReadinessCapture {
       observation = await repository.queryAuthoritativeOperationVisibilityObservation(
         operationId, {
           authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
-          requireAbsenceConfirmation: true,
         });
     } catch {
       return {outcome: LEGACY_AUTHORITY.UNAVAILABLE};
