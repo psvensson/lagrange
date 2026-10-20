@@ -1,0 +1,47 @@
+# Read-only topology matrix plan on the frozen U1 candidate; zero cloud provisioning.
+name: u1-gcp-topology-plan-20261020
+on:
+  push:
+    branches:
+      - verify/u1-gcp-20261020
+    paths:
+      - .github/workflows/u1-gcp-topology-preflight-20261020.yml
+permissions:
+  contents: read
+concurrency:
+  group: u1-gcp-topology-plan-20261020
+  cancel-in-progress: false
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: be25caa5f0c3612feec662d4feaa9ba28f8f34df
+          persist-credentials: false
+          fetch-depth: 1
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Check committed U1 source identity and install dependencies
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = be25caa5f0c3612feec662d4feaa9ba28f8f34df
+          npm ci
+      - name: Derive topology matrix from canonical registry without provisioning VMs
+        run: |
+          set -euo pipefail
+          node scripts/run-distributed-matrix.js --target gcp --profile topology --dry-run \
+            > "$RUNNER_TEMP/u1-gcp-topology-plan.txt"
+          cat "$RUNNER_TEMP/u1-gcp-topology-plan.txt"
+          test -s "$RUNNER_TEMP/u1-gcp-topology-plan.txt"
+      - name: Preserve read-only preflight
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: u1-gcp-topology-plan-${{ github.run_id }}
+          path: ${{ runner.temp }}/u1-gcp-topology-plan.txt
+          retention-days: 14
+          if-no-files-found: warn
