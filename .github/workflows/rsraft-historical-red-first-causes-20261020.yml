@@ -1,0 +1,39 @@
+name: rsraft-historical-red-first-causes-20261020
+on:
+  push:
+    branches: [investigate/rsraft-historical-reds-20261020]
+    paths:
+      - .github/workflows/rsraft-historical-red-first-causes-20261020.yml
+      - verification/rsraft-historical-20261020/classify-reds.py
+permissions:
+  contents: read
+  actions: read
+jobs:
+  causes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - name: Download historical exact-source GCP reports, read-only
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/red-history/candidate" "$RUNNER_TEMP/red-history/predecessor"
+          gh run download 39393585693 -R psvensson/lagrange -n u1-gcp-selected-corpus-39393585693 -D "$RUNNER_TEMP/red-history/candidate"
+          gh run download 39405963549 -R psvensson/lagrange -n u1-gcp-predecessor-119-39405963549 -D "$RUNNER_TEMP/red-history/predecessor"
+          python3 verification/rsraft-historical-20261020/classify-reds.py \
+            "$RUNNER_TEMP/red-history" "$RUNNER_TEMP/red-analyses" \
+            > "$RUNNER_TEMP/red-analyses-output.txt"
+          cat "$RUNNER_TEMP/red-analyses-output.txt"
+          cp "$RUNNER_TEMP/red-analyses-output.txt" "$RUNNER_TEMP/red-analyses/summary.txt"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: historical-119-observation-matrix-${{ github.run_id }}
+          path: ${{ runner.temp }}/red-analyses/
+          if-no-files-found: warn
+          retention-days: 14
