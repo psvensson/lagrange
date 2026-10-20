@@ -9,6 +9,8 @@ import {WASM_CREATION_LOCAL_INSPECTION as LOCAL} from
   '../../src/wasm-service/wasm-creation-opening.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {SERVICE_INSTANCE_OUTCOME as OUTCOME} from '../../src/constants/service-instance.js';
+import {RUNTIME_SERVICE_HANDLER_ERROR_MSG as ERROR} from
+  '../../src/node/runtime-service-handler-constants.js';
 
 const QUIET = {debug() {}, info() {}, warn() {}, error() {}};
 
@@ -110,7 +112,7 @@ test('U1 inventory: shutdown during held journal scan cannot publish late memos 
     assert.equal(scans, 1);
     for (const outcome of outcomes) {
       assert.equal(outcome.outcome, OUTCOME.UNAVAILABLE);
-      assert.equal(outcome.reason, 'HANDLER_STOPPED');
+      assert.equal(outcome.reason, ERROR.HANDLER_STOPPED);
     }
     await turn();
     assert.equal(w.handler.restartLatch.isReady(), false);
@@ -135,7 +137,7 @@ test('U1 inventory: shutdown during per-row physical inspection cannot publish s
     release.resolve();
     const result = await scanning;
     assert.equal(result.outcome, OUTCOME.UNAVAILABLE);
-    assert.equal(result.reason, 'HANDLER_STOPPED');
+    assert.equal(result.reason, ERROR.HANDLER_STOPPED);
     await turn();
     assert.equal(w.handler.restartLatch.isReady(), false);
     assert.equal(w.handler.localReplicas.size, 0);
