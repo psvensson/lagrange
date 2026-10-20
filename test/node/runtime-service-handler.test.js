@@ -857,28 +857,32 @@ describe('RuntimeServiceHandler handleRemoveReplica', () => {
         'REFUSED_CLEANUP_OVERWROTE_ANOTHER_CREATION');
     });
 
-  it('returns IN_PROGRESS for removing replica', async () => {
-    const {handler} = createHandler();
+  it('returns IN_PROGRESS only for the exact admitted duplicate REMOVE', async () => {
+    const {handler, lifecycle} = createHandler();
     handler.localReplicas.set('sys-postgres-wire-r1', {
       replicaId: 'sys-postgres-wire-r1',
       entityId: 'sys-postgres-wire',
-      status: ReplicaStatus.REMOVING,
+      status: ReplicaStatus.ACTIVE,
     });
-    handler.inProgressOperations.set('op-1', {
-      type: ReplicaOperationMessageType.REMOVE_REPLICA,
-      replicaId: 'sys-postgres-wire-r1',
-      entityId: 'sys-postgres-wire',
-      startedAt: Date.now(),
-    });
-    const response = await handler.handleRemoveReplica({
+    const request = {
       [ReplicaOperationField.OPERATION_ID]: 'op-1',
       [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
       [ReplicaOperationField.REPLICA_ID]: 'sys-postgres-wire-r1',
-    });
-    assert.equal(
-      response.status,
-      ReplicaOperationResponseStatus.IN_PROGRESS,
-    );
+    };
+    // Enter the real admission path; a synthetic entry without operationId
+    // and captured request identity is not an in-flight REMOVE.
+    const first = await handler.handleRemoveReplica(request);
+    assert.equal(first.status, ReplicaOperationResponseStatus.INITIATED);
+    const installed = handler.inProgressOperations.get('op-1');
+    assert.ok(installed, 'FIRST_REMOVE_DID_NOT_OWN_EXECUTION');
+    const response = await handler.handleRemoveReplica(request);
+    assert.equal(response.status, ReplicaOperationResponseStatus.IN_PROGRESS);
+    assert.strictEqual(handler.inProgressOperations.get('op-1'), installed,
+      'DUPLICATE_REMOVE_REPLACED_EXISTING_ADMISSION');
+    await flushImmediate();
+    await flushImmediate();
+    assert.equal(lifecycle.calls.filter(({method}) => method === 'stopReplica').length, 1,
+      'DUPLICATE_REMOVE_STARTED_ANOTHER_PHYSICAL_STOP');
   });
 
   it('resumes stalled removing replica when no removal task is active',
