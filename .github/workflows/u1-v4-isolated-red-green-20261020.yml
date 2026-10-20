@@ -1,0 +1,91 @@
+# V4 wake custody: canonical existing C6 integration oracle, source-only mutant.
+# Not approval of U1 or broad fixture compatibility.
+name: u1-v4-source-only-red-green-20261020
+on:
+  push:
+    branches:
+      - verify/u1-gcp-20261020
+    paths:
+      - .github/workflows/u1-v4-isolated-red-green-20261020.yml
+permissions:
+  contents: read
+concurrency:
+  group: u1-v4-source-only-red-green-20261020
+  cancel-in-progress: false
+env:
+  POSITIVE: 537ae826473f8fa8a20e28d783aa5fe76301ffbd
+  NEGATIVE: 83e2a9679f3ec3e59134b8bb37b323a104d48c8c
+  V4_ORIGINAL_FILE: test/wasm-service/bound-creation-restart.integration.test.js
+  V4_NAME: 'U1 memo wake: real HELD J retains one wake behind exact F through handler gate release'
+jobs:
+  original-positive:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: 537ae826473f8fa8a20e28d783aa5fe76301ffbd
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Exact V4 original test positive
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$POSITIVE"
+          npm ci
+          mkdir -p test-output/u1-v4
+          node --test --test-reporter=tap \
+            --test-name-pattern "$V4_NAME" "$V4_ORIGINAL_FILE" \
+            > test-output/u1-v4/positive.log 2>&1 || {
+              cat test-output/u1-v4/positive.log
+              exit 1
+            }
+          grep -q '^# pass 1$' test-output/u1-v4/positive.log
+          grep -q '^# fail 0$' test-output/u1-v4/positive.log
+          tail -n 30 test-output/u1-v4/positive.log
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: u1-v4-positive-${{ github.run_id }}
+          path: test-output/u1-v4
+  source-only-negative:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: 83e2a9679f3ec3e59134b8bb37b323a104d48c8c
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Verify direct-parent sole production change, then require decisive RED
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$NEGATIVE"
+          test "$(git rev-parse HEAD^)" = "$POSITIVE"
+          test "$(git diff --name-only "$POSITIVE" "$NEGATIVE")" = 'src/node/runtime-service-bound-creation-route.js'
+          npm ci
+          mkdir -p test-output/u1-v4
+          set +e
+          node --test --test-reporter=tap \
+            --test-name-pattern "$V4_NAME" "$V4_ORIGINAL_FILE" \
+            > test-output/u1-v4/negative.log 2>&1
+          STATUS=$?
+          set -e
+          tail -n 70 test-output/u1-v4/negative.log
+          test "$STATUS" -ne 0
+          grep -q 'ORDINARY_J_WAKE_WAS_LOST_BEHIND_F' test-output/u1-v4/negative.log
+          grep -q '^# fail 1$' test-output/u1-v4/negative.log
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: u1-v4-negative-${{ github.run_id }}
+          path: test-output/u1-v4
