@@ -454,7 +454,7 @@ function consumeCreationWake(handler, serviceDefinitionId, wake) {
     }
     return {outcome: WAKE.QUEUED};
   case WAKE_ACTION.MEMO:
-    memo.wakePending = true;
+    // MUTATION V4: lose the only queued memo wake while F holds the gate.
     resumeHeldMemoWake(handler, memo.replicaId);
     return {outcome: WAKE.QUEUED};
   default:
