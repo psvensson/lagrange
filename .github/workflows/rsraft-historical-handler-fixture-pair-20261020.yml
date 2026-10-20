@@ -1,0 +1,66 @@
+name: rsraft-historical-handler-fixture-pair-20261020
+on:
+  push:
+    branches: [work/rsraft-historical-handler-fixture-20261020]
+    paths: [.github/workflows/rsraft-historical-handler-fixture-pair-20261020.yml]
+permissions: {contents: read}
+jobs:
+  comparative:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - kind: original
+            sha: 'be25caa5f0c3612feec662d4feaa9ba28f8f34df'
+          - kind: corrected-fixture
+            sha: '6ca32c0fa6733e7875aa52b9ecfd1f664cbc0542'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ matrix.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Compare real tests at original and fixture correction
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ matrix.sha }}
+          KIND: ${{ matrix.kind }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          npm ci
+          mkdir -p test-output/historical-handler-fixture
+          set +e
+          node scripts/run-classified-test-files.js --stdin \
+            > test-output/historical-handler-fixture/runner.log 2>&1 <<'CASES'
+          test/address/address-manager-peer-location-authority.test.js
+          test/node/replica-transport-handler-identity.test.js
+          test/partition/raft-rs-transport-demux.test.js
+          CASES
+          code=$?
+          set -e
+          grep 'test-files total=' test-output/historical-handler-fixture/runner.log | tail -n 10
+          if [[ "$KIND" == original ]]; then
+            test "$code" -ne 0
+            grep -F 'Replica transport handler left registered' test-output/historical-handler-fixture/runner.log
+          else
+            test "$code" -eq 0 || { tail -n 160 test-output/historical-handler-fixture/runner.log; exit "$code"; }
+            grep -F '# test-files total=3 pass=3 fail=0' test-output/historical-handler-fixture/runner.log
+            npx eslint test/address/address-manager-peer-location-authority.test.js \
+              test/node/replica-transport-handler-identity.test.js \
+              test/partition/raft-rs-transport-demux.test.js
+          fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: historical-handler-fixture-${{ matrix.kind }}-${{ github.run_id }}
+          path: test-output/historical-handler-fixture/
+          retention-days: 14
+          if-no-files-found: warn
