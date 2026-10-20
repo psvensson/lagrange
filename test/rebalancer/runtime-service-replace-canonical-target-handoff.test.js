@@ -209,7 +209,7 @@ function createRuntimeHandler({
     ),
     executorOutcomeEmitter,
   });
-  handler.logger = QUIET_LOGGER;
+  handler.logger = console;
   handler.initialize();
   return handler;
 }
