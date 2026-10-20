@@ -106,7 +106,6 @@ async function projectPublishedConsensus(owner, driver, bound, confirmed) {
   const physical = physicalIdentity(bound.origin);
   const causeId = getOrCreateCauseId(bound.origin.operationId);
   const row = await projectServicesRow(owner, bound, physical, host, causeId);
-  if (!current()) return stale();
   if (row.outcome !== undefined) return unprojected(row);
   const endpointRefusal = await writeEndpoint(owner, bound, physical, {host,
     port: confirmed.port, consensusBinding: bound.origin.intent.consensusBinding,
