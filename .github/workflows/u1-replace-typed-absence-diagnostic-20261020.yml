@@ -1,0 +1,21 @@
+name: u1-replace-typed-absence-diagnostic
+on:
+  push:
+    branches: [probe/u1-replace-target-20261020]
+    paths: [.github/workflows/u1-replace-typed-absence-diagnostic-20261020.yml]
+permissions: {contents: read}
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - run: npm ci
+      - run: node scripts/run-classified-test-files.js --stdin <<<'test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js'
