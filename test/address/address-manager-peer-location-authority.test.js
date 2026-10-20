@@ -137,9 +137,22 @@ function cacheSaying(rows) {
 }
 
 function recordingTransport(sent) {
+  // A real node's transport supports exact handler identity. The routing
+  // witness must not fail shutdown just because its send-recording fixture
+  // silently omitted the retirement side of that same owner contract.
+  const handlers = new Map();
   return {
-    register() {},
-    unregister() {},
+    register(address, handler) {
+      handlers.set(address, handler);
+    },
+    getRegisteredHandler(address) {
+      return handlers.get(address) ?? null;
+    },
+    unregisterExact(address, handler) {
+      if (handlers.get(address) !== handler) return false;
+      handlers.delete(address);
+      return true;
+    },
     async deliver(address) {
       sent.push(address);
       return {ok: true};
