@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          ref: 6ca32c0fa6733e7875aa52b9ecfd1f664cbc0542
+          ref: 35a5c1eceb7f1cb17f96cdd756f6e92ffd3487fb
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
@@ -20,13 +20,14 @@ jobs:
           package-manager-cache: false
       - run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = 6ca32c0fa6733e7875aa52b9ecfd1f664cbc0542
+          test "$(git rev-parse HEAD)" = 35a5c1eceb7f1cb17f96cdd756f6e92ffd3487fb
           npm ci
           npm run -s test:metadata:refresh
           echo 'HISTORICAL_HANDLER_SEAL_BEGIN'
           cat test/shards/impact-graph-seal.json
           echo 'HISTORICAL_HANDLER_SEAL_END'
-          git diff --name-only
+          git diff --exit-code
           node scripts/check-fast-static.js --base 381750de29af647d446b19adedf1da53eb712093 --explain
           echo 'HISTORICAL_HANDLER_CHANGES_AFTER_STATIC'
-          git diff --name-only
+          git diff --exit-code
+          test -z "$(git status --porcelain --untracked-files=no)"
