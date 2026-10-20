@@ -61,3 +61,21 @@ The comparison result is **not** enough to mark each failure "inherited". Match 
 5. The distributed real five-host / GCP recovery, three consecutive frozen-SHA formation certifications, integrated independent closeout and **explicit owner's approval before merge** all remain outstanding.
 
 At this checkpoint `solve/oracle/raft-rs-full-cutover.json` still reports `metric: 8`, `target: 0`, `status: transport-predecessor-in-progress`, `terminalEvidence: null`. This evidence-only note cannot change those facts.
+
+
+## Continuation, 2026-10-20: bootstrap cone and explicit U1 acceptance gate
+
+The next exact-source candidate run [lab #563](https://github.com/psvensson/lagrange-lab/issues/563) settled **COMPLETE/FAIL**: 32 files, **30 PASS / 2 FAIL**, **692 runner assertions**, candidate SHA unchanged `be25caa5`. The new cumulative candidate measured **159 distinct source test files, 145 PASS / 14 FAIL, 3,806 assertions**. This extends breadth but is not a full-corpus proof.
+
+The two newly observed files (both have byte-identical committed test blobs at the pre-U1 baseline) are:
+
+- `test/bootstrap/partition-activation-handler-boundary.test.js`: N2 exact-handler identity, activation vs retirement and successive-generation behavioral cases passed; the **N2 static removal-path census** rejected the shutdown/removal routing (“shutdown retires the handler in the lane before closing the store”). Full native log evidence was accessed through [#564](https://github.com/psvensson/lagrange-lab/issues/564) and [#565](https://github.com/psvensson/lagrange-lab/issues/565). Do not loosen the census without the owner authority and proof that no competing removal path exists.
+- `test/bootstrap/fresh-join-registration-runtime-replacement.integration.test.js`: the fresh-join registration scenario did **not** reach its essential setup. Seed bootstrap refused participant release at `indices-p1` with `release_fact_unavailable`, missing `release_deadline`, budget 1,000 ms spent at ~1,006 ms after 13/46 releases. Subsequent join assertions have no valid prerequisite. Treat this as an actual readiness/release failure (with measured 1-second budget), not as proof of any registration/replacement behavior. The exact source log is accessible via [#565](https://github.com/psvensson/lagrange-lab/issues/565).
+
+For same-SHA test-signature discrimination, the explicit pre-U1 comparison request [lab #568](https://github.com/psvensson/lagrange-lab/issues/568) targeted exactly these two files on `adam-laptop`. **At this note's measurement, it has no terminal evidence yet.** Do not infer inherited behavior or call the 1-second spent budget a flaky pass.
+
+The explicitly required **thirteen-file positive U1 suite** was submitted as [lab #567](https://github.com/psvensson/lagrange-lab/issues/567) on the same original immutable candidate `be25caa5`; it had been claimed and was running, but is NOT certified or a PASS in this snapshot. Its complete file membership matches the named selection in `u1-finite-acceptance-checklist-and-cell-scope-20261019.md`. Await actual terminal counts before disposition.
+
+Reading that existing checklist also confirmed the **seven separate U1 completion gates U1-1…U1-7** were marked OPEN in its own review snapshot: net nine-path production source review, immutable oracle tree checkpoint, corrected-source static gate, 13-file current positive selection, P0–P5 source-only controls, affected-owner compatibility, and category-complete independent 55-item combined conclusion. Earlier bounded F1 and physical source approvals **do not** grant whole-U1 approval or supersede these requirements. The adjacent Cell queued-START finding is explicitly not waived.
+
+No candidate/main change and no U2/activation/GCP distributed certification authorization arises from any of the above. Keep the source frozen for the signature comparison and control-gate review.
