@@ -479,8 +479,8 @@ function resumeHeldMemoWake(handler, replicaId) {
 // It cannot settle a REMOVE until its original creation journal is confirmed.
 function decideRetirement(result) {
   const kind = [
-    [result?.finality === FINALITY.FINAL &&
-      result.completion?.outcome === CREATION.ROW_COMPLETED, DECISION.COMPLETED],
+    // MUTATION V7: physical finality alone falsely discharges original CREATE.
+    [result?.finality === FINALITY.FINAL, DECISION.COMPLETED],
     [PERMANENT_RETIREMENT_REFUSALS.has(result?.outcome), DECISION.FAILED],
     [true, DECISION.HELD],
   ].find(([matches]) => matches)[1];
