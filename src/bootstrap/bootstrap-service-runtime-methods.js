@@ -425,14 +425,7 @@ function createBootstrapServiceRuntimeMethods() {
         this.emit(BootstrapEvent.SHUTDOWN, {nodeId: this.nodeId});
       })();
       this.shutdownPromise = attempt;
-      try {
-        return await attempt;
-      } catch (error) {
-        // Native owners retain failed cleanup. Release only this rejected
-        // attempt so the next caller can retry those same obligations.
-        if (this.shutdownPromise === attempt) this.shutdownPromise = null;
-        throw error;
-      }
+      return await attempt;
     },
   };
 }
