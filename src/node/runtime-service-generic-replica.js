@@ -127,7 +127,7 @@ async function removeGenericReplica(handler, {
     await handler.serviceLifecycleManager.stopReplica(
       replicaHandle, {nodeId: handler.nodeId, reason},
     );
-    if (!currentRemovalMemo(handler, entry)) return;
+    // MUTATION: a late STOP answer may now overwrite a successor memo.
 
     handler.localReplicas.set(replicaId, {
       replicaId, entityId, status: ReplicaStatus.REMOVED,
