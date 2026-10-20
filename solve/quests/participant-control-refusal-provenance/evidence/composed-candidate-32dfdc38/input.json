@@ -1,0 +1,47 @@
+{
+  "sha": "32dfdc388cf80c695b70207e1b659bce8d5d6ad5",
+  "host": "adams-gamla",
+  "retryFailedOnce": 0,
+  "files": [
+    "test/partition/participant-release-protocol.test.js",
+    "test/partition/participant-release-deadline-recovery.test.js",
+    "test/node/participant-release-control-refusal-observation.test.js",
+    "test/bootstrap/seed-participant-release-failure-projection.test.js",
+    "test/node/replica-handler-release-recovery.test.js",
+    "test/partition/participant-release-control-three-member.test.js",
+    "test/partition/participant-release-native-application-order.test.js",
+    "test/partition/participant-release-delivery-recorder.test.js",
+    "test/wasm-service/bound-remove-physical-operation.integration.test.js",
+    "test/wasm-service/bound-creation-handler-embedding.integration.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/node/participant-release-control-refusal-observation.test.js",
+        "test/node/replica-handler-release-recovery.test.js",
+        "test/partition/participant-release-control-three-member.test.js",
+        "test/partition/participant-release-deadline-recovery.test.js",
+        "test/partition/participant-release-delivery-recorder.test.js",
+        "test/partition/participant-release-native-application-order.test.js",
+        "test/partition/participant-release-protocol.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/bootstrap/seed-participant-release-failure-projection.test.js"
+      ],
+      "jobs": 2,
+      "resourceClass": "bootstrap"
+    },
+    {
+      "files": [
+        "test/wasm-service/bound-creation-handler-embedding.integration.test.js",
+        "test/wasm-service/bound-remove-physical-operation.integration.test.js"
+      ],
+      "jobs": 1,
+      "resourceClass": "exclusive"
+    }
+  ]
+}

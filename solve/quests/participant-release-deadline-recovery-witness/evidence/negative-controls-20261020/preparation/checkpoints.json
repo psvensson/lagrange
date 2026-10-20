@@ -1,0 +1,92 @@
+{
+  "schema": "controlled-source-negative-checkpoints/1",
+  "date": "2026-10-20",
+  "positiveBaseCommit": "a72609dadfca7f8292c347d041175990b09e2c54",
+  "preparationAgent": "release_recovery_writer",
+  "nativeMeasurement": "No native runs by preparation agent; root owns locked same-host measurements.",
+  "limits": "Experimental negative controls only. No push, merge, landing or implementation acceptance. No hook bypass or ratchet changes.",
+  "controls": [
+    {
+      "control": "deadline",
+      "preparationStatus": "committed-normal-hooks",
+      "worktree": "/mnt/data/peter/projects/.worktrees/rsraft-release-negative-deadline-20261020",
+      "branch": "experiment/rsraft-release-negative-deadline-20261020",
+      "commit": "27d00cd4be71fe4445fc20a2049e933b3ae63b60",
+      "currentHead": "27d00cd4be71fe4445fc20a2049e933b3ae63b60",
+      "inputRecord": "solve/quests/participant-release-deadline-recovery-witness/evidence/negative-controls/deadline-input.json",
+      "sourcePath": "src/node/participant-release-client.js",
+      "sourceMutatedSha256": "8f613ab5214d21760133894364fef573041cead2e3c62919c9ca2883352a6b65",
+      "patchSha256": "2e78b2a1bebc0b053d01280d917031bab8f077aec4bc74c8927beb6bd22f27f4",
+      "witnessSha256": {
+        "test/partition/participant-release-deadline-recovery.test.js": "d2f5be01c26338c9715d4abcb75ed6bd1a9dee269eaad312528bdc255bfcaa7a",
+        "test/test-helpers/participant-release-protocol-fixture.js": "3f3b17a7d3fa637b09001fb179170bb1792efbec5acbb96cd009dcdd7117934c"
+      },
+      "checks": {
+        "test/partition/participant-release-deadline-recovery.test.js": true,
+        "test/test-helpers/participant-release-protocol-fixture.js": true,
+        "sourceMutationMatchesRecord": true,
+        "patchMatchesRecord": true,
+        "directParentIsPositiveBase": true,
+        "cleanWorktree": true
+      },
+      "expectedSemanticDiscriminator": "After the actual dependent PAUSE and exhausted original deadline, the pre-dispatch ENABLE phase assertion at witness line 176 should discriminate the bypass. Setup failure is not an engaged negative.",
+      "normalCommitExitCode": 0,
+      "normalHookLog": null,
+      "blockerRecord": null
+    },
+    {
+      "control": "authorization",
+      "preparationStatus": "committed-normal-hooks",
+      "worktree": "/mnt/data/peter/projects/.worktrees/rsraft-release-negative-authorization-20261020",
+      "branch": "experiment/rsraft-release-negative-authorization-20261020",
+      "commit": "187221614f26fd2bc2c16342d35a1ebf6cf09564",
+      "currentHead": "187221614f26fd2bc2c16342d35a1ebf6cf09564",
+      "inputRecord": "solve/quests/participant-release-deadline-recovery-witness/evidence/negative-controls/authorization-input.json",
+      "sourcePath": "src/node/replica-handler-participant-cutover.js",
+      "sourceMutatedSha256": "c9c87eb1081217a5736aa22a2ffe40c61f55bc2d703e9c14d8fcf1bf53a03dda",
+      "patchSha256": "1a1c1e6eba11bdb25faea1ba2ed62a44aa8a6ba2c6eb228d98f8702c1db89ca6",
+      "witnessSha256": {
+        "test/partition/participant-release-deadline-recovery.test.js": "d2f5be01c26338c9715d4abcb75ed6bd1a9dee269eaad312528bdc255bfcaa7a",
+        "test/test-helpers/participant-release-protocol-fixture.js": "3f3b17a7d3fa637b09001fb179170bb1792efbec5acbb96cd009dcdd7117934c"
+      },
+      "checks": {
+        "test/partition/participant-release-deadline-recovery.test.js": true,
+        "test/test-helpers/participant-release-protocol-fixture.js": true,
+        "sourceMutationMatchesRecord": true,
+        "patchMatchesRecord": true,
+        "directParentIsPositiveBase": true,
+        "cleanWorktree": true
+      },
+      "expectedSemanticDiscriminator": "The new live-budget unprivileged release after engaged pre-ENABLE expiry should fail the OPERATOR_REQUIRED assertion at witness line 186. Setup failure is not an engaged negative.",
+      "normalCommitExitCode": 0,
+      "normalHookLog": "/mnt/data/peter/projects/.worktrees/rsraft-release-negative-authorization-20261020/test-output/negative-control-preparation/normal-commit.log",
+      "blockerRecord": null
+    },
+    {
+      "control": "retry",
+      "preparationStatus": "blocked-normal-hook-decision-boundary",
+      "worktree": "/mnt/data/peter/projects/.worktrees/rsraft-release-negative-retry-20261020",
+      "branch": "experiment/rsraft-release-negative-retry-20261020",
+      "commit": null,
+      "currentHead": "a72609dadfca7f8292c347d041175990b09e2c54",
+      "inputRecord": "solve/quests/participant-release-deadline-recovery-witness/evidence/negative-controls/retry-input.json",
+      "sourcePath": "src/node/replica-handler-release-recovery.js",
+      "sourceMutatedSha256": "0d30099bf40db5269ca8b3651872e2596aafe53b948e129ef36669037cddac7c",
+      "patchSha256": "c388662f7f0c04eb61c02360ad7d828e217cc9a0473ae10e4ebb8b2bc40d9cf8",
+      "witnessSha256": {
+        "test/partition/participant-release-deadline-recovery.test.js": "d2f5be01c26338c9715d4abcb75ed6bd1a9dee269eaad312528bdc255bfcaa7a",
+        "test/test-helpers/participant-release-protocol-fixture.js": "3f3b17a7d3fa637b09001fb179170bb1792efbec5acbb96cd009dcdd7117934c"
+      },
+      "checks": {
+        "test/partition/participant-release-deadline-recovery.test.js": true,
+        "test/test-helpers/participant-release-protocol-fixture.js": true,
+        "sourceMutationMatchesRecord": true,
+        "patchMatchesRecord": true
+      },
+      "expectedSemanticDiscriminator": "After the real lost native ENABLE answer, same-file restart, positively dropped notifications, missing-control refusal and real control restoration, the due timer must fail the bounded existing-owner OPEN/progress assertion at witness line 265. Earlier setup failure or a generic hang is not an engaged negative.",
+      "normalCommitExitCode": 1,
+      "normalHookLog": "/mnt/data/peter/projects/.worktrees/rsraft-release-negative-retry-20261020/test-output/negative-control-preparation/normal-commit.log",
+      "blockerRecord": "/mnt/data/peter/projects/.worktrees/rsraft-release-negative-retry-20261020/test-output/negative-control-preparation/normal-commit-blocker.json"
+    }
+  ]
+}

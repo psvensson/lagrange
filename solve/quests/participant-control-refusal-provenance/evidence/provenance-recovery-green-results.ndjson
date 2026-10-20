@@ -1,0 +1,8 @@
+{"file":"test/node/participant-release-control-refusal-observation.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":282,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/participant-release-delivery-recorder.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":386,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/participant-release-control-three-member.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":5797,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/participant-release-deadline-recovery.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":5892,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/participant-release-native-application-order.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":6316,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/node/replica-handler-release-recovery.test.js","attempt":1,"ok":true,"assertions":25,"durationMs":7357,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/participant-release-protocol.test.js","attempt":1,"ok":true,"assertions":16,"durationMs":5828,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/seed-participant-release-failure-projection.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":3279,"retriedOnce":false,"firstFailureLine":null}

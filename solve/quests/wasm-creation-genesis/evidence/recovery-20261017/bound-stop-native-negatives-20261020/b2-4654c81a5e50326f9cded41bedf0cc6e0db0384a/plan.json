@@ -1,0 +1,23 @@
+{
+  "label": "b2",
+  "sha": "4654c81a5e50326f9cded41bedf0cc6e0db0384a",
+  "files": [
+    "test/wasm-service/bound-remove-physical-operation.integration.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/wasm-service/bound-remove-physical-operation.integration.test.js"
+      ],
+      "jobs": 1,
+      "resourceClass": "exclusive"
+    }
+  ],
+  "positiveSha": "0e19f5e07da01d6d8fe59131b7617ac8ed33b758",
+  "testHashes": {
+    "test/wasm-service/bound-remove-physical-operation-fixture.js": "f11ef265730a036c342f7ad1344227ded9700046de70537643b1ac8dffe0af7f",
+    "test/wasm-service/bound-remove-physical-operation.integration.test.js": "09a365dd29bb022821d2c16e4ee4f827d328c634a67a1eec70a56a57b41fe7c4"
+  },
+  "host": "adams-gamla",
+  "retry": 0
+}

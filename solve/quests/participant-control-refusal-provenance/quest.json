@@ -1,0 +1,48 @@
+{
+  "schema": "solve-quest/2",
+  "id": "participant-control-refusal-provenance",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "Preserve bounded nested control-release missingFact, phase and reason at the existing failed-control projection, without changing authority, release outcomes, retry behavior, deadlines, transport dispatch or durable effects. Validate selected-path discrimination through registered real owners and preserve one exact original-entry measurement without attributing historical causation from a different schedule.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/participant-control-refusal-provenance/evidence/receipt.json",
+      "requiredReceipts": [
+        "nested-failure-provenance-red-green",
+        "registered-positive-and-branch-controls",
+        "independent-source-and-harness-review",
+        "exact-candidate-audits-and-composition"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "bounded-existing-projection",
+      "statement": "Only retain already returned failure facts in the existing control refusal. No new reads of owner state, await, protocol call, recovery owner, authority grant, transport classification or deadline change."
+    },
+    {
+      "id": "preserve-history-and-scope",
+      "statement": "The existing seed-control-authority-first-divergence seal remains unchanged and unresolved. Historical artifacts stay immutable. Product base be25caa5; execution base be93c7e5. Recovery and physical-custody repairs stay in their own bounded units."
+    },
+    {
+      "id": "evidence-and-baselines",
+      "statement": "Failing provenance assertion precedes source change. Independently review bounded contract and witness before source repair, and frozen source before accepting execution. Positive/negative controls use actual existing owners. Original seed assertions and 3000ms budget unchanged. No baseline increases; reduce introduced diagnostic complexity."
+    },
+    {
+      "id": "one-original-entry-measurement",
+      "statement": "After reviewed source and controls, one declared information-improving original seed measurement at exact committed bytes on locked adam-laptop. Complete passive trace and nested facts discriminate this run only. No tuned delays or retries to fish for historical wrapper; nonrecurrence leaves historical cause unresolved."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "admission-gating",
+    "transport-delivery",
+    "retry-loops",
+    "recovery-replay",
+    "concurrency-serialization",
+    "formation-circularity",
+    "harness-fidelity"
+  ],
+  "sealedAt": "be93c7e5d9a76a39e76a530c93715521b2281356"
+}

@@ -5,7 +5,6 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {afterEach, beforeEach, test} from 'node:test';
-import {PartitionService} from '../../src/partition/partition-service.js';
 import {ReplicaHandler} from '../../src/node/replica-handler-class.js';
 import {requestParticipantRelease} from '../../src/node/participant-release-client.js';
 import {runtimeBuildProvenance} from '../../src/diagnostics/runtime-build-provenance.js';
@@ -25,6 +24,8 @@ import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from
 import {PARTICIPANT_CUTOVER_OUTCOME as OUTCOME} from
   '../../src/partition/partition-participant-transaction-cutover-constants.js';
 import {
+  PARTICIPANT_CUTOVER_BOUND as RELEASE_BOUND,
+  PARTICIPANT_RELEASE_MISSING_FACT as MISSING_FACT,
   PARTICIPANT_RELEASE_ACTION as RELEASE_ACTION,
   PARTICIPANT_RELEASE_ADMISSION as ADMISSION,
   PARTICIPANT_RELEASE_RESULT_FIELD,
@@ -53,22 +54,16 @@ import {
   pollutePrototypeProperty,
   replacePrototypeProperty,
 } from '../helpers/hostile-intrinsics.js';
-import {withFoundingStamp} from './partition-founding-stamp.js';
+import {observeParticipantReleaseDelivery} from './participant-release-delivery-recorder.js';
 import {waitForCondition} from './partition-service-test-support.js';
+import {CONTROL_PARTITION, NODE, PARTITION, SQL, cache,
+  withParticipantReleaseProtocol as fixture} from
+  '../test-helpers/participant-release-protocol-fixture.js';
 
 beforeEach(resetFixtureSingletons);
 afterEach(clearFixtureSingletons);
-const NODE = 'test-node';
-const CONTROL_NODE = 'control-node';
-const REPLICA = 'release-r1';
-const PARTITION = 'release-partition';
-const TABLE = 'release_table';
-const CONTROL_PARTITION = 'sql_transactions-p1';
-const CONTROL_REPLICA = 'release-sql-transactions-r1';
-const SQL = `INSERT INTO ${TABLE} (id, value) VALUES (?, ?)`;
 const PENDING_DELETE_SQL =
   'DELETE FROM sql_transactions WHERE transaction_id = ?';
-const cache = {getAll: () => [], get: () => null, filter: () => []};
 
 function retainFailure(current, next, message) {
   return current === null ? next : new AggregateError([current, next], message);
@@ -168,95 +163,6 @@ async function joinedHostedPartitionFailure(starterRequest, clockValues = [100, 
   return {starter: answers[0], joiner: answers[1], joinedAttempt};
 }
 
-async function fixture(measure, table = {tableId: TABLE, tableName: TABLE,
-  schema: {columns: [{name: 'id', type: 'TEXT', primaryKey: true},
-    {name: 'value', type: 'TEXT'}]}}, fixtureOptions = {}) {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'tx1-release-protocol-'));
-  const transport = createInProcessMockTransport();
-  const options = {nodeId: NODE, partitionId: PARTITION, replicaId: REPLICA,
-    replicaIds: [REPLICA], ...table, dbPath: path.join(directory, 'partition.db'),
-    systemTableCache: cache, deferElection: true};
-  const create = (overrides) => new PartitionService(withFoundingStamp({...options, ...overrides}));
-  const topologyOwner = fixtureOptions.remoteControl === true ? {
-    resolveCanonicalPartitionLeaderNodeId(partitionId) {
-      return partitionId === CONTROL_PARTITION ? CONTROL_NODE : null;
-    },
-  } : null;
-  const cdcIntegrationService = topologyOwner === null ? {} :
-    {sqlQueryEngine: {queryExecutor: {bootstrapTopologySnapshotOwner: topologyOwner}}};
-  let handler = null;
-  let service = null;
-  let controlService = null;
-  let controlHandler = null;
-  let failure = null;
-  try {
-    handler = new ReplicaHandler({nodeId: NODE, ownerIncarnation: 1,
-      systemTableCache: cache, cdcIntegrationService, createPartitionService: create,
-      messageRouter: transport, dataDir: directory});
-    handler.registerWithRouter(transport);
-    service = create();
-    if (table.tableName !== SQL_TRANSACTIONS_SCHEMA.tableName &&
-        fixtureOptions.includeControl !== false) {
-      const controlNodeId = fixtureOptions.remoteControl === true ?
-        CONTROL_NODE : NODE;
-      controlService = new PartitionService(withFoundingStamp({
-        nodeId: controlNodeId, partitionId: CONTROL_PARTITION,
-        replicaId: CONTROL_REPLICA,
-        replicaIds: [CONTROL_REPLICA], tableId: SQL_TRANSACTIONS_SCHEMA.tableName,
-        tableName: SQL_TRANSACTIONS_SCHEMA.tableName, schema: SQL_TRANSACTIONS_SCHEMA,
-        dbPath: path.join(directory, 'sql-transactions.db'), systemTableCache: cache,
-        deferElection: true,
-      }));
-      await controlService.initialize();
-      if (fixtureOptions.remoteControl === true) {
-        controlHandler = new ReplicaHandler({nodeId: CONTROL_NODE,
-          ownerIncarnation: 2, systemTableCache: cache,
-          cdcIntegrationService: {}, createPartitionService: create,
-          messageRouter: transport, dataDir: directory});
-        controlHandler.registerWithRouter(transport);
-        controlHandler.localServices.set(CONTROL_REPLICA, controlService);
-      } else {
-        handler.localServices.set(CONTROL_REPLICA, controlService);
-      }
-      await controlService.raft.campaign();
-      assert.equal(controlService.raft.readStatus().role, 'leader');
-    }
-    await service.initialize();
-    handler.localServices.set(REPLICA, service);
-    await service.raft.campaign();
-    assert.equal(service.raft.readStatus().role, 'leader');
-    const build = await runtimeBuildProvenance();
-    assert.equal(build.state, 'measured', build.reason);
-    if (controlHandler !== null) {
-      const controlRelease = await controlHandler.participantReleaseRecovery
-        .releaseOperator({partitionId: CONTROL_PARTITION,
-          targetBuildDigest: build.digest,
-          deadlineAtMs: controlHandler.timeSource.now() + 30000});
-      assert.equal(controlRelease.outcome, OUTCOME.CUT_OVER,
-        JSON.stringify(controlRelease));
-    }
-    const release = (targetBuildDigest = build.digest) =>
-      handler.participantReleaseRecovery.releaseOperator({
-        partitionId: options.partitionId, targetBuildDigest,
-        deadlineAtMs: handler.timeSource.now() + 30000,
-      });
-    await measure({handler, service, controlService, transport, release, create,
-      replace: (next) => {
-        service = next;
-        handler.replaceLocalReplicaService(REPLICA, next);
-      }});
-  } catch (error) {
-    failure = error;
-  }
-  failure = await cleanOwnedFixture({directory, failure,
-    label: 'participant release', operations: [
-      ['local release recovery', () => handler?.participantReleaseRecovery.shutdown()],
-      ['control release recovery', () => controlHandler?.participantReleaseRecovery.shutdown()],
-      ['dependent service', () => service?.shutdown()],
-      ['control service', () => controlService?.shutdown()],
-    ]});
-  if (failure !== null) throw failure;
-}
 
 test('real release route pauses initial writes, applies origin, censuses and resumes; ' +
   'registry and consensus triggers recover a recreated service from the same durable origin', () =>
@@ -875,3 +781,116 @@ test('post-ENABLE control loss returns the canonical control refusal and stays p
     }
     if (failure !== null) throw failure;
   }));
+
+
+const CONTROL_EXPIRY_START_MS = 100;
+const CONTROL_EXPIRY_DEADLINE_MS = 200;
+
+function nestedControlExpiryClock() {
+  const timers = new VirtualTimeSource({startMs: CONTROL_EXPIRY_START_MS});
+  let observations = null;
+  return {
+    now() {
+      if (observations === null) return CONTROL_EXPIRY_START_MS;
+      const value = observations.length < 2 ?
+        CONTROL_EXPIRY_START_MS : CONTROL_EXPIRY_DEADLINE_MS;
+      observations.push(value);
+      return value;
+    },
+    setTimeout: timers.setTimeout.bind(timers),
+    clearTimeout: timers.clearTimeout.bind(timers),
+    arm() {
+      observations = [];
+    },
+    observations: () => observations,
+  };
+}
+
+async function recordReleaseDeliveries(transport, measure) {
+  const original = transport.deliver;
+  const records = [];
+  const errors = [];
+  let failure = null;
+  const observe = ([address, request], response) => {
+    records.push({address, request, response});
+  };
+  transport.deliver = observeParticipantReleaseDelivery(original, observe, errors);
+  try {
+    await measure(records);
+  } catch (error) {
+    failure = error;
+  }
+  try {
+    transport.deliver = original;
+  } catch (error) {
+    errors.push(error);
+  }
+  if (errors.length > 0) {
+    throw new AggregateError([...(failure === null ? [] : [failure]), ...errors],
+      'release assertion, observer and restoration failures retained');
+  }
+  if (failure !== null) throw failure;
+}
+
+test('registered dependent release retains control expiry before nested client dispatch', async () => {
+  const clock = nestedControlExpiryClock();
+  await fixture(async ({handler, service, controlService, transport, build}) => {
+    assert.equal(controlService.raft.readStatus().role, 'leader');
+    const authorization = handler.participantReleaseAuthorizationOwner.authorizeOperator({
+      partitionId: PARTITION, targetBuildDigest: build.digest});
+    await recordReleaseDeliveries(transport, async (records) => {
+      clock.arm();
+      const answer = await sendRegisteredRelease(handler, transport, registeredReleaseRequest({
+        targetBuildDigest: build.digest, authorization,
+        deadlineAtMs: CONTROL_EXPIRY_DEADLINE_MS, trigger: PARTICIPANT_RELEASE_TRIGGER.OPERATOR,
+      }));
+      assert.equal(answer.outcome, OUTCOME.UNAVAILABLE);
+      assert.equal(answer.missingFact, MISSING_FACT.CURRENT_CONTROL_OWNER);
+      assert.equal(answer.controlNodeId, NODE, 'a current local control destination was selected');
+      assert.equal(answer.controlPartitionId, CONTROL_PARTITION);
+      assert.equal(answer.controlOutcome, OUTCOME.UNAVAILABLE);
+      assert.equal(answer.phase, RELEASE_ACTION.RELEASE);
+      assert.equal(answer.retryAfterMs, RELEASE_BOUND.PAUSE_RETRY_AFTER_MS);
+      assert.deepEqual(clock.observations(), [CONTROL_EXPIRY_START_MS,
+        CONTROL_EXPIRY_START_MS, CONTROL_EXPIRY_DEADLINE_MS]);
+      assert.equal(records.length, 0, 'nested control expires before any transport delivery');
+      assert.equal(readPartitionWriteOrigin(service.db), null);
+      assert.equal(participantReleaseAdmissionOf(service).state, ADMISSION.CLOSED);
+      assert.equal(answer.controlMissingFact, MISSING_FACT.RELEASE_DEADLINE,
+        'the failed-control projection preserves the actual nested client missing fact');
+      assert.equal(answer.controlPhase, RELEASE_ACTION.RELEASE);
+      assert.equal(answer.controlReason, null);
+    });
+  }, undefined, {timeSource: clock});
+});
+
+test('registered dependent release retains delivered control refusal after current leader loss', () =>
+  fixture(async ({service, controlService, controlHandler, transport, release}) => {
+    assert.notEqual(readPartitionWriteOrigin(controlService.db), null,
+      'remote control was actually released before the loss');
+    await controlService.shutdown();
+    assert.equal(typeof transport.getRegisteredHandler(
+      `${controlHandler.nodeId}${PARTICIPANT_RELEASE_ROUTE_SUFFIX}`), 'function');
+    await recordReleaseDeliveries(transport, async (records) => {
+      const answer = await release();
+      const delivered = records.filter(({request}) => request.partitionId === CONTROL_PARTITION &&
+        request.action === RELEASE_ACTION.RELEASE);
+      assert.equal(delivered.length, 1, 'exactly one real control RELEASE reached its route');
+      const response = delivered[0].response;
+      assert.notEqual(response.noHandler, true);
+      const nested = response[PARTICIPANT_RELEASE_RESULT_FIELD];
+      assert.equal(nested.outcome, OUTCOME.UNAVAILABLE);
+      assert.equal(nested.missingFact, MISSING_FACT.HOSTED_PARTITION);
+      assert.equal(answer.outcome, OUTCOME.UNAVAILABLE);
+      assert.equal(answer.missingFact, MISSING_FACT.CURRENT_CONTROL_OWNER);
+      assert.equal(answer.controlNodeId, controlHandler.nodeId);
+      assert.equal(answer.controlOutcome, nested.outcome);
+      assert.equal(answer.retryAfterMs, RELEASE_BOUND.PAUSE_RETRY_AFTER_MS);
+      assert.equal(readPartitionWriteOrigin(service.db), null);
+      assert.equal(participantReleaseAdmissionOf(service).state, ADMISSION.CLOSED);
+      assert.equal(answer.controlMissingFact, nested.missingFact,
+        'the failed-control projection preserves the actual delivered missing fact');
+      assert.equal(answer.controlPhase, nested.phase);
+      assert.equal(answer.controlReason, null);
+    });
+  }, undefined, {remoteControl: true}));

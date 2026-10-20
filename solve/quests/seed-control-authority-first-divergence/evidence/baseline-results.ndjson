@@ -1,0 +1,2 @@
+{"file":"test/partition/participant-release-protocol.test.js","attempt":1,"ok":true,"assertions":14,"durationMs":5041,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/single-path-partition-cutover.test.js","attempt":1,"ok":false,"assertions":5,"durationMs":15049,"retriedOnce":false,"firstFailureLine":"not ok 1 - seed bootstraps and serves a write on rs-raft by default"}

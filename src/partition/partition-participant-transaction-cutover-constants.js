@@ -41,9 +41,15 @@ const PARTICIPANT_RELEASE_MISSING_FACT = Object.freeze({
   REPLICA_RELEASE_REPLY: 'replica_release_reply',
 });
 const PARTICIPANT_CUTOVER_BOUND = Object.freeze({
-  DRAIN_DEADLINE_MS: 30000, REPLICA_CENSUS_DEADLINE_MS: 30000,
-  REQUEST_TIMEOUT_MS: 5000, POLL_INTERVAL_MS: 20, QUIET_POLLS: 2,
+  // ends-on: the current release attempt returns its canonical outcome
+  DRAIN_DEADLINE_MS: 30000,
+  // ends-on: n/a dead (no consumer in src/)
+  REPLICA_CENSUS_DEADLINE_MS: 30000,
+  // ends-on: the release request receives its transport answer
+  REQUEST_TIMEOUT_MS: 5000,
+  POLL_INTERVAL_MS: 20, QUIET_POLLS: 2,
   PAUSE_RETRY_AFTER_MS: 100, RECOVERY_RETRY_MS: 1000,
+  CONTROL_REFUSAL_TEXT_MAX_LENGTH: 512,
 });
 const PARTICIPANT_RELEASE_ROUTE_SUFFIX = '/service/replica-handler';
 const PARTICIPANT_RELEASE_PRIORITY = 'critical';

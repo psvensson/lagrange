@@ -56,6 +56,8 @@ import {
 import {createSeedQuerySurface} from
   '../../integration/helpers/seed-query-surface.js';
 import {withFoundingStamp} from '../../partition/partition-founding-stamp.js';
+import {createParticipantReleaseDeliveryTrace, emitParticipantReleaseDeliveryTrace} from
+  '../../test-helpers/participant-release-delivery-trace.js';
 
 const ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -260,6 +262,66 @@ function systemPartitionServices(bootstrapResult, bootstrapService) {
     .filter((service) => systemTables.has(service.tableName));
 }
 
+async function bootstrapWithParticipantTrace(bootstrapService, participantTrace) {
+  let bootstrapResult = null;
+  let bootstrapFailure = null;
+  const diagnosticFailures = [];
+  try {
+    bootstrapResult = await bootstrapService.bootstrap();
+  } catch (error) {
+    bootstrapFailure = error;
+  }
+  try {
+    participantTrace.restore();
+  } catch (error) {
+    diagnosticFailures.push(error);
+  }
+  try {
+    emitParticipantReleaseDeliveryTrace(participantTrace);
+  } catch (error) {
+    diagnosticFailures.push(error);
+  }
+  if (diagnosticFailures.length > 0) {
+    const failure = new AggregateError([
+      ...(bootstrapFailure === null ? [] : [bootstrapFailure]),
+      ...diagnosticFailures,
+    ], 'bootstrap/diagnostic failures retained: ' +
+      `success=${bootstrapResult?.success} error=${String(bootstrapResult?.error)} ` +
+      `diagnostics=${diagnosticFailures.map((error) => String(error)).join('; ')}`);
+    return {result: bootstrapResult, failure};
+  }
+  return {result: bootstrapResult, failure: bootstrapFailure};
+}
+
+async function cleanSeedAttempt({bootstrapService, bootstrapResult, seedApi, dataDir,
+  seedFailure}) {
+  const cleanupFailures = [];
+  try {
+    await gracefulShutdown(bootstrapService, bootstrapResult, seedApi);
+  } catch (error) {
+    cleanupFailures.push(error);
+  }
+  try {
+    await cleanupTestEnvironment();
+  } catch (error) {
+    cleanupFailures.push(error);
+  }
+  // Failed shutdown retains the physical directory for custody/inspection.
+  if (cleanupFailures.length === 0 && typeof dataDir === 'string' && dataDir.length > 0) {
+    try {
+      fs.rmSync(dataDir, {recursive: true, force: true});
+    } catch (error) {
+      cleanupFailures.push(error);
+    }
+  }
+  if (cleanupFailures.length > 0) {
+    throw new AggregateError([
+      ...(seedFailure === null ? [] : [seedFailure]), ...cleanupFailures,
+    ], 'seed assertion/cleanup failures retained');
+  }
+  if (seedFailure !== null) throw seedFailure;
+}
+
 test('seed bootstraps and serves a write on rs-raft by default',
   {timeout: SEED_TEST_TIMEOUT_MS}, async () => {
     initializeTestEnvironment({
@@ -269,10 +331,12 @@ test('seed bootstraps and serves a write on rs-raft by default',
         stabilizationPeriodMs: 10000,
       },
     });
+    const participantTrace = createParticipantReleaseDeliveryTrace();
     const seedNodeId = '550e8400-e29b-41d4-a716-446655449961';
     const seedWsPort = getUniquePort();
     const bootstrapService = await createVirginSeedBootstrapService({
       nodeId: seedNodeId,
+      routerFactory: participantTrace.routerFactory,
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
       config: {
@@ -287,8 +351,11 @@ test('seed bootstraps and serves a write on rs-raft by default',
       ConfigurationManager.getInstance().get(CONFIG_KEY.STORAGE_DATA_DIR);
     let bootstrapResult = null;
     let seedApi = null;
+    let seedFailure = null;
     try {
-      bootstrapResult = await bootstrapService.bootstrap();
+      const bootstrap = await bootstrapWithParticipantTrace(bootstrapService, participantTrace);
+      bootstrapResult = bootstrap.result;
+      if (bootstrap.failure !== null) throw bootstrap.failure;
       assert.equal(bootstrapResult.success, true,
         'the seed bootstraps through production construction');
 
@@ -342,13 +409,10 @@ test('seed bootstraps and serves a write on rs-raft by default',
         (selected.rows ?? []).map(({id, payload}) => ({id, payload})),
         [{id: SEED_ROW.id, payload: SEED_ROW.payload}],
         'the acknowledged INSERT selects back');
-    } finally {
-      await gracefulShutdown(bootstrapService, bootstrapResult, seedApi);
-      await cleanupTestEnvironment();
-      if (typeof dataDir === 'string' && dataDir.length > 0) {
-        fs.rmSync(dataDir, {recursive: true, force: true});
-      }
+    } catch (error) {
+      seedFailure = error;
     }
+    await cleanSeedAttempt({bootstrapService, bootstrapResult, seedApi, dataDir, seedFailure});
   });
 
 test('omitted selection cannot reach the retired backend',

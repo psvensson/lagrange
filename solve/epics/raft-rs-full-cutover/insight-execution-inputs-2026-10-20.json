@@ -1,0 +1,99 @@
+{
+  "schema": "lagrange-insight-plan-inputs/v1",
+  "date": "2026-10-20",
+  "repository": "psvensson/lagrange",
+  "source_anchor": "be25caa5f0c3612feec662d4feaa9ba28f8f34df",
+  "publication_branch": "planning/rsraft-insight-execution-20261020",
+  "operator_decision": "Approve and persist the proposed execution plan; commit/push the planning changes and create a handover. Not source acceptance or main-merge authority.",
+  "original_proposal": {
+    "filename": "EXECUTION-PLAN.md",
+    "bytes": 19586,
+    "sha256": "1ac110182c1fb91410e5574dc153e221070cf527e6327f325a0ff423ad35e8bb",
+    "git_blob_sha": "be4e305775f477da0fe1738eb7386c2a70501ffc",
+    "adaptation": "Only planning status, repository-relative navigation, provenance references and dated persistence decision updated; work packages and proof requirements retained."
+  },
+  "original_review_archive": {
+    "filename": "lagrange-architecture-review-2026-10-20.zip",
+    "bytes": 21715,
+    "sha256": "0eb769ba1f52d86fffe6517333d9544ae928aaa7274748004bf26b143ab7d0dc",
+    "preservation": "All six extracted files below are byte-identical to the supplied archive; the binary archive is not duplicated in Git."
+  },
+  "files": [
+    {
+      "path": "evidence/insight-review-2026-10-20/README.md",
+      "bytes": 1210,
+      "sha256": "83a7cbbb145fc8aca4da21ea4bf777378684583f9c9297017b4f1898c68e1647",
+      "git_blob_sha": "737ea95d0f57b991f3ede6e3ba6ee63975ddc30b"
+    },
+    {
+      "path": "evidence/insight-review-2026-10-20/REVIEW.md",
+      "bytes": 27073,
+      "sha256": "1dc9e7b6197ba538b9376686370d3c3a5b0de0a04c35db43e0104bcae69a0118",
+      "git_blob_sha": "bb5c93e70d5b6fae7ebafd2666aafacd4681720e"
+    },
+    {
+      "path": "evidence/insight-review-2026-10-20/SHA256SUMS",
+      "bytes": 406,
+      "sha256": "e863f7d593724a15d1faa8595a1e9f835b309a392e00e8d3cac61c3778cac4c7",
+      "git_blob_sha": "0800ffafdfc61e25029fbc8814b4a36e8d7e7cd0"
+    },
+    {
+      "path": "evidence/insight-review-2026-10-20/check_models.py",
+      "bytes": 13561,
+      "sha256": "aef5368dfd0246cc26240d3f3cc6d17d74d44f197e6bda045cca832797a8fc90",
+      "git_blob_sha": "af18d072344d9590f50fa4a5d2d78e40b5804ed2"
+    },
+    {
+      "path": "evidence/insight-review-2026-10-20/model-results.json",
+      "bytes": 14482,
+      "sha256": "763a084dd3d017569f5252e121b955ece9fa73b0d322a25198b65d838229cb67",
+      "git_blob_sha": "4f342a5fab34d058d5152857f86c4f13c25719e9"
+    },
+    {
+      "path": "evidence/insight-review-2026-10-20/source-manifest.json",
+      "bytes": 7721,
+      "sha256": "a0a863063c4bfc431511e230b5f0c4150cd429f3760c9bab28ba0d2abb44c374",
+      "git_blob_sha": "cfc13bfb9b52f7ec17922d18e5eff042eb6d0ca7"
+    }
+  ],
+  "planning_files": [
+    {
+      "path": "insight-execution-plan-2026-10-20.md",
+      "bytes": 20821,
+      "sha256": "4df9158a53d24aa8df82aeeb10455fbb262200b4870844de7af0e59f28591e05",
+      "git_blob_sha": "f51a8724f86eddafdeeb7f5efaccc915fbb39eec"
+    },
+    {
+      "path": "insight-proof-matrix-2026-10-20.md",
+      "bytes": 5883,
+      "sha256": "0b3a7976f2ff93dd454fe0fab21c34018810dcb9843c15f6dfc9e5688117a9b3",
+      "git_blob_sha": "e6718da9a77e5769b376ab8b100871053e7ee539"
+    }
+  ],
+  "abstract_reexecution": {
+    "python": "3.13.5",
+    "command": "python3 check_models.py --output model-results-reproduced.json",
+    "exit_code": 0,
+    "studies": 8,
+    "negative_controls_detected": 8,
+    "revised_abstractions_with_positive_and_no_bounded_violation": 8,
+    "output_byte_identical_to_original": true,
+    "output_sha256": "763a084dd3d017569f5252e121b955ece9fa73b0d322a25198b65d838229cb67",
+    "environment": "Chat container; standalone finite models only, no Lagrange source execution."
+  },
+  "not_performed": [
+    "Production source changes",
+    "New real-owner reproduction",
+    "Repository static or source-suite execution",
+    "Lab/GCP physical run",
+    "Independent source approval",
+    "Quest sealing or terminal landing",
+    "Main merge or release certification"
+  ],
+  "historical_research": {
+    "pr": 141,
+    "head": "bdc94775708e357c5b0129fded70be4cea48079b",
+    "status_at_read": "open draft unmerged",
+    "use": "Historical evidence, not production approval."
+  }
+}

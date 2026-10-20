@@ -1,0 +1,132 @@
+{
+  "base": "be93c7e5d9a76a39e76a530c93715521b2281356",
+  "candidate": "32dfdc388cf80c695b70207e1b659bce8d5d6ad5",
+  "independentReviewer": "subagent:/root/physical_custody_review",
+  "comparison": "read-only artifact comparison; one separately authorized canonical documentation validator invocation; no native/full-static re-execution",
+  "structured": {
+    "complexity-src-test.json": {
+      "before": 1811,
+      "after": 1804,
+      "baselineBefore": 1755,
+      "baselineAfter": 1755,
+      "removed": [
+        {
+          "column": 1,
+          "filePath": "src/node/replica-handler-participant-cutover.js",
+          "line": 151,
+          "message": "Async function 'releaseControlOwnerFirst' has a complexity of 15. Maximum allowed is 12."
+        },
+        {
+          "column": 1,
+          "filePath": "src/node/replica-handler-participant-cutover.js",
+          "line": 245,
+          "message": "Async function 'runCutoverAttempt' has a complexity of 31. Maximum allowed is 12."
+        },
+        {
+          "column": 45,
+          "filePath": "test/raft/raft-rs-backend/single-path-partition-cutover.test.js",
+          "line": 266,
+          "message": "Async arrow function has a complexity of 21. Maximum allowed is 12."
+        },
+        {
+          "column": 1,
+          "filePath": "test/test-helpers/participant-release-delivery-trace.js",
+          "line": 76,
+          "message": "Function 'membershipTraceOf' has a complexity of 15. Maximum allowed is 12."
+        },
+        {
+          "column": 1,
+          "filePath": "test/test-helpers/participant-release-delivery-trace.js",
+          "line": 123,
+          "message": "Function 'requestTraceOf' has a complexity of 17. Maximum allowed is 12."
+        },
+        {
+          "column": 1,
+          "filePath": "test/test-helpers/participant-release-delivery-trace.js",
+          "line": 138,
+          "message": "Function 'releaseAnswerTraceOf' has a complexity of 23. Maximum allowed is 12."
+        },
+        {
+          "column": 55,
+          "filePath": "test/test-helpers/participant-release-delivery-trace.js",
+          "line": 202,
+          "message": "Arrow function has a complexity of 13. Maximum allowed is 12."
+        }
+      ],
+      "added": []
+    },
+    "cognitive-complexity-src-scripts.json": {
+      "before": 153,
+      "after": 152,
+      "baselineBefore": 152,
+      "baselineAfter": 152,
+      "removed": [
+        {
+          "column": 16,
+          "filePath": "src/node/replica-handler-participant-cutover.js",
+          "line": 245,
+          "message": "Refactor this function to reduce its Cognitive Complexity from 24 to the 20 allowed."
+        }
+      ],
+      "added": []
+    }
+  },
+  "documentation": {
+    "before": 292,
+    "candidate": 298,
+    "candidateRemoved": [],
+    "candidateAdded": [
+      "solve/epics/raft-rs-full-cutover/evidence/insight-execution-2026-10-20/snapshot-cdc-lineage-coverage-review.md:123: referenced repository path is missing: test/cdc/cdc-obligation-recovery.integration.test.js",
+      "solve/epics/raft-rs-full-cutover/evidence/insight-execution-2026-10-20/snapshot-cdc-lineage-coverage-review.md:157: referenced repository path is missing: src/cdc/cdc-coverage-reconcile-owner.js",
+      "solve/epics/raft-rs-full-cutover/evidence/insight-execution-2026-10-20/snapshot-cdc-lineage-coverage-review.md:158: referenced repository path is missing: src/cdc/cdc-coverage-transfer-owner.js",
+      "solve/epics/raft-rs-full-cutover/evidence/insight-execution-2026-10-20/snapshot-cdc-lineage-coverage-review.md:158: referenced repository path is missing: src/cdc/cdc-coverage-domain.js",
+      "solve/epics/raft-rs-full-cutover/evidence/insight-execution-2026-10-20/snapshot-cdc-lineage-coverage-review.md:159: referenced repository path is missing: src/partition/partition-cdc-source-coverage.js",
+      "solve/epics/raft-rs-full-cutover/evidence/insight-execution-2026-10-20/snapshot-cdc-lineage-coverage-review.md:160: referenced repository path is missing: src/cache/system-table-cache-cdc-source-order.js"
+    ],
+    "corrected": 292,
+    "correctedRemovedVersusBase": [],
+    "correctedAddedVersusBase": [],
+    "correctedReportSha256": "87445b37c8cf1c715ac04cedb2d32f38312de9b629baf23cfb96878372e7a497"
+  },
+  "guidelines": {
+    "emittedBlockIdentical": true,
+    "countBefore": 321,
+    "countAfter": 321,
+    "matchedBaselineBefore": 1264,
+    "matchedBaselineAfter": 1264,
+    "limitation": "No complete per-violation literal report located; identical count/top20 block does not establish every one of321findings is identical."
+  },
+  "sourcePaths": [
+    "src/node/participant-release-diagnostic-observation.js",
+    "src/node/replica-handler-participant-cutover.js",
+    "src/partition/partition-participant-transaction-cutover-constants.js"
+  ],
+  "currentSourceMatchesCandidate": true,
+  "auditScriptDiff": [],
+  "inputs": [
+    {
+      "path": "/mnt/data/peter/projects/.worktrees/rsraft-control-authority-20261020/test-output/control-authority-intake/be93-predecessor-static-20261020.log",
+      "sha256": "0c9fe03babf5ff72c321c8ac510a2e035f57478401bec09bf7d205ec4c2cddeb"
+    },
+    {
+      "path": "/mnt/data/peter/projects/.worktrees/control-refusal-provenance-20261020/test-output/control-refusal-continuation/composed-32dfdc38-static.log",
+      "sha256": "cf89a6b393cdfe20a52d24ef463d38c09d200b65c37c2ee03212c830e62c3c05"
+    },
+    {
+      "path": "/mnt/data/peter/projects/.worktrees/rsraft-control-authority-20261020/test-output/analysis/complexity-src-test.json",
+      "sha256": "6f5b0cb9d3e298f83f19f06521ae747a117fd027a7b116f5441674ae218270ae"
+    },
+    {
+      "path": "/mnt/data/peter/projects/.worktrees/control-refusal-provenance-20261020/test-output/analysis/complexity-src-test.json",
+      "sha256": "f1e76dc7109167b08d108855151596d3cabe2adce3b6096598559938dffd064c"
+    },
+    {
+      "path": "/mnt/data/peter/projects/.worktrees/rsraft-control-authority-20261020/test-output/analysis/cognitive-complexity-src-scripts.json",
+      "sha256": "0438eabb166426580233e158e08192bbb04460f70b408cfe1cce8c7df33d8f5c"
+    },
+    {
+      "path": "/mnt/data/peter/projects/.worktrees/control-refusal-provenance-20261020/test-output/analysis/cognitive-complexity-src-scripts.json",
+      "sha256": "efe58390f3e02f753679b0d238c9e2476cef29627bb3fd2cba3cc6120cb3c28d"
+    }
+  ]
+}

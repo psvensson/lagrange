@@ -1,0 +1,10 @@
+{"file":"test/node/participant-release-control-refusal-observation.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":278,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/participant-release-control-three-member.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":5500,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/participant-release-deadline-recovery.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":5533,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/participant-release-delivery-recorder.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":309,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/node/replica-handler-release-recovery.test.js","attempt":1,"ok":true,"assertions":25,"durationMs":6408,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/participant-release-native-application-order.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":4661,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/participant-release-protocol.test.js","attempt":1,"ok":true,"assertions":16,"durationMs":5342,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/seed-participant-release-failure-projection.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":2964,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/wasm-service/bound-creation-handler-embedding.integration.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":2236,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/wasm-service/bound-remove-physical-operation.integration.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":2474,"retriedOnce":false,"firstFailureLine":null}

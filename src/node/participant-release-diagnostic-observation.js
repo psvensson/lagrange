@@ -1,7 +1,8 @@
 // Bounded observations for the existing participant-release interaction.
 // These values explain a refusal; they never decide release, drain, retry,
 // admission, recovery, or deadline policy.
-import {PARTICIPANT_RELEASE_TRIGGER} from
+import {types} from 'node:util';
+import {PARTICIPANT_RELEASE_TRIGGER, PARTICIPANT_CUTOVER_BOUND} from
   '../partition/partition-participant-transaction-cutover-constants.js';
 import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
 
@@ -9,6 +10,39 @@ const numberIsSafeInteger = Number.isSafeInteger;
 const objectFreeze = Object.freeze;
 const objectIs = Object.is;
 const reflectApply = Reflect.apply;
+const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const objectHasOwn = Object.hasOwn;
+const isProxy = types.isProxy;
+const stringSlice = String.prototype.slice;
+const DESCRIPTOR_VALUE = 'value';
+const CONTROL_REFUSAL_FIELD = objectFreeze({
+  MISSING_FACT: 'missingFact', PHASE: 'phase', REASON: 'reason',
+});
+
+function controlRefusalText(answer, field) {
+  if (answer === null || typeof answer !== 'object' || isProxy(answer)) return null;
+  let descriptor;
+  try {
+    descriptor = objectGetOwnPropertyDescriptor(answer, field);
+  } catch {
+    // Exotic own properties may be unavailable without invoking a getter.
+    return null;
+  }
+  if (!descriptor || !objectHasOwn(descriptor, DESCRIPTOR_VALUE) ||
+      typeof descriptor.value !== 'string') return null;
+  return reflectApply(stringSlice, descriptor.value,
+    [0, PARTICIPANT_CUTOVER_BOUND.CONTROL_REFUSAL_TEXT_MAX_LENGTH]);
+}
+
+// Own-data observations only: no getter/coercion, no retained nested answer.
+// Strings are prefixes bounded by CONTROL_REFUSAL_TEXT_MAX_LENGTH, not identities.
+function captureParticipantControlRefusal(answer) {
+  return objectFreeze({
+    controlMissingFact: controlRefusalText(answer, CONTROL_REFUSAL_FIELD.MISSING_FACT),
+    controlPhase: controlRefusalText(answer, CONTROL_REFUSAL_FIELD.PHASE),
+    controlReason: controlRefusalText(answer, CONTROL_REFUSAL_FIELD.REASON),
+  });
+}
 
 const CLOCK_STATE = objectFreeze({
   MEASURED: 'measured',
@@ -117,6 +151,7 @@ function participantReleaseSeedBudgetObservation(start, terminal, budgetMs) {
 }
 
 export {
+  captureParticipantControlRefusal,
   captureParticipantReleaseDiagnosticTrigger,
   observeParticipantReleaseClockValue,
   safeClockInteger as participantReleaseSafeClockInteger,

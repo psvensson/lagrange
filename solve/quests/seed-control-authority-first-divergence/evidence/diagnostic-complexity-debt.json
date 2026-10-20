@@ -1,0 +1,35 @@
+{
+  "scope": "Diagnostic WIP, not waived or landed. Full audit is red. Initial report predates final cleanup delta; not final-byte static proof.",
+  "reported": [
+    {
+      "filePath": "test/raft/raft-rs-backend/single-path-partition-cutover.test.js",
+      "line": 266,
+      "column": 45,
+      "message": "Async arrow function has a complexity of 21. Maximum allowed is 12."
+    },
+    {
+      "filePath": "test/test-helpers/participant-release-delivery-trace.js",
+      "line": 74,
+      "column": 1,
+      "message": "Function 'membershipTraceOf' has a complexity of 15. Maximum allowed is 12."
+    },
+    {
+      "filePath": "test/test-helpers/participant-release-delivery-trace.js",
+      "line": 121,
+      "column": 1,
+      "message": "Function 'requestTraceOf' has a complexity of 17. Maximum allowed is 12."
+    },
+    {
+      "filePath": "test/test-helpers/participant-release-delivery-trace.js",
+      "line": 136,
+      "column": 1,
+      "message": "Function 'releaseAnswerTraceOf' has a complexity of 23. Maximum allowed is 12."
+    },
+    {
+      "filePath": "test/test-helpers/participant-release-delivery-trace.js",
+      "line": 200,
+      "column": 55,
+      "message": "Arrow function has a complexity of 13. Maximum allowed is 12."
+    }
+  ]
+}

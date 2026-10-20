@@ -1,0 +1,7 @@
+{
+  "schema": "verbatim-utf8-evidence/1",
+  "originalPath": "control-source-bundle-verification.txt",
+  "bytes": 788,
+  "sha256": "f4ef25c8f065d06376b9c087fd703f4179b4235350a28b8e7b6077e4275bd554",
+  "utf8Text": "test-output/control-refusal-continuation/insight-owner-controls-20261020.bundle is okay\nThe bundle contains these 6 refs:\n187221614f26fd2bc2c16342d35a1ebf6cf09564 refs/heads/experiment/rsraft-release-negative-authorization-20261020\n27d00cd4be71fe4445fc20a2049e933b3ae63b60 refs/heads/experiment/rsraft-release-negative-deadline-20261020\n34ca6d5738cfc45995104df8268d2eb66614fbd4 refs/heads/probe/insight-control-projection-20261020\n0e19f5e07da01d6d8fe59131b7617ac8ed33b758 refs/heads/work/generic-stop-custody-witness-20261020\naa66604f7e9dbfecd952d30e8e124317175c4dea refs/heads/work/bound-stop-custody-mutant-b1-20261020\n4654c81a5e50326f9cded41bedf0cc6e0db0384a refs/heads/work/bound-stop-custody-mutant-b2-20261020\nThe bundle requires this ref:\nbe93c7e5d9a76a39e76a530c93715521b2281356 \n"
+}

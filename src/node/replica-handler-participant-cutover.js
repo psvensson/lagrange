@@ -16,7 +16,7 @@ import {isReleaseDrained, releaseAnswer, releaseCensusDefect, releaseIdentityOf,
   '../partition/partition-participant-release-contract.js';
 import {askParticipantRelease, releaseNodeOfAddress, requestParticipantRelease} from
   './participant-release-client.js';
-import {captureParticipantReleaseDiagnosticTrigger,
+import {captureParticipantControlRefusal, captureParticipantReleaseDiagnosticTrigger,
   participantReleaseAttemptAgeObservation, readParticipantReleaseClock} from
   './participant-release-diagnostic-observation.js';
 import {settleTransactionReleaseRows, transactionReleaseProofOf} from
@@ -148,17 +148,21 @@ function controlReleaseAnswerValid(answer, targetBuildDigest) {
       TRANSACTION_SCHEMA_ENFORCEMENT_STATE.ENFORCED);
 }
 
-async function releaseControlOwnerFirst(handler, service, request) {
-  if (service.tableName === TABLES.SQL_TRANSACTIONS) return null;
-  const partitionId = INITIAL_PARTITION_IDS[TABLES.SQL_TRANSACTIONS];
+function currentControlNodeId(handler, service, partitionId) {
   const localControlLeader = [...handler.localServices.values()].find((candidate) =>
     candidate.initialized && !candidate.isShutdown &&
     candidate.partitionId === partitionId &&
     candidate.raft?.readStatus().role === RAFT_ROLE.LEADER);
   const topologyOwner = releaseQueryEngine(handler, service)?.queryExecutor
     ?.bootstrapTopologySnapshotOwner;
-  const nodeId = localControlLeader ? handler.nodeId :
+  return localControlLeader ? handler.nodeId :
     topologyOwner?.resolveCanonicalPartitionLeaderNodeId?.(partitionId) ?? null;
+}
+
+async function releaseControlOwnerFirst(handler, service, request) {
+  if (service.tableName === TABLES.SQL_TRANSACTIONS) return null;
+  const partitionId = INITIAL_PARTITION_IDS[TABLES.SQL_TRANSACTIONS];
+  const nodeId = currentControlNodeId(handler, service, partitionId);
   if (typeof nodeId !== 'string' || nodeId.length === 0) {
     return attemptRefusal(request, OUTCOME.UNAVAILABLE,
       {missingFact: MISSING_FACT.CURRENT_CONTROL_OWNER});
@@ -176,7 +180,8 @@ async function releaseControlOwnerFirst(handler, service, request) {
   if (!controlReleaseAnswerValid(answer, request.targetBuildDigest)) {
     return attemptRefusal(request, OUTCOME.UNAVAILABLE,
       {missingFact: MISSING_FACT.CURRENT_CONTROL_OWNER, controlPartitionId: partitionId,
-        controlNodeId: nodeId, controlOutcome: answer?.outcome ?? null});
+        controlNodeId: nodeId, controlOutcome: answer?.outcome ?? null,
+        ...captureParticipantControlRefusal(answer)});
   }
   return null;
 }
@@ -242,17 +247,7 @@ async function reopenCohort(handler, service, request, release, attempt, census)
     attemptRefusal(request, OUTCOME.STALE, {reopened}) : reopened;
 }
 
-async function runCutoverAttempt(handler, request) {
-  if (Number.isSafeInteger(request.deadlineAtMs) &&
-      handler.timeSource.now() >= request.deadlineAtMs) {
-    return attemptRefusal(request, OUTCOME.UNAVAILABLE,
-      {missingFact: MISSING_FACT.RELEASE_DEADLINE});
-  }
-  const service = localLeader(handler, request);
-  if (service === null) {
-    return attemptRefusal(request, OUTCOME.UNAVAILABLE,
-      {missingFact: MISSING_FACT.HOSTED_PARTITION});
-  }
+function localReleaseRefusal(handler, service, request) {
   const status = service.raft.readStatus();
   if (status.role !== RAFT_ROLE.LEADER) {
     return releaseAnswer(OUTCOME.NOT_LEADER, request,
@@ -266,6 +261,22 @@ async function runCutoverAttempt(handler, request) {
     return releaseAnswer(OUTCOME.OPERATOR_REQUIRED, request,
       {missingFact: MISSING_FACT.FRESH_STORAGE_OR_OPERATOR_AUTHORITY});
   }
+  return null;
+}
+
+async function runCutoverAttempt(handler, request) {
+  if (Number.isSafeInteger(request.deadlineAtMs) &&
+      handler.timeSource.now() >= request.deadlineAtMs) {
+    return attemptRefusal(request, OUTCOME.UNAVAILABLE,
+      {missingFact: MISSING_FACT.RELEASE_DEADLINE});
+  }
+  const service = localLeader(handler, request);
+  if (service === null) {
+    return attemptRefusal(request, OUTCOME.UNAVAILABLE,
+      {missingFact: MISSING_FACT.HOSTED_PARTITION});
+  }
+  const localRefusal = localReleaseRefusal(handler, service, request);
+  if (localRefusal !== null) return localRefusal;
   const controlOwner = await releaseControlOwnerFirst(handler, service, request);
   if (controlOwner !== null) return controlOwner;
   // Close the current leader before any awaited remote observation. A
@@ -298,6 +309,10 @@ async function runCutoverAttempt(handler, request) {
   census = await actOnCohort(handler, release, attempt, ACTION.PAUSE, census);
   unavailable = unavailableCensus(census);
   if (unavailable !== null) return unavailable;
+  return runPausedCutover(handler, service, request, release, attempt, cohort, census);
+}
+
+async function runPausedCutover(handler, service, request, release, attempt, cohort, census) {
   const blockedDrain = census.find((facts) => !isReleaseDrained(facts.work));
   if (blockedDrain !== undefined) {
     return attemptRefusal({...request, release}, OUTCOME.DRAIN_PENDING,
@@ -324,9 +339,14 @@ async function runCutoverAttempt(handler, request) {
   const application = await enableAndObserveCohort(handler, release, attempt,
     census, local, queryRelease.queryDrainProof);
   if (application !== null) return application;
-  census = await readCohort(handler, service.partitionId, cohort,
+  return finishEnabledCutover(handler, service, request, release, attempt, cohort, queryRelease);
+}
+
+async function finishEnabledCutover(handler, service, request, release, attempt, cohort,
+  queryRelease) {
+  const census = await readCohort(handler, service.partitionId, cohort,
     request.deadlineAtMs);
-  unavailable = unavailableCensus(census);
+  const unavailable = unavailableCensus(census);
   if (unavailable !== null) return unavailable;
   const finalLocal = census.find((facts) => facts.generation.replicaId === service.replicaId);
   const finalQueryDrainProof = queryRelease.transactions === null ? null :

@@ -1,0 +1,27 @@
+{
+  "schema": "controlled-source-negative/1",
+  "date": "2026-10-20",
+  "control": "authorization",
+  "status": "prepared-unmeasured",
+  "baseCommit": "a72609dadfca7f8292c347d041175990b09e2c54",
+  "branch": "experiment/rsraft-release-negative-authorization-20261020",
+  "sourcePath": "src/node/replica-handler-participant-cutover.js",
+  "sourceBaseGitBlob": "d4c1f18755dfb7fd80b74096a6e0b1db8d6a644f",
+  "sourceMutatedSha256": "c9c87eb1081217a5736aa22a2ffe40c61f55bc2d703e9c14d8fcf1bf53a03dda",
+  "mutation": "Change only readPartitionWriteOrigin(service.db) === null to === undefined in the no-origin authorization guard.",
+  "review": "Exact minimal negative control reviewed by control_source_review and authorized by root; not a production repair or implementation acceptance.",
+  "patchSha256": "1a1c1e6eba11bdb25faea1ba2ed62a44aa8a6ba2c6eb228d98f8702c1db89ca6",
+  "witnessSha256": {
+    "test/partition/participant-release-deadline-recovery.test.js": "d2f5be01c26338c9715d4abcb75ed6bd1a9dee269eaad312528bdc255bfcaa7a",
+    "test/test-helpers/participant-release-protocol-fixture.js": "3f3b17a7d3fa637b09001fb179170bb1792efbec5acbb96cd009dcdd7117934c"
+  },
+  "expectedSemanticDiscriminator": "The new live-budget unprivileged release after engaged pre-ENABLE expiry should fail the OPERATOR_REQUIRED assertion at witness line 186. Setup failure is not an engaged negative.",
+  "measurement": "Not run in this worktree. Root coordinates exact-commit locked same-host native measurement.",
+  "constraints": [
+    "Experimental WIP only; never land, merge or push as a production repair.",
+    "Keep witness and fixture bytes identical to the positive base.",
+    "Normal pre-commit hooks and generated metadata; no bypass or ratchet increase.",
+    "No native test execution by the preparation agent."
+  ],
+  "patchText": "--- a/src/node/replica-handler-participant-cutover.js\n+++ b/src/node/replica-handler-participant-cutover.js\n@@ -253,7 +253,7 @@\n     return releaseAnswer(OUTCOME.NOT_LEADER, request,\n       {leaderAddress: status.leaderAddress, leaderReplicaId: status.leaderId});\n   }\n-  if (readPartitionWriteOrigin(service.db) === null &&\n+  if (readPartitionWriteOrigin(service.db) === undefined &&\n       !handler.participantReleaseAuthorizationOwner.validates(\n         request.authorization,\n         {partitionId: service.partitionId,\n"
+}
