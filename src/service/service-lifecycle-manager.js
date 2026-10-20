@@ -559,13 +559,11 @@ const MAX_DIAGNOSTICS_LIMIT = 500;
         continue;
       }
       const prior = unique.get(operationId);
-      // A repeated ID with divergent content is a storage-integrity error,
-      // not an independent row failure. Never choose one contender.
-      requireInstance(prior === undefined ||
-        (captured !== null && prior.__recoveryCorrupt !== true &&
-          instanceDigest(prior) === instanceDigest(captured)),
-      INSTANCE_OUTCOME.CORRUPT_STATE);
-      unique.set(operationId, captured ?? corrupt(operationId, row?.created_at ?? 0));
+      // MUTATION U1-R2E: first-observed ID wins, ignoring conflicting siblings.
+      // Negative control only. A divergent journal entry may now be accepted.
+      if (prior === undefined) {
+        unique.set(operationId, captured ?? corrupt(operationId, row?.created_at ?? 0));
+      }
     }
     const rows = [...unkeyed, ...unique.values()];
     rows.sort((left, right) => {
