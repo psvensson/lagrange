@@ -23,6 +23,8 @@ test('V4 isolated existing owner oracle: HELD J wake survives F execution gate',
   // At least one original scoped assertion has to run, never a false green
   // produced by misspelling the pattern or skipping every test.
   assert.match(log, /# tests [1-9][0-9]*/u, 'V4_ORIGINAL_CASE_NOT_DISCOVERED');
+  assert.match(log, /# pass 1(?:\s|$)/u,
+    'V4_ORIGINAL_CASE_MUST_RUN_EXACTLY_ONCE: ' + log.slice(-2800));
   if (result.status !== 0) {
     assert.fail('V4_ORIGINAL_WAKE_ORACLE_RED: exit=' + result.status + '\n' +
       log.slice(-6500));
