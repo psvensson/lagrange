@@ -717,9 +717,8 @@ function replyToExistingReplica(handler, existing, params) {
       const joined = replyToGenericExecutionGate(handler, params,
         ReplicaOperationMessageType.CREATE_REPLICA);
       if (joined !== undefined) return joined;
-      // The previous generic attempt left no owned work. Re-enter through
-      // handleCreateReplica's ordinary admission instead of a false ACK.
-      return null;
+      // MUTATION: a memo alone now falsely promises an in-progress execution.
+      return inProgressReply(handler, replicaId);
     }
     handler.logger.info(LOG.CREATE_IN_PROGRESS, {replicaId, nodeId: handler.nodeId});
     return replicaReply(ReplicaOperationResponseStatus.IN_PROGRESS,
