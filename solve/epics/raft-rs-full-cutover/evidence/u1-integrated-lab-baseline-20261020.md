@@ -100,3 +100,19 @@ The same-host immutable pre-U1 [lab #568](https://github.com/psvensson/lagrange-
 These two now have *matched first-failure* evidence, stronger than matching file-level failure counts. They remain red for eventual release. No change to U1 code, budget, or oracle is authorized by this record.
 
 The terminal **13/13 positive U1 run** remains [#567](https://github.com/psvensson/lagrange-lab/issues/567). This does not replace the outstanding source-review, mutation-control, full-corpus, Cell compatibility and independent 55-item certification work.
+
+
+## Continuation, 2026-10-20: isolated source-only mutation controls
+
+**Procedure:** six adversarial mutant branches were created independently from the **same immutable, green 13-file source** `be25caa5`. Every branch modifies **one production file only**, confirmed through exact base-versus-head GitHub compare (one commit ahead, zero behind). No mutated code was merged into the U1 candidate, main, or the evidence branch. The baseline's unmodified physical custody test was already PASS in lab [#553](https://github.com/psvensson/lagrange-lab/issues/553) and [#567](https://github.com/psvensson/lagrange-lab/issues/567). Thus a mutant must fail at the *named substantive physical/manager effect*, not from compilation, missing fixture, or broad timeout.
+
+| Mutation | Isolated negative alteration (only in its test branch) | Lab / observed terminal | Verdict |
+| --- | --- | --- | --- |
+| P0 | Remove *only* physical CURRENT observation from `startBoundReplica`'s pre-start check; retain descriptor check | [#571](https://github.com/psvensson/lagrange-lab/issues/571), `a8fa5882`: FAIL, 19/20 child tests passed, first substantive check `OLD_CONTEXT_STARTED_A_SUCCESSOR_THROUGH_SERVICE_ID` (actual physical `startReplica` calls 1 vs expected 0) | **MUTANT KILLED** |
+| P1 | Permit stale STARTING manager projection after READY return while retaining the other state gates | branch `mutation/u1-p1-manager-ready-return-20261020`, `eccd5ce2`: created and exactly 1 production file altered; lab submission not accepted by remote tool | **UNEXECUTED; gate OPEN** |
+| P2 | Remove post-PUBLISHED driver physical-CURRENT check; leave pre-start check | [#572](https://github.com/psvensson/lagrange-lab/issues/572), `6a717b19`: FAIL at `LATE_PUBLISHED_DRIVER_RETURN_MARKED_HELD_SUCCESSOR_RUNNING` | **MUTANT KILLED** |
+| P3 | Permit stale RUNNING manager projection after exact confirmation; retain STARTING/other guards | [#573](https://github.com/psvensson/lagrange-lab/issues/573), `021d2e8a`: reported RUNNING at this checkpoint; no terminal conclusion | **PENDING; gate OPEN** |
+| P4 | Remove only currentness test after awaited `projectServicesRow`; retain initial and endpoint-return guards | [#574](https://github.com/psvensson/lagrange-lab/issues/574), `f84d6715`: FAIL at `LATE_SERVICES_RETURN_INVOKED_RETIRED_CREATIONS_ENDPOINT_WRITER` | **MUTANT KILLED** |
+| P5 | Remove only currentness test after awaited `writeEndpoint`; retain earlier guards | [#575](https://github.com/psvensson/lagrange-lab/issues/575), `dd9ac1cf`: FAIL at `LATE_ENDPOINT_RETURN_INVOKED_RETIRED_CREATIONS_PHYSICAL_MARK` | **MUTANT KILLED** |
+
+Each executed mutant ran the unchanged existing `test/wasm-service/bound-creation-physical-custody.integration.test.js` on an authorized physical lab host. These results are real **RED negative controls** under deliberately defective source, **not regressions in the production candidate**; they support the unchanged candidate's corresponding exclusion evidence. Four of the six required P0–P5 controls are now measured/decisive. P1 and P3 remain unaccepted/unfinished; other U1 V1–V9 and the independent 55-item conclusion remain required. Do not turn this into blanket U1 closure or a main merge.
