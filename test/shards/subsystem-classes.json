@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 116,
     "architecture-governance": 19,
-    "bootstrap-membership": 317,
+    "bootstrap-membership": 319,
     "cdc-metadata": 63,
     "cli-tooling": 96,
     "control-plane": 216,
@@ -25,10 +25,10 @@
     "transport-messaging": 96,
     "wasm-toolchain": 73
   },
-  "censusSize": 2411,
-  "digest": "fnv1a32-cb2869b3",
+  "censusSize": 2413,
+  "digest": "fnv1a32-5ff424e0",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-83f73b24",
+  "observationDigest": "fnv1a32-3c2921e0",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1215,6 +1215,8 @@
     "test/node/runtime-service-bound-route.test.js": "bootstrap-membership",
     "test/node/runtime-service-call-cell-handler.test.js": "bootstrap-membership",
     "test/node/runtime-service-handler.test.js": "bootstrap-membership",
+    "test/node/runtime-service-remove-execution-custody.test.js": "bootstrap-membership",
+    "test/node/runtime-service-restart-inventory-custody.test.js": "bootstrap-membership",
     "test/node/services-p1-diagnostic-logger.test.js": "bootstrap-membership",
     "test/node/single-cdc-write-path.property.test.js": "bootstrap-membership",
     "test/node/state-change-event-emission.property.test.js": "bootstrap-membership",
@@ -8694,6 +8696,27 @@
       ],
       "env": [
         "NODE_ENV"
+      ]
+    },
+    "test/node/runtime-service-remove-execution-custody.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/rebalancer/executor-outcome-constants.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "src/service/service-consensus-creation-intent.js",
+        "src/service/service-lifecycle-command-contract.js",
+        "test/control-plane/service-instance-creation-sqlite-fixture.js"
+      ]
+    },
+    "test/node/runtime-service-restart-inventory-custody.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/node/runtime-service-handler-constants.js",
+        "src/service/service-lifecycle-command-contract.js",
+        "src/wasm-service/wasm-creation-opening.js",
+        "test/control-plane/service-instance-creation-sqlite-fixture.js"
       ]
     },
     "test/node/single-cdc-write-path.property.test.js": {
