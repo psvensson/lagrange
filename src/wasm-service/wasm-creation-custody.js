@@ -67,7 +67,7 @@ function admitWasmRetirement(lifecycle, value) {
   }
   const task = Promise.withResolvers();
   const entry = {origin, promise: task.promise};
-  lifecycle.creationRetirements.set(origin.operationId, entry);
+  // MUTATION V6: no custody registration for synchronously reentrant shutdown.
   // Install before invocation: resource release may synchronously reenter
   // shutdownAll or retireReplica before returning its promise.
   const finish = () => {
