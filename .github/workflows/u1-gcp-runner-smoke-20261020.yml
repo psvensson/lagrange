@@ -1,0 +1,111 @@
+# WIP U1 exact-source GCP runner smoke, not release or native multi-host proof.
+# Starts only the known stopped CI runner, runs fixed bounded source tests,
+# then stops only the VM it started. Never changes main or any test verdict.
+name: u1-gcp-runner-smoke-20261020
+on:
+  push:
+    branches:
+      - verify/u1-gcp-20261020
+    paths:
+      - .github/workflows/u1-gcp-runner-smoke-20261020.yml
+permissions:
+  contents: read
+concurrency:
+  group: u1-gcp-runner-smoke-20261020
+  cancel-in-progress: false
+env:
+  TARGET: be25caa5f0c3612feec662d4feaa9ba28f8f34df
+  GCP_PROJECT: something-2e584
+  GCP_ZONE: europe-north1-a
+  GCP_VM: lagrange-ci-runner
+jobs:
+  wake:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      owned: ${{ steps.start.outputs.owned }}
+    steps:
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          workload_identity_provider: projects/759391918025/locations/global/workloadIdentityPools/github/providers/github-actions
+          service_account: github-release-starter@something-2e584.iam.gserviceaccount.com
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
+      - id: start
+        name: Start only the already-registered GCP CI runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          STATUS="$(gcloud compute instances describe "$GCP_VM" --project "$GCP_PROJECT" --zone "$GCP_ZONE" --format='value(status)')"
+          test "$STATUS" = TERMINATED || { echo "Refuse use of an already running/shared VM: $STATUS"; exit 3; }
+          echo "owned=true" >> "$GITHUB_OUTPUT"
+          gcloud compute instances start "$GCP_VM" --project "$GCP_PROJECT" --zone "$GCP_ZONE" --quiet
+  smoke:
+    needs: wake
+    runs-on: [self-hosted, gcp]
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout immutable U1 candidate
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: be25caa5f0c3612feec662d4feaa9ba28f8f34df
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Assert exact candidate and install locked dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TARGET"
+          echo "gcp-runner=$(hostname) candidate=$TARGET"
+          npm ci
+      - name: Execute selected U1 owner smoke through original runner
+        shell: bash
+        env:
+          LAGRANGE_RETRY_FAILED_ONCE: '0'
+        run: |
+          set -euo pipefail
+          node scripts/run-classified-test-files.js --stdin <<'TESTFILES'
+          test/node/runtime-service-handler.test.js
+          test/node/runtime-service-remove-execution-custody.test.js
+          test/service/service-consensus-creation-intent.test.js
+          TESTFILES
+      - name: Archive immutable smoke evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: u1-gcp-runner-smoke-${{ github.run_id }}
+          path: |
+            test-output/reports/
+            .tap/test-results/
+          retention-days: 14
+          if-no-files-found: ignore
+  cleanup:
+    if: always() && needs.wake.outputs.owned == 'true'
+    needs: [wake, smoke]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          workload_identity_provider: projects/759391918025/locations/global/workloadIdentityPools/github/providers/github-actions
+          service_account: github-release-starter@something-2e584.iam.gserviceaccount.com
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
+      - name: Stop VM started by this workflow and verify shutdown
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud compute instances stop "$GCP_VM" --project "$GCP_PROJECT" --zone "$GCP_ZONE" --quiet
+          STATUS="$(gcloud compute instances describe "$GCP_VM" --project "$GCP_PROJECT" --zone "$GCP_ZONE" --format='value(status)')"
+          echo "GCP_CLEANUP_STATUS=$STATUS"
+          test "$STATUS" = TERMINATED
