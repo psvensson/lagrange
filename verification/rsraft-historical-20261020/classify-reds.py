@@ -61,8 +61,8 @@ classed = collections.defaultdict(list)
 data=[]
 for p in reds:
     a=candidate[p]; b=before[p]
-    first=a.get('firstFailureLine','')
-    earlier=b.get('firstFailureLine','')
+    first=a.get('firstFailureLine') or ''
+    earlier=b.get('firstFailureLine') or ''
     eq=(first == earlier)
     group=primary(first)
     if group == 'unclassified': group=primary(earlier)
