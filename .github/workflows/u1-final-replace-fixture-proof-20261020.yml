@@ -1,0 +1,23 @@
+name: u1-final-replace-fixture-proof-20261020
+on:
+  push:
+    branches: [verify/u1-fixture-final-sealed-20261020]
+    paths: [.github/workflows/u1-final-replace-fixture-proof-20261020.yml]
+permissions: {contents: read}
+jobs:
+  proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ba2b08ce01969ad0a0c8835a31689a09247fad0a
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - run: test "$(git rev-parse HEAD)" = ba2b08ce01969ad0a0c8835a31689a09247fad0a
+      - run: npm ci
+      - run: node scripts/run-classified-test-files.js --stdin <<<'test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js'
+      - run: npx eslint test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js
