@@ -16,7 +16,7 @@ import {isReleaseDrained, releaseAnswer, releaseCensusDefect, releaseIdentityOf,
   '../partition/partition-participant-release-contract.js';
 import {askParticipantRelease, releaseNodeOfAddress, requestParticipantRelease} from
   './participant-release-client.js';
-import {captureParticipantControlRefusal, captureParticipantReleaseDiagnosticTrigger,
+import {captureParticipantReleaseDiagnosticTrigger,
   participantReleaseAttemptAgeObservation, readParticipantReleaseClock} from
   './participant-release-diagnostic-observation.js';
 import {settleTransactionReleaseRows, transactionReleaseProofOf} from
@@ -180,8 +180,7 @@ async function releaseControlOwnerFirst(handler, service, request) {
   if (!controlReleaseAnswerValid(answer, request.targetBuildDigest)) {
     return attemptRefusal(request, OUTCOME.UNAVAILABLE,
       {missingFact: MISSING_FACT.CURRENT_CONTROL_OWNER, controlPartitionId: partitionId,
-        controlNodeId: nodeId, controlOutcome: answer?.outcome ?? null,
-        ...captureParticipantControlRefusal(answer)});
+        controlNodeId: nodeId, controlOutcome: answer?.outcome ?? null});
   }
   return null;
 }
