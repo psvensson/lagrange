@@ -31,7 +31,8 @@ import {captureRetainedCreationOrigin, sameRetainedCreation} from
 import {instanceDigest} from '../control-plane/owners/service-instance-contract.js';
 import {matchesCreationRequest, matchesCreationWake, replicaExecution, currentExecution,
   retainedCreationPlan, executionRefusal, inProgressReply, installExecution, releaseExecution,
-  joinRetirementObserver} from './runtime-service-creation-execution.js';
+  joinRetirementObserver, replyToGenericExecutionGate} from
+  './runtime-service-creation-execution.js';
 import {RECONCILE_REASON} from '../workflow/reconcile-queue-constants.js';
 import {RUNTIME_SERVICE_CREATION_MEMO as MEMO,
   RUNTIME_SERVICE_RESTART_ACTION as ACTION, RUNTIME_SERVICE_RESTART_PLAN_STATE as PLAN_STATE,
@@ -709,17 +710,20 @@ function replyToExistingReplica(handler, existing, params) {
     return retainedReply;
   }
   if (status === ReplicaStatus.CREATING) {
-    handler.logger.info(
-      LOG.CREATE_IN_PROGRESS,
-      {replicaId, nodeId: handler.nodeId},
-    );
-    return replicaReply(
-      ReplicaOperationResponseStatus.IN_PROGRESS,
-      {
-        replicaId,
-        nodeId: handler.nodeId,
-      },
-    );
+    // A named retained creation is routed through its own durable journal
+    // above. A nameless generic memo is only a projection: IN_PROGRESS is
+    // justified by the exact installed execution, never by the memo alone.
+    if (!namesCreation(existing)) {
+      const joined = replyToGenericExecutionGate(handler, params,
+        ReplicaOperationMessageType.CREATE_REPLICA);
+      if (joined !== undefined) return joined;
+      // The previous generic attempt left no owned work. Re-enter through
+      // handleCreateReplica's ordinary admission instead of a false ACK.
+      return null;
+    }
+    handler.logger.info(LOG.CREATE_IN_PROGRESS, {replicaId, nodeId: handler.nodeId});
+    return replicaReply(ReplicaOperationResponseStatus.IN_PROGRESS,
+      {replicaId, nodeId: handler.nodeId});
   }
   return null;
 }
