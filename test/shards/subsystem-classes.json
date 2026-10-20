@@ -28,7 +28,7 @@
   "censusSize": 2415,
   "digest": "fnv1a32-249c8060",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-27efb265",
+  "observationDigest": "fnv1a32-0544ad03",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -8403,8 +8403,7 @@
     "test/node/participant-release-control-refusal-observation.test.js": {
       "files": [
         "src/node/participant-release-diagnostic-observation.js",
-        "src/partition/partition-participant-transaction-cutover-constants.js",
-        "test/test-helpers/participant-release-control-refusal-uninitialized-fixture.js"
+        "src/partition/partition-participant-transaction-cutover-constants.js"
       ]
     },
     "test/node/registered-partition-removal.property.test.js": {
