@@ -1,0 +1,19 @@
+{
+  "id": "participant-control-refusal-provenance",
+  "uploaded": {
+    "sha256": "d4e70fde8ed3d63b5017fd5cac426767a30c980702e82e409c36930ed8bb6e94",
+    "bytes": 15785,
+    "asset": "participant-control-refusal-provenance--static-audit-comparison-32dfdc38-be93c7e5.tar.gz",
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/participant-control-refusal-provenance--static-audit-comparison-32dfdc38-be93c7e5.tar.gz"
+  },
+  "entry": {
+    "ts": "2026-10-20T17:44:44.564Z",
+    "type": "finding",
+    "kind": "evidence",
+    "text": "evidence participant-control-refusal-provenance--static-audit-comparison-32dfdc38-be93c7e5.tar.gz uploaded and verified",
+    "evidence": "sha256:d4e70fde8ed3d63b5017fd5cac426767a30c980702e82e409c36930ed8bb6e94",
+    "asset": "participant-control-refusal-provenance--static-audit-comparison-32dfdc38-be93c7e5.tar.gz",
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/participant-control-refusal-provenance--static-audit-comparison-32dfdc38-be93c7e5.tar.gz",
+    "bytes": 15785
+  }
+}

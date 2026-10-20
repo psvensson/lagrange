@@ -1,0 +1,19 @@
+{
+  "id": "participant-control-refusal-provenance",
+  "uploaded": {
+    "sha256": "272ea07aab5f3efcd2f4d4af7aae98072d0668951496c95990f3136072d56a3a",
+    "bytes": 69389,
+    "asset": "participant-control-refusal-provenance--insight-owner-controls-20261020.bundle",
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/participant-control-refusal-provenance--insight-owner-controls-20261020.bundle"
+  },
+  "entry": {
+    "ts": "2026-10-20T17:50:39.480Z",
+    "type": "finding",
+    "kind": "evidence",
+    "text": "evidence participant-control-refusal-provenance--insight-owner-controls-20261020.bundle uploaded and verified",
+    "evidence": "sha256:272ea07aab5f3efcd2f4d4af7aae98072d0668951496c95990f3136072d56a3a",
+    "asset": "participant-control-refusal-provenance--insight-owner-controls-20261020.bundle",
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/participant-control-refusal-provenance--insight-owner-controls-20261020.bundle",
+    "bytes": 69389
+  }
+}

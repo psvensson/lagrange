@@ -4,15 +4,15 @@
   "receipts": [
     {
       "id": "nested-failure-provenance-red-green",
-      "passed": false
+      "passed": true
     },
     {
       "id": "registered-positive-and-branch-controls",
-      "passed": false
+      "passed": true
     },
     {
       "id": "independent-source-and-harness-review",
-      "passed": false
+      "passed": true
     },
     {
       "id": "exact-candidate-audits-and-composition",

@@ -1,0 +1,11 @@
+{
+  "schema": "verbatim-evidence-mapping/1",
+  "reason": "Lossless representation of raw native or tool output; preserves whitespace and all original hashes. Original log files remain under ignored execution output. Decode utf8Text as UTF-8 before comparing original raw-log manifests.",
+  "files": {
+    "lab.log": {
+      "encodedPath": "lab.log.json",
+      "sha256": "6a1522a8e70ae5ffee88525ccb5b401496590ee6784e4dbbeaffd02dbc38643a",
+      "bytes": 2321
+    }
+  }
+}

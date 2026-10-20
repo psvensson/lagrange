@@ -119,9 +119,10 @@ SQLite checkpoint receipt.
   O-series controllable-replica witnesses: atomic debt, exact original
   payload, acknowledgements, restart redelivery, stale-tenure completion,
   provisional debt and same-row event identity. Its header explicitly says
-  controllable replicas. The referenced sibling
-  `test/cdc/cdc-obligation-recovery.integration.test.js` is absent at this
-  candidate. The header reference cannot supply native evidence.
+  controllable replicas. Header lines 4-6 record the R-series sibling name
+  `cdc-obligation-recovery.integration.test.js`. That named sibling is absent
+  from the inspected candidate's CDC test directory; the recorded header
+  claim cannot supply a current test link or native evidence.
 - `test/message-group/message-group-native-custody-handoff.test.js:120-214`
   uses a real ordinary source INSERT, source obligations and a native RF3
   recipient. It holds recipient entries, changes recipient leadership,
@@ -154,14 +155,18 @@ source review, cumulative native/transport/cache witnesses, normal startup,
 original-event lost-ACK delivery and merge acceptance open. This historical
 review must not be recast as current source acceptance.
 
-The named coverage implementation paths `src/cdc/cdc-coverage-reconcile-owner.js`,
-`src/cdc/cdc-coverage-transfer-owner.js`, `src/cdc/cdc-coverage-domain.js`,
-`src/partition/partition-cdc-source-coverage.js` and
-`src/cache/system-table-cache-cdc-source-order.js` are absent from the
-inspected candidate. Some appear in preserved review navigation or the
-dirty historical CDC worktree. Neither location makes them current product
-implementation. See the D report's dated worktree inventory before attempting
-any reuse.
+The round-twelve report's reference key at lines 81-85 names historical
+subjects under its `C` namespace, explicitly defined there as
+`/mnt/data/peter/projects/.worktrees/tx1-cdc-20261011`:
+`C/src/cdc/cdc-coverage-reconcile-owner.js`,
+`C/src/cdc/cdc-coverage-transfer-owner.js`, `C/src/cdc/cdc-coverage-domain.js`,
+`C/src/partition/partition-cdc-source-coverage.js` and
+`C/src/cache/system-table-cache-cdc-source-order.js`.
+The corresponding files are absent from the inspected candidate. These are
+addresses in that preserved review's worktree, not current product paths.
+Some also remain in the dirty historical CDC worktree; neither location
+makes them current product implementation. See the D report's dated worktree
+inventory before attempting any reuse.
 
 `architecture/live-query-data-plane.md:5-9` also labels its contract approved
 direction rather than current capability. Its `:97-120` boundary requires
@@ -189,3 +194,16 @@ as separate verdicts.
 M7, the shared M6 handoff, and parent TX1 receipt 8 remain **UNRESOLVED**.
 This review authorizes no new stream controller, metadata ledger, global
 cursor, TTL-based reclamation, source repair, acceptance or release.
+
+## Reference correction, 2026-10-20
+
+Commit `32dfdc388cf80c695b70207e1b659bce8d5d6ad5` preserves this report before
+the correction, with SHA-256
+`9b47df3b0542629023cec293de0ba799dae0332e68c6329341be008263fcb4f8`.
+The six missing-file mentions now point to their actual evidence: the
+existing O-series header and the preserved round-twelve review's historical
+worktree namespace. This follows the Git/Solver provenance boundary in
+`docs/development/documentation-lifecycle.md`; it does not classify absent
+files as current implementation. The absence findings, claim verdicts and
+continuation gates are unchanged. No historical record, source, test, seal
+or receipt is changed by this correction.

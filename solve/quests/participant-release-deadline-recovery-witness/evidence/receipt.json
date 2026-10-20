@@ -4,15 +4,15 @@
   "receipts": [
     {
       "id": "pre-enable-expiry-keeps-origins-and-admission-safe",
-      "passed": false
+      "passed": true
     },
     {
       "id": "absent-origin-refusal-and-authorized-progress",
-      "passed": false
+      "passed": true
     },
     {
       "id": "lost-enable-answer-restart-and-retained-recovery",
-      "passed": false
+      "passed": true
     },
     {
       "id": "semantic-negative-controls",

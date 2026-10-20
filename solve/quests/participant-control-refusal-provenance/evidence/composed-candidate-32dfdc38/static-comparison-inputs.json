@@ -1,0 +1,30 @@
+{
+  "schema": "static-audit-comparison-inputs/1",
+  "date": "2026-10-20",
+  "command": "LAGRANGE_CHECK_BASE=be93c7e5d9a76a39e76a530c93715521b2281356 npm run test:static:postpush",
+  "candidate": "32dfdc388cf80c695b70207e1b659bce8d5d6ad5",
+  "predecessor": "be93c7e5d9a76a39e76a530c93715521b2281356",
+  "candidateResult": {
+    "exitCode": 1,
+    "executed": 19,
+    "skipped": 4,
+    "failed": 5
+  },
+  "predecessorResult": {
+    "exitCode": 1,
+    "executed": 23,
+    "skipped": 0,
+    "failed": 6
+  },
+  "files": {
+    "candidate-32dfdc38-static.log": {
+      "sha256": "cf89a6b393cdfe20a52d24ef463d38c09d200b65c37c2ee03212c830e62c3c05",
+      "bytes": 75790
+    },
+    "predecessor-be93c7e5-static.log": {
+      "sha256": "0c9fe03babf5ff72c321c8ac510a2e035f57478401bec09bf7d205ec4c2cddeb",
+      "bytes": 80450
+    }
+  },
+  "limits": "Exact raw outputs preserved unchanged. Comparing aggregate counts does not prove individual finding identity. Historical failures remain gates, not waivers. The predecessor was clean before and after the run. No native tests were run by these static commands."
+}

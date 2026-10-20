@@ -1,0 +1,18 @@
+{
+  "sha": "32dfdc388cf80c695b70207e1b659bce8d5d6ad5",
+  "host": "adam-laptop",
+  "retryFailedOnce": 0,
+  "declaredMeasurements": 1,
+  "files": [
+    "test/raft/raft-rs-backend/single-path-partition-cutover.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/raft/raft-rs-backend/single-path-partition-cutover.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

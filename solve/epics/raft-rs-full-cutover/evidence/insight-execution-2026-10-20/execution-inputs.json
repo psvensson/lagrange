@@ -1,0 +1,201 @@
+{
+  "schema": "rsraft-insight-execution-inputs/1",
+  "date": "2026-10-20",
+  "status": "partial-HOLD-no-landing-or-release-acceptance",
+  "branch": "work/control-refusal-provenance-20261020",
+  "productAnalysisBase": "be25caa5f0c3612feec662d4feaa9ba28f8f34df",
+  "executionBase": "be93c7e5d9a76a39e76a530c93715521b2281356",
+  "measuredCandidate": "32dfdc388cf80c695b70207e1b659bce8d5d6ad5",
+  "measuredTree": "98e2e1d9ab5257c27146ba9e5924ca91c6b5172b",
+  "runtimeFiles": {
+    "src/node/participant-release-diagnostic-observation.js": {
+      "gitBlob": "2b5fa3c328c88d716ddb631a50600524aa487368",
+      "sha256": "07302e1a99ebd82aa10c63ea154bda94bebd60ecc90f2e6b263e36c65cbc92d4"
+    },
+    "src/node/replica-handler-participant-cutover.js": {
+      "gitBlob": "d4c1f18755dfb7fd80b74096a6e0b1db8d6a644f",
+      "sha256": "29614ff0e427e4971cb4a186e000f8deafa55081a91877635833398948210464"
+    },
+    "src/partition/partition-participant-transaction-cutover-constants.js": {
+      "gitBlob": "b2fde9c0ca00284bb7372d5c291f1cc263056f13",
+      "sha256": "59d9a3088e04aa074b29c7143bc8bcaee1a83929e27bbe0613b989cf3d4a6507"
+    },
+    "test/partition/participant-release-protocol.test.js": {
+      "gitBlob": "d1bff2c6418effed55afb7dcc865cf2d579576d3",
+      "sha256": "0bd4de0096bb30fb226d0635e79e6d87f156b3d575d18437ef99d9b5d817e481"
+    },
+    "test/partition/participant-release-deadline-recovery.test.js": {
+      "gitBlob": "83879696a05296d607e9a124bd38f4b0d1cc489f",
+      "sha256": "d2f5be01c26338c9715d4abcb75ed6bd1a9dee269eaad312528bdc255bfcaa7a"
+    },
+    "test/node/participant-release-control-refusal-observation.test.js": {
+      "gitBlob": "afa763c4576fcc423236daef907f33ec053308e8",
+      "sha256": "33b0d9dea829e09143f01ac35bb4cf8043c97ed3d892d2965dacf2e9054f744a"
+    },
+    "test/bootstrap/seed-participant-release-failure-projection.test.js": {
+      "gitBlob": "d9edc3e118354bbcb308a9e06a5343d82184c1b9",
+      "sha256": "3350b6ad477f1b721fd644b1af2130b597632e6dfed237e30c34d5e3f560dba1"
+    },
+    "test/node/replica-handler-release-recovery.test.js": {
+      "gitBlob": "2add6d83f6ffe89d2271c1158311d3ecc29ea0f0",
+      "sha256": "b7638c2ba5fced8dfee2152860514db7235d74adaf79efe710ae9738425ebbfb"
+    },
+    "test/partition/participant-release-control-three-member.test.js": {
+      "gitBlob": "dfa2c5d9acce0466c21a5f6a5a78c7848cfae1f9",
+      "sha256": "b092dcb8cd7f1f6feb3426cd98a373eadf687a21942c53d462ac19f5f61ad736"
+    },
+    "test/partition/participant-release-native-application-order.test.js": {
+      "gitBlob": "6a8b70a33561466f87d4d16b06be985044acce76",
+      "sha256": "125abab30068895313e22ee6fb29b2712d9334c38ee1cb0907d6e9b90f0d3940"
+    },
+    "test/partition/participant-release-delivery-recorder.test.js": {
+      "gitBlob": "3217ba70b90c020739f6d7e8f7beb93da4f69649",
+      "sha256": "9f2ce0d127e94f8e1374832b9ccb34788a58f04d6276890f0cb834110d532342"
+    },
+    "test/wasm-service/bound-remove-physical-operation.integration.test.js": {
+      "gitBlob": "95c5fc096672104c8340926d62e497fb111f8bf0",
+      "sha256": "09a365dd29bb022821d2c16e4ee4f827d328c634a67a1eec70a56a57b41fe7c4"
+    },
+    "test/wasm-service/bound-creation-handler-embedding.integration.test.js": {
+      "gitBlob": "22e40d9e0e59df7504cab87d67e241a6f14efb85",
+      "sha256": "7a07782466fa5c91addf1b4e915cf5c8ffee14e370f601d933c4e267b3b1bc03"
+    },
+    "test/raft/raft-rs-backend/single-path-partition-cutover.test.js": {
+      "gitBlob": "d0a3f05d9d42cefbc2f1692fae6b6f7e048e6be5",
+      "sha256": "188444966a1ae89324210a5e30d28179ccf16abee2a46bb1a5ae6ef5bab7fb6e"
+    },
+    "test/test-helpers/participant-release-delivery-trace.js": {
+      "gitBlob": "616d69d4b1035a4befd422bd7e2dace025553948",
+      "sha256": "3c331e5b387439a654f9107a70f34eaffc6e2587384330c12ea2edb661ca5a48"
+    },
+    "test/test-helpers/participant-release-protocol-fixture.js": {
+      "gitBlob": "a758d79a72aed979b3882ab4a7d0ed56c39d022c",
+      "sha256": "3f3b17a7d3fa637b09001fb179170bb1792efbec5acbb96cd009dcdd7117934c"
+    },
+    "test/wasm-service/bound-remove-physical-operation-fixture.js": {
+      "gitBlob": "79ca43996c2dafd152aaa19fafea984280fba0ec",
+      "sha256": "f11ef265730a036c342f7ad1344227ded9700046de70537643b1ac8dffe0af7f"
+    }
+  },
+  "measurements": {
+    "provenanceRed": {
+      "commit": "0e9ff4fdc11152e6b4da39adb5a1046615d19be4",
+      "host": "adam-laptop",
+      "cases": 16,
+      "passed": 14,
+      "failed": 2
+    },
+    "provenanceRecoveryPositive": {
+      "commit": "a72609dadfca7f8292c347d041175990b09e2c54",
+      "host": "adam-laptop",
+      "files": 8,
+      "cases": 57,
+      "passed": 57,
+      "failed": 0
+    },
+    "physicalPositive": {
+      "commit": "0e19f5e07da01d6d8fe59131b7617ac8ed33b758",
+      "host": "adams-gamla",
+      "files": 2,
+      "cases": 5,
+      "passed": 5,
+      "failed": 0
+    },
+    "composedPositive": {
+      "commit": "32dfdc388cf80c695b70207e1b659bce8d5d6ad5",
+      "host": "adams-gamla",
+      "files": 10,
+      "cases": 62,
+      "passed": 62,
+      "failed": 0
+    },
+    "originalEntry": {
+      "commit": "32dfdc388cf80c695b70207e1b659bce8d5d6ad5",
+      "host": "adam-laptop",
+      "declaredAttempts": 1,
+      "files": 1,
+      "cases": 5,
+      "passed": 2,
+      "failed": 3,
+      "traceRecords": 1515,
+      "traceIncompleteOrDropped": 0
+    }
+  },
+  "nativeRetryFailedOnce": false,
+  "negativeControls": {
+    "projection": "34ca6d5738cfc45995104df8268d2eb66614fbd4",
+    "clientDeadline": "27d00cd4be71fe4445fc20a2049e933b3ae63b60",
+    "noOriginAuthorization": "187221614f26fd2bc2c16342d35a1ebf6cf09564",
+    "physicalTargetIdentity": "aa66604f7e9dbfecd952d30e8e124317175c4dea",
+    "nativeCloseFinality": "4654c81a5e50326f9cded41bedf0cc6e0db0384a",
+    "retrySuppression": {
+      "status": "blocked-uncommitted-unexecuted",
+      "base": "a72609dadfca7f8292c347d041175990b09e2c54",
+      "reason": "normal staged decision-boundary guard on unchanged fresh-create retry loop; no bypass"
+    }
+  },
+  "externalEvidence": {
+    "originalTrace": {
+      "sha256": "0c699ca94a218acd1913f022c5e407dcc3647c5c70bd039edce999bc3952b97f",
+      "bytes": 4088846,
+      "asset": "participant-control-refusal-provenance--original-entry-32dfdc38-trace.json",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/participant-control-refusal-provenance--original-entry-32dfdc38-trace.json"
+    },
+    "staticRawComparison": {
+      "sha256": "d4e70fde8ed3d63b5017fd5cac426767a30c980702e82e409c36930ed8bb6e94",
+      "bytes": 15785,
+      "asset": "participant-control-refusal-provenance--static-audit-comparison-32dfdc38-be93c7e5.tar.gz",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/participant-control-refusal-provenance--static-audit-comparison-32dfdc38-be93c7e5.tar.gz"
+    },
+    "staticAttributionComplete": {
+      "sha256": "edfd639488ec8d7c19b2d80cae363b4562e91595cc1b75a86eddf755a42e9f43",
+      "bytes": 119103,
+      "asset": "participant-control-refusal-provenance--static-attribution-complete-32dfdc38.tar.gz",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/participant-control-refusal-provenance--static-attribution-complete-32dfdc38.tar.gz"
+    },
+    "controlSourceBundle": {
+      "sha256": "272ea07aab5f3efcd2f4d4af7aae98072d0668951496c95990f3136072d56a3a",
+      "bytes": 69389,
+      "asset": "participant-control-refusal-provenance--insight-owner-controls-20261020.bundle",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/participant-control-refusal-provenance--insight-owner-controls-20261020.bundle"
+    }
+  },
+  "sourceBundle": {
+    "purpose": "Exact positive-B and deliberately defective semantic-control commits, archival evidence only; no mutant Git refs published and no mutation source merged into the positive branch.",
+    "prerequisiteCommit": "be93c7e5d9a76a39e76a530c93715521b2281356",
+    "verification": "git bundle verify passed; six exact refs listed in lossless control-source-bundle-verification.txt.json"
+  },
+  "gates": {
+    "provenanceReceipt": {
+      "passed": 3,
+      "required": 4,
+      "status": "fail"
+    },
+    "recoveryReceipt": {
+      "passed": 3,
+      "required": 5,
+      "status": "fail"
+    },
+    "staticCandidate": {
+      "executed": 19,
+      "skipped": 4,
+      "failed": 5
+    },
+    "selector": {
+      "fullSuite": true,
+      "selectedFiles": 2416,
+      "reason": "coverage snapshot.fileDigests must exactly bind its coverage edges",
+      "corpusExecuted": false
+    },
+    "solverLandExecuted": false,
+    "publisherExecuted": false,
+    "mainMoved": false,
+    "releaseCertificationExecuted": false
+  },
+  "limits": [
+    "Later artifact/documentation checkpoints are not new native measurement commits. Runtime-file identities above are compared to the measured candidate.",
+    "Native component and same-process RF3 witnesses do not certify cross-host metadata, physical release formation or storage-loss safety.",
+    "Original seed is red; historical nested-control refusal remains unresolved; no schedule fishing.",
+    "Older failures and all original U1/TX1/FreshMG/cutover gates remain obligations."
+  ]
+}
