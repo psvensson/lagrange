@@ -66,6 +66,10 @@ class SeedRuntimeBridgeOwner {
     return engine;
   }
 
+  releaseSqlQueryEngine(engine) {
+    if (this.sqlQueryEngine === engine) this.sqlQueryEngine = null;
+  }
+
   getCompatibilityOverride(methodName) {
     if (!this.compatibilityPhase ||
         !Object.prototype.hasOwnProperty.call(this.compatibilityPhase, methodName)) {

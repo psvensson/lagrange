@@ -390,6 +390,10 @@ function buildCleanupDelegates(service) {
     // on the seed and the engine's executor was never marked shutting-down.
     getSqlQueryEngine: () => self.sqlQueryEngine,
     getCdcIntegrationService: () => self.cdcIntegrationService,
+    releaseSqlQueryEngine: (engine) => {
+      self.seedRuntimeBridgeOwner.releaseSqlQueryEngine(engine);
+      if (self.sqlQueryEngine === engine) self.sqlQueryEngine = null;
+    },
     // Cleanup must be able to stop every runtime driver (request/call
     // cell workers) before the runtime service handler clears its
     // replica bookkeeping; the per-replica stop path never runs at

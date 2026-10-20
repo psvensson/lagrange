@@ -192,7 +192,7 @@ function createBootstrapServiceRuntimeMethods() {
         registeredNodeId: this.nodeId,
       };
 
-      await this.cleanupFailedBootstrap(
+      const cleanup = await this.cleanupFailedBootstrap(
         failedPhase,
         cleanupContext,
       );
@@ -202,6 +202,7 @@ function createBootstrapServiceRuntimeMethods() {
         phase: failedPhase,
         duration,
         error: error.message,
+        cleanup,
         servicesCreated: this.servicesCreated,
       });
 
@@ -211,6 +212,7 @@ function createBootstrapServiceRuntimeMethods() {
         duration,
         error: error.message,
         phase: failedPhase,
+        cleanup,
         servicesCreated: this.servicesCreated,
       };
     },
@@ -220,10 +222,10 @@ function createBootstrapServiceRuntimeMethods() {
      * cleanup owner (SeedCleanupHandler — D3.1).
      * @param {string} failedPhase - The phase that failed.
      * @param {Object} cleanupContext - Context about what was created.
-     * @return {Promise<void>}
+     * @return {Promise<Object>} Frozen cleanup observation.
      */
     async cleanupFailedBootstrap(failedPhase, cleanupContext) {
-      await this.seedCleanupHandler.cleanupFailedBootstrap(
+      return this.seedCleanupHandler.cleanupFailedBootstrap(
         failedPhase,
         cleanupContext,
       );
@@ -389,7 +391,7 @@ function createBootstrapServiceRuntimeMethods() {
         return this.shutdownPromise;
       }
 
-      this.shutdownPromise = (async () => {
+      const attempt = (async () => {
         this.isShuttingDown = true;
 
         if (this.deferredLatencyTopologyStartHandle) {
@@ -422,8 +424,15 @@ function createBootstrapServiceRuntimeMethods() {
 
         this.emit(BootstrapEvent.SHUTDOWN, {nodeId: this.nodeId});
       })();
-
-      return this.shutdownPromise;
+      this.shutdownPromise = attempt;
+      try {
+        return await attempt;
+      } catch (error) {
+        // Native owners retain failed cleanup. Release only this rejected
+        // attempt so the next caller can retry those same obligations.
+        if (this.shutdownPromise === attempt) this.shutdownPromise = null;
+        throw error;
+      }
     },
   };
 }

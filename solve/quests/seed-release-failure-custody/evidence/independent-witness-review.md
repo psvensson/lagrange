@@ -199,3 +199,64 @@ with native groups and SQLite. It does not establish public process-lock
 reentry, cross-host quorum recovery, automatic partial-seed admission, full
 startup latency, U1/TX1/FreshMG closure, complete static/corpus gates or release
 acceptance. Runtime results and any source patch require separate review.
+
+## Native baseline assessment: exact 63420a1a5
+
+The reviewer independently read the locked `adam-laptop` artifacts for
+`63420a1a5d6ec3564027275ddf35369edb128983`, with retries disabled.
+The committed native test and helper blobs hash to the round 2 approved
+values above. This assessment performed no additional test execution.
+
+The local packet is `test-output/seed-release-custody/baseline-native/`;
+its raw files have these SHA-256 values:
+
+| File | SHA-256 |
+| --- | --- |
+| `controller.log` | `5f5f04729224ace5e3326fcafb009a5b4ccae88a45e3fb97ad096c0fd02747ee` |
+| `input.json` | `8c12b867dd86c9b4bf0b927e962f614a441e5599883ff1fc961bf7cf5a22acfc` |
+| `results.ndjson` | `65c462f48a5e2c28597e42e7329ebd03b31a72c86344e3077774f9293464ff10` |
+| `exit.json` | `950e8b800437285210983f185696e5176c22281d05a741f991f87d008cb24fc1` |
+
+The native entry reached `assertCommittedExpiryEngaged` before its three
+sequential subtests. Consequently its real virgin-storage admission, actual
+ENABLE answer and native origin, exact selected attempt, unchanged clocks,
+positive native close calls and retained open connection were engaged.
+The final diagnostic at controller line 471 identifies
+`artifact_payload_chunks-p1-r1` and origin index 2, term 1. The real seed
+clock reported elapsed 118 ms of its original 3000 ms budget at refusal
+(line 266). This is not natural exhaustion of the real seed clock: only
+the handler clock was forced to the already-issued deadline after real
+ENABLE settlement. The selected first outer answer is the
+`observe_applied_position` / `release_deadline` refusal.
+
+The first child fails at the intended phase assertion: expected
+`registration`, actual `partitions` (controller lines 269-285). Assertions
+later in that child did not execute, so the baseline does not independently
+measure their proposed cleanup-result or SQL-order guarantees.
+
+The second child reaches native top-level shutdown failure, restores the
+real close method, then receives the cached `Replica handler still owns
+failed runtime shutdowns` AggregateError from the second top-level call
+(lines 299-312; test lines 142-152). This is the intended retry defect,
+not a setup or timeout failure. The focused companion independently shows
+the cleanup call count did not advance on the next shutdown call.
+
+The third child passes after the explicitly labeled existing-owner teardown.
+Its actual retained reader reports readable, nonempty storage and no
+SERVICES rows. The new BootstrapService reaches the real
+`seedPartitionsPhase` refusal `CREATE_OWNER_DEFERRED` for the same replica,
+before acquiring a replacement release handler (lines 453-459). The origin
+is unchanged on independent retained-store reads before and after that
+startup. This proves the existing admission frontier for this measured
+store; it does not prove automatic restart recovery.
+
+The focused SQL companion retains the exact references on rejected shutdown
+and passes the successor-preservation case. Its successful retry fails the
+two intended bootstrap/bridge-reference discharge assertions (lines
+178-221); the existing CDC discharge is not the defect. The same companion
+also exposes the old service-map cleanup completion/discharge behavior.
+
+**Verdict:** valid engaged baseline evidence for the declared repair.
+Both native semantic reds and the retained-startup protection are preserved.
+This run supplies no repaired-source positive, public process-lock witness,
+cross-host recovery result or Quest acceptance.

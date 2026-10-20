@@ -40,6 +40,10 @@ const TYPE_OBJECT = 'object';
 const DEFERRED_START_IMMEDIATE = 'immediate';
 const DEFERRED_START_TIMEOUT = 'timeout';
 const SEED_WORKFLOW_PLAN_VERSION = 'seed-startup-plan/v1';
+const SEED_PARTICIPANT_RELEASE_ERROR = Object.freeze({
+  AUTHORITY_UNAVAILABLE: 'Seed participant release authority unavailable',
+  FAILED_PREFIX: 'Seed participant release failed: ',
+});
 const SEED_WORKFLOW_PHASE = Object.freeze({
   CONTROL_PLANE_READY: 'seed_workflow:control_plane_ready',
   RUNTIME_READY: 'seed_workflow:runtime_ready',
@@ -312,7 +316,7 @@ function createBootstrapServiceSeedWorkflowMethods() {
             membershipOwnerOutcome: this.membershipOwnerOutcome,
           });
         if (authorization === null) {
-          throw new Error('Seed participant release authority unavailable');
+          throw new Error(SEED_PARTICIPANT_RELEASE_ERROR.AUTHORITY_UNAVAILABLE);
         }
         let answer = null;
         let attemptCount = 0;
@@ -345,7 +349,7 @@ function createBootstrapServiceSeedWorkflowMethods() {
             terminalObservation, budgetMs, ordinal: completed + 1,
             total: cohorts.length, completed, attemptCount, firstBlockedDrain,
             firstJoinedAttempt});
-          throw new Error('Seed participant release failed: ' +
+          throw new Error(SEED_PARTICIPANT_RELEASE_ERROR.FAILED_PREFIX +
             JSON.stringify({partitionId: service.partitionId, answer, seedRelease}));
         }
         completed += 1;
@@ -403,14 +407,6 @@ function createBootstrapServiceSeedWorkflowMethods() {
             resolveCheckpointSnapshot(),
           ),
           run: async () => {
-            if (!this.replicaStateMachine) {
-              this.seedRuntimeBridgeOwner
-                .ensureBootstrapCdcIntegrationService();
-              this.initializeReplicaStateMachine();
-            }
-            this.seedRuntimeBridgeOwner.acquireSqlQueryEngine();
-            this.acquireReplicaHandler();
-            await this.releaseSeedParticipantCohorts();
             await startupPipelineRunner.run({
               phases: phases.slice(NUM.THREE, NUM.FOUR),
             });

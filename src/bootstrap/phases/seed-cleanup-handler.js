@@ -7,8 +7,9 @@
  */
 
 import {LatencyTopologySetup} from '../shared/latency-topology-setup.js';
-import {retireMessageGroupTransportHandlers} from
+import {retireMessageGroupTransportHandler} from
   '../shared/message-group-transport-handler.js';
+import {ADDRESS, ENTITY_TYPE} from '../../constants/index.js';
 import {
   BOOTSTRAP_CLEANUP_STEP,
   BOOTSTRAP_EVENT,
@@ -21,6 +22,7 @@ import {
 } from '../../node/node-lifecycle-state-machine.js';
 
 const LOCAL_STR_FUNCTION = 'function';
+const SERVICE_CLEANUP_PENDING = 'Bootstrap service cleanup remains pending';
 
 /**
  * All cleanup steps in reverse phase order.
@@ -93,7 +95,7 @@ class SeedCleanupHandler {
       registeredNodeId: d.getNodeId(),
     };
 
-    await this.cleanupFailedBootstrap(
+    const cleanup = await this.cleanupFailedBootstrap(
       failedPhase, cleanupContext,
     );
 
@@ -102,6 +104,7 @@ class SeedCleanupHandler {
       phase: failedPhase,
       duration,
       error: error.message,
+      cleanup,
       servicesCreated: d.getServicesCreated(),
     });
 
@@ -111,6 +114,7 @@ class SeedCleanupHandler {
       duration,
       error: error.message,
       phase: failedPhase,
+      cleanup,
       servicesCreated: d.getServicesCreated(),
     };
   }
@@ -119,7 +123,7 @@ class SeedCleanupHandler {
    * Clean up a failed bootstrap in reverse phase order.
    * @param {string} failedPhase
    * @param {Object} cleanupContext
-   * @return {Promise<void>}
+   * @return {Promise<Object>} Frozen cleanup observation.
    */
   async cleanupFailedBootstrap(failedPhase, cleanupContext) {
     const d = this.delegates;
@@ -174,6 +178,11 @@ class SeedCleanupHandler {
         failedPhase,
         stepResults,
       });
+    return Object.freeze({
+      outcome: Object.values(stepResults).includes(CLEANUP_RESULT.ERROR) ?
+        CLEANUP_RESULT.ERROR : CLEANUP_RESULT.SUCCESS,
+      stepResults: Object.freeze(stepResults),
+    });
   }
 
   /**
@@ -267,6 +276,7 @@ class SeedCleanupHandler {
       await LatencyTopologySetup.stop(d.getLatencyTopology());
       d.setLatencyTopology(null);
 
+      await this.shutdownSqlQueryEngine(d);
       d.clearCdcIntegrationService();
       await d.clearRuntimeServiceHandler();
       d.stopAndClearControlPlaneServices();
@@ -311,26 +321,17 @@ class SeedCleanupHandler {
           partitionCount: d.getPartitionServices().size,
         });
 
-      for (const [replicaId, partition] of
-        d.getPartitionServices()) {
-        try {
-          if (partition.shutdown) {
-            await partition.shutdown();
-          }
-        } catch (err) {
-          logger.warn(
-            BOOTSTRAP_LOG_MSG.PARTITION_CLEANUP_FAILED, {
-              replicaId,
-              error: err.message,
-            });
-        }
-      }
+      await this.shutdownServiceMap({
+        logger,
+        services: d.getPartitionServices(),
+        successLogMessage: BOOTSTRAP_LOG_MSG.PARTITION_CLEANED,
+        failureLogMessage: BOOTSTRAP_LOG_MSG.PARTITION_CLEANUP_FAILED,
+      });
 
       // partition.shutdown() retired its exact handler through the replica
       // lifecycle owner, and no successor can occupy the address before this
       // point; a by-address removal here could only remove a successor's
       // handler. Router shutdown is the node-lifetime backstop.
-      d.getPartitionServices().clear();
       d.resetPartitionReplicas();
 
       logger.info(
@@ -367,27 +368,7 @@ class SeedCleanupHandler {
             d.getMessageGroupServices().size,
         });
 
-      for (const [replicaId, messageGroup] of
-        d.getMessageGroupServices()) {
-        try {
-          if (messageGroup.shutdown) {
-            await messageGroup.shutdown();
-          }
-        } catch (err) {
-          logger.warn(
-            BOOTSTRAP_LOG_MSG.MESSAGE_GROUP_CLEANUP_FAILED, {
-              replicaId,
-              error: err.message,
-            });
-        }
-      }
-
-      await retireMessageGroupTransportHandlers({
-        messageGroupServices: d.getMessageGroupServices(),
-        messageRouter: d.getMessageRouter(),
-        nodeId: d.getNodeId(),
-      });
-      d.getMessageGroupServices().clear();
+      await this.shutdownMessageGroupServices(logger);
       d.resetMessageGroupReplicas();
 
       logger.info(
@@ -564,21 +545,9 @@ class SeedCleanupHandler {
     // by-address removal could only remove a successor's handler). Router
     // shutdown below is the node-lifetime backstop.
     const messageRouter = d.getMessageRouter();
-    d.getPartitionServices().clear();
     d.resetPartitionReplicas();
 
-    await this.shutdownServiceMap({
-      logger,
-      services: d.getMessageGroupServices(),
-      successLogMessage: BOOTSTRAP_LOG_MSG.MESSAGE_GROUP_CLEANED,
-      failureLogMessage: BOOTSTRAP_LOG_MSG.MESSAGE_GROUP_CLEANUP_FAILED,
-    });
-    await retireMessageGroupTransportHandlers({
-      messageGroupServices: d.getMessageGroupServices(),
-      messageRouter,
-      nodeId: d.getNodeId(),
-    });
-    d.getMessageGroupServices().clear();
+    await this.shutdownMessageGroupServices(logger);
     d.resetMessageGroupReplicas();
 
     const transport = d.getTransport();
@@ -625,7 +594,7 @@ class SeedCleanupHandler {
     if (cdcIntegrationService?.sqlQueryEngine === sqlQueryEngine) {
       cdcIntegrationService.sqlQueryEngine = null;
     }
-    d.setSqlQueryEngine?.(null);
+    d.releaseSqlQueryEngine?.(sqlQueryEngine);
   }
 
   disableSystemTableWriter(d) {
@@ -637,21 +606,54 @@ class SeedCleanupHandler {
   }
 
   async shutdownServiceMap(options) {
-    for (const [replicaId, service] of options.services) {
+    const closeErrors = [];
+    // A late old completion may only discharge its captured object. Newly
+    // published entries belong to a subsequent cleanup attempt.
+    for (const [replicaId, service] of [...options.services]) {
       try {
         if (service.shutdown) {
           await service.shutdown();
+        }
+        await options.afterShutdown?.(replicaId, service);
+        if (options.services.get(replicaId) === service) {
+          options.services.delete(replicaId);
         }
         options.logger.debug(options.successLogMessage, {
           replicaId,
         });
       } catch (error) {
+        closeErrors.push(error);
         options.logger.warn(options.failureLogMessage, {
           replicaId,
           error: error.message,
         });
       }
     }
+    if (closeErrors.length > 0 || options.services.size > 0) {
+      throw new AggregateError(closeErrors, SERVICE_CLEANUP_PENDING);
+    }
+  }
+
+  async shutdownMessageGroupServices(logger) {
+    const d = this.delegates;
+    const messageRouter = d.getMessageRouter();
+    const nodeId = d.getNodeId();
+    await this.shutdownServiceMap({
+      logger,
+      services: d.getMessageGroupServices(),
+      successLogMessage: BOOTSTRAP_LOG_MSG.MESSAGE_GROUP_CLEANED,
+      failureLogMessage: BOOTSTRAP_LOG_MSG.MESSAGE_GROUP_CLEANUP_FAILED,
+      afterShutdown: async (replicaId, messageGroup) => {
+        if (!messageRouter) return;
+        await retireMessageGroupTransportHandler({
+          messageGroup,
+          messageRouter,
+          address: `${nodeId}${ADDRESS.SEPARATOR}` +
+            `${ENTITY_TYPE.MESSAGE_GROUP}${ADDRESS.SEPARATOR}${replicaId}`,
+          replicaId,
+        });
+      },
+    });
   }
 
   async shutdownTransportAndRouter(d, transport, messageRouter) {
