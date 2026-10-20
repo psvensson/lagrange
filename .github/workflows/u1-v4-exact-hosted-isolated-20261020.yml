@@ -1,0 +1,68 @@
+name: u1-v4-exact-hosted-isolated-20261020
+on:
+  push:
+    branches: [verify/u1-v4-exact-hosted-20261020]
+    paths: [.github/workflows/u1-v4-exact-hosted-isolated-20261020.yml]
+permissions: {contents: read}
+jobs:
+  wake-owner:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - kind: positive
+            sha: '537ae826473f8fa8a20e28d783aa5fe76301ffbd'
+          - kind: source-only-mutation
+            sha: '83e2a9679f3ec3e59134b8bb37b323a104d48c8c'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ matrix.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Verify pinned oracle bytes and actual test execution
+        shell: bash
+        env:
+          CANDIDATE_KIND: ${{ matrix.kind }}
+          CANDIDATE_SHA: ${{ matrix.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(git rev-parse HEAD:test/wasm-service/u1-v4-isolated-existing-wake.test.js)" = 547fa61d739ea420647656ef31807d32e0390c9e
+          npm ci
+          mkdir -p test-output/u1-v4-pair
+          set +e
+          node scripts/run-classified-test-files.js --stdin \
+            <<<'test/wasm-service/u1-v4-isolated-existing-wake.test.js' \
+            > test-output/u1-v4-pair/runner.log 2>&1
+          result=$?
+          set -e
+          tail -n 120 test-output/u1-v4-pair/runner.log
+          if [[ "$CANDIDATE_KIND" == positive ]]; then
+            test "$result" -eq 0
+            grep -F '# test-files total=1 pass=1 fail=0' test-output/u1-v4-pair/runner.log
+          else
+            test "$result" -ne 0
+            grep -F '# test-files total=1 pass=0 fail=1' test-output/u1-v4-pair/runner.log
+            grep -E 'ORDINARY_J_WAKE_WAS_LOST_BEHIND_F|V4_ORIGINAL_CASE_MUST_RUN_EXACTLY_ONCE|V4_ORIGINAL_WAKE_ORACLE_RED' \
+              test-output/u1-v4-pair/runner.log
+            # The expected red must be from the original semantic oracle, not
+            # an import, setup, dependency, timeout or skipped-case failure.
+            ! grep -E "ERR_MODULE_NOT_FOUND|Cannot find module|timed out|ETIMEDOUT" \
+              test-output/u1-v4-pair/runner.log
+          fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: u1-v4-${{ matrix.kind }}-${{ github.run_id }}
+          path: test-output/u1-v4-pair/
+          retention-days: 14
+          if-no-files-found: warn
