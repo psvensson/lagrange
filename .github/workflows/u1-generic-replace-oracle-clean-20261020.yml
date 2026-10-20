@@ -1,0 +1,27 @@
+name: u1-generic-replace-oracle-clean-20261020
+on:
+  push:
+    branches: [probe/u1-runtime-empty-history-20261020]
+    paths: [.github/workflows/u1-generic-replace-oracle-clean-20261020.yml]
+permissions: {contents: read}
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Verify production bytes unchanged and exact original test
+        run: |
+          set -euo pipefail
+          test "$(git diff --name-only be25caa5f0c3612feec662d4feaa9ba28f8f34df HEAD -- src | wc -l)" -eq 0
+          npm ci
+          printf '%s\n' test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js |
+            node scripts/run-classified-test-files.js --stdin
