@@ -286,6 +286,49 @@ describe('RuntimeServiceHandler handleCreateReplica', () => {
     );
   });
 
+  it('does not acknowledge a foreign CREATE without an execution outcome owner',
+    async () => {
+      const emitted = [];
+      const {handler, lifecycle} = createHandler({
+        executorOutcomeEmitter: {
+          emitOutcome(...args) {
+            emitted.push(args);
+          },
+        },
+      });
+      const request = (operationId) => ({
+        [ReplicaOperationField.OPERATION_ID]: operationId,
+        [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
+        [ReplicaOperationField.REPLICA_ID]: 'sys-postgres-wire-r1',
+      });
+      try {
+        const admitted = await handler.handleCreateReplica(request('create-owner'));
+        assert.equal(admitted.status, ReplicaOperationResponseStatus.INITIATED);
+        assert.equal(handler.inProgressOperations.size, 1);
+
+        const equal = await handler.handleCreateReplica(request('create-owner'));
+        assert.equal(equal.status, ReplicaOperationResponseStatus.IN_PROGRESS,
+          'AN_EXACT_CREATE_REDELIVERY_LOST_ITS_JOIN');
+        const foreign = await handler.handleCreateReplica(request('create-foreign'));
+        assert.equal(foreign.status, ReplicaOperationResponseStatus.ERROR,
+          'FOREIGN_CREATE_ACKNOWLEDGED_WITHOUT_AN_OUTCOME_OWNER');
+        assert.equal(foreign.deferRetry, true,
+          'UNOBSERVED_FOREIGN_CREATE_MUST_RETAIN_CALLER_RETRY_CUSTODY');
+        assert.equal(handler.inProgressOperations.size, 1);
+        assert.equal(lifecycle.calls.length, 0,
+          'A_FOREIGN_CREATE_DISPATCHED_PHYSICAL_WORK_BEFORE_OWNER_SLOT_RAN');
+
+        await flushImmediate();
+        await flushImmediate();
+        assert.equal(lifecycle.calls.filter((entry) => entry.method === 'createReplica').length, 1);
+        assert.deepEqual(emitted.map((outcome) => [outcome[0], outcome[1]]),
+          [[EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_ACTIVE, 'create-owner']],
+          'FOREIGN_CREATE_REUSED_OR_FABRICATED_AN_EXECUTOR_OUTCOME');
+      } finally {
+        handler.shutdown();
+      }
+    });
+
   it('returns IN_PROGRESS for creating replica', async () => {
     const {handler} = createHandler();
     handler.localReplicas.set('sys-postgres-wire-r1', {
