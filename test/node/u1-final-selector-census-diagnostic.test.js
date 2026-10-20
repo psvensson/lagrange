@@ -28,6 +28,9 @@ test('U1 exact changed-owner test selection census (no execution)', () => {
     assert.equal(add.code, 0, add.err);
     mounted = true;
     assert.equal(run(source, 'git', ['rev-parse', 'HEAD']).out.trim(), SUBJECT);
+    // The detached read-only checkout needs the same installed dependency tree
+    // as the lab placement. The symlink stays inside this disposable checkout.
+    fs.symlinkSync(path.join(outer, 'node_modules'), path.join(source, 'node_modules'), 'dir');
     const args = ['scripts/select-change-tests.js', '--base', BASE];
     const explained = run(source, 'node', [...args, '--explain']);
     const listed = run(source, 'node', [...args, '--list']);
