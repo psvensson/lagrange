@@ -151,7 +151,8 @@ async function inventoryAttempt(handler, task) {
     if (handler.stopped || handler.restartTask !== task) return stoppedInventory();
   }
   applyMemos(handler, plans);
-  task.plansById = new Map(plans.map((plan) => [plan.creation.operationId, plan]));
+  // MUTATION V2: incorrectly use the physical replica key for historical debt.
+  task.plansById = new Map(plans.map((plan) => [plan.creation.replicaId, plan]));
   task.applied = true;
   handler.restartLatch.open();
   setImmediate(() => {
