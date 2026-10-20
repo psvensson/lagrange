@@ -173,7 +173,7 @@ function recoverRetainedCreations(handler) {
   const task = {promise: completion.promise, applied: false, plansById: new Map()};
   handler.restartTask = task;
   inventoryAttempt(handler, task).then(completion.resolve, (error) => {
-    if (!task.applied && handler.restartTask === task) handler.restartTask = undefined;
+    // MUTATION: an unsuccessful inventory retains stale retry ownership.
     completion.reject(error);
   });
   return task.promise;
