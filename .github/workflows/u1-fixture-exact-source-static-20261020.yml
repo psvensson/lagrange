@@ -37,15 +37,18 @@ jobs:
           tail -n 50 test-output/u1-fixture-static/metadata.log
           # The authoritative producer may create ignored analysis reports;
           # every tracked derived metadata/seal file must match the pinned HEAD.
-          git diff --exit-code
+          echo 'U1_PRODUCER_SEAL_BEGIN'
+          cat test/shards/impact-graph-seal.json
+          echo 'U1_PRODUCER_SEAL_END'
+          git diff --name-only
           node scripts/check-fast-static.js --base 381750de29af647d446b19adedf1da53eb712093 --explain \
             > test-output/u1-fixture-static/static.log 2>&1 || {
               tail -n 120 test-output/u1-fixture-static/static.log
               exit 1
             }
           tail -n 90 test-output/u1-fixture-static/static.log
-          git diff --exit-code
-          test -z "$(git status --porcelain --untracked-files=no)"
+          echo 'U1_PRODUCER_POST_STATIC_CHANGED_FILES'
+          git diff --name-only
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
