@@ -1,0 +1,15 @@
+{
+  "sha": "a72609dadfca7f8292c347d041175990b09e2c54",
+  "files": [
+    "test/partition/participant-release-protocol.test.js",
+    "test/partition/participant-release-deadline-recovery.test.js",
+    "test/node/participant-release-control-refusal-observation.test.js",
+    "test/bootstrap/seed-participant-release-failure-projection.test.js",
+    "test/node/replica-handler-release-recovery.test.js",
+    "test/partition/participant-release-control-three-member.test.js",
+    "test/partition/participant-release-native-application-order.test.js",
+    "test/partition/participant-release-delivery-recorder.test.js"
+  ],
+  "host": "adam-laptop",
+  "retryFailedOnce": false
+}

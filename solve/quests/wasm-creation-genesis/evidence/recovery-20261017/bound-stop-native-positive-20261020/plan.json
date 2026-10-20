@@ -1,0 +1,20 @@
+{
+  "sha": "0e19f5e07da01d6d8fe59131b7617ac8ed33b758",
+  "files": [
+    "test/wasm-service/bound-remove-physical-operation.integration.test.js",
+    "test/wasm-service/bound-creation-handler-embedding.integration.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/wasm-service/bound-creation-handler-embedding.integration.test.js",
+        "test/wasm-service/bound-remove-physical-operation.integration.test.js"
+      ],
+      "jobs": 1,
+      "resourceClass": "exclusive"
+    }
+  ],
+  "host": "adams-gamla",
+  "retry": 0,
+  "evidenceCeiling": "single-process native RF3 with component metadata"
+}

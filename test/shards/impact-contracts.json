@@ -1192,11 +1192,12 @@
         "test/control-plane/service-instance-creation-cas.test.js",
         "test/wasm-service/bound-creation-physical-custody.integration.test.js",
         "test/wasm-service/bound-creation-restart.integration.test.js",
-        "test/runtime/service-runtime-consensus-publication.test.js"
+        "test/runtime/service-runtime-consensus-publication.test.js",
+        "test/wasm-service/bound-remove-physical-operation.integration.test.js"
       ]
     },
     "runtime-service-bound-creation-route": {
-      "description": "U1 v3 and its addenda make one PENDING/IN_PROGRESS journal observation into exact per-origin continuation plans under one irreversible handler lifetime. Known retained requests route by full origin before the current memo; collisions preserve all plans and expose CONTINUATION_PENDING. Bound CREATE, coordinator REMOVE and silent startup retirement share the existing canonical replica execution gate, including one bounded startup retirement observer and global request-ID conflict checks. Prompt CREATE acknowledgment precedes journal-only hydration; a wake never adopts its token. Matching qualifying wakes retain at most one bit per plan or ordinary HELD memo and reenter only after gate settlement and immediate physical CURRENT. Canonical handler/manager/driver state cannot be rewritten by a historical or stale origin. Physical FINAL, exact STOPPED projection and authoritative original-journal completion are separate ordered obligations; retained, failed, absent or stopped projection replies keep RETIRED_UNPROJECTED and its original debt. The C6 handler, restart and physical-custody witnesses cover this complete interaction; the real asynchronous projection receipt continuation remains activation A5. Legacy REMOVE consumes the original operation through the existing repository with OWNER_RPC_REQUIRED and requireAbsenceConfirmation; unavailable authority leaves cleanup retryable. Bootstrap passes that dispatch authority to the handler. An admitted generic removal retains its exact local memo until STOP settles and releases its own execution even when that memo is superseded. Handler and strict-dispatch witnesses cover this consumer contract with a scripted repository, not native authority execution.",
+      "description": "U1 v3 and its addenda make one PENDING/IN_PROGRESS journal observation into exact per-origin continuation plans under one irreversible handler lifetime. Known retained requests route by full origin before the current memo; collisions preserve all plans and expose CONTINUATION_PENDING. Bound CREATE, coordinator REMOVE and silent startup retirement share the existing canonical replica execution gate, including one bounded startup retirement observer and global request-ID conflict checks. Prompt CREATE acknowledgment precedes journal-only hydration; a wake never adopts its token. Matching qualifying wakes retain at most one bit per plan or ordinary HELD memo and reenter only after gate settlement and immediate physical CURRENT. Canonical handler/manager/driver state cannot be rewritten by a historical or stale origin. Physical FINAL, exact STOPPED projection and authoritative original-journal completion are separate ordered obligations; retained, failed, absent or stopped projection replies keep RETIRED_UNPROJECTED and its original debt. The C6 handler, restart and physical-custody witnesses cover this complete interaction; the real asynchronous projection receipt continuation remains activation A5. Legacy REMOVE consumes the original operation through the existing repository with OWNER_RPC_REQUIRED and requireAbsenceConfirmation; unavailable authority leaves cleanup retryable. Bootstrap passes that dispatch authority to the handler. An admitted generic removal retains its exact local memo until STOP settles and releases its own execution even when that memo is superseded. Handler and strict-dispatch witnesses cover this consumer contract with a scripted repository, not native authority execution. The bound REMOVE operation witness follows real RF3 publication through exact endpoint withdrawal, full-origin native retirement, successor grant refusal and failed-close custody/retry. Its component SQLite metadata and same-process transport do not certify cross-host authority or generic catalog activation.",
       "owners": [
         "src/node/runtime-service-bound-creation-route.js",
         "src/node/runtime-service-restart-inventory.js",
@@ -1230,7 +1231,12 @@
         "src/control-plane/replica-dispatch-service.js",
         "src/rebalancer/replica-operation-repository.js",
         "src/rebalancer/replica-operation-repository-read-methods.js",
-        "src/rebalancer/replica-operation-repository-visibility-methods.js"
+        "src/rebalancer/replica-operation-repository-visibility-methods.js",
+        "src/runtime/runtime-endpoint-publication-wiring.js",
+        "src/runtime/runtime-endpoint-writer.js",
+        "src/control-plane/owners/service-endpoints-owner.js",
+        "src/control-plane/owners/services-owner.js",
+        "src/query/runtime-replica-state-projection.js"
       ],
       "tests": [
         "test/wasm-service/bound-creation-handler-embedding.integration.test.js",
@@ -1239,7 +1245,8 @@
         "test/runtime/service-runtime-consensus-publication.test.js",
         "test/wasm-service/bound-creation-physical-custody.integration.test.js",
         "test/node/runtime-service-handler.test.js",
-        "test/control-plane/replica-dispatch-reservation-identity.test.js"
+        "test/control-plane/replica-dispatch-reservation-identity.test.js",
+        "test/wasm-service/bound-remove-physical-operation.integration.test.js"
       ]
     }
   },
@@ -2457,11 +2464,12 @@
         "test/wasm-service/wasm-creation-publication.integration.test.js",
         "test/wasm-service/wasm-creation-local-record.test.js",
         "test/wasm-service/bound-creation-physical-custody.integration.test.js",
-        "test/wasm-service/bound-creation-restart.integration.test.js"
+        "test/wasm-service/bound-creation-restart.integration.test.js",
+        "test/wasm-service/bound-remove-physical-operation.integration.test.js"
       ]
     },
     "runtime-service-bound-creation-route": {
-      "description": "The exact retained-plan handler, canonical execution gate and full-origin wake matching consume the same physical-currentness and retirement/debt contract supplied by manager, runtime, driver and physical custody owners. U1 v3 supersedes last-row-wins and current-memo authority: old origins retain their own journals and cannot retarget a successor. Gate/observer identity, immediate CURRENT projection fences, raw physical FINAL and unresolved STOPPED/journal debt change and are reviewed together. Real C6 restart and custody cases pair those owners, while bound-route consumer cases cover acknowledgment and bounded request observers. Production A5 retained-to-applied behavior is explicitly outside this proof.",
+      "description": "The exact retained-plan handler, canonical execution gate and full-origin wake matching consume the same physical-currentness and retirement/debt contract supplied by manager, runtime, driver and physical custody owners. U1 v3 supersedes last-row-wins and current-memo authority: old origins retain their own journals and cannot retarget a successor. Gate/observer identity, immediate CURRENT projection fences, raw physical FINAL and unresolved STOPPED/journal debt change and are reviewed together. Real C6 restart and custody cases pair those owners, while bound-route consumer cases cover acknowledgment and bounded request observers. Production A5 retained-to-applied behavior is explicitly outside this proof. The bound REMOVE operation witness follows real RF3 publication through exact endpoint withdrawal, full-origin native retirement, successor grant refusal and failed-close custody/retry. Its component SQLite metadata and same-process transport do not certify cross-host authority or generic catalog activation.",
       "endpoints": [
         {
           "id": "handler-bound-creation-route",
@@ -2499,7 +2507,12 @@
             "src/wasm-service/wasm-creation-custody.js",
             "src/wasm-service/wasm-creation-retirement.js",
             "src/wasm-service/wasm-service-lifecycle.js",
-            "src/wasm-service/wasm-service-constants.js"
+            "src/wasm-service/wasm-service-constants.js",
+            "src/runtime/runtime-endpoint-publication-wiring.js",
+            "src/runtime/runtime-endpoint-writer.js",
+            "src/control-plane/owners/service-endpoints-owner.js",
+            "src/control-plane/owners/services-owner.js",
+            "src/query/runtime-replica-state-projection.js"
           ]
         }
       ],
@@ -2509,7 +2522,8 @@
         "test/wasm-service/bound-creation-restart.integration.test.js",
         "test/wasm-service/bound-creation-physical-custody.integration.test.js",
         "test/node/runtime-service-bound-route.test.js",
-        "test/node/runtime-service-handler.test.js"
+        "test/node/runtime-service-handler.test.js",
+        "test/wasm-service/bound-remove-physical-operation.integration.test.js"
       ]
     },
     "runtime-service-legacy-removal-authority": {

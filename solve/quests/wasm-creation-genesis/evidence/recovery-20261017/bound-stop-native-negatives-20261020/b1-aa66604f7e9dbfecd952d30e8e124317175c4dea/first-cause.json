@@ -1,0 +1,19 @@
+{
+  "candidate": "aa66604f7e9dbfecd952d30e8e124317175c4dea",
+  "label": "B1",
+  "kind": "semantic-negative",
+  "failure": "EXACT_OLD_RETIREMENT_REPLAY_CLOSED_SUCCESSOR_DB",
+  "expected": true,
+  "actual": false,
+  "nativeSuccessorPublishedBeforeOldManagerReplay": true,
+  "nativeCloseDebtCase": "passed",
+  "retry": 0,
+  "timeoutOrSetupFailure": false,
+  "preliminaryGuardRefusal": {
+    "command": "npx eslint src/wasm-service/wasm-creation-retirement.js",
+    "error": "sameCreation is defined but never used",
+    "rule": "no-unused-vars",
+    "line": 44,
+    "disposition": "Root authorized and independent reviewer confirmed removal only of now-dead helper and instanceDigest import; normal hooks passed without bypass."
+  }
+}

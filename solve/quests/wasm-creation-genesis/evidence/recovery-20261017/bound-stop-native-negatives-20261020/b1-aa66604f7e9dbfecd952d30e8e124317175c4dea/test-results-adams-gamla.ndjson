@@ -1,0 +1,1 @@
+{"file":"test/wasm-service/bound-remove-physical-operation.integration.test.js","attempt":1,"ok":false,"assertions":2,"durationMs":2535,"retriedOnce":false,"firstFailureLine":"not ok 1 - U1 bound REMOVE exact endpoint await preserves old physical custody and successor exclusion"}

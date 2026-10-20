@@ -1,0 +1,6 @@
+{
+  "schema": "preserved-patch/1",
+  "originalName": "source.patch",
+  "originalSha256": "2abde53f23dea9b912c76f651086ef6ff3007c55b32594f9fd37ed29131a653f",
+  "patchText": "diff --git a/src/wasm-service/wasm-creation-retirement.js b/src/wasm-service/wasm-creation-retirement.js\nindex 271cab77b..75623a9cd 100644\n--- a/src/wasm-service/wasm-creation-retirement.js\n+++ b/src/wasm-service/wasm-creation-retirement.js\n@@ -167,7 +167,7 @@ async function retireWasmCreation(lifecycle, value) {\n   switch (local.state) {\n   case LOCAL_RETIREMENT.BLOCKED:\n     return {outcome: REFUSAL.RETIREMENT_BLOCKED_CLEANUP_REQUIRED, retired: false, closed: false,\n-      finality: FINALITY.UNRESOLVED,\n+      finality: FINALITY.FINAL,\n       release: local.release, failure: local.failure};\n   case LOCAL_RETIREMENT.REFUSED:\n     return {outcome: local.tombstone.outcome, retired: false, closed: false,\n"
+}

@@ -3,13 +3,13 @@
   "id": "test-primary-classification",
   "counts": {
     "unit": 2097,
-    "integration": 106,
+    "integration": 107,
     "bootstrap": 205,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2415,
-  "digest": "fnv1a32-c6e7b056",
+  "censusSize": 2416,
+  "digest": "fnv1a32-7f4f8fe0",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -2345,6 +2345,7 @@
     "test/wasm-service/bound-creation-handler-embedding.integration.test.js": "integration",
     "test/wasm-service/bound-creation-physical-custody.integration.test.js": "integration",
     "test/wasm-service/bound-creation-restart.integration.test.js": "integration",
+    "test/wasm-service/bound-remove-physical-operation.integration.test.js": "integration",
     "test/wasm-service/call-cell-world-abi.test.js": "unit",
     "test/wasm-service/capability-policy.test.js": "unit",
     "test/wasm-service/dependency-lock-determinism.property.test.js": "unit",
