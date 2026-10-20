@@ -1,0 +1,60 @@
+name: u1-final-source-static-sealed-20261020
+on:
+  push:
+    branches: [verify/u1-fixture-final-sealed-20261020]
+    paths: [.github/workflows/u1-final-source-static-sealed-20261020.yml]
+permissions: {contents: read}
+jobs:
+  static-exact:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: '962602a66ecaec08437af16215fbb7f4065da1f1'
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Verify exact source, run ordinary metadata producer and whole U1 fast-static
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = 962602a66ecaec08437af16215fbb7f4065da1f1
+          test "$(git rev-parse HEAD:test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js)" = 52c2f9439db9daf1c965d813664dbfd7441ccb81
+          test "$(git rev-parse HEAD:src/node/runtime-service-bound-creation-route.js)" = 0648fb505c1dc47899989ba49eb9056f8703a089
+          test "$(git rev-parse HEAD:test/shards/impact-graph-seal.json)" = b0843ccd1982477f6acb7f05827f94c29da43159
+          git cat-file -e 381750de29af647d446b19adedf1da53eb712093^{commit}
+          npm ci
+          mkdir -p test-output/u1-fixture-static
+          npm run -s test:metadata:refresh > test-output/u1-fixture-static/metadata.log 2>&1 || {
+            tail -n 100 test-output/u1-fixture-static/metadata.log
+            exit 1
+          }
+          tail -n 50 test-output/u1-fixture-static/metadata.log
+          # The authoritative producer may create ignored analysis reports;
+          # every tracked derived metadata/seal file must match the pinned HEAD.
+          echo 'U1_PRODUCER_SEAL_BEGIN'
+          cat test/shards/impact-graph-seal.json
+          echo 'U1_PRODUCER_SEAL_END'
+          git diff --exit-code
+          node scripts/check-fast-static.js --base 381750de29af647d446b19adedf1da53eb712093 --explain \
+            > test-output/u1-fixture-static/static.log 2>&1 || {
+              tail -n 120 test-output/u1-fixture-static/static.log
+              exit 1
+            }
+          tail -n 90 test-output/u1-fixture-static/static.log
+          echo 'U1_PRODUCER_POST_STATIC_CHANGED_FILES'
+          git diff --exit-code
+          test -z "$(git status --porcelain --untracked-files=no)"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: u1-fixture-exact-static-${{ github.run_id }}
+          path: test-output/u1-fixture-static/
+          retention-days: 14
+          if-no-files-found: warn
