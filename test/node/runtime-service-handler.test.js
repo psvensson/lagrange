@@ -367,22 +367,27 @@ describe('RuntimeServiceHandler handleCreateReplica', () => {
       }
     });
 
-  it('returns IN_PROGRESS for creating replica', async () => {
+  it('an unowned nameless CREATING projection schedules its own CREATE retry', async () => {
     const {handler} = createHandler();
     handler.localReplicas.set('sys-postgres-wire-r1', {
       replicaId: 'sys-postgres-wire-r1',
       entityId: 'sys-postgres-wire',
       status: ReplicaStatus.CREATING,
     });
+    assert.equal(handler.inProgressOperations.size, 0,
+      'a memo without an installed execution cannot promise completion');
     const response = await handler.handleCreateReplica({
       [ReplicaOperationField.OPERATION_ID]: 'op-1',
       [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
       [ReplicaOperationField.REPLICA_ID]: 'sys-postgres-wire-r1',
     });
-    assert.equal(
-      response.status,
-      ReplicaOperationResponseStatus.IN_PROGRESS,
-    );
+    assert.equal(response.status, ReplicaOperationResponseStatus.INITIATED,
+      'UNOWNED_CREATING_MEMO_RETURNED_IN_PROGRESS_WITH_NO_WORK_OWNER');
+    assert.equal(handler.inProgressOperations.size, 1);
+    await flushImmediate();
+    await flushImmediate();
+    assert.equal(handler.getLocalReplica('sys-postgres-wire-r1').status, ReplicaStatus.ACTIVE);
+    handler.shutdown();
   });
 
   it('returns IN_PROGRESS for duplicate operation ID', async () => {
