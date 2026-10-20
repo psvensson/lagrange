@@ -169,7 +169,12 @@ async function withCapturedReplicaFactory(
     ReplicaHandlerSetup.create = ({createPartitionService}) => {
       capturedCreatePartitionService = createPartitionService;
       return {
-        replicaHandler: {},
+        // The bootstrap owner initializes the returned handler. This
+        // factory-capture double has no physical work, but must implement
+        // the existing lifecycle interface instead of throwing at setup.
+        replicaHandler: {
+          initialize() {},
+        },
         replicaStateMachine: {
           registerReplicaSnapshot() {
             return true;
