@@ -454,7 +454,7 @@ function consumeCreationWake(handler, serviceDefinitionId, wake) {
     }
     return {outcome: WAKE.QUEUED};
   case WAKE_ACTION.MEMO:
-    memo.wakePending = true;
+    // V4 deliberate negative: the retained wake bit is discarded.
     resumeHeldMemoWake(handler, memo.replicaId);
     return {outcome: WAKE.QUEUED};
   default:
