@@ -73,11 +73,6 @@ function projectBoundStart(driver, startResult, serviceId, origin, replicaContex
   case BOUND_START.HELD:
     return {status: CONSENSUS_BOOTSTRAP.HELD, ...bound};
   case BOUND_START.PUBLISHED:
-    if (observeBoundCurrentCreation(driver, {consensusCreation: origin}).outcome !==
-        CURRENT.CURRENT) {
-      return {...startFailure(SERVICE_INSTANCE_OUTCOME.UNAVAILABLE),
-        outcome: SERVICE_INSTANCE_OUTCOME.UNAVAILABLE};
-    }
     driver._replicaContexts.set(serviceId, replicaContext);
     driver._running.add(serviceId);
     return {status: CONSENSUS_BOOTSTRAP.PUBLISHED, started: true, bootstrapped: true,
