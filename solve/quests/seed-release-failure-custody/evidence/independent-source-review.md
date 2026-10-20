@@ -628,3 +628,79 @@ the earlier semantic assertion succeeded.
 Receipt 4 remains open. Passing this correspondence/component measurement
 will not by itself resolve the unchanged inherited identity-file failure,
 the static gate or any broader release obligation.
+
+## Final focused composition and partial receipt assessment
+
+The reviewer independently inspected the input, exit, structured results and
+controller output in
+`test-output/seed-release-custody/composed-e0e93bf70/` for exact candidate
+`e0e93bf70776e1f1daeb149e5a3e9f14a1332464`.
+Input and controller placement agree on that head, `adam-laptop` and retry
+zero. The ledger contains seventeen first-attempt results: sixteen files
+pass, one fails, and the runner reports 511 assertions. Exit status remains
+one. This is a red focused composition, not an all-green run.
+
+| Packet file | SHA-256 |
+| --- | --- |
+| `input.json` | `ef6a30af7639999062d88c25993ede6d72d984f066403ec90a569a6e9ffef3d6` |
+| `exit.json` | `950e8b800437285210983f185696e5176c22281d05a741f991f87d008cb24fc1` |
+| `results.ndjson` | `d5833be72f223b3d8ab52bb3b5b9ad38be7af20bc50f06eecd51dd917d59a95b` |
+| `controller.log` | `f502d7d36a7c72267a2a5d3de8e1a913c5550f07a1a6b2ae7903fab541322e5d` |
+
+The entire `src` tree is `00b72e3dfe4f9738fe4163383c141f55a07ef1f0`,
+identical to the earlier repaired `e29e46abf` source tree. The reviewer
+verified all fifteen composed file blob IDs and SHA-256 values in
+`evidence/candidate-identities.json` directly against the committed Git
+objects. All twelve original positive test files remain byte-identical to
+`e29e46abf` and pass again here. The new MG component and corrected census
+files match the approved hashes above. Generated classification changes
+register the additional test and corresponding derived digests; they do
+not alter executable pass criteria.
+
+The three native custody children and focused phase/SQL/map assertions pass
+in this exact composition. The six MG component cases pass through both
+actual cleanup entries. The updated activation-boundary file passes its
+75 runner-reported assertions, retaining the eleven existing behavioral
+cases and the corrected structural correspondence. The canonical exact API
+and message-group executor activation files pass with 36 and 43 reported
+assertions respectively. These are component/router and native-partition
+claims at the previously stated ceilings; they do not turn shutdown doubles
+into native MG failure proof.
+
+The sole failed file is
+`test/node/replica-transport-handler-identity.test.js` (22 reported
+assertions). Its partition, message-group and WASM subcases each receive
+`refused_transport_without_handler_identity` as a returned promise rejection
+at the existing canonical retirement owner. The three paths are visible in
+controller lines 44-183. Its Git blob is unchanged across `63420a1a5`,
+`e29e46abf` and this composed candidate; the same earlier same-host packets
+retain those failures. Classification as inherited does not waive their
+remaining owner/test-contract obligation, and this review does not silently
+rewrite their expected result.
+
+Both earlier semantic controls remain valid targeted evidence: their
+mutated owner blocks derive from the same repaired source, and their
+executable witnesses/helpers are unchanged in this composition. The
+diagnostic source is not merged or counted in the positive population.
+
+The proposed exact-candidate partial receipt values are consistent:
+
+| Receipt | Passed | Evidence and remaining limit |
+| --- | --- | --- |
+| `actual-seed-committed-origin-expiry-and-registration-cleanup` | true | Unchanged actual native entry and registration-cleanup child pass on this candidate; phase control has its engaged semantic kill. |
+| `native-cleanup-custody-and-top-level-retry` | true | Exact native close rejection, retained owner and restored same-owner retry pass; retry control has its engaged semantic kill. |
+| `retained-origin-and-authoritative-restart-frontier` | true | Actual retained-reader bootstrap preserves origin and refuses absent SERVICES authority; this is a measured frontier, not automatic restart success. |
+| `semantic-negatives-and-unchanged-owner-regressions` | false | Both negatives and new MG correspondence/component checks are valid, but the required inherited identity-file regression remains red. |
+| `independent-review-and-applicable-gates` | false | Independent review is complete for these bytes; the two scoped inherited static findings and unpassed broader gates remain unresolved. |
+
+Overall receipt status must remain `fail`, with the Quest open and
+unlanded. This reviewer recommends bounded non-main preservation of the
+measured work and its complete red/positive/control history. There is no
+additional source/test binding issue identified in this assessment.
+
+A later documentation-only preservation commit must name this measured
+execution candidate and retain these source/test identities; it is not
+itself a newly measured runtime head. Any changed executable byte or test
+criterion needs the applicable renewed review and measurement. No automatic
+partial-seed recovery, public process-lock reentry, complete corpus/static
+green, U1/TX1/FreshMG acceptance, main merge or release is certified here.

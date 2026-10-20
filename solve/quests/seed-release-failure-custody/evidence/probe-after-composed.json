@@ -1,0 +1,26 @@
+{
+  "id": "seed-release-failure-custody",
+  "status": "open",
+  "blocked": null,
+  "probe": {
+    "metric": 2,
+    "target": 0,
+    "done": false,
+    "measuring": true,
+    "evidence": "solve/quests/seed-release-failure-custody/evidence/receipt.json",
+    "reason": "measured",
+    "outstanding": [
+      "semantic-negatives-and-unchanged-owner-regressions",
+      "independent-review-and-applicable-gates"
+    ]
+  },
+  "sealMetric": 5,
+  "delta": -3,
+  "attempts": 3,
+  "attemptsSinceAltitudeCheck": 3,
+  "recent": [
+    "2026-10-20T19:20:29.112Z finding decision: Final targeted composition e0e93bf70776e1f1daeb149e5a3e9f14a1332464: locked adam-laptop, retry0, 17 files16pass1fail511 reported assertions. All original positi",
+    "2026-10-20T19:20:29.306Z verification approve: subagent:/root/control_source_review independently verified final e0e17/16/1/511 results, all15 candidate identity fields, unchanged source tree00b72e3dfe4f9738",
+    "2026-10-20T19:21:35.096Z finding evidence: Append-only count clarification from final handover consistency review: the 75 reported assertions belong to the entire message-group-activation-handler-boundar"
+  ]
+}

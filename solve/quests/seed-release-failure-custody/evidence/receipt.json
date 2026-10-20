@@ -1,11 +1,65 @@
 {
   "schema": "test-receipt/1",
   "status": "fail",
+  "measuredCandidate": "e0e93bf70776e1f1daeb149e5a3e9f14a1332464",
+  "sourceTree": "00b72e3dfe4f9738fe4163383c141f55a07ef1f0",
   "receipts": [
-    {"id": "actual-seed-committed-origin-expiry-and-registration-cleanup", "passed": false},
-    {"id": "native-cleanup-custody-and-top-level-retry", "passed": false},
-    {"id": "retained-origin-and-authoritative-restart-frontier", "passed": false},
-    {"id": "semantic-negatives-and-unchanged-owner-regressions", "passed": false},
-    {"id": "independent-review-and-applicable-gates", "passed": false}
+    {
+      "id": "actual-seed-committed-origin-expiry-and-registration-cleanup",
+      "passed": true,
+      "evidence": [
+        "composed-e0e93bf70/input.json",
+        "composed-e0e93bf70/results.ndjson",
+        "independent-source-review.md"
+      ],
+      "scope": "Actual seed entry and registered ENABLE; native engagement and cleanup result/event assertions pass under unchanged original release budget."
+    },
+    {
+      "id": "native-cleanup-custody-and-top-level-retry",
+      "passed": true,
+      "evidence": [
+        "composed-e0e93bf70/results.ndjson",
+        "retry-negative-8be74d3a6/controller.log",
+        "independent-source-review.md"
+      ],
+      "scope": "Exact native partition DB close failure retains its existing owner; restored close permits same top-level shutdown retry. MG additions prove component orchestration only."
+    },
+    {
+      "id": "retained-origin-and-authoritative-restart-frontier",
+      "passed": true,
+      "evidence": [
+        "composed-e0e93bf70/results.ndjson",
+        "baseline-native-63420a1a5/controller.log",
+        "independent-source-review.md"
+      ],
+      "scope": "Actual retained-store startup refuses missing SERVICES placement identity and preserves origin; this is not successful automatic restart."
+    },
+    {
+      "id": "semantic-negatives-and-unchanged-owner-regressions",
+      "passed": false,
+      "evidence": [
+        "phase-negative-d23a24a82/controller.log",
+        "retry-negative-8be74d3a6/controller.log",
+        "owner-regression-comparison.md",
+        "composed-e0e93bf70/controller.log"
+      ],
+      "reason": "Both semantic controls are valid; new MG component/census witnesses pass. The unchanged replica-transport-handler-identity test still has three inherited typed-refusal fixture failures. Historical attribution does not waive them."
+    },
+    {
+      "id": "independent-review-and-applicable-gates",
+      "passed": false,
+      "evidence": [
+        "independent-source-review.md",
+        "static-review/normal-precommit.txt",
+        "static-review/owner-routing.md"
+      ],
+      "reason": "Independent bounded design/source/witness/result reviews are complete. Two inherited decision-boundary findings remain unresolved; complete static/corpus, Solver landing, publisher and physical distributed certification were not executed."
+    }
+  ],
+  "limits": [
+    "Preservation only; no Quest landing, main merge or release acceptance.",
+    "Successful controller output has file summaries; no positive target/origin/timing values are borrowed from baseline diagnostics.",
+    "Automatic retained partial-seed placement requires a separately bounded authority handoff.",
+    "Safety, recovery progress and performance verdicts remain separate."
   ]
 }
