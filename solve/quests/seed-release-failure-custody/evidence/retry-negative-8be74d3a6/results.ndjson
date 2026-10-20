@@ -1,0 +1,2 @@
+{"file":"test/bootstrap/bootstrap-shutdown-quiesce.test.js","attempt":1,"ok":false,"assertions":32,"durationMs":2039,"retriedOnce":false,"firstFailureLine":"not ok 6 - a new shutdown re-enters the retained cleanup owner"}
+{"file":"test/bootstrap/seed-release-failure-custody.test.js","attempt":1,"ok":false,"assertions":4,"durationMs":17055,"retriedOnce":false,"firstFailureLine":"not ok 2 - BootstrapService.shutdown retries the same retained native close"}

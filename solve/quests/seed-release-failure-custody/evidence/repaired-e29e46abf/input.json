@@ -1,0 +1,45 @@
+{
+  "sha": "e29e46abf6c5daf506d8c0500b5a9a1d16c2bcd6",
+  "files": [
+    "test/bootstrap/bootstrap-failure-cleanup.test.js",
+    "test/bootstrap/bootstrap-shutdown-quiesce.test.js",
+    "test/bootstrap/pipeline/seed-registration-phase-custody.test.js",
+    "test/bootstrap/seed-release-failure-custody.test.js",
+    "test/bootstrap/cleanup-ownership-order-characterization.test.js",
+    "test/bootstrap/bootstrap-cleanup.property.test.js",
+    "test/bootstrap/pipeline/startup-pipeline-runner.test.js",
+    "test/bootstrap/seed-participant-release-failure-projection.test.js",
+    "test/node/replica-runtime-cleanup-custody.integration.test.js",
+    "test/raft/raft-rs-backend/startup-cleanup.integration.test.js",
+    "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
+    "test/bootstrap/seed-startup-session-store.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/bootstrap/pipeline/seed-registration-phase-custody.test.js",
+        "test/bootstrap/seed-participant-release-failure-projection.test.js",
+        "test/bootstrap/seed-release-failure-custody.test.js",
+        "test/bootstrap/bootstrap-cleanup.property.test.js",
+        "test/bootstrap/cleanup-ownership-order-characterization.test.js",
+        "test/bootstrap/bootstrap-failure-cleanup.test.js",
+        "test/bootstrap/pipeline/startup-pipeline-runner.test.js",
+        "test/bootstrap/seed-startup-session-store.test.js",
+        "test/bootstrap/bootstrap-shutdown-quiesce.test.js"
+      ],
+      "jobs": 2,
+      "resourceClass": "bootstrap"
+    },
+    {
+      "files": [
+        "test/node/replica-runtime-cleanup-custody.integration.test.js",
+        "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
+        "test/raft/raft-rs-backend/startup-cleanup.integration.test.js"
+      ],
+      "jobs": 1,
+      "resourceClass": "exclusive"
+    }
+  ],
+  "on": "adam-laptop",
+  "retryFailedOnce": false
+}

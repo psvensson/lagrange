@@ -309,3 +309,192 @@ then preserving an explicitly RED, unlanded WIP checkpoint fits that
 boundary. It supplies no clean-gate, Solver-land, main-merge or publication
 receipt. This review neither executes that exception nor predicts the
 normal hook's outcome.
+
+## Repaired locked measurement: e29e46abf
+
+The reviewer independently inspected
+`test-output/seed-release-custody/repaired-e29e46abf/` for exact candidate
+`e29e46abf6c5daf506d8c0500b5a9a1d16c2bcd6`.
+The input names `adam-laptop` with retries disabled. Controller line 4
+records the same placement head, line 8 records retry zero, and its thermal
+hold is followed by the normal thermal admission. The twelve structured
+result rows are all first-attempt passes, totaling 329 runner-reported
+assertions; exit status is zero. The bootstrap lane has nine files and the
+exclusive lane three files.
+
+| Packet file | SHA-256 |
+| --- | --- |
+| `input.json` | `070160a642e01b8194abf102021f665431a83e0e4a67d6b3072ce8c35c1e440f` |
+| `exit.json` | `a570bcf4494f671c5b57805cd66f0c61ace157ea3de5d4e3a29c3cc3e7b84a82` |
+| `results.ndjson` | `8cf2a55bb4fe449c522ae4c5cc7fd110ea5b9018391c6eee4d4ecb9f5a006715` |
+| `controller.log` | `f6bb0698ad879851e236b5d5b52ab460253de63bbf4f9cbe5d66eb9416fb084f` |
+
+All seven source/registry hashes match the final approved fingerprints.
+The five modified/new witness and helper hashes match the approved witness
+review. Independent comparison of Git blobs confirms all twelve measured
+test files are byte-identical between baseline `63420a1a5` and repaired
+`e29e46abf`; no assertion was relaxed to obtain this result.
+
+The native custody file passes all four runner-reported tests. With its
+unchanged sequential test body, this establishes that the native engagement
+checks and all three child assertions completed successfully:
+
+- Real ENABLE commits before the handler-only expiry treatment, admission
+  remains closed, and the original release refuses at its deadline.
+- Registration cleanup reports the primary refusal and frozen ERROR
+  observation, retains the failed exact native owner, and performs SQL/CDC
+  cleanup in the asserted order.
+- Restoring the original native close allows another top-level shutdown to
+  re-enter existing custody, close the same DB, and discharge its retained
+  owner rather than replay the old cached rejection.
+- The subsequent actual retained-store startup consumes readable nonempty
+  storage without SERVICES rows, reaches its real typed creation refusal,
+  and preserves the committed origin.
+
+The successful controller output contains file-level summaries rather than
+the full native child diagnostics. These conclusions are therefore bound to
+the exact passing assertions and reviewed fixture. This assessment does not
+assign a positive-run partition, numeric origin, deadline or elapsed value
+by copying the baseline's diagnostic values.
+
+The focused phase, cleanup and shutdown/SQL tests also pass. Existing
+cleanup ordering/property, startup pipeline, release-failure projection,
+startup-session, runtime custody, native startup cleanup and opening-history
+tests pass on the same candidate. This is the declared focused composition,
+not a whole-repository corpus result.
+
+**Result assessment: the repaired candidate has a valid focused positive
+for the reviewed cleanup interaction.** Exact source-only semantic controls
+remain pending at this assessment. The inherited static findings remain
+unresolved; no static-gate, landing, main/publication or release approval is
+given. The previous scope exclusions remain unchanged.
+
+## Isolated source-only semantic controls: pre-execution review
+
+Both controls derive from exact positive candidate
+`e29e46abf6c5daf506d8c0500b5a9a1d16c2bcd6`. The reviewer read each complete
+source diff and the unchanged engagement, assertion and teardown paths.
+These are deliberately defective diagnostic branches and must not merge.
+No negative execution occurred as part of this review.
+
+The phase control at `diagnostic/seed-custody-phase-negative-20261020`
+moves acquisition and release back into the checkpoint callback, outside
+`executePhase`, and restores the registration callback to metadata only.
+The two error constants and every other repair remain intact:
+
+| File | Mutant SHA-256 |
+| --- | --- |
+| `src/bootstrap/bootstrap-service-seed-workflow.js` | `d7a6cea593672d838f5db82cbefd589b628354cf57f8d6ba3f399b2c3d739405` |
+| `src/bootstrap/pipeline/seed-startup-plan.js` | `3f7009251e1f81a97d5a8e6d80cc3568b61d160369be3665366e1a61cccfa19c` |
+
+The retry control at `diagnostic/seed-custody-retry-negative-20261020`
+removes only the rejected-attempt reset and its catch/rethrow scaffold.
+It retains `this.shutdownPromise = attempt; return await attempt;`.
+The runtime file's SHA-256 is
+`ce54e0c1ac4b11afe6c41f3800d3b00bfa08be24a818f9e92d8da813a1d624b4`;
+the exact source patch hashes to
+`604a9f5f433786dc460f39f06e6a8ccc0f4e234d4ff7527506c6236cfff49074`.
+It changes neither initial single-flight nor original error propagation.
+
+Both test trees remain unchanged against the positive candidate. In
+particular the native witness, fixture and focused shutdown hashes remain
+`5c82b732...`, `f15ac20c...` and `9d1df4d0...` as recorded in full above and
+in the companion witness review. No deadlines or pass criteria change.
+
+### Expected discriminators and interpretation
+
+For the phase control, the focused phase test must reach the actual class A
+scheduler and then fail its acquisition/release sequence assertion at
+`test/bootstrap/pipeline/seed-registration-phase-custody.test.js:83-86`.
+Its explicit settlement race prevents a missing release callback from
+becoming a hanging test. The native witness must pass its real ENABLE,
+origin, deadline and native-close engagement checks, then fail the first
+child at line 111: `partitions` versus `registration`. The repaired
+top-level retry and retained-startup refusal children should remain positive.
+This restores the old placement of the whole acquisition/release operation;
+it is not a phase-label-only mutation.
+
+For the retry control, focused shutdown lines 105-115 must first establish
+one concurrent attempt and the exact original rejection for both callers.
+Lines 123-124 then detect the retained rejection and call count one instead
+of two. In the native file, the registration/custody child should pass; the
+retry child should fail at line 152 only after the initial native failure
+and restoration of the real close. The subsequent retained-store refusal
+child should remain positive after the explicitly labeled existing-owner
+teardown.
+
+The fixture's teardown at
+`test/test-helpers/seed-release-failure-custody-fixture.js:257-291` restores
+substitutions, invokes existing owners, and requires every captured native
+DB closed before deleting its supplied directory. A cleanup error is
+retained together with the primary error at lines 323-332. Teardown is not
+evidence that the mutated top-level retry succeeded. An import/setup failure,
+unengaged timeout or teardown-only failure is not an intended semantic kill.
+
+### All nine categories rechecked
+
+The numbered census in the full source assessment remains binding. For
+these two controlled deltas every item was reconsidered:
+
+| Category and items | Control-specific assessment and evidence |
+| --- | --- |
+| Admission 1-7 | 1 and 6: actual initial/retained readers and placement enforcement are unchanged (native test 70-89, 174-198). 2 and 4: original primary refusal and cleanup shapes remain unchanged; phase changes which existing cleanup steps are selected. 3: original 3000 ms budget remains asserted at line 72. 5: only the retry control deliberately removes the canonical cleanup retrigger (runtime reset); it does not reopen admission. 7: native target and retained-store refusal diagnostics remain actual-owner observations. |
+| Recovery 1-5 | 1: exact-map and engine discharge repairs remain in both controls. 2: native restart still constructs a new BootstrapService through real retained readers. 3: nonempty real inventory and actual release engagement remain mandatory at native lines 70-107. 4: origin rereads and successful native close remain unchanged. 5: readable nonempty/no-SERVICES refusal remains asserted at lines 174-198; neither mutation grants absence-based permission. |
+| Retry 1-7 | 1 and 4: the retry mutation specifically restores the permanently cached rejection; focused 123-124 and native 152 detect the dead retrigger. 2 and 5: no timer, loop or budget is added; initial concurrent joining remains. 3: original error is still propagated by `return await attempt`. 6: all lower-owner idempotence and exact identity guards remain. 7: no transport ACK or failed observation resets a retry counter. |
+| Transport 1-5 | 1: real OBSERVED and matching native origin are still required before treatment. 2: no late-response handler or waiter changes. 3: no delivery classifier or reply shape changes. 4: bounded existing release transport remains unchanged. 5: real router and one original delivery remain in the unchanged fixture. The phase mutation relocates entry, not transport implementation. |
+| Timer 1-5 | 1: no timer is added or altered. 2: no role/authority fact changes. 3: retry intentionally retains only the rejected JS promise; native state is untouched. 4: handler-only expiry follows the actual settled ENABLE under the same absolute deadline. 5: neither control adds a read-through sweep or new dependency; the phase control reverses the reviewed scheduler boundary. |
+| Concurrency 1-5 | 1: first-attempt synchronous joining remains in both controls. 2: exact post-await map and engine checks are unchanged. 3: no new claimant is introduced. 4: existing recovery traffic remains allowed and attempt-scoped by the witness. 5: retry mutation affects the same BootstrapService promise only; phase mutation affects its registration callback only. Focused joining and phase gate assertions establish those scopes. |
+| Formation 1-5 | 1: phase control restores acquisition/release before actual registration phase entry, the exact defect being tested. 2: retry control deliberately leaves stale rejection as the veto; no substitute rescue is claimed. 3: native failure still precedes serving admission. 4: neither changes release budget or asserts natural startup margin. 5: no synthetic SERVICES, origin, control fact or alternative admission path is added. |
+| Harness 1-6 | 1: only the named post-engagement phase/retry assertions qualify as kills. 2: native owners and narrower focused doubles are unchanged. 3: time treatment/budgets are unchanged. 4: requests and retained records remain produced by actual owners. 5: original positive engagement prevents empty-cohort or no-effect success. 6: exact e29 positive and isolated mutant fingerprints bind the comparison; the claim remains BootstrapService/native-local, not public-process or cross-host certification. |
+| Interaction 1-10 | 1-2: existing owners and typed boundaries remain; mutations deliberately violate only phase custody or retry continuation. 3: one native sequence still checks origin, custody, retry and retained refusal, with the expected child distinguished. 4: restored native close is fresh evidence that the retry mutant wrongly fails to reconsider. 5: no new amplification/backoff bypass. 6: explicit top-level shutdown remains the tested trigger. 7: diagnostics never become authority. 8: source-only fingerprints and unchanged witnesses establish treatment fidelity; actual kills remain pending. 9: lower-owner teardown stays excluded from retry proof. 10: the existing product contract and positive candidate stay unchanged; diagnostic branches are excluded from landing and positive certification. |
+
+**Verdict: APPROVE both isolated controls for the declared locked
+measurements.** No actionable findings remain in this pre-execution round.
+Record exact committed diagnostic heads and actual failures separately.
+This approval does not certify the anticipated result, resolve the inherited
+static findings or authorize merging either mutant.
+
+## Retry control result: 8be74d3a6
+
+The reviewer independently inspected
+`evidence/retry-negative-8be74d3a6/` for exact diagnostic head
+`8be74d3a62b625ebcb330724bcaf0a1596ae0a9a`.
+Its runtime Git blob has the approved mutant hash `ce54e0c1...`.
+Both measured tests and the native helper are byte-identical to their
+`e29e46abf` blobs. The only executable difference is the reviewed runtime
+mutation; the other changed file is the diagnostic description.
+
+All four packet hashes in `sha256.json` were independently checked against
+the actual files. The controller hash is
+`e6df9b349228fa60d99c16c63f45d25dc4c1ece4403ca9601533c176a9b43979`.
+Input and placement agree on the diagnostic head and `adam-laptop`, with
+retry zero. Both files fail on attempt one, with 36 total runner-reported
+assertions. This expected-negative sample is excluded from positives.
+
+The focused test first passes its concurrent single-attempt, exact-error
+identity and still-shutting-down assertions (controller lines 25-30).
+It then fails the intended lines 123 and 124: the new shutdown returns the
+old error, and cleanup count remains one rather than two (controller
+lines 31-79). This is the reviewed missing-retrigger mechanism.
+
+The native test reaches real committed-origin expiry and passes the entire
+registration cleanup/custody child. Its retry child alone fails with
+`Replica handler still owns failed runtime shutdowns` after the test restores
+the real close and invokes shutdown again. The retained-origin restart
+child subsequently passes after the explicitly labeled teardown
+(controller lines 137-156 and 298-304). The native diagnostic records
+`artifact_payload_chunks-p1-r1`, origin index 2/term 1, the original
+3000 ms bound, failure phase `registration`, and ERROR cleanup with
+registration/partition errors and successful message-group/infrastructure
+steps (line 316).
+
+**Classification: valid engaged semantic kill of the rejected-attempt
+reset.** Phase accounting, exact retained cleanup observation and
+authoritative restart refusal remain positive in the same mutated native
+sequence. The result is not an import, setup or timeout failure, and
+teardown is not credited as top-level retry success.
+
+The separate phase control and newly identified message-group cleanup
+correspondence/regression obligations are still pending at this assessment.
+Receipt `semantic-negatives-and-unchanged-owner-regressions` remains open;
+this negative does not resolve static gates or authorize landing.

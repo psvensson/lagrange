@@ -1,0 +1,19 @@
+{
+  "sha": "8be74d3a62b625ebcb330724bcaf0a1596ae0a9a",
+  "files": [
+    "test/bootstrap/bootstrap-shutdown-quiesce.test.js",
+    "test/bootstrap/seed-release-failure-custody.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/bootstrap/seed-release-failure-custody.test.js",
+        "test/bootstrap/bootstrap-shutdown-quiesce.test.js"
+      ],
+      "jobs": 2,
+      "resourceClass": "bootstrap"
+    }
+  ],
+  "on": "adam-laptop",
+  "retryFailedOnce": false
+}
