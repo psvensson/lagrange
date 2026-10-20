@@ -29,7 +29,9 @@ function observeCurrentWasmCreation(lifecycle, value) {
     const replica = lifecycle.activeReplicas.get(origin.intent.descriptor.serviceId);
     const outcome = [
       [replica === undefined, CURRENT.ABSENT],
-      [!sameRetainedCreation(replica?.consensusCreation, origin), CURRENT.DIFFERENT],
+      // MUTATION V5: compare a token ID only; disregard immutable intent.
+      [replica?.consensusCreation?.token?.operationId !== origin.token.operationId,
+        CURRENT.DIFFERENT],
       [CURRENT_STATES.has(replica?.lifecycleState), CURRENT.CURRENT],
       [true, CURRENT.UNAVAILABLE],
     ].find(([matches]) => matches)[1];
