@@ -166,7 +166,7 @@ function createLifecycleManager(cache, activeEffects, activationRecord) {
   return {
     // The production-shaped manager without a journal (design
     // ACTIVATION-DISCOVERY-DESIGN-20261017 Revision 3 RV2.2) answers UNAVAILABLE.
-    async readRetainedCreation() { return {outcome: 'INTENT_NOT_FOUND'}; },
+    async readRetainedCreation() { return {outcome: 'UNAVAILABLE'}; },
     async resumeConsensusCreation() {
       return {outcome: 'UNAVAILABLE'};
     },
