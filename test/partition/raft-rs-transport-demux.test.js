@@ -28,9 +28,19 @@ afterEach(() => {
 test('PartitionService routes semantic raft-rs transport envelopes to the operation port',
   async (t) => {
     const consensusPort = new ControllableConsensusPort();
+    const handlers = new Map();
     const transport = {
-      register() {},
-      unregister() {},
+      register(address, handler) {
+        handlers.set(address, handler);
+      },
+      getRegisteredHandler(address) {
+        return handlers.get(address) ?? null;
+      },
+      unregisterExact(address, handler) {
+        if (handlers.get(address) !== handler) return false;
+        handlers.delete(address);
+        return true;
+      },
       async deliver() {
         return {acknowledged: true};
       },
