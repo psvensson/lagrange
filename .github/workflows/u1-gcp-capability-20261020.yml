@@ -1,0 +1,46 @@
+# Bounded read-only GCP capability probe for immutable U1 candidate.
+# No VM creation/start, no runner registration changes or source mutation.
+name: u1-gcp-capability-20261020
+on:
+  push:
+    branches:
+      - verify/u1-gcp-20261020
+    paths:
+      - .github/workflows/u1-gcp-capability-20261020.yml
+  workflow_dispatch: {}
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: u1-gcp-capability-20261020
+  cancel-in-progress: false
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout exact test workflow source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Confirm frozen production test subject
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor be25caa5f0c3612feec662d4feaa9ba28f8f34df HEAD
+          test -f test/shards/impact-graph-seal.json
+          echo "Target immutable U1: be25caa5f0c3612feec662d4feaa9ba28f8f34df"
+      - name: Authenticate existing keyless project identity
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          workload_identity_provider: projects/759391918025/locations/global/workloadIdentityPools/github/providers/github-actions
+          service_account: github-release-starter@something-2e584.iam.gserviceaccount.com
+      - name: Install existing gcloud adapter
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
+      - name: Verify read-only GCP runner capability
+        run: |
+          set -euo pipefail
+          gcloud compute instances describe lagrange-ci-runner \
+            --project something-2e584 --zone europe-north1-a \
+            --format="value(name,status,zone)"
+          echo "GCP_READ_ONLY_PREFLIGHT_PASS"
