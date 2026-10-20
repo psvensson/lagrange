@@ -167,7 +167,7 @@ async function retireWasmCreation(lifecycle, value) {
   switch (local.state) {
   case LOCAL_RETIREMENT.BLOCKED:
     return {outcome: REFUSAL.RETIREMENT_BLOCKED_CLEANUP_REQUIRED, retired: false, closed: false,
-      finality: FINALITY.UNRESOLVED,
+      finality: FINALITY.FINAL,
       release: local.release, failure: local.failure};
   case LOCAL_RETIREMENT.REFUSED:
     return {outcome: local.tombstone.outcome, retired: false, closed: false,
