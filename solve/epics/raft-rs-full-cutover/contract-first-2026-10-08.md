@@ -173,3 +173,26 @@ of existing hardened boundaries or sealed tests without explicit judgment.
 Preserve agreed 0.3 SQL/transaction/split-merge semantics, including prepared-
 transaction correctness. The separate 0.3 path advances only where its actual
 dependencies allow; this plan does not trade away product correctness.
+
+## Planning continuation recorded 2026-10-20
+
+The operator approved the source-bound architectural insight execution plan
+and asked for persistence, commits/push, and a handover. Continue through
+[the execution plan](insight-execution-plan-2026-10-20.md),
+[the initial proof matrix](insight-proof-matrix-2026-10-20.md), and
+[the handover](HANDOVER-2026-10-20-insight-plan.md).
+The [review packet](evidence/insight-review-2026-10-20/README.md) retains exact
+source bindings, eight finite counterexamples, assumptions and proof limits.
+
+This is a planning/evidence continuation of this epic, not a second
+architecture programme. U1 closure and historical release repair remain
+separately bounded. Participant-release/control-authority investigation and
+existing U1 physical-custody review are the immediate priorities; existing
+TX1 prerequisites and independent source reviews remain in force.
+
+The source anchor is `be25caa5f0c3612feec662d4feaa9ba28f8f34df`; select the
+actual execution candidate from current owner/branch state before changing
+production behavior. Earlier dated assignments and branch snapshots above
+remain historical records, not instructions to overwrite newer work.
+No sealed acceptance, source scope, release promise or main-merge authority
+is changed by this planning publication.
