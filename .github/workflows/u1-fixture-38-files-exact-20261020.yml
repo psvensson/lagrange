@@ -1,0 +1,98 @@
+name: u1-fixture-38-files-exact-20261020
+on:
+  push:
+    branches: [verify/u1-fixture-clean-20261020]
+    paths: [.github/workflows/u1-fixture-38-files-exact-20261020.yml]
+permissions: {contents: read}
+jobs:
+  focus:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: focused
+            expected: 15
+          - group: compatibility
+            expected: 23
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: 1452846885fe0646fd0ed5bff1746075c8ff9502
+          persist-credentials: false
+          fetch-depth: 1
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Assert source and run named existing owners
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = 1452846885fe0646fd0ed5bff1746075c8ff9502
+          npm ci
+          mkdir -p test-output/u1-fixture-exact
+          if test '${{ matrix.group }}' = focused; then
+            cat > "$RUNNER_TEMP/u1-files" <<'FOCUS'
+test/control-plane/replica-dispatch-reservation-identity.test.js
+test/control-plane/service-instance-creation-cas.test.js
+test/node/runtime-service-bound-route.test.js
+test/node/runtime-service-handler.test.js
+test/node/runtime-service-remove-execution-custody.test.js
+test/node/runtime-service-restart-inventory-custody.test.js
+test/runtime/service-runtime-consensus-publication.test.js
+test/service/service-consensus-creation-intent.test.js
+test/service/service-consensus-creation-recovery.integration.test.js
+test/service/service-lifecycle-manager.test.js
+test/wasm-service/bound-creation-handler-embedding.integration.test.js
+test/wasm-service/bound-creation-physical-custody.integration.test.js
+test/wasm-service/bound-creation-restart.integration.test.js
+test/wasm-service/operation-lifecycle.test.js
+test/wasm-service/wasm-service-lifecycle.test.js
+FOCUS
+          else
+            cat > "$RUNNER_TEMP/u1-files" <<'COMPAT'
+test/control-plane/service-install-catalog-owner.test.js
+test/control-plane/service-instance-selection-admission.test.js
+test/service/service-lifecycle-command-owner.test.js
+test/service/service-installation-reconciler.test.js
+test/runtime/minimal-deployment-request-cell-runtime-readiness.test.js
+test/service/minimal-deployment-request-cell-routing.test.js
+test/runtime/node-shutdown-cell-worker-teardown.test.js
+test/runtime/request-cell-definition-classification.test.js
+test/runtime/wasm-component-driver.test.js
+test/runtime/wasm-driver-contract-conformance.test.js
+test/service/service-type-adapter.test.js
+test/runtime/service-runtime-lifecycle.test.js
+test/runtime/service-runtime-lifecycle-journal.test.js
+test/runtime/service-runtime-lifecycle-idempotency.test.js
+test/wasm-service/wasm-service-replica.test.js
+test/wasm-service/wasm-creation-publication.integration.test.js
+test/wasm-service/wasm-creation-local-record.test.js
+test/storage/data-directory-manager.test.js
+test/storage/data-directory-validation.property.test.js
+test/rebalancer/replica-operation-repository.test.js
+test/wasm-service/wasm-writer-state-v1.test.js
+test/wasm-service/wasm-writer-client-v1.test.js
+test/wasm-service/wasm-writer-completion-v1.test.js
+COMPAT
+          fi
+          test "$(wc -l < "$RUNNER_TEMP/u1-files")" -eq '${{ matrix.expected }}'
+          node scripts/run-classified-test-files.js --stdin \
+            < "$RUNNER_TEMP/u1-files" > test-output/u1-fixture-exact/runner.log 2>&1 || {
+              grep 'test-files total=' test-output/u1-fixture-exact/runner.log | tail -n 10
+              tail -n 110 test-output/u1-fixture-exact/runner.log
+              exit 1
+            }
+          grep 'test-files total=' test-output/u1-fixture-exact/runner.log | tail -n 10
+          test "$(git status --porcelain --untracked-files=no)" = ''
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: u1-fixture-${{ matrix.group }}-${{ github.run_id }}
+          path: test-output/u1-fixture-exact/
+          retention-days: 14
+          if-no-files-found: warn
