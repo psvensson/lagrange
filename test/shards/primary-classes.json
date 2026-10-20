@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2093,
+    "unit": 2095,
     "integration": 106,
     "bootstrap": 205,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2411,
-  "digest": "fnv1a32-81d15f88",
+  "censusSize": 2413,
+  "digest": "fnv1a32-4df7e825",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1196,6 +1196,8 @@
     "test/node/runtime-service-bound-route.test.js": "unit",
     "test/node/runtime-service-call-cell-handler.test.js": "unit",
     "test/node/runtime-service-handler.test.js": "unit",
+    "test/node/runtime-service-remove-execution-custody.test.js": "unit",
+    "test/node/runtime-service-restart-inventory-custody.test.js": "unit",
     "test/node/services-p1-diagnostic-logger.test.js": "unit",
     "test/node/single-cdc-write-path.property.test.js": "unit",
     "test/node/state-change-event-emission.property.test.js": "unit",
