@@ -1,0 +1,73 @@
+# Read-only exact Git blob identity comparison of the 119 GCP candidate RED files.
+# No tests, cloud provisioning, runtime source mutation or release authority.
+name: u1-test-blob-differential-20261020
+on:
+  push:
+    branches:
+      - verify/u1-gcp-20261020
+    paths:
+      - .github/workflows/u1-test-blob-differential-20261020.yml
+permissions:
+  contents: read
+jobs:
+  compare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Validate original source revisions and 119 observed failures
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e 381750de29af647d446b19adedf1da53eb712093^{commit}
+          git cat-file -e be25caa5f0c3612feec662d4feaa9ba28f8f34df^{commit}
+          test "$(wc -l < verification/u1-20261020/gcp-corpus-119-red-files.txt)" -eq 119
+      - name: Categorize exact changed/unchanged/absent test blobs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p test-output/u1-red-blob-census
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess, json, hashlib, collections
+          base='381750de29af647d446b19adedf1da53eb712093'
+          candidate='be25caa5f0c3612feec662d4feaa9ba28f8f34df'
+          items=Path('verification/u1-20261020/gcp-corpus-119-red-files.txt').read_text().splitlines()
+          assert len(items)==119 and len(set(items))==119
+          rows=[]
+          for path in items:
+            assert path.startswith('test/') and path.endswith('.test.js')
+            blobs=[]
+            for sha in (base,candidate):
+              x=subprocess.run(['git','rev-parse','--verify',sha+':'+path],
+                 capture_output=True,text=True)
+              blobs.append(x.stdout.strip() if x.returncode==0 else None)
+            assert blobs[1], 'candidate missing '+path
+            kind=('absent-at-base' if blobs[0] is None else
+                  'unchanged-test-bytes' if blobs[0]==blobs[1] else 'changed-test-bytes')
+            rows.append(dict(path=path, classification=kind, baseBlob=blobs[0],
+                         candidateBlob=blobs[1]))
+          counts=dict(collections.Counter(row['classification'] for row in rows))
+          out=Path('test-output/u1-red-blob-census')
+          (out/'blobs.json').write_text(json.dumps({
+             'base':base,'candidate':candidate,'count':len(rows),
+             'classificationCounts':counts,'files':rows},indent=2)+'\n')
+          for name in ['unchanged-test-bytes','changed-test-bytes','absent-at-base']:
+            selected=[r['path'] for r in rows if r['classification']==name]
+            (out/(name+'.txt')).write_text('\n'.join(selected)+ ('\n' if selected else ''))
+          print('U1_RED_TEST_BLOB_CLASSIFICATION='+json.dumps(counts,sort_keys=True))
+          print('U1_RED_BLOB_RECORD_SHA256='+hashlib.sha256(
+             (out/'blobs.json').read_bytes()).hexdigest())
+          PY
+      - name: Preserve exact blob comparison
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: u1-test-blob-differential-${{ github.run_id }}
+          path: test-output/u1-red-blob-census/
+          retention-days: 14
+          if-no-files-found: warn
