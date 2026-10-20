@@ -103,9 +103,7 @@ async function startBoundReplica(driver, lifecycle, replicaContext, serviceId) {
   try {
     const {origin, descriptor} = captureConsensusBootstrap(replicaContext.definition,
       replicaContext);
-    if (instanceDigest(driver._prepared.get(serviceId)) !== instanceDigest(descriptor) ||
-        observeBoundCurrentCreation(driver, {consensusCreation: origin}).outcome !==
-          CURRENT.CURRENT) {
+    if (instanceDigest(driver._prepared.get(serviceId)) !== instanceDigest(descriptor)) {
       return {...startFailure(SERVICE_INSTANCE_OUTCOME.CONTENT_CONFLICT),
         outcome: SERVICE_INSTANCE_OUTCOME.CONTENT_CONFLICT};
     }
