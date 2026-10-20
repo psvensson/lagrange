@@ -205,7 +205,8 @@ function createRuntimeHandler({
     ),
     executorOutcomeEmitter,
   });
-  handler.logger = QUIET_LOGGER;
+  // Diagnostic-only exact producer error text, never relax admission.
+  handler.logger = console;
   handler.initialize();
   return handler;
 }
