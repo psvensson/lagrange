@@ -2,7 +2,9 @@ name: rsraft-historical-red-first-causes-20261020
 on:
   push:
     branches: [investigate/rsraft-historical-reds-20261020]
-    paths: [.github/workflows/rsraft-historical-red-first-causes-20261020.yml]
+    paths:
+      - .github/workflows/rsraft-historical-red-first-causes-20261020.yml
+      - verification/rsraft-historical-20261020/classify-reds.py
 permissions:
   contents: read
   actions: read
