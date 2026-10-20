@@ -20,7 +20,8 @@ function projectCreationReplicaState(manager, owned, state) {
     sameRetainedCreation(record.origin, origin);
   const observation = manager.observeCurrentCreation({consensusCreation: origin});
   const permitted = state === STATE.STOPPED ? ownsRecord && observation.outcome === CURRENT.ABSENT :
-    observation.outcome === CURRENT.CURRENT && (state !== STATE.STOPPING || ownsRecord);
+    (state === STATE.STARTING || observation.outcome === CURRENT.CURRENT) &&
+      (state !== STATE.STOPPING || ownsRecord);
   if (permitted) {
     manager._replicaStateById.set(replicaId, {state, ownership: OWNERSHIP.CREATION, origin});
   }
