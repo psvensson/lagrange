@@ -144,11 +144,11 @@ function replyToRestartPlan(handler, params) {
 
 async function inventoryAttempt(handler, task) {
   const results = await handler.serviceLifecycleManager.recoverPendingOperations(SKIP_GENERIC_ROWS);
-  if (handler.stopped || handler.restartTask !== task) return stoppedInventory();
+  // MUTATION V1-B: stale journal/inspection returns bypass shutdown lifetime.
   const plans = [];
   for (const entry of nodeEntries(handler, results)) {
     plans.push(await planEntry(handler, entry));
-    if (handler.stopped || handler.restartTask !== task) return stoppedInventory();
+    // MUTATION V1-B: stale journal/inspection returns bypass shutdown lifetime.
   }
   applyMemos(handler, plans);
   task.plansById = new Map(plans.map((plan) => [plan.creation.operationId, plan]));
