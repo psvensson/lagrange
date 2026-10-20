@@ -719,7 +719,8 @@ function replyToExistingReplica(handler, existing, params) {
       if (joined !== undefined) return joined;
       // The previous generic attempt left no owned work. Re-enter through
       // handleCreateReplica's ordinary admission instead of a false ACK.
-      return null;
+      // MUTATION: no installed execution, but falsely claim IN_PROGRESS.
+      return inProgressReply(handler, replicaId);
     }
     handler.logger.info(LOG.CREATE_IN_PROGRESS, {replicaId, nodeId: handler.nodeId});
     return replicaReply(ReplicaOperationResponseStatus.IN_PROGRESS,
