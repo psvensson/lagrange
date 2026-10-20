@@ -44,7 +44,10 @@ test('read-only classification census of the exact 38-file U1 candidate', () => 
         counts: produced.counts,
         problems: produced.problems || [],
         classDelta: delta,
-        observationDelta: observationDelta.slice(0, 15),
+        newObservations: observationDelta.filter((item) => item.before === null)
+          .map((item) => ({path: item.path, after: item.after})),
+        existingDrift: observationDelta.filter((item) => item.before !== null)
+          .map((item) => item.path).slice(0, 12),
         observationDeltaCount: observationDelta.length,
         observationDigest: produced.observationDigest || null,
         oldDigest: stored.digest,
