@@ -1,0 +1,63 @@
+# U1 integrated lab verification and baseline discriminator — 2026-10-20
+
+**Status: measured, NOT approved.** This is a preservation-only evidence note, deliberately committed on a separate evidence branch based on `be25caa5`. It neither changes nor certifies the tested U1 candidate; it is NOT a new authority, a green verdict, a new quest owner, or a main-merge authorization. The existing raft-rs epic/quest log, oracle and independent-verification protocol remain binding.
+
+## Exact subject and comparison
+
+- U1 integration candidate: `be25caa5f0c3612feec662d4feaa9ba28f8f34df`, `refs/heads/work/u1-integration-candidate-20261020`.
+- Pre-U1 comparison: `381750de29af647d446b19adedf1da53eb712093`, `refs/heads/probe/rs-raft-stage1c-381750de2-20261017`.
+- The two remote branch tips were checked before requests. All twelve failing test files were individually read from both refs and their Git **blob SHAs match**. Matching test bytes alone does not prove matching causal failures.
+- Source tests ran on the permitted `tv-dator`, `lenovo-laptop`, `adam-laptop`, `adams-gamla` pool through controller `b4a2e06c193c44b09f1b67d02e8d80f4`. No source test was executed on the cloud controller. File-parallel placement is not distributed five-host certification.
+
+## Candidate: four settled lab batches
+
+| Lab issue | Files | Passed | Failed | Runner-reported assertions |
+| --- | ---: | ---: | ---: | ---: |
+| [#525](https://github.com/psvensson/lagrange-lab/issues/525) | 32 | 29 | 3 | 141 |
+| [#526](https://github.com/psvensson/lagrange-lab/issues/526) | 31 | 27 | 4 | 1,632 |
+| [#527](https://github.com/psvensson/lagrange-lab/issues/527) | 32 | 29 | 3 | 991 |
+| [#553](https://github.com/psvensson/lagrange-lab/issues/553) | 32 | 30 | 2 | 350 |
+| **Total** | **127** | **115** | **12** | **3,114** |
+
+Each row is a terminal `COMPLETE/FAIL` executor result at the same source SHA. This is not the complete ~1,898-file corpus, a final negative-control suite, a mutational certificate, or a verifier approval. Failed files remain FAILED even if many child assertions passed.
+
+### File-level failure ledger
+
+| File | Observed failure/consequence | Lab |
+| --- | --- | --- |
+| `test/raft/raft-rs-backend/committed-membership-census.test.js` | Static exact-caller census rejects added consumers, including participant pause, message-group recipient, WASM genesis. Verify authoritative-reader boundary before changing census. | #525 |
+| `test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js` | Partition write refused `partition_write_cutover_paused`; message-group application durability observation; WASM invalid writer command. | #525 |
+| `test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js` | Retire-call census finds a call that does not syntactically name `runtime:`. Determine exact source call; do not blindly weaken invariant. | #525 |
+| `test/node/replica-create-admission-recovery.test.js` | Unsettled promise and cascaded cancelled child tests. Find first causal wait, not the many secondary cancellations. | #526 |
+| `test/node/replica-handler-owner-path-bypass.test.js` | First outcome-emitter scenario does not settle; nested tests subsequently terminate without running. | #526 |
+| `test/node/replica-handler-cache-state.test.js` | Fresh-create release authority unavailable during cache-only ACTIVE repair; subsequent tests abort. | #526 |
+| `test/node/replica-handler.test.js` | 89-subtest suite aborted; later child tests never ran. Determine first causal error via full log, not its tail. | #526 |
+| `test/partition/participant-release-first-prepare-native.test.js` | **First PREPARE creates durable obligation after production PAUSE.** This is a real safety counterexample, not cosmetic test drift. | #527 |
+| `test/partition/participant-release-prepare-identity-native.test.js` | PREPARE identity/admission proof rejects. | #527 |
+| `test/partition/partition-write-leadership-transfer-committed.test.js` | Serving-write setup fails; review both subtests and exact admission state. | #527 |
+| `test/wasm-service/wasm-strong-write-native-completion.test.js` | `INVALID_WRITER_COMMAND` refusal means no durable proposal (assertion expects exact proposal position). | #553 |
+| `test/wasm-service/wasm-writer-recreation-origin-v1.test.js` | **`OLD_WRITER_REVIVED_AFTER_RECREATION`** deterministic counterexample. | #553 |
+
+Full native logs remain in the private lab's owned `executor.log` for each root request, with terminal comment log digest/length. Bounded, redacted evidence read receipts: [#532](https://github.com/psvensson/lagrange-lab/issues/532), [#533](https://github.com/psvensson/lagrange-lab/issues/533), [#534–#541](https://github.com/psvensson/lagrange-lab/issues/534), [#549–#550](https://github.com/psvensson/lagrange-lab/issues/549), [#554–#561](https://github.com/psvensson/lagrange-lab/issues/554). These are read-only evidence requests, not additional source execution.
+
+## Same-test pre-U1 comparison
+
+| Lab issue | Files | Passed | Failed | Role |
+| --- | ---: | ---: | ---: | --- |
+| [#543](https://github.com/psvensson/lagrange-lab/issues/543) | 3 | 0 | 3 | All three Raft-census/durability failures |
+| [#551](https://github.com/psvensson/lagrange-lab/issues/551) | 7 | 1 | 6 | Four replica/node and two partition files, plus `partition-participant-release-admission` control |
+| [#552](https://github.com/psvensson/lagrange-lab/issues/552) | 1 | 0 | 1 | `participant-release-prepare-identity-native` |
+| [#562](https://github.com/psvensson/lagrange-lab/issues/562) | 2 | 0 | 2 | Both WASM writer failures |
+| **Total** | **13** | **1** | **12** | **Comparison fails at same aggregate file count** |
+
+The comparison result is **not** enough to mark each failure "inherited". Match each *first causal assertion / error / cancellation chain* between exact baseline and candidate. In particular, node parent-suite cancellations and one extra included positive control can obscure mismatched failure identities. Preserve per-file classification explicitly (`SAME_SIGNATURE_INHERITED`, `CHANGED_SIGNATURE`, `NEW`, or `INFRASTRUCTURE`). Do not count file-level aggregate parity as zero regressions.
+
+### Safety and ownership decisions
+
+1. The two **bold** counterexamples are release-relevant safety failures even if inherited from pre-U1. Route to established participant mutation-admission and WASM writer-state owners. Neither may be waived as a pre-existing baseline red for eventual release/certification.
+2. Keep the U1 owner implementation scoped to finality, inventory/recovery lifetime, retirement serialisation, physical custody and journal completion. No unrelated opportunistic fixes in this frozen branch.
+3. Complete the U1 adverse-witness / mutation kill matrix, owner vetoes and 55-item independent checklist against a single frozen candidate. Classification is not independent APPROVE.
+4. Only extend the remaining full corpus in bounded, source-authorized lab batches; retain exact per-file and baseline signatures, first causal failures and log hashes, without suppressing tests or raising ratchets.
+5. The distributed real five-host / GCP recovery, three consecutive frozen-SHA formation certifications, integrated independent closeout and **explicit owner's approval before merge** all remain outstanding.
+
+At this checkpoint `solve/oracle/raft-rs-full-cutover.json` still reports `metric: 8`, `target: 0`, `status: transport-predecessor-in-progress`, `terminalEvidence: null`. This evidence-only note cannot change those facts.
