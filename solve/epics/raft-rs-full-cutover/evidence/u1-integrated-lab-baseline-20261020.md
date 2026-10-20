@@ -88,3 +88,15 @@ No candidate/main change and no U2/activation/GCP distributed certification auth
 The aggregate of candidate test-file *executions* reported so far is **172 runs, 158 PASS and 14 FAIL, 4,219 runner assertions** across six batches (#525, #526, #527, #553, #563 and #567); three of the thirteen positive-selection files also ran successfully in #553. Therefore the exact **distinct** tested files number **169**, with **155 distinct passing files and 14 distinct failing files**, rather than 172 unique files. All failures remain blockers until disposition, not hidden in the overall passing count.
 
 Note the distinction between U1-4's positive suite result and U1-1, U1-2, U1-3, U1-5, U1-6 and U1-7: the latter have not been independently discharged by lab #567.
+
+
+## Continuation, 2026-10-20: bootstrap baseline causal comparison
+
+The same-host immutable pre-U1 [lab #568](https://github.com/psvensson/lagrange-lab/issues/568) completed at `2026-10-20T08:51:42Z`, **0/2 file PASS, 2/2 FAIL, 49 runner assertions**, pinned source `381750de2`. The 8,000-byte first native log slice [#569](https://github.com/psvensson/lagrange-lab/issues/569) identifies **the same first substantive failed subtest in both files** as integrated candidate [#563](https://github.com/psvensson/lagrange-lab/issues/563):
+
+1. Partition activation handler boundary: N2 census, `shutdown retires the handler in the lane before closing the store`, fails on both. Its seven preceding individual N2 scenarios passed on candidate. Classification **SAME_FIRST_FAILED_ORACLE_IN_PRE_U1**, but full differing source-path semantics have not received independent review.
+2. Fresh-join registration runtime replacement: prerequisite seed/bootstrap first fails with `Seed participant release failed`, `release_fact_unavailable`, missing `release_deadline`; both precede any claimed join proof. On candidate the observed seed shared budget was exactly 1,000 ms and was spent around ordinal 14 of 46 cohorts, after 13 successful releases. The code at `src/bootstrap/bootstrap-service-seed-workflow.js` computes **one shared absolute cohort deadline** from `config.leadershipWaitTimeoutMs` and advances it across all cohorts rather than granting 1,000 ms per cohort. This may explain predictable failure under ordinary host contention, but a budget policy change needs owner review and actual latency measurements, not a test timeout increase or pass waiver. Classification **SAME_SEED_RELEASE_PRECONDITION_FAILURE_IN_PRE_U1**.
+
+These two now have *matched first-failure* evidence, stronger than matching file-level failure counts. They remain red for eventual release. No change to U1 code, budget, or oracle is authorized by this record.
+
+The terminal **13/13 positive U1 run** remains [#567](https://github.com/psvensson/lagrange-lab/issues/567). This does not replace the outstanding source-review, mutation-control, full-corpus, Cell compatibility and independent 55-item certification work.
