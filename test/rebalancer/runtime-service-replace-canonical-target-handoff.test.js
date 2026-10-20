@@ -268,8 +268,25 @@ test('runtime-service REPLACE keeps one canonical target through the next ' +
     storageAdmissionService,
     systemTableCache: cache,
   });
-  coordinator.logger = QUIET_LOGGER;
-  coordinator.workflowOwner.logger = QUIET_LOGGER;
+  // Diagnostic-only owner ingress witness: the ordinary test still asserts
+  // exactly its original result, but reports the actual workflow failure
+  // rather than the listener's 'UNKNOWN' fallback.
+  coordinator.logger = console;
+  coordinator.workflowOwner.logger = console;
+  coordinator.on(REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED, (event) => {
+    console.error('U1_REPLACE_OWNER_FAILURE_EVENT=' + JSON.stringify({
+      error: event?.error,
+      errorMessage: event?.errorMessage,
+      operationId: event?.operation?.operationId,
+      workflowStep: event?.operation?.workflowStep,
+      operationErrorMessage: event?.operation?.errorMessage,
+      operationType: event?.operation?.type,
+      entityId: event?.operation?.entityId,
+    }));
+  });
+  coordinator.on(REBALANCE_COORDINATOR_EVENT.OUTCOME_ROUTED, (event) => {
+    console.error('U1_REPLACE_OWNER_ROUTED_OUTCOME=' + JSON.stringify(event));
+  });
 
   for (const nodeId of [
     SOURCE_NODE_ID,
