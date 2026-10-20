@@ -1,0 +1,140 @@
+lab test: adam-laptop: ordinary (1 files) cores=8 mem=15.5GiB speed x1.96
+[adam-laptop] placement-shell=2073913
+[adam-laptop] placement-head=c8638eb93dc37ecf7c2c167f0176fe4756ee32b2
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2 mode:local retry:0 timeout: lanecap:7
+[adam-laptop] placement-pid=2074340
+[adam-laptop] # test-files planned=1
+[adam-laptop] classified lane ordinary: 1 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 79C (coretemp/Package id 0) nvme 19C (nvme/Composite) - CPU package 79C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 40C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] not ok test/raft/raft-rs-backend/single-path-partition-cutover.test.js (5 assertions, 15675ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] {"level":50,"time":"2026-10-20T16:29:35.733Z","nodeId":"test-node","pid":2074356,"subsystem":"bootstrap","nodeId":"test-node","phase":"partitions","duration":12721,"error":"Seed participant release failed: {\"partitionId\":\"sql_write_operations-p1\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":\"d9c83f328f5952d2111aa96889220507cc560075c99b095f8cb14f475217e920\",\"partitionId\":\"sql_write_operations-p1\",\"phase\":\"enable\",\"missingFact\":\"release_deadline\",\"owner\":\"550e8400-e29b-41d4-a716-446655449961\"},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":3000,\"elapsedMs\":3003,\"remainingMs\":0,\"ordinal\":43,\"total\":46,\"completed\":42,\"attemptCount\":1,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}","stack":"Error: Seed participant release failed: {\"partitionId\":\"sql_write_operations-p1\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":\"d9c83f328f5952d2111aa96889220507cc560075c99b095f8cb14f475217e920\",\"partitionId\":\"sql_write_operations-p1\",\"phase\":\"enable\",\"missingFact\":\"release_deadline\",\"owner\":\"550e8400-e29b-41d4-a716-446655449961\"},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":3000,\"elapsedMs\":3003,\"remainingMs\":0,\"ordinal\":43,\"total\":46,\"completed\":42,\"attemptCount\":1,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}\n    at BootstrapService.releaseSeedParticipantCohorts (file:///home/peter/projects/lagrange/test-output/placement-worktrees/c8638eb93dc3-mvgwdewk-3987855/src/bootstrap/bootstrap-service-seed-workflow.js:348:17)\n    at runNextTicks (node:internal/process/task_queues:64:5)\n    at listOnTimeout (node:internal/timers:547:9)\n    at process.processTimers (node:internal/timers:521:7)\n    at async Object.run (file:///home/peter/projects/lagrange/test-output/placement-worktrees/c8638eb93dc3-mvgwdewk-3987855/src/bootstrap/bootstrap-service-seed-workflow.js:413:13)\n    at async StartupPipelineRunner.runWorkflow (file:///home/peter/projects/lagrange/test-output/placement-worktrees/c8638eb93dc3-mvgwdewk-3987855/src/bootstrap/pipeline/startup-pipeline-runner.js:169:9)\n    at async BootstrapService.bootstrap (file:///home/peter/projects/lagrange/test-output/placement-worktrees/c8638eb93dc3-mvgwdewk-3987855/src/bootstrap/bootstrap-service-seed-workflow.js:527:9)\n    at async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/c8638eb93dc3-mvgwdewk-3987855/test/raft/raft-rs-backend/single-path-partition-cutover.test.js:299:27)\n    at async Test.run (node:internal/test_runner/test:1054:7)\n    at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)","servicesCreated":141,"contextNodeId":"550e8400-e29b-41d4-a716-446655449961","msg":"Bootstrap failed"}
+[adam-laptop] # Subtest: seed bootstraps and serves a write on rs-raft by default
+[adam-laptop] not ok 1 - seed bootstraps and serves a write on rs-raft by default
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 13485.500438
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/c8638eb93dc3-mvgwdewk-3987855/test/raft/raft-rs-backend/single-path-partition-cutover.test.js:265:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     the seed bootstraps through production construction
+[adam-laptop]     
+[adam-laptop]     false !== true
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected: true
+[adam-laptop]   actual: false
+[adam-laptop]   operator: 'strictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/c8638eb93dc3-mvgwdewk-3987855/test/raft/raft-rs-backend/single-path-partition-cutover.test.js:322:14)
+[adam-laptop]     process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: omitted selection cannot reach the retired backend
+[adam-laptop] ok 2 - omitted selection cannot reach the retired backend
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 135.349638
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the write path has one durable log
+[adam-laptop] not ok 3 - the write path has one durable log
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 55.077505
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/c8638eb93dc3-mvgwdewk-3987855/test/raft/raft-rs-backend/single-path-partition-cutover.test.js:442:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     every write is acknowledged: [{"success":false,"error":"The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried","failureCode":"partition_write_cutover_paused","deferRetry":true,"retryAfterMs":100,"partitionId":"one-durable-log"},{"success":false,"error":"The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried","failureCode":"partition_write_cutover_paused","deferRetry":true,"retryAfterMs":100,"partitionId":"one-durable-log"},{"success":false,"error":"The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried","failureCode":"partition_write_cutover_paused","deferRetry":true,"retryAfterMs":100,"partitionId":"one-durable-log"}]
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]       [
+[adam-laptop]     +   false,
+[adam-laptop]     +   false,
+[adam-laptop]     +   false
+[adam-laptop]     -   true,
+[adam-laptop]     -   true,
+[adam-laptop]     -   true
+[adam-laptop]       ]
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected:
+[adam-laptop]     0: true
+[adam-laptop]     1: true
+[adam-laptop]     2: true
+[adam-laptop]   actual:
+[adam-laptop]     0: false
+[adam-laptop]     1: false
+[adam-laptop]     2: false
+[adam-laptop]   operator: 'deepStrictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/c8638eb93dc3-mvgwdewk-3987855/test/raft/raft-rs-backend/single-path-partition-cutover.test.js:451:14)
+[adam-laptop]     process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: legacy durable consensus state fails closed
+[adam-laptop] ok 4 - legacy durable consensus state fails closed
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 73.317564
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: restart serves writes from the rs-raft store
+[adam-laptop] not ok 5 - restart serves writes from the rs-raft store
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 54.09804
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/c8638eb93dc3-mvgwdewk-3987855/test/raft/raft-rs-backend/single-path-partition-cutover.test.js:531:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     every write is acknowledged: [{"success":false,"error":"The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried","failureCode":"partition_write_cutover_paused","deferRetry":true,"retryAfterMs":100,"partitionId":"restart-rs-store"},{"success":false,"error":"The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried","failureCode":"partition_write_cutover_paused","deferRetry":true,"retryAfterMs":100,"partitionId":"restart-rs-store"},{"success":false,"error":"The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried","failureCode":"partition_write_cutover_paused","deferRetry":true,"retryAfterMs":100,"partitionId":"restart-rs-store"}]
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]       [
+[adam-laptop]     +   false,
+[adam-laptop]     +   false,
+[adam-laptop]     +   false
+[adam-laptop]     -   true,
+[adam-laptop]     -   true,
+[adam-laptop]     -   true
+[adam-laptop]       ]
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected:
+[adam-laptop]     0: true
+[adam-laptop]     1: true
+[adam-laptop]     2: true
+[adam-laptop]   actual:
+[adam-laptop]     0: false
+[adam-laptop]     1: false
+[adam-laptop]     2: false
+[adam-laptop]   operator: 'deepStrictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/c8638eb93dc3-mvgwdewk-3987855/test/raft/raft-rs-backend/single-path-partition-cutover.test.js:543:16)
+[adam-laptop]     process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] 1..5
+[adam-laptop] # tests 5
+[adam-laptop] # suites 0
+[adam-laptop] # pass 2
+[adam-laptop] # fail 3
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 13843.159829
+[adam-laptop] # time=15675ms
+[adam-laptop] # test-files total=1 pass=0 fail=1 assertions=5
+[adam-laptop] {"schema":"participant-release-trace-file/1","file":"/tmp/lagrange-control-trace-ddgcc4/trace.json","sha256":"dc8240b36bb7114577a0011c567c51f46bc29520fef978421e71c9607c2fce64","bytes":4082257,"recordedCount":1551,"droppedCount":0,"captureErrorCount":0,"incompleteCount":0}
+lab test: adam-laptop: # test-files total=1 pass=0 fail=1 assertions=5
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=1 pass=0 fail=1 assertions=5

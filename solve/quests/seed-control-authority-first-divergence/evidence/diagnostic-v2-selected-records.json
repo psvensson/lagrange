@@ -1,0 +1,1894 @@
+{
+  "schema": "selected-trace-records/1",
+  "fullArtifact": {
+    "sha256": "dc8240b36bb7114577a0011c567c51f46bc29520fef978421e71c9607c2fce64",
+    "bytes": 4082257,
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/seed-control-authority-first-divergence--diagnostic-v2-trace.json"
+  },
+  "selection": "callOrdinal in [16027,19483,19484] or callOrdinal >= 19485; original record order and all recorded fields retained",
+  "reportCounts": {
+    "schema": "participant-release-delivery-trace/1",
+    "cap": 8192,
+    "matchedCount": 1551,
+    "recordedCount": 1551,
+    "completionCount": 1551,
+    "droppedCount": 0,
+    "captureErrorCount": 0,
+    "incompleteCount": 0
+  },
+  "actions": {
+    "release": 126,
+    "inspect": 504,
+    "pause": 378,
+    "enable": 42,
+    "observe_applied_position": 126,
+    "resume": 375
+  },
+  "outcomes": {
+    "cut_over": 125,
+    "observed": 1050,
+    "resumed": 375,
+    "release_fact_unavailable": 1
+  },
+  "records": [
+    {
+      "startedAtMs": 1792513772717,
+      "settledAtMs": 1792513772794,
+      "installationOrdinal": 1,
+      "routerId": "123737f4-d6ac-46ef-966e-cb1d13d847a6",
+      "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+      "callOrdinal": 16027,
+      "completionOrdinal": 17,
+      "targetAddress": "550e8400-e29b-41d4-a716-446655449961/service/replica-handler",
+      "request": {
+        "action": "release",
+        "trigger": "fresh-seed",
+        "partitionId": "sql_transactions-p1",
+        "replicaId": null,
+        "targetBuildDigest": "353f097bed71e6ffdf7858e1ab91798e49542b5ce73c42517d92b3fbb7c9090e",
+        "deadlineAtMs": 1792513775716,
+        "release": null,
+        "target": null,
+        "attempt": null,
+        "cohort": null
+      },
+      "response": {
+        "acknowledged": true,
+        "deliveryState": "delivered",
+        "noHandler": false,
+        "errorCode": null,
+        "answer": {
+          "outcome": "cut_over",
+          "releaseId": "a0922b6cfcd97caa7ed0dee95edf8027b5c4a1613cc08b1729054cf8fe6f99bc",
+          "partitionId": "sql_transactions-p1",
+          "phase": "release",
+          "reason": null,
+          "queryState": null,
+          "queryEnforcement": null,
+          "retryAfterMs": null,
+          "missingFact": null,
+          "controlPartitionId": null,
+          "controlNodeId": null,
+          "controlOutcome": null,
+          "leaderReplicaId": null,
+          "leaderAddress": null,
+          "buildDigest": null,
+          "release": {
+            "releaseId": "a0922b6cfcd97caa7ed0dee95edf8027b5c4a1613cc08b1729054cf8fe6f99bc",
+            "partitionId": "sql_transactions-p1",
+            "protocolVersion": 1,
+            "targetBuildDigest": "353f097bed71e6ffdf7858e1ab91798e49542b5ce73c42517d92b3fbb7c9090e",
+            "configurationKey": "[[\"2734552253535212872\",\"6600243378791833037\",\"7691077697885072888\"],[],[],[],false]",
+            "membershipGenerationIndex": 0
+          },
+          "generation": null,
+          "work": null,
+          "origin": null,
+          "membership": null,
+          "blockedDrain": null
+        }
+      },
+      "error": null
+    },
+    {
+      "startedAtMs": 1792513775695,
+      "settledAtMs": 1792513775719,
+      "installationOrdinal": 1,
+      "routerId": "123737f4-d6ac-46ef-966e-cb1d13d847a6",
+      "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+      "callOrdinal": 19483,
+      "completionOrdinal": 1551,
+      "targetAddress": "550e8400-e29b-41d4-a716-446655449961/service/replica-handler",
+      "request": {
+        "action": "release",
+        "trigger": "fresh-seed",
+        "partitionId": "sql_write_operations-p1",
+        "replicaId": null,
+        "targetBuildDigest": "353f097bed71e6ffdf7858e1ab91798e49542b5ce73c42517d92b3fbb7c9090e",
+        "deadlineAtMs": 1792513775716,
+        "release": null,
+        "target": null,
+        "attempt": null,
+        "cohort": null
+      },
+      "response": {
+        "acknowledged": true,
+        "deliveryState": "delivered",
+        "noHandler": false,
+        "errorCode": null,
+        "answer": {
+          "outcome": "release_fact_unavailable",
+          "releaseId": "d9c83f328f5952d2111aa96889220507cc560075c99b095f8cb14f475217e920",
+          "partitionId": "sql_write_operations-p1",
+          "phase": "enable",
+          "reason": null,
+          "queryState": null,
+          "queryEnforcement": null,
+          "retryAfterMs": null,
+          "missingFact": "release_deadline",
+          "controlPartitionId": null,
+          "controlNodeId": null,
+          "controlOutcome": null,
+          "leaderReplicaId": null,
+          "leaderAddress": null,
+          "buildDigest": null,
+          "release": null,
+          "generation": null,
+          "work": null,
+          "origin": null,
+          "membership": null,
+          "blockedDrain": null
+        }
+      },
+      "error": null
+    },
+    {
+      "startedAtMs": 1792513775696,
+      "settledAtMs": 1792513775712,
+      "installationOrdinal": 1,
+      "routerId": "123737f4-d6ac-46ef-966e-cb1d13d847a6",
+      "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+      "callOrdinal": 19484,
+      "completionOrdinal": 1544,
+      "targetAddress": "550e8400-e29b-41d4-a716-446655449961/service/replica-handler",
+      "request": {
+        "action": "release",
+        "trigger": "fresh-seed",
+        "partitionId": "sql_transactions-p1",
+        "replicaId": null,
+        "targetBuildDigest": "353f097bed71e6ffdf7858e1ab91798e49542b5ce73c42517d92b3fbb7c9090e",
+        "deadlineAtMs": 1792513775716,
+        "release": null,
+        "target": null,
+        "attempt": null,
+        "cohort": null
+      },
+      "response": {
+        "acknowledged": true,
+        "deliveryState": "delivered",
+        "noHandler": false,
+        "errorCode": null,
+        "answer": {
+          "outcome": "cut_over",
+          "releaseId": "a0922b6cfcd97caa7ed0dee95edf8027b5c4a1613cc08b1729054cf8fe6f99bc",
+          "partitionId": "sql_transactions-p1",
+          "phase": "release",
+          "reason": null,
+          "queryState": null,
+          "queryEnforcement": null,
+          "retryAfterMs": null,
+          "missingFact": null,
+          "controlPartitionId": null,
+          "controlNodeId": null,
+          "controlOutcome": null,
+          "leaderReplicaId": null,
+          "leaderAddress": null,
+          "buildDigest": null,
+          "release": {
+            "releaseId": "a0922b6cfcd97caa7ed0dee95edf8027b5c4a1613cc08b1729054cf8fe6f99bc",
+            "partitionId": "sql_transactions-p1",
+            "protocolVersion": 1,
+            "targetBuildDigest": "353f097bed71e6ffdf7858e1ab91798e49542b5ce73c42517d92b3fbb7c9090e",
+            "configurationKey": "[[\"2734552253535212872\",\"6600243378791833037\",\"7691077697885072888\"],[],[],[],false]",
+            "membershipGenerationIndex": 0
+          },
+          "generation": null,
+          "work": null,
+          "origin": null,
+          "membership": null,
+          "blockedDrain": null
+        }
+      },
+      "error": null
+    },
+    {
+      "startedAtMs": 1792513775698,
+      "settledAtMs": 1792513775700,
+      "installationOrdinal": 1,
+      "routerId": "123737f4-d6ac-46ef-966e-cb1d13d847a6",
+      "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+      "callOrdinal": 19485,
+      "completionOrdinal": 1535,
+      "targetAddress": "550e8400-e29b-41d4-a716-446655449961/service/replica-handler",
+      "request": {
+        "action": "inspect",
+        "trigger": null,
+        "partitionId": "sql_transactions-p1",
+        "replicaId": "sql_transactions-p1-r1",
+        "targetBuildDigest": null,
+        "deadlineAtMs": 1792513775716,
+        "release": null,
+        "target": null,
+        "attempt": null,
+        "cohort": null
+      },
+      "response": {
+        "acknowledged": true,
+        "deliveryState": "delivered",
+        "noHandler": false,
+        "errorCode": null,
+        "answer": {
+          "outcome": "observed",
+          "releaseId": null,
+          "partitionId": "sql_transactions-p1",
+          "phase": null,
+          "reason": null,
+          "queryState": "clear",
+          "queryEnforcement": "enforced",
+          "retryAfterMs": null,
+          "missingFact": null,
+          "controlPartitionId": null,
+          "controlNodeId": null,
+          "controlOutcome": null,
+          "leaderReplicaId": "sql_transactions-p1-r1",
+          "leaderAddress": "550e8400-e29b-41d4-a716-446655449961/partition/sql_transactions-p1-r1",
+          "buildDigest": "353f097bed71e6ffdf7858e1ab91798e49542b5ce73c42517d92b3fbb7c9090e",
+          "release": null,
+          "generation": {
+            "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+            "ownerIncarnation": 1,
+            "replicaId": "sql_transactions-p1-r1",
+            "lifecycleIncarnation": "a2b3ff78-7795-46d6-aad7-b9fc6abbabf1",
+            "runtimeGeneration": 1,
+            "connectionGeneration": 114,
+            "admissionGeneration": 383
+          },
+          "work": {
+            "sqliteTransactionOpen": false,
+            "participantStaging": false,
+            "participantPrepared": 0,
+            "proposals": 0,
+            "pendingOutcomes": 0,
+            "appliedIndex": 2,
+            "commitIndex": 2,
+            "lastIndex": 2
+          },
+          "origin": {
+            "originIndex": 2,
+            "originTerm": 1
+          },
+          "membership": {
+            "kind": "committed",
+            "voters": [
+              "2734552253535212872",
+              "6600243378791833037",
+              "7691077697885072888"
+            ],
+            "votersOutgoing": [],
+            "learners": [],
+            "learnersNext": [],
+            "appliedIndex": 2,
+            "configurationKey": "[[\"2734552253535212872\",\"6600243378791833037\",\"7691077697885072888\"],[],[],[],false]",
+            "membershipGenerationIndex": 0,
+            "commitIndex": 2,
+            "term": 1,
+            "leaderId": "sql_transactions-p1-r1",
+            "gateOpen": true,
+            "identities": [
+              {
+                "peerId": "2734552253535212872",
+                "replicaId": "sql_transactions-p1-r1"
+              },
+              {
+                "peerId": "6600243378791833037",
+                "replicaId": "sql_transactions-p1-r3"
+              },
+              {
+                "peerId": "7691077697885072888",
+                "replicaId": "sql_transactions-p1-r2"
+              }
+            ]
+          },
+          "blockedDrain": null
+        }
+      },
+      "error": null
+    },
+    {
+      "startedAtMs": 1792513775698,
+      "settledAtMs": 1792513775700,
+      "installationOrdinal": 1,
+      "routerId": "123737f4-d6ac-46ef-966e-cb1d13d847a6",
+      "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+      "callOrdinal": 19486,
+      "completionOrdinal": 1536,
+      "targetAddress": "550e8400-e29b-41d4-a716-446655449961/service/replica-handler",
+      "request": {
+        "action": "inspect",
+        "trigger": null,
+        "partitionId": "sql_transactions-p1",
+        "replicaId": "sql_transactions-p1-r2",
+        "targetBuildDigest": null,
+        "deadlineAtMs": 1792513775716,
+        "release": null,
+        "target": null,
+        "attempt": null,
+        "cohort": null
+      },
+      "response": {
+        "acknowledged": true,
+        "deliveryState": "delivered",
+        "noHandler": false,
+        "errorCode": null,
+        "answer": {
+          "outcome": "observed",
+          "releaseId": null,
+          "partitionId": "sql_transactions-p1",
+          "phase": null,
+          "reason": null,
+          "queryState": "clear",
+          "queryEnforcement": "enforced",
+          "retryAfterMs": null,
+          "missingFact": null,
+          "controlPartitionId": null,
+          "controlNodeId": null,
+          "controlOutcome": null,
+          "leaderReplicaId": "sql_transactions-p1-r1",
+          "leaderAddress": "550e8400-e29b-41d4-a716-446655449961/partition/sql_transactions-p1-r1",
+          "buildDigest": "353f097bed71e6ffdf7858e1ab91798e49542b5ce73c42517d92b3fbb7c9090e",
+          "release": null,
+          "generation": {
+            "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+            "ownerIncarnation": 1,
+            "replicaId": "sql_transactions-p1-r2",
+            "lifecycleIncarnation": "b81cbf00-cdc7-46dc-8a7c-e3420715b155",
+            "runtimeGeneration": 1,
+            "connectionGeneration": 128,
+            "admissionGeneration": 381
+          },
+          "work": {
+            "sqliteTransactionOpen": false,
+            "participantStaging": false,
+            "participantPrepared": 0,
+            "proposals": 0,
+            "pendingOutcomes": 0,
+            "appliedIndex": 2,
+            "commitIndex": 2,
+            "lastIndex": 2
+          },
+          "origin": {
+            "originIndex": 2,
+            "originTerm": 1
+          },
+          "membership": {
+            "kind": "committed",
+            "voters": [
+              "2734552253535212872",
+              "6600243378791833037",
+              "7691077697885072888"
+            ],
+            "votersOutgoing": [],
+            "learners": [],
+            "learnersNext": [],
+            "appliedIndex": 2,
+            "configurationKey": "[[\"2734552253535212872\",\"6600243378791833037\",\"7691077697885072888\"],[],[],[],false]",
+            "membershipGenerationIndex": 0,
+            "commitIndex": 2,
+            "term": 1,
+            "leaderId": "sql_transactions-p1-r1",
+            "gateOpen": true,
+            "identities": [
+              {
+                "peerId": "2734552253535212872",
+                "replicaId": "sql_transactions-p1-r1"
+              },
+              {
+                "peerId": "6600243378791833037",
+                "replicaId": "sql_transactions-p1-r3"
+              },
+              {
+                "peerId": "7691077697885072888",
+                "replicaId": "sql_transactions-p1-r2"
+              }
+            ]
+          },
+          "blockedDrain": null
+        }
+      },
+      "error": null
+    },
+    {
+      "startedAtMs": 1792513775698,
+      "settledAtMs": 1792513775700,
+      "installationOrdinal": 1,
+      "routerId": "123737f4-d6ac-46ef-966e-cb1d13d847a6",
+      "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+      "callOrdinal": 19487,
+      "completionOrdinal": 1537,
+      "targetAddress": "550e8400-e29b-41d4-a716-446655449961/service/replica-handler",
+      "request": {
+        "action": "inspect",
+        "trigger": null,
+        "partitionId": "sql_transactions-p1",
+        "replicaId": "sql_transactions-p1-r3",
+        "targetBuildDigest": null,
+        "deadlineAtMs": 1792513775716,
+        "release": null,
+        "target": null,
+        "attempt": null,
+        "cohort": null
+      },
+      "response": {
+        "acknowledged": true,
+        "deliveryState": "delivered",
+        "noHandler": false,
+        "errorCode": null,
+        "answer": {
+          "outcome": "observed",
+          "releaseId": null,
+          "partitionId": "sql_transactions-p1",
+          "phase": null,
+          "reason": null,
+          "queryState": "clear",
+          "queryEnforcement": "enforced",
+          "retryAfterMs": null,
+          "missingFact": null,
+          "controlPartitionId": null,
+          "controlNodeId": null,
+          "controlOutcome": null,
+          "leaderReplicaId": "sql_transactions-p1-r1",
+          "leaderAddress": "550e8400-e29b-41d4-a716-446655449961/partition/sql_transactions-p1-r1",
+          "buildDigest": "353f097bed71e6ffdf7858e1ab91798e49542b5ce73c42517d92b3fbb7c9090e",
+          "release": null,
+          "generation": {
+            "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+            "ownerIncarnation": 1,
+            "replicaId": "sql_transactions-p1-r3",
+            "lifecycleIncarnation": "bb1d7fc5-280a-4ff3-89fe-4643359151d2",
+            "runtimeGeneration": 1,
+            "connectionGeneration": 132,
+            "admissionGeneration": 382
+          },
+          "work": {
+            "sqliteTransactionOpen": false,
+            "participantStaging": false,
+            "participantPrepared": 0,
+            "proposals": 0,
+            "pendingOutcomes": 0,
+            "appliedIndex": 2,
+            "commitIndex": 2,
+            "lastIndex": 2
+          },
+          "origin": {
+            "originIndex": 2,
+            "originTerm": 1
+          },
+          "membership": {
+            "kind": "committed",
+            "voters": [
+              "2734552253535212872",
+              "6600243378791833037",
+              "7691077697885072888"
+            ],
+            "votersOutgoing": [],
+            "learners": [],
+            "learnersNext": [],
+            "appliedIndex": 2,
+            "configurationKey": "[[\"2734552253535212872\",\"6600243378791833037\",\"7691077697885072888\"],[],[],[],false]",
+            "membershipGenerationIndex": 0,
+            "commitIndex": 2,
+            "term": 1,
+            "leaderId": "sql_transactions-p1-r1",
+            "gateOpen": true,
+            "identities": [
+              {
+                "peerId": "2734552253535212872",
+                "replicaId": "sql_transactions-p1-r1"
+              },
+              {
+                "peerId": "6600243378791833037",
+                "replicaId": "sql_transactions-p1-r3"
+              },
+              {
+                "peerId": "7691077697885072888",
+                "replicaId": "sql_transactions-p1-r2"
+              }
+            ]
+          },
+          "blockedDrain": null
+        }
+      },
+      "error": null
+    },
+    {
+      "startedAtMs": 1792513775700,
+      "settledAtMs": 1792513775706,
+      "installationOrdinal": 1,
+      "routerId": "123737f4-d6ac-46ef-966e-cb1d13d847a6",
+      "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+      "callOrdinal": 19488,
+      "completionOrdinal": 1538,
+      "targetAddress": "550e8400-e29b-41d4-a716-446655449961/service/replica-handler",
+      "request": {
+        "action": "pause",
+        "trigger": null,
+        "partitionId": "sql_transactions-p1",
+        "replicaId": "sql_transactions-p1-r1",
+        "targetBuildDigest": null,
+        "deadlineAtMs": 1792513775716,
+        "release": {
+          "releaseId": "a0922b6cfcd97caa7ed0dee95edf8027b5c4a1613cc08b1729054cf8fe6f99bc",
+          "partitionId": "sql_transactions-p1",
+          "protocolVersion": 1,
+          "targetBuildDigest": "353f097bed71e6ffdf7858e1ab91798e49542b5ce73c42517d92b3fbb7c9090e",
+          "configurationKey": "[[\"2734552253535212872\",\"6600243378791833037\",\"7691077697885072888\"],[],[],[],false]",
+          "membershipGenerationIndex": 0
+        },
+        "target": {
+          "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+          "ownerIncarnation": 1,
+          "replicaId": "sql_transactions-p1-r1",
+          "lifecycleIncarnation": "a2b3ff78-7795-46d6-aad7-b9fc6abbabf1",
+          "runtimeGeneration": 1,
+          "connectionGeneration": 114,
+          "admissionGeneration": 383
+        },
+        "attempt": {
+          "leaderReplicaId": "sql_transactions-p1-r1",
+          "term": 1,
+          "leaderLifecycleIncarnation": "a2b3ff78-7795-46d6-aad7-b9fc6abbabf1",
+          "deadlineAtMs": 1792513775716
+        },
+        "cohort": null
+      },
+      "response": {
+        "acknowledged": true,
+        "deliveryState": "delivered",
+        "noHandler": false,
+        "errorCode": null,
+        "answer": {
+          "outcome": "observed",
+          "releaseId": null,
+          "partitionId": "sql_transactions-p1",
+          "phase": null,
+          "reason": null,
+          "queryState": "clear",
+          "queryEnforcement": "enforced",
+          "retryAfterMs": null,
+          "missingFact": null,
+          "controlPartitionId": null,
+          "controlNodeId": null,
+          "controlOutcome": null,
+          "leaderReplicaId": "sql_transactions-p1-r1",
+          "leaderAddress": "550e8400-e29b-41d4-a716-446655449961/partition/sql_transactions-p1-r1",
+          "buildDigest": "353f097bed71e6ffdf7858e1ab91798e49542b5ce73c42517d92b3fbb7c9090e",
+          "release": null,
+          "generation": {
+            "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+            "ownerIncarnation": 1,
+            "replicaId": "sql_transactions-p1-r1",
+            "lifecycleIncarnation": "a2b3ff78-7795-46d6-aad7-b9fc6abbabf1",
+            "runtimeGeneration": 1,
+            "connectionGeneration": 114,
+            "admissionGeneration": 383
+          },
+          "work": {
+            "sqliteTransactionOpen": false,
+            "participantStaging": false,
+            "participantPrepared": 0,
+            "proposals": 0,
+            "pendingOutcomes": 0,
+            "appliedIndex": 2,
+            "commitIndex": 2,
+            "lastIndex": 2
+          },
+          "origin": {
+            "originIndex": 2,
+            "originTerm": 1
+          },
+          "membership": {
+            "kind": "committed",
+            "voters": [
+              "2734552253535212872",
+              "6600243378791833037",
+              "7691077697885072888"
+            ],
+            "votersOutgoing": [],
+            "learners": [],
+            "learnersNext": [],
+            "appliedIndex": 2,
+            "configurationKey": "[[\"2734552253535212872\",\"6600243378791833037\",\"7691077697885072888\"],[],[],[],false]",
+            "membershipGenerationIndex": 0,
+            "commitIndex": 2,
+            "term": 1,
+            "leaderId": "sql_transactions-p1-r1",
+            "gateOpen": true,
+            "identities": [
+              {
+                "peerId": "2734552253535212872",
+                "replicaId": "sql_transactions-p1-r1"
+              },
+              {
+                "peerId": "6600243378791833037",
+                "replicaId": "sql_transactions-p1-r3"
+              },
+              {
+                "peerId": "7691077697885072888",
+                "replicaId": "sql_transactions-p1-r2"
+              }
+            ]
+          },
+          "blockedDrain": null
+        }
+      },
+      "error": null
+    },
+    {
+      "startedAtMs": 1792513775701,
+      "settledAtMs": 1792513775706,
+      "installationOrdinal": 1,
+      "routerId": "123737f4-d6ac-46ef-966e-cb1d13d847a6",
+      "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+      "callOrdinal": 19489,
+      "completionOrdinal": 1539,
+      "targetAddress": "550e8400-e29b-41d4-a716-446655449961/service/replica-handler",
+      "request": {
+        "action": "pause",
+        "trigger": null,
+        "partitionId": "sql_transactions-p1",
+        "replicaId": "sql_transactions-p1-r2",
+        "targetBuildDigest": null,
+        "deadlineAtMs": 1792513775716,
+        "release": {
+          "releaseId": "a0922b6cfcd97caa7ed0dee95edf8027b5c4a1613cc08b1729054cf8fe6f99bc",
+          "partitionId": "sql_transactions-p1",
+          "protocolVersion": 1,
+          "targetBuildDigest": "353f097bed71e6ffdf7858e1ab91798e49542b5ce73c42517d92b3fbb7c9090e",
+          "configurationKey": "[[\"2734552253535212872\",\"6600243378791833037\",\"7691077697885072888\"],[],[],[],false]",
+          "membershipGenerationIndex": 0
+        },
+        "target": {
+          "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+          "ownerIncarnation": 1,
+          "replicaId": "sql_transactions-p1-r2",
+          "lifecycleIncarnation": "b81cbf00-cdc7-46dc-8a7c-e3420715b155",
+          "runtimeGeneration": 1,
+          "connectionGeneration": 128,
+          "admissionGeneration": 381
+        },
+        "attempt": {
+          "leaderReplicaId": "sql_transactions-p1-r1",
+          "term": 1,
+          "leaderLifecycleIncarnation": "a2b3ff78-7795-46d6-aad7-b9fc6abbabf1",
+          "deadlineAtMs": 1792513775716
+        },
+        "cohort": null
+      },
+      "response": {
+        "acknowledged": true,
+        "deliveryState": "delivered",
+        "noHandler": false,
+        "errorCode": null,
+        "answer": {
+          "outcome": "observed",
+          "releaseId": null,
+          "partitionId": "sql_transactions-p1",
+          "phase": null,
+          "reason": null,
+          "queryState": "clear",
+          "queryEnforcement": "enforced",
+          "retryAfterMs": null,
+          "missingFact": null,
+          "controlPartitionId": null,
+          "controlNodeId": null,
+          "controlOutcome": null,
+          "leaderReplicaId": "sql_transactions-p1-r1",
+          "leaderAddress": "550e8400-e29b-41d4-a716-446655449961/partition/sql_transactions-p1-r1",
+          "buildDigest": "353f097bed71e6ffdf7858e1ab91798e49542b5ce73c42517d92b3fbb7c9090e",
+          "release": null,
+          "generation": {
+            "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+            "ownerIncarnation": 1,
+            "replicaId": "sql_transactions-p1-r2",
+            "lifecycleIncarnation": "b81cbf00-cdc7-46dc-8a7c-e3420715b155",
+            "runtimeGeneration": 1,
+            "connectionGeneration": 128,
+            "admissionGeneration": 384
+          },
+          "work": {
+            "sqliteTransactionOpen": false,
+            "participantStaging": false,
+            "participantPrepared": 0,
+            "proposals": 0,
+            "pendingOutcomes": 0,
+            "appliedIndex": 2,
+            "commitIndex": 2,
+            "lastIndex": 2
+          },
+          "origin": {
+            "originIndex": 2,
+            "originTerm": 1
+          },
+          "membership": {
+            "kind": "committed",
+            "voters": [
+              "2734552253535212872",
+              "6600243378791833037",
+              "7691077697885072888"
+            ],
+            "votersOutgoing": [],
+            "learners": [],
+            "learnersNext": [],
+            "appliedIndex": 2,
+            "configurationKey": "[[\"2734552253535212872\",\"6600243378791833037\",\"7691077697885072888\"],[],[],[],false]",
+            "membershipGenerationIndex": 0,
+            "commitIndex": 2,
+            "term": 1,
+            "leaderId": "sql_transactions-p1-r1",
+            "gateOpen": true,
+            "identities": [
+              {
+                "peerId": "2734552253535212872",
+                "replicaId": "sql_transactions-p1-r1"
+              },
+              {
+                "peerId": "6600243378791833037",
+                "replicaId": "sql_transactions-p1-r3"
+              },
+              {
+                "peerId": "7691077697885072888",
+                "replicaId": "sql_transactions-p1-r2"
+              }
+            ]
+          },
+          "blockedDrain": null
+        }
+      },
+      "error": null
+    },
+    {
+      "startedAtMs": 1792513775701,
+      "settledAtMs": 1792513775706,
+      "installationOrdinal": 1,
+      "routerId": "123737f4-d6ac-46ef-966e-cb1d13d847a6",
+      "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+      "callOrdinal": 19490,
+      "completionOrdinal": 1540,
+      "targetAddress": "550e8400-e29b-41d4-a716-446655449961/service/replica-handler",
+      "request": {
+        "action": "pause",
+        "trigger": null,
+        "partitionId": "sql_transactions-p1",
+        "replicaId": "sql_transactions-p1-r3",
+        "targetBuildDigest": null,
+        "deadlineAtMs": 1792513775716,
+        "release": {
+          "releaseId": "a0922b6cfcd97caa7ed0dee95edf8027b5c4a1613cc08b1729054cf8fe6f99bc",
+          "partitionId": "sql_transactions-p1",
+          "protocolVersion": 1,
+          "targetBuildDigest": "353f097bed71e6ffdf7858e1ab91798e49542b5ce73c42517d92b3fbb7c9090e",
+          "configurationKey": "[[\"2734552253535212872\",\"6600243378791833037\",\"7691077697885072888\"],[],[],[],false]",
+          "membershipGenerationIndex": 0
+        },
+        "target": {
+          "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+          "ownerIncarnation": 1,
+          "replicaId": "sql_transactions-p1-r3",
+          "lifecycleIncarnation": "bb1d7fc5-280a-4ff3-89fe-4643359151d2",
+          "runtimeGeneration": 1,
+          "connectionGeneration": 132,
+          "admissionGeneration": 382
+        },
+        "attempt": {
+          "leaderReplicaId": "sql_transactions-p1-r1",
+          "term": 1,
+          "leaderLifecycleIncarnation": "a2b3ff78-7795-46d6-aad7-b9fc6abbabf1",
+          "deadlineAtMs": 1792513775716
+        },
+        "cohort": null
+      },
+      "response": {
+        "acknowledged": true,
+        "deliveryState": "delivered",
+        "noHandler": false,
+        "errorCode": null,
+        "answer": {
+          "outcome": "observed",
+          "releaseId": null,
+          "partitionId": "sql_transactions-p1",
+          "phase": null,
+          "reason": null,
+          "queryState": "clear",
+          "queryEnforcement": "enforced",
+          "retryAfterMs": null,
+          "missingFact": null,
+          "controlPartitionId": null,
+          "controlNodeId": null,
+          "controlOutcome": null,
+          "leaderReplicaId": "sql_transactions-p1-r1",
+          "leaderAddress": "550e8400-e29b-41d4-a716-446655449961/partition/sql_transactions-p1-r1",
+          "buildDigest": "353f097bed71e6ffdf7858e1ab91798e49542b5ce73c42517d92b3fbb7c9090e",
+          "release": null,
+          "generation": {
+            "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+            "ownerIncarnation": 1,
+            "replicaId": "sql_transactions-p1-r3",
+            "lifecycleIncarnation": "bb1d7fc5-280a-4ff3-89fe-4643359151d2",
+            "runtimeGeneration": 1,
+            "connectionGeneration": 132,
+            "admissionGeneration": 385
+          },
+          "work": {
+            "sqliteTransactionOpen": false,
+            "participantStaging": false,
+            "participantPrepared": 0,
+            "proposals": 0,
+            "pendingOutcomes": 0,
+            "appliedIndex": 2,
+            "commitIndex": 2,
+            "lastIndex": 2
+          },
+          "origin": {
+            "originIndex": 2,
+            "originTerm": 1
+          },
+          "membership": {
+            "kind": "committed",
+            "voters": [
+              "2734552253535212872",
+              "6600243378791833037",
+              "7691077697885072888"
+            ],
+            "votersOutgoing": [],
+            "learners": [],
+            "learnersNext": [],
+            "appliedIndex": 2,
+            "configurationKey": "[[\"2734552253535212872\",\"6600243378791833037\",\"7691077697885072888\"],[],[],[],false]",
+            "membershipGenerationIndex": 0,
+            "commitIndex": 2,
+            "term": 1,
+            "leaderId": "sql_transactions-p1-r1",
+            "gateOpen": true,
+            "identities": [
+              {
+                "peerId": "2734552253535212872",
+                "replicaId": "sql_transactions-p1-r1"
+              },
+              {
+                "peerId": "6600243378791833037",
+                "replicaId": "sql_transactions-p1-r3"
+              },
+              {
+                "peerId": "7691077697885072888",
+                "replicaId": "sql_transactions-p1-r2"
+              }
+            ]
+          },
+          "blockedDrain": null
+        }
+      },
+      "error": null
+    },
+    {
+      "startedAtMs": 1792513775706,
+      "settledAtMs": 1792513775712,
+      "installationOrdinal": 1,
+      "routerId": "123737f4-d6ac-46ef-966e-cb1d13d847a6",
+      "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+      "callOrdinal": 19491,
+      "completionOrdinal": 1541,
+      "targetAddress": "550e8400-e29b-41d4-a716-446655449961/service/replica-handler",
+      "request": {
+        "action": "resume",
+        "trigger": null,
+        "partitionId": "sql_transactions-p1",
+        "replicaId": "sql_transactions-p1-r1",
+        "targetBuildDigest": null,
+        "deadlineAtMs": 1792513775716,
+        "release": {
+          "releaseId": "a0922b6cfcd97caa7ed0dee95edf8027b5c4a1613cc08b1729054cf8fe6f99bc",
+          "partitionId": "sql_transactions-p1",
+          "protocolVersion": 1,
+          "targetBuildDigest": "353f097bed71e6ffdf7858e1ab91798e49542b5ce73c42517d92b3fbb7c9090e",
+          "configurationKey": "[[\"2734552253535212872\",\"6600243378791833037\",\"7691077697885072888\"],[],[],[],false]",
+          "membershipGenerationIndex": 0
+        },
+        "target": {
+          "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+          "ownerIncarnation": 1,
+          "replicaId": "sql_transactions-p1-r1",
+          "lifecycleIncarnation": "a2b3ff78-7795-46d6-aad7-b9fc6abbabf1",
+          "runtimeGeneration": 1,
+          "connectionGeneration": 114,
+          "admissionGeneration": 383
+        },
+        "attempt": {
+          "leaderReplicaId": "sql_transactions-p1-r1",
+          "term": 1,
+          "leaderLifecycleIncarnation": "a2b3ff78-7795-46d6-aad7-b9fc6abbabf1",
+          "deadlineAtMs": 1792513775716
+        },
+        "cohort": {
+          "total": 3,
+          "captured": 3,
+          "dropped": 0,
+          "members": [
+            {
+              "ordinal": 1,
+              "partitionId": "sql_transactions-p1",
+              "generation": {
+                "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+                "ownerIncarnation": 1,
+                "replicaId": "sql_transactions-p1-r1",
+                "lifecycleIncarnation": "a2b3ff78-7795-46d6-aad7-b9fc6abbabf1",
+                "runtimeGeneration": 1,
+                "connectionGeneration": 114,
+                "admissionGeneration": 383
+              }
+            },
+            {
+              "ordinal": 2,
+              "partitionId": "sql_transactions-p1",
+              "generation": {
+                "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+                "ownerIncarnation": 1,
+                "replicaId": "sql_transactions-p1-r2",
+                "lifecycleIncarnation": "b81cbf00-cdc7-46dc-8a7c-e3420715b155",
+                "runtimeGeneration": 1,
+                "connectionGeneration": 128,
+                "admissionGeneration": 384
+              }
+            },
+            {
+              "ordinal": 3,
+              "partitionId": "sql_transactions-p1",
+              "generation": {
+                "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+                "ownerIncarnation": 1,
+                "replicaId": "sql_transactions-p1-r3",
+                "lifecycleIncarnation": "bb1d7fc5-280a-4ff3-89fe-4643359151d2",
+                "runtimeGeneration": 1,
+                "connectionGeneration": 132,
+                "admissionGeneration": 385
+              }
+            }
+          ]
+        }
+      },
+      "response": {
+        "acknowledged": true,
+        "deliveryState": "delivered",
+        "noHandler": false,
+        "errorCode": null,
+        "answer": {
+          "outcome": "resumed",
+          "releaseId": "a0922b6cfcd97caa7ed0dee95edf8027b5c4a1613cc08b1729054cf8fe6f99bc",
+          "partitionId": "sql_transactions-p1",
+          "phase": "resume",
+          "reason": null,
+          "queryState": null,
+          "queryEnforcement": null,
+          "retryAfterMs": null,
+          "missingFact": null,
+          "controlPartitionId": null,
+          "controlNodeId": null,
+          "controlOutcome": null,
+          "leaderReplicaId": null,
+          "leaderAddress": null,
+          "buildDigest": null,
+          "release": null,
+          "generation": null,
+          "work": null,
+          "origin": null,
+          "membership": null,
+          "blockedDrain": null
+        }
+      },
+      "error": null
+    },
+    {
+      "startedAtMs": 1792513775706,
+      "settledAtMs": 1792513775712,
+      "installationOrdinal": 1,
+      "routerId": "123737f4-d6ac-46ef-966e-cb1d13d847a6",
+      "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+      "callOrdinal": 19492,
+      "completionOrdinal": 1542,
+      "targetAddress": "550e8400-e29b-41d4-a716-446655449961/service/replica-handler",
+      "request": {
+        "action": "resume",
+        "trigger": null,
+        "partitionId": "sql_transactions-p1",
+        "replicaId": "sql_transactions-p1-r2",
+        "targetBuildDigest": null,
+        "deadlineAtMs": 1792513775716,
+        "release": {
+          "releaseId": "a0922b6cfcd97caa7ed0dee95edf8027b5c4a1613cc08b1729054cf8fe6f99bc",
+          "partitionId": "sql_transactions-p1",
+          "protocolVersion": 1,
+          "targetBuildDigest": "353f097bed71e6ffdf7858e1ab91798e49542b5ce73c42517d92b3fbb7c9090e",
+          "configurationKey": "[[\"2734552253535212872\",\"6600243378791833037\",\"7691077697885072888\"],[],[],[],false]",
+          "membershipGenerationIndex": 0
+        },
+        "target": {
+          "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+          "ownerIncarnation": 1,
+          "replicaId": "sql_transactions-p1-r2",
+          "lifecycleIncarnation": "b81cbf00-cdc7-46dc-8a7c-e3420715b155",
+          "runtimeGeneration": 1,
+          "connectionGeneration": 128,
+          "admissionGeneration": 384
+        },
+        "attempt": {
+          "leaderReplicaId": "sql_transactions-p1-r1",
+          "term": 1,
+          "leaderLifecycleIncarnation": "a2b3ff78-7795-46d6-aad7-b9fc6abbabf1",
+          "deadlineAtMs": 1792513775716
+        },
+        "cohort": {
+          "total": 3,
+          "captured": 3,
+          "dropped": 0,
+          "members": [
+            {
+              "ordinal": 1,
+              "partitionId": "sql_transactions-p1",
+              "generation": {
+                "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+                "ownerIncarnation": 1,
+                "replicaId": "sql_transactions-p1-r1",
+                "lifecycleIncarnation": "a2b3ff78-7795-46d6-aad7-b9fc6abbabf1",
+                "runtimeGeneration": 1,
+                "connectionGeneration": 114,
+                "admissionGeneration": 383
+              }
+            },
+            {
+              "ordinal": 2,
+              "partitionId": "sql_transactions-p1",
+              "generation": {
+                "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+                "ownerIncarnation": 1,
+                "replicaId": "sql_transactions-p1-r2",
+                "lifecycleIncarnation": "b81cbf00-cdc7-46dc-8a7c-e3420715b155",
+                "runtimeGeneration": 1,
+                "connectionGeneration": 128,
+                "admissionGeneration": 384
+              }
+            },
+            {
+              "ordinal": 3,
+              "partitionId": "sql_transactions-p1",
+              "generation": {
+                "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+                "ownerIncarnation": 1,
+                "replicaId": "sql_transactions-p1-r3",
+                "lifecycleIncarnation": "bb1d7fc5-280a-4ff3-89fe-4643359151d2",
+                "runtimeGeneration": 1,
+                "connectionGeneration": 132,
+                "admissionGeneration": 385
+              }
+            }
+          ]
+        }
+      },
+      "response": {
+        "acknowledged": true,
+        "deliveryState": "delivered",
+        "noHandler": false,
+        "errorCode": null,
+        "answer": {
+          "outcome": "resumed",
+          "releaseId": "a0922b6cfcd97caa7ed0dee95edf8027b5c4a1613cc08b1729054cf8fe6f99bc",
+          "partitionId": "sql_transactions-p1",
+          "phase": "resume",
+          "reason": null,
+          "queryState": null,
+          "queryEnforcement": null,
+          "retryAfterMs": null,
+          "missingFact": null,
+          "controlPartitionId": null,
+          "controlNodeId": null,
+          "controlOutcome": null,
+          "leaderReplicaId": null,
+          "leaderAddress": null,
+          "buildDigest": null,
+          "release": null,
+          "generation": null,
+          "work": null,
+          "origin": null,
+          "membership": null,
+          "blockedDrain": null
+        }
+      },
+      "error": null
+    },
+    {
+      "startedAtMs": 1792513775706,
+      "settledAtMs": 1792513775712,
+      "installationOrdinal": 1,
+      "routerId": "123737f4-d6ac-46ef-966e-cb1d13d847a6",
+      "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+      "callOrdinal": 19493,
+      "completionOrdinal": 1543,
+      "targetAddress": "550e8400-e29b-41d4-a716-446655449961/service/replica-handler",
+      "request": {
+        "action": "resume",
+        "trigger": null,
+        "partitionId": "sql_transactions-p1",
+        "replicaId": "sql_transactions-p1-r3",
+        "targetBuildDigest": null,
+        "deadlineAtMs": 1792513775716,
+        "release": {
+          "releaseId": "a0922b6cfcd97caa7ed0dee95edf8027b5c4a1613cc08b1729054cf8fe6f99bc",
+          "partitionId": "sql_transactions-p1",
+          "protocolVersion": 1,
+          "targetBuildDigest": "353f097bed71e6ffdf7858e1ab91798e49542b5ce73c42517d92b3fbb7c9090e",
+          "configurationKey": "[[\"2734552253535212872\",\"6600243378791833037\",\"7691077697885072888\"],[],[],[],false]",
+          "membershipGenerationIndex": 0
+        },
+        "target": {
+          "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+          "ownerIncarnation": 1,
+          "replicaId": "sql_transactions-p1-r3",
+          "lifecycleIncarnation": "bb1d7fc5-280a-4ff3-89fe-4643359151d2",
+          "runtimeGeneration": 1,
+          "connectionGeneration": 132,
+          "admissionGeneration": 385
+        },
+        "attempt": {
+          "leaderReplicaId": "sql_transactions-p1-r1",
+          "term": 1,
+          "leaderLifecycleIncarnation": "a2b3ff78-7795-46d6-aad7-b9fc6abbabf1",
+          "deadlineAtMs": 1792513775716
+        },
+        "cohort": {
+          "total": 3,
+          "captured": 3,
+          "dropped": 0,
+          "members": [
+            {
+              "ordinal": 1,
+              "partitionId": "sql_transactions-p1",
+              "generation": {
+                "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+                "ownerIncarnation": 1,
+                "replicaId": "sql_transactions-p1-r1",
+                "lifecycleIncarnation": "a2b3ff78-7795-46d6-aad7-b9fc6abbabf1",
+                "runtimeGeneration": 1,
+                "connectionGeneration": 114,
+                "admissionGeneration": 383
+              }
+            },
+            {
+              "ordinal": 2,
+              "partitionId": "sql_transactions-p1",
+              "generation": {
+                "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+                "ownerIncarnation": 1,
+                "replicaId": "sql_transactions-p1-r2",
+                "lifecycleIncarnation": "b81cbf00-cdc7-46dc-8a7c-e3420715b155",
+                "runtimeGeneration": 1,
+                "connectionGeneration": 128,
+                "admissionGeneration": 384
+              }
+            },
+            {
+              "ordinal": 3,
+              "partitionId": "sql_transactions-p1",
+              "generation": {
+                "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+                "ownerIncarnation": 1,
+                "replicaId": "sql_transactions-p1-r3",
+                "lifecycleIncarnation": "bb1d7fc5-280a-4ff3-89fe-4643359151d2",
+                "runtimeGeneration": 1,
+                "connectionGeneration": 132,
+                "admissionGeneration": 385
+              }
+            }
+          ]
+        }
+      },
+      "response": {
+        "acknowledged": true,
+        "deliveryState": "delivered",
+        "noHandler": false,
+        "errorCode": null,
+        "answer": {
+          "outcome": "resumed",
+          "releaseId": "a0922b6cfcd97caa7ed0dee95edf8027b5c4a1613cc08b1729054cf8fe6f99bc",
+          "partitionId": "sql_transactions-p1",
+          "phase": "resume",
+          "reason": null,
+          "queryState": null,
+          "queryEnforcement": null,
+          "retryAfterMs": null,
+          "missingFact": null,
+          "controlPartitionId": null,
+          "controlNodeId": null,
+          "controlOutcome": null,
+          "leaderReplicaId": null,
+          "leaderAddress": null,
+          "buildDigest": null,
+          "release": null,
+          "generation": null,
+          "work": null,
+          "origin": null,
+          "membership": null,
+          "blockedDrain": null
+        }
+      },
+      "error": null
+    },
+    {
+      "startedAtMs": 1792513775713,
+      "settledAtMs": 1792513775715,
+      "installationOrdinal": 1,
+      "routerId": "123737f4-d6ac-46ef-966e-cb1d13d847a6",
+      "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+      "callOrdinal": 19494,
+      "completionOrdinal": 1545,
+      "targetAddress": "550e8400-e29b-41d4-a716-446655449961/service/replica-handler",
+      "request": {
+        "action": "inspect",
+        "trigger": null,
+        "partitionId": "sql_write_operations-p1",
+        "replicaId": "sql_write_operations-p1-r1",
+        "targetBuildDigest": null,
+        "deadlineAtMs": 1792513775716,
+        "release": null,
+        "target": null,
+        "attempt": null,
+        "cohort": null
+      },
+      "response": {
+        "acknowledged": true,
+        "deliveryState": "delivered",
+        "noHandler": false,
+        "errorCode": null,
+        "answer": {
+          "outcome": "observed",
+          "releaseId": null,
+          "partitionId": "sql_write_operations-p1",
+          "phase": null,
+          "reason": null,
+          "queryState": null,
+          "queryEnforcement": null,
+          "retryAfterMs": null,
+          "missingFact": null,
+          "controlPartitionId": null,
+          "controlNodeId": null,
+          "controlOutcome": null,
+          "leaderReplicaId": "sql_write_operations-p1-r1",
+          "leaderAddress": "550e8400-e29b-41d4-a716-446655449961/partition/sql_write_operations-p1-r1",
+          "buildDigest": "353f097bed71e6ffdf7858e1ab91798e49542b5ce73c42517d92b3fbb7c9090e",
+          "release": null,
+          "generation": {
+            "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+            "ownerIncarnation": 1,
+            "replicaId": "sql_write_operations-p1-r1",
+            "lifecycleIncarnation": "6473049f-b908-49ee-8bed-020c88a721c1",
+            "runtimeGeneration": 1,
+            "connectionGeneration": 115,
+            "admissionGeneration": 118
+          },
+          "work": {
+            "sqliteTransactionOpen": false,
+            "participantStaging": false,
+            "participantPrepared": 0,
+            "proposals": 0,
+            "pendingOutcomes": 0,
+            "appliedIndex": 1,
+            "commitIndex": 1,
+            "lastIndex": 1
+          },
+          "origin": null,
+          "membership": {
+            "kind": "committed",
+            "voters": [
+              "2071046831538394644",
+              "2357906118569620004",
+              "8906062517334037358"
+            ],
+            "votersOutgoing": [],
+            "learners": [],
+            "learnersNext": [],
+            "appliedIndex": 1,
+            "configurationKey": "[[\"2071046831538394644\",\"2357906118569620004\",\"8906062517334037358\"],[],[],[],false]",
+            "membershipGenerationIndex": 0,
+            "commitIndex": 1,
+            "term": 1,
+            "leaderId": "sql_write_operations-p1-r1",
+            "gateOpen": true,
+            "identities": [
+              {
+                "peerId": "2071046831538394644",
+                "replicaId": "sql_write_operations-p1-r1"
+              },
+              {
+                "peerId": "2357906118569620004",
+                "replicaId": "sql_write_operations-p1-r3"
+              },
+              {
+                "peerId": "8906062517334037358",
+                "replicaId": "sql_write_operations-p1-r2"
+              }
+            ]
+          },
+          "blockedDrain": null
+        }
+      },
+      "error": null
+    },
+    {
+      "startedAtMs": 1792513775713,
+      "settledAtMs": 1792513775715,
+      "installationOrdinal": 1,
+      "routerId": "123737f4-d6ac-46ef-966e-cb1d13d847a6",
+      "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+      "callOrdinal": 19495,
+      "completionOrdinal": 1546,
+      "targetAddress": "550e8400-e29b-41d4-a716-446655449961/service/replica-handler",
+      "request": {
+        "action": "inspect",
+        "trigger": null,
+        "partitionId": "sql_write_operations-p1",
+        "replicaId": "sql_write_operations-p1-r2",
+        "targetBuildDigest": null,
+        "deadlineAtMs": 1792513775716,
+        "release": null,
+        "target": null,
+        "attempt": null,
+        "cohort": null
+      },
+      "response": {
+        "acknowledged": true,
+        "deliveryState": "delivered",
+        "noHandler": false,
+        "errorCode": null,
+        "answer": {
+          "outcome": "observed",
+          "releaseId": null,
+          "partitionId": "sql_write_operations-p1",
+          "phase": null,
+          "reason": null,
+          "queryState": null,
+          "queryEnforcement": null,
+          "retryAfterMs": null,
+          "missingFact": null,
+          "controlPartitionId": null,
+          "controlNodeId": null,
+          "controlOutcome": null,
+          "leaderReplicaId": "sql_write_operations-p1-r1",
+          "leaderAddress": "550e8400-e29b-41d4-a716-446655449961/partition/sql_write_operations-p1-r1",
+          "buildDigest": "353f097bed71e6ffdf7858e1ab91798e49542b5ce73c42517d92b3fbb7c9090e",
+          "release": null,
+          "generation": {
+            "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+            "ownerIncarnation": 1,
+            "replicaId": "sql_write_operations-p1-r2",
+            "lifecycleIncarnation": "0b601280-d737-4617-9bb0-5ab40dbf44af",
+            "runtimeGeneration": 1,
+            "connectionGeneration": 129,
+            "admissionGeneration": 119
+          },
+          "work": {
+            "sqliteTransactionOpen": false,
+            "participantStaging": false,
+            "participantPrepared": 0,
+            "proposals": 0,
+            "pendingOutcomes": 0,
+            "appliedIndex": 1,
+            "commitIndex": 1,
+            "lastIndex": 1
+          },
+          "origin": null,
+          "membership": {
+            "kind": "committed",
+            "voters": [
+              "2071046831538394644",
+              "2357906118569620004",
+              "8906062517334037358"
+            ],
+            "votersOutgoing": [],
+            "learners": [],
+            "learnersNext": [],
+            "appliedIndex": 1,
+            "configurationKey": "[[\"2071046831538394644\",\"2357906118569620004\",\"8906062517334037358\"],[],[],[],false]",
+            "membershipGenerationIndex": 0,
+            "commitIndex": 1,
+            "term": 1,
+            "leaderId": "sql_write_operations-p1-r1",
+            "gateOpen": true,
+            "identities": [
+              {
+                "peerId": "2071046831538394644",
+                "replicaId": "sql_write_operations-p1-r1"
+              },
+              {
+                "peerId": "2357906118569620004",
+                "replicaId": "sql_write_operations-p1-r3"
+              },
+              {
+                "peerId": "8906062517334037358",
+                "replicaId": "sql_write_operations-p1-r2"
+              }
+            ]
+          },
+          "blockedDrain": null
+        }
+      },
+      "error": null
+    },
+    {
+      "startedAtMs": 1792513775713,
+      "settledAtMs": 1792513775715,
+      "installationOrdinal": 1,
+      "routerId": "123737f4-d6ac-46ef-966e-cb1d13d847a6",
+      "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+      "callOrdinal": 19496,
+      "completionOrdinal": 1547,
+      "targetAddress": "550e8400-e29b-41d4-a716-446655449961/service/replica-handler",
+      "request": {
+        "action": "inspect",
+        "trigger": null,
+        "partitionId": "sql_write_operations-p1",
+        "replicaId": "sql_write_operations-p1-r3",
+        "targetBuildDigest": null,
+        "deadlineAtMs": 1792513775716,
+        "release": null,
+        "target": null,
+        "attempt": null,
+        "cohort": null
+      },
+      "response": {
+        "acknowledged": true,
+        "deliveryState": "delivered",
+        "noHandler": false,
+        "errorCode": null,
+        "answer": {
+          "outcome": "observed",
+          "releaseId": null,
+          "partitionId": "sql_write_operations-p1",
+          "phase": null,
+          "reason": null,
+          "queryState": null,
+          "queryEnforcement": null,
+          "retryAfterMs": null,
+          "missingFact": null,
+          "controlPartitionId": null,
+          "controlNodeId": null,
+          "controlOutcome": null,
+          "leaderReplicaId": "sql_write_operations-p1-r1",
+          "leaderAddress": "550e8400-e29b-41d4-a716-446655449961/partition/sql_write_operations-p1-r1",
+          "buildDigest": "353f097bed71e6ffdf7858e1ab91798e49542b5ce73c42517d92b3fbb7c9090e",
+          "release": null,
+          "generation": {
+            "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+            "ownerIncarnation": 1,
+            "replicaId": "sql_write_operations-p1-r3",
+            "lifecycleIncarnation": "39a5cad1-f297-4ce8-898d-5860d7efc71e",
+            "runtimeGeneration": 1,
+            "connectionGeneration": 133,
+            "admissionGeneration": 120
+          },
+          "work": {
+            "sqliteTransactionOpen": false,
+            "participantStaging": false,
+            "participantPrepared": 0,
+            "proposals": 0,
+            "pendingOutcomes": 0,
+            "appliedIndex": 1,
+            "commitIndex": 1,
+            "lastIndex": 1
+          },
+          "origin": null,
+          "membership": {
+            "kind": "committed",
+            "voters": [
+              "2071046831538394644",
+              "2357906118569620004",
+              "8906062517334037358"
+            ],
+            "votersOutgoing": [],
+            "learners": [],
+            "learnersNext": [],
+            "appliedIndex": 1,
+            "configurationKey": "[[\"2071046831538394644\",\"2357906118569620004\",\"8906062517334037358\"],[],[],[],false]",
+            "membershipGenerationIndex": 0,
+            "commitIndex": 1,
+            "term": 1,
+            "leaderId": "sql_write_operations-p1-r1",
+            "gateOpen": true,
+            "identities": [
+              {
+                "peerId": "2071046831538394644",
+                "replicaId": "sql_write_operations-p1-r1"
+              },
+              {
+                "peerId": "2357906118569620004",
+                "replicaId": "sql_write_operations-p1-r3"
+              },
+              {
+                "peerId": "8906062517334037358",
+                "replicaId": "sql_write_operations-p1-r2"
+              }
+            ]
+          },
+          "blockedDrain": null
+        }
+      },
+      "error": null
+    },
+    {
+      "startedAtMs": 1792513775715,
+      "settledAtMs": 1792513775719,
+      "installationOrdinal": 1,
+      "routerId": "123737f4-d6ac-46ef-966e-cb1d13d847a6",
+      "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+      "callOrdinal": 19497,
+      "completionOrdinal": 1548,
+      "targetAddress": "550e8400-e29b-41d4-a716-446655449961/service/replica-handler",
+      "request": {
+        "action": "pause",
+        "trigger": null,
+        "partitionId": "sql_write_operations-p1",
+        "replicaId": "sql_write_operations-p1-r1",
+        "targetBuildDigest": null,
+        "deadlineAtMs": 1792513775716,
+        "release": {
+          "releaseId": "d9c83f328f5952d2111aa96889220507cc560075c99b095f8cb14f475217e920",
+          "partitionId": "sql_write_operations-p1",
+          "protocolVersion": 1,
+          "targetBuildDigest": "353f097bed71e6ffdf7858e1ab91798e49542b5ce73c42517d92b3fbb7c9090e",
+          "configurationKey": "[[\"2071046831538394644\",\"2357906118569620004\",\"8906062517334037358\"],[],[],[],false]",
+          "membershipGenerationIndex": 0
+        },
+        "target": {
+          "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+          "ownerIncarnation": 1,
+          "replicaId": "sql_write_operations-p1-r1",
+          "lifecycleIncarnation": "6473049f-b908-49ee-8bed-020c88a721c1",
+          "runtimeGeneration": 1,
+          "connectionGeneration": 115,
+          "admissionGeneration": 118
+        },
+        "attempt": {
+          "leaderReplicaId": "sql_write_operations-p1-r1",
+          "term": 1,
+          "leaderLifecycleIncarnation": "6473049f-b908-49ee-8bed-020c88a721c1",
+          "deadlineAtMs": 1792513775716
+        },
+        "cohort": null
+      },
+      "response": {
+        "acknowledged": true,
+        "deliveryState": "delivered",
+        "noHandler": false,
+        "errorCode": null,
+        "answer": {
+          "outcome": "observed",
+          "releaseId": null,
+          "partitionId": "sql_write_operations-p1",
+          "phase": null,
+          "reason": null,
+          "queryState": null,
+          "queryEnforcement": null,
+          "retryAfterMs": null,
+          "missingFact": null,
+          "controlPartitionId": null,
+          "controlNodeId": null,
+          "controlOutcome": null,
+          "leaderReplicaId": "sql_write_operations-p1-r1",
+          "leaderAddress": "550e8400-e29b-41d4-a716-446655449961/partition/sql_write_operations-p1-r1",
+          "buildDigest": "353f097bed71e6ffdf7858e1ab91798e49542b5ce73c42517d92b3fbb7c9090e",
+          "release": null,
+          "generation": {
+            "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+            "ownerIncarnation": 1,
+            "replicaId": "sql_write_operations-p1-r1",
+            "lifecycleIncarnation": "6473049f-b908-49ee-8bed-020c88a721c1",
+            "runtimeGeneration": 1,
+            "connectionGeneration": 115,
+            "admissionGeneration": 118
+          },
+          "work": {
+            "sqliteTransactionOpen": false,
+            "participantStaging": false,
+            "participantPrepared": 0,
+            "proposals": 0,
+            "pendingOutcomes": 0,
+            "appliedIndex": 1,
+            "commitIndex": 1,
+            "lastIndex": 1
+          },
+          "origin": null,
+          "membership": {
+            "kind": "committed",
+            "voters": [
+              "2071046831538394644",
+              "2357906118569620004",
+              "8906062517334037358"
+            ],
+            "votersOutgoing": [],
+            "learners": [],
+            "learnersNext": [],
+            "appliedIndex": 1,
+            "configurationKey": "[[\"2071046831538394644\",\"2357906118569620004\",\"8906062517334037358\"],[],[],[],false]",
+            "membershipGenerationIndex": 0,
+            "commitIndex": 1,
+            "term": 1,
+            "leaderId": "sql_write_operations-p1-r1",
+            "gateOpen": true,
+            "identities": [
+              {
+                "peerId": "2071046831538394644",
+                "replicaId": "sql_write_operations-p1-r1"
+              },
+              {
+                "peerId": "2357906118569620004",
+                "replicaId": "sql_write_operations-p1-r3"
+              },
+              {
+                "peerId": "8906062517334037358",
+                "replicaId": "sql_write_operations-p1-r2"
+              }
+            ]
+          },
+          "blockedDrain": null
+        }
+      },
+      "error": null
+    },
+    {
+      "startedAtMs": 1792513775715,
+      "settledAtMs": 1792513775719,
+      "installationOrdinal": 1,
+      "routerId": "123737f4-d6ac-46ef-966e-cb1d13d847a6",
+      "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+      "callOrdinal": 19498,
+      "completionOrdinal": 1549,
+      "targetAddress": "550e8400-e29b-41d4-a716-446655449961/service/replica-handler",
+      "request": {
+        "action": "pause",
+        "trigger": null,
+        "partitionId": "sql_write_operations-p1",
+        "replicaId": "sql_write_operations-p1-r2",
+        "targetBuildDigest": null,
+        "deadlineAtMs": 1792513775716,
+        "release": {
+          "releaseId": "d9c83f328f5952d2111aa96889220507cc560075c99b095f8cb14f475217e920",
+          "partitionId": "sql_write_operations-p1",
+          "protocolVersion": 1,
+          "targetBuildDigest": "353f097bed71e6ffdf7858e1ab91798e49542b5ce73c42517d92b3fbb7c9090e",
+          "configurationKey": "[[\"2071046831538394644\",\"2357906118569620004\",\"8906062517334037358\"],[],[],[],false]",
+          "membershipGenerationIndex": 0
+        },
+        "target": {
+          "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+          "ownerIncarnation": 1,
+          "replicaId": "sql_write_operations-p1-r2",
+          "lifecycleIncarnation": "0b601280-d737-4617-9bb0-5ab40dbf44af",
+          "runtimeGeneration": 1,
+          "connectionGeneration": 129,
+          "admissionGeneration": 119
+        },
+        "attempt": {
+          "leaderReplicaId": "sql_write_operations-p1-r1",
+          "term": 1,
+          "leaderLifecycleIncarnation": "6473049f-b908-49ee-8bed-020c88a721c1",
+          "deadlineAtMs": 1792513775716
+        },
+        "cohort": null
+      },
+      "response": {
+        "acknowledged": true,
+        "deliveryState": "delivered",
+        "noHandler": false,
+        "errorCode": null,
+        "answer": {
+          "outcome": "observed",
+          "releaseId": null,
+          "partitionId": "sql_write_operations-p1",
+          "phase": null,
+          "reason": null,
+          "queryState": null,
+          "queryEnforcement": null,
+          "retryAfterMs": null,
+          "missingFact": null,
+          "controlPartitionId": null,
+          "controlNodeId": null,
+          "controlOutcome": null,
+          "leaderReplicaId": "sql_write_operations-p1-r1",
+          "leaderAddress": "550e8400-e29b-41d4-a716-446655449961/partition/sql_write_operations-p1-r1",
+          "buildDigest": "353f097bed71e6ffdf7858e1ab91798e49542b5ce73c42517d92b3fbb7c9090e",
+          "release": null,
+          "generation": {
+            "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+            "ownerIncarnation": 1,
+            "replicaId": "sql_write_operations-p1-r2",
+            "lifecycleIncarnation": "0b601280-d737-4617-9bb0-5ab40dbf44af",
+            "runtimeGeneration": 1,
+            "connectionGeneration": 129,
+            "admissionGeneration": 119
+          },
+          "work": {
+            "sqliteTransactionOpen": false,
+            "participantStaging": false,
+            "participantPrepared": 0,
+            "proposals": 0,
+            "pendingOutcomes": 0,
+            "appliedIndex": 1,
+            "commitIndex": 1,
+            "lastIndex": 1
+          },
+          "origin": null,
+          "membership": {
+            "kind": "committed",
+            "voters": [
+              "2071046831538394644",
+              "2357906118569620004",
+              "8906062517334037358"
+            ],
+            "votersOutgoing": [],
+            "learners": [],
+            "learnersNext": [],
+            "appliedIndex": 1,
+            "configurationKey": "[[\"2071046831538394644\",\"2357906118569620004\",\"8906062517334037358\"],[],[],[],false]",
+            "membershipGenerationIndex": 0,
+            "commitIndex": 1,
+            "term": 1,
+            "leaderId": "sql_write_operations-p1-r1",
+            "gateOpen": true,
+            "identities": [
+              {
+                "peerId": "2071046831538394644",
+                "replicaId": "sql_write_operations-p1-r1"
+              },
+              {
+                "peerId": "2357906118569620004",
+                "replicaId": "sql_write_operations-p1-r3"
+              },
+              {
+                "peerId": "8906062517334037358",
+                "replicaId": "sql_write_operations-p1-r2"
+              }
+            ]
+          },
+          "blockedDrain": null
+        }
+      },
+      "error": null
+    },
+    {
+      "startedAtMs": 1792513775715,
+      "settledAtMs": 1792513775719,
+      "installationOrdinal": 1,
+      "routerId": "123737f4-d6ac-46ef-966e-cb1d13d847a6",
+      "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+      "callOrdinal": 19499,
+      "completionOrdinal": 1550,
+      "targetAddress": "550e8400-e29b-41d4-a716-446655449961/service/replica-handler",
+      "request": {
+        "action": "pause",
+        "trigger": null,
+        "partitionId": "sql_write_operations-p1",
+        "replicaId": "sql_write_operations-p1-r3",
+        "targetBuildDigest": null,
+        "deadlineAtMs": 1792513775716,
+        "release": {
+          "releaseId": "d9c83f328f5952d2111aa96889220507cc560075c99b095f8cb14f475217e920",
+          "partitionId": "sql_write_operations-p1",
+          "protocolVersion": 1,
+          "targetBuildDigest": "353f097bed71e6ffdf7858e1ab91798e49542b5ce73c42517d92b3fbb7c9090e",
+          "configurationKey": "[[\"2071046831538394644\",\"2357906118569620004\",\"8906062517334037358\"],[],[],[],false]",
+          "membershipGenerationIndex": 0
+        },
+        "target": {
+          "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+          "ownerIncarnation": 1,
+          "replicaId": "sql_write_operations-p1-r3",
+          "lifecycleIncarnation": "39a5cad1-f297-4ce8-898d-5860d7efc71e",
+          "runtimeGeneration": 1,
+          "connectionGeneration": 133,
+          "admissionGeneration": 120
+        },
+        "attempt": {
+          "leaderReplicaId": "sql_write_operations-p1-r1",
+          "term": 1,
+          "leaderLifecycleIncarnation": "6473049f-b908-49ee-8bed-020c88a721c1",
+          "deadlineAtMs": 1792513775716
+        },
+        "cohort": null
+      },
+      "response": {
+        "acknowledged": true,
+        "deliveryState": "delivered",
+        "noHandler": false,
+        "errorCode": null,
+        "answer": {
+          "outcome": "observed",
+          "releaseId": null,
+          "partitionId": "sql_write_operations-p1",
+          "phase": null,
+          "reason": null,
+          "queryState": null,
+          "queryEnforcement": null,
+          "retryAfterMs": null,
+          "missingFact": null,
+          "controlPartitionId": null,
+          "controlNodeId": null,
+          "controlOutcome": null,
+          "leaderReplicaId": "sql_write_operations-p1-r1",
+          "leaderAddress": "550e8400-e29b-41d4-a716-446655449961/partition/sql_write_operations-p1-r1",
+          "buildDigest": "353f097bed71e6ffdf7858e1ab91798e49542b5ce73c42517d92b3fbb7c9090e",
+          "release": null,
+          "generation": {
+            "nodeId": "550e8400-e29b-41d4-a716-446655449961",
+            "ownerIncarnation": 1,
+            "replicaId": "sql_write_operations-p1-r3",
+            "lifecycleIncarnation": "39a5cad1-f297-4ce8-898d-5860d7efc71e",
+            "runtimeGeneration": 1,
+            "connectionGeneration": 133,
+            "admissionGeneration": 120
+          },
+          "work": {
+            "sqliteTransactionOpen": false,
+            "participantStaging": false,
+            "participantPrepared": 0,
+            "proposals": 0,
+            "pendingOutcomes": 0,
+            "appliedIndex": 1,
+            "commitIndex": 1,
+            "lastIndex": 1
+          },
+          "origin": null,
+          "membership": {
+            "kind": "committed",
+            "voters": [
+              "2071046831538394644",
+              "2357906118569620004",
+              "8906062517334037358"
+            ],
+            "votersOutgoing": [],
+            "learners": [],
+            "learnersNext": [],
+            "appliedIndex": 1,
+            "configurationKey": "[[\"2071046831538394644\",\"2357906118569620004\",\"8906062517334037358\"],[],[],[],false]",
+            "membershipGenerationIndex": 0,
+            "commitIndex": 1,
+            "term": 1,
+            "leaderId": "sql_write_operations-p1-r1",
+            "gateOpen": true,
+            "identities": [
+              {
+                "peerId": "2071046831538394644",
+                "replicaId": "sql_write_operations-p1-r1"
+              },
+              {
+                "peerId": "2357906118569620004",
+                "replicaId": "sql_write_operations-p1-r3"
+              },
+              {
+                "peerId": "8906062517334037358",
+                "replicaId": "sql_write_operations-p1-r2"
+              }
+            ]
+          },
+          "blockedDrain": null
+        }
+      },
+      "error": null
+    }
+  ]
+}
