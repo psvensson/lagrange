@@ -5,7 +5,8 @@ import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {ReplicaOperationMessageType, ReplicaOperationResponseStatus} from
   '../rebalancer/replica-operation-constants.js';
 import {EXECUTOR_OUTCOME_TYPE} from '../rebalancer/executor-outcome-constants.js';
-import {currentExecution, releaseExecution, replicaExecution, executionRefusal, inProgressReply} from './runtime-service-creation-execution.js';
+import {currentExecution, releaseExecution, executionRefusal,
+  replyToGenericExecutionGate} from './runtime-service-creation-execution.js';
 import {RUNTIME_SERVICE_HANDLER_ERROR_MSG, RUNTIME_SERVICE_HANDLER_LOG_MSG} from
   './runtime-service-handler-constants.js';
 
@@ -173,11 +174,11 @@ async function removeGenericReplica(handler, {
 
 function admitGenericRemoval(handler, params, replica) {
   const {operationId, replicaId} = params;
-  const busy = replicaExecution(handler, replicaId);
-  if (busy !== undefined) {
-    return busy.type === ReplicaOperationMessageType.CREATE_REPLICA ? executionRefusal(handler) :
-      inProgressReply(handler, replicaId);
-  }
+  // The shared execution owner only acknowledges an exact duplicate.
+  // A foreign REMOVE has no registered outcome observer and must retry.
+  const joined = replyToGenericExecutionGate(handler, params,
+    ReplicaOperationMessageType.REMOVE_REPLICA);
+  if (joined !== undefined) return joined;
   if (replica.status === ReplicaStatus.REMOVED) {
     handler.logger.info(RUNTIME_SERVICE_HANDLER_LOG_MSG.REMOVE_ALREADY_REMOVED,
       {replicaId, nodeId: handler.nodeId});
