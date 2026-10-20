@@ -28,7 +28,7 @@
   "censusSize": 2413,
   "digest": "fnv1a32-5ff424e0",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-3c2921e0",
+  "observationDigest": "fnv1a32-7d3cc811",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -11465,11 +11465,14 @@
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/config/configuration-manager.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-raft-storage.js",
         "src/partition/partition-service-constants.js",
         "src/partition/partition-service.js",
+        "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-rs-durable-store-constants.js",
-        "test/integration/helpers/seed-query-surface.js"
+        "test/integration/helpers/seed-query-surface.js",
+        "test/test-helpers/participant-release-delivery-trace.js"
       ],
       "directories": [
         "src"

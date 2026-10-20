@@ -1,0 +1,46 @@
+{
+  "schema": "solve-quest/2",
+  "id": "seed-control-authority-first-divergence",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "On product candidate be25caa5f0c3612feec662d4feaa9ba28f8f34df, trace the original current_control_owner_fact seed participant-release refusal through the actual registered route, control cohort facts and durable origin. Measure a bounded test-only discriminator on the unchanged startup entry and budgets, preserve the first nested refusal before projection, distinguish an enforced exclusion from a reachable defect, and independently review the causal explanation and next bounded owner interaction. No production repair or release acceptance is part of this diagnostic unit.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/seed-control-authority-first-divergence/evidence/receipt.json",
+      "requiredReceipts": [
+        "exact-candidate-causal-owner-trace",
+        "engaged-original-entry-discriminator",
+        "targeted-negative-and-positive-controls",
+        "independent-scope-and-evidence-review"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "immutable-product-and-history",
+      "statement": "Product src, runtime configuration, existing assertion bodies and budgets remain unchanged from be25caa5. Use isolated worktree based on planning head 58c505788a7ca1106b5409723140218f2bcb27fc. Keep shared staged paths, historical failures, all existing seals and original evidence unchanged."
+    },
+    {
+      "id": "passive-original-entry",
+      "statement": "Observe only original MessageRouter deliveries and their original settlements through actual startup. Return the exact original promise/result/error, call original transport once, introduce no awaited work, owner reads, sleeps, retries or protocol actions. Bounded observation overhead and all drops/capture failures/incomplete records are reported. No expected-red conversion."
+    },
+    {
+      "id": "proof-ceilings",
+      "statement": "Source correspondence and local/native boundary controls do not certify cross-host recovery, full U1, TX1, FreshMG or release. A setup failure or unengaged trace remains unresolved. Distinguish safety, progress and performance. No new runtime owner, ledger or fallback."
+    },
+    {
+      "id": "independent-diagnostic-review",
+      "statement": "Independently review frozen diagnostic bytes before interpreting execution. Use existing classified runner and locked lab placement. Preserve first results and identical-host controls; no retry-only green, skipped tests, timeout or baseline increases. Production repair requires independently reviewed bounded contract and witness under an appropriate source-changing unit."
+    }
+  ],
+  "verificationTemplates": [
+    "formation-circularity",
+    "harness-fidelity",
+    "owner-interaction",
+    "admission-gating",
+    "recovery-replay",
+    "concurrency-serialization"
+  ],
+  "sealedAt": "58c505788a7ca1106b5409723140218f2bcb27fc"
+}
