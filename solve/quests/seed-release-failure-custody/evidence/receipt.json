@@ -1,0 +1,11 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {"id": "actual-seed-committed-origin-expiry-and-registration-cleanup", "passed": false},
+    {"id": "native-cleanup-custody-and-top-level-retry", "passed": false},
+    {"id": "retained-origin-and-authoritative-restart-frontier", "passed": false},
+    {"id": "semantic-negatives-and-unchanged-owner-regressions", "passed": false},
+    {"id": "independent-review-and-applicable-gates", "passed": false}
+  ]
+}

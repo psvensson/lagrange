@@ -11,6 +11,7 @@ import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {
   BOOTSTRAP_PHASE,
   BOOTSTRAP_CLEANUP_STEP,
+  CLEANUP_RESULT,
 } from '../../src/bootstrap/bootstrap-constants.js';
 import {NodeState} from '../../src/node/node-lifecycle-state-machine.js';
 
@@ -383,11 +384,17 @@ test('cleanupFailedBootstrap - cleanup errors are logged but not thrown', async 
     registeredNodeId: null,
   };
 
-  // Should NOT throw even though cleanup steps fail
-  await service.cleanupFailedBootstrap(
+  // Should NOT throw even though cleanup steps fail.
+  const cleanup = await service.cleanupFailedBootstrap(
     BOOTSTRAP_PHASE.CACHE_HYDRATION,
     cleanupContext,
   );
+  t.equal(cleanup?.outcome, CLEANUP_RESULT.ERROR,
+    'the caller sees incomplete cleanup alongside the primary failure');
+  t.equal(cleanup?.stepResults?.[BOOTSTRAP_CLEANUP_STEP.CACHE_HYDRATION],
+    CLEANUP_RESULT.ERROR, 'cache failure remains visible');
+  t.equal(cleanup?.stepResults?.[BOOTSTRAP_CLEANUP_STEP.INFRASTRUCTURE],
+    CLEANUP_RESULT.ERROR, 'later infrastructure failure is retained too');
 
   // Verify errors were logged
   const warnings = service._testLogEntries
@@ -562,7 +569,7 @@ test('cleanupFailedBootstrap - partition shutdown error does not stop other clea
     registeredNodeId: null,
   };
 
-  await service.cleanupFailedBootstrap(
+  const cleanup = await service.cleanupFailedBootstrap(
     BOOTSTRAP_PHASE.PARTITIONS,
     cleanupContext,
   );
@@ -575,6 +582,13 @@ test('cleanupFailedBootstrap - partition shutdown error does not stop other clea
     router.shutdownCalled,
     'should still shutdown router after partition error',
   );
+  t.equal(partitionServices.get('p-fail'), failingPartition,
+    'the exact failed partition remains owned for cleanup retry');
+  t.equal(partitionServices.has('p-good'), false,
+    'only successfully released partition objects leave the owner map');
+  t.equal(cleanup?.outcome, CLEANUP_RESULT.ERROR);
+  t.equal(cleanup?.stepResults?.[BOOTSTRAP_CLEANUP_STEP.PARTITIONS],
+    CLEANUP_RESULT.ERROR, 'one failed native release cannot report step success');
   t.end();
 });
 

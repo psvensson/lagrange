@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2399,
+    "ordinary": 2401,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2416,
-  "digest": "fnv1a32-baf41968",
+  "censusSize": 2418,
+  "digest": "fnv1a32-11ffde82",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -234,6 +234,7 @@
     "test/bootstrap/phases/join-resume-iteration-not-spent-wait.test.js": "ordinary",
     "test/bootstrap/phases/wait-for-leadership-phase-retryable-timeout.test.js": "ordinary",
     "test/bootstrap/pipeline/join-startup-plan-segment-contract.test.js": "ordinary",
+    "test/bootstrap/pipeline/seed-registration-phase-custody.test.js": "ordinary",
     "test/bootstrap/pipeline/startup-pipeline-runner.test.js": "ordinary",
     "test/bootstrap/production-scheduling-defaults.test.js": "ordinary",
     "test/bootstrap/query-state-single-owner.test.js": "ordinary",
@@ -257,6 +258,7 @@
     "test/bootstrap/seed-participant-release-failure-projection.test.js": "ordinary",
     "test/bootstrap/seed-registration-election-scheduling.test.js": "ordinary",
     "test/bootstrap/seed-registration-phase.test.js": "ordinary",
+    "test/bootstrap/seed-release-failure-custody.test.js": "ordinary",
     "test/bootstrap/seed-release-once-per-cohort.test.js": "ordinary",
     "test/bootstrap/seed-restart-recovery-gate.test.js": "ordinary",
     "test/bootstrap/seed-startup-session-store.test.js": "ordinary",
