@@ -24,9 +24,16 @@ candidate_rows = rows('candidate')
 before_rows = rows('predecessor')
 candidate = {row['file']: row for row in candidate_rows}
 before = {row['file']: row for row in before_rows}
-reds = sorted(p for p, row in candidate.items() if not row['ok'])
-missing = sorted(set(reds) - set(before))
-assert len(reds) == 119, ('candidate red count drift', len(reds))
+# Use the immutable *source-bound selected-corpus list*, not incidental
+# historical NDJSON entries from other stored test commands in the workspace.
+red_lists = list((base/'predecessor').rglob('observed-candidate-red-list.txt'))
+assert len(red_lists)==1, ('missing original explicit candidate red census',red_lists)
+reds = sorted(set(red_lists[0].read_text().splitlines()))
+other_reds = sorted(p for p,row in candidate.items() if not row['ok'] and p not in reds)
+print('EXTRA_NDJSON_FAILED_NOT_IN_SELECTED_CORPUS',len(other_reds),other_reds)
+missing = sorted(set(reds) - set(before) | set(reds) - set(candidate))
+assert len(reds) == 119, ('selected original red count drift', len(reds))
+assert all(not candidate[p]['ok'] for p in reds if p in candidate), 'selected candidate red became green in report'
 assert not missing, ('unmeasured predecessor rows', missing)
 assert all(isinstance(candidate[p].get('firstFailureLine'), str) for p in reds)
 shared = [p for p in reds if not before[p]['ok']]
