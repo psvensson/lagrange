@@ -1,0 +1,117 @@
+# Diagnostic full U1 change-selection corpus at exact unmerged source.
+# The original classified runner owns the 1,898-test set and semantics.
+# All red cases are preserved; this does not certify rs-raft or publish main.
+name: u1-gcp-selected-corpus-20261020
+on:
+  push:
+    branches:
+      - verify/u1-gcp-20261020
+    paths:
+      - .github/workflows/u1-gcp-selected-corpus-20261020.yml
+permissions:
+  contents: read
+concurrency:
+  group: u1-gcp-selected-corpus-20261020
+  cancel-in-progress: false
+env:
+  TARGET: be25caa5f0c3612feec662d4feaa9ba28f8f34df
+  BASE: 381750de29af647d446b19adedf1da53eb712093
+  GCP_PROJECT: something-2e584
+  GCP_ZONE: europe-north1-a
+  GCP_VM: lagrange-ci-runner
+jobs:
+  wake:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      owned: ${{ steps.start.outputs.owned }}
+    steps:
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          workload_identity_provider: projects/759391918025/locations/global/workloadIdentityPools/github/providers/github-actions
+          service_account: github-release-starter@something-2e584.iam.gserviceaccount.com
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
+      - id: start
+        name: Start known stopped runner only
+        shell: bash
+        run: |
+          set -euo pipefail
+          STATUS="$(gcloud compute instances describe "$GCP_VM" --project "$GCP_PROJECT" --zone "$GCP_ZONE" --format='value(status)')"
+          test "$STATUS" = TERMINATED || { echo "Existing runner not idle/stopped: $STATUS"; exit 3; }
+          echo 'owned=true' >> "$GITHUB_OUTPUT"
+          gcloud compute instances start "$GCP_VM" --project "$GCP_PROJECT" --zone "$GCP_ZONE" --quiet
+  corpus:
+    needs: wake
+    runs-on: [self-hosted, gcp]
+    timeout-minutes: 180
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: be25caa5f0c3612feec662d4feaa9ba28f8f34df
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Prepare exact immutable candidate and canonical graph
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TARGET"
+          npm ci
+          node scripts/generate-global-owner-debt-inventory.js --refresh-import-graph-only
+          git diff --exit-code -- test/shards/impact-graph-seal.json
+          test -z "$(git status --porcelain --untracked-files=no)"
+          node scripts/select-change-tests.js --base "$BASE" --list | tee "$RUNNER_TEMP/u1-selected-files.txt" > /dev/null
+          echo "Selected files: $(wc -l < "$RUNNER_TEMP/u1-selected-files.txt")"
+          test "$(wc -l < "$RUNNER_TEMP/u1-selected-files.txt")" -eq 1898
+          sha256sum "$RUNNER_TEMP/u1-selected-files.txt"
+          test "$(sha256sum "$RUNNER_TEMP/u1-selected-files.txt" | cut -d' ' -f1)" = dc20fcd3832012570c8b541b78364e54fc5adf42e420e62aee768ae04132b991
+      - name: Execute full exact selected cone via canonical classified owner
+        shell: bash
+        timeout-minutes: 165
+        env:
+          LAGRANGE_RETRY_FAILED_ONCE: '0'
+        run: |
+          set -euo pipefail
+          echo "U1_CORPUS_SOURCE=$TARGET"
+          echo "U1_CORPUS_BASE=$BASE"
+          node scripts/select-change-tests.js --base "$BASE"
+      - name: Upload complete test and selection evidence even on RED
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: u1-gcp-selected-corpus-${{ github.run_id }}
+          path: |
+            test-output/reports/
+            .tap/test-results/
+          retention-days: 14
+          if-no-files-found: ignore
+  cleanup:
+    if: always() && needs.wake.outputs.owned == 'true'
+    needs: [wake, corpus]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          workload_identity_provider: projects/759391918025/locations/global/workloadIdentityPools/github/providers/github-actions
+          service_account: github-release-starter@something-2e584.iam.gserviceaccount.com
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
+      - name: Stop only this workflow's runner VM and verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud compute instances stop "$GCP_VM" --project "$GCP_PROJECT" --zone "$GCP_ZONE" --quiet
+          STATUS="$(gcloud compute instances describe "$GCP_VM" --project "$GCP_PROJECT" --zone "$GCP_ZONE" --format='value(status)')"
+          echo "GCP_CORPUS_CLEANUP_STATUS=$STATUS"
+          test "$STATUS" = TERMINATED
