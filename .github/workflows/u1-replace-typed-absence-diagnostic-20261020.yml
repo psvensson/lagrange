@@ -2,7 +2,7 @@ name: u1-replace-typed-absence-diagnostic
 on:
   push:
     branches: [probe/u1-replace-target-20261020]
-    paths: [.github/workflows/u1-replace-typed-absence-diagnostic-20261020.yml]
+    paths: [.github/workflows/u1-replace-typed-absence-diagnostic-20261020.yml, src/node/runtime-service-bound-creation-route.js, test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js]
 permissions: {contents: read}
 jobs:
   test:
