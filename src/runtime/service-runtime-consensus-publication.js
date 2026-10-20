@@ -111,7 +111,6 @@ async function projectPublishedConsensus(owner, driver, bound, confirmed) {
   const endpointRefusal = await writeEndpoint(owner, bound, physical, {host,
     port: confirmed.port, consensusBinding: bound.origin.intent.consensusBinding,
     consensusResourceToken: bound.origin.token}, causeId);
-  if (!current()) return stale();
   if (endpointRefusal !== null) return unprojected(endpointRefusal);
   const mark = markPresent(driver, bound.descriptor, row.serviceType, bound.origin.token);
   return mark.outcome === undefined ? {...confirmed, projection: mark} : unprojected(mark);
