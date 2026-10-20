@@ -1,0 +1,1082 @@
+{
+  "schema": "lagrange-u1-red-triage/v1",
+  "candidate": "be25caa5f0c3612feec662d4feaa9ba28f8f34df",
+  "sourceGitHubRun": 39393585693,
+  "sourceJobId": 118530893528,
+  "sourceArtifactId": 12256004857,
+  "advisory": "First observed TAP failure per candidate RED file; do not infer ownership, inheritance, or completeness from a red file. Some nested TAP cases are canceled after first unfinished setup; full original logs retained in source artifacts.",
+  "count": 119,
+  "failures": [
+    {
+      "path": "test/address/address-manager-peer-location-authority.test.js",
+      "runnerReportedAssertions": 28,
+      "runnerReportedMs": 2094,
+      "firstObservedFail": "Replica transport handler left registered: the transport cannot prove handler identity, so retirement was refused",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/config/code-path-uniqueness.property.test.js",
+      "runnerReportedAssertions": 12,
+      "runnerReportedMs": 1239,
+      "firstObservedFail": "No files should have core feature flags. Found: [{\"file\":\"node/replica-handler-participant-release.js\",\"coreFlags\":[\"ENABLE_REFUSED\"],\"observabilityFlags\":[],\"hasCoreFlags\":true},{\"file\":\"partition/partition-participant-transaction-cutover-",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/control-plane/core-system-logic-runtime-witness.test.js",
+      "runnerReportedAssertions": 3,
+      "runnerReportedMs": 2456,
+      "firstObservedFail": "phase-owner-handoff-completes: completing the seed phase transfers the control-plane writers to the steady-state owners before the phase is complete",
+      "firstObservedError": null,
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/control-plane/replica-dispatch-node-state-update-ready-node-retry-cache-priority.test.js",
+      "runnerReportedAssertions": 37,
+      "runnerReportedMs": 1768,
+      "firstObservedFail": "ready-node retry should wake the remote owner directly when the ready target only sees a remote-owned pending operation",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/control-plane/replica-dispatch-node-state-update-ready-node-retry-dispatch.test.js",
+      "runnerReportedAssertions": 54,
+      "runnerReportedMs": 1787,
+      "firstObservedFail": "authoritative rediscovery should still re-enter the canonical per-operation queue",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/control-plane/replica-dispatch-node-state-update-remote-direct-wakeup.test.js",
+      "runnerReportedAssertions": 38,
+      "runnerReportedMs": 1590,
+      "firstObservedFail": "remote-owned coordinator creates should wake the target owner directly",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/index-management/index-maintenance-consistency.property.test.js",
+      "runnerReportedAssertions": 10,
+      "runnerReportedMs": 2504,
+      "firstObservedFail": "Property failed after 1 tests { seed: 2040042126, path: \"0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0\", endOnFailure: true } Counterexample: [\"partition-0\",\"tbl_A00\",{\"id\":1,\"col_data\":\" \",\"col_num\":0}] Shrunk 20 time(s) Got error: Property fa",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/index-management/index-service.test.js",
+      "runnerReportedAssertions": 57,
+      "runnerReportedMs": 2385,
+      "firstObservedFail": "SQLite index should be created",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/message-group/message-group-native-custody-handoff.test.js",
+      "runnerReportedAssertions": 1,
+      "runnerReportedMs": 5418,
+      "firstObservedFail": "native CDC producer retains custody until message-group committed application",
+      "firstObservedError": null,
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/node/message-group-service-handler-membership.test.js",
+      "runnerReportedAssertions": 1,
+      "runnerReportedMs": 931,
+      "firstObservedFail": "a real committed learner plus exact admission package is the only CREATE path",
+      "firstObservedError": null,
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/node/replica-create-admission-recovery.test.js",
+      "runnerReportedAssertions": 10,
+      "runnerReportedMs": 4901,
+      "firstObservedFail": "takes over CREATING work on the current boot and starts one worker",
+      "firstObservedError": "Promise resolution is still pending but the event loop has already resolved",
+      "firstObservedFailureType": "cancelledByParent",
+      "observedPendingPromise": true
+    },
+    {
+      "path": "test/node/replica-handler-cache-state.test.js",
+      "runnerReportedAssertions": 19,
+      "runnerReportedMs": 5161,
+      "firstObservedFail": "test unfinished",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/node/replica-handler-owner-path-bypass.test.js",
+      "runnerReportedAssertions": 4,
+      "runnerReportedMs": 5079,
+      "firstObservedFail": "test unfinished",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/node/replica-handler.test.js",
+      "runnerReportedAssertions": 105,
+      "runnerReportedMs": 5135,
+      "firstObservedFail": "test unfinished",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/node/replica-transport-handler-identity.test.js",
+      "runnerReportedAssertions": 22,
+      "runnerReportedMs": 2008,
+      "firstObservedFail": "Replica transport handler left registered: the transport cannot prove handler identity, so retirement was refused",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/partition/cdc-generation.property.test.js",
+      "runnerReportedAssertions": 8,
+      "runnerReportedMs": 2348,
+      "firstObservedFail": "Property failed after 1 tests { seed: 466193805, path: \"0:0:0:0:0:0:0:0:0:0:0\", endOnFailure: true } Counterexample: [\"partition-A\",\"A\",{\"id\":1,\"name\":\" \",\"value\":0}] Shrunk 10 time(s) Got error: Property failed by returning false  Hint: En",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/partition/participant-release-first-prepare-native.test.js",
+      "runnerReportedAssertions": 1,
+      "runnerReportedMs": 4921,
+      "firstObservedFail": "local staging grants no first PREPARE admission after the production PAUSE",
+      "firstObservedError": null,
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/partition/participant-release-prepare-identity-native.test.js",
+      "runnerReportedAssertions": 1,
+      "runnerReportedMs": 5300,
+      "firstObservedFail": "durable PREPARE replay validates the original transaction epoch before exemption",
+      "firstObservedError": null,
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/partition/partition-admission-redrive-wakes.test.js",
+      "runnerReportedAssertions": 38,
+      "runnerReportedMs": 2213,
+      "firstObservedFail": "every RAFT_EVENT member is a wake or classified as none",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/partition/partition-consensus-hold-log.test.js",
+      "runnerReportedAssertions": 1,
+      "runnerReportedMs": 1477,
+      "firstObservedFail": "F-an: a hold on a contained unexpected throw is named once at error level with its message, however often it throws again, and its end once at info",
+      "firstObservedError": null,
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/partition/partition-replication-restart-attempt-handoff.test.js",
+      "runnerReportedAssertions": 108,
+      "runnerReportedMs": 2200,
+      "firstObservedFail": "split: target seed write commits",
+      "firstObservedError": "The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried",
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/partition/partition-service-raft-noop-cdc-placement.test.js",
+      "runnerReportedAssertions": 12,
+      "runnerReportedMs": 1706,
+      "firstObservedFail": "should be equal",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/partition/partition-service-raft-propose-metrics.test.js",
+      "runnerReportedAssertions": 34,
+      "runnerReportedMs": 1862,
+      "firstObservedFail": "should be equal",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/partition/partition-service-sqlite-metrics.test.js",
+      "runnerReportedAssertions": 17,
+      "runnerReportedMs": 1705,
+      "firstObservedFail": "should be equal",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/partition/partition-service-stale-topology-write-guard.test.js",
+      "runnerReportedAssertions": 22,
+      "runnerReportedMs": 1860,
+      "firstObservedFail": "rejection should surface the no-leader routing error",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/partition/partition-service-size-split-transport.test.js",
+      "runnerReportedAssertions": 107,
+      "runnerReportedMs": 4789,
+      "firstObservedFail": "failed delivery should be preserved in retry buffer",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/partition/partition-service.test.js",
+      "runnerReportedAssertions": 126,
+      "runnerReportedMs": 3201,
+      "firstObservedFail": "a COMMIT applies only to PREPARED",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/partition/partition-statement-admission.test.js",
+      "runnerReportedAssertions": 11,
+      "runnerReportedMs": 5513,
+      "firstObservedFail": "TX1 admission A2: a ceiling refusal and non-replicated inserts on each replica's connection, followed by an UPDATE, a DELETE and an ignored INSERT, leave byte-identical outcome rows on two replicas; an INSERT outcome still carries its own r",
+      "firstObservedError": null,
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/partition/partition-transaction-replay-cursor-v4.test.js",
+      "runnerReportedAssertions": 11,
+      "runnerReportedMs": 5241,
+      "firstObservedFail": "TX1 v4 RC1: a source entry whose statement failed deterministically is never mirrored",
+      "firstObservedError": null,
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/partition/partition-write-kernel.test.js",
+      "runnerReportedAssertions": 104,
+      "runnerReportedMs": 586,
+      "firstObservedFail": "successful apply should return one explicit side-effect plan",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/partition/partition-write-leadership-transfer-committed.test.js",
+      "runnerReportedAssertions": 2,
+      "runnerReportedMs": 1823,
+      "firstObservedFail": "a write the leader serves during a leadership transfer is committed: its row is stored and the log position it names holds it",
+      "firstObservedError": null,
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/partition/partition-write-leadership-transfer.test.js",
+      "runnerReportedAssertions": 2,
+      "runnerReportedMs": 1863,
+      "firstObservedFail": "a partition write during a leadership transfer is retried and served once the leader takes writes again, never refused",
+      "firstObservedError": null,
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/partition/raft-rs-transport-demux.test.js",
+      "runnerReportedAssertions": 16,
+      "runnerReportedMs": 1864,
+      "firstObservedFail": "Replica transport handler left registered: the transport cannot prove handler identity, so retirement was refused",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/partition/settled-replay-preserves-result.test.js",
+      "runnerReportedAssertions": 6,
+      "runnerReportedMs": 1876,
+      "firstObservedFail": "W1: an INSERT in flight across a forced runtime replacement commits once, and its retry is answered applied with its row count - never success with zero rows, never a UNIQUE failure",
+      "firstObservedError": null,
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/partition/split-backfill-internal-pacing.test.js",
+      "runnerReportedAssertions": 6,
+      "runnerReportedMs": 1824,
+      "firstObservedFail": "The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/partition/table-partition-structure.property.test.js",
+      "runnerReportedAssertions": 6,
+      "runnerReportedMs": 18007,
+      "firstObservedFail": "Property failed after 1 tests { seed: -328076229, path: \"0:0:0:0:0:0:0:0:0:0:0:0\", endOnFailure: true } Counterexample: [\"A\",[{\"id\":\"00000000-0000-1000-8000-000000000000\",\"value\":0}]] Shrunk 11 time(s) Got error: Property failed by returnin",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/query/deferred-hash.test.js",
+      "runnerReportedAssertions": 21,
+      "runnerReportedMs": 1560,
+      "firstObservedFail": "recordWriteOperation must be called",
+      "firstObservedError": "Transaction recovery state is incomplete or incompatible",
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/query/distributed-transaction-coordinator.test.js",
+      "runnerReportedAssertions": 86,
+      "runnerReportedMs": 1134,
+      "firstObservedFail": "Transaction recovery state is incomplete or incompatible",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/query/distributed-transaction-coordinator.property.test.js",
+      "runnerReportedAssertions": 23,
+      "runnerReportedMs": 2593,
+      "firstObservedFail": "Property failed after 1 tests { seed: 657737917, path: \"0:0:0:0:0:0\", endOnFailure: true } Counterexample: [\"-0-\",\"p-0\",1] Shrunk 5 time(s) Got error: Participant answered without the typed outcome the transaction protocol requires     at p",
+      "firstObservedError": "participant-unreachable",
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/query/partition-transaction-seam-falsifiers.test.js",
+      "runnerReportedAssertions": 14,
+      "runnerReportedMs": 2587,
+      "firstObservedFail": "TX1 seam S1: once a transaction is COMMITTING, an exceeded budget never rolls a participant back, and the caller learns the commit point was reached",
+      "firstObservedError": "Transaction recovery state is incomplete or incompatible",
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/query/partition-write-answer-consumers.test.js",
+      "runnerReportedAssertions": 2,
+      "runnerReportedMs": 2021,
+      "firstObservedFail": "F-aj: the query executor re-delivers an unknown outcome under the write's one entryId until it is settled - its client gets the original result, applied once; a router holding the code re-proposes it only under its entryId, idempotently",
+      "firstObservedError": null,
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/query/sql-query-engine-execution.test.js",
+      "runnerReportedAssertions": 130,
+      "runnerReportedMs": 2447,
+      "firstObservedFail": "Transaction recovery state is incomplete or incompatible",
+      "firstObservedError": "partition unavailable",
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/query/sql-query-engine-managed-split.test.js",
+      "runnerReportedAssertions": 39,
+      "runnerReportedMs": 1543,
+      "firstObservedFail": "Transaction recovery state is incomplete or incompatible",
+      "firstObservedError": "getRuntimeView(...)?.getAll is not a function",
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/query/sql-query-engine-transaction-owned-commit-mode.test.js",
+      "runnerReportedAssertions": 19,
+      "runnerReportedMs": 1524,
+      "firstObservedFail": "Transaction recovery state is incomplete or incompatible",
+      "firstObservedError": "getRuntimeView(...)?.getAll is not a function",
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/query/sql-query-engine.test.js",
+      "runnerReportedAssertions": 132,
+      "runnerReportedMs": 2580,
+      "firstObservedFail": "Query failed",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/query/transaction-owned-commit-mode-guard.test.js",
+      "runnerReportedAssertions": 12,
+      "runnerReportedMs": 663,
+      "firstObservedFail": "should match pattern",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/query/transaction-recovery-poison-row-attribution.test.js",
+      "runnerReportedAssertions": 14,
+      "runnerReportedMs": 714,
+      "firstObservedFail": "the fatal names the exact failed decision dimension",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/query/unknown-outcome-redelivery-budget.test.js",
+      "runnerReportedAssertions": 3,
+      "runnerReportedMs": 74205,
+      "firstObservedFail": "an unknown that outlasts the budget is re-delivered with backoff - a handful of deliveries, not one per retry delay - and ends typed",
+      "firstObservedError": "setup: the core trapped the write",
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/query/settled-replay-sql-surface.test.js",
+      "runnerReportedAssertions": 4,
+      "runnerReportedMs": 121762,
+      "firstObservedFail": "W6: an INSERT whose first answer is lost after it applied, re-sent with its entryId, reaches its client with the row it inserted - never zero rows",
+      "firstObservedError": "test timed out after 30000ms",
+      "firstObservedFailureType": "testTimeoutFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/query/write-exactly-once-schedules.test.js",
+      "runnerReportedAssertions": 2,
+      "runnerReportedMs": 61953,
+      "firstObservedFail": "(c1) two log entries for one entryId, both committed: applied once, the caller answered with the first application's result",
+      "firstObservedError": null,
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/query/write-path-internal-pacing.test.js",
+      "runnerReportedAssertions": 37,
+      "runnerReportedMs": 2496,
+      "firstObservedFail": "the separate submission should commit",
+      "firstObservedError": "The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried",
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/raft/leadership-transfer-single-path.test.js",
+      "runnerReportedAssertions": 3,
+      "runnerReportedMs": 1260,
+      "firstObservedFail": "W5: the port operation has one partition issuer and one caller of it",
+      "firstObservedError": null,
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/raft/raft-rs-backend/committed-membership-census.test.js",
+      "runnerReportedAssertions": 8,
+      "runnerReportedMs": 771,
+      "firstObservedFail": "T7: the committed-membership read has exactly three callers outside src/raft - the bootstrap read, the REPLACE completion witness and a message group's witness read of its own configuration",
+      "firstObservedError": null,
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/query/unknown-outcome-same-entry.test.js",
+      "runnerReportedAssertions": 11,
+      "runnerReportedMs": 171480,
+      "firstObservedFail": "W1 (R6-B): a registration INSERT cut by a runtime replacement, with no authoritative read, ends ACCEPTED - one row, no UNIQUE error, never \"not confirmed\"",
+      "firstObservedError": "setup: the core trapped the write",
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/query/write-identity-instance.test.js",
+      "runnerReportedAssertions": 17,
+      "runnerReportedMs": 446342,
+      "firstObservedFail": "V3: a second birth of a held name after the row was deleted executes - the row exists with the new content",
+      "firstObservedError": "setup: it commits",
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/query/write-exactly-once-property.test.js",
+      "runnerReportedAssertions": 1,
+      "runnerReportedMs": 600060,
+      "firstObservedFail": "exactly-once property, seed 20261005: 40 logical writes under random faults",
+      "firstObservedError": "test timed out after 300000ms",
+      "firstObservedFailureType": "testTimeoutFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js",
+      "runnerReportedAssertions": 3,
+      "runnerReportedMs": 2086,
+      "firstObservedFail": "partition replica: the persist path syncs, the application does not",
+      "firstObservedError": null,
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/raft/raft-rs-backend/evidence-o1-static.test.js",
+      "runnerReportedAssertions": 8,
+      "runnerReportedMs": 929,
+      "firstObservedFail": "enumerations: the stamp kinds and bootstrap sources are the two stamp origins plus the record",
+      "firstObservedError": null,
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js",
+      "runnerReportedAssertions": 6,
+      "runnerReportedMs": 655,
+      "firstObservedFail": "registry operation census: exact-generation only, no logical lookup",
+      "firstObservedError": "every retirement names the exact runtime it targets",
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/raft/raft-rs-backend/operation-port-boundary.test.js",
+      "runnerReportedAssertions": 7,
+      "runnerReportedMs": 8528,
+      "firstObservedFail": "one private binding owner loads native bytes and only the runtime owner imports it",
+      "firstObservedError": null,
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/raft/raft-rs-backend/reseed-hold-durability.test.js",
+      "runnerReportedAssertions": 3,
+      "runnerReportedMs": 1367,
+      "firstObservedFail": "D1: failed hold writes are asked again by the group's own deliveries until one lands; one ERROR line",
+      "firstObservedError": "SQLITE_BUSY: database is locked",
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js",
+      "runnerReportedAssertions": 4,
+      "runnerReportedMs": 11712,
+      "firstObservedFail": "wasm service group commits and applies kv writes through raft-rs",
+      "firstObservedError": null,
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/raft/raft-rs-backend/single-path-partition-cutover.test.js",
+      "runnerReportedAssertions": 5,
+      "runnerReportedMs": 23950,
+      "firstObservedFail": "seed bootstraps and serves a write on rs-raft by default",
+      "firstObservedError": "2026-10-20T08:47:02.4225191Z     + actual - expected",
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/raft/raft-rs-backend/transfer-leadership-drain-oracle.test.js",
+      "runnerReportedAssertions": 155,
+      "runnerReportedMs": 37609,
+      "firstObservedFail": "mid-turn: D1 with pending MsgAppendResponse (a higher-term vote request arrives during an awaited send) [mid-turn-D1]",
+      "firstObservedError": null,
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/rebalancer/existing-group-add-topology-guard.test.js",
+      "runnerReportedAssertions": 14,
+      "runnerReportedMs": 4938,
+      "firstObservedFail": "Fresh replica release deadline unavailable",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/rebalancer/message-group-membership-change-parked.test.js",
+      "runnerReportedAssertions": 4,
+      "runnerReportedMs": 1339,
+      "firstObservedFail": "fresh-identity closing condition: seed-only mg-1 enters one REPLACE operation instead of the interim membership park",
+      "firstObservedError": "the approved fresh-identity path must cross the planner refusal",
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/rebalancer/rebalance-coordinator-operation-ownership.test.js",
+      "runnerReportedAssertions": 173,
+      "runnerReportedMs": 1668,
+      "firstObservedFail": "executeOperation should be guarded by shared workflow single-flight",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/rebalancer/rebalance-coordinator-outcome-routing.test.js",
+      "runnerReportedAssertions": 102,
+      "runnerReportedMs": 1537,
+      "firstObservedFail": "owner key must contain the operationId",
+      "firstObservedError": "Authoritative ACTIVE storage reservation mismatches operation identity",
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/rebalancer/rebalance-coordinator-owner-path-convergence.test.js",
+      "runnerReportedAssertions": 44,
+      "runnerReportedMs": 12553,
+      "firstObservedFail": "service-row progress should continue the REPLACE into source removal even when authoritative operation reads miss",
+      "firstObservedError": "Authoritative replica operation not confirmed: op-observed-progress-replace-fallback",
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/rebalancer/replace-replica-workflow.test.js",
+      "runnerReportedAssertions": 291,
+      "runnerReportedMs": 2045,
+      "firstObservedFail": "the owner re-drives REMOVE_PEER through the witness",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/rebalancer/replica-operation-membership-epoch-binding.test.js",
+      "runnerReportedAssertions": 109,
+      "runnerReportedMs": 2233,
+      "firstObservedFail": "src/control-plane/replica-dispatch-readiness-capture.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js",
+      "runnerReportedAssertions": 2,
+      "runnerReportedMs": 1491,
+      "firstObservedFail": "Runtime-service REPLACE failed: UNKNOWN",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/rebalancer/spread-cure-transition-authorization-row.test.js",
+      "runnerReportedAssertions": 1,
+      "runnerReportedMs": 1263,
+      "firstObservedFail": "the authorization rides the operation row and rows without it preserve the pre-admission payload",
+      "firstObservedError": null,
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/runtime/pgwire-commit-outcome-coordinator.test.js",
+      "runnerReportedAssertions": 9,
+      "runnerReportedMs": 549,
+      "firstObservedFail": "the budget lapses between 2PC participant commits: the engine reports the commit point reached; the wire answers 08007, never \"no changes were committed\"",
+      "firstObservedError": "1 subtest failed",
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/runtime/pgwire-result-mapper.test.js",
+      "runnerReportedAssertions": 24,
+      "runnerReportedMs": 1451,
+      "firstObservedFail": "derives the oracle tag from each producer result",
+      "firstObservedError": "1 subtest failed",
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/scripts/change-selection-taxonomy.test.js",
+      "runnerReportedAssertions": 8,
+      "runnerReportedMs": 10716,
+      "firstObservedFail": "EXHAUSTIVE: the four categories partition the candidate universe",
+      "firstObservedError": null,
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/scripts/check-guideline-decision-boundaries.test.js",
+      "runnerReportedAssertions": 96,
+      "runnerReportedMs": 2489,
+      "firstObservedFail": "every named wait in src/ declares its end",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/scripts/proof-cone-cli-output-completeness.test.js",
+      "runnerReportedAssertions": 3,
+      "runnerReportedMs": 7262,
+      "firstObservedFail": "the quest-proof dry run emits the complete selection through a pipe",
+      "firstObservedError": null,
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/scripts/push-gate-change-proof.test.js",
+      "runnerReportedAssertions": 18,
+      "runnerReportedMs": 25566,
+      "firstObservedFail": "every module in the gate's own import closure trips a full-corpus trigger",
+      "firstObservedError": null,
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/scripts/closed-quest-shape.test.js",
+      "runnerReportedAssertions": 9,
+      "runnerReportedMs": 513588,
+      "firstObservedFail": "the repository itself is clean under the general rule",
+      "firstObservedError": null,
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/scripts/solve-footprint-accounting.test.js",
+      "runnerReportedAssertions": 4,
+      "runnerReportedMs": 515646,
+      "firstObservedFail": "the accounting reports total, append-only history and active bytes",
+      "firstObservedError": "false == true",
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/wasm-service/wasm-strong-write-native-completion.test.js",
+      "runnerReportedAssertions": 2,
+      "runnerReportedMs": 1792,
+      "firstObservedFail": "WasmServiceReplica strong write does not succeed before native quorum commit",
+      "firstObservedError": null,
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/wasm-service/wasm-writer-recreation-origin-v1.test.js",
+      "runnerReportedAssertions": 3,
+      "runnerReportedMs": 538,
+      "firstObservedFail": "WasmWriterState refuses revival of an old writer after same-service recreation",
+      "firstObservedError": null,
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/workflow/monotonic-workflow-regression.test.js",
+      "runnerReportedAssertions": 86,
+      "runnerReportedMs": 1434,
+      "firstObservedFail": "transition must persist exactly once",
+      "firstObservedError": "disk full",
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/bootstrap/bootstrap-sequence.test.js",
+      "runnerReportedAssertions": 58,
+      "runnerReportedMs": 27539,
+      "firstObservedFail": "bootstrap should succeed",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/bootstrap/dynamic-partition-cdc-subscription.test.js",
+      "runnerReportedAssertions": 30,
+      "runnerReportedMs": 2623,
+      "firstObservedFail": "this.replicaHandler.initialize is not a function",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/bootstrap/fresh-join-registration-runtime-replacement.integration.test.js",
+      "runnerReportedAssertions": 4,
+      "runnerReportedMs": 23061,
+      "firstObservedFail": "seed bootstrap should succeed",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/bootstrap/fresh-join-via-non-seed-node.integration.test.js",
+      "runnerReportedAssertions": 11,
+      "runnerReportedMs": 22828,
+      "firstObservedFail": "seed bootstrap should succeed",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/bootstrap/join-lifecycle-sub-phase-parity-characterization.test.js",
+      "runnerReportedAssertions": 84,
+      "runnerReportedMs": 2643,
+      "firstObservedFail": "bootstrap should succeed",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/bootstrap/partition-activation-handler-boundary.test.js",
+      "runnerReportedAssertions": 45,
+      "runnerReportedMs": 1283,
+      "firstObservedFail": "shutdown retires the handler in the lane before closing the store",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/bootstrap/phase-event-ordering-characterization.test.js",
+      "runnerReportedAssertions": 223,
+      "runnerReportedMs": 2928,
+      "firstObservedFail": "bootstrap should succeed",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/bootstrap/node-bootstrap-consistency.property.test.js",
+      "runnerReportedAssertions": 61,
+      "runnerReportedMs": 85643,
+      "firstObservedFail": "seed bootstrap should succeed",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/bootstrap/seed-teardown-pending-cdc-delivery.test.js",
+      "runnerReportedAssertions": 1,
+      "runnerReportedMs": 1781,
+      "firstObservedFail": "the seed teardown completes when the latency topology stops inside a partition CDC delivery's batch window",
+      "firstObservedError": null,
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/integration/concurrent-join-message-group-assignment.integration.test.js",
+      "runnerReportedAssertions": 12,
+      "runnerReportedMs": 23760,
+      "firstObservedFail": "seed bootstrap should succeed",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/integration/control-plane-rebalance.integration.test.js",
+      "runnerReportedAssertions": 8,
+      "runnerReportedMs": 23420,
+      "firstObservedFail": "bootstrap should succeed",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/integration/create-table-partition-provisioning.integration.test.js",
+      "runnerReportedAssertions": 4,
+      "runnerReportedMs": 27676,
+      "firstObservedFail": "seed bootstrap should succeed  false !== true",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/integration/critical-partition-learner-safety.integration.test.js",
+      "runnerReportedAssertions": 10,
+      "runnerReportedMs": 44508,
+      "firstObservedFail": "seed bootstrap should succeed",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/integration/critical-replica-placement-causal-trace.integration.test.js",
+      "runnerReportedAssertions": 31,
+      "runnerReportedMs": 149355,
+      "firstObservedFail": "seed bootstrap succeeds",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/integration/cross-node-replica-placement.integration.test.js",
+      "runnerReportedAssertions": 26,
+      "runnerReportedMs": 4664,
+      "firstObservedFail": "second call should return already_exists",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/integration/insert-or-ignore-raft-replay.integration.test.js",
+      "runnerReportedAssertions": 3,
+      "runnerReportedMs": 59404,
+      "firstObservedFail": "timeout!",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/integration/leader-metadata-validation.integration.test.js",
+      "runnerReportedAssertions": 13,
+      "runnerReportedMs": 32717,
+      "firstObservedFail": "seed node bootstrap should succeed",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/integration/managed-split-admission-reliability.integration.test.js",
+      "runnerReportedAssertions": 16,
+      "runnerReportedMs": 37114,
+      "firstObservedFail": "Cannot read properties of null (reading 'storageAccountingService')",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/integration/managed-split-writes-after-cutover.integration.test.js",
+      "runnerReportedAssertions": 2,
+      "runnerReportedMs": 140131,
+      "firstObservedFail": "managed split did not produce two routable partitions",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/integration/membership-consistency.integration.test.js",
+      "runnerReportedAssertions": 71,
+      "runnerReportedMs": 54220,
+      "firstObservedFail": "bootstrap should succeed",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/integration/message-group-fresh-identity-replacement.integration.test.js",
+      "runnerReportedAssertions": 1,
+      "runnerReportedMs": 2288,
+      "firstObservedFail": "mg-1 survives physical seed storage loss from two distinct off-seed voters",
+      "firstObservedError": null,
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/integration/multi-node-raft-replication.integration.test.js",
+      "runnerReportedAssertions": 17,
+      "runnerReportedMs": 52876,
+      "firstObservedFail": "seed node bootstrap should succeed",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/integration/node-join-replica-activation.integration.test.js",
+      "runnerReportedAssertions": 30,
+      "runnerReportedMs": 75881,
+      "firstObservedFail": "seed node bootstrap should succeed",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/integration/node-joining-rebalance.integration.test.js",
+      "runnerReportedAssertions": 28,
+      "runnerReportedMs": 33848,
+      "firstObservedFail": "bootstrap should succeed",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/integration/pgwire-command-tag-real-engine.integration.test.js",
+      "runnerReportedAssertions": 64,
+      "runnerReportedMs": 312636,
+      "firstObservedFail": "the engine dropped the transaction once its budget was spent",
+      "firstObservedError": "CDCIntegrationService is shut down: this write was not routed and was not applied, and no retry through the service can succeed",
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/integration/preflight-critical-path-hops.integration.test.js",
+      "runnerReportedAssertions": 86,
+      "runnerReportedMs": 132407,
+      "firstObservedFail": "timeout!",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/integration/public-binding-cell-invocation-seam.integration.test.js",
+      "runnerReportedAssertions": 2,
+      "runnerReportedMs": 184581,
+      "firstObservedFail": "undefined: managed split did not produce two routable partitions (undefined)",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/integration/public-consumer-contract-ratchet.integration.test.js",
+      "runnerReportedAssertions": 2,
+      "runnerReportedMs": 53752,
+      "firstObservedFail": "formation of 1 did not complete within 45000 ms (x factor): embedded node 2fb2165f-3cc6-4811-88f2-2b8201a5ec94 start exceeded 45000 ms node logs: seed 2fb2165f-3cc6-4811-88f2-2b8201a5ec94: signatures [] top [451x No row found for CDC update",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/integration/raft-leader-election.integration.test.js",
+      "runnerReportedAssertions": 41,
+      "runnerReportedMs": 111983,
+      "firstObservedFail": "bootstrap should complete within 15s (took 59726ms)",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/integration/seed-node-bootstrap.integration.test.js",
+      "runnerReportedAssertions": 45,
+      "runnerReportedMs": 38583,
+      "firstObservedFail": "bootstrap should succeed",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/integration/service-install-lifecycle-cli-pgwire.integration.test.js",
+      "runnerReportedAssertions": 5,
+      "runnerReportedMs": 2063,
+      "firstObservedFail": "submits exact lifecycle SQL envelopes and prints server rows",
+      "firstObservedError": "Authentication failed",
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/integration/services-p1-self-referential-write.integration.test.js",
+      "runnerReportedAssertions": 10,
+      "runnerReportedMs": 28948,
+      "firstObservedFail": "seed node bootstrap should succeed",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/integration/single-node-default-replica-count-writes.integration.test.js",
+      "runnerReportedAssertions": 8,
+      "runnerReportedMs": 27828,
+      "firstObservedFail": "seed bootstrap should succeed",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/integration/sql-engine-system-writes-contract.integration.test.js",
+      "runnerReportedAssertions": 4,
+      "runnerReportedMs": 31944,
+      "firstObservedFail": "[real] an empty system table reads as success with no rows",
+      "firstObservedError": "seed bootstrap failed: \"Seed participant release failed: {\\\\\"partitionId\\\\\":\\\\\"debug_breakpoints-p1\\\\\",\\\\\"answer\\\\\":{\\\\\"outcome\\\\\":\\\\\"release_fact_unavailable\\\\\",\\\\\"releaseId\\\\\":\\\\\"1ad55dfa7654d06344dfd5d047057b1f88e997c56804e0e79daed554ce8",
+      "firstObservedFailureType": "testCodeFailure",
+      "observedPendingPromise": false
+    },
+    {
+      "path": "test/integration/three-node-seed-rebalance.integration.test.js",
+      "runnerReportedAssertions": 3,
+      "runnerReportedMs": 16746,
+      "firstObservedFail": "seed bootstrap timed out after 12000ms",
+      "firstObservedError": null,
+      "firstObservedFailureType": null,
+      "observedPendingPromise": false
+    }
+  ]
+}
