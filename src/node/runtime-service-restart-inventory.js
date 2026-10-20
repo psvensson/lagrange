@@ -144,7 +144,7 @@ function replyToRestartPlan(handler, params) {
 
 async function inventoryAttempt(handler, task) {
   const results = await handler.serviceLifecycleManager.recoverPendingOperations(SKIP_GENERIC_ROWS);
-  if (handler.stopped || handler.restartTask !== task) return stoppedInventory();
+  // MUTATION V1b: stale inventory may call the physical inspection owner.
   const plans = [];
   for (const entry of nodeEntries(handler, results)) {
     plans.push(await planEntry(handler, entry));
