@@ -13,7 +13,7 @@ jobs:
           - kind: original
             sha: 'be25caa5f0c3612feec662d4feaa9ba28f8f34df'
           - kind: corrected-fixture
-            sha: '6ca32c0fa6733e7875aa52b9ecfd1f664cbc0542'
+            sha: '35a5c1eceb7f1cb17f96cdd756f6e92ffd3487fb'
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
