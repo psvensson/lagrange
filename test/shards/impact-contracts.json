@@ -680,7 +680,9 @@
         "test/bootstrap/bootstrap-failure-cleanup.test.js",
         "test/bootstrap/bootstrap-shutdown-quiesce.test.js",
         "test/bootstrap/pipeline/seed-registration-phase-custody.test.js",
-        "test/bootstrap/seed-release-failure-custody.test.js"
+        "test/bootstrap/seed-release-failure-custody.test.js",
+        "test/bootstrap/seed-message-group-cleanup-custody.test.js",
+        "test/bootstrap/message-group-activation-handler-boundary.test.js"
       ]
     },
     "partition-raft-operation-port": {
@@ -1836,7 +1838,9 @@
         "test/bootstrap/bootstrap-failure-cleanup.test.js",
         "test/bootstrap/bootstrap-shutdown-quiesce.test.js",
         "test/bootstrap/pipeline/seed-registration-phase-custody.test.js",
-        "test/bootstrap/seed-release-failure-custody.test.js"
+        "test/bootstrap/seed-release-failure-custody.test.js",
+        "test/bootstrap/seed-message-group-cleanup-custody.test.js",
+        "test/bootstrap/message-group-activation-handler-boundary.test.js"
       ]
     },
     "partition-raft-operation-port": {

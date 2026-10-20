@@ -1,0 +1,19 @@
+{
+  "sha": "d23a24a8243d3a45d4f7cfd50505e8efa775b2fb",
+  "files": [
+    "test/bootstrap/pipeline/seed-registration-phase-custody.test.js",
+    "test/bootstrap/seed-release-failure-custody.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/bootstrap/pipeline/seed-registration-phase-custody.test.js",
+        "test/bootstrap/seed-release-failure-custody.test.js"
+      ],
+      "jobs": 2,
+      "resourceClass": "bootstrap"
+    }
+  ],
+  "on": "adam-laptop",
+  "retryFailedOnce": false
+}

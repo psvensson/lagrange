@@ -20,6 +20,8 @@ import {MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR} from
   '../../src/message-group/message-group-service-row-owner.js';
 import {activateMessageGroupServiceRows} from
   '../../src/bootstrap/shared/message-group-service-activation.js';
+import {SeedCleanupHandler} from
+  '../../src/bootstrap/phases/seed-cleanup-handler.js';
 import {
   initializeRegisteredMessageGroup,
   messageGroupCreationAlreadySettled,
@@ -381,8 +383,8 @@ async (t) => {
     'src/node/runtime-service-handler.js',
   ]);
   t.notMatch(read('src/bootstrap/phases/seed-cleanup-handler.js'),
-    /ENTITY_TYPE\.MESSAGE_GROUP/u,
-    'seed cleanup formats no message-group address for a raw removal');
+    /\bunregister(Exact)?(\?\.)?\(/u,
+    'seed cleanup performs no raw handler removal');
   // The handler retires exactly the callback it registered at its own fixed
   // address (registered-learner-read contract): a successor registration at
   // the same address survives an old handler's retirement.
@@ -398,16 +400,29 @@ async (t) => {
       /await retireMessageGroupTransportHandler\(\{/gu,
     'src/bootstrap/join-cleanup-handler.js':
       /await retireMessageGroupTransportHandlers\(\{/gu,
-    'src/bootstrap/phases/seed-cleanup-handler.js':
-      /await retireMessageGroupTransportHandlers\(\{/gu,
-  };
-  const expectedCounts = {
-    'src/bootstrap/phases/seed-cleanup-handler.js': 2,
   };
   for (const [path, pattern] of Object.entries(retirements)) {
-    t.equal((read(path).match(pattern) || []).length,
-      expectedCounts[path] || 1, `${path} retires through the owner helper`);
+    t.equal((read(path).match(pattern) || []).length, 1,
+      `${path} retires through the owner helper`);
   }
+  // Both seed cleanup entries share exact-object release. Formatting its
+  // canonical address is not removal authority: the captured object still
+  // crosses the singular exact-handler owner after successful shutdown.
+  const seedCleanup = SeedCleanupHandler.prototype;
+  for (const method of ['_cleanupMessageGroups', 'cleanup']) {
+    t.match(seedCleanup[method].toString(),
+      /await this\.shutdownMessageGroupServices\(logger\);/u,
+      `${method} awaits the shared message-group cleanup path`);
+  }
+  t.match(seedCleanup.shutdownMessageGroupServices.toString(),
+    /const messageRouter = d\.getMessageRouter\(\);[\s\S]*const nodeId = d\.getNodeId\(\);[\s\S]*await this\.shutdownServiceMap\(\{/u,
+    'the shared path captures router and node before awaiting release');
+  t.match(seedCleanup.shutdownMessageGroupServices.toString(),
+    /afterShutdown: async \(replicaId, messageGroup\) => \{[\s\S]*await retireMessageGroupTransportHandler\(\{\s*messageGroup,\s*messageRouter,[\s\S]*replicaId,\s*\}\);/u,
+    'retirement uses the captured released object and its exact identity');
+  t.match(seedCleanup.shutdownServiceMap.toString(),
+    /await service\.shutdown\(\);[\s\S]*await options\.afterShutdown\?\.\(replicaId, service\);[\s\S]*if \(options\.services\.get\(replicaId\) === service\) \{\s*options\.services\.delete\(replicaId\);/u,
+    'native shutdown and exact retirement precede conditional map discharge');
   for (const path of [
     'src/bootstrap/phases/create-message-group-replica-lifecycle.js',
     'src/bootstrap/phases/seed-message-groups-phase.js',

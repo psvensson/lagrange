@@ -498,3 +498,133 @@ The separate phase control and newly identified message-group cleanup
 correspondence/regression obligations are still pending at this assessment.
 Receipt `semantic-negatives-and-unchanged-owner-regressions` remains open;
 this negative does not resolve static gates or authorize landing.
+
+## Phase control result: d23a24a82
+
+The reviewer independently inspected the complete local packet at
+`test-output/seed-release-custody/phase-negative-d23a24a82/` for diagnostic
+head `d23a24a8243d3a45d4f7cfd50505e8efa775b2fb`. Both source blobs match
+the approved mutant hashes `d7a6cea5...` and `3f700925...`. Both executable
+tests, the native fixture and the impact contract are byte-identical to
+`e29e46abf`. The additional committed differences are diagnostic prose and
+generated inventory/seal digest changes; no additional runtime behavior or
+test assertion changes were found.
+
+| Packet file | SHA-256 |
+| --- | --- |
+| `input.json` | `65b2f28dfd0a36774dd2967e42b5d9ad25565b6a0f02305915ff630331de8352` |
+| `exit.json` | `950e8b800437285210983f185696e5176c22281d05a741f991f87d008cb24fc1` |
+| `results.ndjson` | `e8ee1bc8ccf61703952ce61e6dd47e4992b86159123e1037771211149e23d4ec` |
+| `controller.log` | `ffa82a0ecc9c130fb6bdbf1d074f76e247d1e256abbb1d76bb625ba51aaf7549` |
+
+Input and placement identify the same diagnostic head on `adam-laptop`
+with retry zero. Both files fail on their first attempt, with five total
+runner-reported tests/assertions. The focused phase witness reaches its
+actual scheduler boundary, then fails at line 83 because the phase directly
+calls metadata registration without enclosing CDC/state/SQL/handler
+acquisition and release (controller lines 17-52). This is the declared
+behavioral sequence failure, not a timeout caused by the missing callback.
+
+The native engagement checks complete before child 1 fails at the intended
+phase comparison: actual `partitions`, expected `registration` (controller
+lines 70-88). The top-level native shutdown retry child passes at lines
+102-103; the actual retained-startup refusal child passes at lines 249-255.
+The diagnostic at line 267 records origin index 2/term 1 for
+`artifact_payload_chunks-p1-r1`, the original 3000 ms bound, the selected
+`observe_applied_position` deadline refusal, and a cleanup observation whose
+step map begins at partitions and omits registration. Assertions later in
+the failing first child are not credited as executed.
+
+**Classification: valid engaged semantic kill of the registration phase
+acquisition/release move.** The independent retry and retained-startup
+protections remain positive in this mutated native sequence. Together with
+the retry negative, the two controls distinguish the two repairs without
+altering their witnesses or lowering their budgets. Neither diagnostic
+branch belongs in the positive or landing population.
+
+The message-group orchestration witness and owner-regression correspondence
+remain outstanding at this assessment. Receipt 4 therefore remains open,
+and the unresolved static gate still prevents landing approval.
+
+## Message-group cleanup correspondence and component witness review
+
+The additional unchanged owner-regression measurement has a narrower result
+than the earlier twelve-file positive. The reviewer read the structured
+packets under `test-output/seed-release-custody/owner-baseline-63420a1a5/`
+and `owner-repaired-e29e46abf/`, and the repaired controller output.
+Baseline passes three of four files; repaired passes two of four, both with
+172 runner-reported assertions. The exact-handler API and executor activation
+files pass in both. The replica-transport-handler identity file fails in
+both with the same first typed-retirement refusal. That inherited failure
+remains an obligation; this review does not repair or waive its fixture.
+
+In the repaired bootstrap activation-boundary file, all eleven behavioral
+subtests pass. The only new failures are the census assertions prohibiting
+the MESSAGE_GROUP address constant and requiring two direct batch-retirement
+calls. Source inspection confirms the new address is passed to the existing
+singular exact owner, and both cleanup entries now share one captured-object
+cleanup helper. These observations justify a correspondence update without
+changing the original exact-handler safety requirement.
+
+The reviewer independently read and hashed the frozen proposed test changes:
+
+| File | SHA-256 |
+| --- | --- |
+| `test/bootstrap/seed-message-group-cleanup-custody.test.js` | `5baad40fab86f349f431439a47ab2b6357242c7efbf08c23e8c566b81eaddcd9` |
+| `test/bootstrap/message-group-activation-handler-boundary.test.js` | `c61d3c839dcb86fc5ccf3c0788ede5cc72e8ab0883cd81ae724761f0c7ebdd7c` |
+| `test/shards/impact-contracts.json` | `8831a8ac4fa514a4ead51430ec1f6fd1b8c621a3ab77d5fdd38d78e79d49bce8` |
+
+**Verdict: APPROVE these test/registry bytes for locked measurement.** No
+actionable finding remains in this complete review round. Product source
+does not change. Native execution, the exact new composition and outstanding
+inherited failures remain separate obligations.
+
+The census diff leaves all eleven behavioral cases unchanged, retains the
+raw-removal site list and canonical helper's lane/exact-identity assertions,
+and explicitly prohibits raw unregister calls in seed cleanup. Per-method
+checks bind both `_cleanupMessageGroups` and `cleanup` to the shared path,
+then bind its captured service/router arguments and the shutdown, retirement,
+identity-checked map-discharge ordering. The new registry entries add the two
+witnesses to the same existing contract and coupled pair; no authority or
+acceptance statement changes.
+
+The six new cases parameterize three attacks over actual failed-bootstrap
+MG step and actual graceful cleanup. They use a real BootstrapService,
+MessageRouter, registration helper and exact-retirement owner, with explicit
+service shutdown doubles. The exact API observer either calls its original
+once or throws the selected exact error before the original call. It never
+forges an absent-handler result.
+
+### Nine-category review of the added witness and census
+
+All items in the previously enumerated category census were reconsidered;
+line references here name the new component file unless otherwise stated.
+
+| Category and items | Evidence and limits |
+| --- | --- |
+| Admission 1-7 | 1/6: actual current map and exact registered callback are read at136-144; no placement gate is substituted. 2/4: failed step returns ERROR, graceful cleanup retains AggregateError/error identity at119-133. 3: no new timer/budget or compressed timeout. 5: clear the injected fault, then call the same actual owner at254-259 and280-286. 7: assertions identify the actual replica, service and handler, not presence at a generic address. |
+| Recovery 1-5 | 1: old-success/current-successor map and handler survive at289-317. 2: this is same-instance cleanup, explicitly not restarted native recovery. 3: each case registers a positive service; failed shutdown includes a healthy second entry at235-252. 4: retirement retry uses the same closed double, with completion count one at282-284. 5: failed close/retirement cannot discharge map custody; empty map is asserted only after original exact API success. |
+| Retry 1-7 | 1: both actual cleanup entries are called again after treatment removal. 2/5: no polling or automatic retry loop; finite explicit attempts. 3: ERROR/rejection versus successful completion is asserted at119-175. 4: explicit cleanup does not wait on serving/readiness. 6: same closed double is not physically re-created; controlled old-success/successor case verifies no successor close on the first attempt. 7: only original exact API processing, never ACK, supplies retirement evidence. |
+| Transport 1-5 | 1: original `unregisterExact` return is recorded at70-73. 2: delayed old completion is tested with a real successor callback at302-311. 3: retirement throw reaches actual cleanup handling; no delivery classification is fabricated. 4: no network wait is introduced. 5: real MessageRouter registry and production registration/retirement helpers are used at31-104; shutdown alone is a double. |
+| Timer 1-5 | 1: explicit gates replace timing guesses; no new timers. 2: no Raft role or authorization is modeled. 3: the test does not claim crash equivalence. 4: gate entry races actual attempt settlement at293-297 rather than a fixed microtask count. 5: no enforced subsystem is used to poll itself. |
+| Concurrency 1-5 | 1: each case invokes the actual existing cleanup owner; this file does not claim a new concurrent single-flight proof. 2: old shutdown is held while successor map/handler changes, then exact old retirement and no successor shutdown are asserted. 3: controlled host replacement is explicitly a post-await identity test, not replacement permission. 4: no timer reentrancy is introduced. 5: the contended identities are one replicaId, exact service and exact handler; original API invocation proves the intended sink was engaged. |
+| Formation 1-5 | 1: no formation metadata/CDC dependency is introduced. 2: retry directly re-enters cleanup. 3: no serving operation is asserted. 4: no startup window or native performance claim. 5: no origin, SERVICES row, authority grant or alternative completion owner is supplied. The structural census keeps the existing no-raw-removal rule. |
+| Harness 1-6 | 1: native/phase negatives are separate; these component cases require actual shutdown/retirement engagement before custody assertions. 2: real router plus explicit shutdown doubles are honestly scoped. 3: no compressed native budget. 4: actual registration creates the callback identity; tests do not hand-author a retirement outcome. 5: call counts, originalCalls, completed ordering and healthy second entry exclude vacuous success at152-165,235-317. 6: only component orchestration/exact router identity is claimed; native MG close and cross-host behavior remain unmeasured by this file. |
+| Interaction 1-10 | 1/2: Bootstrap cleanup orchestrates; exact handler owner decides retirement. 3: failed close, failed retirement and successor survival each coexist with same-owner successful continuation. 4: fault removal is followed by a fresh actual owner call. 5: no new loops, force flags or backoff bypass. 6: explicit retry is the release trigger. 7: passive event traces are assertions, never authority. 8: this witness has no executed result yet; pending measurement cannot count as proof. 9: teardown uses existing cleanup, restores exact descriptor, releases gates and aggregates primary/cleanup errors at178-232. 10: census and both existing interaction registry lists include the component witness without changing the eleven activation cases. |
+
+The registration helper receives no `resolveLane` in this component fixture.
+Accordingly these cases do not themselves prove activation-effect
+serialization; the original unchanged behavioral activation cases provide
+that separate owner evidence. Likewise `closed` and completion counters
+describe shutdown doubles, not physical SQLite/native closure.
+
+Whole-router shutdown after successful graceful cleanup may legitimately
+remove node-lifetime handlers. The failure/successor assertions occur while
+the retained-map rejection stops that later stage, so router-wide teardown
+cannot make the exact-retirement assertions pass. Finally cleanup attempts
+all restorations and owners and retains errors; it is not used as proof that
+the earlier semantic assertion succeeded.
+
+Receipt 4 remains open. Passing this correspondence/component measurement
+will not by itself resolve the unchanged inherited identity-file failure,
+the static gate or any broader release obligation.

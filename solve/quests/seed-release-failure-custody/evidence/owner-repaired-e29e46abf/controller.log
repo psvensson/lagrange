@@ -1,0 +1,1061 @@
+{"sha":"e29e46abf6c5daf506d8c0500b5a9a1d16c2bcd6","plan":[{"files":["test/node/message-group-executor-activation-handler-boundary.test.js","test/transport/exact-handler-identity-api.test.js","test/node/replica-transport-handler-identity.test.js"],"jobs":4,"resourceClass":"ordinary"},{"files":["test/bootstrap/message-group-activation-handler-boundary.test.js"],"jobs":2,"resourceClass":"bootstrap"}]}
+lab test: adam-laptop: ordinary, bootstrap (4 files) cores=8 mem=15.5GiB speed x2.00
+[adam-laptop] placement-shell=2093173
+[adam-laptop] placement-head=e29e46abf6c5daf506d8c0500b5a9a1d16c2bcd6
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2 mode:local retry:0 timeout: lanecap:7
+[adam-laptop] placement-pid=2093594
+[adam-laptop] # test-files planned=4
+[adam-laptop] classified lane ordinary: 3 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 82C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 82C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 43C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] ok test/transport/exact-handler-identity-api.test.js (36 assertions, 847ms)
+[adam-laptop] ok test/node/message-group-executor-activation-handler-boundary.test.js (43 assertions, 1277ms)
+[adam-laptop] not ok test/node/replica-transport-handler-identity.test.js (22 assertions, 1756ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 14
+[adam-laptop] # Subtest: Removal-8: an old generation shut down before registration never removes the new generation's handler
+[adam-laptop]     ok 1 - G1 registered no handler
+[adam-laptop] {"level":30,"time":"2026-10-20T19:09:14.071Z","nodeId":"9d22b4fb-2c06-47d4-8d05-e1176ad3951a","pid":2093616,"subsystem":"partition","partitionId":"p1","replicaId":"p1-r1","nodeId":"9d22b4fb-2c06-47d4-8d05-e1176ad3951a","msg":"Shutting down partition service"}
+[adam-laptop]     ok 2 - the G2 handler is untouched by the delayed G1 retirement
+[adam-laptop]     ok 3 - an absent handler is a typed already-absent no-op
+[adam-laptop]     ok 4 - should be equal
+[adam-laptop]     1..4
+[adam-laptop] ok 1 - Removal-8: an old generation shut down before registration never removes the new generation's handler # time=67.488ms
+[adam-laptop] 
+[adam-laptop] # Subtest: Removal-8: exact removal removes only the exact handler
+[adam-laptop]     ok 1 - the exact handler is retired
+[adam-laptop]     ok 2 - should be equal
+[adam-laptop]     ok 3 - a delayed retirement of G1 finds its handler gone
+[adam-laptop]     ok 4 - and leaves the G2 handler registered
+[adam-laptop]     1..4
+[adam-laptop] ok 2 - Removal-8: exact removal removes only the exact handler # time=1.322ms
+[adam-laptop] 
+[adam-laptop] # Subtest: Removal-8: a transport without the identity API is refused and nothing is removed
+[adam-laptop]     ok 1 - the activation check cannot pass on presence
+[adam-laptop]     ok 2 - typed refusal
+[adam-laptop]     ok 3 - no removal by address
+[adam-laptop]     ok 4 - the handler is untouched
+[adam-laptop]     1..4
+[adam-laptop] ok 3 - Removal-8: a transport without the identity API is refused and nothing is removed # time=1.411ms
+[adam-laptop] 
+[adam-laptop] # Subtest: Removal-8: every retiring owner surfaces a refused retirement (the handler is left registered) instead of discarding it
+[adam-laptop]     # Subtest: partition replica shutdown
+[adam-laptop]         not ok 1 - Replica transport handler left registered: the transport cannot prove handler identity, so retirement was refused
+[adam-laptop]           ---
+[adam-laptop]           stack: >
+[adam-laptop]             requireReplicaHandlerRetirement
+[adam-laptop]             (src/node/replica-transport-handler-identity.js:33:25)
+[adam-laptop]           
+[adam-laptop]             retirePartitionTransportHandler
+[adam-laptop]             (src/partition/partition-service-lifecycle-methods.js:76:3)
+[adam-laptop]           
+[adam-laptop]             async release (src/partition/partition-service-lifecycle-methods.js:206:7)
+[adam-laptop]           
+[adam-laptop]             async Test.<anonymous>
+[adam-laptop]             (test/node/replica-transport-handler-identity.test.js:159:5)
+[adam-laptop]           at:
+[adam-laptop]             fileName: src/node/replica-transport-handler-identity.js
+[adam-laptop]             lineNumber: 33
+[adam-laptop]             columnNumber: 25
+[adam-laptop]             functionName: requireReplicaHandlerRetirement
+[adam-laptop]           code: refused_transport_without_handler_identity
+[adam-laptop]           tapCaught: returnedPromiseRejection
+[adam-laptop]           source: >2
+[adam-laptop]               if (outcome !== REPLICA_HANDLER_RETIREMENT_OUTCOME.RETIRED &&
+[adam-laptop]                   outcome !== REPLICA_HANDLER_RETIREMENT_OUTCOME.ALREADY_ABSENT) {
+[adam-laptop]                 throw Object.assign(new Error(REPLICA_HANDLER_RETIREMENT_LOG_MSG.LEFT_REGISTERED),
+[adam-laptop]             ------------------------^
+[adam-laptop]                   {code: outcome});
+[adam-laptop]               }
+[adam-laptop]           ...
+[adam-laptop]         
+[adam-laptop]         1..1
+[adam-laptop]     not ok 1 - partition replica shutdown # time=19.955ms
+[adam-laptop]       ---
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/node/replica-transport-handler-identity.test.js
+[adam-laptop]         lineNumber: 151
+[adam-laptop]         columnNumber: 5
+[adam-laptop]         typeName: Test
+[adam-laptop]       source: |2
+[adam-laptop]           const handler = () => ({acknowledged: true});
+[adam-laptop]       
+[adam-laptop]           t.test('partition replica shutdown', async (t) => {
+[adam-laptop]         ----^
+[adam-laptop]             const transport = createPresenceOnlyTransport();
+[adam-laptop]             const service = new PartitionService({partitionId: 'p1', tableId: 't1',
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     # Subtest: message-group replica retirement
+[adam-laptop]         not ok 1 - Replica transport handler left registered: the transport cannot prove handler identity, so retirement was refused
+[adam-laptop]           ---
+[adam-laptop]           stack: >
+[adam-laptop]             requireReplicaHandlerRetirement
+[adam-laptop]             (src/node/replica-transport-handler-identity.js:33:25)
+[adam-laptop]           
+[adam-laptop]             retireMessageGroupTransportHandler
+[adam-laptop]             (src/bootstrap/shared/message-group-transport-handler.js:59:3)
+[adam-laptop]           
+[adam-laptop]             async Test.<anonymous>
+[adam-laptop]             (test/node/replica-transport-handler-identity.test.js:170:13)
+[adam-laptop]           at:
+[adam-laptop]             fileName: src/node/replica-transport-handler-identity.js
+[adam-laptop]             lineNumber: 33
+[adam-laptop]             columnNumber: 25
+[adam-laptop]             functionName: requireReplicaHandlerRetirement
+[adam-laptop]           code: refused_transport_without_handler_identity
+[adam-laptop]           tapCaught: returnedPromiseRejection
+[adam-laptop]           source: >2
+[adam-laptop]               if (outcome !== REPLICA_HANDLER_RETIREMENT_OUTCOME.RETIRED &&
+[adam-laptop]                   outcome !== REPLICA_HANDLER_RETIREMENT_OUTCOME.ALREADY_ABSENT) {
+[adam-laptop]                 throw Object.assign(new Error(REPLICA_HANDLER_RETIREMENT_LOG_MSG.LEFT_REGISTERED),
+[adam-laptop]             ------------------------^
+[adam-laptop]                   {code: outcome});
+[adam-laptop]               }
+[adam-laptop]           ...
+[adam-laptop]         
+[adam-laptop]         1..1
+[adam-laptop]     not ok 2 - message-group replica retirement # time=3.86ms
+[adam-laptop]       ---
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/node/replica-transport-handler-identity.test.js
+[adam-laptop]         lineNumber: 165
+[adam-laptop]         columnNumber: 5
+[adam-laptop]         typeName: Test
+[adam-laptop]       source: |2
+[adam-laptop]           });
+[adam-laptop]       
+[adam-laptop]           t.test('message-group replica retirement', async (t) => {
+[adam-laptop]         ----^
+[adam-laptop]             const transport = createPresenceOnlyTransport();
+[adam-laptop]             const address = `${NODE_ID}/message-group/mg-r1`;
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop] {"level":30,"time":"2026-10-20T19:09:14.156Z","nodeId":"e17e9ab6-813d-4843-bf53-e3b29c04a64e","pid":2093616,"subsystem":"wasm-service-replica","replicaId":"wsr-1","serviceDefinitionId":"svc","nodeId":"e17e9ab6-813d-4843-bf53-e3b29c04a64e","msg":"WASM service replica created"}
+[adam-laptop]     # Subtest: WASM service replica shutdown
+[adam-laptop]         not ok 1 - Replica transport handler left registered: the transport cannot prove handler identity, so retirement was refused
+[adam-laptop]           ---
+[adam-laptop]           stack: >
+[adam-laptop]             requireReplicaHandlerRetirement
+[adam-laptop]             (src/node/replica-transport-handler-identity.js:33:25)
+[adam-laptop]           
+[adam-laptop]             retireReplica (src/wasm-service/wasm-service-replica-lifecycle.js:293:5)
+[adam-laptop]           
+[adam-laptop]             async Test.<anonymous>
+[adam-laptop]             (test/node/replica-transport-handler-identity.test.js:188:7)
+[adam-laptop]           at:
+[adam-laptop]             fileName: src/node/replica-transport-handler-identity.js
+[adam-laptop]             lineNumber: 33
+[adam-laptop]             columnNumber: 25
+[adam-laptop]             functionName: requireReplicaHandlerRetirement
+[adam-laptop]           code: refused_transport_without_handler_identity
+[adam-laptop]           tapCaught: returnedPromiseRejection
+[adam-laptop]           source: >2
+[adam-laptop]               if (outcome !== REPLICA_HANDLER_RETIREMENT_OUTCOME.RETIRED &&
+[adam-laptop]                   outcome !== REPLICA_HANDLER_RETIREMENT_OUTCOME.ALREADY_ABSENT) {
+[adam-laptop]                 throw Object.assign(new Error(REPLICA_HANDLER_RETIREMENT_LOG_MSG.LEFT_REGISTERED),
+[adam-laptop]             ------------------------^
+[adam-laptop]                   {code: outcome});
+[adam-laptop]               }
+[adam-laptop]           ...
+[adam-laptop]         
+[adam-laptop]         1..1
+[adam-laptop]     not ok 3 - WASM service replica shutdown # time=40.455ms
+[adam-laptop]       ---
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/node/replica-transport-handler-identity.test.js
+[adam-laptop]         lineNumber: 177
+[adam-laptop]         columnNumber: 5
+[adam-laptop]         typeName: Test
+[adam-laptop]       source: |2
+[adam-laptop]           });
+[adam-laptop]       
+[adam-laptop]           t.test('WASM service replica shutdown', async (t) => {
+[adam-laptop]         ----^
+[adam-laptop]             const transport = createPresenceOnlyTransport();
+[adam-laptop]             const directory = mkdtempSync(join(tmpdir(), 'wasm-refused-retirement-'));
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     1..3
+[adam-laptop] not ok 4 - Removal-8: every retiring owner surfaces a refused retirement (the handler is left registered) instead of discarding it # time=117.253ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/node/replica-transport-handler-identity.test.js
+[adam-laptop]     lineNumber: 146
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: |
+[adam-laptop]     }
+[adam-laptop]   
+[adam-laptop]     test('Removal-8: every retiring owner surfaces a refused retirement (the ' +
+[adam-laptop]     ^
+[adam-laptop]       'handler is left registered) instead of discarding it', async (t) => {
+[adam-laptop]       initializeEnvironment();
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] 1..4
+[adam-laptop] # { total: 15, pass: 12, fail: 3 }
+[adam-laptop] # time=215.004ms
+[adam-laptop] # test-files total=3 pass=2 fail=1 assertions=101
+[adam-laptop] classified lane bootstrap: 1 file(s), jobs=2
+[adam-laptop] thermal: ok cpu 65C (coretemp/Package id 0) nvme 21C (nvme/Composite)
+[adam-laptop] not ok test/bootstrap/message-group-activation-handler-boundary.test.js (71 assertions, 1149ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 14
+[adam-laptop] # Subtest: MG retirement refuses completion without exact handler identity API
+[adam-laptop]     ok 1 - logging a refused identity retirement must not settle teardown
+[adam-laptop]     ok 2 - the handler was retained rather than removed unsafely by address
+[adam-laptop]     ok 3 - the same owner reports the typed refusal
+[adam-laptop]     ok 4 - should be equal
+[adam-laptop]     1..4
+[adam-laptop] ok 1 - MG retirement refuses completion without exact handler identity API # time=16.862ms
+[adam-laptop] 
+[adam-laptop] # Subtest: MG creation failure retires registered handler before returning the primary refusal
+[adam-laptop]     ok 1 - initialization refusal must propagate
+[adam-laptop]     ok 2 - successful cleanup propagates the same error object
+[adam-laptop]     ok 3 - the exact failed runtime receives shutdown
+[adam-laptop]     ok 4 - completed cleanup never publishes a failed service
+[adam-laptop]     ok 5 - should be equal
+[adam-laptop]     1..5
+[adam-laptop] ok 2 - MG creation failure retires registered handler before returning the primary refusal # time=1.513ms
+[adam-laptop] 
+[adam-laptop] # Subtest: MG creation failure retains unretired handler under host custody
+[adam-laptop]     ok 1 - initialization refusal must propagate
+[adam-laptop]     ok 2 - the original startup refusal remains the primary error
+[adam-laptop]     ok 3 - the exact failed runtime receives shutdown
+[adam-laptop]     ok 4 - failed cleanup is reachable through the existing host map
+[adam-laptop]     ok 5 - identity refusal never removes the callback by address
+[adam-laptop]     ok 6 - a cleanup-debt object must not masquerade as CREATED
+[adam-laptop]     1..6
+[adam-laptop] ok 3 - MG creation failure retains unretired handler under host custody # time=1.121ms
+[adam-laptop] 
+[adam-laptop] # Subtest: MG N2 (1): the exact generation handler is registered -> ACTIVE
+[adam-laptop]     ok 1 - should be equal
+[adam-laptop]     ok 2 - should be equal
+[adam-laptop]     ok 3 - the handler was registered when the CAS was issued
+[adam-laptop]     1..3
+[adam-laptop] ok 4 - MG N2 (1): the exact generation handler is registered -> ACTIVE # time=76.831ms
+[adam-laptop] 
+[adam-laptop] # Subtest: MG N2 (2): the handler is missing before activation -> refused, no CAS
+[adam-laptop]     ok 1 - expected to reject
+[adam-laptop]     ok 2 - should be equal
+[adam-laptop]     ok 3 - should be equal
+[adam-laptop]     1..3
+[adam-laptop] ok 5 - MG N2 (2): the handler is missing before activation -> refused, no CAS # time=47.259ms
+[adam-laptop] 
+[adam-laptop] # Subtest: MG N2 (3): the handler is retired after the preflight but immediately before the final effect -> refused
+[adam-laptop]     ok 1 - the activation passed the preflight and is queued in the lane
+[adam-laptop]     ok 2 - should be equal
+[adam-laptop]     ok 3 - the in-lane check refuses: the handler left before the ACTIVE CAS
+[adam-laptop]     ok 4 - no ACTIVE CAS was issued
+[adam-laptop]     ok 5 - should be equal
+[adam-laptop]     1..5
+[adam-laptop] ok 6 - MG N2 (3): the handler is retired after the preflight but immediately before the final effect -> refused # time=36.312ms
+[adam-laptop] 
+[adam-laptop] # Subtest: MG N2 (4): unregister racing activation under the shared owner: exactly one ordering wins and ACTIVE never lands without its handler
+[adam-laptop]     ok 1 - the retirement waits for the in-flight ACTIVE CAS
+[adam-laptop]     ok 2 - the handler stays registered through the activation effect
+[adam-laptop]     ok 3 - should be equal
+[adam-laptop]     ok 4 - retired after the activation effect
+[adam-laptop]     ok 5 - the ACTIVE CAS was issued with the handler registered
+[adam-laptop]     ok 6 - no section is open yet: the retirement completes at once
+[adam-laptop]     ok 7 - expected to reject
+[adam-laptop]     ok 8 - no ACTIVE CAS
+[adam-laptop]     ok 9 - no orphan ACTIVE row without a handler
+[adam-laptop]     1..9
+[adam-laptop] ok 7 - MG N2 (4): unregister racing activation under the shared owner: exactly one ordering wins and ACTIVE never lands without its handler # time=70.44ms
+[adam-laptop] 
+[adam-laptop] # Subtest: MG N2 (4b): retirement does not wait for unrelated lifecycle work in the lane (no shutdown deadlock)
+[adam-laptop]     ok 1 - a stuck unrelated lane action does not block handler retirement
+[adam-laptop]     1..1
+[adam-laptop] ok 8 - MG N2 (4b): retirement does not wait for unrelated lifecycle work in the lane (no shutdown deadlock) # time=30.672ms
+[adam-laptop] 
+[adam-laptop] # Subtest: MG N2 (5): a different generation handler under the same replica id does not satisfy activation
+[adam-laptop]     ok 1 - presence at the address is not this generation's handler
+[adam-laptop]     ok 2 - should be equal
+[adam-laptop]     ok 3 - should be equal
+[adam-laptop]     1..3
+[adam-laptop] ok 9 - MG N2 (5): a different generation handler under the same replica id does not satisfy activation # time=29.499ms
+[adam-laptop] 
+[adam-laptop] # Subtest: MG N2 (6): a delayed G1 activation after G2 registered cannot activate G1 or mutate G2
+[adam-laptop]     ok 1 - should be equal
+[adam-laptop]     ok 2 - G1's activation is refused: the registered handler is G2's
+[adam-laptop]     ok 3 - the G2 row is untouched
+[adam-laptop]     ok 4 - a delayed G1 retirement cannot remove the G2 handler (exact identity)
+[adam-laptop]     1..4
+[adam-laptop] ok 10 - MG N2 (6): a delayed G1 activation after G2 registered cannot activate G1 or mutate G2 # time=30.027ms
+[adam-laptop] 
+[adam-laptop] # Subtest: MG N2 (7): lifecycle-owner admission closed -> refused, no CAS
+[adam-laptop]     ok 1 - expected to reject
+[adam-laptop]     ok 2 - should be equal
+[adam-laptop]     1..2
+[adam-laptop] ok 11 - MG N2 (7): lifecycle-owner admission closed -> refused, no CAS # time=43.294ms
+[adam-laptop] 
+[adam-laptop] # Subtest: MG N2 census: every message-group transport-handler registration and removal in src goes through the exact-identity owner helpers
+[adam-laptop]     ok 1 - should be equivalent
+[adam-laptop]     not ok 2 - seed cleanup formats no message-group address for a raw removal
+[adam-laptop]       ---
+[adam-laptop]       found: >
+[adam-laptop]         /**
+[adam-laptop]          * Seed Cleanup Handler — handles bootstrap failure cleanup and
+[adam-laptop]          * graceful shutdown for the seed bootstrap service.
+[adam-laptop]          *
+[adam-laptop]          * Extracted from BootstrapService to keep the orchestrator thin.
+[adam-laptop]          * The class receives required dependencies via constructor injection.
+[adam-laptop]          */
+[adam-laptop]       
+[adam-laptop]         import {LatencyTopologySetup} from '../shared/latency-topology-setup.js';
+[adam-laptop]       
+[adam-laptop]         import {retireMessageGroupTransportHandler} from
+[adam-laptop]           '../shared/message-group-transport-handler.js';
+[adam-laptop]         import {ADDRESS, ENTITY_TYPE} from '../../constants/index.js';
+[adam-laptop]       
+[adam-laptop]         import {
+[adam-laptop]           BOOTSTRAP_CLEANUP_STEP,
+[adam-laptop]           BOOTSTRAP_EVENT,
+[adam-laptop]           BOOTSTRAP_LOG_MSG,
+[adam-laptop]           BOOTSTRAP_PHASE,
+[adam-laptop]           CLEANUP_RESULT,
+[adam-laptop]         } from '../bootstrap-constants.js';
+[adam-laptop]       
+[adam-laptop]         import {
+[adam-laptop]           NodeState,
+[adam-laptop]         } from '../../node/node-lifecycle-state-machine.js';
+[adam-laptop]       
+[adam-laptop]       
+[adam-laptop]         const LOCAL_STR_FUNCTION = 'function';
+[adam-laptop]       
+[adam-laptop]         const SERVICE_CLEANUP_PENDING = 'Bootstrap service cleanup remains pending';
+[adam-laptop]       
+[adam-laptop]       
+[adam-laptop]         /**
+[adam-laptop]          * All cleanup steps in reverse phase order.
+[adam-laptop]          */
+[adam-laptop]         const CLEANUP_STEPS_REVERSE_ORDER = Object.freeze([
+[adam-laptop]           BOOTSTRAP_CLEANUP_STEP.CACHE_HYDRATION,
+[adam-laptop]           BOOTSTRAP_CLEANUP_STEP.REGISTRATION,
+[adam-laptop]           BOOTSTRAP_CLEANUP_STEP.PARTITIONS,
+[adam-laptop]           BOOTSTRAP_CLEANUP_STEP.MESSAGE_GROUPS,
+[adam-laptop]           BOOTSTRAP_CLEANUP_STEP.INFRASTRUCTURE,
+[adam-laptop]         ]);
+[adam-laptop]       
+[adam-laptop]       
+[adam-laptop]         /**
+[adam-laptop]          * Maps each bootstrap phase to its index in the cleanup order.
+[adam-laptop]          */
+[adam-laptop]         const PHASE_TO_CLEANUP_INDEX = Object.freeze({
+[adam-laptop]           [BOOTSTRAP_PHASE.CACHE_HYDRATION]: 0,
+[adam-laptop]           [BOOTSTRAP_PHASE.REGISTRATION]: 1,
+[adam-laptop]           [BOOTSTRAP_PHASE.PARTITIONS]: 2,
+[adam-laptop]           [BOOTSTRAP_PHASE.MESSAGE_GROUPS]: 3,
+[adam-laptop]           [BOOTSTRAP_PHASE.INFRASTRUCTURE]: 4,
+[adam-laptop]         });
+[adam-laptop]       
+[adam-laptop]       
+[adam-laptop]         /**
+[adam-laptop]          * Handles bootstrap failure cleanup and graceful shutdown.
+[adam-laptop]          */
+[adam-laptop]         class SeedCleanupHandler {
+[adam-laptop]           /**
+[adam-laptop]            * @param {Object} options
+[adam-laptop]            * @param {Object} options.delegates - Callbacks into the bootstrap
+[adam-laptop]            *   service for accessing mutable state.
+[adam-laptop]            */
+[adam-laptop]           constructor(options = {}) {
+[adam-laptop]             this.delegates = options.delegates || {};
+[adam-laptop]           }
+[adam-laptop]       
+[adam-laptop]           /**
+[adam-laptop]            * Handle bootstrap failure.
+[adam-laptop]            * @param {Error} error
+[adam-laptop]            * @return {Object}
+[adam-laptop]            */
+[adam-laptop]           async handleBootstrapFailure(error) {
+[adam-laptop]             const d = this.delegates;
+[adam-laptop]             const logger = d.getLogger();
+[adam-laptop]             const failedPhase = d.getPhase();
+[adam-laptop]             d.setPhase(BOOTSTRAP_PHASE.FAILED);
+[adam-laptop]             d.setLastError(error);
+[adam-laptop]             const duration = Date.now() - d.getStartTime();
+[adam-laptop]       
+[adam-laptop]             logger.error(BOOTSTRAP_LOG_MSG.BOOTSTRAP_FAILED, {
+[adam-laptop]               nodeId: d.getNodeId(),
+[adam-laptop]               phase: failedPhase,
+[adam-laptop]               duration,
+[adam-laptop]               error: error.message,
+[adam-laptop]               stack: error.stack,
+[adam-laptop]               servicesCreated: d.getServicesCreated(),
+[adam-laptop]             });
+[adam-laptop]       
+[adam-laptop]             const cleanupContext = {
+[adam-laptop]               failedPhase,
+[adam-laptop]               createdPartitions:
+[adam-laptop]                 [...d.getPartitionServices().keys()],
+[adam-laptop]               createdServices: [
+[adam-laptop]                 ...d.getMessageGroupServices().keys(),
+[adam-laptop]                 ...d.getPartitionServices().keys(),
+[adam-laptop]               ],
+[adam-laptop]               createdMessageGroups:
+[adam-laptop]                 d.getMessageGroupsCreated() > 0 ?
+[adam-laptop]                   [d.getInitialMessageGroupId()] : [],
+[adam-laptop]               registeredNodeId: d.getNodeId(),
+[adam-laptop]             };
+[adam-laptop]       
+[adam-laptop]             const cleanup = await this.cleanupFailedBootstrap(
+[adam-laptop]               failedPhase, cleanupContext,
+[adam-laptop]             );
+[adam-laptop]       
+[adam-laptop]             d.emit(BOOTSTRAP_EVENT.FAILED, {
+[adam-laptop]               nodeId: d.getNodeId(),
+[adam-laptop]               phase: failedPhase,
+[adam-laptop]               duration,
+[adam-laptop]               error: error.message,
+[adam-laptop]               cleanup,
+[adam-laptop]               servicesCreated: d.getServicesCreated(),
+[adam-laptop]             });
+[adam-laptop]       
+[adam-laptop]             return {
+[adam-laptop]               success: false,
+[adam-laptop]               nodeId: d.getNodeId(),
+[adam-laptop]               duration,
+[adam-laptop]               error: error.message,
+[adam-laptop]               phase: failedPhase,
+[adam-laptop]               cleanup,
+[adam-laptop]               servicesCreated: d.getServicesCreated(),
+[adam-laptop]             };
+[adam-laptop]           }
+[adam-laptop]       
+[adam-laptop]           /**
+[adam-laptop]            * Clean up a failed bootstrap in reverse phase order.
+[adam-laptop]            * @param {string} failedPhase
+[adam-laptop]            * @param {Object} cleanupContext
+[adam-laptop]            * @return {Promise<Object>} Frozen cleanup observation.
+[adam-laptop]            */
+[adam-laptop]           async cleanupFailedBootstrap(failedPhase, cleanupContext) {
+[adam-laptop]             const d = this.delegates;
+[adam-laptop]             const logger = d.getLogger();
+[adam-laptop]       
+[adam-laptop]             logger.info(
+[adam-laptop]               BOOTSTRAP_LOG_MSG.FAILED_BOOTSTRAP_CLEANUP_START, {
+[adam-laptop]                 nodeId: d.getNodeId(),
+[adam-laptop]                 failedPhase,
+[adam-laptop]                 createdPartitions:
+[adam-laptop]                   cleanupContext.createdPartitions.length,
+[adam-laptop]                 createdServices:
+[adam-laptop]                   cleanupContext.createdServices.length,
+[adam-laptop]                 createdMessageGroups:
+[adam-laptop]                   cleanupContext.createdMessageGroups.length,
+[adam-laptop]               });
+[adam-laptop]       
+[adam-laptop]             const startIndex = PHASE_TO_CLEANUP_INDEX[failedPhase];
+[adam-laptop]             const effectiveStart = startIndex !== undefined ?
+[adam-laptop]               startIndex : 0;
+[adam-laptop]       
+[adam-laptop]             const stepsToRun =
+[adam-laptop]               CLEANUP_STEPS_REVERSE_ORDER.slice(effectiveStart);
+[adam-laptop]       
+[adam-laptop]             const stepResults = {};
+[adam-laptop]       
+[adam-laptop]             for (const step of stepsToRun) {
+[adam-laptop]               stepResults[step] = await this._executeCleanupStep(
+[adam-laptop]                 step, cleanupContext,
+[adam-laptop]               );
+[adam-laptop]             }
+[adam-laptop]       
+[adam-laptop]             const lifecycleStateMachine =
+[adam-laptop]               d.getLifecycleStateMachine();
+[adam-laptop]             const currentState = lifecycleStateMachine.getState();
+[adam-laptop]             if (currentState !== NodeState.STOPPED) {
+[adam-laptop]               try {
+[adam-laptop]                 lifecycleStateMachine.transition(NodeState.STOPPED);
+[adam-laptop]               } catch (err) {
+[adam-laptop]                 logger.warn(
+[adam-laptop]                   BOOTSTRAP_LOG_MSG
+[adam-laptop]                     .FAILED_BOOTSTRAP_CLEANUP_COMPLETE, {
+[adam-laptop]                     nodeId: d.getNodeId(),
+[adam-laptop]                     transitionError: err.message,
+[adam-laptop]                   });
+[adam-laptop]               }
+[adam-laptop]             }
+[adam-laptop]       
+[adam-laptop]             logger.info(
+[adam-laptop]               BOOTSTRAP_LOG_MSG.FAILED_BOOTSTRAP_CLEANUP_SUMMARY, {
+[adam-laptop]                 nodeId: d.getNodeId(),
+[adam-laptop]                 failedPhase,
+[adam-laptop]                 stepResults,
+[adam-laptop]               });
+[adam-laptop]             return Object.freeze({
+[adam-laptop]               outcome: Object.values(stepResults).includes(CLEANUP_RESULT.ERROR) ?
+[adam-laptop]                 CLEANUP_RESULT.ERROR : CLEANUP_RESULT.SUCCESS,
+[adam-laptop]               stepResults: Object.freeze(stepResults),
+[adam-laptop]             });
+[adam-laptop]           }
+[adam-laptop]       
+[adam-laptop]           /**
+[adam-laptop]            * Execute a single cleanup step.
+[adam-laptop]            * @param {string} step
+[adam-laptop]            * @param {Object} cleanupContext
+[adam-laptop]            * @return {Promise<string>}
+[adam-laptop]            */
+[adam-laptop]           async _executeCleanupStep(step, cleanupContext) {
+[adam-laptop]             switch (step) {
+[adam-laptop]             case BOOTSTRAP_CLEANUP_STEP.CACHE_HYDRATION:
+[adam-laptop]               return this._cleanupCacheHydration();
+[adam-laptop]             case BOOTSTRAP_CLEANUP_STEP.REGISTRATION:
+[adam-laptop]               return this._cleanupRegistration(cleanupContext);
+[adam-laptop]             case BOOTSTRAP_CLEANUP_STEP.PARTITIONS:
+[adam-laptop]               return this._cleanupPartitions();
+[adam-laptop]             case BOOTSTRAP_CLEANUP_STEP.MESSAGE_GROUPS:
+[adam-laptop]               return this._cleanupMessageGroups();
+[adam-laptop]             case BOOTSTRAP_CLEANUP_STEP.INFRASTRUCTURE:
+[adam-laptop]               return this._cleanupInfrastructure();
+[adam-laptop]             default:
+[adam-laptop]               return CLEANUP_RESULT.SKIPPED;
+[adam-laptop]             }
+[adam-laptop]           }
+[adam-laptop]       
+[adam-laptop]           /**
+[adam-laptop]            * Cleanup step: clear the system table cache.
+[adam-laptop]            * @return {Promise<string>}
+[adam-laptop]            */
+[adam-laptop]           async _cleanupCacheHydration() {
+[adam-laptop]             const d = this.delegates;
+[adam-laptop]             const logger = d.getLogger();
+[adam-laptop]             try {
+[adam-laptop]               logger.info(
+[adam-laptop]                 BOOTSTRAP_LOG_MSG.FAILED_BOOTSTRAP_CLEANUP_CACHE, {
+[adam-laptop]                   nodeId: d.getNodeId(),
+[adam-laptop]                 });
+[adam-laptop]               const cache = d.getSystemTableCacheRef() ||
+[adam-laptop]                 d.getSystemTableCacheSafe();
+[adam-laptop]               if (cache && cache.clear) {
+[adam-laptop]                 cache.clear();
+[adam-laptop]               }
+[adam-laptop]               d.setSystemTableCacheRef(null);
+[adam-laptop]               logger.info(
+[adam-laptop]                 BOOTSTRAP_LOG_MSG.FAILED_BOOTSTRAP_CLEANUP_CACHE_DONE, {
+[adam-laptop]                   nodeId: d.getNodeId(),
+[adam-laptop]                 });
+[adam-laptop]               return CLEANUP_RESULT.SUCCESS;
+[adam-laptop]             } catch (err) {
+[adam-laptop]               logger.warn(
+[adam-laptop]                 BOOTSTRAP_LOG_MSG
+[adam-laptop]                   .FAILED_BOOTSTRAP_CLEANUP_CACHE_ERROR, {
+[adam-laptop]                   nodeId: d.getNodeId(),
+[adam-laptop]                   error: err.message,
+[adam-laptop]                   stack: err.stack,
+[adam-laptop]                 });
+[adam-laptop]               return CLEANUP_RESULT.ERROR;
+[adam-laptop]             }
+[adam-laptop]           }
+[adam-laptop]       
+[adam-laptop]           /**
+[adam-laptop]            * Cleanup step: remove partial registration entries.
+[adam-laptop]            * @param {Object} cleanupContext
+[adam-laptop]            * @return {Promise<string>}
+[adam-laptop]            */
+[adam-laptop]           async _cleanupRegistration(cleanupContext) {
+[adam-laptop]             const d = this.delegates;
+[adam-laptop]             const logger = d.getLogger();
+[adam-laptop]             try {
+[adam-laptop]               logger.info(
+[adam-laptop]                 BOOTSTRAP_LOG_MSG
+[adam-laptop]                   .FAILED_BOOTSTRAP_CLEANUP_REGISTRATION, {
+[adam-laptop]                   nodeId: d.getNodeId(),
+[adam-laptop]                   registeredNodeId: cleanupContext.registeredNodeId,
+[adam-laptop]                   serviceCount:
+[adam-laptop]                     cleanupContext.createdServices.length,
+[adam-laptop]                   partitionCount:
+[adam-laptop]                     cleanupContext.createdPartitions.length,
+[adam-laptop]                   messageGroupCount:
+[adam-laptop]                     cleanupContext.createdMessageGroups.length,
+[adam-laptop]                 });
+[adam-laptop]       
+[adam-laptop]               await this.quiesceRebalancers();
+[adam-laptop]               d.stopUnifiedLifecycleOwners();
+[adam-laptop]       
+[adam-laptop]               const systemTableWriter = d.getSystemTableWriter();
+[adam-laptop]               if (systemTableWriter && systemTableWriter.disable) {
+[adam-laptop]                 systemTableWriter.disable();
+[adam-laptop]               }
+[adam-laptop]               d.setSystemTableWriter(null);
+[adam-laptop]               await LatencyTopologySetup.stop(d.getLatencyTopology());
+[adam-laptop]               d.setLatencyTopology(null);
+[adam-laptop]       
+[adam-laptop]               await this.shutdownSqlQueryEngine(d);
+[adam-laptop]               d.clearCdcIntegrationService();
+[adam-laptop]               await d.clearRuntimeServiceHandler();
+[adam-laptop]               d.stopAndClearControlPlaneServices();
+[adam-laptop]               await d.clearRpcClient();
+[adam-laptop]               await d.clearReplicaStateMachine();
+[adam-laptop]               d.clearEpochManager();
+[adam-laptop]               await d.clearReplicaHandler();
+[adam-laptop]               d.clearTablePolicyService();
+[adam-laptop]               d.clearRebalanceCoordinator();
+[adam-laptop]               d.clearNodeReadyRebalanceState();
+[adam-laptop]       
+[adam-laptop]               logger.info(
+[adam-laptop]                 BOOTSTRAP_LOG_MSG
+[adam-laptop]                   .FAILED_BOOTSTRAP_CLEANUP_REGISTRATION_DONE, {
+[adam-laptop]                   nodeId: d.getNodeId(),
+[adam-laptop]                 });
+[adam-laptop]               return CLEANUP_RESULT.SUCCESS;
+[adam-laptop]             } catch (err) {
+[adam-laptop]               logger.warn(
+[adam-laptop]                 BOOTSTRAP_LOG_MSG
+[adam-laptop]                   .FAILED_BOOTSTRAP_CLEANUP_REGISTRATION_ERROR, {
+[adam-laptop]                   nodeId: d.getNodeId(),
+[adam-laptop]                   error: err.message,
+[adam-laptop]                   stack: err.stack,
+[adam-laptop]                 });
+[adam-laptop]               return CLEANUP_RESULT.ERROR;
+[adam-laptop]             }
+[adam-laptop]           }
+[adam-laptop]       
+[adam-laptop]           /**
+[adam-laptop]            * Cleanup step: stop and destroy partition services.
+[adam-laptop]            * @return {Promise<string>}
+[adam-laptop]            */
+[adam-laptop]           async _cleanupPartitions() {
+[adam-laptop]             const d = this.delegates;
+[adam-laptop]             const logger = d.getLogger();
+[adam-laptop]             try {
+[adam-laptop]               logger.info(
+[adam-laptop]                 BOOTSTRAP_LOG_MSG
+[adam-laptop]                   .FAILED_BOOTSTRAP_CLEANUP_PARTITIONS, {
+[adam-laptop]                   nodeId: d.getNodeId(),
+[adam-laptop]                   partitionCount: d.getPartitionServices().size,
+[adam-laptop]                 });
+[adam-laptop]       
+[adam-laptop]               await this.shutdownServiceMap({
+[adam-laptop]                 logger,
+[adam-laptop]                 services: d.getPartitionServices(),
+[adam-laptop]                 successLogMessage: BOOTSTRAP_LOG_MSG.PARTITION_CLEANED,
+[adam-laptop]                 failureLogMessage: BOOTSTRAP_LOG_MSG.PARTITION_CLEANUP_FAILED,
+[adam-laptop]               });
+[adam-laptop]       
+[adam-laptop]               // partition.shutdown() retired its exact handler through the replica
+[adam-laptop]               // lifecycle owner, and no successor can occupy the address before this
+[adam-laptop]               // point; a by-address removal here could only remove a successor's
+[adam-laptop]               // handler. Router shutdown is the node-lifetime backstop.
+[adam-laptop]               d.resetPartitionReplicas();
+[adam-laptop]       
+[adam-laptop]               logger.info(
+[adam-laptop]                 BOOTSTRAP_LOG_MSG
+[adam-laptop]                   .FAILED_BOOTSTRAP_CLEANUP_PARTITIONS_DONE, {
+[adam-laptop]                   nodeId: d.getNodeId(),
+[adam-laptop]                 });
+[adam-laptop]               return CLEANUP_RESULT.SUCCESS;
+[adam-laptop]             } catch (err) {
+[adam-laptop]               logger.warn(
+[adam-laptop]                 BOOTSTRAP_LOG_MSG
+[adam-laptop]                   .FAILED_BOOTSTRAP_CLEANUP_PARTITIONS_ERROR, {
+[adam-laptop]                   nodeId: d.getNodeId(),
+[adam-laptop]                   error: err.message,
+[adam-laptop]                   stack: err.stack,
+[adam-laptop]                 });
+[adam-laptop]               return CLEANUP_RESULT.ERROR;
+[adam-laptop]             }
+[adam-laptop]           }
+[adam-laptop]       
+[adam-laptop]           /**
+[adam-laptop]            * Cleanup step: stop and destroy message group services.
+[adam-laptop]            * @return {Promise<string>}
+[adam-laptop]            */
+[adam-laptop]           async _cleanupMessageGroups() {
+[adam-laptop]             const d = this.delegates;
+[adam-laptop]             const logger = d.getLogger();
+[adam-laptop]             try {
+[adam-laptop]               logger.info(
+[adam-laptop]                 BOOTSTRAP_LOG_MSG
+[adam-laptop]                   .FAILED_BOOTSTRAP_CLEANUP_MESSAGE_GROUPS, {
+[adam-laptop]                   nodeId: d.getNodeId(),
+[adam-laptop]                   messageGroupCount:
+[adam-laptop]                     d.getMessageGroupServices().size,
+[adam-laptop]                 });
+[adam-laptop]       
+[adam-laptop]               await this.shutdownMessageGroupServices(logger);
+[adam-laptop]               d.resetMessageGroupReplicas();
+[adam-laptop]       
+[adam-laptop]               logger.info(
+[adam-laptop]                 BOOTSTRAP_LOG_MSG
+[adam-laptop]                   .FAILED_BOOTSTRAP_CLEANUP_MESSAGE_GROUPS_DONE,
+[adam-laptop]                 {nodeId: d.getNodeId()},
+[adam-laptop]               );
+[adam-laptop]               return CLEANUP_RESULT.SUCCESS;
+[adam-laptop]             } catch (err) {
+[adam-laptop]               logger.warn(
+[adam-laptop]                 BOOTSTRAP_LOG_MSG
+[adam-laptop]                   .FAILED_BOOTSTRAP_CLEANUP_MESSAGE_GROUPS_ERROR,
+[adam-laptop]                 {
+[adam-laptop]                   nodeId: d.getNodeId(),
+[adam-laptop]                   error: err.message,
+[adam-laptop]                   stack: err.stack,
+[adam-laptop]                 });
+[adam-laptop]               return CLEANUP_RESULT.ERROR;
+[adam-laptop]             }
+[adam-laptop]           }
+[adam-laptop]       
+[adam-laptop]           /**
+[adam-laptop]            * Cleanup step: stop the message router and transport.
+[adam-laptop]            * @return {Promise<string>}
+[adam-laptop]            */
+[adam-laptop]           async _cleanupInfrastructure() {
+[adam-laptop]             const d = this.delegates;
+[adam-laptop]             const logger = d.getLogger();
+[adam-laptop]             try {
+[adam-laptop]               logger.info(
+[adam-laptop]                 BOOTSTRAP_LOG_MSG
+[adam-laptop]                   .FAILED_BOOTSTRAP_CLEANUP_INFRASTRUCTURE, {
+[adam-laptop]                   nodeId: d.getNodeId(),
+[adam-laptop]                 });
+[adam-laptop]       
+[adam-laptop]               d.stopUnifiedLifecycleOwners();
+[adam-laptop]       
+[adam-laptop]               const messageRouter = d.getMessageRouter();
+[adam-laptop]               if (messageRouter && messageRouter.shutdown) {
+[adam-laptop]                 await messageRouter.shutdown();
+[adam-laptop]                 d.setMessageRouter(null);
+[adam-laptop]               }
+[adam-laptop]       
+[adam-laptop]               const transport = d.getTransport();
+[adam-laptop]               if (transport && transport.shutdown &&
+[adam-laptop]                   transport !== messageRouter) {
+[adam-laptop]                 await transport.shutdown();
+[adam-laptop]               }
+[adam-laptop]               d.setTransport(null);
+[adam-laptop]       
+[adam-laptop]               logger.info(
+[adam-laptop]                 BOOTSTRAP_LOG_MSG
+[adam-laptop]                   .FAILED_BOOTSTRAP_CLEANUP_INFRASTRUCTURE_DONE,
+[adam-laptop]                 {nodeId: d.getNodeId()},
+[adam-laptop]               );
+[adam-laptop]               return CLEANUP_RESULT.SUCCESS;
+[adam-laptop]             } catch (err) {
+[adam-laptop]               logger.warn(
+[adam-laptop]                 BOOTSTRAP_LOG_MSG
+[adam-laptop]                   .FAILED_BOOTSTRAP_CLEANUP_INFRASTRUCTURE_ERROR,
+[adam-laptop]                 {
+[adam-laptop]                   nodeId: d.getNodeId(),
+[adam-laptop]                   error: err.message,
+[adam-laptop]                   stack: err.stack,
+[adam-laptop]                 });
+[adam-laptop]               return CLEANUP_RESULT.ERROR;
+[adam-laptop]             }
+[adam-laptop]           }
+[adam-laptop]       
+[adam-laptop]           /**
+[adam-laptop]            * Stop all rebalancer and coordinator activity.
+[adam-laptop]            * @return {Promise<void>}
+[adam-laptop]            */
+[adam-laptop]           async quiesceRebalancers() {
+[adam-laptop]             const d = this.delegates;
+[adam-laptop]             const logger = d.getLogger();
+[adam-laptop]       
+[adam-laptop]             const partitionTasks =
+[adam-laptop]               [...d.getPartitionServices().entries()].map(
+[adam-laptop]                 async ([replicaId, partition]) => {
+[adam-laptop]                   if (!partition ||
+[adam-laptop]                       typeof partition.quiesceRebalancing !==
+[adam-laptop]                         'function') {
+[adam-laptop]                     return;
+[adam-laptop]                   }
+[adam-laptop]                   try {
+[adam-laptop]                     await partition.quiesceRebalancing();
+[adam-laptop]                   } catch (error) {
+[adam-laptop]                     logger.warn(
+[adam-laptop]                       BOOTSTRAP_LOG_MSG.PARTITION_CLEANUP_FAILED, {
+[adam-laptop]                         replicaId,
+[adam-laptop]                         error: error.message,
+[adam-laptop]                       });
+[adam-laptop]                   }
+[adam-laptop]                 },
+[adam-laptop]               );
+[adam-laptop]       
+[adam-laptop]             const messageGroupTasks =
+[adam-laptop]               [...d.getMessageGroupServices().entries()]
+[adam-laptop]                 .map(async ([replicaId, messageGroup]) => {
+[adam-laptop]                   if (!messageGroup ||
+[adam-laptop]                       typeof messageGroup.quiesceRebalancing !==
+[adam-laptop]                         'function') {
+[adam-laptop]                     return;
+[adam-laptop]                   }
+[adam-laptop]                   try {
+[adam-laptop]                     await messageGroup.quiesceRebalancing();
+[adam-laptop]                   } catch (error) {
+[adam-laptop]                     logger.warn(
+[adam-laptop]                       BOOTSTRAP_LOG_MSG.MESSAGE_GROUP_CLEANUP_FAILED, {
+[adam-laptop]                         replicaId,
+[adam-laptop]                         error: error.message,
+[adam-laptop]                       });
+[adam-laptop]                   }
+[adam-laptop]                 });
+[adam-laptop]       
+[adam-laptop]             await Promise.all(
+[adam-laptop]               [...partitionTasks, ...messageGroupTasks],
+[adam-laptop]             );
+[adam-laptop]       
+[adam-laptop]             const rebalanceCoordinator = d.getRebalanceCoordinator();
+[adam-laptop]             if (rebalanceCoordinator) {
+[adam-laptop]               try {
+[adam-laptop]                 await rebalanceCoordinator.shutdown();
+[adam-laptop]               } catch (error) {
+[adam-laptop]                 logger.warn(
+[adam-laptop]                   BOOTSTRAP_LOG_MSG
+[adam-laptop]                     .FAILED_BOOTSTRAP_CLEANUP_REGISTRATION_ERROR, {
+[adam-laptop]                     nodeId: d.getNodeId(),
+[adam-laptop]                     error: error.message,
+[adam-laptop]                   });
+[adam-laptop]               }
+[adam-laptop]               d.clearRebalanceCoordinator();
+[adam-laptop]             }
+[adam-laptop]           }
+[adam-laptop]       
+[adam-laptop]           /**
+[adam-laptop]            * Clean up partially initialized services (graceful shutdown).
+[adam-laptop]            * @return {Promise<void>}
+[adam-laptop]            */
+[adam-laptop]           async cleanup() {
+[adam-laptop]             const d = this.delegates;
+[adam-laptop]             const logger = d.getLogger();
+[adam-laptop]       
+[adam-laptop]             d.setIsShuttingDown(true);
+[adam-laptop]             logger.info(BOOTSTRAP_LOG_MSG.CLEANUP_START, {
+[adam-laptop]               nodeId: d.getNodeId(),
+[adam-laptop]               messageGroupServices:
+[adam-laptop]                 d.getMessageGroupServices().size,
+[adam-laptop]               partitionServices: d.getPartitionServices().size,
+[adam-laptop]             });
+[adam-laptop]       
+[adam-laptop]             d.clearNodeReadyRebalanceState();
+[adam-laptop]             d.stopUnifiedLifecycleOwners();
+[adam-laptop]             await this.quiesceRebalancers();
+[adam-laptop]             await LatencyTopologySetup.stop(d.getLatencyTopology());
+[adam-laptop]             d.setLatencyTopology(null);
+[adam-laptop]             await this.shutdownSharedRuntimeDependencies(d);
+[adam-laptop]             await d.clearReplicaStateMachine();
+[adam-laptop]             this.disableSystemTableWriter(d);
+[adam-laptop]             d.clearEpochManager();
+[adam-laptop]             await d.clearReplicaHandler();
+[adam-laptop]       
+[adam-laptop]             await this.shutdownServiceMap({
+[adam-laptop]               logger,
+[adam-laptop]               services: d.getPartitionServices(),
+[adam-laptop]               successLogMessage: BOOTSTRAP_LOG_MSG.PARTITION_CLEANED,
+[adam-laptop]               failureLogMessage: BOOTSTRAP_LOG_MSG.PARTITION_CLEANUP_FAILED,
+[adam-laptop]             });
+[adam-laptop]             // Each partition.shutdown() above retired its exact handler through the
+[adam-laptop]             // replica lifecycle owner, after the replica state machine closed and the
+[adam-laptop]             // executor stopped, so no successor can occupy the address before this
+[adam-laptop]             // point: cleanup is never a second handler-removal authority (a
+[adam-laptop]             // by-address removal could only remove a successor's handler). Router
+[adam-laptop]             // shutdown below is the node-lifetime backstop.
+[adam-laptop]             const messageRouter = d.getMessageRouter();
+[adam-laptop]             d.resetPartitionReplicas();
+[adam-laptop]       
+[adam-laptop]             await this.shutdownMessageGroupServices(logger);
+[adam-laptop]             d.resetMessageGroupReplicas();
+[adam-laptop]       
+[adam-laptop]             const transport = d.getTransport();
+[adam-laptop]             await this.shutdownTransportAndRouter(d, transport, messageRouter);
+[adam-laptop]             logger.info(BOOTSTRAP_LOG_MSG.CLEANUP_COMPLETE, {
+[adam-laptop]               nodeId: d.getNodeId(),
+[adam-laptop]             });
+[adam-laptop]           }
+[adam-laptop]       
+[adam-laptop]           async shutdownSharedRuntimeDependencies(d) {
+[adam-laptop]             // Stop all runtime drivers (request/call cell workers) BEFORE the
+[adam-laptop]             // runtime service handler clears its replica bookkeeping: the
+[adam-laptop]             // per-replica REMOVE_REPLICA stop path never runs at whole-node
+[adam-laptop]             // teardown, so without this sweep the cell Workers keep the event
+[adam-laptop]             // loop alive after the rest of the node is down.
+[adam-laptop]             const serviceRuntimeLifecycle =
+[adam-laptop]               d.getServiceRuntimeLifecycle?.() || null;
+[adam-laptop]             if (
+[adam-laptop]               typeof serviceRuntimeLifecycle?.shutdown === LOCAL_STR_FUNCTION
+[adam-laptop]             ) {
+[adam-laptop]               await serviceRuntimeLifecycle.shutdown({logger: d.getLogger()});
+[adam-laptop]             }
+[adam-laptop]             await d.clearRuntimeServiceHandler();
+[adam-laptop]             d.stopAndClearControlPlaneServices();
+[adam-laptop]             await d.clearRpcClient();
+[adam-laptop]             await this.shutdownSqlQueryEngine(d);
+[adam-laptop]           }
+[adam-laptop]       
+[adam-laptop]           async shutdownSqlQueryEngine(d) {
+[adam-laptop]             const cdcIntegrationService = d.getCdcIntegrationService?.() || null;
+[adam-laptop]             // Mark the CDC service shutting down before nulling the engine so its
+[adam-laptop]             // routed-mutation retry-budget loop stops re-arming instead of retrying the
+[adam-laptop]             // engine-less write forever and holding the event loop open after teardown.
+[adam-laptop]             if (typeof cdcIntegrationService?.markShuttingDown === LOCAL_STR_FUNCTION) {
+[adam-laptop]               cdcIntegrationService.markShuttingDown();
+[adam-laptop]             }
+[adam-laptop]             const sqlQueryEngine =
+[adam-laptop]               d.getSqlQueryEngine?.() ||
+[adam-laptop]               d.getCdcIntegrationService?.()?.sqlQueryEngine ||
+[adam-laptop]               null;
+[adam-laptop]             if (sqlQueryEngine && typeof sqlQueryEngine.shutdown === LOCAL_STR_FUNCTION) {
+[adam-laptop]               await sqlQueryEngine.shutdown();
+[adam-laptop]             }
+[adam-laptop]             if (cdcIntegrationService?.sqlQueryEngine === sqlQueryEngine) {
+[adam-laptop]               cdcIntegrationService.sqlQueryEngine = null;
+[adam-laptop]             }
+[adam-laptop]             d.releaseSqlQueryEngine?.(sqlQueryEngine);
+[adam-laptop]           }
+[adam-laptop]       
+[adam-laptop]           disableSystemTableWriter(d) {
+[adam-laptop]             const systemTableWriter = d.getSystemTableWriter();
+[adam-laptop]             if (systemTableWriter?.disable) {
+[adam-laptop]               systemTableWriter.disable();
+[adam-laptop]             }
+[adam-laptop]             d.setSystemTableWriter(null);
+[adam-laptop]           }
+[adam-laptop]       
+[adam-laptop]           async shutdownServiceMap(options) {
+[adam-laptop]             const closeErrors = [];
+[adam-laptop]             // A late old completion may only discharge its captured object. Newly
+[adam-laptop]             // published entries belong to a subsequent cleanup attempt.
+[adam-laptop]             for (const [replicaId, service] of [...options.services]) {
+[adam-laptop]               try {
+[adam-laptop]                 if (service.shutdown) {
+[adam-laptop]                   await service.shutdown();
+[adam-laptop]                 }
+[adam-laptop]                 await options.afterShutdown?.(replicaId, service);
+[adam-laptop]                 if (options.services.get(replicaId) === service) {
+[adam-laptop]                   options.services.delete(replicaId);
+[adam-laptop]                 }
+[adam-laptop]                 options.logger.debug(options.successLogMessage, {
+[adam-laptop]                   replicaId,
+[adam-laptop]                 });
+[adam-laptop]               } catch (error) {
+[adam-laptop]                 closeErrors.push(error);
+[adam-laptop]                 options.logger.warn(options.failureLogMessage, {
+[adam-laptop]                   replicaId,
+[adam-laptop]                   error: error.message,
+[adam-laptop]                 });
+[adam-laptop]               }
+[adam-laptop]             }
+[adam-laptop]             if (closeErrors.length > 0 || options.services.size > 0) {
+[adam-laptop]               throw new AggregateError(closeErrors, SERVICE_CLEANUP_PENDING);
+[adam-laptop]             }
+[adam-laptop]           }
+[adam-laptop]       
+[adam-laptop]           async shutdownMessageGroupServices(logger) {
+[adam-laptop]             const d = this.delegates;
+[adam-laptop]             const messageRouter = d.getMessageRouter();
+[adam-laptop]             const nodeId = d.getNodeId();
+[adam-laptop]             await this.shutdownServiceMap({
+[adam-laptop]               logger,
+[adam-laptop]               services: d.getMessageGroupServices(),
+[adam-laptop]               successLogMessage: BOOTSTRAP_LOG_MSG.MESSAGE_GROUP_CLEANED,
+[adam-laptop]               failureLogMessage: BOOTSTRAP_LOG_MSG.MESSAGE_GROUP_CLEANUP_FAILED,
+[adam-laptop]               afterShutdown: async (replicaId, messageGroup) => {
+[adam-laptop]                 if (!messageRouter) return;
+[adam-laptop]                 await retireMessageGroupTransportHandler({
+[adam-laptop]                   messageGroup,
+[adam-laptop]                   messageRouter,
+[adam-laptop]                   address: `${nodeId}${ADDRESS.SEPARATOR}` +
+[adam-laptop]                     `${ENTITY_TYPE.MESSAGE_GROUP}${ADDRESS.SEPARATOR}${replicaId}`,
+[adam-laptop]                   replicaId,
+[adam-laptop]                 });
+[adam-laptop]               },
+[adam-laptop]             });
+[adam-laptop]           }
+[adam-laptop]       
+[adam-laptop]           async shutdownTransportAndRouter(d, transport, messageRouter) {
+[adam-laptop]             if (transport && transport.shutdown &&
+[adam-laptop]                 transport !== messageRouter) {
+[adam-laptop]               await transport.shutdown();
+[adam-laptop]             }
+[adam-laptop]             d.setTransport(null);
+[adam-laptop]             if (messageRouter?.shutdown) {
+[adam-laptop]               await messageRouter.shutdown();
+[adam-laptop]             }
+[adam-laptop]             d.setMessageRouter(null);
+[adam-laptop]           }
+[adam-laptop]         }
+[adam-laptop]       
+[adam-laptop]       
+[adam-laptop]         export {SeedCleanupHandler};
+[adam-laptop]       doNotWant: !re /ENTITY_TYPE\.MESSAGE_GROUP/u
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/bootstrap/message-group-activation-handler-boundary.test.js
+[adam-laptop]         lineNumber: 383
+[adam-laptop]         columnNumber: 5
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: >
+[adam-laptop]         Test.<anonymous>
+[adam-laptop]         (test/bootstrap/message-group-activation-handler-boundary.test.js:383:5)
+[adam-laptop]       source: |2
+[adam-laptop]             'src/node/runtime-service-handler.js',
+[adam-laptop]           ]);
+[adam-laptop]           t.notMatch(read('src/bootstrap/phases/seed-cleanup-handler.js'),
+[adam-laptop]         ----^
+[adam-laptop]             /ENTITY_TYPE\.MESSAGE_GROUP/u,
+[adam-laptop]             'seed cleanup formats no message-group address for a raw removal');
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     ok 3 - the node-level service handler removes only its own fixed address, and only its own callback
+[adam-laptop]     ok 4 - src/bootstrap/phases/create-message-group-replica-lifecycle.js retires through the owner helper
+[adam-laptop]     ok 5 - src/bootstrap/phases/seed-message-groups-phase.js retires through the owner helper
+[adam-laptop]     ok 6 - src/bootstrap/owners/move-replica-handoff-owner.js retires through the owner helper
+[adam-laptop]     ok 7 - src/bootstrap/join-cleanup-handler.js retires through the owner helper
+[adam-laptop]     not ok 8 - src/bootstrap/phases/seed-cleanup-handler.js retires through the owner helper
+[adam-laptop]       ---
+[adam-laptop]       compare: ===
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/bootstrap/message-group-activation-handler-boundary.test.js
+[adam-laptop]         lineNumber: 408
+[adam-laptop]         columnNumber: 7
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: >
+[adam-laptop]         Test.<anonymous>
+[adam-laptop]         (test/bootstrap/message-group-activation-handler-boundary.test.js:408:7)
+[adam-laptop]       source: |2
+[adam-laptop]           };
+[adam-laptop]           for (const [path, pattern] of Object.entries(retirements)) {
+[adam-laptop]             t.equal((read(path).match(pattern) || []).length,
+[adam-laptop]         ------^
+[adam-laptop]               expectedCounts[path] || 1, `${path} retires through the owner helper`);
+[adam-laptop]           }
+[adam-laptop]       diff: |
+[adam-laptop]         --- expected
+[adam-laptop]         +++ actual
+[adam-laptop]         @@ -1,1 +1,1 @@
+[adam-laptop]         -2
+[adam-laptop]         +0
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     ok 9 - src/bootstrap/phases/create-message-group-replica-lifecycle.js registers no raw message-group handler
+[adam-laptop]     ok 10 - src/bootstrap/phases/create-message-group-replica-lifecycle.js registers through the exact-identity helper
+[adam-laptop]     ok 11 - src/bootstrap/phases/seed-message-groups-phase.js registers no raw message-group handler
+[adam-laptop]     ok 12 - src/bootstrap/phases/seed-message-groups-phase.js registers through the exact-identity helper
+[adam-laptop]     ok 13 - retirement waits on the owner's activation effect section
+[adam-laptop]     ok 14 - retirement is exact-identity
+[adam-laptop]     1..14
+[adam-laptop] not ok 12 - MG N2 census: every message-group transport-handler registration and removal in src goes through the exact-identity owner helpers # time=60.123ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/bootstrap/message-group-activation-handler-boundary.test.js
+[adam-laptop]     lineNumber: 350
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: |2
+[adam-laptop]       });
+[adam-laptop]   
+[adam-laptop]     test('MG N2 census: every message-group transport-handler registration and ' +
+[adam-laptop]     ^
+[adam-laptop]       'removal in src goes through the exact-identity owner helpers',
+[adam-laptop]     async (t) => {
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] 1..12
+[adam-laptop] # { total: 59, pass: 57, fail: 2 }
+[adam-laptop] # time=457.779ms
+[adam-laptop] # test-files total=1 pass=0 fail=1 assertions=71
+lab test: adam-laptop: # test-files total=4 pass=2 fail=2 assertions=172
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=4 pass=2 fail=2 assertions=172

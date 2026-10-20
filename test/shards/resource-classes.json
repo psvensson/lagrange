@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2401,
+    "ordinary": 2402,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2418,
-  "digest": "fnv1a32-11ffde82",
+  "censusSize": 2419,
+  "digest": "fnv1a32-23f342c7",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -254,6 +254,7 @@
     "test/bootstrap/seed-delegate-bundles.test.js": "ordinary",
     "test/bootstrap/seed-infrastructure-phase.test.js": "ordinary",
     "test/bootstrap/seed-infrastructure-runtime-identity.test.js": "ordinary",
+    "test/bootstrap/seed-message-group-cleanup-custody.test.js": "ordinary",
     "test/bootstrap/seed-message-group-founder-open-refusal.test.js": "ordinary",
     "test/bootstrap/seed-participant-release-failure-projection.test.js": "ordinary",
     "test/bootstrap/seed-registration-election-scheduling.test.js": "ordinary",

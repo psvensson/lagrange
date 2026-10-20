@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 116,
     "architecture-governance": 19,
-    "bootstrap-membership": 322,
+    "bootstrap-membership": 323,
     "cdc-metadata": 63,
     "cli-tooling": 96,
     "control-plane": 216,
@@ -25,10 +25,10 @@
     "transport-messaging": 96,
     "wasm-toolchain": 74
   },
-  "censusSize": 2418,
-  "digest": "fnv1a32-e2ab7538",
+  "censusSize": 2419,
+  "digest": "fnv1a32-7f816f2a",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-2ede2532",
+  "observationDigest": "fnv1a32-8332a827",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -274,6 +274,7 @@
     "test/bootstrap/seed-delegate-bundles.test.js": "bootstrap-membership",
     "test/bootstrap/seed-infrastructure-phase.test.js": "bootstrap-membership",
     "test/bootstrap/seed-infrastructure-runtime-identity.test.js": "bootstrap-membership",
+    "test/bootstrap/seed-message-group-cleanup-custody.test.js": "bootstrap-membership",
     "test/bootstrap/seed-message-group-founder-open-refusal.test.js": "bootstrap-membership",
     "test/bootstrap/seed-participant-release-failure-projection.test.js": "bootstrap-membership",
     "test/bootstrap/seed-registration-election-scheduling.test.js": "bootstrap-membership",
@@ -3266,6 +3267,11 @@
     "test/bootstrap/seed-infrastructure-runtime-identity.test.js": {
       "files": [
         "src/bootstrap/phases/seed-infrastructure-phase.js"
+      ]
+    },
+    "test/bootstrap/seed-message-group-cleanup-custody.test.js": {
+      "files": [
+        "src/bootstrap/shared/message-group-transport-handler.js"
       ]
     },
     "test/bootstrap/seed-message-group-founder-open-refusal.test.js": {

@@ -1,0 +1,4 @@
+{"file":"test/transport/exact-handler-identity-api.test.js","attempt":1,"ok":true,"assertions":36,"durationMs":847,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/node/message-group-executor-activation-handler-boundary.test.js","attempt":1,"ok":true,"assertions":43,"durationMs":1277,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/node/replica-transport-handler-identity.test.js","attempt":1,"ok":false,"assertions":22,"durationMs":1756,"retriedOnce":false,"firstFailureLine":"not ok 1 - Replica transport handler left registered: the transport cannot prove handler identity, so retirement was refused"}
+{"file":"test/bootstrap/message-group-activation-handler-boundary.test.js","attempt":1,"ok":false,"assertions":71,"durationMs":1149,"retriedOnce":false,"firstFailureLine":"not ok 2 - seed cleanup formats no message-group address for a raw removal"}
