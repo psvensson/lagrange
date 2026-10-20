@@ -57,8 +57,7 @@ function admitWasmRetirement(lifecycle, value) {
     origin = captureLocalCreation(lifecycle, value);
     const existing = lifecycle.creationRetirements.get(origin.operationId);
     if (existing !== undefined) {
-      requireInstance(sameRetainedCreation(existing.origin, origin), OUTCOME.CONTENT_CONFLICT);
-      return existing.promise;
+      // MUTATION V6: duplicate equal retirement bypasses the shared task.
     }
     requireRetirementOrigin(lifecycle, origin);
   } catch (error) {
