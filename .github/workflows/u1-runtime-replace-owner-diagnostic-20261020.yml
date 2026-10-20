@@ -5,6 +5,7 @@ on:
       - probe/u1-runtime-replace-owner-diagnostics-20261020
     paths:
       - .github/workflows/u1-runtime-replace-owner-diagnostic-20261020.yml
+      - test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js
 permissions:
   contents: read
 jobs:
