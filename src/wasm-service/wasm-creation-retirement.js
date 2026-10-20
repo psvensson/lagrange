@@ -9,7 +9,7 @@
 import fs from 'node:fs';
 import {SERVICE_INSTANCE_LIMIT as LIMIT, SERVICE_INSTANCE_OUTCOME as OUTCOME} from
   '../constants/service-instance.js';
-import {captureInstanceJson, instanceDigest, instanceFailure, requireInstance} from
+import {captureInstanceJson, instanceFailure, requireInstance} from
   '../control-plane/owners/service-instance-contract.js';
 import {matchesInstanceResourceToken} from '../control-plane/owners/service-instance-state.js';
 import {runtimeServiceConsensusIdentity} from '../rebalancer/runtime-service-replica-identity.js';
@@ -41,18 +41,12 @@ function captureRetirement(lifecycle, value) {
       identity.replicaId)};
 }
 
-function sameCreation(replica, retired) {
-  const creation = replica?.consensusCreation ?? null;
-  return creation !== null && instanceDigest(creation.token) === instanceDigest(retired.token) &&
-    instanceDigest(creation.intent) === instanceDigest(retired.intent);
-}
-
 // The registered or still-retiring instance of this exact creation; a
 // successor under the same serviceId is a different creation, never a match.
 function retiringTarget(lifecycle, retired) {
   const candidates = [lifecycle.activeReplicas.get(retired.serviceId),
     ...lifecycle.retiringReplicas];
-  return candidates.find((replica) => sameCreation(replica, retired)) ?? null;
+  return candidates.find((replica) => replica?.serviceDefinitionId === retired.serviceId) ?? null;
 }
 
 async function settleOwner(call) {
