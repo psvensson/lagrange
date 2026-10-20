@@ -1,0 +1,31 @@
+name: rsraft-historical-cdc-factory-metadata-20261020
+on:
+  push:
+    branches: [probe/rsraft-historical-cdc-factory-fixture-20261020]
+    paths: [.github/workflows/rsraft-historical-cdc-factory-metadata-20261020.yml]
+permissions: {contents: read}
+jobs:
+  canonical:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: 2e210f9317ff4fc1ea5186f07814b87aabc1fa71
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = 2e210f9317ff4fc1ea5186f07814b87aabc1fa71
+          npm ci
+          npm run -s test:metadata:refresh
+          echo 'HISTORICAL_CDC_SEAL_BEGIN'
+          cat test/shards/impact-graph-seal.json
+          echo 'HISTORICAL_CDC_SEAL_END'
+          git diff --name-only
+          node scripts/check-fast-static.js --base 381750de29af647d446b19adedf1da53eb712093 --explain
