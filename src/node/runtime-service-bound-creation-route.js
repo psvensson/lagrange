@@ -280,6 +280,8 @@ async function routeRuntimeServiceCreate(handler, params, installed) {
     decision = routed.decision;
     settleCreation(handler, params, decision, entry);
   } catch (error) {
+    handler.logger.error('U1_ROUTE_EXCEPTION_DIAGNOSTIC',
+      {message: error?.message, code: error?.code, stack: error?.stack});
     decision = {kind: DECISION.DEFERRED, errorCode: error?.code ?? OUTCOME.UNKNOWN,
       names: entry.origin !== undefined};
     settleCreation(handler, params, decision, entry);
