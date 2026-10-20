@@ -168,7 +168,7 @@ async function inventoryAttempt(handler, task) {
 
 function recoverRetainedCreations(handler) {
   if (handler.stopped) return Promise.resolve(stoppedInventory());
-  if (handler.restartTask !== undefined) return handler.restartTask.promise;
+  // MUTATION V1-A: competing callers skip the existing inventory owner join.
   const completion = Promise.withResolvers();
   const task = {promise: completion.promise, applied: false, plansById: new Map()};
   handler.restartTask = task;
