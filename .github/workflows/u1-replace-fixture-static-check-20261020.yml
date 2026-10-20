@@ -1,0 +1,34 @@
+name: u1-replace-fixture-static-check-20261020
+on:
+  push:
+    branches: [work/u1-replace-typed-reader-20261020]
+    paths: [.github/workflows/u1-replace-fixture-static-check-20261020.yml]
+permissions: {contents: read}
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Verify only intended fixture changed under source and test scope
+        run: |
+          set -euo pipefail
+          git diff --name-only be25caa5f0c3612feec662d4feaa9ba28f8f34df HEAD -- src test |
+            tee "$RUNNER_TEMP/u1-delta.txt"
+          test "$(cat "$RUNNER_TEMP/u1-delta.txt")" = test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js
+          npm ci
+      - name: Verify exact test lint and canonical metadata producer
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx eslint test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js
+          npm run -s test:metadata:refresh
+          node scripts/check-fast-static.js --base be25caa5f0c3612feec662d4feaa9ba28f8f34df --explain
