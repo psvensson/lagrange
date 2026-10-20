@@ -1,0 +1,115 @@
+# Matched old/new runs for two one-node formation tests on the SAME existing GCP VM.
+# Diagnostic, not approval. Exactly one previously terminated VM; auto-stop.
+name: u1-formation-paired-reproduction-20261020
+on:
+  push:
+    branches: [verify/u1-gcp-20261020]
+    paths:
+      - .github/workflows/u1-formation-paired-reproduction-20261020.yml
+permissions: {contents: read}
+concurrency:
+  group: u1-formation-paired-reproduction-20261020
+  cancel-in-progress: false
+env:
+  BASE: 381750de29af647d446b19adedf1da53eb712093
+  CANDIDATE: be25caa5f0c3612feec662d4feaa9ba28f8f34df
+  GCP_PROJECT: something-2e584
+  GCP_ZONE: europe-north1-a
+  GCP_VM: lagrange-ci-runner
+jobs:
+  wake:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions: {contents: read, id-token: write}
+    outputs:
+      owned: ${{ steps.wake.outputs.owned }}
+    steps:
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          workload_identity_provider: projects/759391918025/locations/global/workloadIdentityPools/github/providers/github-actions
+          service_account: github-release-starter@something-2e584.iam.gserviceaccount.com
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
+      - id: wake
+        run: |
+          set -euo pipefail
+          status="$(gcloud compute instances describe "$GCP_VM" --project "$GCP_PROJECT" --zone "$GCP_ZONE" --format='value(status)')"
+          test "$status" = TERMINATED || { echo "Busy/shared VM is not ours: $status"; exit 3; }
+          echo 'owned=true' >> "$GITHUB_OUTPUT"
+          gcloud compute instances start "$GCP_VM" --project "$GCP_PROJECT" --zone "$GCP_ZONE" --quiet
+  compare:
+    needs: wake
+    runs-on: [self-hosted, gcp]
+    timeout-minutes: 35
+    permissions: {contents: read}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: be25caa5f0c3612feec662d4feaa9ba28f8f34df
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Observe both formation tests twice on each immutable source
+        shell: bash
+        timeout-minutes: 29
+        env:
+          LAGRANGE_RETRY_FAILED_ONCE: '0'
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE"
+          test "$(git rev-parse "$BASE:package-lock.json")" = "$(git rev-parse "$CANDIDATE:package-lock.json")"
+          npm ci
+          mkdir -p test-output/u1-formation-pair
+          for file in \
+            test/integration/single-node-default-replica-count-writes.integration.test.js \
+            test/integration/public-consumer-contract-ratchet.integration.test.js; do
+            test "$(git rev-parse "$BASE:$file")" = "$(git rev-parse "$CANDIDATE:$file")"
+          done
+          for sha in "$BASE" "$CANDIDATE"; do
+            git checkout -q --detach "$sha"
+            for f in \
+              test/integration/single-node-default-replica-count-writes.integration.test.js \
+              test/integration/public-consumer-contract-ratchet.integration.test.js; do
+              for trial in 1 2; do
+                tag="$(basename "$f" .test.js)-${sha:0:10}-trial$trial"
+                set +e
+                printf '%s\n' "$f" | node scripts/run-classified-test-files.js --stdin \
+                  > "test-output/u1-formation-pair/$tag.log" 2>&1
+                result=$?
+                set -e
+                printf '%s\t%s\t%s\t%s\n' "$sha" "$f" "$trial" "$result" \
+                  >> test-output/u1-formation-pair/summary.tsv
+                grep '# test-files total=' "test-output/u1-formation-pair/$tag.log" | tail -n 1
+                test "$result" -le 1 || { echo "Unclassified test failure: $tag rc=$result"; exit 2; }
+              done
+            done
+          done
+          git checkout -q --detach "$CANDIDATE"
+          cat test-output/u1-formation-pair/summary.tsv
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: u1-formation-pair-${{ github.run_id }}
+          path: test-output/u1-formation-pair/
+          retention-days: 14
+          if-no-files-found: warn
+  cleanup:
+    if: always() && needs.wake.outputs.owned == 'true'
+    needs: [wake, compare]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions: {contents: read, id-token: write}
+    steps:
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          workload_identity_provider: projects/759391918025/locations/global/workloadIdentityPools/github/providers/github-actions
+          service_account: github-release-starter@something-2e584.iam.gserviceaccount.com
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
+      - run: |
+          set -euo pipefail
+          gcloud compute instances stop "$GCP_VM" --project "$GCP_PROJECT" --zone "$GCP_ZONE" --quiet
+          status="$(gcloud compute instances describe "$GCP_VM" --project "$GCP_PROJECT" --zone "$GCP_ZONE" --format='value(status)')"
+          echo "U1_FORMATION_GCP_STOP=$status"
+          test "$status" = TERMINATED
