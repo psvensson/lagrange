@@ -125,6 +125,30 @@ function releaseExecution(handler, entry) {
   return true;
 }
 
+/**
+ * One existing generic execution gate decides whether a request can join an
+ * in-progress CREATE/REMOVE. An IN_PROGRESS reply promises an outcome for
+ * that exact request: a different operation identity has no registered
+ * observer and must retain its own retry custody. The bound retirement
+ * observer contract remains separate and is not widened here.
+ *
+ * A nameless CREATING memo with no installed execution is not a gate:
+ * undefined lets the caller enter the ordinary CREATE admission owner.
+ * @return {Object|undefined} A typed reply, or no active gate.
+ */
+function replyToGenericExecutionGate(handler, params, operationType) {
+  const active = replicaExecution(handler, params.replicaId);
+  if (active === undefined) return undefined;
+  if (active.type === operationType && sameExecutionRequest(active, params)) {
+    return inProgressReply(handler, params.replicaId);
+  }
+  // Same ID with conflicting request/body/kind is permanently conflicting;
+  // a different operation may retry once the incumbent reaches finality.
+  const conflictingIdentity = active.operationId === params.operationId;
+  return executionRefusal(handler, conflictingIdentity ?
+    OUTCOME.CONTENT_CONFLICT : ERROR.RETIREMENT_IN_PROGRESS, !conflictingIdentity);
+}
+
 function sameCoordinatorRequest(entry, params, creationOperationId) {
   return sameExecutionRequest(entry, params) && entry.creationOperationId === creationOperationId;
 }
@@ -158,4 +182,5 @@ function joinRetirementObserver(handler, entry, params, creationOperationId) {
 
 export {captureCreationRequest, matchesCreationRequest, matchesCreationWake, replicaExecution,
   currentExecution, retainedCreationPlan, executionRefusal, inProgressReply, installExecution,
-  releaseExecution, joinRetirementObserver, executionForRequest, executionRequestConflict};
+  releaseExecution, joinRetirementObserver, executionForRequest, executionRequestConflict,
+  replyToGenericExecutionGate};
