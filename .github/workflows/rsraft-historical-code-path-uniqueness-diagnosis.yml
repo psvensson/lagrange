@@ -1,0 +1,43 @@
+name: rsraft-historical-code-path-uniqueness-diagnosis
+on:
+  push:
+    branches: [probe/rsraft-historical-core-flag-source-diagnosis-20261020]
+    paths: [.github/workflows/rsraft-historical-code-path-uniqueness-diagnosis.yml]
+permissions: {contents: read}
+jobs:
+  diagnosis:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: be25caa5f0c3612feec662d4feaa9ba28f8f34df
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - shell: bash
+        env:
+          LAGRANGE_RETRY_FAILED_ONCE: '0'
+        run: |
+          set -euo pipefail
+          npm ci
+          mkdir -p test-output/core-flag-diagnosis
+          set +e
+          node scripts/run-classified-test-files.js --stdin \
+            <<<'test/config/code-path-uniqueness.property.test.js' \
+            > test-output/core-flag-diagnosis/test.log 2>&1
+          status=$?
+          set -e
+          echo "ORIGINAL_CODE_PATH_UNIQUENESS_EXIT=$status"
+          tail -n 130 test-output/core-flag-diagnosis/test.log
+          grep -F 'No files should have core feature flags.' test-output/core-flag-diagnosis/test.log
+          test "$status" -ne 0
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: historical-code-path-uniqueness-${{ github.run_id }}
+          path: test-output/core-flag-diagnosis/
+          retention-days: 14
+          if-no-files-found: warn
