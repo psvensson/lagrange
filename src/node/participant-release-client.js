@@ -109,7 +109,7 @@ async function askParticipantRelease(owner, nodeId, request) {
   if (prepared.answer !== undefined) {
     return prepared.answer;
   }
-  if (prepared.timeoutMs <= 0) {
+  if (prepared.timeoutMs < 0) {
     return releaseAnswer(OUTCOME.UNAVAILABLE, request,
       {missingFact: MISSING_FACT.RELEASE_DEADLINE, owner: nodeId});
   }
