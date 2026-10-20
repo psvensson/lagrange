@@ -453,7 +453,7 @@ function consumeCreationWake(handler, serviceDefinitionId, wake) {
     }
     return {outcome: WAKE.QUEUED};
   case WAKE_ACTION.MEMO:
-    memo.wakePending = true;
+    // MUTATION V4: the admitted wake is discarded before the occupied gate releases.
     resumeHeldMemoWake(handler, memo.replicaId);
     return {outcome: WAKE.QUEUED};
   default:
