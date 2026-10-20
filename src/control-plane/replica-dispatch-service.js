@@ -60,8 +60,10 @@ class ReplicaDispatchService extends ReplicaDispatchReadinessCapture {
       return {outcome: LEGACY_AUTHORITY.UNAVAILABLE};
     }
     const operation = observation?.operation;
-    if (!operation) return {outcome: observation?.deferredOutcome ?
-      LEGACY_AUTHORITY.UNAVAILABLE : LEGACY_AUTHORITY.CONTENT_CONFLICT};
+    if (!operation) {
+      return {outcome: observation?.deferredOutcome ?
+        LEGACY_AUTHORITY.UNAVAILABLE : LEGACY_AUTHORITY.CONTENT_CONFLICT};
+    }
     const matches = operation.operationId === operationId &&
       operation.type === OperationType.REMOVE &&
       operation.entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE &&
