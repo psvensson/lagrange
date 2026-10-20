@@ -198,6 +198,41 @@ test('U1 physical owner: actual failed cleanup is unavailable while its resource
     }
   });
 
+test('U1 retirement custody: failed activity stop after closing DB remains unresolved',
+  async (t) => {
+    const {host, retained, replica} = await preparedHost(t);
+    await replica.initialize();
+    const original = replica.roleMutationHelper.shutdown.bind(replica.roleMutationHelper);
+    let faults = 0;
+    replica.roleMutationHelper.shutdown = () => {
+      faults += 1;
+      if (faults === 1) throw new Error('U1_ACTIVITY_RETIREMENT_FAILED_AFTER_FENCE');
+      return original();
+    };
+    let first;
+    try {
+      // Real metadata release, native shutdown and local tombstone. Only one
+      // synchronous activity cleanup seam is faulted.
+      first = await host.lifecycle.retireReplica(retained);
+    } finally {
+      replica.roleMutationHelper.shutdown = original;
+    }
+    assert.equal(faults, 1, 'the admitted local stop actually reached its fault');
+    assert.equal(replica.lifecycleState, STATE.CLEANUP_REQUIRED);
+    assert.equal(replica.db, null, 'native file closure finished before activity cleanup settled');
+    assert.equal(host.lifecycle.retiringReplicas.has(replica), true,
+      'FAILED_ACTIVITY_STOP_LOST_EXACT_RETRY_CUSTODY');
+    assert.equal(first.closed, false,
+      'INCOMPLETE_ACTIVITY_CLEANUP_CLOSED_ORIGINAL_CREATION_JOURNAL');
+    assert.equal(first.finality, 'UNRESOLVED',
+      'INCOMPLETE_ACTIVITY_CLEANUP_CLAIMED_PERMANENT_FINALITY');
+    const second = await host.lifecycle.retireReplica(retained);
+    assert.equal(second.finality, 'FINAL', 'owner retry settles the same original creation');
+    assert.equal(second.closed, true);
+    assert.equal(host.lifecycle.retiringReplicas.has(replica), false,
+      'successful owned retry did not release the exact retired object');
+  });
+
 test('U1 retirement custody: registration precedes a synchronously reentrant shutdown', async (t) => {
   const {e, host, retained} = await retainedHost(t);
   const releaseResource = e.metadata.primary.releaseInstanceResource.bind(e.metadata.primary);
