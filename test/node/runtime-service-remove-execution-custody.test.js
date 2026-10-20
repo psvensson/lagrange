@@ -142,6 +142,47 @@ test('U1 execution: a late STOP return cannot overwrite a successor and releases
     assert.equal(w.outcomes.at(-1)[1], 'new-inflight');
   });
 
+test('U1 execution: foreign REMOVE cannot join without owning an outcome observer',
+  async (t) => {
+    const entered = deferred();
+    const release = deferred();
+    const targets = [];
+    const w = genericWorld(t, async (target) => {
+      targets.push(target);
+      entered.resolve();
+      await release.promise;
+      return {stopped: true};
+    });
+    try {
+      const first = await w.handler.handleRemoveReplica(request('remove-owner'));
+      assert.equal(first.status, REPLY.INITIATED);
+      await entered.promise;
+      assert.equal(w.handler.inProgressOperations.size, 1);
+
+      const duplicate = await w.handler.handleRemoveReplica(request('remove-owner'));
+      assert.equal(duplicate.status, REPLY.IN_PROGRESS,
+        'AN_EXACT_DUPLICATE_LOST_ITS_IN_PROGRESS_JOIN');
+
+      const foreign = await w.handler.handleRemoveReplica(request('remove-foreign'));
+      assert.equal(foreign.status, REPLY.ERROR,
+        'FOREIGN_REMOVE_WAS_ACKNOWLEDGED_WITH_NO_OUTCOME_OWNER');
+      assert.equal(foreign.deferRetry, true,
+        'FOREIGN_REMOVE_WAS_NOT_GIVEN_RETRY_CUSTODY');
+      assert.equal(w.handler.inProgressOperations.size, 1);
+      assert.equal(targets.length, 1,
+        'FOREIGN_REMOVE_DISPATCHED_A_SECOND_PHYSICAL_STOP');
+    } finally {
+      release.resolve();
+      await turn();
+      await turn();
+    }
+    assert.equal(w.outcomes.length, 1);
+    assert.equal(w.outcomes[0][0], OUTCOME.RUNTIME_SERVICE_REMOVE_COMPLETED);
+    assert.equal(w.outcomes[0][1], 'remove-owner',
+      'THE_ORIGINAL_OUTCOME_CHANGED_IDENTITY_AFTER_FOREIGN_DUPLICATE');
+    assert.equal(w.handler.inProgressOperations.size, 0);
+  });
+
 test('U1 execution: failed STOP releases its attempt for independently admitted retry',
   async (t) => {
     let stops = 0;
