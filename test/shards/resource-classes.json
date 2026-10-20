@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2396,
+    "ordinary": 2398,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2413,
-  "digest": "fnv1a32-3646d203",
+  "censusSize": 2415,
+  "digest": "fnv1a32-be3d99a2",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1153,6 +1153,7 @@
     "test/node/node-service-presence.property.test.js": "ordinary",
     "test/node/node-service-runtime-isolation.test.js": "ordinary",
     "test/node/node-service.test.js": "ordinary",
+    "test/node/participant-release-control-refusal-observation.test.js": "ordinary",
     "test/node/partition-registration-invariant.property.test.js": "ordinary",
     "test/node/registered-partition-removal.property.test.js": "ordinary",
     "test/node/replica-cleanup-token-authority.test.js": "ordinary",
@@ -1256,6 +1257,7 @@
     "test/partition/participant-release-applied-position.test.js": "ordinary",
     "test/partition/participant-release-build-provenance.test.js": "ordinary",
     "test/partition/participant-release-control-three-member.test.js": "ordinary",
+    "test/partition/participant-release-deadline-recovery.test.js": "ordinary",
     "test/partition/participant-release-delivery-recorder.test.js": "ordinary",
     "test/partition/participant-release-first-prepare-native.test.js": "ordinary",
     "test/partition/participant-release-native-application-order.test.js": "ordinary",

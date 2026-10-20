@@ -1,0 +1,166 @@
+lab test: adam-laptop: ordinary (1 files) cores=8 mem=15.5GiB speed x2.01
+[adam-laptop] placement-shell=2076586
+[adam-laptop] placement-head=0e9ff4fdc11152e6b4da39adb5a1046615d19be4
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7
+[adam-laptop] placement-pid=2077012
+[adam-laptop] # test-files planned=1
+[adam-laptop] classified lane ordinary: 1 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 80C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 80C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 40C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] not ok test/partition/participant-release-protocol.test.js (16 assertions, 4781ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] # Subtest: real release route pauses initial writes, applies origin, censuses and resumes; registry and consensus triggers recover a recreated service from the same durable origin
+[adam-laptop] ok 1 - real release route pauses initial writes, applies origin, censuses and resumes; registry and consensus triggers recover a recreated service from the same durable origin
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 2613.440903
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: no-origin release without fresh storage or operator authority stays closed
+[adam-laptop] ok 2 - no-origin release without fresh storage or operator authority stays closed
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 85.964418
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: dependent release stays closed without a reconstructed current control owner fact
+[adam-laptop] ok 3 - dependent release stays closed without a reconstructed current control owner fact
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 48.624382
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: dependent release consumes an exact remotely routed current control owner fact
+[adam-laptop] ok 4 - dependent release consumes an exact remotely routed current control owner fact
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 96.414038
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: mixed target build is refused and cannot lower admission
+[adam-laptop] ok 5 - mixed target build is refused and cannot lower admission
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 73.695803
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: control cohort origin installs the fixed coordinator schema atomically and its replay repairs a missing enforcer without changing the durable origin
+[adam-laptop] ok 6 - control cohort origin installs the fixed coordinator schema atomically and its replay repairs a missing enforcer without changing the durable origin
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 72.145528
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: already-current control cohort proves release with fewer original route calls
+[adam-laptop] ok 7 - already-current control cohort proves release with fewer original route calls
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 62.322573
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: already-clean control release consumes one post-pause census at original recipient
+[adam-laptop] ok 8 - already-clean control release consumes one post-pause census at original recipient
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 71.032268
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: control current-proof refuses an enforcer mutation at final actual RESUME
+[adam-laptop] ok 9 - control current-proof refuses an enforcer mutation at final actual RESUME
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 71.03607
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: control cohort preserves unreconstructible legacy rows and reports exact activation debt
+[adam-laptop] ok 10 - control cohort preserves unreconstructible legacy rows and reports exact activation debt
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 48.628174
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: registered participant release projects one real blocked drain and older joined attempt
+[adam-laptop] ok 11 - registered participant release projects one real blocked drain and older joined attempt
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 53.45874
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: registered failed joins bound triggers without getters or coercion
+[adam-laptop] ok 12 - registered failed joins bound triggers without getters or coercion
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 28.223201
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: registered failed joins type invalid and backward owner clock observations
+[adam-laptop] ok 13 - registered failed joins type invalid and backward owner clock observations
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 75.258957
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: post-ENABLE control loss returns the canonical control refusal and stays paused
+[adam-laptop] ok 14 - post-ENABLE control loss returns the canonical control refusal and stays paused
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 83.162411
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: registered dependent release retains control expiry before nested client dispatch
+[adam-laptop] not ok 15 - registered dependent release retains control expiry before nested client dispatch
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 61.76858
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/0e9ff4fdc111-mvgxf11g-4044892/test/partition/participant-release-protocol.test.js:835:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     the failed-control projection preserves the actual nested client missing fact
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]     + undefined
+[adam-laptop]     - 'release_deadline'
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected: 'release_deadline'
+[adam-laptop]   operator: 'strictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/0e9ff4fdc111-mvgxf11g-4044892/test/partition/participant-release-protocol.test.js:859:14
+[adam-laptop]     async recordReleaseDeliveries (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0e9ff4fdc111-mvgxf11g-4044892/test/partition/participant-release-protocol.test.js:819:5)
+[adam-laptop]     async fixture.timeSource (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0e9ff4fdc111-mvgxf11g-4044892/test/partition/participant-release-protocol.test.js:841:5)
+[adam-laptop]     async withParticipantReleaseProtocol (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0e9ff4fdc111-mvgxf11g-4044892/test/test-helpers/participant-release-protocol-fixture.js:103:5)
+[adam-laptop]     async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0e9ff4fdc111-mvgxf11g-4044892/test/partition/participant-release-protocol.test.js:837:3)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: registered dependent release retains delivered control refusal after current leader loss
+[adam-laptop] not ok 16 - registered dependent release retains delivered control refusal after current leader loss
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 70.058536
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/0e9ff4fdc111-mvgxf11g-4044892/test/partition/participant-release-protocol.test.js:867:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     the failed-control projection preserves the actual delivered missing fact
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]     + undefined
+[adam-laptop]     - 'hosted_partition'
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected: 'hosted_partition'
+[adam-laptop]   operator: 'strictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/0e9ff4fdc111-mvgxf11g-4044892/test/partition/participant-release-protocol.test.js:891:14
+[adam-laptop]     async recordReleaseDeliveries (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0e9ff4fdc111-mvgxf11g-4044892/test/partition/participant-release-protocol.test.js:819:5)
+[adam-laptop]     async fixture.remoteControl (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0e9ff4fdc111-mvgxf11g-4044892/test/partition/participant-release-protocol.test.js:874:5)
+[adam-laptop]     async withParticipantReleaseProtocol (file:///home/peter/projects/lagrange/test-output/placement-worktrees/0e9ff4fdc111-mvgxf11g-4044892/test/test-helpers/participant-release-protocol-fixture.js:103:5)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] 1..16
+[adam-laptop] # tests 16
+[adam-laptop] # suites 0
+[adam-laptop] # pass 14
+[adam-laptop] # fail 2
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 3629.881485
+[adam-laptop] # time=4781ms
+[adam-laptop] # test-files total=1 pass=0 fail=1 assertions=16
+lab test: adam-laptop: # test-files total=1 pass=0 fail=1 assertions=16
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=1 pass=0 fail=1 assertions=16

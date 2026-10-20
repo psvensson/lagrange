@@ -1,6 +1,7 @@
-// The native protocol fixture shared by the existing release tests and bounded
-// recovery witnesses. Only the transport hop and optional handler clock differ
-// from production; release facts, Raft, SQLite and lifecycle owners are real.
+// Native release owners with an in-process transport, empty system-cache double,
+// optional remote-route hint double and optional injected handler clock.
+// PartitionService, Raft, SQLite, release facts and lifecycle owners are real;
+// this fixture does not prove full bootstrap or remote topology availability.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -27,6 +28,17 @@ const CONTROL_REPLICA = 'release-sql-transactions-r1';
 const SQL = `INSERT INTO ${TABLE} (id, value) VALUES (?, ?)`;
 const cache = {getAll: () => [], get: () => null, filter: () => []};
 
+function createControlService(directory, remoteControl, overrides) {
+  return new PartitionService(withFoundingStamp({
+    nodeId: remoteControl ? CONTROL_NODE : NODE, partitionId: CONTROL_PARTITION,
+    replicaId: CONTROL_REPLICA, replicaIds: [CONTROL_REPLICA],
+    tableId: SQL_TRANSACTIONS_SCHEMA.tableName,
+    tableName: SQL_TRANSACTIONS_SCHEMA.tableName, schema: SQL_TRANSACTIONS_SCHEMA,
+    dbPath: path.join(directory, 'sql-transactions.db'), systemTableCache: cache,
+    deferElection: true, ...overrides,
+  }));
+}
+
 async function withParticipantReleaseProtocol(measure, table = {tableId: TABLE, tableName: TABLE,
   schema: {columns: [{name: 'id', type: 'TEXT', primaryKey: true},
     {name: 'value', type: 'TEXT'}]}}, fixtureOptions = {}) {
@@ -36,6 +48,8 @@ async function withParticipantReleaseProtocol(measure, table = {tableId: TABLE, 
     replicaIds: [REPLICA], ...table, dbPath: path.join(directory, 'partition.db'),
     systemTableCache: cache, deferElection: true};
   const create = (overrides) => new PartitionService(withFoundingStamp({...options, ...overrides}));
+  const createControl = (overrides) =>
+    createControlService(directory, fixtureOptions.remoteControl === true, overrides);
   const topologyOwner = fixtureOptions.remoteControl === true ? {
     resolveCanonicalPartitionLeaderNodeId(partitionId) {
       return partitionId === CONTROL_PARTITION ? CONTROL_NODE : null;
@@ -57,16 +71,7 @@ async function withParticipantReleaseProtocol(measure, table = {tableId: TABLE, 
     service = create();
     if (table.tableName !== SQL_TRANSACTIONS_SCHEMA.tableName &&
         fixtureOptions.includeControl !== false) {
-      const controlNodeId = fixtureOptions.remoteControl === true ?
-        CONTROL_NODE : NODE;
-      controlService = new PartitionService(withFoundingStamp({
-        nodeId: controlNodeId, partitionId: CONTROL_PARTITION,
-        replicaId: CONTROL_REPLICA,
-        replicaIds: [CONTROL_REPLICA], tableId: SQL_TRANSACTIONS_SCHEMA.tableName,
-        tableName: SQL_TRANSACTIONS_SCHEMA.tableName, schema: SQL_TRANSACTIONS_SCHEMA,
-        dbPath: path.join(directory, 'sql-transactions.db'), systemTableCache: cache,
-        deferElection: true,
-      }));
+      controlService = createControl();
       await controlService.initialize();
       if (fixtureOptions.remoteControl === true) {
         controlHandler = new ReplicaHandler({nodeId: CONTROL_NODE,
@@ -101,10 +106,14 @@ async function withParticipantReleaseProtocol(measure, table = {tableId: TABLE, 
         deadlineAtMs: handler.timeSource.now() + 30000,
       });
     await measure({handler, service, controlService, controlHandler, transport, release, create,
-      build, timeSource: handler.timeSource,
+      build, timeSource: handler.timeSource, createControl,
       replace: (next) => {
         service = next;
         handler.replaceLocalReplicaService(REPLICA, next);
+      },
+      replaceControl: (next) => {
+        controlService = next;
+        (controlHandler ?? handler).replaceLocalReplicaService(CONTROL_REPLICA, next);
       }});
   } catch (error) {
     failure = error;

@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2095,
+    "unit": 2097,
     "integration": 106,
     "bootstrap": 205,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2413,
-  "digest": "fnv1a32-4df7e825",
+  "censusSize": 2415,
+  "digest": "fnv1a32-c6e7b056",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1154,6 +1154,7 @@
     "test/node/node-service-presence.property.test.js": "unit",
     "test/node/node-service-runtime-isolation.test.js": "unit",
     "test/node/node-service.test.js": "unit",
+    "test/node/participant-release-control-refusal-observation.test.js": "unit",
     "test/node/partition-registration-invariant.property.test.js": "unit",
     "test/node/registered-partition-removal.property.test.js": "unit",
     "test/node/replica-cleanup-token-authority.test.js": "unit",
@@ -1257,6 +1258,7 @@
     "test/partition/participant-release-applied-position.test.js": "unit",
     "test/partition/participant-release-build-provenance.test.js": "unit",
     "test/partition/participant-release-control-three-member.test.js": "unit",
+    "test/partition/participant-release-deadline-recovery.test.js": "unit",
     "test/partition/participant-release-delivery-recorder.test.js": "unit",
     "test/partition/participant-release-first-prepare-native.test.js": "unit",
     "test/partition/participant-release-native-application-order.test.js": "unit",

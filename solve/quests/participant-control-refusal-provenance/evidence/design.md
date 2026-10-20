@@ -79,3 +79,32 @@ The existing native protocol fixture uses an empty system-table cache and a
 substituted remote topology hint when remoteControl is selected, in addition to
 in-process transport and optional handler clock. It proves registered owner
 behavior, not actual remote publication or cross-host routing availability.
+
+## Required audit repair at the source checkpoint
+
+The normal commit hooks refused four unnamed field/descriptor literals, three
+named waits without ending-event comments, and existing cyclomatic complexity
+15/31 in the now-touched cutover owner. The failed hook output is preserved in
+`initial-source-checkpoint-guard-refusal.txt`. No hook bypass or baseline increase
+is used. Independent reviewer `subagent:/root/control_source_review` judged a
+bounded same-owner extraction admissible as necessary audit repair on
+2026-10-20, subject to frozen review and composed measurements.
+
+The diagnostic owner names its own field keys and descriptor key. Existing wait
+values are unchanged; comments identify release completion, transport answer and
+the unused census deadline. The cutover owner extracts current-control selection
+and local leadership/authorization checks synchronously, preserving eager reads.
+It tail-calls separate paused and enabled portions of the same operation, with
+the same original awaited owner operations and ordering. The added Promise
+adoptions can delay outer settlement and RUNS cleanup: this is not a claim of
+scheduling identity. Final native protocol, recovery and original-entry evidence
+must use these refactored bytes. No new authority, retry, actuation or deadline
+policy is introduced.
+
+The registered native red measurement at
+`0e9ff4fdc11152e6b4da39adb5a1046615d19be4` passed the original 14 assertions and
+failed only the two missing nested-fact assertions, after their route, clock,
+origin and admission controls passed. The later identical-test mutation will
+remove only the diagnostic spread from the final composed candidate. New
+adversarial value tests supplement those actual-owner tests; they do not replace
+the native proof.
