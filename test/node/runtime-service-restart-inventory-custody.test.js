@@ -95,7 +95,13 @@ test('U1 inventory: shutdown during held journal scan cannot publish late memos 
     const entered = deferred();
     const release = deferred();
     const scan = w.manager.recoverPendingOperations.bind(w.manager);
+    const inspect = w.manager.inspectRetainedCreation.bind(w.manager);
     let scans = 0;
+    let inspections = 0;
+    w.manager.inspectRetainedCreation = (...args) => {
+      inspections += 1;
+      return inspect(...args);
+    };
     w.manager.recoverPendingOperations = async (...args) => {
       scans += 1;
       entered.resolve();
@@ -110,6 +116,8 @@ test('U1 inventory: shutdown during held journal scan cannot publish late memos 
     release.resolve();
     const outcomes = await Promise.all([first, repeat]);
     assert.equal(scans, 1);
+    assert.equal(inspections, 0,
+      'POST_SHUTDOWN_INVENTORY_INVOKED_PHYSICAL_INSPECTION_OWNER');
     for (const outcome of outcomes) {
       assert.equal(outcome.outcome, OUTCOME.UNAVAILABLE);
       assert.equal(outcome.reason, ERROR.HANDLER_STOPPED);
