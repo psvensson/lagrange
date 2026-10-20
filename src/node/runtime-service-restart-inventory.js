@@ -148,7 +148,7 @@ async function inventoryAttempt(handler, task) {
   const plans = [];
   for (const entry of nodeEntries(handler, results)) {
     plans.push(await planEntry(handler, entry));
-    if (handler.stopped || handler.restartTask !== task) return stoppedInventory();
+    // MUTATION V1c: inspection's late return may publish stale memos.
   }
   applyMemos(handler, plans);
   task.plansById = new Map(plans.map((plan) => [plan.creation.operationId, plan]));
