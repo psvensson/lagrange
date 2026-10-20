@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2396,
+    "ordinary": 2397,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2413,
-  "digest": "fnv1a32-3646d203",
+  "censusSize": 2414,
+  "digest": "fnv1a32-5e1f6f6b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -2342,6 +2342,7 @@
     "test/wasm-service/bound-creation-handler-embedding.integration.test.js": "ordinary",
     "test/wasm-service/bound-creation-physical-custody.integration.test.js": "ordinary",
     "test/wasm-service/bound-creation-restart.integration.test.js": "ordinary",
+    "test/wasm-service/bound-remove-physical-operation.integration.test.js": "ordinary",
     "test/wasm-service/call-cell-world-abi.test.js": "external-toolchain",
     "test/wasm-service/capability-policy.test.js": "ordinary",
     "test/wasm-service/dependency-lock-determinism.property.test.js": "ordinary",
