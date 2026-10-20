@@ -1,6 +1,8 @@
 // Test-only passive original-delivery observation, reused from the independently
 // reviewed native-startup census trace-v2. No owner read or protocol action.
-import {gzipSync} from 'node:zlib';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {COMMITTED_MEMBERSHIP_MAX_PEERS} from
@@ -283,16 +285,19 @@ function createParticipantReleaseDeliveryTrace() {
   };
 }
 
-// Compress only after bootstrap settles. The complete bounded trace must fit
-// the runner's retained output; oversize is an explicit diagnostic failure.
+// Preserve full evidence outside the runner's disposable worktree, only after
+// bootstrap settles. Root owns copying and deleting this one named directory.
 function emitParticipantReleaseDeliveryTrace(trace) {
-  const payload = Buffer.from(JSON.stringify(trace.report()));
-  const compressed = gzipSync(payload).toString('base64');
-  const limit = 96 * 1024;
-  if (compressed.length > limit) throw new Error('release trace exceeds retained output limit');
-  console.error(JSON.stringify({schema: 'participant-release-trace-gzip/1',
+  const report = trace.report();
+  const payload = JSON.stringify(report);
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'lagrange-control-trace-'));
+  const file = path.join(directory, 'trace.json');
+  fs.writeFileSync(file, payload);
+  console.error(JSON.stringify({schema: 'participant-release-trace-file/1', file,
     sha256: createHash('sha256').update(payload).digest('hex'),
-    uncompressedBytes: payload.length, gzipBase64: compressed}));
+    bytes: Buffer.byteLength(payload), recordedCount: report.recordedCount,
+    droppedCount: report.droppedCount, captureErrorCount: report.captureErrorCount,
+    incompleteCount: report.incompleteCount}));
 }
 
 export {createParticipantReleaseDeliveryTrace, emitParticipantReleaseDeliveryTrace};

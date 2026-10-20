@@ -315,7 +315,8 @@ test('seed bootstraps and serves a write on rs-raft by default',
           ...(bootstrapFailure === null ? [] : [bootstrapFailure]),
           ...diagnosticFailures,
         ], 'bootstrap/diagnostic failures retained: ' +
-          `success=${bootstrapResult?.success} error=${String(bootstrapResult?.error)}`);
+          `success=${bootstrapResult?.success} error=${String(bootstrapResult?.error)} ` +
+          `diagnostics=${diagnosticFailures.map((error) => String(error)).join('; ')}`);
       }
       if (bootstrapFailure !== null) throw bootstrapFailure;
       assert.equal(bootstrapResult.success, true,
