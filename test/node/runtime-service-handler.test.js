@@ -390,20 +390,27 @@ describe('RuntimeServiceHandler handleCreateReplica', () => {
     handler.shutdown();
   });
 
-  it('returns IN_PROGRESS for duplicate operation ID', async () => {
-    const {handler} = createHandler();
-    handler.inProgressOperations.set('op-1', {
-      type: ReplicaOperationMessageType.CREATE_REPLICA,
-    });
-    const response = await handler.handleCreateReplica({
+  it('returns IN_PROGRESS for a duplicate of the actually admitted CREATE', async () => {
+    const {handler, lifecycle} = createHandler();
+    const request = {
       [ReplicaOperationField.OPERATION_ID]: 'op-1',
       [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
       [ReplicaOperationField.REPLICA_ID]: 'sys-postgres-wire-r1',
-    });
-    assert.equal(
-      response.status,
-      ReplicaOperationResponseStatus.IN_PROGRESS,
-    );
+    };
+    try {
+      const first = await handler.handleCreateReplica(request);
+      assert.equal(first.status, ReplicaOperationResponseStatus.INITIATED);
+      const duplicate = await handler.handleCreateReplica(request);
+      assert.equal(duplicate.status, ReplicaOperationResponseStatus.IN_PROGRESS);
+      assert.equal(handler.inProgressOperations.size, 1,
+        'the exact duplicate never creates an additional execution owner');
+      await flushImmediate();
+      await flushImmediate();
+      assert.deepEqual(lifecycle.calls.map((call) => call.method),
+        ['createReplica', 'startReplica'], 'DUPLICATE_CREATE_EXECUTED_TWICE');
+    } finally {
+      handler.shutdown();
+    }
   });
 
   it('a CREATE over a nameless FAILED or REMOVING memo takes the generic path (RV6.1-RV6.3)',
@@ -857,7 +864,7 @@ describe('RuntimeServiceHandler handleRemoveReplica', () => {
         'REFUSED_CLEANUP_OVERWROTE_ANOTHER_CREATION');
     });
 
-  it('returns IN_PROGRESS only for the exact admitted duplicate REMOVE', async () => {
+  it('returns IN_PROGRESS for a duplicate of the actually admitted REMOVE', async () => {
     const {handler, lifecycle} = createHandler();
     handler.localReplicas.set('sys-postgres-wire-r1', {
       replicaId: 'sys-postgres-wire-r1',
@@ -869,20 +876,22 @@ describe('RuntimeServiceHandler handleRemoveReplica', () => {
       [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
       [ReplicaOperationField.REPLICA_ID]: 'sys-postgres-wire-r1',
     };
-    // Enter the real admission path; a synthetic entry without operationId
-    // and captured request identity is not an in-flight REMOVE.
-    const first = await handler.handleRemoveReplica(request);
-    assert.equal(first.status, ReplicaOperationResponseStatus.INITIATED);
-    const installed = handler.inProgressOperations.get('op-1');
-    assert.ok(installed, 'FIRST_REMOVE_DID_NOT_OWN_EXECUTION');
-    const response = await handler.handleRemoveReplica(request);
-    assert.equal(response.status, ReplicaOperationResponseStatus.IN_PROGRESS);
-    assert.strictEqual(handler.inProgressOperations.get('op-1'), installed,
-      'DUPLICATE_REMOVE_REPLACED_EXISTING_ADMISSION');
-    await flushImmediate();
-    await flushImmediate();
-    assert.equal(lifecycle.calls.filter(({method}) => method === 'stopReplica').length, 1,
-      'DUPLICATE_REMOVE_STARTED_ANOTHER_PHYSICAL_STOP');
+    try {
+      const first = await handler.handleRemoveReplica(request);
+      assert.equal(first.status, ReplicaOperationResponseStatus.INITIATED);
+      const duplicate = await handler.handleRemoveReplica(request);
+      assert.equal(duplicate.status, ReplicaOperationResponseStatus.IN_PROGRESS);
+      assert.equal(handler.inProgressOperations.size, 1,
+        'the exact duplicate never creates another STOP obligation');
+      await flushImmediate();
+      await flushImmediate();
+      assert.deepEqual(lifecycle.calls.map((call) => call.method), ['stopReplica'],
+        'DUPLICATE_REMOVE_DISPATCHED_TWO_STOPS');
+      assert.equal(handler.localReplicas.get('sys-postgres-wire-r1')?.status,
+        ReplicaStatus.REMOVED);
+    } finally {
+      handler.shutdown();
+    }
   });
 
   it('resumes stalled removing replica when no removal task is active',
