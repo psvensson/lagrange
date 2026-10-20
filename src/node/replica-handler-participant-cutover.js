@@ -253,7 +253,7 @@ function localReleaseRefusal(handler, service, request) {
     return releaseAnswer(OUTCOME.NOT_LEADER, request,
       {leaderAddress: status.leaderAddress, leaderReplicaId: status.leaderId});
   }
-  if (readPartitionWriteOrigin(service.db) === null &&
+  if (readPartitionWriteOrigin(service.db) === undefined &&
       !handler.participantReleaseAuthorizationOwner.validates(
         request.authorization,
         {partitionId: service.partitionId,
