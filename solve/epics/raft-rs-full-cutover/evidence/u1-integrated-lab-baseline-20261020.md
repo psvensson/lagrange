@@ -79,3 +79,12 @@ The explicitly required **thirteen-file positive U1 suite** was submitted as [la
 Reading that existing checklist also confirmed the **seven separate U1 completion gates U1-1…U1-7** were marked OPEN in its own review snapshot: net nine-path production source review, immutable oracle tree checkpoint, corrected-source static gate, 13-file current positive selection, P0–P5 source-only controls, affected-owner compatibility, and category-complete independent 55-item combined conclusion. Earlier bounded F1 and physical source approvals **do not** grant whole-U1 approval or supersede these requirements. The adjacent Cell queued-START finding is explicitly not waived.
 
 No candidate/main change and no U2/activation/GCP distributed certification authorization arises from any of the above. Keep the source frozen for the signature comparison and control-gate review.
+
+
+## Continuation, 2026-10-20: required thirteen-file positive suite passed
+
+[Lab #567](https://github.com/psvensson/lagrange-lab/issues/567) reached a terminal **COMPLETE/PASS** at `2026-10-20T08:49:41Z`, with **13/13 files PASS, 0 FAIL, 413 runner assertions**, and `executor.log` length 5,207 bytes. It ran the precise thirteen-file positive selection documented by U1-4 against the unchanged exact source `be25caa5f0c3612feec662d4feaa9ba28f8f34df`. This closes **the measured execution component** of U1-4 for that immutable source; independent evidence validation and complete U1 acceptance are still required.
+
+The aggregate of candidate test-file *executions* reported so far is **172 runs, 158 PASS and 14 FAIL, 4,219 runner assertions** across six batches (#525, #526, #527, #553, #563 and #567); three of the thirteen positive-selection files also ran successfully in #553. Therefore the exact **distinct** tested files number **169**, with **155 distinct passing files and 14 distinct failing files**, rather than 172 unique files. All failures remain blockers until disposition, not hidden in the overall passing count.
+
+Note the distinction between U1-4's positive suite result and U1-1, U1-2, U1-3, U1-5, U1-6 and U1-7: the latter have not been independently discharged by lab #567.
