@@ -1,0 +1,116 @@
+# Diagnostic only: bisect the two old-GREEN/new-RED replacement tests.
+# Does not change candidate, main, approvals or cloud VMs.
+name: u1-two-replacement-bisect-20261020
+on:
+  push:
+    branches: [verify/u1-gcp-20261020]
+    paths:
+      - .github/workflows/u1-two-replacement-bisect-20261020.yml
+permissions:
+  contents: read
+concurrency:
+  group: u1-two-replacement-bisect-20261020
+  cancel-in-progress: false
+jobs:
+  bisect:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - owner: replace-membership
+            test_file: test/rebalancer/replace-replica-workflow.test.js
+          - owner: runtime-target-handoff
+            test_file: test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    env:
+      U1_GOOD: 381750de29af647d446b19adedf1da53eb712093
+      U1_BAD: be25caa5f0c3612feec662d4feaa9ba28f8f34df
+      U1_FILE: ${{ matrix.test_file }}
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: be25caa5f0c3612feec662d4feaa9ba28f8f34df
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install unchanged exact dependency lock
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$U1_BAD"
+          test "$(git rev-parse "$U1_GOOD:package-lock.json")" = "$(git rev-parse "$U1_BAD:package-lock.json")"
+          test "$(git rev-parse "$U1_GOOD:$U1_FILE")" = "$(git rev-parse "$U1_BAD:$U1_FILE")"
+          npm ci
+      - name: Bisect only after original test passes twice at GOOD and fails twice at BAD
+        timeout-minutes: 22
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/u1-bisect-${{ matrix.owner }}"
+          mkdir -p "$OUT"
+          cat > "$OUT/check.sh" <<'SH'
+          #!/usr/bin/env bash
+          set -uo pipefail
+          SHA="$(git rev-parse HEAD)"
+          LOG="$U1_BISECT_OUT/$SHA.tap"
+          printf '%s\n' "$U1_FILE" |
+            node scripts/run-classified-test-files.js --stdin > "$LOG" 2>&1
+          RC=$?
+          tail -n 6 "$LOG"
+          if test "$RC" -eq 0 && grep -q 'test-files total=1 pass=1 fail=0' "$LOG"; then
+            printf 'GOOD %s\n' "$SHA" >> "$U1_BISECT_OUT/outcomes.txt"
+            exit 0
+          fi
+          if test "$RC" -eq 1 && grep -q 'test-files total=1 pass=0 fail=1' "$LOG"; then
+            printf 'BAD %s\n' "$SHA" >> "$U1_BISECT_OUT/outcomes.txt"
+            exit 1
+          fi
+          printf 'SKIP %s exit=%s\n' "$SHA" "$RC" >> "$U1_BISECT_OUT/outcomes.txt"
+          exit 125
+          SH
+          chmod +x "$OUT/check.sh"
+          export U1_BISECT_OUT="$OUT"
+          # Explicitly check this CI runner can reproduce BOTH endpoints.
+          for rev in "$U1_GOOD" "$U1_BAD"; do
+            git checkout --detach -q "$rev"
+            for attempt in 1 2; do
+              set +e
+              bash "$OUT/check.sh"
+              code=$?
+              set -e
+              if [ "$rev" = "$U1_GOOD" ]; then test "$code" = 0; else test "$code" = 1; fi
+            done
+          done
+          git checkout --detach -q "$U1_BAD"
+          set +e
+          git bisect start "$U1_BAD" "$U1_GOOD" > "$OUT/start.txt" 2>&1
+          started=$?
+          set -e
+          test "$started" -eq 0
+          set +e
+          git bisect run bash "$OUT/check.sh" > "$OUT/bisect.log" 2>&1
+          bisectStatus=$?
+          set -e
+          printf '%s\n' "$bisectStatus" > "$OUT/bisect.status"
+          git bisect log > "$OUT/steps.txt"
+          git log -1 --format='%H%n%s%n%P' > "$OUT/first-bad.txt"
+          git bisect reset > "$OUT/reset.txt" 2>&1
+          git status --porcelain > "$OUT/status.txt"
+          echo "U1_BISECT_OWNER=${{ matrix.owner }}"
+          echo "U1_BISECT_STATUS=$bisectStatus"
+          cat "$OUT/first-bad.txt"
+          tail -n 90 "$OUT/bisect.log"
+          test "$bisectStatus" -eq 0
+          grep -q 'is the first bad commit' "$OUT/bisect.log"
+      - name: Retain original TAP and all bisect decisions even if RED
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: u1-first-bad-${{ matrix.owner }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/u1-bisect-${{ matrix.owner }}/
+          retention-days: 14
+          if-no-files-found: warn
