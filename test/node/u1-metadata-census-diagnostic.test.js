@@ -55,8 +55,10 @@ test('read-only classification census of the exact 38-file U1 candidate', () => 
     fs.renameSync(hidden, original);
   }
   assert.equal(fs.existsSync(original), true, 'diagnostic was restored');
-  console.log('U1_METADATA_CENSUS_RESULT=' + JSON.stringify(output));
   for (const manifest of Object.values(output)) {
     assert.deepEqual(manifest.problems, [], 'classification owner returned problems');
   }
+  // Diagnostic stop only: the lab's successful-file reporter suppresses
+  // stdout, so carry bounded computed data in the deliberate TAP failure.
+  assert.fail('U1_METADATA_DIAGNOSTIC_OUTPUT=' + JSON.stringify(output));
 });
