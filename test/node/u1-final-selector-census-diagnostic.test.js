@@ -55,6 +55,9 @@ test('U1 exact changed-owner test selection census (no execution)', () => {
     assert.equal(listed.code, 0, 'selector must produce an ordinary file list');
     assert.ok(files.length >= 15, 'U1 proof selection cannot be only the short focused cone');
     assert.equal(run(source, 'git', ['status', '--porcelain']).out.trim(), '');
+    // Deliberate diagnostic-only TAP failure to preserve this bounded census
+    // in the controller's failure log; the ordinary selector succeeded above.
+    assert.fail('U1_EXACT_SELECTION_CENSUS=' + JSON.stringify(report));
   } finally {
     if (mounted) {
       const rm = run(outer, 'git', ['worktree', 'remove', '--force', source]);
