@@ -407,6 +407,14 @@ function createBootstrapServiceSeedWorkflowMethods() {
             resolveCheckpointSnapshot(),
           ),
           run: async () => {
+            if (!this.replicaStateMachine) {
+              this.seedRuntimeBridgeOwner
+                .ensureBootstrapCdcIntegrationService();
+              this.initializeReplicaStateMachine();
+            }
+            this.seedRuntimeBridgeOwner.acquireSqlQueryEngine();
+            this.acquireReplicaHandler();
+            await this.releaseSeedParticipantCohorts();
             await startupPipelineRunner.run({
               phases: phases.slice(NUM.THREE, NUM.FOUR),
             });

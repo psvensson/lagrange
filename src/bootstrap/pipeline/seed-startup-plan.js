@@ -34,16 +34,7 @@ function createSeedStartupPlan(service) {
         name: BootstrapPhase.REGISTRATION,
         run: () => service.executePhase(
           BootstrapPhase.REGISTRATION,
-          async () => {
-            if (!service.replicaStateMachine) {
-              service.seedRuntimeBridgeOwner.ensureBootstrapCdcIntegrationService();
-              service.initializeReplicaStateMachine();
-            }
-            service.seedRuntimeBridgeOwner.acquireSqlQueryEngine();
-            service.acquireReplicaHandler();
-            await service.releaseSeedParticipantCohorts();
-            await service.seedPhaseOwners.registration();
-          },
+          () => service.seedPhaseOwners.registration(),
         ),
       },
       {
