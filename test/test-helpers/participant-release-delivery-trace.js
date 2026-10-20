@@ -15,6 +15,11 @@ const PARTICIPANT_RELEASE_COHORT_TRACE_CAP = 16;
 const TRACE_ERROR_MESSAGE_CAP = 512;
 const PARTICIPANT_RELEASE_TRACE_SCHEMA = 'participant-release-delivery-trace/1';
 
+// Preserve only the named observational fields; absence stays explicit null.
+function traceFields(value, fields) {
+  return Object.fromEntries(fields.map((field) => [field, value?.[field] ?? null]));
+}
+
 function traceErrorOf(error) {
   if (error === null || typeof error !== 'object') return null;
   const message = typeof error.message === 'string' ? error.message : null;
@@ -79,8 +84,8 @@ function membershipTraceOf(membership) {
   const votersOutgoing = boundedMembershipArray(membership.votersOutgoing);
   const learners = boundedMembershipArray(membership.learners);
   const learnersNext = boundedMembershipArray(membership.learnersNext);
-  const peerIds = [...new Set([...(voters ?? []), ...(votersOutgoing ?? []),
-    ...(learners ?? []), ...(learnersNext ?? [])])]
+  const groups = [voters, votersOutgoing, learners, learnersNext];
+  const peerIds = [...new Set(groups.flatMap((group) => group ?? []))]
     .slice(0, COMMITTED_MEMBERSHIP_MAX_PEERS);
   return {
     kind: membership.kind ?? null,
@@ -88,13 +93,8 @@ function membershipTraceOf(membership) {
     votersOutgoing,
     learners,
     learnersNext,
-    appliedIndex: membership.appliedIndex ?? null,
-    configurationKey: membership.configurationKey ?? null,
-    membershipGenerationIndex: membership.membershipGenerationIndex ?? null,
-    commitIndex: membership.commitIndex ?? null,
-    term: membership.term ?? null,
-    leaderId: membership.leaderId ?? null,
-    gateOpen: membership.gateOpen ?? null,
+    ...traceFields(membership, ['appliedIndex', 'configurationKey',
+      'membershipGenerationIndex', 'commitIndex', 'term', 'leaderId', 'gateOpen']),
     identities: peerIds.map((peerId) => ({peerId,
       replicaId: membership.identities?.[peerId] ?? null})),
   };
@@ -122,12 +122,8 @@ function cohortTraceOf(census) {
 
 function requestTraceOf(request) {
   return {
-    action: request?.action ?? null,
-    trigger: request?.trigger ?? null,
-    partitionId: request?.partitionId ?? null,
-    replicaId: request?.replicaId ?? null,
-    targetBuildDigest: request?.targetBuildDigest ?? null,
-    deadlineAtMs: request?.deadlineAtMs ?? null,
+    ...traceFields(request, ['action', 'trigger', 'partitionId', 'replicaId',
+      'targetBuildDigest', 'deadlineAtMs']),
     release: releaseIdentityTraceOf(request?.release),
     target: generationTraceOf(request?.target),
     attempt: attemptTraceOf(request?.attempt),
@@ -135,35 +131,33 @@ function requestTraceOf(request) {
   };
 }
 
+function blockedDrainTraceOf(blockedDrain) {
+  if (blockedDrain === null || typeof blockedDrain !== 'object') return null;
+  return {generation: generationTraceOf(blockedDrain.generation),
+    work: workTraceOf(blockedDrain.work)};
+}
+
 function releaseAnswerTraceOf(answer) {
   if (answer === null || typeof answer !== 'object') return null;
   return {
-    outcome: answer.outcome ?? null,
-    releaseId: answer.releaseId ?? null,
-    partitionId: answer.partitionId ?? null,
-    phase: answer.phase ?? null,
-    reason: answer.reason ?? null,
+    ...traceFields(answer, ['outcome', 'releaseId', 'partitionId', 'phase', 'reason']),
     queryState: answer.queryCensus?.state ?? null,
     queryEnforcement: answer.queryCensus?.enforcement?.state ?? null,
-    retryAfterMs: answer.retryAfterMs ?? null,
-    missingFact: answer.missingFact ?? null,
-    controlPartitionId: answer.controlPartitionId ?? null,
-    controlNodeId: answer.controlNodeId ?? null,
-    controlOutcome: answer.controlOutcome ?? null,
-    leaderReplicaId: answer.leaderReplicaId ?? null,
-    leaderAddress: answer.leaderAddress ?? null,
-    buildDigest: answer.buildDigest ?? null,
+    ...traceFields(answer, ['retryAfterMs', 'missingFact', 'controlPartitionId',
+      'controlNodeId', 'controlOutcome', 'leaderReplicaId', 'leaderAddress', 'buildDigest']),
     release: releaseIdentityTraceOf(answer.release),
     generation: generationTraceOf(answer.generation),
     work: workTraceOf(answer.work),
     origin: originTraceOf(answer.origin),
     membership: membershipTraceOf(answer.membership),
-    blockedDrain: answer.blockedDrain === null ||
-        typeof answer.blockedDrain !== 'object' ? null : {
-        generation: generationTraceOf(answer.blockedDrain.generation),
-        work: workTraceOf(answer.blockedDrain.work),
-      },
+    blockedDrain: blockedDrainTraceOf(answer.blockedDrain),
   };
+}
+
+function responseTraceOf(response) {
+  if (response === null) return null;
+  return {...traceFields(response, ['acknowledged', 'deliveryState', 'noHandler', 'errorCode']),
+    answer: releaseAnswerTraceOf(response?.[PARTICIPANT_RELEASE_RESULT_FIELD])};
 }
 
 function createParticipantReleaseDeliveryTrace() {
@@ -202,13 +196,7 @@ function createParticipantReleaseDeliveryTrace() {
   const captureCompletion = (record, response, error) => {
     if (record === null) return;
     try {
-      const responseTrace = response === null ? null : {
-        acknowledged: response?.acknowledged ?? null,
-        deliveryState: response?.deliveryState ?? null,
-        noHandler: response?.noHandler ?? null,
-        errorCode: response?.errorCode ?? null,
-        answer: releaseAnswerTraceOf(response?.[PARTICIPANT_RELEASE_RESULT_FIELD]),
-      };
+      const responseTrace = responseTraceOf(response);
       const errorTrace = traceErrorOf(error);
       completionOrdinal += 1;
       record.completionOrdinal = completionOrdinal;

@@ -5,8 +5,8 @@
     "inputs": [
       {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 427382,
-        "sha256": "6f5b0cb9d3e298f83f19f06521ae747a117fd027a7b116f5441674ae218270ae"
+        "bytes": 426280,
+        "sha256": "192436bce376d0b1e18acbc460859f0c4a9e776da3001e54132cd09904a9fef0"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2987108,
-        "sha256": "0101a2b6efbad859bc16392dddba2bfdf4b9c3d7b68b6b437cf91b04058b48e1"
+        "bytes": 2988095,
+        "sha256": "2530cb6a06abd6f06dcb26b791588bac079db17fa00fe953d36598121785187c"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "4038f83d67af7660606fdb9577923695ebd41de4023a450e51552bd686988960"
+        "sha256": "2d31c2f10ecab6f5f7c556b508654683e04ef756db0e4a461b62673da32e01d1"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,18 +62,18 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "c06bb4809e527e559405c77e698f1d54402c88ad978f3b1ae0c01fe3d147926e"
+    "inputDigest": "92440f0a07059811d531ec367599c3706bf06ff513f373df0c46daad2aef4f8f"
   },
   "reconciliation": {
     "complexity": {
       "identity": {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 427382,
-        "sha256": "6f5b0cb9d3e298f83f19f06521ae747a117fd027a7b116f5441674ae218270ae"
+        "bytes": 426280,
+        "sha256": "192436bce376d0b1e18acbc460859f0c4a9e776da3001e54132cd09904a9fef0"
       },
-      "declaredCount": 1811,
-      "observedCount": 1811,
-      "assignedCount": 1811
+      "declaredCount": 1806,
+      "observedCount": 1806,
+      "assignedCount": 1806
     },
     "cognitive": {
       "identity": {
@@ -130,12 +130,12 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "4038f83d67af7660606fdb9577923695ebd41de4023a450e51552bd686988960"
+          "sha256": "2d31c2f10ecab6f5f7c556b508654683e04ef756db0e4a461b62673da32e01d1"
         },
         "cloneGroups": 701,
-        "duplicatedLines": 26705,
+        "duplicatedLines": 26618,
         "sourceCloneTouches": 1402,
-        "sourceDuplicatedLineTouches": 53410,
+        "sourceDuplicatedLineTouches": 53236,
         "nonzeroSourceCount": 452,
         "touchMultiplicity": 2
       }
@@ -167,35 +167,35 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2987108,
-        "sha256": "0101a2b6efbad859bc16392dddba2bfdf4b9c3d7b68b6b437cf91b04058b48e1"
+        "bytes": 2988095,
+        "sha256": "2530cb6a06abd6f06dcb26b791588bac079db17fa00fe953d36598121785187c"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "a6b7edc78a82259eba07d65936fbad31cc50346097cd6afe417cdd3e3c9aa0ea",
-      "moduleCount": 5507,
-      "edgeCount": 28626,
+      "sourceDigest": "e5cd14a8dcbc6e1a02453d1aa57cbf582a4521af1b8028ec629221dfe1e26419",
+      "moduleCount": 5508,
+      "edgeCount": 28638,
       "unresolvedCount": 36
     }
   },
   "assignment": {
-    "sourceSignalCount": 2560,
-    "assignedSignalCount": 2560,
-    "uniqueAssignmentCount": 2560,
-    "digest": "6f3a887d0e089b4e5951a8a4316771a8f06fba9bd40c95c4712de753bb7adf46"
+    "sourceSignalCount": 2555,
+    "assignedSignalCount": 2555,
+    "uniqueAssignmentCount": 2555,
+    "digest": "f45b820573dfb49a3bc919aae4e908ceb1ef0f89666098285269b21ae465aa2d"
   },
   "signalCounts": {
     "cognitive": 153,
-    "complexity": 1811,
+    "complexity": 1806,
     "duplication": 511,
     "fileSize": 46,
     "lintExclusion": 39
   },
   "summary": {
-    "filesWithDebt": 1316,
+    "filesWithDebt": 1315,
     "rankedBoundaryCount": 116,
     "semanticBoundaryCount": 20,
     "fallbackBoundaryCount": 96,
@@ -439,13 +439,13 @@
       "complexity": 29,
       "cognitive": 0,
       "oversizedFiles": 0,
-      "duplicatedLines": 2038,
+      "duplicatedLines": 1951,
       "cloneTouches": 60,
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 54,
       "importOut": 372,
-      "score": 319.8,
+      "score": 311.1,
       "topPaths": [
         "test/integration/message-group-membership-claim-cache.integration.test.js",
         "test/integration/versioned-cdc-readiness-convergence.integration.test.js",
@@ -947,7 +947,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 22,
+      "importIn": 23,
       "importOut": 136,
       "score": 100,
       "topPaths": [
@@ -1405,34 +1405,6 @@
       ]
     },
     {
-      "key": "area:test/raft",
-      "owner": null,
-      "boundary": "test/raft",
-      "classification": "test-owner-area",
-      "ownerAreas": [
-        "test/raft"
-      ],
-      "fileCount": 11,
-      "signalCount": 11,
-      "complexity": 2,
-      "cognitive": 0,
-      "oversizedFiles": 0,
-      "duplicatedLines": 368,
-      "cloneTouches": 12,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 3,
-      "importOut": 181,
-      "score": 44.8,
-      "topPaths": [
-        "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
-        "test/raft/raft-rs-backend/startup-cleanup-native-fixture.js",
-        "test/raft/raft-rs-backend/message-group-on-raft-rs.test.js",
-        "test/raft/raft-rs-backend/single-path-partition-cutover.test.js",
-        "test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js"
-      ]
-    },
-    {
       "key": "area:src/migration",
       "owner": null,
       "boundary": "src/migration",
@@ -1570,27 +1542,31 @@
       ]
     },
     {
-      "key": "area:test/test-helpers",
+      "key": "area:test/raft",
       "owner": null,
-      "boundary": "test/test-helpers",
+      "boundary": "test/raft",
       "classification": "test-owner-area",
       "ownerAreas": [
-        "test/test-helpers"
+        "test/raft"
       ],
-      "fileCount": 1,
-      "signalCount": 5,
-      "complexity": 4,
+      "fileCount": 10,
+      "signalCount": 10,
+      "complexity": 1,
       "cognitive": 0,
       "oversizedFiles": 0,
-      "duplicatedLines": 273,
-      "cloneTouches": 4,
+      "duplicatedLines": 368,
+      "cloneTouches": 12,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 1,
-      "importOut": 7,
-      "score": 43.3,
+      "importIn": 3,
+      "importOut": 161,
+      "score": 40.8,
       "topPaths": [
-        "test/test-helpers/participant-release-delivery-trace.js"
+        "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+        "test/raft/raft-rs-backend/startup-cleanup-native-fixture.js",
+        "test/raft/raft-rs-backend/message-group-on-raft-rs.test.js",
+        "test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js",
+        "test/raft/peer-address-resolver.property.test.js"
       ]
     },
     {
@@ -2016,6 +1992,30 @@
         "test/service/call-binding-route-resolver.test.js",
         "test/service/minimal-deployment-request-cell-routing-fixture.js",
         "test/service/handler-aware-runtime-invocation.test.js"
+      ]
+    },
+    {
+      "key": "area:test/test-helpers",
+      "owner": null,
+      "boundary": "test/test-helpers",
+      "classification": "test-owner-area",
+      "ownerAreas": [
+        "test/test-helpers"
+      ],
+      "fileCount": 1,
+      "signalCount": 1,
+      "complexity": 0,
+      "cognitive": 0,
+      "oversizedFiles": 0,
+      "duplicatedLines": 186,
+      "cloneTouches": 4,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 1,
+      "importOut": 7,
+      "score": 18.6,
+      "topPaths": [
+        "test/test-helpers/participant-release-delivery-trace.js"
       ]
     },
     {

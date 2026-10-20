@@ -1,0 +1,22 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "nested-failure-provenance-red-green",
+      "passed": false
+    },
+    {
+      "id": "registered-positive-and-branch-controls",
+      "passed": false
+    },
+    {
+      "id": "independent-source-and-harness-review",
+      "passed": false
+    },
+    {
+      "id": "exact-candidate-audits-and-composition",
+      "passed": false
+    }
+  ]
+}

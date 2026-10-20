@@ -1,0 +1,1 @@
+{"comparisons":4674,"recordCount":1551,"result":"equal JSON projections","ceiling":"replays captured-shaped values plus absent/nested controls; does not reconstruct omitted live fields or certify transport behavior"}
