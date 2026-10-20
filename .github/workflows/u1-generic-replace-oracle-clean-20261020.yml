@@ -2,7 +2,7 @@ name: u1-generic-replace-oracle-clean-20261020
 on:
   push:
     branches: [probe/u1-runtime-empty-history-20261020]
-    paths: [.github/workflows/u1-generic-replace-oracle-clean-20261020.yml]
+    paths: [.github/workflows/u1-generic-replace-oracle-clean-20261020.yml, test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js]
 permissions: {contents: read}
 jobs:
   verify:
