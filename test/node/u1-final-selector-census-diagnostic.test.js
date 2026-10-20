@@ -31,6 +31,13 @@ test('U1 exact changed-owner test selection census (no execution)', () => {
     // The detached read-only checkout needs the same installed dependency tree
     // as the lab placement. The symlink stays inside this disposable checkout.
     fs.symlinkSync(path.join(outer, 'node_modules'), path.join(source, 'node_modules'), 'dir');
+    // The impact selector consumes its canonical generated local import
+    // graph. Materialize it through the original producer in this disposable
+    // worktree before asking the unchanged selector to explain the cone.
+    const refresh = run(source, 'node', [
+      'scripts/generate-global-owner-debt-inventory.js',
+      '--refresh-import-graph-only']);
+    assert.equal(refresh.code, 0, refresh.err);
     const args = ['scripts/select-change-tests.js', '--base', BASE];
     const explained = run(source, 'node', [...args, '--explain']);
     const listed = run(source, 'node', [...args, '--list']);
