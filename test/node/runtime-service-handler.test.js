@@ -329,6 +329,44 @@ describe('RuntimeServiceHandler handleCreateReplica', () => {
       }
     });
 
+  it('re-admits an unowned nameless CREATING memo instead of promising nonexistent work',
+    async () => {
+      const emitted = [];
+      const {handler, lifecycle} = createHandler({
+        executorOutcomeEmitter: {
+          emitOutcome(...args) {
+            emitted.push(args);
+          },
+        },
+      });
+      const replicaId = 'sys-postgres-wire-r1';
+      handler.localReplicas.set(replicaId, {
+        replicaId, entityId: 'sys-postgres-wire', status: ReplicaStatus.CREATING,
+      });
+      assert.equal(handler.inProgressOperations.size, 0,
+        'a volatile CREATING memo alone is not an execution owner');
+      try {
+        const reply = await handler.handleCreateReplica({
+          [ReplicaOperationField.OPERATION_ID]: 'unowned-creating-retry',
+          [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
+          [ReplicaOperationField.REPLICA_ID]: replicaId,
+        });
+        assert.equal(reply.status, ReplicaOperationResponseStatus.INITIATED,
+          'UNOWNED_CREATING_MEMO_ACKNOWLEDGED_WITHOUT_SCHEDULING_RECOVERY');
+        assert.equal(handler.inProgressOperations.size, 1,
+          'recovery was not admitted under the caller operation');
+        await flushImmediate();
+        await flushImmediate();
+        assert.equal(lifecycle.calls.filter((call) => call.method === 'createReplica').length, 1);
+        assert.equal(handler.getLocalReplica(replicaId).status, ReplicaStatus.ACTIVE);
+        assert.deepEqual(emitted.map((outcome) => [outcome[0], outcome[1]]),
+          [[EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_ACTIVE, 'unowned-creating-retry']],
+          'the recovered CREATE must own its eventual outcome');
+      } finally {
+        handler.shutdown();
+      }
+    });
+
   it('returns IN_PROGRESS for creating replica', async () => {
     const {handler} = createHandler();
     handler.localReplicas.set('sys-postgres-wire-r1', {
