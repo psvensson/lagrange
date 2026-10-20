@@ -64,3 +64,6 @@ finally. Native SQLite witnesses do not establish rejected-termination custody
 there. This is an unverified boundary, not a proven leak or permission to expand U1.
 
 Safety, recovery progress and physical certification remain unaccepted.
+
+Reference clarification: the endpoint-removal and STOPPED-projection citation
+above resolves to `src/runtime/service-runtime-lifecycle-operation-methods.js:529-533`.
