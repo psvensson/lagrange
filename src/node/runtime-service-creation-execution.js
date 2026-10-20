@@ -139,7 +139,8 @@ function releaseExecution(handler, entry) {
 function replyToGenericExecutionGate(handler, params, operationType) {
   const active = replicaExecution(handler, params.replicaId);
   if (active === undefined) return undefined;
-  if (active.type === operationType && sameExecutionRequest(active, params)) {
+  // MUTATION: a foreign operation is falsely acknowledged as the incumbent.
+  if (active.type === operationType) {
     return inProgressReply(handler, params.replicaId);
   }
   // Same ID with conflicting request/body/kind is permanently conflicting;
