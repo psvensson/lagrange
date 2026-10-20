@@ -156,7 +156,9 @@ test('Removal-8: every retiring owner surfaces a refused retirement (the ' +
     service.logger = logger;
     service.transportHandler = handler;
     transport.register(ADDRESS, handler);
-    await service.shutdown();
+    await t.rejects(service.shutdown(),
+      {code: REPLICA_HANDLER_RETIREMENT_OUTCOME.REFUSED_NO_IDENTITY},
+      'shutdown refuses to settle while its exact handler remains registered');
     t.equal(transport.handlers.get(ADDRESS), handler,
       'nothing is removed by address');
     assertLeftRegisteredReported(t, logger, ADDRESS, REPLICA_ID);
@@ -167,10 +169,11 @@ test('Removal-8: every retiring owner surfaces a refused retirement (the ' +
     const address = `${NODE_ID}/message-group/mg-r1`;
     const logger = createRecordingLogger();
     transport.register(address, handler);
-    t.equal(await retireMessageGroupTransportHandler({
+    await t.rejects(retireMessageGroupTransportHandler({
       messageGroup: {transportHandler: handler, logger},
       messageRouter: transport, address, replicaId: 'mg-r1'}),
-    REPLICA_HANDLER_RETIREMENT_OUTCOME.REFUSED_NO_IDENTITY);
+    {code: REPLICA_HANDLER_RETIREMENT_OUTCOME.REFUSED_NO_IDENTITY},
+    'message-group retirement refuses to release an unprovable handler');
     assertLeftRegisteredReported(t, logger, address, 'mg-r1');
   });
 
@@ -185,7 +188,9 @@ test('Removal-8: every retiring owner surfaces a refused retirement (the ' +
     try {
       await replica.initialize();
       const registered = replica.transportHandler;
-      await replica.shutdown();
+      await t.rejects(replica.shutdown(),
+        {code: REPLICA_HANDLER_RETIREMENT_OUTCOME.REFUSED_NO_IDENTITY},
+        'WASM shutdown retains custody on refused exact-handler retirement');
       t.equal(transport.handlers.get(replica.unifiedAddress), registered,
         'nothing is removed by address');
       assertLeftRegisteredReported(t, logger, replica.unifiedAddress,
