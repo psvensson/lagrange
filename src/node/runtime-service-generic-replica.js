@@ -167,7 +167,7 @@ async function removeGenericReplica(handler, {
       },
     );
   } finally {
-    releaseExecution(handler, entry);
+    // MUTATION: leave the failed/successful STOP admission owned forever.
   }
 }
 
