@@ -1,0 +1,48 @@
+name: u1-runtime-replace-owner-diagnostic-20261020
+on:
+  push:
+    branches:
+      - probe/u1-runtime-replace-owner-diagnostics-20261020
+    paths:
+      - .github/workflows/u1-runtime-replace-owner-diagnostic-20261020.yml
+permissions:
+  contents: read
+jobs:
+  reproduce:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Execute unmodified production with instrumented test-only owner log
+        shell: bash
+        env:
+          LAGRANGE_RETRY_FAILED_ONCE: '0'
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          npm ci
+          mkdir -p test-output/u1-owner
+          set +e
+          echo test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js |
+            node scripts/run-classified-test-files.js --stdin > test-output/u1-owner/result.log 2>&1
+          code=$?
+          set -e
+          printf '%s\n' "$code" > test-output/u1-owner/exit.txt
+          grep -E 'U1_REPLACE_OWNER_|Operation failed|ERROR|REPLACE failed|CREATE failed|STOP failed|executorOutcome' test-output/u1-owner/result.log | tail -n 85 || true
+          tail -n 55 test-output/u1-owner/result.log
+          test "$code" -eq 1
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: u1-runtime-replace-owner-diagnostic-${{ github.run_id }}
+          path: test-output/u1-owner/
+          retention-days: 14
+          if-no-files-found: warn
