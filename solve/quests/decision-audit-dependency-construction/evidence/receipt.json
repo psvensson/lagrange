@@ -2,9 +2,28 @@
   "schema": "test-receipt/1",
   "status": "fail",
   "receipts": [
-    {"id": "engaged-classifier-red", "passed": true},
-    {"id": "construction-positive-and-adversarial-mixed-reads", "passed": true},
-    {"id": "reviewed-census-delta-without-baseline-growth", "passed": true},
-    {"id": "independent-review-and-applicable-gates", "passed": false}
-  ]
+    {
+      "id": "engaged-classifier-red",
+      "passed": true
+    },
+    {
+      "id": "construction-positive-and-adversarial-mixed-reads",
+      "passed": true
+    },
+    {
+      "id": "reviewed-census-delta-without-baseline-growth",
+      "passed": true
+    },
+    {
+      "id": "independent-review-and-applicable-gates",
+      "passed": false,
+      "reason": "Independent classifier source/result and full identity-delta review are complete; final393 combined audit positive/negative cases pass with unchanged baseline and exact composed source bindings. Scoped static/impact gates pass. Canonical changed selection remainsRED; broader gates, Solver landing and publication are unresolved.",
+      "evidence": [
+        "../../seed-release-failure-custody/evidence/composed-393f411ca/independent-result-review.md",
+        "../../seed-release-failure-custody/evidence/changed-candidate-393f411ca/independent-result-review.md",
+        "../../participant-release-completion-owner/evidence/independent-root-composition-review.md"
+      ]
+    }
+  ],
+  "measuredCandidate": "393f411ca09449898465cc3cb7320c03fba2aba8"
 }

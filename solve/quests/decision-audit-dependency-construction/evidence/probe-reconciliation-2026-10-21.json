@@ -1,0 +1,25 @@
+{
+  "id": "decision-audit-dependency-construction",
+  "status": "open",
+  "blocked": null,
+  "probe": {
+    "metric": 1,
+    "target": 0,
+    "done": false,
+    "measuring": true,
+    "evidence": "solve/quests/decision-audit-dependency-construction/evidence/receipt.json",
+    "reason": "measured",
+    "outstanding": [
+      "independent-review-and-applicable-gates"
+    ]
+  },
+  "sealMetric": 4,
+  "delta": -3,
+  "attempts": 6,
+  "attemptsSinceAltitudeCheck": 6,
+  "recent": [
+    "2026-10-21T05:28:07.760Z finding evidence: Composition into execution branch retains complete reviewed history. Exact merged checker/test are the union of this approved classifier and the independently r",
+    "2026-10-21T05:28:20.475Z finding evidence: Precommit whitespace inspection reports original whitespace in preserved raw baseline controller transcripts. Their exact reviewed bytes and hashes are retained",
+    "2026-10-21T06:51:16.164Z finding evidence: Reconcile current gate status after exact393 composition: component source, adversarial controls, preserved negative/red baseline, full census and focused owner"
+  ]
+}
