@@ -1,0 +1,30 @@
+{
+  "candidate": "bc5a7e9950d4487cf6a3cf5077029e6f656f729f",
+  "files": [
+    {
+      "path": "scripts/check-guideline-decision-boundaries.js",
+      "blob": "505340a3acee2387de0aaaaade3e9d9e6a365e20",
+      "sha256": "cef9ce06ee0fa2adc3be2885dd4261ea65234220e1c622240a5162c90648936a"
+    },
+    {
+      "path": "scripts/checks/decision-boundary-construction.js",
+      "blob": "ae68e8f9d9d196f782cd2be80acd0a4e35607416",
+      "sha256": "33dfb3a8b035620934981881316f26b93ccdbb3b7a8f062bf7f4621755ead180"
+    },
+    {
+      "path": "scripts/checks/decision-boundary-exception-collection.js",
+      "blob": "23afe2db324cbcc71e62214dcc3eed8ee7e21db9",
+      "sha256": "2054984db6c8fd64864fa10697b1b2839fc2c5e5902055146fae1c45481bb7d1"
+    },
+    {
+      "path": "scripts/check-guideline-decision-boundaries-baseline.json",
+      "blob": "e0daed66965605f979623443e6b6c8e4170f9432",
+      "sha256": "f38ebcf505e7c73ac57c59184f2a0a4005d32d9b46614c7ffbf84c5fe786eebf"
+    },
+    {
+      "path": "test/scripts/check-guideline-decision-boundaries.test.js",
+      "blob": "d56fb4cb67720b5525a9b3e201fe413e27428d0e",
+      "sha256": "700a997d93289d9cd55d648eba85bb86af443cbd5f2d8c8fe1f14b9f5f1f53af"
+    }
+  ]
+}
