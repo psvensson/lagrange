@@ -12,7 +12,7 @@ import {PARTICIPANT_CUTOVER_BOUND as BOUND, PARTICIPANT_CUTOVER_OUTCOME as OUTCO
   PARTICIPANT_RELEASE_LOG, PARTICIPANT_RELEASE_TRIGGER as TRIGGER} from
   '../partition/partition-participant-transaction-cutover-constants.js';
 import {runParticipantCutover} from './replica-handler-participant-cutover.js';
-import {requestParticipantRelease} from './participant-release-client.js';
+import {completeParticipantRelease, requestParticipantRelease} from './participant-release-client.js';
 import {isHeldByHostFailure} from '../partition/partition-write-kernel.js';
 
 const RELEASE_RECOVERY_FACT = Object.freeze({
@@ -84,11 +84,6 @@ function statusReportOf(observation) {
     failure: status?.failure ?? null};
 }
 
-function freshCreateRetryDelay(answer) {
-  return answer.outcome === OUTCOME.NOT_LEADER ?
-    BOUND.PAUSE_RETRY_AFTER_MS : answer.retryAfterMs;
-}
-
 function createParticipantReleaseRecovery(handler) {
   const MAX_CONCURRENT_ATTEMPTS = 4;
   const pending = new Map();
@@ -98,12 +93,10 @@ function createParticipantReleaseRecovery(handler) {
   let stopped = false;
   const now = () => handler.timeSource.now();
 
-  function sleep(delayMs, deadlineAtMs) {
-    const remaining = deadlineAtMs - now();
-    if (remaining <= 0) return Promise.resolve(false);
+  function sleep(delayMs) {
     return new Promise((resolve) => {
       const handle = handler.timeSource.setTimeout(
-        () => resolve(true), Math.min(delayMs, remaining));
+        () => resolve(), delayMs);
       handle?.unref?.();
     });
   }
@@ -270,20 +263,10 @@ function createParticipantReleaseRecovery(handler) {
       if (authorization === null) {
         throw new Error(RELEASE_RECOVERY_ERROR.FRESH_AUTHORITY);
       }
-      let answer = null;
-      do {
-        answer = await requestParticipantRelease(handler, {partitionId,
-          targetBuildDigest: build.digest, trigger: TRIGGER.FRESH_CREATE,
-          deadlineAtMs: deadline, authorization});
-        if (answer.outcome === OUTCOME.CUT_OVER) return answer;
-        // A newly created one-member group can answer before its first leader
-        // election.  There is no redirect yet, but NOT_LEADER is still a
-        // bounded lifecycle wait rather than an authority to publish ACTIVE.
-        const retryAfterMs = freshCreateRetryDelay(answer);
-        if (!Number.isSafeInteger(retryAfterMs) || retryAfterMs < 0 ||
-            now() + retryAfterMs > deadline ||
-            !await sleep(retryAfterMs, deadline)) break;
-      } while (now() <= deadline);
+      const {answer, completed} = await completeParticipantRelease(handler, {partitionId,
+        targetBuildDigest: build.digest, trigger: TRIGGER.FRESH_CREATE,
+        deadlineAtMs: deadline, authorization}, {now, sleep});
+      if (completed) return answer;
       throw new Error(RELEASE_RECOVERY_ERROR.FRESH_FAILED +
         JSON.stringify({partitionId, answer}));
     },

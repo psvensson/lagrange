@@ -64,3 +64,35 @@ Then run the same witnesses on the shared operation, existing native and
 protocol regressions, structural negatives, scoped audits and independent
 category-complete review. Record source-only negative limits separately
 from distributed or restart certification. No earlier seal is rewritten.
+
+## Additive review correction: reply observations and checked bindings
+
+Independent review rejected the first implementation before any repaired
+native measurement. A reply is an arbitrary object at the existing client
+boundary; its outcome property may be a getter. The fresh caller must consume
+an explicit completed boolean set by the shared owner's existing CUT_OVER
+branch. This preserves its original two outcome reads on success and three
+on terminal invalid-delay refusal, including the primitive's redirect check.
+Seed retains its historical outer outcome observation. Original-source
+getter controls are frozen and measured before applying that correction.
+
+The structural proof also requires canonical top-level client definitions,
+the actual caller factory and returned method, and the recovery closure's
+own clock and sleep declarations. Guarded dependency names may not be
+rebound, assigned, incremented, iteration targets or catch bindings. Table
+and diagnostic observation imports must resolve to their existing owners.
+Unsupported binding/scope forms fail closed; this is a finite proof for the
+existing three-owner interaction, not general JavaScript analysis.
+
+Adversarial source controls preserve checked bodies while changing dependency
+writes, catch bindings, lexical placement or import provenance. Their
+rejection is static evidence. It is not a native semantic-mutation kill and
+does not authorize disabling the guard to checkpoint an invalid owner.
+
+A second independent audit review additionally requires unique direct
+noncomputed returned properties, so a later spread, duplicate, getter or
+computed property cannot replace the checked caller method. The binding
+census includes named, default and namespace imports and both class name
+forms. Exact-body-preserving overwrite and intrinsic-shadow controls cover
+these refinements. The product source and original getter witness do not
+change with this audit correction.

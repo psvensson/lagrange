@@ -19,11 +19,11 @@ import {
 } from '../runtime/work-class-scheduler.js';
 import {runtimeBuildProvenance, RUNTIME_BUILD_STATE} from
   '../diagnostics/runtime-build-provenance.js';
-import {requestParticipantRelease} from '../node/participant-release-client.js';
+import {completeParticipantRelease} from '../node/participant-release-client.js';
 import {observeParticipantReleaseClockValue,
   participantReleaseSeedBudgetObservation, readParticipantReleaseClock} from
   '../node/participant-release-diagnostic-observation.js';
-import {PARTICIPANT_CUTOVER_BOUND, PARTICIPANT_CUTOVER_OUTCOME,
+import {PARTICIPANT_CUTOVER_OUTCOME,
   PARTICIPANT_RELEASE_TRIGGER} from
   '../partition/partition-participant-transaction-cutover-constants.js';
 import {
@@ -89,12 +89,6 @@ const PHASE_EVENT = Object.freeze({
 });
 const DEFERRED_LATENCY_TOPOLOGY_FAILURE =
   'Deferred latency topology lifecycle start failed';
-const EMPTY_PARTICIPANT_RELEASE_DIAGNOSTIC_OBSERVATION = null;
-
-function retainFirstReleaseObservation(current, value) {
-  return current === null && value !== undefined ? value : current;
-}
-
 function seedReleaseFailureProjection({startObservation, terminalObservation,
   budgetMs, ordinal, total, completed, attemptCount, firstBlockedDrain,
   firstJoinedAttempt}) {
@@ -318,31 +312,12 @@ function createBootstrapServiceSeedWorkflowMethods() {
         if (authorization === null) {
           throw new Error(SEED_PARTICIPANT_RELEASE_ERROR.AUTHORITY_UNAVAILABLE);
         }
-        let answer = null;
-        let attemptCount = 0;
-        let firstBlockedDrain = EMPTY_PARTICIPANT_RELEASE_DIAGNOSTIC_OBSERVATION;
-        let firstJoinedAttempt = EMPTY_PARTICIPANT_RELEASE_DIAGNOSTIC_OBSERVATION;
-        do {
-          attemptCount += 1;
-          answer = await requestParticipantRelease(this.replicaHandler, {
+        const {answer, attemptCount, firstBlockedDrain, firstJoinedAttempt} =
+          await completeParticipantRelease(this.replicaHandler, {
             partitionId: service.partitionId, targetBuildDigest: build.digest,
             trigger: PARTICIPANT_RELEASE_TRIGGER.FRESH_SEED,
             deadlineAtMs: deadline, authorization,
-          });
-          firstBlockedDrain = retainFirstReleaseObservation(
-            firstBlockedDrain, answer.blockedDrain);
-          firstJoinedAttempt = retainFirstReleaseObservation(
-            firstJoinedAttempt, answer.joinedAttempt);
-          if (answer.outcome === PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER) break;
-          const retryAfterMs = answer.outcome ===
-              PARTICIPANT_CUTOVER_OUTCOME.NOT_LEADER ?
-            PARTICIPANT_CUTOVER_BOUND.PAUSE_RETRY_AFTER_MS :
-            answer.retryAfterMs;
-          if (!Number.isSafeInteger(retryAfterMs) || retryAfterMs < 0 ||
-              timeSource.now() + retryAfterMs > deadline) break;
-          await this.sleep(Math.min(retryAfterMs,
-            Math.max(0, deadline - timeSource.now())));
-        } while (timeSource.now() <= deadline);
+          }, {now: () => timeSource.now(), sleep: (delayMs) => this.sleep(delayMs)});
         if (answer?.outcome !== PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER) {
           const terminalObservation = readParticipantReleaseClock(timeSource);
           const seedRelease = seedReleaseFailureProjection({startObservation,

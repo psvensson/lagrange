@@ -1,0 +1,47 @@
+TAP version 13
+# Subtest: fresh CREATE completion re-drives with original authority and exact answer, without diagnostic reads
+ok 1 - fresh CREATE completion re-drives with original authority and exact answer, without diagnostic reads
+  ---
+  duration_ms: 2244.807245
+  type: 'test'
+  ...
+# Subtest: fresh CREATE completion keeps invalid delays terminal before any guard-clock read
+ok 2 - fresh CREATE completion keeps invalid delays terminal before any guard-clock read
+  ---
+  duration_ms: 2.00834
+  type: 'test'
+  ...
+# Subtest: fresh CREATE stops when wait preparation reaches D, but calls the client after a wait ending at D
+ok 3 - fresh CREATE stops when wait preparation reaches D, but calls the client after a wait ending at D
+  ---
+  duration_ms: 0.902407
+  type: 'test'
+  ...
+# Subtest: fresh CREATE preserves prerequisite refusal and original wait rejection
+ok 4 - fresh CREATE preserves prerequisite refusal and original wait rejection
+  ---
+  duration_ms: 0.643928
+  type: 'test'
+  ...
+# Subtest: fresh CREATE refuses a safe delay that exceeds the original remaining budget
+ok 5 - fresh CREATE refuses a safe delay that exceeds the original remaining budget
+  ---
+  duration_ms: 0.261073
+  type: 'test'
+  ...
+# Subtest: completion fixture preserves primary and cleanup error identities
+ok 6 - completion fixture preserves primary and cleanup error identities
+  ---
+  duration_ms: 0.338781
+  type: 'test'
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 6
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2259.424179
+# time=3267ms

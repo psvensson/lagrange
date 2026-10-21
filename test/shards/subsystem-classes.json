@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 190,
     "storage-raft": 134,
-    "test-infrastructure": 143,
+    "test-infrastructure": 144,
     "transactions": 16,
     "transport-messaging": 96,
     "wasm-toolchain": 74
   },
-  "censusSize": 2420,
-  "digest": "fnv1a32-9044a29a",
+  "censusSize": 2421,
+  "digest": "fnv1a32-0e0ed05b",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-b21398be",
+  "observationDigest": "fnv1a32-12e66053",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2162,6 +2162,7 @@
     "test/scripts/no-legacy-consensus-reference-audit.test.js": "test-infrastructure",
     "test/scripts/no-legacy-consensus-reference-ratchet.test.js": "test-infrastructure",
     "test/scripts/observation-census.test.js": "test-infrastructure",
+    "test/scripts/participant-release-completion-owner.test.js": "test-infrastructure",
     "test/scripts/pre-push-hook-control-flow.test.js": "test-infrastructure",
     "test/scripts/pre-push-stage-manifest.test.js": "test-infrastructure",
     "test/scripts/priority-recovery-current-artifact-fixture.test.js": "test-infrastructure",
@@ -13906,7 +13907,15 @@
     "test/scripts/check-guideline-decision-boundaries.test.js": {
       "files": [
         "scripts/check-guideline-decision-boundaries-baseline.json",
-        "src/node/replica-handler-constants.js"
+        "scripts/participant-release-completion-audit.js",
+        "src/bootstrap/bootstrap-service-seed-workflow.js",
+        "src/constants/index.js",
+        "src/diagnostics/runtime-build-provenance.js",
+        "src/node/participant-release-client.js",
+        "src/node/participant-release-diagnostic-observation.js",
+        "src/node/replica-handler-constants.js",
+        "src/node/replica-handler-release-recovery.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js"
       ],
       "directories": [
         "scripts",
@@ -14314,10 +14323,18 @@
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/lab.js",
+        "scripts/participant-release-completion-audit.js",
         "scripts/run-classified-test-files.js",
         "scripts/select-change-tests.js",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
+        "src/bootstrap/bootstrap-service-seed-workflow.js",
+        "src/constants/index.js",
+        "src/diagnostics/runtime-build-provenance.js",
+        "src/node/participant-release-client.js",
+        "src/node/participant-release-diagnostic-observation.js",
+        "src/node/replica-handler-release-recovery.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local-three-node.json",
         "test/distributed/config/local.json",
@@ -14744,6 +14761,26 @@
         "LAGRANGE_PROBE",
         "LAGRANGE_TEST_MACHINE_FACTOR",
         "OTHER_THING"
+      ]
+    },
+    "test/scripts/participant-release-completion-owner.test.js": {
+      "files": [
+        "scripts/check-guideline-decision-boundaries-baseline.json",
+        "scripts/check-guideline-decision-boundaries.js",
+        "scripts/participant-release-completion-audit.js",
+        "src/bootstrap/bootstrap-service-seed-workflow.js",
+        "src/constants/index.js",
+        "src/diagnostics/runtime-build-provenance.js",
+        "src/node/participant-release-client.js",
+        "src/node/participant-release-diagnostic-observation.js",
+        "src/node/replica-handler-participant-cutover.js",
+        "src/node/replica-handler-release-recovery.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js"
+      ],
+      "directories": [
+        "scripts",
+        "src",
+        "test"
       ]
     },
     "test/scripts/pre-push-hook-control-flow.test.js": {

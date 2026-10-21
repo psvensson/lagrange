@@ -1,0 +1,5 @@
+Attempt to prepare labTestCommit used mistyped non-existent SHA fefc75988b6a8f435105bf9873705a09c9099999.
+labTestCommit/resolveCommit refused: is not a commit here.
+This happened before discover/placement/runLabTest; no host run was started.
+Corrected exact git rev-parse HEAD is fefc75988807f2e89733ebaf2bc3a844d8ca311f.
+Actual measurement uses separate baseline-fefc75988-exact evidence directory.

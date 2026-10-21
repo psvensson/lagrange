@@ -1,5 +1,7 @@
 import {KEYS} from 'eslint-visitor-keys';
 import fs from 'node:fs/promises';
+import {loadParticipantReleaseCompletionAudit, isOwnedParticipantReleaseCompletionLoop} from
+  './participant-release-completion-audit.js';
 import {
   FILE_CLASS,
   applyCountBaseline,
@@ -35,6 +37,8 @@ const LOCAL_STR_DECISION_BOUNDARY_GUIDELINE = 'decision-boundary guideline';
 const RULES_MD = 'docs/steering/rules.md ';
 const RULE_REFERENCE =
   `${RULES_MD}R07. A semantic outcome is a named state`;
+
+const RETRY_LOOP_TYPES = new Set(['WhileStatement', 'DoWhileStatement', 'ForStatement']);
 
 const FUNCTION_TYPE = Object.freeze({
   ARROW: 'ArrowFunctionExpression',
@@ -435,7 +439,7 @@ function checkSchemaUnsafeWrite(node, filePath, violations) {
   }
 }
 
-function checkLocalRetryLoop(node, functionName, filePath, violations) {
+function checkLocalRetryLoop(node, functionName, filePath, violations, source, completionContext) {
   walkAst(node.body || node, (child) => {
     if (child.type === 'CallExpression') {
       if (child.callee?.type === 'Identifier' &&
@@ -458,7 +462,9 @@ function checkLocalRetryLoop(node, functionName, filePath, violations) {
           });
         }
       }
-    } else if (child.type === 'WhileStatement' || child.type === 'DoWhileStatement' || child.type === 'ForStatement') {
+    } else if (RETRY_LOOP_TYPES.has(child.type)) {
+      if (isOwnedParticipantReleaseCompletionLoop(
+        child, source, filePath, completionContext)) return;
       let hasRetry = false;
       walkAst(child, (loopNode) => {
         if (loopNode.type === 'Identifier' && loopNode.name.toLowerCase().includes('retry')) {
@@ -848,7 +854,8 @@ function collectDecisionBoundaryViolationsFromSource(
 
     const functionName = getFunctionName(node, parent);
     checkMixedCacheAndSqlDecision(node, functionName, filePath, fileClass, violations);
-    checkLocalRetryLoop(node, functionName, filePath, violations);
+    checkLocalRetryLoop(node, functionName, filePath, violations, source,
+      options.completionContext);
 
     walkAst(node.body || node, (child) => {
       checkRawNullOrEmptyState(child, functionName, filePath, violations);
@@ -1039,15 +1046,16 @@ async function collectRefutedDeadClaims(
 
 async function collectDecisionBoundaryViolations(pathsToScan, options = {}) {
   const deadWaitClaims = [];
+  const completion = await loadParticipantReleaseCompletionAudit(options.completionRoot);
   const report = await buildGuidelineViolationReport(
     pathsToScan,
-    {...options, deadWaitClaims},
+    {...options, deadWaitClaims, completionContext: completion.context},
     collectDecisionBoundaryViolationsFromSource,
   );
-  return withAddedViolations(report, await collectRefutedDeadClaims(
+  return withAddedViolations(report, [...completion.violations, ...await collectRefutedDeadClaims(
     deadWaitClaims,
     options.referenceRoots,
-  ));
+  )]);
 }
 
 // 2026-07-28 upward re-anchor: the required CI gate was silently red (the

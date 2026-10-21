@@ -9,7 +9,8 @@ import {participantReleaseClockMeasured, participantReleaseSafeClockInteger,
   './participant-release-diagnostic-observation.js';
 import {releaseAnswer} from '../partition/partition-participant-release-contract.js';
 import {PARTICIPANT_CUTOVER_BOUND as BOUND, PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
-  PARTICIPANT_RELEASE_ACTION as ACTION, PARTICIPANT_RELEASE_PRIORITY,
+  PARTICIPANT_RELEASE_ACTION as ACTION, PARTICIPANT_RELEASE_TRIGGER as TRIGGER,
+  PARTICIPANT_RELEASE_PRIORITY,
   PARTICIPANT_RELEASE_MISSING_FACT as MISSING_FACT,
   PARTICIPANT_RELEASE_RESULT_FIELD, PARTICIPANT_RELEASE_ROUTE_SUFFIX,
   PARTICIPANT_RELEASE_TYPE} from
@@ -19,6 +20,7 @@ const mathMax = Math.max;
 const mathMin = Math.min;
 const objectFreeze = Object.freeze;
 const objectIs = Object.is;
+const EMPTY_PARTICIPANT_RELEASE_DIAGNOSTIC_OBSERVATION = null;
 
 function releaseNodeOfAddress(address) {
   try {
@@ -140,6 +142,45 @@ async function requestParticipantRelease(owner, request) {
     {...payload, replicaId: first.leaderReplicaId});
 }
 
-export {askParticipantRelease, participantReleaseAbsoluteClockValid,
+// Completion owns response interpretation; clocks only execute the caller's
+// existing now/sleep substrate. Every attempt retains the original authority.
+function retainFirstReleaseObservation(current, value) {
+  return current === null && value !== undefined ? value : current;
+}
+
+async function completeParticipantRelease(owner, request, clock) {
+  const intent = objectFreeze({...request});
+  const deadline = intent.deadlineAtMs;
+  const seed = intent.trigger === TRIGGER.FRESH_SEED;
+  let answer = null;
+  let completed = false;
+  let attemptCount = 0;
+  let firstBlockedDrain = EMPTY_PARTICIPANT_RELEASE_DIAGNOSTIC_OBSERVATION;
+  let firstJoinedAttempt = EMPTY_PARTICIPANT_RELEASE_DIAGNOSTIC_OBSERVATION;
+  do {
+    attemptCount += 1;
+    answer = await requestParticipantRelease(owner, intent);
+    if (seed) {
+      firstBlockedDrain = retainFirstReleaseObservation(firstBlockedDrain, answer.blockedDrain);
+      firstJoinedAttempt = retainFirstReleaseObservation(firstJoinedAttempt, answer.joinedAttempt);
+    }
+    if (answer.outcome === OUTCOME.CUT_OVER) {
+      completed = true;
+      break;
+    }
+    const retryAfterMs = answer.outcome === OUTCOME.NOT_LEADER ?
+      BOUND.PAUSE_RETRY_AFTER_MS : answer.retryAfterMs;
+    if (!Number.isSafeInteger(retryAfterMs) || retryAfterMs < 0 ||
+        clock.now() + retryAfterMs > deadline) break;
+    const remaining = deadline - clock.now();
+    // Seed historically executes a zero wait if preparation itself reaches D;
+    // fresh CREATE stops there. A completed wait at D permits either final call.
+    if (!seed && remaining <= 0) break;
+    await clock.sleep(mathMin(retryAfterMs, mathMax(0, remaining)));
+  } while (clock.now() <= deadline);
+  return {answer, completed, attemptCount, firstBlockedDrain, firstJoinedAttempt};
+}
+
+export {askParticipantRelease, completeParticipantRelease, participantReleaseAbsoluteClockValid,
   participantReleaseRequestBudget,
   releaseNodeOfAddress, requestParticipantRelease};
