@@ -1,0 +1,2291 @@
+{
+  "derivation": "Parse the complete selected object from the initial public-startup-settled diagnostic in the head of controller.log after removing host/TAP prefix and collapsing TAP-doubled backslash pairs once. The following original database inventory is truncated by the canonical runner and is not reconstructed.",
+  "selected": {
+    "request": {
+      "partitionId": "artifact_payload_chunks-p1",
+      "replicaId": "artifact_payload_chunks-p1-r1",
+      "release": {
+        "partitionId": "artifact_payload_chunks-p1",
+        "protocolVersion": 1,
+        "targetBuildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+        "configurationKey": "[[\"1472389356923736468\",\"4753637574165189743\",\"5498864487858037747\"],[],[],[],false]",
+        "membershipGenerationIndex": 0,
+        "releaseId": "c2d3e7cbc07f902eba0c47dda8ce2c7d140329d4905b02b3d1351ee67142609e"
+      },
+      "attempt": {
+        "leaderReplicaId": "artifact_payload_chunks-p1-r1",
+        "term": 1,
+        "leaderLifecycleIncarnation": "bacd6551-4a1c-4a93-be68-b27e38b577e4",
+        "deadlineAtMs": 1792564852532
+      },
+      "action": "enable",
+      "target": {
+        "nodeId": "550e8400-e29b-41d4-a716-446655449965",
+        "ownerIncarnation": 1,
+        "replicaId": "artifact_payload_chunks-p1-r1",
+        "lifecycleIncarnation": "bacd6551-4a1c-4a93-be68-b27e38b577e4",
+        "runtimeGeneration": 1,
+        "connectionGeneration": 1,
+        "admissionGeneration": 1
+      },
+      "deadlineAtMs": 1792564852532,
+      "census": [
+        {
+          "outcome": "observed",
+          "partitionId": "artifact_payload_chunks-p1",
+          "generation": {
+            "nodeId": "550e8400-e29b-41d4-a716-446655449965",
+            "ownerIncarnation": 1,
+            "replicaId": "artifact_payload_chunks-p1-r1",
+            "lifecycleIncarnation": "bacd6551-4a1c-4a93-be68-b27e38b577e4",
+            "runtimeGeneration": 1,
+            "connectionGeneration": 1,
+            "admissionGeneration": 1
+          },
+          "buildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+          "membership": {
+            "kind": "committed",
+            "voters": [
+              "1472389356923736468",
+              "4753637574165189743",
+              "5498864487858037747"
+            ],
+            "votersOutgoing": [],
+            "learners": [],
+            "learnersNext": [],
+            "appliedIndex": 1,
+            "configurationKey": "[[\"1472389356923736468\",\"4753637574165189743\",\"5498864487858037747\"],[],[],[],false]",
+            "membershipGenerationIndex": 0,
+            "commitIndex": 1,
+            "term": 1,
+            "leaderId": "artifact_payload_chunks-p1-r1",
+            "gateOpen": true,
+            "identities": {
+              "1472389356923736468": "artifact_payload_chunks-p1-r3",
+              "4753637574165189743": "artifact_payload_chunks-p1-r2",
+              "5498864487858037747": "artifact_payload_chunks-p1-r1"
+            }
+          },
+          "leaderReplicaId": "artifact_payload_chunks-p1-r1",
+          "leaderAddress": "550e8400-e29b-41d4-a716-446655449965/partition/artifact_payload_chunks-p1-r1",
+          "role": "leader",
+          "confChangePending": false,
+          "peers": [
+            {
+              "peerId": "4753637574165189743",
+              "replicaIdentity": "artifact_payload_chunks-p1-r2",
+              "address": "550e8400-e29b-41d4-a716-446655449965/partition/artifact_payload_chunks-p1-r2",
+              "addressStatus": "resolved",
+              "learner": false,
+              "delivery": {
+                "outcome": "delivered",
+                "consecutiveFailures": 0
+              }
+            },
+            {
+              "peerId": "1472389356923736468",
+              "replicaIdentity": "artifact_payload_chunks-p1-r3",
+              "address": "550e8400-e29b-41d4-a716-446655449965/partition/artifact_payload_chunks-p1-r3",
+              "addressStatus": "resolved",
+              "learner": false,
+              "delivery": {
+                "outcome": "delivered",
+                "consecutiveFailures": 0
+              }
+            }
+          ],
+          "origin": null,
+          "connection": {
+            "generation": 1,
+            "servedLegacy": false
+          },
+          "paused": true,
+          "rowid": {
+            "kind": "rowid",
+            "maximum": null,
+            "belowCeiling": true
+          },
+          "work": {
+            "sqliteTransactionOpen": false,
+            "participantStaging": false,
+            "participantPrepared": 0,
+            "proposals": 0,
+            "pendingOutcomes": 0,
+            "appliedIndex": 1,
+            "commitIndex": 1,
+            "lastIndex": 1
+          },
+          "topology": null,
+          "queryCensus": null
+        },
+        {
+          "outcome": "observed",
+          "partitionId": "artifact_payload_chunks-p1",
+          "generation": {
+            "nodeId": "550e8400-e29b-41d4-a716-446655449965",
+            "ownerIncarnation": 1,
+            "replicaId": "artifact_payload_chunks-p1-r2",
+            "lifecycleIncarnation": "60b0fc96-6917-4a76-b173-8448dddc4cb5",
+            "runtimeGeneration": 1,
+            "connectionGeneration": 8,
+            "admissionGeneration": 2
+          },
+          "buildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+          "membership": {
+            "kind": "committed",
+            "voters": [
+              "1472389356923736468",
+              "4753637574165189743",
+              "5498864487858037747"
+            ],
+            "votersOutgoing": [],
+            "learners": [],
+            "learnersNext": [],
+            "appliedIndex": 1,
+            "configurationKey": "[[\"1472389356923736468\",\"4753637574165189743\",\"5498864487858037747\"],[],[],[],false]",
+            "membershipGenerationIndex": 0,
+            "commitIndex": 1,
+            "term": 1,
+            "leaderId": "artifact_payload_chunks-p1-r1",
+            "gateOpen": true,
+            "identities": {
+              "1472389356923736468": "artifact_payload_chunks-p1-r3",
+              "4753637574165189743": "artifact_payload_chunks-p1-r2",
+              "5498864487858037747": "artifact_payload_chunks-p1-r1"
+            }
+          },
+          "leaderReplicaId": "artifact_payload_chunks-p1-r1",
+          "leaderAddress": "550e8400-e29b-41d4-a716-446655449965/partition/artifact_payload_chunks-p1-r1",
+          "role": "follower",
+          "confChangePending": false,
+          "peers": [
+            {
+              "peerId": "5498864487858037747",
+              "replicaIdentity": "artifact_payload_chunks-p1-r1",
+              "address": "550e8400-e29b-41d4-a716-446655449965/partition/artifact_payload_chunks-p1-r1",
+              "addressStatus": "resolved",
+              "learner": false,
+              "delivery": {
+                "outcome": "delivered",
+                "consecutiveFailures": 0
+              }
+            },
+            {
+              "peerId": "1472389356923736468",
+              "replicaIdentity": "artifact_payload_chunks-p1-r3",
+              "address": "550e8400-e29b-41d4-a716-446655449965/partition/artifact_payload_chunks-p1-r3",
+              "addressStatus": "resolved",
+              "learner": false,
+              "delivery": {
+                "outcome": "none-observed"
+              }
+            }
+          ],
+          "origin": null,
+          "connection": {
+            "generation": 8,
+            "servedLegacy": false
+          },
+          "paused": true,
+          "rowid": {
+            "kind": "rowid",
+            "maximum": null,
+            "belowCeiling": true
+          },
+          "work": {
+            "sqliteTransactionOpen": false,
+            "participantStaging": false,
+            "participantPrepared": 0,
+            "proposals": 0,
+            "pendingOutcomes": 0,
+            "appliedIndex": 1,
+            "commitIndex": 1,
+            "lastIndex": 1
+          },
+          "topology": null,
+          "queryCensus": null
+        },
+        {
+          "outcome": "observed",
+          "partitionId": "artifact_payload_chunks-p1",
+          "generation": {
+            "nodeId": "550e8400-e29b-41d4-a716-446655449965",
+            "ownerIncarnation": 1,
+            "replicaId": "artifact_payload_chunks-p1-r3",
+            "lifecycleIncarnation": "b56c85d8-08e3-45b2-9e84-f421be9ead99",
+            "runtimeGeneration": 1,
+            "connectionGeneration": 14,
+            "admissionGeneration": 3
+          },
+          "buildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+          "membership": {
+            "kind": "committed",
+            "voters": [
+              "1472389356923736468",
+              "4753637574165189743",
+              "5498864487858037747"
+            ],
+            "votersOutgoing": [],
+            "learners": [],
+            "learnersNext": [],
+            "appliedIndex": 1,
+            "configurationKey": "[[\"1472389356923736468\",\"4753637574165189743\",\"5498864487858037747\"],[],[],[],false]",
+            "membershipGenerationIndex": 0,
+            "commitIndex": 1,
+            "term": 1,
+            "leaderId": "artifact_payload_chunks-p1-r1",
+            "gateOpen": true,
+            "identities": {
+              "1472389356923736468": "artifact_payload_chunks-p1-r3",
+              "4753637574165189743": "artifact_payload_chunks-p1-r2",
+              "5498864487858037747": "artifact_payload_chunks-p1-r1"
+            }
+          },
+          "leaderReplicaId": "artifact_payload_chunks-p1-r1",
+          "leaderAddress": "550e8400-e29b-41d4-a716-446655449965/partition/artifact_payload_chunks-p1-r1",
+          "role": "follower",
+          "confChangePending": false,
+          "peers": [
+            {
+              "peerId": "5498864487858037747",
+              "replicaIdentity": "artifact_payload_chunks-p1-r1",
+              "address": "550e8400-e29b-41d4-a716-446655449965/partition/artifact_payload_chunks-p1-r1",
+              "addressStatus": "resolved",
+              "learner": false,
+              "delivery": {
+                "outcome": "delivered",
+                "consecutiveFailures": 0
+              }
+            },
+            {
+              "peerId": "4753637574165189743",
+              "replicaIdentity": "artifact_payload_chunks-p1-r2",
+              "address": "550e8400-e29b-41d4-a716-446655449965/partition/artifact_payload_chunks-p1-r2",
+              "addressStatus": "resolved",
+              "learner": false,
+              "delivery": {
+                "outcome": "none-observed"
+              }
+            }
+          ],
+          "origin": null,
+          "connection": {
+            "generation": 14,
+            "servedLegacy": false
+          },
+          "paused": true,
+          "rowid": {
+            "kind": "rowid",
+            "maximum": null,
+            "belowCeiling": true
+          },
+          "work": {
+            "sqliteTransactionOpen": false,
+            "participantStaging": false,
+            "participantPrepared": 0,
+            "proposals": 0,
+            "pendingOutcomes": 0,
+            "appliedIndex": 1,
+            "commitIndex": 1,
+            "lastIndex": 1
+          },
+          "topology": null,
+          "queryCensus": null
+        }
+      ],
+      "queryDrainProof": null,
+      "type": "PARTICIPANT_RELEASE"
+    },
+    "dbPath": "/tmp/retained-seed-public-CkzwCB/partitions/artifact_payload_chunks-p1/artifact_payload_chunks-p1-r1.db",
+    "before": null,
+    "after": {
+      "originIndex": 2,
+      "originTerm": 1
+    },
+    "answer": {
+      "outcome": "observed",
+      "partitionId": "artifact_payload_chunks-p1",
+      "generation": {
+        "nodeId": "550e8400-e29b-41d4-a716-446655449965",
+        "ownerIncarnation": 1,
+        "replicaId": "artifact_payload_chunks-p1-r1",
+        "lifecycleIncarnation": "bacd6551-4a1c-4a93-be68-b27e38b577e4",
+        "runtimeGeneration": 1,
+        "connectionGeneration": 1,
+        "admissionGeneration": 1
+      },
+      "buildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+      "membership": {
+        "kind": "committed",
+        "voters": [
+          "1472389356923736468",
+          "4753637574165189743",
+          "5498864487858037747"
+        ],
+        "votersOutgoing": [],
+        "learners": [],
+        "learnersNext": [],
+        "appliedIndex": 2,
+        "configurationKey": "[[\"1472389356923736468\",\"4753637574165189743\",\"5498864487858037747\"],[],[],[],false]",
+        "membershipGenerationIndex": 0,
+        "commitIndex": 2,
+        "term": 1,
+        "leaderId": "artifact_payload_chunks-p1-r1",
+        "gateOpen": true,
+        "identities": {
+          "1472389356923736468": "artifact_payload_chunks-p1-r3",
+          "4753637574165189743": "artifact_payload_chunks-p1-r2",
+          "5498864487858037747": "artifact_payload_chunks-p1-r1"
+        }
+      },
+      "leaderReplicaId": "artifact_payload_chunks-p1-r1",
+      "leaderAddress": "550e8400-e29b-41d4-a716-446655449965/partition/artifact_payload_chunks-p1-r1",
+      "role": "leader",
+      "confChangePending": false,
+      "peers": [
+        {
+          "peerId": "4753637574165189743",
+          "replicaIdentity": "artifact_payload_chunks-p1-r2",
+          "address": "550e8400-e29b-41d4-a716-446655449965/partition/artifact_payload_chunks-p1-r2",
+          "addressStatus": "resolved",
+          "learner": false,
+          "delivery": {
+            "outcome": "delivered",
+            "consecutiveFailures": 0
+          }
+        },
+        {
+          "peerId": "1472389356923736468",
+          "replicaIdentity": "artifact_payload_chunks-p1-r3",
+          "address": "550e8400-e29b-41d4-a716-446655449965/partition/artifact_payload_chunks-p1-r3",
+          "addressStatus": "resolved",
+          "learner": false,
+          "delivery": {
+            "outcome": "delivered",
+            "consecutiveFailures": 0
+          }
+        }
+      ],
+      "origin": {
+        "originIndex": 2,
+        "originTerm": 1
+      },
+      "connection": {
+        "generation": 1,
+        "servedLegacy": false
+      },
+      "paused": true,
+      "rowid": {
+        "kind": "rowid",
+        "maximum": null,
+        "belowCeiling": true
+      },
+      "work": {
+        "sqliteTransactionOpen": false,
+        "participantStaging": false,
+        "participantPrepared": 0,
+        "proposals": 0,
+        "pendingOutcomes": 0,
+        "appliedIndex": 2,
+        "commitIndex": 2,
+        "lastIndex": 2
+      },
+      "topology": null,
+      "queryCensus": null
+    },
+    "settledAtMs": 1792564824627,
+    "forcedAtMs": 1792564852532,
+    "admissionAfterEnable": {
+      "state": "closed",
+      "raisedAtMs": 1792564822538,
+      "generation": 1,
+      "releaseId": null
+    },
+    "nativeClockUnchanged": true,
+    "nodeClockUnchanged": true,
+    "selectedOuter": {
+      "request": {
+        "partitionId": "artifact_payload_chunks-p1",
+        "targetBuildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+        "trigger": "fresh-seed",
+        "deadlineAtMs": 1792564852532,
+        "authorization": {},
+        "action": "release",
+        "type": "PARTICIPANT_RELEASE"
+      },
+      "answer": {
+        "outcome": "release_fact_unavailable",
+        "releaseId": "c2d3e7cbc07f902eba0c47dda8ce2c7d140329d4905b02b3d1351ee67142609e",
+        "partitionId": "artifact_payload_chunks-p1",
+        "phase": "observe_applied_position",
+        "missingFact": "release_deadline",
+        "owner": "550e8400-e29b-41d4-a716-446655449965"
+      },
+      "error": null,
+      "settled": true
+    },
+    "freshIntents": [
+      {
+        "request": {
+          "partitionId": "sql_transactions-p1",
+          "targetBuildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+          "trigger": "fresh-seed",
+          "deadlineAtMs": 1792564852532,
+          "authorization": {},
+          "action": "release",
+          "type": "PARTICIPANT_RELEASE"
+        },
+        "answer": {
+          "outcome": "not_leader",
+          "releaseId": null,
+          "partitionId": "sql_transactions-p1",
+          "phase": "release",
+          "leaderAddress": null,
+          "leaderReplicaId": null
+        },
+        "error": null,
+        "settled": true
+      },
+      {
+        "request": {
+          "partitionId": "sql_transactions-p1",
+          "targetBuildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+          "trigger": "fresh-seed",
+          "deadlineAtMs": 1792564852532,
+          "authorization": {},
+          "action": "release",
+          "type": "PARTICIPANT_RELEASE"
+        },
+        "answer": {
+          "outcome": "not_leader",
+          "releaseId": null,
+          "partitionId": "sql_transactions-p1",
+          "phase": "release",
+          "leaderAddress": null,
+          "leaderReplicaId": null
+        },
+        "error": null,
+        "settled": true
+      },
+      {
+        "request": {
+          "partitionId": "sql_transactions-p1",
+          "targetBuildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+          "trigger": "fresh-seed",
+          "deadlineAtMs": 1792564852532,
+          "authorization": {},
+          "action": "release",
+          "type": "PARTICIPANT_RELEASE"
+        },
+        "answer": {
+          "outcome": "not_leader",
+          "releaseId": null,
+          "partitionId": "sql_transactions-p1",
+          "phase": "release",
+          "leaderAddress": null,
+          "leaderReplicaId": null
+        },
+        "error": null,
+        "settled": true
+      },
+      {
+        "request": {
+          "partitionId": "sql_transactions-p1",
+          "targetBuildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+          "trigger": "fresh-seed",
+          "deadlineAtMs": 1792564852532,
+          "authorization": {},
+          "action": "release",
+          "type": "PARTICIPANT_RELEASE"
+        },
+        "answer": {
+          "outcome": "not_leader",
+          "releaseId": null,
+          "partitionId": "sql_transactions-p1",
+          "phase": "release",
+          "leaderAddress": null,
+          "leaderReplicaId": null
+        },
+        "error": null,
+        "settled": true
+      },
+      {
+        "request": {
+          "partitionId": "sql_transactions-p1",
+          "targetBuildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+          "trigger": "fresh-seed",
+          "deadlineAtMs": 1792564852532,
+          "authorization": {},
+          "action": "release",
+          "type": "PARTICIPANT_RELEASE"
+        },
+        "answer": {
+          "outcome": "not_leader",
+          "releaseId": null,
+          "partitionId": "sql_transactions-p1",
+          "phase": "release",
+          "leaderAddress": null,
+          "leaderReplicaId": null
+        },
+        "error": null,
+        "settled": true
+      },
+      {
+        "request": {
+          "partitionId": "sql_transactions-p1",
+          "targetBuildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+          "trigger": "fresh-seed",
+          "deadlineAtMs": 1792564852532,
+          "authorization": {},
+          "action": "release",
+          "type": "PARTICIPANT_RELEASE"
+        },
+        "answer": {
+          "outcome": "not_leader",
+          "releaseId": null,
+          "partitionId": "sql_transactions-p1",
+          "phase": "release",
+          "leaderAddress": null,
+          "leaderReplicaId": null
+        },
+        "error": null,
+        "settled": true
+      },
+      {
+        "request": {
+          "partitionId": "sql_transactions-p1",
+          "targetBuildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+          "trigger": "fresh-seed",
+          "deadlineAtMs": 1792564852532,
+          "authorization": {},
+          "action": "release",
+          "type": "PARTICIPANT_RELEASE"
+        },
+        "answer": {
+          "outcome": "not_leader",
+          "releaseId": null,
+          "partitionId": "sql_transactions-p1",
+          "phase": "release",
+          "leaderAddress": null,
+          "leaderReplicaId": null
+        },
+        "error": null,
+        "settled": true
+      },
+      {
+        "request": {
+          "partitionId": "sql_transactions-p1",
+          "targetBuildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+          "trigger": "fresh-seed",
+          "deadlineAtMs": 1792564852532,
+          "authorization": {},
+          "action": "release",
+          "type": "PARTICIPANT_RELEASE"
+        },
+        "answer": {
+          "outcome": "not_leader",
+          "releaseId": null,
+          "partitionId": "sql_transactions-p1",
+          "phase": "release",
+          "leaderAddress": null,
+          "leaderReplicaId": null
+        },
+        "error": null,
+        "settled": true
+      },
+      {
+        "request": {
+          "partitionId": "sql_transactions-p1",
+          "targetBuildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+          "trigger": "fresh-seed",
+          "deadlineAtMs": 1792564852532,
+          "authorization": {},
+          "action": "release",
+          "type": "PARTICIPANT_RELEASE"
+        },
+        "answer": {
+          "outcome": "not_leader",
+          "releaseId": null,
+          "partitionId": "sql_transactions-p1",
+          "phase": "release",
+          "leaderAddress": null,
+          "leaderReplicaId": null
+        },
+        "error": null,
+        "settled": true
+      },
+      {
+        "request": {
+          "partitionId": "sql_transactions-p1",
+          "targetBuildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+          "trigger": "fresh-seed",
+          "deadlineAtMs": 1792564852532,
+          "authorization": {},
+          "action": "release",
+          "type": "PARTICIPANT_RELEASE"
+        },
+        "answer": {
+          "outcome": "not_leader",
+          "releaseId": null,
+          "partitionId": "sql_transactions-p1",
+          "phase": "release",
+          "leaderAddress": null,
+          "leaderReplicaId": null
+        },
+        "error": null,
+        "settled": true
+      },
+      {
+        "request": {
+          "partitionId": "sql_transactions-p1",
+          "targetBuildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+          "trigger": "fresh-seed",
+          "deadlineAtMs": 1792564852532,
+          "authorization": {},
+          "action": "release",
+          "type": "PARTICIPANT_RELEASE"
+        },
+        "answer": {
+          "outcome": "not_leader",
+          "releaseId": null,
+          "partitionId": "sql_transactions-p1",
+          "phase": "release",
+          "leaderAddress": null,
+          "leaderReplicaId": null
+        },
+        "error": null,
+        "settled": true
+      },
+      {
+        "request": {
+          "partitionId": "sql_transactions-p1",
+          "targetBuildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+          "trigger": "fresh-seed",
+          "deadlineAtMs": 1792564852532,
+          "authorization": {},
+          "action": "release",
+          "type": "PARTICIPANT_RELEASE"
+        },
+        "answer": {
+          "outcome": "not_leader",
+          "releaseId": null,
+          "partitionId": "sql_transactions-p1",
+          "phase": "release",
+          "leaderAddress": null,
+          "leaderReplicaId": null
+        },
+        "error": null,
+        "settled": true
+      },
+      {
+        "request": {
+          "partitionId": "sql_transactions-p1",
+          "targetBuildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+          "trigger": "fresh-seed",
+          "deadlineAtMs": 1792564852532,
+          "authorization": {},
+          "action": "release",
+          "type": "PARTICIPANT_RELEASE"
+        },
+        "answer": {
+          "outcome": "not_leader",
+          "releaseId": null,
+          "partitionId": "sql_transactions-p1",
+          "phase": "release",
+          "leaderAddress": null,
+          "leaderReplicaId": null
+        },
+        "error": null,
+        "settled": true
+      },
+      {
+        "request": {
+          "partitionId": "sql_transactions-p1",
+          "targetBuildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+          "trigger": "fresh-seed",
+          "deadlineAtMs": 1792564852532,
+          "authorization": {},
+          "action": "release",
+          "type": "PARTICIPANT_RELEASE"
+        },
+        "answer": {
+          "outcome": "not_leader",
+          "releaseId": null,
+          "partitionId": "sql_transactions-p1",
+          "phase": "release",
+          "leaderAddress": null,
+          "leaderReplicaId": null
+        },
+        "error": null,
+        "settled": true
+      },
+      {
+        "request": {
+          "partitionId": "sql_transactions-p1",
+          "targetBuildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+          "trigger": "fresh-seed",
+          "deadlineAtMs": 1792564852532,
+          "authorization": {},
+          "action": "release",
+          "type": "PARTICIPANT_RELEASE"
+        },
+        "answer": {
+          "outcome": "not_leader",
+          "releaseId": null,
+          "partitionId": "sql_transactions-p1",
+          "phase": "release",
+          "leaderAddress": null,
+          "leaderReplicaId": null
+        },
+        "error": null,
+        "settled": true
+      },
+      {
+        "request": {
+          "partitionId": "sql_transactions-p1",
+          "targetBuildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+          "trigger": "fresh-seed",
+          "deadlineAtMs": 1792564852532,
+          "authorization": {},
+          "action": "release",
+          "type": "PARTICIPANT_RELEASE"
+        },
+        "answer": {
+          "outcome": "not_leader",
+          "releaseId": null,
+          "partitionId": "sql_transactions-p1",
+          "phase": "release",
+          "leaderAddress": null,
+          "leaderReplicaId": null
+        },
+        "error": null,
+        "settled": true
+      },
+      {
+        "request": {
+          "partitionId": "sql_transactions-p1",
+          "targetBuildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+          "trigger": "fresh-seed",
+          "deadlineAtMs": 1792564852532,
+          "authorization": {},
+          "action": "release",
+          "type": "PARTICIPANT_RELEASE"
+        },
+        "answer": {
+          "outcome": "not_leader",
+          "releaseId": null,
+          "partitionId": "sql_transactions-p1",
+          "phase": "release",
+          "leaderAddress": null,
+          "leaderReplicaId": null
+        },
+        "error": null,
+        "settled": true
+      },
+      {
+        "request": {
+          "partitionId": "sql_transactions-p1",
+          "targetBuildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+          "trigger": "fresh-seed",
+          "deadlineAtMs": 1792564852532,
+          "authorization": {},
+          "action": "release",
+          "type": "PARTICIPANT_RELEASE"
+        },
+        "answer": {
+          "outcome": "not_leader",
+          "releaseId": null,
+          "partitionId": "sql_transactions-p1",
+          "phase": "release",
+          "leaderAddress": null,
+          "leaderReplicaId": null
+        },
+        "error": null,
+        "settled": true
+      },
+      {
+        "request": {
+          "partitionId": "sql_transactions-p1",
+          "targetBuildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+          "trigger": "fresh-seed",
+          "deadlineAtMs": 1792564852532,
+          "authorization": {},
+          "action": "release",
+          "type": "PARTICIPANT_RELEASE"
+        },
+        "answer": {
+          "outcome": "not_leader",
+          "releaseId": null,
+          "partitionId": "sql_transactions-p1",
+          "phase": "release",
+          "leaderAddress": null,
+          "leaderReplicaId": null
+        },
+        "error": null,
+        "settled": true
+      },
+      {
+        "request": {
+          "partitionId": "sql_transactions-p1",
+          "targetBuildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+          "trigger": "fresh-seed",
+          "deadlineAtMs": 1792564852532,
+          "authorization": {},
+          "action": "release",
+          "type": "PARTICIPANT_RELEASE"
+        },
+        "answer": {
+          "outcome": "cut_over",
+          "releaseId": "4ff9194545cd4aad4e9c83d9082e62dfd258aca6c58dcb9d3e6dd4c7f0520c16",
+          "partitionId": "sql_transactions-p1",
+          "phase": "release",
+          "release": {
+            "partitionId": "sql_transactions-p1",
+            "protocolVersion": 1,
+            "targetBuildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+            "configurationKey": "[[\"2734552253535212872\",\"6600243378791833037\",\"7691077697885072888\"],[],[],[],false]",
+            "membershipGenerationIndex": 0,
+            "releaseId": "4ff9194545cd4aad4e9c83d9082e62dfd258aca6c58dcb9d3e6dd4c7f0520c16"
+          },
+          "census": [
+            {
+              "outcome": "observed",
+              "partitionId": "sql_transactions-p1",
+              "generation": {
+                "nodeId": "550e8400-e29b-41d4-a716-446655449965",
+                "ownerIncarnation": 1,
+                "replicaId": "sql_transactions-p1-r1",
+                "lifecycleIncarnation": "7e7b6e5c-d55c-4f46-8b5d-6563f826a8d8",
+                "runtimeGeneration": 1,
+                "connectionGeneration": 118,
+                "admissionGeneration": 115
+              },
+              "buildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+              "membership": {
+                "kind": "committed",
+                "voters": [
+                  "2734552253535212872",
+                  "6600243378791833037",
+                  "7691077697885072888"
+                ],
+                "votersOutgoing": [],
+                "learners": [],
+                "learnersNext": [],
+                "appliedIndex": 2,
+                "configurationKey": "[[\"2734552253535212872\",\"6600243378791833037\",\"7691077697885072888\"],[],[],[],false]",
+                "membershipGenerationIndex": 0,
+                "commitIndex": 2,
+                "term": 1,
+                "leaderId": "sql_transactions-p1-r1",
+                "gateOpen": true,
+                "identities": {
+                  "2734552253535212872": "sql_transactions-p1-r1",
+                  "6600243378791833037": "sql_transactions-p1-r3",
+                  "7691077697885072888": "sql_transactions-p1-r2"
+                }
+              },
+              "leaderReplicaId": "sql_transactions-p1-r1",
+              "leaderAddress": "550e8400-e29b-41d4-a716-446655449965/partition/sql_transactions-p1-r1",
+              "role": "leader",
+              "confChangePending": false,
+              "peers": [
+                {
+                  "peerId": "6600243378791833037",
+                  "replicaIdentity": "sql_transactions-p1-r3",
+                  "address": "550e8400-e29b-41d4-a716-446655449965/partition/sql_transactions-p1-r3",
+                  "addressStatus": "resolved",
+                  "learner": false,
+                  "delivery": {
+                    "outcome": "delivered",
+                    "consecutiveFailures": 0
+                  }
+                },
+                {
+                  "peerId": "7691077697885072888",
+                  "replicaIdentity": "sql_transactions-p1-r2",
+                  "address": "550e8400-e29b-41d4-a716-446655449965/partition/sql_transactions-p1-r2",
+                  "addressStatus": "resolved",
+                  "learner": false,
+                  "delivery": {
+                    "outcome": "delivered",
+                    "consecutiveFailures": 0
+                  }
+                }
+              ],
+              "origin": {
+                "originIndex": 2,
+                "originTerm": 1
+              },
+              "connection": {
+                "generation": 118,
+                "servedLegacy": false
+              },
+              "paused": true,
+              "rowid": {
+                "kind": "rowid",
+                "maximum": null,
+                "belowCeiling": true
+              },
+              "work": {
+                "sqliteTransactionOpen": false,
+                "participantStaging": false,
+                "participantPrepared": 0,
+                "proposals": 0,
+                "pendingOutcomes": 0,
+                "appliedIndex": 2,
+                "commitIndex": 2,
+                "lastIndex": 2
+              },
+              "topology": null,
+              "queryCensus": {
+                "state": "clear",
+                "schemaVersion": 2,
+                "semanticVersion": "tx1-query-set-v1",
+                "rowGenerationDigest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+                "enforcement": {
+                  "state": "enforced",
+                  "schemaVersion": 2,
+                  "schemaDigest": "8200c95c4ecdf0b6e3311ee67c0952b4bdb561b3f8b77dc2ae12bb5f2947093c",
+                  "enforcerDigest": "bdde8533813a78d55860924b1ae04693667080208044d4ee7593e1c5d6858d16",
+                  "missingColumns": []
+                },
+                "legacyTransactionIds": [],
+                "recoverableTransactionIds": []
+              }
+            },
+            {
+              "outcome": "observed",
+              "partitionId": "sql_transactions-p1",
+              "generation": {
+                "nodeId": "550e8400-e29b-41d4-a716-446655449965",
+                "ownerIncarnation": 1,
+                "replicaId": "sql_transactions-p1-r2",
+                "lifecycleIncarnation": "4304709b-a5da-4d52-bb09-3cc8852b29b3",
+                "runtimeGeneration": 1,
+                "connectionGeneration": 129,
+                "admissionGeneration": 116
+              },
+              "buildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+              "membership": {
+                "kind": "committed",
+                "voters": [
+                  "2734552253535212872",
+                  "6600243378791833037",
+                  "7691077697885072888"
+                ],
+                "votersOutgoing": [],
+                "learners": [],
+                "learnersNext": [],
+                "appliedIndex": 2,
+                "configurationKey": "[[\"2734552253535212872\",\"6600243378791833037\",\"7691077697885072888\"],[],[],[],false]",
+                "membershipGenerationIndex": 0,
+                "commitIndex": 2,
+                "term": 1,
+                "leaderId": "sql_transactions-p1-r1",
+                "gateOpen": true,
+                "identities": {
+                  "2734552253535212872": "sql_transactions-p1-r1",
+                  "6600243378791833037": "sql_transactions-p1-r3",
+                  "7691077697885072888": "sql_transactions-p1-r2"
+                }
+              },
+              "leaderReplicaId": "sql_transactions-p1-r1",
+              "leaderAddress": "550e8400-e29b-41d4-a716-446655449965/partition/sql_transactions-p1-r1",
+              "role": "follower",
+              "confChangePending": false,
+              "peers": [
+                {
+                  "peerId": "6600243378791833037",
+                  "replicaIdentity": "sql_transactions-p1-r3",
+                  "address": "550e8400-e29b-41d4-a716-446655449965/partition/sql_transactions-p1-r3",
+                  "addressStatus": "resolved",
+                  "learner": false,
+                  "delivery": {
+                    "outcome": "none-observed"
+                  }
+                },
+                {
+                  "peerId": "2734552253535212872",
+                  "replicaIdentity": "sql_transactions-p1-r1",
+                  "address": "550e8400-e29b-41d4-a716-446655449965/partition/sql_transactions-p1-r1",
+                  "addressStatus": "resolved",
+                  "learner": false,
+                  "delivery": {
+                    "outcome": "delivered",
+                    "consecutiveFailures": 0
+                  }
+                }
+              ],
+              "origin": {
+                "originIndex": 2,
+                "originTerm": 1
+              },
+              "connection": {
+                "generation": 129,
+                "servedLegacy": false
+              },
+              "paused": true,
+              "rowid": {
+                "kind": "rowid",
+                "maximum": null,
+                "belowCeiling": true
+              },
+              "work": {
+                "sqliteTransactionOpen": false,
+                "participantStaging": false,
+                "participantPrepared": 0,
+                "proposals": 0,
+                "pendingOutcomes": 0,
+                "appliedIndex": 2,
+                "commitIndex": 2,
+                "lastIndex": 2
+              },
+              "topology": null,
+              "queryCensus": {
+                "state": "clear",
+                "schemaVersion": 2,
+                "semanticVersion": "tx1-query-set-v1",
+                "rowGenerationDigest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+                "enforcement": {
+                  "state": "enforced",
+                  "schemaVersion": 2,
+                  "schemaDigest": "8200c95c4ecdf0b6e3311ee67c0952b4bdb561b3f8b77dc2ae12bb5f2947093c",
+                  "enforcerDigest": "bdde8533813a78d55860924b1ae04693667080208044d4ee7593e1c5d6858d16",
+                  "missingColumns": []
+                },
+                "legacyTransactionIds": [],
+                "recoverableTransactionIds": []
+              }
+            },
+            {
+              "outcome": "observed",
+              "partitionId": "sql_transactions-p1",
+              "generation": {
+                "nodeId": "550e8400-e29b-41d4-a716-446655449965",
+                "ownerIncarnation": 1,
+                "replicaId": "sql_transactions-p1-r3",
+                "lifecycleIncarnation": "8a778c3a-0978-474f-9383-e2f9196fba3e",
+                "runtimeGeneration": 1,
+                "connectionGeneration": 132,
+                "admissionGeneration": 117
+              },
+              "buildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+              "membership": {
+                "kind": "committed",
+                "voters": [
+                  "2734552253535212872",
+                  "6600243378791833037",
+                  "7691077697885072888"
+                ],
+                "votersOutgoing": [],
+                "learners": [],
+                "learnersNext": [],
+                "appliedIndex": 2,
+                "configurationKey": "[[\"2734552253535212872\",\"6600243378791833037\",\"7691077697885072888\"],[],[],[],false]",
+                "membershipGenerationIndex": 0,
+                "commitIndex": 2,
+                "term": 1,
+                "leaderId": "sql_transactions-p1-r1",
+                "gateOpen": true,
+                "identities": {
+                  "2734552253535212872": "sql_transactions-p1-r1",
+                  "6600243378791833037": "sql_transactions-p1-r3",
+                  "7691077697885072888": "sql_transactions-p1-r2"
+                }
+              },
+              "leaderReplicaId": "sql_transactions-p1-r1",
+              "leaderAddress": "550e8400-e29b-41d4-a716-446655449965/partition/sql_transactions-p1-r1",
+              "role": "follower",
+              "confChangePending": false,
+              "peers": [
+                {
+                  "peerId": "7691077697885072888",
+                  "replicaIdentity": "sql_transactions-p1-r2",
+                  "address": "550e8400-e29b-41d4-a716-446655449965/partition/sql_transactions-p1-r2",
+                  "addressStatus": "resolved",
+                  "learner": false,
+                  "delivery": {
+                    "outcome": "none-observed"
+                  }
+                },
+                {
+                  "peerId": "2734552253535212872",
+                  "replicaIdentity": "sql_transactions-p1-r1",
+                  "address": "550e8400-e29b-41d4-a716-446655449965/partition/sql_transactions-p1-r1",
+                  "addressStatus": "resolved",
+                  "learner": false,
+                  "delivery": {
+                    "outcome": "delivered",
+                    "consecutiveFailures": 0
+                  }
+                }
+              ],
+              "origin": {
+                "originIndex": 2,
+                "originTerm": 1
+              },
+              "connection": {
+                "generation": 132,
+                "servedLegacy": false
+              },
+              "paused": true,
+              "rowid": {
+                "kind": "rowid",
+                "maximum": null,
+                "belowCeiling": true
+              },
+              "work": {
+                "sqliteTransactionOpen": false,
+                "participantStaging": false,
+                "participantPrepared": 0,
+                "proposals": 0,
+                "pendingOutcomes": 0,
+                "appliedIndex": 2,
+                "commitIndex": 2,
+                "lastIndex": 2
+              },
+              "topology": null,
+              "queryCensus": {
+                "state": "clear",
+                "schemaVersion": 2,
+                "semanticVersion": "tx1-query-set-v1",
+                "rowGenerationDigest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+                "enforcement": {
+                  "state": "enforced",
+                  "schemaVersion": 2,
+                  "schemaDigest": "8200c95c4ecdf0b6e3311ee67c0952b4bdb561b3f8b77dc2ae12bb5f2947093c",
+                  "enforcerDigest": "bdde8533813a78d55860924b1ae04693667080208044d4ee7593e1c5d6858d16",
+                  "missingColumns": []
+                },
+                "legacyTransactionIds": [],
+                "recoverableTransactionIds": []
+              }
+            }
+          ]
+        },
+        "error": null,
+        "settled": true
+      },
+      {
+        "request": {
+          "partitionId": "artifact_payload_chunks-p1",
+          "targetBuildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+          "trigger": "fresh-seed",
+          "deadlineAtMs": 1792564852532,
+          "authorization": {},
+          "action": "release",
+          "type": "PARTICIPANT_RELEASE"
+        },
+        "answer": {
+          "outcome": "release_fact_unavailable",
+          "releaseId": "c2d3e7cbc07f902eba0c47dda8ce2c7d140329d4905b02b3d1351ee67142609e",
+          "partitionId": "artifact_payload_chunks-p1",
+          "phase": "observe_applied_position",
+          "missingFact": "release_deadline",
+          "owner": "550e8400-e29b-41d4-a716-446655449965"
+        },
+        "error": null,
+        "settled": true
+      },
+      {
+        "request": {
+          "partitionId": "sql_transactions-p1",
+          "nodeId": "550e8400-e29b-41d4-a716-446655449965",
+          "targetBuildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+          "trigger": "fresh-seed",
+          "deadlineAtMs": 1792564852532,
+          "authorization": {},
+          "action": "release",
+          "type": "PARTICIPANT_RELEASE"
+        },
+        "answer": {
+          "outcome": "cut_over",
+          "releaseId": "4ff9194545cd4aad4e9c83d9082e62dfd258aca6c58dcb9d3e6dd4c7f0520c16",
+          "partitionId": "sql_transactions-p1",
+          "phase": "release",
+          "release": {
+            "partitionId": "sql_transactions-p1",
+            "protocolVersion": 1,
+            "targetBuildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+            "configurationKey": "[[\"2734552253535212872\",\"6600243378791833037\",\"7691077697885072888\"],[],[],[],false]",
+            "membershipGenerationIndex": 0,
+            "releaseId": "4ff9194545cd4aad4e9c83d9082e62dfd258aca6c58dcb9d3e6dd4c7f0520c16"
+          },
+          "census": [
+            {
+              "outcome": "observed",
+              "partitionId": "sql_transactions-p1",
+              "generation": {
+                "nodeId": "550e8400-e29b-41d4-a716-446655449965",
+                "ownerIncarnation": 1,
+                "replicaId": "sql_transactions-p1-r1",
+                "lifecycleIncarnation": "7e7b6e5c-d55c-4f46-8b5d-6563f826a8d8",
+                "runtimeGeneration": 1,
+                "connectionGeneration": 118,
+                "admissionGeneration": 131
+              },
+              "buildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+              "membership": {
+                "kind": "committed",
+                "voters": [
+                  "2734552253535212872",
+                  "6600243378791833037",
+                  "7691077697885072888"
+                ],
+                "votersOutgoing": [],
+                "learners": [],
+                "learnersNext": [],
+                "appliedIndex": 2,
+                "configurationKey": "[[\"2734552253535212872\",\"6600243378791833037\",\"7691077697885072888\"],[],[],[],false]",
+                "membershipGenerationIndex": 0,
+                "commitIndex": 2,
+                "term": 1,
+                "leaderId": "sql_transactions-p1-r1",
+                "gateOpen": true,
+                "identities": {
+                  "2734552253535212872": "sql_transactions-p1-r1",
+                  "6600243378791833037": "sql_transactions-p1-r3",
+                  "7691077697885072888": "sql_transactions-p1-r2"
+                }
+              },
+              "leaderReplicaId": "sql_transactions-p1-r1",
+              "leaderAddress": "550e8400-e29b-41d4-a716-446655449965/partition/sql_transactions-p1-r1",
+              "role": "leader",
+              "confChangePending": false,
+              "peers": [
+                {
+                  "peerId": "6600243378791833037",
+                  "replicaIdentity": "sql_transactions-p1-r3",
+                  "address": "550e8400-e29b-41d4-a716-446655449965/partition/sql_transactions-p1-r3",
+                  "addressStatus": "resolved",
+                  "learner": false,
+                  "delivery": {
+                    "outcome": "delivered",
+                    "consecutiveFailures": 0
+                  }
+                },
+                {
+                  "peerId": "7691077697885072888",
+                  "replicaIdentity": "sql_transactions-p1-r2",
+                  "address": "550e8400-e29b-41d4-a716-446655449965/partition/sql_transactions-p1-r2",
+                  "addressStatus": "resolved",
+                  "learner": false,
+                  "delivery": {
+                    "outcome": "delivered",
+                    "consecutiveFailures": 0
+                  }
+                }
+              ],
+              "origin": {
+                "originIndex": 2,
+                "originTerm": 1
+              },
+              "connection": {
+                "generation": 118,
+                "servedLegacy": false
+              },
+              "paused": true,
+              "rowid": {
+                "kind": "rowid",
+                "maximum": null,
+                "belowCeiling": true
+              },
+              "work": {
+                "sqliteTransactionOpen": false,
+                "participantStaging": false,
+                "participantPrepared": 0,
+                "proposals": 0,
+                "pendingOutcomes": 0,
+                "appliedIndex": 2,
+                "commitIndex": 2,
+                "lastIndex": 2
+              },
+              "topology": null,
+              "queryCensus": {
+                "state": "clear",
+                "schemaVersion": 2,
+                "semanticVersion": "tx1-query-set-v1",
+                "rowGenerationDigest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+                "enforcement": {
+                  "state": "enforced",
+                  "schemaVersion": 2,
+                  "schemaDigest": "8200c95c4ecdf0b6e3311ee67c0952b4bdb561b3f8b77dc2ae12bb5f2947093c",
+                  "enforcerDigest": "bdde8533813a78d55860924b1ae04693667080208044d4ee7593e1c5d6858d16",
+                  "missingColumns": []
+                },
+                "legacyTransactionIds": [],
+                "recoverableTransactionIds": []
+              }
+            },
+            {
+              "outcome": "observed",
+              "partitionId": "sql_transactions-p1",
+              "generation": {
+                "nodeId": "550e8400-e29b-41d4-a716-446655449965",
+                "ownerIncarnation": 1,
+                "replicaId": "sql_transactions-p1-r2",
+                "lifecycleIncarnation": "4304709b-a5da-4d52-bb09-3cc8852b29b3",
+                "runtimeGeneration": 1,
+                "connectionGeneration": 129,
+                "admissionGeneration": 132
+              },
+              "buildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+              "membership": {
+                "kind": "committed",
+                "voters": [
+                  "2734552253535212872",
+                  "6600243378791833037",
+                  "7691077697885072888"
+                ],
+                "votersOutgoing": [],
+                "learners": [],
+                "learnersNext": [],
+                "appliedIndex": 2,
+                "configurationKey": "[[\"2734552253535212872\",\"6600243378791833037\",\"7691077697885072888\"],[],[],[],false]",
+                "membershipGenerationIndex": 0,
+                "commitIndex": 2,
+                "term": 1,
+                "leaderId": "sql_transactions-p1-r1",
+                "gateOpen": true,
+                "identities": {
+                  "2734552253535212872": "sql_transactions-p1-r1",
+                  "6600243378791833037": "sql_transactions-p1-r3",
+                  "7691077697885072888": "sql_transactions-p1-r2"
+                }
+              },
+              "leaderReplicaId": "sql_transactions-p1-r1",
+              "leaderAddress": "550e8400-e29b-41d4-a716-446655449965/partition/sql_transactions-p1-r1",
+              "role": "follower",
+              "confChangePending": false,
+              "peers": [
+                {
+                  "peerId": "6600243378791833037",
+                  "replicaIdentity": "sql_transactions-p1-r3",
+                  "address": "550e8400-e29b-41d4-a716-446655449965/partition/sql_transactions-p1-r3",
+                  "addressStatus": "resolved",
+                  "learner": false,
+                  "delivery": {
+                    "outcome": "none-observed"
+                  }
+                },
+                {
+                  "peerId": "2734552253535212872",
+                  "replicaIdentity": "sql_transactions-p1-r1",
+                  "address": "550e8400-e29b-41d4-a716-446655449965/partition/sql_transactions-p1-r1",
+                  "addressStatus": "resolved",
+                  "learner": false,
+                  "delivery": {
+                    "outcome": "delivered",
+                    "consecutiveFailures": 0
+                  }
+                }
+              ],
+              "origin": {
+                "originIndex": 2,
+                "originTerm": 1
+              },
+              "connection": {
+                "generation": 129,
+                "servedLegacy": false
+              },
+              "paused": true,
+              "rowid": {
+                "kind": "rowid",
+                "maximum": null,
+                "belowCeiling": true
+              },
+              "work": {
+                "sqliteTransactionOpen": false,
+                "participantStaging": false,
+                "participantPrepared": 0,
+                "proposals": 0,
+                "pendingOutcomes": 0,
+                "appliedIndex": 2,
+                "commitIndex": 2,
+                "lastIndex": 2
+              },
+              "topology": null,
+              "queryCensus": {
+                "state": "clear",
+                "schemaVersion": 2,
+                "semanticVersion": "tx1-query-set-v1",
+                "rowGenerationDigest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+                "enforcement": {
+                  "state": "enforced",
+                  "schemaVersion": 2,
+                  "schemaDigest": "8200c95c4ecdf0b6e3311ee67c0952b4bdb561b3f8b77dc2ae12bb5f2947093c",
+                  "enforcerDigest": "bdde8533813a78d55860924b1ae04693667080208044d4ee7593e1c5d6858d16",
+                  "missingColumns": []
+                },
+                "legacyTransactionIds": [],
+                "recoverableTransactionIds": []
+              }
+            },
+            {
+              "outcome": "observed",
+              "partitionId": "sql_transactions-p1",
+              "generation": {
+                "nodeId": "550e8400-e29b-41d4-a716-446655449965",
+                "ownerIncarnation": 1,
+                "replicaId": "sql_transactions-p1-r3",
+                "lifecycleIncarnation": "8a778c3a-0978-474f-9383-e2f9196fba3e",
+                "runtimeGeneration": 1,
+                "connectionGeneration": 132,
+                "admissionGeneration": 133
+              },
+              "buildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+              "membership": {
+                "kind": "committed",
+                "voters": [
+                  "2734552253535212872",
+                  "6600243378791833037",
+                  "7691077697885072888"
+                ],
+                "votersOutgoing": [],
+                "learners": [],
+                "learnersNext": [],
+                "appliedIndex": 2,
+                "configurationKey": "[[\"2734552253535212872\",\"6600243378791833037\",\"7691077697885072888\"],[],[],[],false]",
+                "membershipGenerationIndex": 0,
+                "commitIndex": 2,
+                "term": 1,
+                "leaderId": "sql_transactions-p1-r1",
+                "gateOpen": true,
+                "identities": {
+                  "2734552253535212872": "sql_transactions-p1-r1",
+                  "6600243378791833037": "sql_transactions-p1-r3",
+                  "7691077697885072888": "sql_transactions-p1-r2"
+                }
+              },
+              "leaderReplicaId": "sql_transactions-p1-r1",
+              "leaderAddress": "550e8400-e29b-41d4-a716-446655449965/partition/sql_transactions-p1-r1",
+              "role": "follower",
+              "confChangePending": false,
+              "peers": [
+                {
+                  "peerId": "7691077697885072888",
+                  "replicaIdentity": "sql_transactions-p1-r2",
+                  "address": "550e8400-e29b-41d4-a716-446655449965/partition/sql_transactions-p1-r2",
+                  "addressStatus": "resolved",
+                  "learner": false,
+                  "delivery": {
+                    "outcome": "none-observed"
+                  }
+                },
+                {
+                  "peerId": "2734552253535212872",
+                  "replicaIdentity": "sql_transactions-p1-r1",
+                  "address": "550e8400-e29b-41d4-a716-446655449965/partition/sql_transactions-p1-r1",
+                  "addressStatus": "resolved",
+                  "learner": false,
+                  "delivery": {
+                    "outcome": "delivered",
+                    "consecutiveFailures": 0
+                  }
+                }
+              ],
+              "origin": {
+                "originIndex": 2,
+                "originTerm": 1
+              },
+              "connection": {
+                "generation": 132,
+                "servedLegacy": false
+              },
+              "paused": true,
+              "rowid": {
+                "kind": "rowid",
+                "maximum": null,
+                "belowCeiling": true
+              },
+              "work": {
+                "sqliteTransactionOpen": false,
+                "participantStaging": false,
+                "participantPrepared": 0,
+                "proposals": 0,
+                "pendingOutcomes": 0,
+                "appliedIndex": 2,
+                "commitIndex": 2,
+                "lastIndex": 2
+              },
+              "topology": null,
+              "queryCensus": {
+                "state": "clear",
+                "schemaVersion": 2,
+                "semanticVersion": "tx1-query-set-v1",
+                "rowGenerationDigest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+                "enforcement": {
+                  "state": "enforced",
+                  "schemaVersion": 2,
+                  "schemaDigest": "8200c95c4ecdf0b6e3311ee67c0952b4bdb561b3f8b77dc2ae12bb5f2947093c",
+                  "enforcerDigest": "bdde8533813a78d55860924b1ae04693667080208044d4ee7593e1c5d6858d16",
+                  "missingColumns": []
+                },
+                "legacyTransactionIds": [],
+                "recoverableTransactionIds": []
+              }
+            }
+          ]
+        },
+        "error": null,
+        "settled": true
+      }
+    ],
+    "selectedAttempt": [
+      {
+        "request": {
+          "partitionId": "artifact_payload_chunks-p1",
+          "replicaId": "artifact_payload_chunks-p1-r1",
+          "release": {
+            "partitionId": "artifact_payload_chunks-p1",
+            "protocolVersion": 1,
+            "targetBuildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+            "configurationKey": "[[\"1472389356923736468\",\"4753637574165189743\",\"5498864487858037747\"],[],[],[],false]",
+            "membershipGenerationIndex": 0,
+            "releaseId": "c2d3e7cbc07f902eba0c47dda8ce2c7d140329d4905b02b3d1351ee67142609e"
+          },
+          "attempt": {
+            "leaderReplicaId": "artifact_payload_chunks-p1-r1",
+            "term": 1,
+            "leaderLifecycleIncarnation": "bacd6551-4a1c-4a93-be68-b27e38b577e4",
+            "deadlineAtMs": 1792564852532
+          },
+          "action": "pause",
+          "target": {
+            "nodeId": "550e8400-e29b-41d4-a716-446655449965",
+            "ownerIncarnation": 1,
+            "replicaId": "artifact_payload_chunks-p1-r1",
+            "lifecycleIncarnation": "bacd6551-4a1c-4a93-be68-b27e38b577e4",
+            "runtimeGeneration": 1,
+            "connectionGeneration": 1,
+            "admissionGeneration": 1
+          },
+          "deadlineAtMs": 1792564852532,
+          "type": "PARTICIPANT_RELEASE"
+        },
+        "answer": {
+          "outcome": "observed",
+          "partitionId": "artifact_payload_chunks-p1",
+          "generation": {
+            "nodeId": "550e8400-e29b-41d4-a716-446655449965",
+            "ownerIncarnation": 1,
+            "replicaId": "artifact_payload_chunks-p1-r1",
+            "lifecycleIncarnation": "bacd6551-4a1c-4a93-be68-b27e38b577e4",
+            "runtimeGeneration": 1,
+            "connectionGeneration": 1,
+            "admissionGeneration": 1
+          },
+          "buildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+          "membership": {
+            "kind": "committed",
+            "voters": [
+              "1472389356923736468",
+              "4753637574165189743",
+              "5498864487858037747"
+            ],
+            "votersOutgoing": [],
+            "learners": [],
+            "learnersNext": [],
+            "appliedIndex": 1,
+            "configurationKey": "[[\"1472389356923736468\",\"4753637574165189743\",\"5498864487858037747\"],[],[],[],false]",
+            "membershipGenerationIndex": 0,
+            "commitIndex": 1,
+            "term": 1,
+            "leaderId": "artifact_payload_chunks-p1-r1",
+            "gateOpen": true,
+            "identities": {
+              "1472389356923736468": "artifact_payload_chunks-p1-r3",
+              "4753637574165189743": "artifact_payload_chunks-p1-r2",
+              "5498864487858037747": "artifact_payload_chunks-p1-r1"
+            }
+          },
+          "leaderReplicaId": "artifact_payload_chunks-p1-r1",
+          "leaderAddress": "550e8400-e29b-41d4-a716-446655449965/partition/artifact_payload_chunks-p1-r1",
+          "role": "leader",
+          "confChangePending": false,
+          "peers": [
+            {
+              "peerId": "4753637574165189743",
+              "replicaIdentity": "artifact_payload_chunks-p1-r2",
+              "address": "550e8400-e29b-41d4-a716-446655449965/partition/artifact_payload_chunks-p1-r2",
+              "addressStatus": "resolved",
+              "learner": false,
+              "delivery": {
+                "outcome": "delivered",
+                "consecutiveFailures": 0
+              }
+            },
+            {
+              "peerId": "1472389356923736468",
+              "replicaIdentity": "artifact_payload_chunks-p1-r3",
+              "address": "550e8400-e29b-41d4-a716-446655449965/partition/artifact_payload_chunks-p1-r3",
+              "addressStatus": "resolved",
+              "learner": false,
+              "delivery": {
+                "outcome": "delivered",
+                "consecutiveFailures": 0
+              }
+            }
+          ],
+          "origin": null,
+          "connection": {
+            "generation": 1,
+            "servedLegacy": false
+          },
+          "paused": true,
+          "rowid": {
+            "kind": "rowid",
+            "maximum": null,
+            "belowCeiling": true
+          },
+          "work": {
+            "sqliteTransactionOpen": false,
+            "participantStaging": false,
+            "participantPrepared": 0,
+            "proposals": 0,
+            "pendingOutcomes": 0,
+            "appliedIndex": 1,
+            "commitIndex": 1,
+            "lastIndex": 1
+          },
+          "topology": null,
+          "queryCensus": null
+        },
+        "error": null,
+        "settled": true
+      },
+      {
+        "request": {
+          "partitionId": "artifact_payload_chunks-p1",
+          "replicaId": "artifact_payload_chunks-p1-r2",
+          "release": {
+            "partitionId": "artifact_payload_chunks-p1",
+            "protocolVersion": 1,
+            "targetBuildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+            "configurationKey": "[[\"1472389356923736468\",\"4753637574165189743\",\"5498864487858037747\"],[],[],[],false]",
+            "membershipGenerationIndex": 0,
+            "releaseId": "c2d3e7cbc07f902eba0c47dda8ce2c7d140329d4905b02b3d1351ee67142609e"
+          },
+          "attempt": {
+            "leaderReplicaId": "artifact_payload_chunks-p1-r1",
+            "term": 1,
+            "leaderLifecycleIncarnation": "bacd6551-4a1c-4a93-be68-b27e38b577e4",
+            "deadlineAtMs": 1792564852532
+          },
+          "action": "pause",
+          "target": {
+            "nodeId": "550e8400-e29b-41d4-a716-446655449965",
+            "ownerIncarnation": 1,
+            "replicaId": "artifact_payload_chunks-p1-r2",
+            "lifecycleIncarnation": "60b0fc96-6917-4a76-b173-8448dddc4cb5",
+            "runtimeGeneration": 1,
+            "connectionGeneration": 8,
+            "admissionGeneration": 2
+          },
+          "deadlineAtMs": 1792564852532,
+          "type": "PARTICIPANT_RELEASE"
+        },
+        "answer": {
+          "outcome": "observed",
+          "partitionId": "artifact_payload_chunks-p1",
+          "generation": {
+            "nodeId": "550e8400-e29b-41d4-a716-446655449965",
+            "ownerIncarnation": 1,
+            "replicaId": "artifact_payload_chunks-p1-r2",
+            "lifecycleIncarnation": "60b0fc96-6917-4a76-b173-8448dddc4cb5",
+            "runtimeGeneration": 1,
+            "connectionGeneration": 8,
+            "admissionGeneration": 2
+          },
+          "buildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+          "membership": {
+            "kind": "committed",
+            "voters": [
+              "1472389356923736468",
+              "4753637574165189743",
+              "5498864487858037747"
+            ],
+            "votersOutgoing": [],
+            "learners": [],
+            "learnersNext": [],
+            "appliedIndex": 1,
+            "configurationKey": "[[\"1472389356923736468\",\"4753637574165189743\",\"5498864487858037747\"],[],[],[],false]",
+            "membershipGenerationIndex": 0,
+            "commitIndex": 1,
+            "term": 1,
+            "leaderId": "artifact_payload_chunks-p1-r1",
+            "gateOpen": true,
+            "identities": {
+              "1472389356923736468": "artifact_payload_chunks-p1-r3",
+              "4753637574165189743": "artifact_payload_chunks-p1-r2",
+              "5498864487858037747": "artifact_payload_chunks-p1-r1"
+            }
+          },
+          "leaderReplicaId": "artifact_payload_chunks-p1-r1",
+          "leaderAddress": "550e8400-e29b-41d4-a716-446655449965/partition/artifact_payload_chunks-p1-r1",
+          "role": "follower",
+          "confChangePending": false,
+          "peers": [
+            {
+              "peerId": "5498864487858037747",
+              "replicaIdentity": "artifact_payload_chunks-p1-r1",
+              "address": "550e8400-e29b-41d4-a716-446655449965/partition/artifact_payload_chunks-p1-r1",
+              "addressStatus": "resolved",
+              "learner": false,
+              "delivery": {
+                "outcome": "delivered",
+                "consecutiveFailures": 0
+              }
+            },
+            {
+              "peerId": "1472389356923736468",
+              "replicaIdentity": "artifact_payload_chunks-p1-r3",
+              "address": "550e8400-e29b-41d4-a716-446655449965/partition/artifact_payload_chunks-p1-r3",
+              "addressStatus": "resolved",
+              "learner": false,
+              "delivery": {
+                "outcome": "none-observed"
+              }
+            }
+          ],
+          "origin": null,
+          "connection": {
+            "generation": 8,
+            "servedLegacy": false
+          },
+          "paused": true,
+          "rowid": {
+            "kind": "rowid",
+            "maximum": null,
+            "belowCeiling": true
+          },
+          "work": {
+            "sqliteTransactionOpen": false,
+            "participantStaging": false,
+            "participantPrepared": 0,
+            "proposals": 0,
+            "pendingOutcomes": 0,
+            "appliedIndex": 1,
+            "commitIndex": 1,
+            "lastIndex": 1
+          },
+          "topology": null,
+          "queryCensus": null
+        },
+        "error": null,
+        "settled": true
+      },
+      {
+        "request": {
+          "partitionId": "artifact_payload_chunks-p1",
+          "replicaId": "artifact_payload_chunks-p1-r3",
+          "release": {
+            "partitionId": "artifact_payload_chunks-p1",
+            "protocolVersion": 1,
+            "targetBuildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+            "configurationKey": "[[\"1472389356923736468\",\"4753637574165189743\",\"5498864487858037747\"],[],[],[],false]",
+            "membershipGenerationIndex": 0,
+            "releaseId": "c2d3e7cbc07f902eba0c47dda8ce2c7d140329d4905b02b3d1351ee67142609e"
+          },
+          "attempt": {
+            "leaderReplicaId": "artifact_payload_chunks-p1-r1",
+            "term": 1,
+            "leaderLifecycleIncarnation": "bacd6551-4a1c-4a93-be68-b27e38b577e4",
+            "deadlineAtMs": 1792564852532
+          },
+          "action": "pause",
+          "target": {
+            "nodeId": "550e8400-e29b-41d4-a716-446655449965",
+            "ownerIncarnation": 1,
+            "replicaId": "artifact_payload_chunks-p1-r3",
+            "lifecycleIncarnation": "b56c85d8-08e3-45b2-9e84-f421be9ead99",
+            "runtimeGeneration": 1,
+            "connectionGeneration": 14,
+            "admissionGeneration": 3
+          },
+          "deadlineAtMs": 1792564852532,
+          "type": "PARTICIPANT_RELEASE"
+        },
+        "answer": {
+          "outcome": "observed",
+          "partitionId": "artifact_payload_chunks-p1",
+          "generation": {
+            "nodeId": "550e8400-e29b-41d4-a716-446655449965",
+            "ownerIncarnation": 1,
+            "replicaId": "artifact_payload_chunks-p1-r3",
+            "lifecycleIncarnation": "b56c85d8-08e3-45b2-9e84-f421be9ead99",
+            "runtimeGeneration": 1,
+            "connectionGeneration": 14,
+            "admissionGeneration": 3
+          },
+          "buildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+          "membership": {
+            "kind": "committed",
+            "voters": [
+              "1472389356923736468",
+              "4753637574165189743",
+              "5498864487858037747"
+            ],
+            "votersOutgoing": [],
+            "learners": [],
+            "learnersNext": [],
+            "appliedIndex": 1,
+            "configurationKey": "[[\"1472389356923736468\",\"4753637574165189743\",\"5498864487858037747\"],[],[],[],false]",
+            "membershipGenerationIndex": 0,
+            "commitIndex": 1,
+            "term": 1,
+            "leaderId": "artifact_payload_chunks-p1-r1",
+            "gateOpen": true,
+            "identities": {
+              "1472389356923736468": "artifact_payload_chunks-p1-r3",
+              "4753637574165189743": "artifact_payload_chunks-p1-r2",
+              "5498864487858037747": "artifact_payload_chunks-p1-r1"
+            }
+          },
+          "leaderReplicaId": "artifact_payload_chunks-p1-r1",
+          "leaderAddress": "550e8400-e29b-41d4-a716-446655449965/partition/artifact_payload_chunks-p1-r1",
+          "role": "follower",
+          "confChangePending": false,
+          "peers": [
+            {
+              "peerId": "5498864487858037747",
+              "replicaIdentity": "artifact_payload_chunks-p1-r1",
+              "address": "550e8400-e29b-41d4-a716-446655449965/partition/artifact_payload_chunks-p1-r1",
+              "addressStatus": "resolved",
+              "learner": false,
+              "delivery": {
+                "outcome": "delivered",
+                "consecutiveFailures": 0
+              }
+            },
+            {
+              "peerId": "4753637574165189743",
+              "replicaIdentity": "artifact_payload_chunks-p1-r2",
+              "address": "550e8400-e29b-41d4-a716-446655449965/partition/artifact_payload_chunks-p1-r2",
+              "addressStatus": "resolved",
+              "learner": false,
+              "delivery": {
+                "outcome": "none-observed"
+              }
+            }
+          ],
+          "origin": null,
+          "connection": {
+            "generation": 14,
+            "servedLegacy": false
+          },
+          "paused": true,
+          "rowid": {
+            "kind": "rowid",
+            "maximum": null,
+            "belowCeiling": true
+          },
+          "work": {
+            "sqliteTransactionOpen": false,
+            "participantStaging": false,
+            "participantPrepared": 0,
+            "proposals": 0,
+            "pendingOutcomes": 0,
+            "appliedIndex": 1,
+            "commitIndex": 1,
+            "lastIndex": 1
+          },
+          "topology": null,
+          "queryCensus": null
+        },
+        "error": null,
+        "settled": true
+      },
+      {
+        "request": {
+          "partitionId": "artifact_payload_chunks-p1",
+          "replicaId": "artifact_payload_chunks-p1-r1",
+          "release": {
+            "partitionId": "artifact_payload_chunks-p1",
+            "protocolVersion": 1,
+            "targetBuildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+            "configurationKey": "[[\"1472389356923736468\",\"4753637574165189743\",\"5498864487858037747\"],[],[],[],false]",
+            "membershipGenerationIndex": 0,
+            "releaseId": "c2d3e7cbc07f902eba0c47dda8ce2c7d140329d4905b02b3d1351ee67142609e"
+          },
+          "attempt": {
+            "leaderReplicaId": "artifact_payload_chunks-p1-r1",
+            "term": 1,
+            "leaderLifecycleIncarnation": "bacd6551-4a1c-4a93-be68-b27e38b577e4",
+            "deadlineAtMs": 1792564852532
+          },
+          "action": "enable",
+          "target": {
+            "nodeId": "550e8400-e29b-41d4-a716-446655449965",
+            "ownerIncarnation": 1,
+            "replicaId": "artifact_payload_chunks-p1-r1",
+            "lifecycleIncarnation": "bacd6551-4a1c-4a93-be68-b27e38b577e4",
+            "runtimeGeneration": 1,
+            "connectionGeneration": 1,
+            "admissionGeneration": 1
+          },
+          "deadlineAtMs": 1792564852532,
+          "census": [
+            {
+              "outcome": "observed",
+              "partitionId": "artifact_payload_chunks-p1",
+              "generation": {
+                "nodeId": "550e8400-e29b-41d4-a716-446655449965",
+                "ownerIncarnation": 1,
+                "replicaId": "artifact_payload_chunks-p1-r1",
+                "lifecycleIncarnation": "bacd6551-4a1c-4a93-be68-b27e38b577e4",
+                "runtimeGeneration": 1,
+                "connectionGeneration": 1,
+                "admissionGeneration": 1
+              },
+              "buildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+              "membership": {
+                "kind": "committed",
+                "voters": [
+                  "1472389356923736468",
+                  "4753637574165189743",
+                  "5498864487858037747"
+                ],
+                "votersOutgoing": [],
+                "learners": [],
+                "learnersNext": [],
+                "appliedIndex": 1,
+                "configurationKey": "[[\"1472389356923736468\",\"4753637574165189743\",\"5498864487858037747\"],[],[],[],false]",
+                "membershipGenerationIndex": 0,
+                "commitIndex": 1,
+                "term": 1,
+                "leaderId": "artifact_payload_chunks-p1-r1",
+                "gateOpen": true,
+                "identities": {
+                  "1472389356923736468": "artifact_payload_chunks-p1-r3",
+                  "4753637574165189743": "artifact_payload_chunks-p1-r2",
+                  "5498864487858037747": "artifact_payload_chunks-p1-r1"
+                }
+              },
+              "leaderReplicaId": "artifact_payload_chunks-p1-r1",
+              "leaderAddress": "550e8400-e29b-41d4-a716-446655449965/partition/artifact_payload_chunks-p1-r1",
+              "role": "leader",
+              "confChangePending": false,
+              "peers": [
+                {
+                  "peerId": "4753637574165189743",
+                  "replicaIdentity": "artifact_payload_chunks-p1-r2",
+                  "address": "550e8400-e29b-41d4-a716-446655449965/partition/artifact_payload_chunks-p1-r2",
+                  "addressStatus": "resolved",
+                  "learner": false,
+                  "delivery": {
+                    "outcome": "delivered",
+                    "consecutiveFailures": 0
+                  }
+                },
+                {
+                  "peerId": "1472389356923736468",
+                  "replicaIdentity": "artifact_payload_chunks-p1-r3",
+                  "address": "550e8400-e29b-41d4-a716-446655449965/partition/artifact_payload_chunks-p1-r3",
+                  "addressStatus": "resolved",
+                  "learner": false,
+                  "delivery": {
+                    "outcome": "delivered",
+                    "consecutiveFailures": 0
+                  }
+                }
+              ],
+              "origin": null,
+              "connection": {
+                "generation": 1,
+                "servedLegacy": false
+              },
+              "paused": true,
+              "rowid": {
+                "kind": "rowid",
+                "maximum": null,
+                "belowCeiling": true
+              },
+              "work": {
+                "sqliteTransactionOpen": false,
+                "participantStaging": false,
+                "participantPrepared": 0,
+                "proposals": 0,
+                "pendingOutcomes": 0,
+                "appliedIndex": 1,
+                "commitIndex": 1,
+                "lastIndex": 1
+              },
+              "topology": null,
+              "queryCensus": null
+            },
+            {
+              "outcome": "observed",
+              "partitionId": "artifact_payload_chunks-p1",
+              "generation": {
+                "nodeId": "550e8400-e29b-41d4-a716-446655449965",
+                "ownerIncarnation": 1,
+                "replicaId": "artifact_payload_chunks-p1-r2",
+                "lifecycleIncarnation": "60b0fc96-6917-4a76-b173-8448dddc4cb5",
+                "runtimeGeneration": 1,
+                "connectionGeneration": 8,
+                "admissionGeneration": 2
+              },
+              "buildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+              "membership": {
+                "kind": "committed",
+                "voters": [
+                  "1472389356923736468",
+                  "4753637574165189743",
+                  "5498864487858037747"
+                ],
+                "votersOutgoing": [],
+                "learners": [],
+                "learnersNext": [],
+                "appliedIndex": 1,
+                "configurationKey": "[[\"1472389356923736468\",\"4753637574165189743\",\"5498864487858037747\"],[],[],[],false]",
+                "membershipGenerationIndex": 0,
+                "commitIndex": 1,
+                "term": 1,
+                "leaderId": "artifact_payload_chunks-p1-r1",
+                "gateOpen": true,
+                "identities": {
+                  "1472389356923736468": "artifact_payload_chunks-p1-r3",
+                  "4753637574165189743": "artifact_payload_chunks-p1-r2",
+                  "5498864487858037747": "artifact_payload_chunks-p1-r1"
+                }
+              },
+              "leaderReplicaId": "artifact_payload_chunks-p1-r1",
+              "leaderAddress": "550e8400-e29b-41d4-a716-446655449965/partition/artifact_payload_chunks-p1-r1",
+              "role": "follower",
+              "confChangePending": false,
+              "peers": [
+                {
+                  "peerId": "5498864487858037747",
+                  "replicaIdentity": "artifact_payload_chunks-p1-r1",
+                  "address": "550e8400-e29b-41d4-a716-446655449965/partition/artifact_payload_chunks-p1-r1",
+                  "addressStatus": "resolved",
+                  "learner": false,
+                  "delivery": {
+                    "outcome": "delivered",
+                    "consecutiveFailures": 0
+                  }
+                },
+                {
+                  "peerId": "1472389356923736468",
+                  "replicaIdentity": "artifact_payload_chunks-p1-r3",
+                  "address": "550e8400-e29b-41d4-a716-446655449965/partition/artifact_payload_chunks-p1-r3",
+                  "addressStatus": "resolved",
+                  "learner": false,
+                  "delivery": {
+                    "outcome": "none-observed"
+                  }
+                }
+              ],
+              "origin": null,
+              "connection": {
+                "generation": 8,
+                "servedLegacy": false
+              },
+              "paused": true,
+              "rowid": {
+                "kind": "rowid",
+                "maximum": null,
+                "belowCeiling": true
+              },
+              "work": {
+                "sqliteTransactionOpen": false,
+                "participantStaging": false,
+                "participantPrepared": 0,
+                "proposals": 0,
+                "pendingOutcomes": 0,
+                "appliedIndex": 1,
+                "commitIndex": 1,
+                "lastIndex": 1
+              },
+              "topology": null,
+              "queryCensus": null
+            },
+            {
+              "outcome": "observed",
+              "partitionId": "artifact_payload_chunks-p1",
+              "generation": {
+                "nodeId": "550e8400-e29b-41d4-a716-446655449965",
+                "ownerIncarnation": 1,
+                "replicaId": "artifact_payload_chunks-p1-r3",
+                "lifecycleIncarnation": "b56c85d8-08e3-45b2-9e84-f421be9ead99",
+                "runtimeGeneration": 1,
+                "connectionGeneration": 14,
+                "admissionGeneration": 3
+              },
+              "buildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+              "membership": {
+                "kind": "committed",
+                "voters": [
+                  "1472389356923736468",
+                  "4753637574165189743",
+                  "5498864487858037747"
+                ],
+                "votersOutgoing": [],
+                "learners": [],
+                "learnersNext": [],
+                "appliedIndex": 1,
+                "configurationKey": "[[\"1472389356923736468\",\"4753637574165189743\",\"5498864487858037747\"],[],[],[],false]",
+                "membershipGenerationIndex": 0,
+                "commitIndex": 1,
+                "term": 1,
+                "leaderId": "artifact_payload_chunks-p1-r1",
+                "gateOpen": true,
+                "identities": {
+                  "1472389356923736468": "artifact_payload_chunks-p1-r3",
+                  "4753637574165189743": "artifact_payload_chunks-p1-r2",
+                  "5498864487858037747": "artifact_payload_chunks-p1-r1"
+                }
+              },
+              "leaderReplicaId": "artifact_payload_chunks-p1-r1",
+              "leaderAddress": "550e8400-e29b-41d4-a716-446655449965/partition/artifact_payload_chunks-p1-r1",
+              "role": "follower",
+              "confChangePending": false,
+              "peers": [
+                {
+                  "peerId": "5498864487858037747",
+                  "replicaIdentity": "artifact_payload_chunks-p1-r1",
+                  "address": "550e8400-e29b-41d4-a716-446655449965/partition/artifact_payload_chunks-p1-r1",
+                  "addressStatus": "resolved",
+                  "learner": false,
+                  "delivery": {
+                    "outcome": "delivered",
+                    "consecutiveFailures": 0
+                  }
+                },
+                {
+                  "peerId": "4753637574165189743",
+                  "replicaIdentity": "artifact_payload_chunks-p1-r2",
+                  "address": "550e8400-e29b-41d4-a716-446655449965/partition/artifact_payload_chunks-p1-r2",
+                  "addressStatus": "resolved",
+                  "learner": false,
+                  "delivery": {
+                    "outcome": "none-observed"
+                  }
+                }
+              ],
+              "origin": null,
+              "connection": {
+                "generation": 14,
+                "servedLegacy": false
+              },
+              "paused": true,
+              "rowid": {
+                "kind": "rowid",
+                "maximum": null,
+                "belowCeiling": true
+              },
+              "work": {
+                "sqliteTransactionOpen": false,
+                "participantStaging": false,
+                "participantPrepared": 0,
+                "proposals": 0,
+                "pendingOutcomes": 0,
+                "appliedIndex": 1,
+                "commitIndex": 1,
+                "lastIndex": 1
+              },
+              "topology": null,
+              "queryCensus": null
+            }
+          ],
+          "queryDrainProof": null,
+          "type": "PARTICIPANT_RELEASE"
+        },
+        "answer": {
+          "outcome": "observed",
+          "partitionId": "artifact_payload_chunks-p1",
+          "generation": {
+            "nodeId": "550e8400-e29b-41d4-a716-446655449965",
+            "ownerIncarnation": 1,
+            "replicaId": "artifact_payload_chunks-p1-r1",
+            "lifecycleIncarnation": "bacd6551-4a1c-4a93-be68-b27e38b577e4",
+            "runtimeGeneration": 1,
+            "connectionGeneration": 1,
+            "admissionGeneration": 1
+          },
+          "buildDigest": "0a8d7a5cf0c595d2fba9189a2d8972148a0c08752d37a6d32765b68b968b7144",
+          "membership": {
+            "kind": "committed",
+            "voters": [
+              "1472389356923736468",
+              "4753637574165189743",
+              "5498864487858037747"
+            ],
+            "votersOutgoing": [],
+            "learners": [],
+            "learnersNext": [],
+            "appliedIndex": 2,
+            "configurationKey": "[[\"1472389356923736468\",\"4753637574165189743\",\"5498864487858037747\"],[],[],[],false]",
+            "membershipGenerationIndex": 0,
+            "commitIndex": 2,
+            "term": 1,
+            "leaderId": "artifact_payload_chunks-p1-r1",
+            "gateOpen": true,
+            "identities": {
+              "1472389356923736468": "artifact_payload_chunks-p1-r3",
+              "4753637574165189743": "artifact_payload_chunks-p1-r2",
+              "5498864487858037747": "artifact_payload_chunks-p1-r1"
+            }
+          },
+          "leaderReplicaId": "artifact_payload_chunks-p1-r1",
+          "leaderAddress": "550e8400-e29b-41d4-a716-446655449965/partition/artifact_payload_chunks-p1-r1",
+          "role": "leader",
+          "confChangePending": false,
+          "peers": [
+            {
+              "peerId": "4753637574165189743",
+              "replicaIdentity": "artifact_payload_chunks-p1-r2",
+              "address": "550e8400-e29b-41d4-a716-446655449965/partition/artifact_payload_chunks-p1-r2",
+              "addressStatus": "resolved",
+              "learner": false,
+              "delivery": {
+                "outcome": "delivered",
+                "consecutiveFailures": 0
+              }
+            },
+            {
+              "peerId": "1472389356923736468",
+              "replicaIdentity": "artifact_payload_chunks-p1-r3",
+              "address": "550e8400-e29b-41d4-a716-446655449965/partition/artifact_payload_chunks-p1-r3",
+              "addressStatus": "resolved",
+              "learner": false,
+              "delivery": {
+                "outcome": "delivered",
+                "consecutiveFailures": 0
+              }
+            }
+          ],
+          "origin": {
+            "originIndex": 2,
+            "originTerm": 1
+          },
+          "connection": {
+            "generation": 1,
+            "servedLegacy": false
+          },
+          "paused": true,
+          "rowid": {
+            "kind": "rowid",
+            "maximum": null,
+            "belowCeiling": true
+          },
+          "work": {
+            "sqliteTransactionOpen": false,
+            "participantStaging": false,
+            "participantPrepared": 0,
+            "proposals": 0,
+            "pendingOutcomes": 0,
+            "appliedIndex": 2,
+            "commitIndex": 2,
+            "lastIndex": 2
+          },
+          "topology": null,
+          "queryCensus": null
+        },
+        "error": null,
+        "settled": true
+      }
+    ]
+  }
+}

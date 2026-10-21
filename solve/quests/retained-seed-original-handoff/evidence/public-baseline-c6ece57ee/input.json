@@ -1,0 +1,58 @@
+{
+  "sha": "c6ece57ee319ff60b77948226e36643f57c6dc22",
+  "product": "393f411ca09449898465cc3cb7320c03fba2aba8",
+  "sourceTree": "ddf32b08e93c0b617f6ec24d0d70596e2888eec5",
+  "scriptsTree": "f9a8c3bd375965168152673ec1afe06f53216e5e",
+  "host": "adam-laptop",
+  "retries": 0,
+  "startedAt": "2026-10-21T06:39:01.718Z",
+  "files": [
+    "test/bootstrap/retained-seed-original-handoff.integration.test.js"
+  ],
+  "bindings": [
+    {
+      "path": "test/bootstrap/retained-seed-original-handoff.integration.test.js",
+      "blob": "c6fe67d5d72af61cd31b3aff578e25e2edf754ef",
+      "sha256": "8647322c9fc96716abccff6bc3d272d55d1caa3770fe8dd711e6cc12470b3ab1"
+    },
+    {
+      "path": "test/test-helpers/retained-seed-public-observer.js",
+      "blob": "d43f41d141d0939ca05471149c6687c2b4cdbd71",
+      "sha256": "7c8adf440a7c77b5cd79d03146705223e7fdc35ac7bdcbc73061c716fbedda1c"
+    },
+    {
+      "path": "test/test-helpers/retained-seed-public-child.js",
+      "blob": "c7fd6b7f41ea2c6d239a4e23bd1f090bac7c95b3",
+      "sha256": "cfbbc9022f63e7b46ff3521ecfc49894fed4c2c1a800eabe2950b350c4993b45"
+    }
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/bootstrap/retained-seed-original-handoff.integration.test.js"
+      ],
+      "jobs": 2,
+      "resourceClass": "bootstrap"
+    }
+  ],
+  "costs": [
+    {
+      "file": "test/bootstrap/retained-seed-original-handoff.integration.test.js",
+      "jobs": 2,
+      "ms": 10000,
+      "lane": "bootstrap"
+    }
+  ],
+  "independentReviewSha256": "642d28dc0e24cd18ba4d61d9836384841fedaa17c71c0f2cf72180dd4686bbf1",
+  "api": [
+    "labTestCommit",
+    "planClassifiedTestFiles",
+    "estimateFileCosts",
+    "labTestDeps",
+    "runLabTest"
+  ],
+  "explicitOverrides": {
+    "LAGRANGE_RETRY_FAILED_ONCE": "0"
+  },
+  "productionDeadlineOverride": false
+}
