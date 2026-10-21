@@ -11,8 +11,10 @@ import {commitDurably} from './raft-rs-durable-store.js';
 import {RAFT_RS_TABLE} from './raft-rs-durable-store-constants.js';
 import {RAFT_RS_OPENING_HISTORY, RAFT_RS_OPENING_HISTORY_ERROR} from
   './raft-rs-opening-history-constants.js';
+import {REPLICA_LIFECYCLE_TABLE} from
+  './raft-rs-original-allocation-constants.js';
 
-const LIFECYCLE_TABLE = '_raft_rs_replica_lifecycle';
+const LIFECYCLE_TABLE = REPLICA_LIFECYCLE_TABLE;
 const SNAPSHOT_RECEIVER_REASON = Object.freeze({
   FRESH: 'snapshot-receiver-fresh',
   HISTORY: 'snapshot-receiver-history-present',
