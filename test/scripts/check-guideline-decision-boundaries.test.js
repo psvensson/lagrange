@@ -738,6 +738,7 @@ const EXCEPTION_COLLECTION_ESCAPES = [
   ['nonexception insertion', 'failureRecords.push(computeStatus());'],
   ['derived state decision', 'if (failureRecords.length > 0) { publish({state: FAILED}); }'],
   ['computed access', 'consume(failureRecords[0]);'],
+  ['shadowed aggregate constructor', 'const AggregateError = consume;'],
 ];
 
 for (const [name, injected] of EXCEPTION_COLLECTION_ESCAPES) {
@@ -765,4 +766,17 @@ test('raw-state audit retains mutable and returned empty semantic outcomes',
       'decide').length, 1);
     t.equal(emptyStateFindings(
       'function decide() { return {outcome: []}; }', 'decide').length, 1);
+  });
+
+test('raw-state audit requires unchanged caught values and an immediate aggregate throw',
+  async (t) => {
+    const mutatedException = CAUGHT_EXCEPTION_COLLECTION.replace(
+      'failureRecords.push(first);', 'first = computeStatus(); failureRecords.push(first);');
+    t.equal(emptyStateFindings(mutatedException, 'releaseResources').length, 1,
+      'an assigned catch parameter no longer proves a caught exception');
+    const deferredThrow = CAUGHT_EXCEPTION_COLLECTION.replace(
+      'throw retainPrimary(primary, new AggregateError(failureRecords, MESSAGE));',
+      'defer(() => { throw new AggregateError(failureRecords, MESSAGE); });');
+    t.equal(emptyStateFindings(deferredThrow, 'releaseResources').length, 1,
+      'a throw in a deferred callback does not settle the current exception');
   });

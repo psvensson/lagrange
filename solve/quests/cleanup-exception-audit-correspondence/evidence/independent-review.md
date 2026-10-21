@@ -131,3 +131,22 @@ No blocking defect was identified in the frozen test-only witness or bounded
 design. The approval ends at old-source measurement and design intent. A later
 implementation review must verify actual binding resolution, all allowed-use
 checks, the complete removed-finding census and the exact product literal diff.
+
+## Witness extension before implementation
+
+The revised frozen detector test SHA256 is
+`8cdab7b8760dd413ecd6a824225793aa01595282b2b67797886747d22358b35e`.
+The additive diff keeps prior assertions and adds three required conservative
+controls: a visible local AggregateError constructor shadow, reassignment of
+the caught value before insertion, and moving the aggregate throw into a
+deferred callback. All use the same real collector and existing finding kind.
+They invalidate, respectively, known aggregation semantics, catch-value
+provenance and immediate current-function settlement. The source transformation
+anchors correspond to the preserved positive fixture.
+
+APPROVE this revised witness for refreshed old-classifier red measurement.
+The six harness and ten owner-interaction assessments above remain applicable;
+these cases strengthen the complete-use proof and no-escape requirements.
+The earlier baseline remains separate historical evidence and must not be
+relabeled as execution of these revised bytes. No implementation or measured
+result approval is given by this extension.
