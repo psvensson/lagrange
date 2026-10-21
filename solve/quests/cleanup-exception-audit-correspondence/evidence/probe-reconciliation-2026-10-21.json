@@ -1,0 +1,25 @@
+{
+  "id": "cleanup-exception-audit-correspondence",
+  "status": "open",
+  "blocked": null,
+  "probe": {
+    "metric": 1,
+    "target": 0,
+    "done": false,
+    "measuring": true,
+    "evidence": "solve/quests/cleanup-exception-audit-correspondence/evidence/receipt.json",
+    "reason": "measured",
+    "outstanding": [
+      "unchanged-cleanup-contract-and-owner-gates"
+    ]
+  },
+  "sealMetric": 4,
+  "delta": -3,
+  "attempts": 3,
+  "attemptsSinceAltitudeCheck": 3,
+  "recent": [
+    "2026-10-21T05:28:07.549Z verification approve: subagent:/root/release_recovery_writer approved exact composition with SQL audit768bf9a09 for merged classifier measurement. Checker/test mechanically equal uni",
+    "2026-10-21T05:31:37.972Z finding evidence: Exact composed audit candidatebc5a7e995 passed merged classifier witness on locked adam-laptop, retry0: one file183 runner-reported assertions, automatic factor",
+    "2026-10-21T06:51:17.086Z finding evidence: Reconcile current gate status after exact393 composition: component source, adversarial controls, preserved negative/red baseline, full census and focused owner"
+  ]
+}

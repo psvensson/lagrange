@@ -30,9 +30,12 @@
         "exception-candidate-5af0cc7f6/results.ndjson",
         "exception-audit-candidate-gates/owner-statics.json",
         "exception-audit-candidate-gates/fast-static.txt",
-        "independent-implementation-review.md"
+        "independent-implementation-review.md",
+        "../../seed-release-failure-custody/evidence/composed-393f411ca/independent-result-review.md",
+        "../../seed-release-failure-custody/evidence/changed-candidate-393f411ca/independent-result-review.md",
+        "../../participant-release-completion-owner/evidence/independent-root-composition-review.md"
       ],
-      "reason": "Six selected cleanup and identity regressions pass237 reported assertions, source substitutions reverse byte-identically and scoped checks pass. Exact composed validation and the complete canonical changed-test selection remain pending; these focused results alone do not close the combined gate."
+      "reason": "Six cleanup/identity regressions and combined classifier controls now pass in exact393 composition, with all source substitutions and full census independently checked. Scoped static/impact gates pass. The complete canonical changed selection was attempted and remainsRED; separate follow-up measures its three missing files red. No acceptance follows from focused green."
     },
     {
       "id": "reviewed-census-and-independent-source",
@@ -42,8 +45,8 @@
         "exception-audit-candidate-census/inputs.json",
         "exception-audit-candidate-census/delta.json"
       ],
-      "scope": "Independent6+10 source review of frozen inputs approved candidate measurement. Full census removes only MG initializeRegisteredMessageGroup/raw_null_empty_state_outcome; no other finding identity/count changes, baseline unchanged. Named product substitutions reverse to exact old bytes. Candidate results and applicable composed gates remain separate pending rows."
+      "scope": "Independent source/census review approved the exact component; final393 full census composition and measured results are now also reviewed. Only the approved exception-accumulator finding is removed by this component; baseline unchanged. The combined broader gate remains red in its own predicate."
     }
   ],
-  "measuredCandidate": "5af0cc7f6d7ddd81bb10e9b590f02cc13e70ddad"
+  "measuredCandidate": "393f411ca09449898465cc3cb7320c03fba2aba8"
 }
