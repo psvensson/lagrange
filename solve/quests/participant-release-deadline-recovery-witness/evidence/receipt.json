@@ -1,0 +1,26 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "pre-enable-expiry-keeps-origins-and-admission-safe",
+      "passed": false
+    },
+    {
+      "id": "absent-origin-refusal-and-authorized-progress",
+      "passed": false
+    },
+    {
+      "id": "lost-enable-answer-restart-and-retained-recovery",
+      "passed": false
+    },
+    {
+      "id": "semantic-negative-controls",
+      "passed": false
+    },
+    {
+      "id": "independent-scope-evidence-and-static-review",
+      "passed": false
+    }
+  ]
+}

@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2987108,
-        "sha256": "0101a2b6efbad859bc16392dddba2bfdf4b9c3d7b68b6b437cf91b04058b48e1"
+        "bytes": 2989071,
+        "sha256": "eda746460e12e2bed59ba017163228e303bde8c53c51b7e8dcb16046d1cdee95"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "4038f83d67af7660606fdb9577923695ebd41de4023a450e51552bd686988960"
+        "sha256": "fa5c53059ee0e36647c1487c0ca21e6eab8fbe3075901089ee367ac223b9c69a"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,7 +62,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "c06bb4809e527e559405c77e698f1d54402c88ad978f3b1ae0c01fe3d147926e"
+    "inputDigest": "9fa40278c9540681355574587118bcd6c79221679bc4535752818ea7f4a5d7c4"
   },
   "reconciliation": {
     "complexity": {
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "4038f83d67af7660606fdb9577923695ebd41de4023a450e51552bd686988960"
+          "sha256": "fa5c53059ee0e36647c1487c0ca21e6eab8fbe3075901089ee367ac223b9c69a"
         },
         "cloneGroups": 701,
         "duplicatedLines": 26705,
@@ -167,17 +167,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2987108,
-        "sha256": "0101a2b6efbad859bc16392dddba2bfdf4b9c3d7b68b6b437cf91b04058b48e1"
+        "bytes": 2989071,
+        "sha256": "eda746460e12e2bed59ba017163228e303bde8c53c51b7e8dcb16046d1cdee95"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "a6b7edc78a82259eba07d65936fbad31cc50346097cd6afe417cdd3e3c9aa0ea",
-      "moduleCount": 5507,
-      "edgeCount": 28626,
+      "sourceDigest": "44490968590087f2e3756bccf6393c9b4d01629263237e5f804d683a37f8c4c8",
+      "moduleCount": 5509,
+      "edgeCount": 28650,
       "unresolvedCount": 36
     }
   },
@@ -779,7 +779,7 @@
       "cloneTouches": 45,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 56,
+      "importIn": 57,
       "importOut": 170,
       "score": 151.3,
       "topPaths": [
@@ -807,7 +807,7 @@
       "cloneTouches": 2,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 93,
+      "importIn": 94,
       "importOut": 137,
       "score": 137,
       "topPaths": [
@@ -947,7 +947,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 22,
+      "importIn": 23,
       "importOut": 136,
       "score": 100,
       "topPaths": [
@@ -1477,7 +1477,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 213,
+      "importIn": 214,
       "importOut": 42,
       "score": 44,
       "topPaths": [
