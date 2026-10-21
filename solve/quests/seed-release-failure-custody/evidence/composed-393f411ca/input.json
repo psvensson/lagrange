@@ -1,0 +1,198 @@
+{
+  "sha": "393f411ca09449898465cc3cb7320c03fba2aba8",
+  "files": [
+    "test/address/address-manager-peer-location-authority.test.js",
+    "test/bootstrap/bootstrap-cleanup.property.test.js",
+    "test/bootstrap/bootstrap-failure-cleanup.test.js",
+    "test/bootstrap/bootstrap-shutdown-quiesce.test.js",
+    "test/bootstrap/cleanup-ownership-order-characterization.test.js",
+    "test/bootstrap/message-group-activation-handler-boundary.test.js",
+    "test/bootstrap/pipeline/seed-registration-phase-custody.test.js",
+    "test/bootstrap/pipeline/startup-pipeline-runner.test.js",
+    "test/bootstrap/seed-message-group-cleanup-custody.test.js",
+    "test/bootstrap/seed-participant-release-failure-projection.test.js",
+    "test/bootstrap/seed-release-failure-custody.test.js",
+    "test/bootstrap/seed-release-once-per-cohort.test.js",
+    "test/bootstrap/seed-startup-session-store.test.js",
+    "test/node/message-group-executor-activation-handler-boundary.test.js",
+    "test/node/participant-release-control-refusal-observation.test.js",
+    "test/node/participant-release-fresh-create-completion.test.js",
+    "test/node/replica-handler-release-recovery.test.js",
+    "test/node/replica-runtime-cleanup-custody.integration.test.js",
+    "test/node/replica-transport-handler-identity.test.js",
+    "test/partition/participant-release-control-three-member.test.js",
+    "test/partition/participant-release-deadline-recovery.test.js",
+    "test/partition/participant-release-delivery-recorder.test.js",
+    "test/partition/participant-release-native-application-order.test.js",
+    "test/partition/participant-release-protocol.test.js",
+    "test/partition/raft-rs-transport-demux.test.js",
+    "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
+    "test/raft/raft-rs-backend/startup-cleanup.integration.test.js",
+    "test/scripts/check-guideline-decision-boundaries.test.js",
+    "test/scripts/participant-release-completion-owner.test.js",
+    "test/transport/exact-handler-identity-api.test.js",
+    "test/wasm-service/bound-creation-handler-embedding.integration.test.js",
+    "test/wasm-service/bound-remove-physical-operation.integration.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/node/participant-release-control-refusal-observation.test.js",
+        "test/node/participant-release-fresh-create-completion.test.js",
+        "test/node/replica-handler-release-recovery.test.js",
+        "test/partition/participant-release-control-three-member.test.js",
+        "test/partition/participant-release-deadline-recovery.test.js",
+        "test/partition/participant-release-delivery-recorder.test.js",
+        "test/partition/participant-release-native-application-order.test.js",
+        "test/partition/participant-release-protocol.test.js",
+        "test/scripts/participant-release-completion-owner.test.js",
+        "test/partition/raft-rs-transport-demux.test.js",
+        "test/address/address-manager-peer-location-authority.test.js",
+        "test/node/message-group-executor-activation-handler-boundary.test.js",
+        "test/transport/exact-handler-identity-api.test.js",
+        "test/node/replica-transport-handler-identity.test.js",
+        "test/scripts/check-guideline-decision-boundaries.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/bootstrap/pipeline/seed-registration-phase-custody.test.js",
+        "test/bootstrap/seed-message-group-cleanup-custody.test.js",
+        "test/bootstrap/seed-participant-release-failure-projection.test.js",
+        "test/bootstrap/seed-release-failure-custody.test.js",
+        "test/bootstrap/seed-release-once-per-cohort.test.js",
+        "test/bootstrap/message-group-activation-handler-boundary.test.js",
+        "test/bootstrap/bootstrap-cleanup.property.test.js",
+        "test/bootstrap/cleanup-ownership-order-characterization.test.js",
+        "test/bootstrap/bootstrap-failure-cleanup.test.js",
+        "test/bootstrap/pipeline/startup-pipeline-runner.test.js",
+        "test/bootstrap/seed-startup-session-store.test.js",
+        "test/bootstrap/bootstrap-shutdown-quiesce.test.js"
+      ],
+      "jobs": 2,
+      "resourceClass": "bootstrap"
+    },
+    {
+      "files": [
+        "test/node/replica-runtime-cleanup-custody.integration.test.js",
+        "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
+        "test/raft/raft-rs-backend/startup-cleanup.integration.test.js",
+        "test/wasm-service/bound-creation-handler-embedding.integration.test.js",
+        "test/wasm-service/bound-remove-physical-operation.integration.test.js"
+      ],
+      "jobs": 1,
+      "resourceClass": "exclusive"
+    }
+  ],
+  "on": "adam-laptop",
+  "retryFailedOnce": false,
+  "selectionOwners": {
+    "test/bootstrap/bootstrap-failure-cleanup.test.js": [
+      "seed-cleanup-composition"
+    ],
+    "test/bootstrap/bootstrap-shutdown-quiesce.test.js": [
+      "seed-cleanup-composition"
+    ],
+    "test/bootstrap/pipeline/seed-registration-phase-custody.test.js": [
+      "seed-cleanup-composition"
+    ],
+    "test/bootstrap/seed-release-failure-custody.test.js": [
+      "seed-cleanup-composition"
+    ],
+    "test/bootstrap/cleanup-ownership-order-characterization.test.js": [
+      "seed-cleanup-composition"
+    ],
+    "test/bootstrap/bootstrap-cleanup.property.test.js": [
+      "seed-cleanup-composition"
+    ],
+    "test/bootstrap/pipeline/startup-pipeline-runner.test.js": [
+      "seed-cleanup-composition"
+    ],
+    "test/bootstrap/seed-participant-release-failure-projection.test.js": [
+      "seed-cleanup-composition",
+      "initial-A-B-composition",
+      "reviewed-completion-owner"
+    ],
+    "test/node/replica-runtime-cleanup-custody.integration.test.js": [
+      "seed-cleanup-composition"
+    ],
+    "test/raft/raft-rs-backend/startup-cleanup.integration.test.js": [
+      "seed-cleanup-composition"
+    ],
+    "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js": [
+      "seed-cleanup-composition"
+    ],
+    "test/bootstrap/seed-startup-session-store.test.js": [
+      "seed-cleanup-composition"
+    ],
+    "test/bootstrap/seed-message-group-cleanup-custody.test.js": [
+      "seed-cleanup-composition"
+    ],
+    "test/bootstrap/message-group-activation-handler-boundary.test.js": [
+      "seed-cleanup-composition",
+      "exact-handler-and-exception"
+    ],
+    "test/node/message-group-executor-activation-handler-boundary.test.js": [
+      "seed-cleanup-composition",
+      "exact-handler-and-exception"
+    ],
+    "test/node/replica-transport-handler-identity.test.js": [
+      "seed-cleanup-composition",
+      "exact-handler-and-exception"
+    ],
+    "test/transport/exact-handler-identity-api.test.js": [
+      "seed-cleanup-composition",
+      "exact-handler-and-exception"
+    ],
+    "test/partition/participant-release-protocol.test.js": [
+      "initial-A-B-composition",
+      "reviewed-completion-owner"
+    ],
+    "test/partition/participant-release-deadline-recovery.test.js": [
+      "initial-A-B-composition"
+    ],
+    "test/node/participant-release-control-refusal-observation.test.js": [
+      "initial-A-B-composition"
+    ],
+    "test/node/replica-handler-release-recovery.test.js": [
+      "initial-A-B-composition",
+      "reviewed-completion-owner"
+    ],
+    "test/partition/participant-release-control-three-member.test.js": [
+      "initial-A-B-composition"
+    ],
+    "test/partition/participant-release-native-application-order.test.js": [
+      "initial-A-B-composition"
+    ],
+    "test/partition/participant-release-delivery-recorder.test.js": [
+      "initial-A-B-composition"
+    ],
+    "test/wasm-service/bound-remove-physical-operation.integration.test.js": [
+      "initial-A-B-composition"
+    ],
+    "test/wasm-service/bound-creation-handler-embedding.integration.test.js": [
+      "initial-A-B-composition"
+    ],
+    "test/scripts/check-guideline-decision-boundaries.test.js": [
+      "exact-handler-and-exception",
+      "reviewed-completion-owner"
+    ],
+    "test/address/address-manager-peer-location-authority.test.js": [
+      "exact-handler-and-exception"
+    ],
+    "test/partition/raft-rs-transport-demux.test.js": [
+      "exact-handler-and-exception"
+    ],
+    "test/bootstrap/seed-release-once-per-cohort.test.js": [
+      "reviewed-completion-owner"
+    ],
+    "test/node/participant-release-fresh-create-completion.test.js": [
+      "reviewed-completion-owner"
+    ],
+    "test/scripts/participant-release-completion-owner.test.js": [
+      "reviewed-completion-owner"
+    ]
+  }
+}

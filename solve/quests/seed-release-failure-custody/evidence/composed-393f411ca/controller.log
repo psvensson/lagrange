@@ -1,0 +1,55 @@
+{"sha":"393f411ca09449898465cc3cb7320c03fba2aba8","plan":[{"files":["test/node/participant-release-control-refusal-observation.test.js","test/node/participant-release-fresh-create-completion.test.js","test/node/replica-handler-release-recovery.test.js","test/partition/participant-release-control-three-member.test.js","test/partition/participant-release-deadline-recovery.test.js","test/partition/participant-release-delivery-recorder.test.js","test/partition/participant-release-native-application-order.test.js","test/partition/participant-release-protocol.test.js","test/scripts/participant-release-completion-owner.test.js","test/partition/raft-rs-transport-demux.test.js","test/address/address-manager-peer-location-authority.test.js","test/node/message-group-executor-activation-handler-boundary.test.js","test/transport/exact-handler-identity-api.test.js","test/node/replica-transport-handler-identity.test.js","test/scripts/check-guideline-decision-boundaries.test.js"],"jobs":4,"resourceClass":"ordinary"},{"files":["test/bootstrap/pipeline/seed-registration-phase-custody.test.js","test/bootstrap/seed-message-group-cleanup-custody.test.js","test/bootstrap/seed-participant-release-failure-projection.test.js","test/bootstrap/seed-release-failure-custody.test.js","test/bootstrap/seed-release-once-per-cohort.test.js","test/bootstrap/message-group-activation-handler-boundary.test.js","test/bootstrap/bootstrap-cleanup.property.test.js","test/bootstrap/cleanup-ownership-order-characterization.test.js","test/bootstrap/bootstrap-failure-cleanup.test.js","test/bootstrap/pipeline/startup-pipeline-runner.test.js","test/bootstrap/seed-startup-session-store.test.js","test/bootstrap/bootstrap-shutdown-quiesce.test.js"],"jobs":2,"resourceClass":"bootstrap"},{"files":["test/node/replica-runtime-cleanup-custody.integration.test.js","test/raft/raft-rs-backend/runtime-opening-history.integration.test.js","test/raft/raft-rs-backend/startup-cleanup.integration.test.js","test/wasm-service/bound-creation-handler-embedding.integration.test.js","test/wasm-service/bound-remove-physical-operation.integration.test.js"],"jobs":1,"resourceClass":"exclusive"}]}
+lab test: adam-laptop: ordinary, bootstrap, exclusive (32 files) cores=8 mem=15.5GiB speed x1.88
+[adam-laptop] placement-shell=2114247
+[adam-laptop] placement-head=393f411ca09449898465cc3cb7320c03fba2aba8
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:1.9 mode:local retry:0 timeout: lanecap:7
+[adam-laptop] placement-pid=2114674
+[adam-laptop] # test-files planned=32
+[adam-laptop] classified lane ordinary: 15 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 76C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 76C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 40C (coretemp/Package id 0) nvme 19C (nvme/Composite)
+[adam-laptop] ok test/node/participant-release-control-refusal-observation.test.js (5 assertions, 269ms)
+[adam-laptop] ok test/node/message-group-executor-activation-handler-boundary.test.js (43 assertions, 1650ms)
+[adam-laptop] ok test/address/address-manager-peer-location-authority.test.js (26 assertions, 2592ms)
+[adam-laptop] ok test/node/replica-transport-handler-identity.test.js (42 assertions, 2330ms)
+[adam-laptop] ok test/node/participant-release-fresh-create-completion.test.js (7 assertions, 5308ms)
+[adam-laptop] ok test/partition/participant-release-delivery-recorder.test.js (4 assertions, 351ms)
+[adam-laptop] ok test/node/replica-handler-release-recovery.test.js (25 assertions, 8386ms)
+[adam-laptop] ok test/partition/participant-release-control-three-member.test.js (1 assertions, 7369ms)
+[adam-laptop] ok test/partition/participant-release-deadline-recovery.test.js (2 assertions, 7832ms)
+[adam-laptop] ok test/partition/raft-rs-transport-demux.test.js (15 assertions, 3243ms)
+[adam-laptop] ok test/partition/participant-release-native-application-order.test.js (1 assertions, 9170ms)
+[adam-laptop] ok test/transport/exact-handler-identity-api.test.js (36 assertions, 1394ms)
+[adam-laptop] ok test/scripts/participant-release-completion-owner.test.js (12 assertions, 3681ms)
+[adam-laptop] ok test/scripts/check-guideline-decision-boundaries.test.js (183 assertions, 5262ms)
+[adam-laptop] ok test/partition/participant-release-protocol.test.js (16 assertions, 9348ms)
+[adam-laptop] # test-files total=15 pass=15 fail=0 assertions=418
+[adam-laptop] classified lane bootstrap: 12 file(s), jobs=2
+[adam-laptop] thermal: ok cpu 61C (coretemp/Package id 0) nvme 24C (nvme/Composite)
+[adam-laptop] ok test/bootstrap/bootstrap-failure-cleanup.test.js (67 assertions, 2822ms)
+[adam-laptop] ok test/bootstrap/bootstrap-cleanup.property.test.js (17 assertions, 2933ms)
+[adam-laptop] ok test/bootstrap/bootstrap-shutdown-quiesce.test.js (33 assertions, 2801ms)
+[adam-laptop] ok test/bootstrap/cleanup-ownership-order-characterization.test.js (124 assertions, 2914ms)
+[adam-laptop] ok test/bootstrap/pipeline/seed-registration-phase-custody.test.js (1 assertions, 975ms)
+[adam-laptop] ok test/bootstrap/message-group-activation-handler-boundary.test.js (75 assertions, 1692ms)
+[adam-laptop] ok test/bootstrap/pipeline/startup-pipeline-runner.test.js (17 assertions, 615ms)
+[adam-laptop] ok test/bootstrap/seed-message-group-cleanup-custody.test.js (6 assertions, 2598ms)
+[adam-laptop] ok test/bootstrap/seed-participant-release-failure-projection.test.js (7 assertions, 4531ms)
+[adam-laptop] ok test/bootstrap/seed-release-once-per-cohort.test.js (1 assertions, 3979ms)
+[adam-laptop] ok test/bootstrap/seed-startup-session-store.test.js (9 assertions, 561ms)
+[adam-laptop] ok test/bootstrap/seed-release-failure-custody.test.js (4 assertions, 17718ms)
+[adam-laptop] # test-files total=12 pass=12 fail=0 assertions=361
+[adam-laptop] classified lane exclusive: 5 file(s), jobs=1
+[adam-laptop] thermal: ok cpu 54C (coretemp/Package id 0) nvme 21C (nvme/Composite)
+[adam-laptop] ok test/node/replica-runtime-cleanup-custody.integration.test.js (8 assertions, 1992ms)
+[adam-laptop] ok test/raft/raft-rs-backend/runtime-opening-history.integration.test.js (16 assertions, 2098ms)
+[adam-laptop] ok test/raft/raft-rs-backend/startup-cleanup.integration.test.js (30 assertions, 3693ms)
+[adam-laptop] ok test/wasm-service/bound-creation-handler-embedding.integration.test.js (3 assertions, 2158ms)
+[adam-laptop] ok test/wasm-service/bound-remove-physical-operation.integration.test.js (2 assertions, 2397ms)
+[adam-laptop] # test-files total=5 pass=5 fail=0 assertions=59
+lab test: adam-laptop: # test-files total=32 pass=32 fail=0 assertions=838
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=32 pass=32 fail=0 assertions=838
