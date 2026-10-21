@@ -62,6 +62,12 @@ function verifyMemberBinding(db, declaration, member) {
   if (row[COLUMN.SERVICE_RIGHT] !== STATE.UNUSED) {
     throw originalAllocationError(REASON.SPENT, member.replicaId);
   }
+  // Only the declared anchor owns a cluster-identity publication right.
+  // A non-anchor grant (including a spent or unknown value) is contrary data.
+  if (member.replicaId !== declaration.anchorReplicaId &&
+      row[COLUMN.IDENTITY_RIGHT] !== null) {
+    throw originalAllocationError(REASON.IDENTITY, member.replicaId);
+  }
   const reservations = readRaftRsPeerIdentityReservations(db);
   if (reservations.length !== member.replicaIds.length ||
       !member.replicaIds.every((replicaId) =>
@@ -179,18 +185,23 @@ class RaftRsOriginalAllocationPreparation {
       validateOriginalSeedDeclaration(declaration, this.#declarationIdentity);
       this.assertCurrent();
       for (const member of declaration.members) {
+        this.assertCurrent();
         const db = this.#custody.open(member, {readonly: true, fileMustExist: true});
         const record = inspectColdMember(db, declaration, member);
         // A named existing application-owner check, with no native entry or
         // formatting. The seed composition supplies the complete original
         // producer correspondence, not a caller-defined permissive default.
         const assessment = inspectApplicationHistory({db, declaration, member, record});
+        // The application owner can synchronously revoke the live attempt.
+        // Do not acquire another member or accept its answer after closure.
+        this.assertCurrent();
         if (assessment !== STATE.HISTORY_ACCEPTED) {
           throw originalAllocationError(REASON.CONTRARY, member.replicaId);
         }
       }
     } catch (error) {
-      this.#fail(error);
+      this.#fail(error?.code === STATE.HOLD ? error :
+        originalAllocationError(REASON.OBSERVATION, null, error));
     }
     this.#finishRead();
   }
