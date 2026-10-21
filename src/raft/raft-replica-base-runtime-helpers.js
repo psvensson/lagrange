@@ -124,6 +124,10 @@ function createRaftInstanceForReplica(replica, logAdapter) {
     [RAFT_REPLICA_BASE_LIFERAFT_TIMER.HEARTBEAT]: heartbeatMs,
     [RAFT_REPLICA_BASE_LIFERAFT_TIMER.ELECTION_MIN]: electionMinMs,
     [RAFT_REPLICA_BASE_LIFERAFT_TIMER.ELECTION_MAX]: electionMaxMs,
+    // The replica's node identity rides into the raft runtime so the
+    // formation-attribution timing seam can bind protocol turns to its own
+    // execution node rather than inheriting ambient scheduling context.
+    nodeId: replica.nodeId,
   };
 
   if (logAdapter) {

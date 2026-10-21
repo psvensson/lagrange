@@ -292,6 +292,12 @@ function withOwnerHandoffState(Base) {
           ),
         );
 
+        if (response?.noHandler === true) {
+          // A noHandler ACK is a typed delivery conflict, not a delivered
+          // outcome: route it into the drop lane before the delivered gate.
+          return this.handleDroppedNoHandlerWake(operation, options);
+        }
+
         if (!isDeliveredTransportDeliveryOutcome(response)) {
           const handoffError = response?.error || response;
           if (
@@ -309,10 +315,6 @@ function withOwnerHandoffState(Base) {
               REBALANCE_COORDINATOR_ERROR_MSG.MESSAGE_NOT_ACKED,
             ),
           );
-        }
-
-        if (response?.noHandler === true) {
-          return this.handleDroppedNoHandlerWake(operation, options);
         }
 
         this.resetCreatedOperationHandoffRetryAttempts(operation.operationId);
