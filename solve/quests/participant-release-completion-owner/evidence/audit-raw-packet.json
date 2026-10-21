@@ -23,6 +23,6 @@
       "sha256": "e33939982c1c0998d26de2d86a002bdca91b12eb56653814fb4a26e1f6d7a6dc"
     }
   },
-  "preservation": "Exact original files, no regenerated or filtered audit output. Archive is ordinary tracked Quest evidence under docs/development/quest-artifacts.md.",
+  "preservation": "Exact original raw JSON members tracked under audit-raw/; no regenerated or filtered output. The local archive is not tracked and its rejected checkpoint is retained.",
   "storage": "Unchanged plain JSON under audit-raw/. Archive remains only local test-output; normal binary guard rejected tracking the tar and was not bypassed."
 }
