@@ -41,6 +41,7 @@ import {
 
 const STATE = WASM_SERVICE_REPLICA_STATE;
 const NO_FAILURE = WASM_SERVICE_NO_FAILURE;
+const SETTLEMENT_ERROR_FIELD = 'error';
 // How one open attempt settled, and the lifecycle state each settlement
 // owns when no concurrent shutdown took the instance meanwhile (R07: one
 // named outcome resolution instead of independent state assignments).
@@ -275,7 +276,7 @@ async function retireReplica(replica, handler, starting, activityFailure, shutdo
     lane: null,
   }).then(
     (outcome) => ({outcome}),
-    (error) => ({error}));
+    (error) => ({[SETTLEMENT_ERROR_FIELD]: error}));
   try {
     if (starting) {
       // The failed open releases its own handles first; its error belongs
@@ -288,7 +289,7 @@ async function retireReplica(replica, handler, starting, activityFailure, shutdo
       activityFailure = joinFailure(activityFailure, error);
     }
     const settled = await handlerRetirement;
-    if ('error' in settled) throw settled.error;
+    if (SETTLEMENT_ERROR_FIELD in settled) throw settled[SETTLEMENT_ERROR_FIELD];
     reportReplicaHandlerRetirement(replica.logger, retirement, settled.outcome);
     requireReplicaHandlerRetirement(settled.outcome);
     if (replica.transportHandler === handler) {

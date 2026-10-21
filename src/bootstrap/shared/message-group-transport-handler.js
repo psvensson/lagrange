@@ -6,6 +6,9 @@ import {
 import {ADDRESS, ENTITY_TYPE} from '../../constants/index.js';
 import {withRaftOpeningCleanupFailure} from '../../raft/raft-operation-port.js';
 
+const OPENING_CLEANUP_MESSAGE = 'Message group opening cleanup remains pending';
+const CREATE_CLEANUP_REQUIRED_CODE = 'MESSAGE_GROUP_CREATE_CLEANUP_REQUIRED';
+
 // A local message-group replica's transport handler (owner decision N2, class
 // repair 2026-09-29g). Registration records the exact handler identity and
 // the replica's lifecycle owner on the service; every removal goes through
@@ -99,7 +102,7 @@ async function initializeRegisteredMessageGroup(options) {
         messageGroupServices.set(replicaId, messageGroup);
       }
       throw withRaftOpeningCleanupFailure(primary,
-        new AggregateError(failures, 'Message group opening cleanup remains pending'));
+        new AggregateError(failures, OPENING_CLEANUP_MESSAGE));
     }
     throw primary;
   }
@@ -111,7 +114,7 @@ function messageGroupCreationAlreadySettled(services, replicaId) {
   if (!existing) return false;
   if (existing.initialized !== true || existing.isShutdown === true) {
     const error = new Error('Message-group cleanup is still required before CREATE');
-    error.code = 'MESSAGE_GROUP_CREATE_CLEANUP_REQUIRED';
+    error.code = CREATE_CLEANUP_REQUIRED_CODE;
     error.deferRetry = true;
     throw error;
   }

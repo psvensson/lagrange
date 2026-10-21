@@ -2,9 +2,33 @@
   "schema": "test-receipt/1",
   "status": "fail",
   "receipts": [
-    {"id": "original-findings-and-engaged-witness-red", "passed": false},
-    {"id": "accumulator-and-escape-controls", "passed": false},
-    {"id": "unchanged-cleanup-contract-and-owner-gates", "passed": false},
-    {"id": "reviewed-census-and-independent-source", "passed": false}
+    {
+      "id": "original-findings-and-engaged-witness-red",
+      "passed": true,
+      "evidence": [
+        "exception-baseline-0e003dc89/input.json",
+        "exception-baseline-0e003dc89/controller.log",
+        "exception-baseline-0e003dc89/results.ndjson"
+      ],
+      "scope": "Exact old classifier and original product paths, frozen revised witness8cdab7b;39cases94leaf assertions,3 intended positive failures only; all adversarial controls pass. Same locked adam-laptop, retries disabled."
+    },
+    {
+      "id": "accumulator-and-escape-controls",
+      "passed": false
+    },
+    {
+      "id": "unchanged-cleanup-contract-and-owner-gates",
+      "passed": false
+    },
+    {
+      "id": "reviewed-census-and-independent-source",
+      "passed": true,
+      "evidence": [
+        "independent-implementation-review.md",
+        "exception-audit-candidate-census/inputs.json",
+        "exception-audit-candidate-census/delta.json"
+      ],
+      "scope": "Independent6+10 source review of frozen inputs approved candidate measurement. Full census removes only MG initializeRegisteredMessageGroup/raw_null_empty_state_outcome; no other finding identity/count changes, baseline unchanged. Named product substitutions reverse to exact old bytes. Candidate results and applicable composed gates remain separate pending rows."
+    }
   ]
 }

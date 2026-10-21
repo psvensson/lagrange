@@ -1,0 +1,457 @@
+{"sha":"0e003dc89c808ac23a7c1fe18e70342f058486b0","plan":[{"files":["test/scripts/check-guideline-decision-boundaries.test.js"],"jobs":4,"resourceClass":"ordinary"}]}
+lab test: adam-laptop: ordinary (1 files) cores=8 mem=15.5GiB speed x1.87
+[adam-laptop] placement-shell=2109678
+[adam-laptop] placement-head=0e003dc89c808ac23a7c1fe18e70342f058486b0
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:1.9 mode:local retry:0 timeout: lanecap:7
+[adam-laptop] placement-pid=2110106
+[adam-laptop] # test-files planned=1
+[adam-laptop] classified lane ordinary: 1 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 76C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 76C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 41C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] not ok test/scripts/check-guideline-decision-boundaries.test.js (133 assertions, 1976ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 14
+[adam-laptop] # Subtest: classifyFilePath recognizes runtime and test files
+[adam-laptop]     ok 1 - should be equal
+[adam-laptop]     ok 2 - should be equal
+[adam-laptop]     1..2
+[adam-laptop] ok 1 - classifyFilePath recognizes runtime and test files # time=10.793ms
+[adam-laptop] 
+[adam-laptop] # Subtest: detects repeated semantic assignments across independent if statements
+[adam-laptop]     ok 1 - should be equal
+[adam-laptop]     ok 2 - should be equal
+[adam-laptop]     ok 3 - should match pattern
+[adam-laptop]     1..3
+[adam-laptop] ok 2 - detects repeated semantic assignments across independent if statements # time=9.885ms
+[adam-laptop] 
+[adam-laptop] # Subtest: detects semantic outcome objects returned from independent if statements
+[adam-laptop]     ok 1 - should be equal
+[adam-laptop]     ok 2 - should be equal
+[adam-laptop]     ok 3 - should match pattern
+[adam-laptop]     ok 4 - should match pattern
+[adam-laptop]     1..4
+[adam-laptop] ok 3 - detects semantic outcome objects returned from independent if statements # time=2.761ms
+[adam-laptop] 
+[adam-laptop] # Subtest: ignores local validation guards that do not build semantic outcomes
+[adam-laptop]     ok 1 - should be equal
+[adam-laptop]     1..1
+[adam-laptop] ok 4 - ignores local validation guards that do not build semantic outcomes # time=1.464ms
+[adam-laptop] 
+[adam-laptop] # Subtest: ignores else-if chains because they are not independent if statements
+[adam-laptop]     ok 1 - should be equal
+[adam-laptop]     1..1
+[adam-laptop] ok 5 - ignores else-if chains because they are not independent if statements # time=1.296ms
+[adam-laptop] 
+[adam-laptop] # Subtest: skips test files by default
+[adam-laptop]     ok 1 - should be equal
+[adam-laptop]     1..1
+[adam-laptop] ok 6 - skips test files by default # time=0.312ms
+[adam-laptop] 
+[adam-laptop] # Subtest: detects raw null/undefined/empty-array assigned or returned to/from semantic targets
+[adam-laptop]     ok 1 - should be equal
+[adam-laptop]     ok 2 - should be equal
+[adam-laptop]     ok 3 - should be equal
+[adam-laptop]     ok 4 - should be equal
+[adam-laptop]     ok 5 - should be equal
+[adam-laptop]     1..5
+[adam-laptop] ok 7 - detects raw null/undefined/empty-array assigned or returned to/from semantic targets # time=3.095ms
+[adam-laptop] 
+[adam-laptop] # Subtest: detects mixed cache and SQL accesses in a decision function
+[adam-laptop]     ok 1 - should be equal
+[adam-laptop]     ok 2 - should be equal
+[adam-laptop]     ok 3 - should be equal
+[adam-laptop]     1..3
+[adam-laptop] ok 8 - detects mixed cache and SQL accesses in a decision function # time=1.841ms
+[adam-laptop] 
+[adam-laptop] # Subtest: detects schema-unsafe INSERT OR REPLACE / REPLACE INTO system table writes
+[adam-laptop]     ok 1 - should be equal
+[adam-laptop]     ok 2 - should be equal
+[adam-laptop]     1..2
+[adam-laptop] ok 9 - detects schema-unsafe INSERT OR REPLACE / REPLACE INTO system table writes # time=0.845ms
+[adam-laptop] 
+[adam-laptop] # Subtest: detects local retry loops using setTimeout/setInterval or loops
+[adam-laptop]     ok 1 - should be equal
+[adam-laptop]     ok 2 - should be equal
+[adam-laptop]     ok 3 - should be equal
+[adam-laptop]     1..3
+[adam-laptop] ok 10 - detects local retry loops using setTimeout/setInterval or loops # time=2.336ms
+[adam-laptop] 
+[adam-laptop] # Subtest: a named wait constant without an ends-on declaration fails
+[adam-laptop]     ok 1 - should be equivalent
+[adam-laptop]     ok 2 - should be equivalent
+[adam-laptop]     ok 3 - an empty declaration is no declaration
+[adam-laptop]     1..3
+[adam-laptop] ok 11 - a named wait constant without an ends-on declaration fails # time=2.586ms
+[adam-laptop] 
+[adam-laptop] # Subtest: a wait whose only exit is the timer fails
+[adam-laptop]     ok 1 - should be equivalent
+[adam-laptop]     1..1
+[adam-laptop] ok 12 - a wait whose only exit is the timer fails # time=0.926ms
+[adam-laptop] 
+[adam-laptop] # Subtest: a declared wait or an enumerated non-wait kind passes
+[adam-laptop]     ok 1 - only the undeclared one fails; non-matching names are not governed
+[adam-laptop]     ok 2 - a declaration on the first line of a multi-line const passes
+[adam-laptop]     ok 3 - a non-wait kind outside the enumeration fails
+[adam-laptop]     ok 4 - the rule governs src/ only
+[adam-laptop]     1..4
+[adam-laptop] ok 13 - a declared wait or an enumerated non-wait kind passes # time=2.575ms
+[adam-laptop] 
+[adam-laptop] # Subtest: object-member bounds are governed like named constants
+[adam-laptop]     ok 1 - Object.freeze, plain and nested members; the comment above or on the member line declares it
+[adam-laptop]     ok 2 - key names, codes, aliases of a governed name and message builders are not bounds
+[adam-laptop]     1..2
+[adam-laptop] ok 14 - object-member bounds are governed like named constants # time=3.215ms
+[adam-laptop] 
+[adam-laptop] # Subtest: the declaration holes are closed
+[adam-laptop]     ok 1 - a bare n/a names no kind
+[adam-laptop]     ok 2 - "Timer" is the timer
+[adam-laptop]     ok 3 - "the timer" is the timer
+[adam-laptop]     ok 4 - "its timer" is the timer
+[adam-laptop]     ok 5 - "THE TIMER fires" is the timer
+[adam-laptop]     ok 6 - "x" names no event
+[adam-laptop]     ok 7 - "reply arrives" names no event
+[adam-laptop]     ok 8 - ". . ." names no event
+[adam-laptop]     ok 9 - let and var declarations are governed
+[adam-laptop]     ok 10 - a *_TIMEOUT name without _MS is governed when it holds a bound
+[adam-laptop]     1..10
+[adam-laptop] ok 15 - the declaration holes are closed # time=3.735ms
+[adam-laptop] 
+[adam-laptop] # Subtest: the timebox, dead and misnamed non-wait kinds pass; skip is not one
+[adam-laptop]     ok 1 - should be equivalent
+[adam-laptop]     ok 2 - "n/a misnamed" does not say what the value is
+[adam-laptop]     ok 3 - "n/a misnamed (a length)" does not say what the value is
+[adam-laptop]     ok 4 - skip is not a non-wait kind: a 1 ms delivery is still a wait
+[adam-laptop]     1..4
+[adam-laptop] ok 16 - the timebox, dead and misnamed non-wait kinds pass; skip is not one # time=1.888ms
+[adam-laptop] 
+[adam-laptop] # Subtest: timer-only constants pass only through the baseline
+[adam-laptop]     ok 1 - an unbaselined timer-only wait still fails
+[adam-laptop]     1..1
+[adam-laptop] ok 17 - timer-only constants pass only through the baseline # time=0.926ms
+[adam-laptop] 
+[adam-laptop] # Subtest: the shared baseline admits only timer-only waits
+[adam-laptop]     ok 1 - an undeclared, unknown-kind or unnamed-event entry is no allowance
+[adam-laptop]     1..1
+[adam-laptop] ok 18 - the shared baseline admits only timer-only waits # time=0.989ms
+[adam-laptop] 
+[adam-laptop] # Subtest: the timer-only baseline cannot grow and holds no stale entry
+[adam-laptop]     ok 1 - only timer-only waits are baselined
+[adam-laptop]     ok 2 - timer-only baseline 2 <= 2
+[adam-laptop]     ok 3 - READ_CANDIDATE_COLD_RECONNECT_DEFER_TIMEOUT_MS is still timer-only in src/query/query-executor-partition-attempt-budget.js; a fixed one leaves the baseline
+[adam-laptop]     ok 4 - RECOVERY_CANDIDATE_COLD_RECONNECT_DEFER_TIMEOUT_MS is still timer-only in src/query/query-executor-partition-attempt-budget.js; a fixed one leaves the baseline
+[adam-laptop]     1..4
+[adam-laptop] ok 19 - the timer-only baseline cannot grow and holds no stale entry # time=27.953ms
+[adam-laptop] 
+[adam-laptop] # Subtest: the governed set is derived from src/, and every member is declared
+[adam-laptop]     ok 1 - the audit derives 47 constants
+[adam-laptop]     ok 2 - the audit derives 57 object members
+[adam-laptop]     ok 3 - the audit set equals an independent text scan of src/
+[adam-laptop]     ok 4 - every named wait in src/ declares its end
+[adam-laptop]     1..4
+[adam-laptop] ok 20 - the governed set is derived from src/, and every member is declared # time=1041.852ms
+[adam-laptop] 
+[adam-laptop] # Subtest: a timer expiry named anywhere in the event is the timer
+[adam-laptop]     ok 1 - "when the timer fires" is the timer
+[adam-laptop]     ok 2 - "on timer expiry the step is cut" is the timer
+[adam-laptop]     ok 3 - "the request timeout elapses first" is the timer
+[adam-laptop]     ok 4 - "the deadline expires before any reply" is the timer
+[adam-laptop]     ok 5 - "the heartbeat timer delivers a fresh lease" names another timer-driven subject
+[adam-laptop]     ok 6 - "the peer acknowledges the deadline request" names another timer-driven subject
+[adam-laptop]     1..6
+[adam-laptop] ok 21 - a timer expiry named anywhere in the event is the timer # time=1.316ms
+[adam-laptop] 
+[adam-laptop] # Subtest: an n/a dead claim is checked against every reference in src/
+[adam-laptop]     ok 1 - a direct, computed, escaped or declarator read refutes the claim; a same-named key on an unrelated object does not
+[adam-laptop]     1..1
+[adam-laptop] ok 22 - an n/a dead claim is checked against every reference in src/ # time=6.105ms
+[adam-laptop] 
+[adam-laptop] # Subtest: the live removal backstop cannot be declared dead
+[adam-laptop]     ok 1 - the false claim is read
+[adam-laptop]     ok 2 - src/ refutes it
+[adam-laptop]     1..2
+[adam-laptop] ok 23 - the live removal backstop cannot be declared dead # time=329.226ms
+[adam-laptop] 
+[adam-laptop] # Subtest: the audit itself refuses a timer-only baseline above its ceiling
+[adam-laptop]     ok 1 - at the ceiling
+[adam-laptop]     ok 2 - one above it is red
+[adam-laptop]     ok 3 - the ceiling holds exactly the two cold-reconnect constants
+[adam-laptop]     ok 4 - the baselined audit run itself is red
+[adam-laptop]     1..4
+[adam-laptop] ok 24 - the audit itself refuses a timer-only baseline above its ceiling # time=3.5ms
+[adam-laptop] 
+[adam-laptop] # Subtest: raw-state audit recognizes the actual message-group caught-exception collection
+[adam-laptop]     ok 1 - the actual owner still uses its original exception accumulator
+[adam-laptop]     not ok 2 - caught cleanup exceptions are data; the retained map owns cleanup state
+[adam-laptop]       ---
+[adam-laptop]       diff: >
+[adam-laptop]         --- expected
+[adam-laptop]       
+[adam-laptop]         +++ actual
+[adam-laptop]       
+[adam-laptop]         @@ -1,1 +1,11 @@
+[adam-laptop]       
+[adam-laptop]         -Array []
+[adam-laptop]       
+[adam-laptop]         +Array [
+[adam-laptop]       
+[adam-laptop]         +  Object {
+[adam-laptop]       
+[adam-laptop]         +    "filePath": "/repo/src/runtime/cleanup-evidence.js",
+[adam-laptop]       
+[adam-laptop]         +    "line": 81,
+[adam-laptop]       
+[adam-laptop]         +    "column": 11,
+[adam-laptop]       
+[adam-laptop]         +    "functionName": "initializeRegisteredMessageGroup",
+[adam-laptop]       
+[adam-laptop]         +    "kind": "raw_null_empty_state_outcome",
+[adam-laptop]       
+[adam-laptop]         +    "reason": "raw null or empty-state outcome assigned/declared for semantic
+[adam-laptop]         target \"failures\"",
+[adam-laptop]       
+[adam-laptop]         +    "ruleReference": "system guidelines.md §4.5 Raw null or undefined must
+[adam-laptop]         not encode runtime state",
+[adam-laptop]       
+[adam-laptop]         +  },
+[adam-laptop]       
+[adam-laptop]         +]
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/scripts/check-guideline-decision-boundaries.test.js
+[adam-laptop]         lineNumber: 713
+[adam-laptop]         columnNumber: 7
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: >
+[adam-laptop]         Test.<anonymous>
+[adam-laptop]         (test/scripts/check-guideline-decision-boundaries.test.js:713:7)
+[adam-laptop]       source: >2
+[adam-laptop]             t.equal(source.split('const failures = [];').length, 2,
+[adam-laptop]               'the actual owner still uses its original exception accumulator');
+[adam-laptop]             t.same(emptyStateFindings(source, 'initializeRegisteredMessageGroup'), [],
+[adam-laptop]         ------^
+[adam-laptop]               'caught cleanup exceptions are data; the retained map owns cleanup state');
+[adam-laptop]             const escaping = source.replace('const failures = [];',
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     ok 3 - the same owner cannot publish that vector as runtime state
+[adam-laptop]     1..3
+[adam-laptop] not ok 25 - raw-state audit recognizes the actual message-group caught-exception collection # time=21.605ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/scripts/check-guideline-decision-boundaries.test.js
+[adam-laptop]     lineNumber: 707
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: >
+[adam-laptop]     ].join('\n');
+[adam-laptop]   
+[adam-laptop]   
+[adam-laptop]     test('raw-state audit recognizes the actual message-group caught-exception
+[adam-laptop]     collection',
+[adam-laptop]   
+[adam-laptop]     ^
+[adam-laptop]       async (t) => {
+[adam-laptop]         const source = await fs.readFile(
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] # Subtest: raw-state audit recognizes exception collection by complete uses, not names
+[adam-laptop]     not ok 1 - should be equivalent
+[adam-laptop]       ---
+[adam-laptop]       diff: >
+[adam-laptop]         --- expected
+[adam-laptop]       
+[adam-laptop]         +++ actual
+[adam-laptop]       
+[adam-laptop]         @@ -1,1 +1,11 @@
+[adam-laptop]       
+[adam-laptop]         -Array []
+[adam-laptop]       
+[adam-laptop]         +Array [
+[adam-laptop]       
+[adam-laptop]         +  Object {
+[adam-laptop]       
+[adam-laptop]         +    "filePath": "/repo/src/runtime/cleanup-evidence.js",
+[adam-laptop]       
+[adam-laptop]         +    "line": 3,
+[adam-laptop]       
+[adam-laptop]         +    "column": 11,
+[adam-laptop]       
+[adam-laptop]         +    "functionName": "releaseResources",
+[adam-laptop]       
+[adam-laptop]         +    "kind": "raw_null_empty_state_outcome",
+[adam-laptop]       
+[adam-laptop]         +    "reason": "raw null or empty-state outcome assigned/declared for semantic
+[adam-laptop]         target \"failureRecords\"",
+[adam-laptop]       
+[adam-laptop]         +    "ruleReference": "system guidelines.md §4.5 Raw null or undefined must
+[adam-laptop]         not encode runtime state",
+[adam-laptop]       
+[adam-laptop]         +  },
+[adam-laptop]       
+[adam-laptop]         +]
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/scripts/check-guideline-decision-boundaries.test.js
+[adam-laptop]         lineNumber: 723
+[adam-laptop]         columnNumber: 7
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: >
+[adam-laptop]         Test.<anonymous>
+[adam-laptop]         (test/scripts/check-guideline-decision-boundaries.test.js:723:7)
+[adam-laptop]       source: >
+[adam-laptop]         test('raw-state audit recognizes exception collection by complete uses, not
+[adam-laptop]         names',
+[adam-laptop]           async (t) => {
+[adam-laptop]             t.same(emptyStateFindings(CAUGHT_EXCEPTION_COLLECTION, 'releaseResources'), []);
+[adam-laptop]         ------^
+[adam-laptop]             const renamed = CAUGHT_EXCEPTION_COLLECTION.replaceAll(
+[adam-laptop]               'failureRecords', 'outcomeExceptions');
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     not ok 2 - a different semantic-looking name has the same non-state role
+[adam-laptop]       ---
+[adam-laptop]       diff: >
+[adam-laptop]         --- expected
+[adam-laptop]       
+[adam-laptop]         +++ actual
+[adam-laptop]       
+[adam-laptop]         @@ -1,1 +1,11 @@
+[adam-laptop]       
+[adam-laptop]         -Array []
+[adam-laptop]       
+[adam-laptop]         +Array [
+[adam-laptop]       
+[adam-laptop]         +  Object {
+[adam-laptop]       
+[adam-laptop]         +    "filePath": "/repo/src/runtime/cleanup-evidence.js",
+[adam-laptop]       
+[adam-laptop]         +    "line": 3,
+[adam-laptop]       
+[adam-laptop]         +    "column": 11,
+[adam-laptop]       
+[adam-laptop]         +    "functionName": "releaseResources",
+[adam-laptop]       
+[adam-laptop]         +    "kind": "raw_null_empty_state_outcome",
+[adam-laptop]       
+[adam-laptop]         +    "reason": "raw null or empty-state outcome assigned/declared for semantic
+[adam-laptop]         target \"outcomeExceptions\"",
+[adam-laptop]       
+[adam-laptop]         +    "ruleReference": "system guidelines.md §4.5 Raw null or undefined must
+[adam-laptop]         not encode runtime state",
+[adam-laptop]       
+[adam-laptop]         +  },
+[adam-laptop]       
+[adam-laptop]         +]
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/scripts/check-guideline-decision-boundaries.test.js
+[adam-laptop]         lineNumber: 726
+[adam-laptop]         columnNumber: 7
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: >
+[adam-laptop]         Test.<anonymous>
+[adam-laptop]         (test/scripts/check-guideline-decision-boundaries.test.js:726:7)
+[adam-laptop]       source: |2
+[adam-laptop]             const renamed = CAUGHT_EXCEPTION_COLLECTION.replaceAll(
+[adam-laptop]               'failureRecords', 'outcomeExceptions');
+[adam-laptop]             t.same(emptyStateFindings(renamed, 'releaseResources'), [],
+[adam-laptop]         ------^
+[adam-laptop]               'a different semantic-looking name has the same non-state role');
+[adam-laptop]           });
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     1..2
+[adam-laptop] not ok 26 - raw-state audit recognizes exception collection by complete uses, not names # time=14.147ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/scripts/check-guideline-decision-boundaries.test.js
+[adam-laptop]     lineNumber: 721
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: >2
+[adam-laptop]       });
+[adam-laptop]   
+[adam-laptop]     test('raw-state audit recognizes exception collection by complete uses, not
+[adam-laptop]     names',
+[adam-laptop]   
+[adam-laptop]     ^
+[adam-laptop]       async (t) => {
+[adam-laptop]         t.same(emptyStateFindings(CAUGHT_EXCEPTION_COLLECTION, 'releaseResources'), []);
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] # Subtest: raw-state audit keeps exception-looking arrays with published semantic state
+[adam-laptop]     ok 1 - an unsupported use invalidates the complete accumulator proof
+[adam-laptop]     1..1
+[adam-laptop] ok 27 - raw-state audit keeps exception-looking arrays with published semantic state # time=0.802ms
+[adam-laptop] 
+[adam-laptop] # Subtest: raw-state audit keeps exception-looking arrays with unknown consumer
+[adam-laptop]     ok 1 - an unsupported use invalidates the complete accumulator proof
+[adam-laptop]     1..1
+[adam-laptop] ok 28 - raw-state audit keeps exception-looking arrays with unknown consumer # time=0.706ms
+[adam-laptop] 
+[adam-laptop] # Subtest: raw-state audit keeps exception-looking arrays with alias
+[adam-laptop]     ok 1 - an unsupported use invalidates the complete accumulator proof
+[adam-laptop]     1..1
+[adam-laptop] ok 29 - raw-state audit keeps exception-looking arrays with alias # time=0.674ms
+[adam-laptop] 
+[adam-laptop] # Subtest: raw-state audit keeps exception-looking arrays with deferred closure
+[adam-laptop]     ok 1 - an unsupported use invalidates the complete accumulator proof
+[adam-laptop]     1..1
+[adam-laptop] ok 30 - raw-state audit keeps exception-looking arrays with deferred closure # time=0.634ms
+[adam-laptop] 
+[adam-laptop] # Subtest: raw-state audit keeps exception-looking arrays with shadowed binding
+[adam-laptop]     ok 1 - an unsupported use invalidates the complete accumulator proof
+[adam-laptop]     1..1
+[adam-laptop] ok 31 - raw-state audit keeps exception-looking arrays with shadowed binding # time=3.66ms
+[adam-laptop] 
+[adam-laptop] # Subtest: raw-state audit keeps exception-looking arrays with length mutation
+[adam-laptop]     ok 1 - an unsupported use invalidates the complete accumulator proof
+[adam-laptop]     1..1
+[adam-laptop] ok 32 - raw-state audit keeps exception-looking arrays with length mutation # time=0.786ms
+[adam-laptop] 
+[adam-laptop] # Subtest: raw-state audit keeps exception-looking arrays with different collection mutation
+[adam-laptop]     ok 1 - an unsupported use invalidates the complete accumulator proof
+[adam-laptop]     1..1
+[adam-laptop] ok 33 - raw-state audit keeps exception-looking arrays with different collection mutation # time=0.592ms
+[adam-laptop] 
+[adam-laptop] # Subtest: raw-state audit keeps exception-looking arrays with nonexception insertion
+[adam-laptop]     ok 1 - an unsupported use invalidates the complete accumulator proof
+[adam-laptop]     1..1
+[adam-laptop] ok 34 - raw-state audit keeps exception-looking arrays with nonexception insertion # time=0.55ms
+[adam-laptop] 
+[adam-laptop] # Subtest: raw-state audit keeps exception-looking arrays with derived state decision
+[adam-laptop]     ok 1 - an unsupported use invalidates the complete accumulator proof
+[adam-laptop]     1..1
+[adam-laptop] ok 35 - raw-state audit keeps exception-looking arrays with derived state decision # time=0.573ms
+[adam-laptop] 
+[adam-laptop] # Subtest: raw-state audit keeps exception-looking arrays with computed access
+[adam-laptop]     ok 1 - an unsupported use invalidates the complete accumulator proof
+[adam-laptop]     1..1
+[adam-laptop] ok 36 - raw-state audit keeps exception-looking arrays with computed access # time=0.552ms
+[adam-laptop] 
+[adam-laptop] # Subtest: raw-state audit keeps exception-looking arrays with shadowed aggregate constructor
+[adam-laptop]     ok 1 - an unsupported use invalidates the complete accumulator proof
+[adam-laptop]     1..1
+[adam-laptop] ok 37 - raw-state audit keeps exception-looking arrays with shadowed aggregate constructor # time=0.547ms
+[adam-laptop] 
+[adam-laptop] # Subtest: raw-state audit retains mutable and returned empty semantic outcomes
+[adam-laptop]     ok 1 - a mutable binding has no immutable accumulator proof
+[adam-laptop]     ok 2 - returning the vector as an outcome keeps the declaration finding
+[adam-laptop]     ok 3 - should be equal
+[adam-laptop]     ok 4 - should be equal
+[adam-laptop]     1..4
+[adam-laptop] ok 38 - raw-state audit retains mutable and returned empty semantic outcomes # time=1.427ms
+[adam-laptop] 
+[adam-laptop] # Subtest: raw-state audit requires unchanged caught values and an immediate aggregate throw
+[adam-laptop]     ok 1 - an assigned catch parameter no longer proves a caught exception
+[adam-laptop]     ok 2 - a throw in a deferred callback does not settle the current exception
+[adam-laptop]     1..2
+[adam-laptop] ok 39 - raw-state audit requires unchanged caught values and an immediate aggregate throw # time=1.091ms
+[adam-laptop] 
+[adam-laptop] 1..39
+[adam-laptop] # { total: 94, pass: 91, fail: 3 }
+[adam-laptop] # time=1536.403ms
+[adam-laptop] # test-files total=1 pass=0 fail=1 assertions=133
+lab test: adam-laptop: # test-files total=1 pass=0 fail=1 assertions=133
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=1 pass=0 fail=1 assertions=133

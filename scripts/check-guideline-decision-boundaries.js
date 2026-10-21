@@ -1,5 +1,6 @@
 import {KEYS} from 'eslint-visitor-keys';
 import fs from 'node:fs/promises';
+import {collectCaughtExceptionCollections} from './checks/decision-boundary-exception-collection.js';
 import {
   FILE_CLASS,
   applyCountBaseline,
@@ -307,7 +308,8 @@ function collectFunctionViolations(node, parent, filePath) {
   return violations;
 }
 
-function checkRawNullOrEmptyState(node, functionName, filePath, violations) {
+function checkRawNullOrEmptyState(node, functionName, filePath, violations, caughtCollections) {
+  if (caughtCollections.has(node)) return;
   if (node.type === 'AssignmentExpression' || node.type === 'VariableDeclarator') {
     const targetNode = node.type === 'AssignmentExpression' ? node.left : node.id;
     const valueNode = node.type === 'AssignmentExpression' ? node.right : node.init;
@@ -850,8 +852,9 @@ function collectDecisionBoundaryViolationsFromSource(
     checkMixedCacheAndSqlDecision(node, functionName, filePath, fileClass, violations);
     checkLocalRetryLoop(node, functionName, filePath, violations);
 
+    const caughtCollections = collectCaughtExceptionCollections(node, ast);
     walkAst(node.body || node, (child) => {
-      checkRawNullOrEmptyState(child, functionName, filePath, violations);
+      checkRawNullOrEmptyState(child, functionName, filePath, violations, caughtCollections);
     });
   });
 

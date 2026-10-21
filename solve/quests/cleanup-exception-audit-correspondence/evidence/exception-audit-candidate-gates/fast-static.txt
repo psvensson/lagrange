@@ -1,0 +1,2 @@
+proof range: 0e003dc89..HEAD (flag)
+fast-static: ok in 13098ms
