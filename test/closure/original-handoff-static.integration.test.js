@@ -1,5 +1,4 @@
-// Diagnostic branch only. Read the live producer and report environmental
-// drift without modifying metadata, production, or any worktree input.
+// Diagnostic-only branch: compact read-only environment comparison.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -7,9 +6,17 @@ import {spawnSync} from 'node:child_process';
 import {test} from 'node:test';
 import {fileURLToPath} from 'node:url';
 import {buildSubsystemManifest} from '../../scripts/checks/test-subsystem-classification.js';
+import {gitProcessEnvironment} from '../../scripts/checks/git-process-environment.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const diagnosticPath = 'test/closure/original-handoff-static.integration.test.js';
+function gitObservation(args, env = process.env) {
+  const result = spawnSync('git', args, {cwd: root, env, encoding: 'utf8',
+    maxBuffer: 4 * 1024 * 1024});
+  return {status: result.status, signal: result.signal, error: result.error?.message,
+    bytes: Buffer.byteLength(result.stdout || ''),
+    output: (result.stdout || '').slice(0, 1500), stderr: result.stderr};
+}
 
 test('diagnose exact-candidate subsystem metadata environmental drift', () => {
   const committed = JSON.parse(fs.readFileSync(
@@ -20,28 +27,31 @@ test('diagnose exact-candidate subsystem metadata environmental drift', () => {
     ...Object.keys(committed.observations), ...Object.keys(generated.observations),
   ])) {
     if (name === diagnosticPath) continue;
-    const before = committed.observations[name];
-    const after = generated.observations[name];
-    if (JSON.stringify(before) !== JSON.stringify(after)) {
-      differences.push({name, committed: before, generated: after});
+    const before = committed.observations[name] || {};
+    const after = generated.observations[name] || {};
+    const changes = {};
+    for (const kind of ['files', 'directories', 'env']) {
+      const added = (after[kind] || []).filter((value) => !(before[kind] || []).includes(value));
+      const removed = (before[kind] || []).filter((value) => !(after[kind] || []).includes(value));
+      if (added.length || removed.length) changes[kind] = {added, removed};
     }
+    if (Object.keys(changes).length) differences.push({name, changes});
   }
-  const untracked = spawnSync('git', ['ls-files', '--others', '--exclude-standard'],
-    {cwd: root, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024});
   const report = {
     node: process.version,
-    committedCensus: committed.censusSize,
-    generatedCensus: generated.censusSize,
-    classificationEqual: JSON.stringify(committed.classes) === JSON.stringify(generated.classes),
-    problemCount: generated.problems.length,
+    committedCensus: committed.censusSize, generatedCensus: generated.censusSize,
     problems: generated.problems,
     diagnosticSelfExcludedFromComparison: diagnosticPath,
-    differenceCount: differences.length,
-    differences: differences.slice(0, 50),
-    untrackedExit: untracked.status,
-    untrackedPaths: untracked.stdout?.split('\n').filter(Boolean).slice(0, 100),
-    gitError: untracked.error?.message ?? untracked.stderr,
+    differenceCount: differences.length, differences,
+    repositoryPointerNames: Object.keys(process.env).filter((key) =>
+      ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR', 'GIT_PREFIX'].includes(key)),
+    rawRoot: gitObservation(['rev-parse', '--show-toplevel']),
+    sanitizedRoot: gitObservation(['rev-parse', '--show-toplevel'], gitProcessEnvironment()),
+    tracked: gitObservation(['ls-files', '-z']),
+    untracked: gitObservation(['ls-files', '-z', '--others', '--exclude-standard']),
+    sanitizedUntracked: gitObservation(['ls-files', '-z', '--others', '--exclude-standard'],
+      gitProcessEnvironment()),
   };
   process.stdout.write(`SUBSYSTEM_ENVIRONMENT_DIAGNOSTIC ${JSON.stringify(report)}\n`);
-  assert.deepEqual(differences, [], 'environmental drift remains; diagnostic is not acceptance');
+  assert.equal(differences.length, 0, 'diagnostic environmental differences remain');
 });
