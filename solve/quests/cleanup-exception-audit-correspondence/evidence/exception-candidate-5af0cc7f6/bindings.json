@@ -1,0 +1,61 @@
+{
+  "candidate": "5af0cc7f6d7ddd81bb10e9b590f02cc13e70ddad",
+  "sourceTree": "8e5f187207b976cdbf03e328d565d6fa46ed745b",
+  "files": [
+    {
+      "path": "scripts/check-guideline-decision-boundaries.js",
+      "blob": "dc458ed969dce88cb21decc84ba72fb50762878d",
+      "sha256": "2fb94d4f1a0091e630b5b88538fe6bc1f19e09933974a62a81cfa5446040380b"
+    },
+    {
+      "path": "scripts/checks/decision-boundary-exception-collection.js",
+      "blob": "23afe2db324cbcc71e62214dcc3eed8ee7e21db9",
+      "sha256": "2054984db6c8fd64864fa10697b1b2839fc2c5e5902055146fae1c45481bb7d1"
+    },
+    {
+      "path": "src/bootstrap/shared/message-group-transport-handler.js",
+      "blob": "4dbb027a938e7a17b8cf2c096c780b1fe6da01eb",
+      "sha256": "52485b9bc111a047ddc69c47065ca8c0e8563bee14fcc49260ff1fd1107a9847"
+    },
+    {
+      "path": "src/wasm-service/wasm-service-replica-lifecycle.js",
+      "blob": "3d5d310af931632d7701748b9c879b02fb13bfe9",
+      "sha256": "620d226b2ea71c51b56b38435ec5965e036a6ee48688c0f280a03d60dea63a74"
+    },
+    {
+      "path": "test/scripts/check-guideline-decision-boundaries.test.js",
+      "blob": "f4cc163f7cbed9788964a939467472f47dedc39e",
+      "sha256": "8cdab7b8760dd413ecd6a824225793aa01595282b2b67797886747d22358b35e"
+    },
+    {
+      "path": "test/address/address-manager-peer-location-authority.test.js",
+      "blob": "58b02ebd4fc29d9034692861bc6b77cf3e740232",
+      "sha256": "2b065854935daa61218ef0b336dab84e75c70c6bea9d08ac2bf5a47744a97aea"
+    },
+    {
+      "path": "test/node/replica-transport-handler-identity.test.js",
+      "blob": "1afe9dbab8d6012483ededa19530f215322494e2",
+      "sha256": "2e21365eb7924472c944999c86df7d906ae21067a49fc2bf4646bc50720295c1"
+    },
+    {
+      "path": "test/partition/raft-rs-transport-demux.test.js",
+      "blob": "054382db75021537315cbaaaf3eb30edb9776a26",
+      "sha256": "01a92788de336c7625ebd119571fd768627b1aaa042c033f8dfd5ddd7d1ecc32"
+    },
+    {
+      "path": "test/bootstrap/message-group-activation-handler-boundary.test.js",
+      "blob": "ca042cb784411f4c22ad8edc5cde64a863cc32c3",
+      "sha256": "c61d3c839dcb86fc5ccf3c0788ede5cc72e8ab0883cd81ae724761f0c7ebdd7c"
+    },
+    {
+      "path": "test/node/message-group-executor-activation-handler-boundary.test.js",
+      "blob": "1126ac33723af442acf2f901fea634e3d2b0f3da",
+      "sha256": "9f04f22a785095178d3081f202e7087b060e3079e1ee3abc58d27c7dfaf42b5f"
+    },
+    {
+      "path": "test/transport/exact-handler-identity-api.test.js",
+      "blob": "286660ccc02ef6bada575498d971b2b156f2b89a",
+      "sha256": "44cb72d0c391aaafb686aa46a42ff75be950c7b8e5f291cd14dc4fffea10c10c"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{"sha":"5af0cc7f6d7ddd81bb10e9b590f02cc13e70ddad","plan":[{"files":["test/partition/raft-rs-transport-demux.test.js","test/address/address-manager-peer-location-authority.test.js","test/node/message-group-executor-activation-handler-boundary.test.js","test/transport/exact-handler-identity-api.test.js","test/node/replica-transport-handler-identity.test.js","test/scripts/check-guideline-decision-boundaries.test.js"],"jobs":4,"resourceClass":"ordinary"},{"files":["test/bootstrap/message-group-activation-handler-boundary.test.js"],"jobs":2,"resourceClass":"bootstrap"}]}
+lab test: adam-laptop: ordinary, bootstrap (7 files) cores=8 mem=15.5GiB speed x2.01
+[adam-laptop] placement-shell=2110689
+[adam-laptop] placement-head=5af0cc7f6d7ddd81bb10e9b590f02cc13e70ddad
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7
+[adam-laptop] placement-pid=2111116
+[adam-laptop] # test-files planned=7
+[adam-laptop] classified lane ordinary: 6 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 77C (coretemp/Package id 0) nvme 19C (nvme/Composite) - CPU package 77C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 40C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] ok test/node/message-group-executor-activation-handler-boundary.test.js (43 assertions, 1759ms)
+[adam-laptop] ok test/node/replica-transport-handler-identity.test.js (42 assertions, 2290ms)
+[adam-laptop] ok test/partition/raft-rs-transport-demux.test.js (15 assertions, 2332ms)
+[adam-laptop] ok test/address/address-manager-peer-location-authority.test.js (26 assertions, 2493ms)
+[adam-laptop] ok test/transport/exact-handler-identity-api.test.js (36 assertions, 791ms)
+[adam-laptop] ok test/scripts/check-guideline-decision-boundaries.test.js (133 assertions, 2213ms)
+[adam-laptop] # test-files total=6 pass=6 fail=0 assertions=295
+[adam-laptop] classified lane bootstrap: 1 file(s), jobs=2
+[adam-laptop] thermal: ok cpu 67C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] ok test/bootstrap/message-group-activation-handler-boundary.test.js (75 assertions, 1137ms)
+[adam-laptop] # test-files total=1 pass=1 fail=0 assertions=75
+lab test: adam-laptop: # test-files total=7 pass=7 fail=0 assertions=370
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=7 pass=7 fail=0 assertions=370

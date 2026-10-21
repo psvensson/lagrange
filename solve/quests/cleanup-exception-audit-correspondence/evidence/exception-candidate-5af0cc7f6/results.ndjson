@@ -1,0 +1,7 @@
+{"file":"test/node/message-group-executor-activation-handler-boundary.test.js","attempt":1,"ok":true,"assertions":43,"durationMs":1759,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/node/replica-transport-handler-identity.test.js","attempt":1,"ok":true,"assertions":42,"durationMs":2290,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/raft-rs-transport-demux.test.js","attempt":1,"ok":true,"assertions":15,"durationMs":2332,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/address/address-manager-peer-location-authority.test.js","attempt":1,"ok":true,"assertions":26,"durationMs":2493,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/exact-handler-identity-api.test.js","attempt":1,"ok":true,"assertions":36,"durationMs":791,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/scripts/check-guideline-decision-boundaries.test.js","attempt":1,"ok":true,"assertions":133,"durationMs":2213,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/message-group-activation-handler-boundary.test.js","attempt":1,"ok":true,"assertions":75,"durationMs":1137,"retriedOnce":false,"firstFailureLine":null}

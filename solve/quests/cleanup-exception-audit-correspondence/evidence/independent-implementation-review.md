@@ -221,3 +221,85 @@ to change a baseline, relax a contract or repair all unrelated global findings
 inside this Quest. Final applicable guard/change-proof and composed checks
 remain explicit. Any implementation byte change requires checking this review's
 scope and evidence binding again.
+
+## Candidate result review — 2026-10-21
+
+Reviewer: `subagent:/root/release_recovery_writer`. This additive round reviews
+the root-owned measurement at exact commit
+`5af0cc7f6d7ddd81bb10e9b590f02cc13e70ddad`; it preserves the preceding
+pre-measurement verdict and its limits.
+
+**APPROVE the measured bounded classifier correction and the selected owner
+regression results at this exact commit.** All applicable composed/canonical
+change-proof, changed-selection, landing and publication gates remain pending.
+The focused seven-file pass does not complete receipt
+`unchanged-cleanup-contract-and-owner-gates` by itself. This reviewer changed
+no source, test, receipt or seal and ran no tests.
+
+The adjacent `exception-candidate-5af0cc7f6` packet independently checks as
+follows:
+
+- All six `sha256.json` entries match their complete file bytes.
+- All 11 source/test rows in `bindings.json` match both the exact Git blob IDs
+  and SHA256 values at the named commit, and also match the current worktree
+  files. Its `src` tree is `8e5f187207b976cdbf03e328d565d6fa46ed745b`.
+- The classifier witness still hashes to
+  `8cdab7b8760dd413ecd6a824225793aa01595282b2b67797886747d22358b35e`.
+  All seven selected tests, not only the classifier file, are byte-identical
+  to old-classifier commit `0e003dc89c808ac23a7c1fe18e70342f058486b0`.
+  The decision-audit baseline is also unchanged.
+- The input selection, plan, controller placement SHA and result ledger agree.
+  The ledger contains exactly the seven requested files, each `ok: true`,
+  attempt 1, `retriedOnce: false`, and no first failure. Controller and ledger
+  totals agree at 370 runner-reported assertions; exit status is zero.
+
+| Measured file | Runner-reported assertions |
+| --- | ---: |
+| `test/scripts/check-guideline-decision-boundaries.test.js` | 133 |
+| `test/address/address-manager-peer-location-authority.test.js` | 26 |
+| `test/node/replica-transport-handler-identity.test.js` | 42 |
+| `test/partition/raft-rs-transport-demux.test.js` | 15 |
+| `test/bootstrap/message-group-activation-handler-boundary.test.js` | 75 |
+| `test/node/message-group-executor-activation-handler-boundary.test.js` | 43 |
+| `test/transport/exact-handler-identity-api.test.js` | 36 |
+
+The same locked `adam-laptop` host ran the revised old classifier and candidate,
+with retries disabled. Automatic placement factor was 1.9 in the revised old
+run and 2.1 in the candidate; the candidate also respected its logged thermal
+hold. This supports a semantic comparison, not timing equivalence or a
+performance claim. Successful-file controller output contains the file-level
+pass summaries; the preserved old-red output contains the named leaf failures.
+
+The red-to-green interpretation is narrow and engaged. The old source reached
+the real MG declaration and failed exactly its exemption assertion plus the
+original/renamed synthetic accumulator positives (3 of 94 leaf assertions in
+39 cases). The candidate executes that same frozen file successfully with the
+same 133 runner count. It still requires the actual-source declaration anchor
+and all publication, alias, shadow, mutation, computed-read, catch-write and
+deferred-throw negatives. No assertion was removed, reclassified as expected
+failure or replaced with a different pass criterion. The already reviewed
+all-reference classifier treatment and sole census removal explain the change;
+the measured result is not inferred from process exit alone.
+
+The six other files contribute 237 reported assertions. Their source retains
+the exact-handler refusal/retry and successor-preservation witnesses, MG
+activation/retirement ordering, routing authority and transport boundaries.
+For example, `test/node/replica-transport-handler-identity.test.js:235` exercises
+WASM shutdown refusal, retained cleanup custody and same-owner retry through
+the actual lifecycle; the MG activation files retain exact identity and
+in-flight activation ordering. These are the selected regression boundaries,
+not a claim that every runtime cleanup or distributed schedule was exercised.
+
+All four implementation source hashes remain exactly those reviewed above.
+Thus the prior byte-preserving product-substitution comparison, `in` presence
+semantics, all six harness items and all ten interaction items remain applicable
+at the measured commit. This round supplies their previously pending frozen
+candidate execution; it does not replace broader canonical selection or prove
+new timing, pressure, wake or native-resource claims beyond the named tests.
+The complete census and its 37 other unresolved findings remain preserved.
+
+Evidence supports the original-red, accumulator-controls and independently
+reviewed-source/census receipts. The combined cleanup-contract/owner-gates
+receipt must remain pending until the required canonical applicable and composed
+checks are completed. No receipt was edited by this reviewer. This is not a
+requirement to silently absorb every unrelated global finding into this Quest.

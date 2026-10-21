@@ -14,11 +14,25 @@
     },
     {
       "id": "accumulator-and-escape-controls",
-      "passed": false
+      "passed": true,
+      "evidence": [
+        "exception-candidate-5af0cc7f6/input.json",
+        "exception-candidate-5af0cc7f6/results.ndjson",
+        "exception-candidate-5af0cc7f6/bindings.json",
+        "independent-implementation-review.md"
+      ],
+      "scope": "Exact frozen witness8cdab7b passes133 runner-reported assertions on locked adam-laptop with retries disabled; actual source and renamed positives green, all frozen adversarial controls retained. Independently reviewed against engaged old red."
     },
     {
       "id": "unchanged-cleanup-contract-and-owner-gates",
-      "passed": false
+      "passed": false,
+      "evidence": [
+        "exception-candidate-5af0cc7f6/results.ndjson",
+        "exception-audit-candidate-gates/owner-statics.json",
+        "exception-audit-candidate-gates/fast-static.txt",
+        "independent-implementation-review.md"
+      ],
+      "reason": "Six selected cleanup and identity regressions pass237 reported assertions, source substitutions reverse byte-identically and scoped checks pass. Exact composed validation and the complete canonical changed-test selection remain pending; these focused results alone do not close the combined gate."
     },
     {
       "id": "reviewed-census-and-independent-source",
@@ -30,5 +44,6 @@
       ],
       "scope": "Independent6+10 source review of frozen inputs approved candidate measurement. Full census removes only MG initializeRegisteredMessageGroup/raw_null_empty_state_outcome; no other finding identity/count changes, baseline unchanged. Named product substitutions reverse to exact old bytes. Candidate results and applicable composed gates remain separate pending rows."
     }
-  ]
+  ],
+  "measuredCandidate": "5af0cc7f6d7ddd81bb10e9b590f02cc13e70ddad"
 }
