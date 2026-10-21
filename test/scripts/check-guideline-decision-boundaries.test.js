@@ -682,3 +682,87 @@ test('the audit itself refuses a timer-only baseline above its ceiling',
       'the baselined audit run itself is red');
     await fs.rm(path.dirname(sourceRoot), {recursive: true, force: true});
   });
+
+function emptyStateFindings(source, functionName) {
+  return collectDecisionBoundaryViolationsFromSource(source,
+    '/repo/src/runtime/cleanup-evidence.js').filter((finding) =>
+    finding.kind === VIOLATION_KIND.RAW_NULL_OR_EMPTY_STATE &&
+    finding.functionName === functionName);
+}
+
+const CAUGHT_EXCEPTION_COLLECTION = [
+  'export async function releaseResources() {',
+  '  try { await open(); } catch (primary) {',
+  '    const failureRecords = [];',
+  '    try { await closeFirst(); } catch (first) { failureRecords.push(first); }',
+  '    try { await closeSecond(); } catch (second) { failureRecords.push(second); }',
+  '    if (failureRecords.length > 0) {',
+  '      throw retainPrimary(primary, new AggregateError(failureRecords, MESSAGE));',
+  '    }',
+  '    throw primary;',
+  '  }',
+  '}',
+].join('\n');
+
+test('raw-state audit recognizes the actual message-group caught-exception collection',
+  async (t) => {
+    const source = await fs.readFile(
+      'src/bootstrap/shared/message-group-transport-handler.js', 'utf8');
+    t.equal(source.split('const failures = [];').length, 2,
+      'the actual owner still uses its original exception accumulator');
+    t.same(emptyStateFindings(source, 'initializeRegisteredMessageGroup'), [],
+      'caught cleanup exceptions are data; the retained map owns cleanup state');
+    const escaping = source.replace('const failures = [];',
+      'const failures = []; publish({outcome: failures});');
+    t.equal(emptyStateFindings(escaping, 'initializeRegisteredMessageGroup').length, 1,
+      'the same owner cannot publish that vector as runtime state');
+  });
+
+test('raw-state audit recognizes exception collection by complete uses, not names',
+  async (t) => {
+    t.same(emptyStateFindings(CAUGHT_EXCEPTION_COLLECTION, 'releaseResources'), []);
+    const renamed = CAUGHT_EXCEPTION_COLLECTION.replaceAll(
+      'failureRecords', 'outcomeExceptions');
+    t.same(emptyStateFindings(renamed, 'releaseResources'), [],
+      'a different semantic-looking name has the same non-state role');
+  });
+
+const EXCEPTION_COLLECTION_ESCAPES = [
+  ['published semantic state', 'publish({status: failureRecords});'],
+  ['unknown consumer', 'consume(failureRecords);'],
+  ['alias', 'const saved = failureRecords; consume(saved);'],
+  ['deferred closure', 'const read = () => failureRecords; consume(read);'],
+  ['shadowed binding', 'const read = (failureRecords) => failureRecords; consume(read);'],
+  ['length mutation', 'failureRecords.length = 0;'],
+  ['different collection mutation', 'failureRecords.splice(0);'],
+  ['nonexception insertion', 'failureRecords.push(computeStatus());'],
+  ['derived state decision', 'if (failureRecords.length > 0) { publish({state: FAILED}); }'],
+  ['computed access', 'consume(failureRecords[0]);'],
+];
+
+for (const [name, injected] of EXCEPTION_COLLECTION_ESCAPES) {
+  test(`raw-state audit keeps exception-looking arrays with ${name}`, async (t) => {
+    const source = CAUGHT_EXCEPTION_COLLECTION.replace(
+      '    if (failureRecords.length > 0) {',
+      `    ${injected}\n    if (failureRecords.length > 0) {`);
+    t.equal(emptyStateFindings(source, 'releaseResources').length, 1,
+      'an unsupported use invalidates the complete accumulator proof');
+  });
+}
+
+test('raw-state audit retains mutable and returned empty semantic outcomes',
+  async (t) => {
+    const mutable = CAUGHT_EXCEPTION_COLLECTION.replace(
+      'const failureRecords = [];', 'let failureRecords = [];');
+    t.equal(emptyStateFindings(mutable, 'releaseResources').length, 1,
+      'a mutable binding has no immutable accumulator proof');
+    const returned = CAUGHT_EXCEPTION_COLLECTION.replace(
+      '    throw primary;', '    return {outcome: failureRecords};');
+    t.equal(emptyStateFindings(returned, 'releaseResources').length, 1,
+      'returning the vector as an outcome keeps the declaration finding');
+    t.equal(emptyStateFindings(
+      'function decide() { const failureState = []; return failureState; }',
+      'decide').length, 1);
+    t.equal(emptyStateFindings(
+      'function decide() { return {outcome: []}; }', 'decide').length, 1);
+  });

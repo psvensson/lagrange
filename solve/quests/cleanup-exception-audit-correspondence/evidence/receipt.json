@@ -1,0 +1,10 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {"id": "original-findings-and-engaged-witness-red", "passed": false},
+    {"id": "accumulator-and-escape-controls", "passed": false},
+    {"id": "unchanged-cleanup-contract-and-owner-gates", "passed": false},
+    {"id": "reviewed-census-and-independent-source", "passed": false}
+  ]
+}
