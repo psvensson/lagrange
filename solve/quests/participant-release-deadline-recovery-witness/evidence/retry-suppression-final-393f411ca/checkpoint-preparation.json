@@ -1,0 +1,14 @@
+{
+  "sourceCheckpoint": "bec0b96c413d94ec93c4ec05c879f8a380882642",
+  "positiveBase": "393f411ca09449898465cc3cb7320c03fba2aba8",
+  "normalPrecommitExit": 0,
+  "normalHooksUsed": true,
+  "bypassesUsed": false,
+  "sourceDiffMatchesReviewedPatch": true,
+  "allTestJavaScriptUnchanged": true,
+  "generatedMetadata": [
+    "solve/changes/global-owner-debt-inventory/inventory.json",
+    "test/shards/impact-graph-seal.json"
+  ],
+  "note": "Hook completed; inventory producer preserved reported global complexity/duplication debt. This is not a clean-global audit claim. Diagnostic source must never merge."
+}

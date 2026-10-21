@@ -1,0 +1,9 @@
+{
+  "README.md": "0e52aef699bc18d820f48e0859354a7a6d5beb9be9ffd74df88d7ea898580c58",
+  "checkpoint-preparation.json": "8d62c156af7b33b29b0b891fbdc9cc67b74e546cb8ba17f5e25e74ca34faa1b6",
+  "independent-review.md": "14e8cf0427179a5db806682c8d6796f0000cb5723adca897168f60b27383de97",
+  "mutation.patch": "1468ae44d3487ee43c9e06a0a010a44ee4981f35f07ff37a7670122a645828d3",
+  "normal-precommit-exit.txt": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+  "normal-precommit.log": "776194e805bc43929ea012ad60fbc15bebb53c6fb17180e2990ab03841400883",
+  "preparation-bindings.json": "2af9e918628475978888a984dfb716bd7cadce9eba363950461762b577e56e5f"
+}
