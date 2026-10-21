@@ -16,6 +16,7 @@ const files = [
   'test/raft/raft-rs-backend/lifecycle-retirement-census.test.js',
   'test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js',
   'test/closure/original-birth-scope-lint.test.js',
+  'test/closure/original-handoff-static.integration.test.js',
 ];
 
 test('birth identity and lifecycle census satisfy repository ESLint rules', async () => {
