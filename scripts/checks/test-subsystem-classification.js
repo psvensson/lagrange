@@ -26,6 +26,7 @@
 import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import {gitProcessEnvironment} from './git-process-environment.js';
 import {collectTestFiles} from './test-primary-classification.js';
 import {
   OBSERVATION_ARRAY_MINIMUM_ROOTS,
@@ -259,6 +260,9 @@ function resolveCandidate(testPath, rawLiteral, options = {}) {
 }
 
 const GIT_BINARY = 'git';
+const GIT_WORKTREE_ARGUMENTS = Object.freeze(['rev-parse', '--is-inside-work-tree']);
+const GIT_CENSUS_MAX_BUFFER_BYTES = 8 * 1024 * 1024;
+const GIT_NOT_REPOSITORY_PREFIX = 'fatal: not a git repository';
 const GIT_TRACKED_ARGUMENTS = Object.freeze(['ls-files', '-z']);
 const GIT_UNTRACKED_ARGUMENTS = Object.freeze(
   ['ls-files', '-z', '--others', '--exclude-standard']);
@@ -274,15 +278,21 @@ const pathIndexByRoot = objectCreate(null);
 function buildPathIndex(root) {
   const files = objectCreate(null);
   const directories = objectCreate(null);
-  let listed;
+  const options = {cwd: root, encoding: UTF8,
+    env: {...gitProcessEnvironment(), LC_ALL: 'C'},
+    maxBuffer: GIT_CENSUS_MAX_BUFFER_BYTES};
+  // Only a genuinely non-Git scratch tree may use physical observations.
+  // An unreadable/oversized index must never broaden repository authority.
   try {
-    listed = execFileSync(GIT_BINARY, [...GIT_TRACKED_ARGUMENTS],
-      {cwd: root, encoding: UTF8}) +
-      execFileSync(GIT_BINARY, [...GIT_UNTRACKED_ARGUMENTS],
-        {cwd: root, encoding: UTF8});
-  } catch {
-    return null;
+    execFileSync(GIT_BINARY, [...GIT_WORKTREE_ARGUMENTS], options);
+  } catch (error) {
+    if (error.status === 128 &&
+        String(error.stderr).startsWith(GIT_NOT_REPOSITORY_PREFIX) &&
+        !fs.existsSync(path.join(root, '.git'))) return null;
+    throw error;
   }
+  const listed = execFileSync(GIT_BINARY, [...GIT_TRACKED_ARGUMENTS], options) +
+    execFileSync(GIT_BINARY, [...GIT_UNTRACKED_ARGUMENTS], options);
   for (const entry of stringSplit(listed, NUL)) {
     if (entry.length === 0) continue;
     files[entry] = true;

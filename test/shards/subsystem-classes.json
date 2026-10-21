@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 192,
     "storage-raft": 139,
-    "test-infrastructure": 144,
+    "test-infrastructure": 145,
     "transactions": 16,
     "transport-messaging": 97,
     "wasm-toolchain": 74
   },
-  "censusSize": 2432,
-  "digest": "fnv1a32-906b204b",
+  "censusSize": 2433,
+  "digest": "fnv1a32-3af414f0",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-7b986615",
+  "observationDigest": "fnv1a32-e2e60cbf",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2221,6 +2221,7 @@
     "test/scripts/test-primary-classification.test.js": "test-infrastructure",
     "test/scripts/test-resource-classification.test.js": "test-infrastructure",
     "test/scripts/test-subsystem-classification.test.js": "test-infrastructure",
+    "test/scripts/test-subsystem-repository-index.test.js": "test-infrastructure",
     "test/scripts/test-timeout-declarations.test.js": "test-infrastructure",
     "test/scripts/wait-for-load-headroom.test.js": "test-infrastructure",
     "test/scripts/workspace-injection-candidates.test.js": "test-infrastructure",
@@ -15714,6 +15715,23 @@
         "solve",
         "solve/quests",
         "test"
+      ]
+    },
+    "test/scripts/test-subsystem-repository-index.test.js": {
+      "files": [
+        ".gitignore",
+        "test/shards/primary-classes.json"
+      ],
+      "directories": [
+        "data",
+        "solve/quests",
+        "test"
+      ],
+      "env": [
+        "GIT_COMMON_DIR",
+        "GIT_DIR",
+        "GIT_INDEX_FILE",
+        "GIT_WORK_TREE"
       ]
     },
     "test/scripts/test-timeout-declarations.test.js": {
