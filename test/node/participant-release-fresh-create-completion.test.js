@@ -247,3 +247,30 @@ test('completion fixture preserves primary and cleanup error identities', async 
   }}, failing), (error) =>
     error instanceof AggregateError && error.errors[0] === primary && error.errors[1] === cleanup);
 });
+
+test('fresh CREATE preserves original outcome getter reads on success and terminal refusal', async () => {
+  for (const outcome of [OUTCOME.CUT_OVER, OUTCOME.UNAVAILABLE]) {
+    const limit = outcome === OUTCOME.CUT_OVER ? 2 : 3;
+    let reads = 0;
+    const answer = {retryAfterMs: undefined};
+    // The actual client accepts an object reply without requiring own-data
+    // outcome. Non-enumerability isolates policy reads from failure JSON.
+    Object.defineProperty(answer, 'outcome', {get() {
+      reads += 1;
+      if (reads > limit) throw new Error('completion added an outcome observation');
+      return outcome;
+    }});
+    const host = createHost({reply: () => answer});
+    await withHost(host, async () => {
+      if (outcome === OUTCOME.CUT_OVER) {
+        assert.equal(await host.run(), answer);
+      } else {
+        const failure = await failureOf(host);
+        assert.deepEqual(failure.answer, {});
+      }
+      host.assertRequests();
+      assert.equal(reads, limit, 'single-attempt redirect check plus original caller reads only');
+      assert.deepEqual(host.clock.waits, []);
+    });
+  }
+});
