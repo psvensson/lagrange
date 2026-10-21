@@ -12,7 +12,8 @@ import {classifyControlPlaneMutationResult} from
   '../control-plane/control-plane-mutation-outcome-classifier.js';
 import {durableRowVersion, nextLifecycleStateEntry} from
   '../node/replica-state-machine-lifecycle-observation.js';
-import {mintServiceRowCreatedAt} from '../node/service-row-incarnation.js';
+import {isExactServiceRowBirth, mintServiceRowCreatedAt} from
+  '../node/service-row-incarnation.js';
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   CONTROL_PLANE_READ_LEADER_MODE,
@@ -78,12 +79,13 @@ function resolveMessageGroupRaftRole(service) {
   return normalizePublishedRaftRole(service?.role);
 }
 
-function messageGroupCreateError(replicaId, code) {
+function messageGroupCreateError(replicaId, code, cause = null) {
   const error = new Error(`Message-group creation ${code}: ${replicaId}`);
   error.code = code;
   error.errorCode = code;
   error.deferRetry = code !==
     MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR.IDENTITY_CONFLICT;
+  if (cause) error.cause = cause;
   return error;
 }
 
@@ -123,16 +125,9 @@ async function observeMessageGroupService(systemTableWriter, replicaId) {
 }
 
 function rowsMatchMessageGroupRegistration(observed, expected) {
-  const fields = [
-    'service_id',
-    'service_type',
-    'group_id',
-    'node_id',
-    'status',
-    'created_at',
-    'state_entered_at',
-  ];
-  return fields.every((field) => observed?.[field] === expected[field]);
+  return isExactServiceRowBirth(observed, expected) &&
+    observed.status === expected.status &&
+    observed.state_entered_at === expected.state_entered_at;
 }
 
 function hasExactMessageGroupIdentity(observed, expected) {
@@ -268,7 +263,7 @@ async function persistMessageGroupActivation(owner, source, options) {
     {cause, mutationOutcome});
 }
 
-async function resolveMessageGroupRegistration(systemTableWriter, row) {
+async function resolveMessageGroupRegistration(systemTableWriter, row, cause) {
   const {row: observed} = await observeMessageGroupService(
     systemTableWriter,
     row.service_id,
@@ -278,12 +273,14 @@ async function resolveMessageGroupRegistration(systemTableWriter, row) {
     throw messageGroupCreateError(
       row.service_id,
       MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR.CLEANUP_IN_PROGRESS,
+      cause,
     );
   }
   throw messageGroupCreateError(
     row.service_id,
     observed ? MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR.IDENTITY_CONFLICT :
       MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR.CREATE_OWNER_DEFERRED,
+    cause,
   );
 }
 
@@ -379,6 +376,7 @@ class MessageGroupServiceRowOwner {
       raft_role: resolveMessageGroupRaftRole(service),
       status,
       address,
+      create_attempt_token: null,
       created_at: timestamp,
       // Registration stamps the canonical lifecycle generation.
       state_entered_at: timestamp,
@@ -446,14 +444,20 @@ class MessageGroupServiceRowOwner {
       timestamp: options.timestamp ?? this.now(),
     });
 
-    const result = await this.systemTableWriter.insertSystemTableRow(
-      SYSTEM_TABLE_NAME.SERVICES,
-      row,
-      {...this.buildDeferredUpdateOptions(row.service_id),
-        allowCoalescing: false},
-    );
+    let result = null;
+    let cause = null;
+    try {
+      result = await this.systemTableWriter.insertSystemTableRow(
+        SYSTEM_TABLE_NAME.SERVICES,
+        row,
+        {...this.buildDeferredUpdateOptions(row.service_id),
+          allowCoalescing: false},
+      );
+    } catch (error) {
+      cause = error;
+    }
     if (!classifyControlPlaneMutationResult(result).applied) {
-      return resolveMessageGroupRegistration(this.systemTableWriter, row);
+      return resolveMessageGroupRegistration(this.systemTableWriter, row, cause);
     }
 
     return row;
