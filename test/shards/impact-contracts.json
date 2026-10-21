@@ -1259,6 +1259,24 @@
         "test/control-plane/replica-dispatch-reservation-identity.test.js",
         "test/wasm-service/bound-remove-physical-operation.integration.test.js"
       ]
+    },
+    "participant-release-bounded-completion": {
+      "description": "The existing release client owns response-to-delay completion for fresh seed and fresh CREATE with one original authority and deadline. Callers retain prerequisites and clock substrates; nested control and operator retain the single-attempt primitive. The audit validates the exact guarded operation and caller correspondence.",
+      "owners": [
+        "src/node/participant-release-client.js",
+        "src/node/replica-handler-release-recovery.js",
+        "src/bootstrap/bootstrap-service-seed-workflow.js",
+        "scripts/participant-release-completion-audit.js",
+        "scripts/check-guideline-decision-boundaries.js"
+      ],
+      "tests": [
+        "test/node/participant-release-fresh-create-completion.test.js",
+        "test/bootstrap/seed-participant-release-failure-projection.test.js",
+        "test/bootstrap/seed-release-once-per-cohort.test.js",
+        "test/scripts/participant-release-completion-owner.test.js",
+        "test/node/replica-handler-release-recovery.test.js",
+        "test/partition/participant-release-protocol.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -2575,6 +2593,35 @@
       "witnessTests": [
         "test/node/runtime-service-handler.test.js",
         "test/control-plane/replica-dispatch-reservation-identity.test.js"
+      ]
+    },
+    "participant-release-bounded-completion": {
+      "description": "Fresh seed and CREATE delegate completion to the client under checked original-input, guard and clock-order contracts.",
+      "endpoints": [
+        {
+          "id": "completion",
+          "owners": [
+            "src/node/participant-release-client.js",
+            "scripts/participant-release-completion-audit.js",
+            "scripts/check-guideline-decision-boundaries.js"
+          ]
+        },
+        {
+          "id": "initiators",
+          "owners": [
+            "src/node/replica-handler-release-recovery.js",
+            "src/bootstrap/bootstrap-service-seed-workflow.js"
+          ]
+        }
+      ],
+      "contract": "participant-release-bounded-completion",
+      "witnessTests": [
+        "test/node/participant-release-fresh-create-completion.test.js",
+        "test/bootstrap/seed-participant-release-failure-projection.test.js",
+        "test/bootstrap/seed-release-once-per-cohort.test.js",
+        "test/scripts/participant-release-completion-owner.test.js",
+        "test/node/replica-handler-release-recovery.test.js",
+        "test/partition/participant-release-protocol.test.js"
       ]
     }
   }

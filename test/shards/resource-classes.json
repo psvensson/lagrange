@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2402,
+    "ordinary": 2404,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2419,
-  "digest": "fnv1a32-23f342c7",
+  "censusSize": 2421,
+  "digest": "fnv1a32-cebd45df",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1157,6 +1157,7 @@
     "test/node/node-service-runtime-isolation.test.js": "ordinary",
     "test/node/node-service.test.js": "ordinary",
     "test/node/participant-release-control-refusal-observation.test.js": "ordinary",
+    "test/node/participant-release-fresh-create-completion.test.js": "ordinary",
     "test/node/partition-registration-invariant.property.test.js": "ordinary",
     "test/node/registered-partition-removal.property.test.js": "ordinary",
     "test/node/replica-cleanup-token-authority.test.js": "ordinary",
@@ -2141,6 +2142,7 @@
     "test/scripts/no-legacy-consensus-reference-audit.test.js": "ordinary",
     "test/scripts/no-legacy-consensus-reference-ratchet.test.js": "ordinary",
     "test/scripts/observation-census.test.js": "ordinary",
+    "test/scripts/participant-release-completion-owner.test.js": "ordinary",
     "test/scripts/pre-push-hook-control-flow.test.js": "ordinary",
     "test/scripts/pre-push-stage-manifest.test.js": "ordinary",
     "test/scripts/priority-recovery-current-artifact-fixture.test.js": "ordinary",
