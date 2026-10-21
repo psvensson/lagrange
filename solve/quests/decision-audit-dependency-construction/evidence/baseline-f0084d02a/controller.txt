@@ -1,0 +1,512 @@
+lab test: lenovo-laptop: ordinary (1 files) cores=8 mem=15.5GiB speed x2.00
+[lenovo-laptop] placement-shell=1953148
+[lenovo-laptop] placement-head=f0084d02ac421ea85f36be3de28eaf29dc49b019
+[lenovo-laptop] placement-link=node_modules
+[lenovo-laptop] placement-link=data/examples
+[lenovo-laptop] placement-link=data/partitions
+[lenovo-laptop] placement-link=tools/alloy-6.2.0
+[lenovo-laptop] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[lenovo-laptop] placement-link=tools/tla2tools.jar
+[lenovo-laptop] placement-prepared=import-graph
+[lenovo-laptop] placement-env=factor:2 mode:local retry:0 timeout: lanecap:7
+[lenovo-laptop] placement-pid=1953531
+[lenovo-laptop] # test-files planned=1
+[lenovo-laptop] classified lane ordinary: 1 file(s), jobs=4
+[lenovo-laptop] thermal: ok cpu 54C (coretemp/Package id 0) nvme unmeasured
+[lenovo-laptop] not ok test/scripts/check-guideline-decision-boundaries.test.js (146 assertions, 2076ms)
+[lenovo-laptop] # TAP assertions failed; test process exited 1
+[lenovo-laptop] TAP version 14
+[lenovo-laptop] # Subtest: classifyFilePath recognizes runtime and test files
+[lenovo-laptop]     ok 1 - should be equal
+[lenovo-laptop]     ok 2 - should be equal
+[lenovo-laptop]     1..2
+[lenovo-laptop] ok 1 - classifyFilePath recognizes runtime and test files # time=14.175ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: detects repeated semantic assignments across independent if statements
+[lenovo-laptop]     ok 1 - should be equal
+[lenovo-laptop]     ok 2 - should be equal
+[lenovo-laptop]     ok 3 - should match pattern
+[lenovo-laptop]     1..3
+[lenovo-laptop] ok 2 - detects repeated semantic assignments across independent if statements # time=11.433ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: detects semantic outcome objects returned from independent if statements
+[lenovo-laptop]     ok 1 - should be equal
+[lenovo-laptop]     ok 2 - should be equal
+[lenovo-laptop]     ok 3 - should match pattern
+[lenovo-laptop]     ok 4 - should match pattern
+[lenovo-laptop]     1..4
+[lenovo-laptop] ok 3 - detects semantic outcome objects returned from independent if statements # time=3.232ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: ignores local validation guards that do not build semantic outcomes
+[lenovo-laptop]     ok 1 - should be equal
+[lenovo-laptop]     1..1
+[lenovo-laptop] ok 4 - ignores local validation guards that do not build semantic outcomes # time=1.687ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: ignores else-if chains because they are not independent if statements
+[lenovo-laptop]     ok 1 - should be equal
+[lenovo-laptop]     1..1
+[lenovo-laptop] ok 5 - ignores else-if chains because they are not independent if statements # time=1.49ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: skips test files by default
+[lenovo-laptop]     ok 1 - should be equal
+[lenovo-laptop]     1..1
+[lenovo-laptop] ok 6 - skips test files by default # time=0.368ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: detects raw null/undefined/empty-array assigned or returned to/from semantic targets
+[lenovo-laptop]     ok 1 - should be equal
+[lenovo-laptop]     ok 2 - should be equal
+[lenovo-laptop]     ok 3 - should be equal
+[lenovo-laptop]     ok 4 - should be equal
+[lenovo-laptop]     ok 5 - should be equal
+[lenovo-laptop]     1..5
+[lenovo-laptop] ok 7 - detects raw null/undefined/empty-array assigned or returned to/from semantic targets # time=3.531ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: detects mixed cache and SQL accesses in a decision function
+[lenovo-laptop]     ok 1 - should be equal
+[lenovo-laptop]     ok 2 - should be equal
+[lenovo-laptop]     ok 3 - should be equal
+[lenovo-laptop]     1..3
+[lenovo-laptop] ok 8 - detects mixed cache and SQL accesses in a decision function # time=2.41ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: detects schema-unsafe INSERT OR REPLACE / REPLACE INTO system table writes
+[lenovo-laptop]     ok 1 - should be equal
+[lenovo-laptop]     ok 2 - should be equal
+[lenovo-laptop]     1..2
+[lenovo-laptop] ok 9 - detects schema-unsafe INSERT OR REPLACE / REPLACE INTO system table writes # time=0.946ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: detects local retry loops using setTimeout/setInterval or loops
+[lenovo-laptop]     ok 1 - should be equal
+[lenovo-laptop]     ok 2 - should be equal
+[lenovo-laptop]     ok 3 - should be equal
+[lenovo-laptop]     1..3
+[lenovo-laptop] ok 10 - detects local retry loops using setTimeout/setInterval or loops # time=2.802ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: a named wait constant without an ends-on declaration fails
+[lenovo-laptop]     ok 1 - should be equivalent
+[lenovo-laptop]     ok 2 - should be equivalent
+[lenovo-laptop]     ok 3 - an empty declaration is no declaration
+[lenovo-laptop]     1..3
+[lenovo-laptop] ok 11 - a named wait constant without an ends-on declaration fails # time=2.929ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: a wait whose only exit is the timer fails
+[lenovo-laptop]     ok 1 - should be equivalent
+[lenovo-laptop]     1..1
+[lenovo-laptop] ok 12 - a wait whose only exit is the timer fails # time=0.972ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: a declared wait or an enumerated non-wait kind passes
+[lenovo-laptop]     ok 1 - only the undeclared one fails; non-matching names are not governed
+[lenovo-laptop]     ok 2 - a declaration on the first line of a multi-line const passes
+[lenovo-laptop]     ok 3 - a non-wait kind outside the enumeration fails
+[lenovo-laptop]     ok 4 - the rule governs src/ only
+[lenovo-laptop]     1..4
+[lenovo-laptop] ok 13 - a declared wait or an enumerated non-wait kind passes # time=2.845ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: object-member bounds are governed like named constants
+[lenovo-laptop]     ok 1 - Object.freeze, plain and nested members; the comment above or on the member line declares it
+[lenovo-laptop]     ok 2 - key names, codes, aliases of a governed name and message builders are not bounds
+[lenovo-laptop]     1..2
+[lenovo-laptop] ok 14 - object-member bounds are governed like named constants # time=3.619ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: the declaration holes are closed
+[lenovo-laptop]     ok 1 - a bare n/a names no kind
+[lenovo-laptop]     ok 2 - "Timer" is the timer
+[lenovo-laptop]     ok 3 - "the timer" is the timer
+[lenovo-laptop]     ok 4 - "its timer" is the timer
+[lenovo-laptop]     ok 5 - "THE TIMER fires" is the timer
+[lenovo-laptop]     ok 6 - "x" names no event
+[lenovo-laptop]     ok 7 - "reply arrives" names no event
+[lenovo-laptop]     ok 8 - ". . ." names no event
+[lenovo-laptop]     ok 9 - let and var declarations are governed
+[lenovo-laptop]     ok 10 - a *_TIMEOUT name without _MS is governed when it holds a bound
+[lenovo-laptop]     1..10
+[lenovo-laptop] ok 15 - the declaration holes are closed # time=4.505ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: the timebox, dead and misnamed non-wait kinds pass; skip is not one
+[lenovo-laptop]     ok 1 - should be equivalent
+[lenovo-laptop]     ok 2 - "n/a misnamed" does not say what the value is
+[lenovo-laptop]     ok 3 - "n/a misnamed (a length)" does not say what the value is
+[lenovo-laptop]     ok 4 - skip is not a non-wait kind: a 1 ms delivery is still a wait
+[lenovo-laptop]     1..4
+[lenovo-laptop] ok 16 - the timebox, dead and misnamed non-wait kinds pass; skip is not one # time=4.316ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: timer-only constants pass only through the baseline
+[lenovo-laptop]     ok 1 - an unbaselined timer-only wait still fails
+[lenovo-laptop]     1..1
+[lenovo-laptop] ok 17 - timer-only constants pass only through the baseline # time=1.087ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: the shared baseline admits only timer-only waits
+[lenovo-laptop]     ok 1 - an undeclared, unknown-kind or unnamed-event entry is no allowance
+[lenovo-laptop]     1..1
+[lenovo-laptop] ok 18 - the shared baseline admits only timer-only waits # time=0.951ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: the timer-only baseline cannot grow and holds no stale entry
+[lenovo-laptop]     ok 1 - only timer-only waits are baselined
+[lenovo-laptop]     ok 2 - timer-only baseline 2 <= 2
+[lenovo-laptop]     ok 3 - READ_CANDIDATE_COLD_RECONNECT_DEFER_TIMEOUT_MS is still timer-only in src/query/query-executor-partition-attempt-budget.js; a fixed one leaves the baseline
+[lenovo-laptop]     ok 4 - RECOVERY_CANDIDATE_COLD_RECONNECT_DEFER_TIMEOUT_MS is still timer-only in src/query/query-executor-partition-attempt-budget.js; a fixed one leaves the baseline
+[lenovo-laptop]     1..4
+[lenovo-laptop] ok 19 - the timer-only baseline cannot grow and holds no stale entry # time=31.691ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: the governed set is derived from src/, and every member is declared
+[lenovo-laptop]     ok 1 - the audit derives 47 constants
+[lenovo-laptop]     ok 2 - the audit derives 57 object members
+[lenovo-laptop]     ok 3 - the audit set equals an independent text scan of src/
+[lenovo-laptop]     ok 4 - every named wait in src/ declares its end
+[lenovo-laptop]     1..4
+[lenovo-laptop] ok 20 - the governed set is derived from src/, and every member is declared # time=1107.154ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: a timer expiry named anywhere in the event is the timer
+[lenovo-laptop]     ok 1 - "when the timer fires" is the timer
+[lenovo-laptop]     ok 2 - "on timer expiry the step is cut" is the timer
+[lenovo-laptop]     ok 3 - "the request timeout elapses first" is the timer
+[lenovo-laptop]     ok 4 - "the deadline expires before any reply" is the timer
+[lenovo-laptop]     ok 5 - "the heartbeat timer delivers a fresh lease" names another timer-driven subject
+[lenovo-laptop]     ok 6 - "the peer acknowledges the deadline request" names another timer-driven subject
+[lenovo-laptop]     1..6
+[lenovo-laptop] ok 21 - a timer expiry named anywhere in the event is the timer # time=1.486ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: an n/a dead claim is checked against every reference in src/
+[lenovo-laptop]     ok 1 - a direct, computed, escaped or declarator read refutes the claim; a same-named key on an unrelated object does not
+[lenovo-laptop]     1..1
+[lenovo-laptop] ok 22 - an n/a dead claim is checked against every reference in src/ # time=5.973ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: mixed-source audit distinguishes the actual seed bridge acquisition from a query
+[lenovo-laptop]     ok 1 - the real acquisition has one exact engine publication site
+[lenovo-laptop]     ok 2 - the named real owner is present in the parsed source
+[lenovo-laptop]     not ok 3 - constructing and publishing the dependency is not a mixed truth read
+[lenovo-laptop]       ---
+[lenovo-laptop]       diff: >
+[lenovo-laptop]         --- expected
+[lenovo-laptop]       
+[lenovo-laptop]         +++ actual
+[lenovo-laptop]       
+[lenovo-laptop]         @@ -1,1 +1,11 @@
+[lenovo-laptop]       
+[lenovo-laptop]         -Array []
+[lenovo-laptop]       
+[lenovo-laptop]         +Array [
+[lenovo-laptop]       
+[lenovo-laptop]         +  Object {
+[lenovo-laptop]       
+[lenovo-laptop]         +    "filePath": "src/bootstrap/owners/seed-runtime-bridge-owner.js",
+[lenovo-laptop]       
+[lenovo-laptop]         +    "line": 51,
+[lenovo-laptop]       
+[lenovo-laptop]         +    "column": 1,
+[lenovo-laptop]       
+[lenovo-laptop]         +    "functionName": "acquireSqlQueryEngine",
+[lenovo-laptop]       
+[lenovo-laptop]         +    "kind": "mixed_cache_and_sql_decision",
+[lenovo-laptop]       
+[lenovo-laptop]         +    "reason": "decision branch mixes cache (line 51) and SQL/DB (line 65) as
+[lenovo-laptop]         equivalent truth for one meaning",
+[lenovo-laptop]       
+[lenovo-laptop]         +    "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision
+[lenovo-laptop]         (Mixed cache and SQL)",
+[lenovo-laptop]       
+[lenovo-laptop]         +  },
+[lenovo-laptop]       
+[lenovo-laptop]         +]
+[lenovo-laptop]       at:
+[lenovo-laptop]         fileName: test/scripts/check-guideline-decision-boundaries.test.js
+[lenovo-laptop]         lineNumber: 667
+[lenovo-laptop]         columnNumber: 7
+[lenovo-laptop]         typeName: Test
+[lenovo-laptop]       stack: >
+[lenovo-laptop]         Test.<anonymous>
+[lenovo-laptop]         (test/scripts/check-guideline-decision-boundaries.test.js:667:7)
+[lenovo-laptop]       source: |2
+[lenovo-laptop]             t.match(source, /acquireSqlQueryEngine\(\)\s*\{/u,
+[lenovo-laptop]               'the named real owner is present in the parsed source');
+[lenovo-laptop]             t.same(mixedFindingsFor(source, filePath, 'acquireSqlQueryEngine'), [],
+[lenovo-laptop]         ------^
+[lenovo-laptop]               'constructing and publishing the dependency is not a mixed truth read');
+[lenovo-laptop]       ...
+[lenovo-laptop]     
+[lenovo-laptop]     ok 4 - real read operations added to that same source owner remain detected
+[lenovo-laptop]     1..4
+[lenovo-laptop] not ok 23 - mixed-source audit distinguishes the actual seed bridge acquisition from a query # time=26.932ms
+[lenovo-laptop]   ---
+[lenovo-laptop]   at:
+[lenovo-laptop]     fileName: test/scripts/check-guideline-decision-boundaries.test.js
+[lenovo-laptop]     lineNumber: 658
+[lenovo-laptop]     columnNumber: 1
+[lenovo-laptop]     isToplevel: true
+[lenovo-laptop]   source: >
+[lenovo-laptop]     }
+[lenovo-laptop]   
+[lenovo-laptop]   
+[lenovo-laptop]     test('mixed-source audit distinguishes the actual seed bridge acquisition from
+[lenovo-laptop]     a query',
+[lenovo-laptop]   
+[lenovo-laptop]     ^
+[lenovo-laptop]       async (t) => {
+[lenovo-laptop]         const filePath = 'src/bootstrap/owners/seed-runtime-bridge-owner.js';
+[lenovo-laptop]   ...
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: mixed-source audit recognizes equivalent renamed construction and publication
+[lenovo-laptop]     not ok 1 - owner, method, handle and constructor names do not need an allowlist
+[lenovo-laptop]       ---
+[lenovo-laptop]       diff: >
+[lenovo-laptop]         --- expected
+[lenovo-laptop]       
+[lenovo-laptop]         +++ actual
+[lenovo-laptop]       
+[lenovo-laptop]         @@ -1,1 +1,11 @@
+[lenovo-laptop]       
+[lenovo-laptop]         -Array []
+[lenovo-laptop]       
+[lenovo-laptop]         +Array [
+[lenovo-laptop]       
+[lenovo-laptop]         +  Object {
+[lenovo-laptop]       
+[lenovo-laptop]         +    "filePath": "/repo/src/runtime/dependency-assembly.js",
+[lenovo-laptop]       
+[lenovo-laptop]         +    "line": 5,
+[lenovo-laptop]       
+[lenovo-laptop]         +    "column": 1,
+[lenovo-laptop]       
+[lenovo-laptop]         +    "functionName": "assemble",
+[lenovo-laptop]       
+[lenovo-laptop]         +    "kind": "mixed_cache_and_sql_decision",
+[lenovo-laptop]       
+[lenovo-laptop]         +    "reason": "decision branch mixes cache (line 5) and SQL/DB (line 10) as
+[lenovo-laptop]         equivalent truth for one meaning",
+[lenovo-laptop]       
+[lenovo-laptop]         +    "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision
+[lenovo-laptop]         (Mixed cache and SQL)",
+[lenovo-laptop]       
+[lenovo-laptop]         +  },
+[lenovo-laptop]       
+[lenovo-laptop]         +]
+[lenovo-laptop]       at:
+[lenovo-laptop]         fileName: test/scripts/check-guideline-decision-boundaries.test.js
+[lenovo-laptop]         lineNumber: 681
+[lenovo-laptop]         columnNumber: 7
+[lenovo-laptop]         typeName: Test
+[lenovo-laptop]       stack: >
+[lenovo-laptop]         Test.<anonymous>
+[lenovo-laptop]         (test/scripts/check-guideline-decision-boundaries.test.js:681:7)
+[lenovo-laptop]       source: >
+[lenovo-laptop]         test('mixed-source audit recognizes equivalent renamed construction and
+[lenovo-laptop]         publication',
+[lenovo-laptop]           async (t) => {
+[lenovo-laptop]             t.same(mixedFindingsFor(RENAMED_CONSTRUCTION_SOURCE), [],
+[lenovo-laptop]         ------^
+[lenovo-laptop]               'owner, method, handle and constructor names do not need an allowlist');
+[lenovo-laptop]             const withReads = RENAMED_CONSTRUCTION_SOURCE.replace(
+[lenovo-laptop]       ...
+[lenovo-laptop]     
+[lenovo-laptop]     ok 2 - publication does not exempt later use of the engine as an authority
+[lenovo-laptop]     1..2
+[lenovo-laptop] not ok 24 - mixed-source audit recognizes equivalent renamed construction and publication # time=12.644ms
+[lenovo-laptop]   ---
+[lenovo-laptop]   at:
+[lenovo-laptop]     fileName: test/scripts/check-guideline-decision-boundaries.test.js
+[lenovo-laptop]     lineNumber: 679
+[lenovo-laptop]     columnNumber: 1
+[lenovo-laptop]     isToplevel: true
+[lenovo-laptop]   source: >2
+[lenovo-laptop]       });
+[lenovo-laptop]   
+[lenovo-laptop]     test('mixed-source audit recognizes equivalent renamed construction and
+[lenovo-laptop]     publication',
+[lenovo-laptop]   
+[lenovo-laptop]     ^
+[lenovo-laptop]       async (t) => {
+[lenovo-laptop]         t.same(mixedFindingsFor(RENAMED_CONSTRUCTION_SOURCE), [],
+[lenovo-laptop]   ...
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: mixed-source audit does not mistake type names and property labels for reads
+[lenovo-laptop]     not ok 1 - should be equivalent
+[lenovo-laptop]       ---
+[lenovo-laptop]       diff: >
+[lenovo-laptop]         --- expected
+[lenovo-laptop]       
+[lenovo-laptop]         +++ actual
+[lenovo-laptop]       
+[lenovo-laptop]         @@ -1,1 +1,11 @@
+[lenovo-laptop]       
+[lenovo-laptop]         -Array []
+[lenovo-laptop]       
+[lenovo-laptop]         +Array [
+[lenovo-laptop]       
+[lenovo-laptop]         +  Object {
+[lenovo-laptop]       
+[lenovo-laptop]         +    "filePath": "/repo/src/runtime/dependency-assembly.js",
+[lenovo-laptop]       
+[lenovo-laptop]         +    "line": 2,
+[lenovo-laptop]       
+[lenovo-laptop]         +    "column": 1,
+[lenovo-laptop]       
+[lenovo-laptop]         +    "functionName": "assemble",
+[lenovo-laptop]       
+[lenovo-laptop]         +    "kind": "mixed_cache_and_sql_decision",
+[lenovo-laptop]       
+[lenovo-laptop]         +    "reason": "decision branch mixes cache (line 2) and SQL/DB (line 2) as
+[lenovo-laptop]         equivalent truth for one meaning",
+[lenovo-laptop]       
+[lenovo-laptop]         +    "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision
+[lenovo-laptop]         (Mixed cache and SQL)",
+[lenovo-laptop]       
+[lenovo-laptop]         +  },
+[lenovo-laptop]       
+[lenovo-laptop]         +]
+[lenovo-laptop]       at:
+[lenovo-laptop]         fileName: test/scripts/check-guideline-decision-boundaries.test.js
+[lenovo-laptop]         lineNumber: 693
+[lenovo-laptop]         columnNumber: 7
+[lenovo-laptop]         typeName: Test
+[lenovo-laptop]       stack: >
+[lenovo-laptop]         Test.<anonymous>
+[lenovo-laptop]         (test/scripts/check-guideline-decision-boundaries.test.js:693:7)
+[lenovo-laptop]       source: >
+[lenovo-laptop]         test('mixed-source audit does not mistake type names and property labels for
+[lenovo-laptop]         reads',
+[lenovo-laptop]           async (t) => {
+[lenovo-laptop]             t.same(mixedFindingsFor([
+[lenovo-laptop]         ------^
+[lenovo-laptop]               'export function assemble() {',
+[lenovo-laptop]               '  return new SQLQueryEngine({cache: "a label", queryMode: "a label"});',
+[lenovo-laptop]       ...
+[lenovo-laptop]     
+[lenovo-laptop]     1..1
+[lenovo-laptop] not ok 25 - mixed-source audit does not mistake type names and property labels for reads # time=5.281ms
+[lenovo-laptop]   ---
+[lenovo-laptop]   at:
+[lenovo-laptop]     fileName: test/scripts/check-guideline-decision-boundaries.test.js
+[lenovo-laptop]     lineNumber: 691
+[lenovo-laptop]     columnNumber: 1
+[lenovo-laptop]     isToplevel: true
+[lenovo-laptop]   source: >2
+[lenovo-laptop]       });
+[lenovo-laptop]   
+[lenovo-laptop]     test('mixed-source audit does not mistake type names and property labels for
+[lenovo-laptop]     reads',
+[lenovo-laptop]   
+[lenovo-laptop]     ^
+[lenovo-laptop]       async (t) => {
+[lenovo-laptop]         t.same(mixedFindingsFor([
+[lenovo-laptop]   ...
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: mixed-source audit keeps actual reads inside constructor arguments
+[lenovo-laptop]     ok 1 - construction-looking syntax must not erase actual or unclassified read evidence
+[lenovo-laptop]     1..1
+[lenovo-laptop] ok 26 - mixed-source audit keeps actual reads inside constructor arguments # time=0.666ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: mixed-source audit keeps actual reads inside a publication argument
+[lenovo-laptop]     ok 1 - construction-looking syntax must not erase actual or unclassified read evidence
+[lenovo-laptop]     1..1
+[lenovo-laptop] ok 27 - mixed-source audit keeps actual reads inside a publication argument # time=0.419ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: mixed-source audit keeps reads in a constructor computed key
+[lenovo-laptop]     ok 1 - construction-looking syntax must not erase actual or unclassified read evidence
+[lenovo-laptop]     1..1
+[lenovo-laptop] ok 28 - mixed-source audit keeps reads in a constructor computed key # time=0.414ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: mixed-source audit keeps reads selecting a constructor
+[lenovo-laptop]     ok 1 - construction-looking syntax must not erase actual or unclassified read evidence
+[lenovo-laptop]     1..1
+[lenovo-laptop] ok 29 - mixed-source audit keeps reads selecting a constructor # time=0.43ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: mixed-source audit keeps a query used as the constructor factory
+[lenovo-laptop]     ok 1 - construction-looking syntax must not erase actual or unclassified read evidence
+[lenovo-laptop]     1..1
+[lenovo-laptop] ok 30 - mixed-source audit keeps a query used as the constructor factory # time=0.431ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: mixed-source audit keeps optional and computed read calls
+[lenovo-laptop]     ok 1 - construction-looking syntax must not erase actual or unclassified read evidence
+[lenovo-laptop]     1..1
+[lenovo-laptop] ok 31 - mixed-source audit keeps optional and computed read calls # time=0.46ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: mixed-source audit keeps reads inside a callback passed to a constructor
+[lenovo-laptop]     ok 1 - construction-looking syntax must not erase actual or unclassified read evidence
+[lenovo-laptop]     1..1
+[lenovo-laptop] ok 32 - mixed-source audit keeps reads inside a callback passed to a constructor # time=0.555ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: mixed-source audit keeps reads inside a callback passed to a publication call
+[lenovo-laptop]     ok 1 - construction-looking syntax must not erase actual or unclassified read evidence
+[lenovo-laptop]     1..1
+[lenovo-laptop] ok 33 - mixed-source audit keeps reads inside a callback passed to a publication call # time=0.387ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: mixed-source audit keeps computed publication receiver selection
+[lenovo-laptop]     ok 1 - construction-looking syntax must not erase actual or unclassified read evidence
+[lenovo-laptop]     1..1
+[lenovo-laptop] ok 34 - mixed-source audit keeps computed publication receiver selection # time=0.461ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: mixed-source audit keeps a query nested in publication of a constructed engine
+[lenovo-laptop]     ok 1 - construction-looking syntax must not erase actual or unclassified read evidence
+[lenovo-laptop]     1..1
+[lenovo-laptop] ok 35 - mixed-source audit keeps a query nested in publication of a constructed engine # time=0.502ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: mixed-source audit keeps read-through access on the constructed handle
+[lenovo-laptop]     ok 1 - construction-looking syntax must not erase actual or unclassified read evidence
+[lenovo-laptop]     1..1
+[lenovo-laptop] ok 36 - mixed-source audit keeps read-through access on the constructed handle # time=0.606ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: mixed-source audit keeps reads through local aliases
+[lenovo-laptop]     ok 1 - construction-looking syntax must not erase actual or unclassified read evidence
+[lenovo-laptop]     1..1
+[lenovo-laptop] ok 37 - mixed-source audit keeps reads through local aliases # time=0.45ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: mixed-source audit keeps reads through an alias of a constructed handle
+[lenovo-laptop]     ok 1 - construction-looking syntax must not erase actual or unclassified read evidence
+[lenovo-laptop]     1..1
+[lenovo-laptop] ok 38 - mixed-source audit keeps reads through an alias of a constructed handle # time=0.47ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: mixed-source audit keeps reads through a destructured method
+[lenovo-laptop]     ok 1 - construction-looking syntax must not erase actual or unclassified read evidence
+[lenovo-laptop]     1..1
+[lenovo-laptop] ok 39 - mixed-source audit keeps reads through a destructured method # time=0.434ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: mixed-source audit keeps a shadowed construction binding is not the captured handle
+[lenovo-laptop]     ok 1 - construction-looking syntax must not erase actual or unclassified read evidence
+[lenovo-laptop]     1..1
+[lenovo-laptop] ok 40 - mixed-source audit keeps a shadowed construction binding is not the captured handle # time=0.504ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: mixed-source audit keeps a reassigned binding remains unclassified authority evidence
+[lenovo-laptop]     ok 1 - construction-looking syntax must not erase actual or unclassified read evidence
+[lenovo-laptop]     1..1
+[lenovo-laptop] ok 41 - mixed-source audit keeps a reassigned binding remains unclassified authority evidence # time=0.471ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: mixed-source audit keeps an overwritten publication field is not a proven dependency
+[lenovo-laptop]     ok 1 - construction-looking syntax must not erase actual or unclassified read evidence
+[lenovo-laptop]     1..1
+[lenovo-laptop] ok 42 - mixed-source audit keeps an overwritten publication field is not a proven dependency # time=0.462ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: mixed-source audit keeps raw cache and SQL row values are still conservative evidence
+[lenovo-laptop]     ok 1 - construction-looking syntax must not erase actual or unclassified read evidence
+[lenovo-laptop]     1..1
+[lenovo-laptop] ok 43 - mixed-source audit keeps raw cache and SQL row values are still conservative evidence # time=0.337ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: mixed-source audit does not treat a getter-bearing publication field as passive
+[lenovo-laptop]     ok 1 - the known accessor prevents treating the identity guard as a plain handle read
+[lenovo-laptop]     1..1
+[lenovo-laptop] ok 44 - mixed-source audit does not treat a getter-bearing publication field as passive # time=0.773ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: mixed-source audit retains delegated fallback policy outside construction
+[lenovo-laptop]     ok 1 - a nonconstructor policy key remains conservative evidence at a delegated read boundary
+[lenovo-laptop]     1..1
+[lenovo-laptop] ok 45 - mixed-source audit retains delegated fallback policy outside construction # time=0.608ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: the live removal backstop cannot be declared dead
+[lenovo-laptop]     ok 1 - the false claim is read
+[lenovo-laptop]     ok 2 - src/ refutes it
+[lenovo-laptop]     1..2
+[lenovo-laptop] ok 46 - the live removal backstop cannot be declared dead # time=279.388ms
+[lenovo-laptop] 
+[lenovo-laptop] # Subtest: the audit itself refuses a timer-only baseline above its ceiling
+[lenovo-laptop]     ok 1 - at the ceiling
+[lenovo-laptop]     ok 2 - one above it is red
+[lenovo-laptop]     ok 3 - the ceiling holds exactly the two cold-reconnect constants
+[lenovo-laptop]     ok 4 - the baselined audit run itself is red
+[lenovo-laptop]     1..4
+[lenovo-laptop] ok 47 - the audit itself refuses a timer-only baseline above its ceiling # time=3.417ms
+[lenovo-laptop] 
+[lenovo-laptop] 1..47
+[lenovo-laptop] # { total: 99, pass: 96, fail: 3 }
+[lenovo-laptop] # time=1576.015ms
+[lenovo-laptop] # test-files total=1 pass=0 fail=1 assertions=146
+lab test: lenovo-laptop: # test-files total=1 pass=0 fail=1 assertions=146
+lab test: lenovo-laptop: results copied to test-output/reports/test-results-lenovo-laptop.ndjson
+# test-files total=1 pass=0 fail=1 assertions=146

@@ -156,3 +156,104 @@ collector must retain one mixed-source finding. The new exact test SHA256 is
 The addition changes no prior assertion. APPROVE this revised witness for
 refreshed old-classifier measurement, with the same 6+10 category assessment
 and proof ceilings above. No test execution or source approval by reviewer.
+
+## Final source and census review before candidate measurement
+
+Date: 2026-10-21. Reviewer: `subagent:/root/control_source_review`.
+Verdict: APPROVE the following exact source/test bytes for candidate
+measurement. This is independent implementation review within this bounded
+audit scope, conditional on actual candidate results and remaining gates;
+it is not landing or a claim that the full decision audit passes.
+
+| Path | SHA256 |
+| --- | --- |
+| scripts/check-guideline-decision-boundaries.js | c79c7888cd423d1420e6ffaa8a6957fd321332f467915de95095b79fbb63bc6a |
+| scripts/checks/decision-boundary-construction.js | 33dfb3a8b035620934981881316f26b93ccdbb3b7a8f062bf7f4621755ead180 |
+| test/scripts/check-guideline-decision-boundaries.test.js | 49895c1c463bc91c52233767b4bcd684941e594a7d4021b39d90de5ed8474f18 |
+| scripts/check-guideline-decision-boundaries-baseline.json | f38ebcf505e7c73ac57c59184f2a0a4005d32d9b46614c7ffbf84c5fe786eebf |
+
+The checker change is limited to constructing the passive-occurrence set for
+the mixed-source check and retaining its existing identifier classification
+for every occurrence not in that set. Parent/ancestor AST context is supplied
+by the existing traversal. Other finding collectors are unchanged. The helper
+contains no path/function allowlist or baseline adjustment. Its final private
+NODE_TYPE/SYNTAX constants and module-load intrinsic captures preserve the
+reviewed predicates; the earlier source hashes remain superseded evidence.
+
+All five implementation predicates were inspected:
+
+1. Syntax labels are individually marked in a WeakSet. Computed constructor
+   selection is not treated as a static label. Noncomputed/non-shorthand keys
+   qualify only in a direct NewExpression argument object. The collector still
+   walks every child, argument, callback and computed expression.
+2. Constructed bindings require direct top-level const declarations initialized
+   by NewExpression. Binding conflicts scan declarations, parameters, catches,
+   assignments and updates; shadowing or unsupported binding forms cannot
+   obtain the passive-use proof. Handle proof is not propagated into nested
+   function/class scopes.
+3. Field proof requires the enclosing nonstatic/noncomputed method of a plain,
+   noninherited class. The complete visible class is checked for accessors,
+   unsupported definitions, other non-null field writes, updates/deletes and
+   unsafe receiver escape/computed use. This intentionally errs conservatively.
+4. Only exact passive occurrences are omitted: declaration/storage, direct
+   return, null equality/inequality guard and proved publication. Invocation,
+   read-through, alias initialization and unclassified use remain identifier
+   evidence; the helper never skips their expression subtrees.
+5. Publication omission requires exactly one argument naming the proved
+   constructed binding and the matching proved field's setter name. Receiver
+   and computed/argument expressions remain traversed. A setter spelling or
+   optional call alone grants no exemption.
+
+Known static labels and proved wiring are not assertions about arbitrary
+constructor/setter effects, external prototype mutation or proxies. Those
+whole-program limits remain explicit. No broader binding or receiver support
+was inferred from this bounded implementation.
+
+### Independent census and gate checks
+
+The reviewer independently compared the full violations arrays in
+evidence/before/canonical-raw.json and evidence/after-final/raw-census.json as
+multisets of file/function/kind identities, including occurrence counts. Raw
+findings change from 791 to 790. The only removal is one
+mixed_cache_and_sql_decision at
+src/bootstrap/owners/seed-runtime-bridge-owner.js/acquireSqlQueryEngine.
+There are no added identities or other-kind/count changes. This independently
+matches evidence/after-final/delta.json; every hash in that delta was recomputed
+and matched. The baseline file is unchanged from the old-source checkpoint.
+
+The earlier broader ten-removal census is preserved in evidence/after and
+was not accepted. The narrowed implementation preserves the nine unrelated
+nonconstructor-key findings, including delegated cache fallback policy. The
+single removed bridge finding is justified by its actual construction and
+publication body, not by merely preferring a smaller count.
+
+The refreshed old-source packet evidence/baseline-f0084d02a binds
+f0084d02ac421ea85f36be3de28eaf29dc49b019 on lenovo-laptop, retry disabled.
+The controller and ledger show attempt 1, retriedOnce false and the intended
+three construction-positive failures. Paired real-read cases, adversarial
+controls and the new delegated-policy negative pass. The ledger reports 146
+assertions including case results; these must not be confused with the
+author's 99 leaf assertions or 47 cases. No setup/import failure supplies red.
+
+evidence/gates-final/results.json records successful lint, helper/test strict
+metrics, scoped literal/decision/ambient/catch checks and impact-contracts.
+The full decision audit remains exit 1, with 37 unresolved new findings and
+753 inherited findings. This review does not approve those findings, increase
+their baseline or turn that full gate green. No candidate behavioral run has
+yet been reviewed in this round.
+
+### Checklist disposition
+
+The six harness items above remain binding: exact original-source red is now
+observed; the real collector and source-injected pair remain unchanged;
+there is no timing treatment; AST fields and all negative seams are retained;
+no positive is vacuous; runtime authority remains outside the proof ceiling.
+
+The ten owner-interaction items remain binding: (1-2) one existing classifier
+and existing finding kind; (3-4) paired construction/read and post-construction
+access controls; (5) no runtime pressure/retry changes; (6) fresh parsing;
+(7) occurrence roles, not naming, justify omissions; (8) preserved old red and
+independently checked complete census; (9) no subtree/path/baseline escape;
+(10) separately sealed scope and applicable metadata, with candidate result
+and final composed-gate review still pending. No blocking implementation or
+census finding was identified in the frozen bytes above.

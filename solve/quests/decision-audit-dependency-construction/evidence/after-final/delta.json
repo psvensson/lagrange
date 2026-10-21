@@ -1,0 +1,33 @@
+{
+  "capturedAt": "2026-10-21T04:50:17.230Z",
+  "hashes": {
+    "scripts/check-guideline-decision-boundaries.js": "c79c7888cd423d1420e6ffaa8a6957fd321332f467915de95095b79fbb63bc6a",
+    "scripts/checks/decision-boundary-construction.js": "33dfb3a8b035620934981881316f26b93ccdbb3b7a8f062bf7f4621755ead180",
+    "scripts/check-guideline-decision-boundaries-baseline.json": "f38ebcf505e7c73ac57c59184f2a0a4005d32d9b46614c7ffbf84c5fe786eebf",
+    "test/scripts/check-guideline-decision-boundaries.test.js": "49895c1c463bc91c52233767b4bcd684941e594a7d4021b39d90de5ed8474f18"
+  },
+  "before": {
+    "files": 2260,
+    "total": 791
+  },
+  "after": {
+    "files": 2261,
+    "total": 790
+  },
+  "gate": {
+    "new": 37,
+    "inherited": 753
+  },
+  "changes": [
+    {
+      "identity": [
+        "src/bootstrap/owners/seed-runtime-bridge-owner.js",
+        "acquireSqlQueryEngine",
+        "mixed_cache_and_sql_decision"
+      ],
+      "before": 1,
+      "after": 0,
+      "delta": -1
+    }
+  ]
+}

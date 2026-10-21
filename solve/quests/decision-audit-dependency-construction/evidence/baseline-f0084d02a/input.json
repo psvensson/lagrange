@@ -1,0 +1,18 @@
+{
+  "sha": "f0084d02ac421ea85f36be3de28eaf29dc49b019",
+  "files": [
+    "test/scripts/check-guideline-decision-boundaries.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/scripts/check-guideline-decision-boundaries.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ],
+  "on": "lenovo-laptop",
+  "retryFailedOnce": false,
+  "startedAt": "2026-10-21T04:44:42.399Z"
+}

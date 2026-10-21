@@ -1,0 +1,7 @@
+
+> lagrange-server@0.2.6 audit:guideline:silent-catch
+> node scripts/check-guideline-silent-catch.js scripts/check-guideline-decision-boundaries.js scripts/checks/decision-boundary-construction.js
+
+Scanned 0 JavaScript files
+Found 0 silent catch violations
+Matched 0 inherited silent-catch baseline violations
