@@ -1,26 +1,69 @@
 {
   "schema": "test-receipt/1",
-  "status": "fail",
+  "status": "pass",
   "receipts": [
     {
       "id": "pre-enable-expiry-keeps-origins-and-admission-safe",
-      "passed": true
+      "passed": true,
+      "evidence": [
+        "independent-receipt-reconciliation-2026-10-21.md",
+        "../../seed-release-failure-custody/evidence/composed-393f411ca/results.ndjson",
+        "../../seed-release-failure-custody/evidence/composed-393f411ca/independent-result-review.md"
+      ]
     },
     {
       "id": "absent-origin-refusal-and-authorized-progress",
-      "passed": true
+      "passed": true,
+      "evidence": [
+        "independent-receipt-reconciliation-2026-10-21.md",
+        "../../seed-release-failure-custody/evidence/composed-393f411ca/results.ndjson",
+        "../../seed-release-failure-custody/evidence/composed-393f411ca/independent-result-review.md"
+      ]
     },
     {
       "id": "lost-enable-answer-restart-and-retained-recovery",
-      "passed": true
+      "passed": true,
+      "evidence": [
+        "independent-receipt-reconciliation-2026-10-21.md",
+        "../../seed-release-failure-custody/evidence/composed-393f411ca/results.ndjson",
+        "../../seed-release-failure-custody/evidence/composed-393f411ca/independent-result-review.md"
+      ]
     },
     {
       "id": "semantic-negative-controls",
-      "passed": false
+      "passed": true,
+      "evidence": [
+        "independent-receipt-reconciliation-2026-10-21.md",
+        "../../seed-release-failure-custody/evidence/composed-393f411ca/results.ndjson",
+        "../../seed-release-failure-custody/evidence/composed-393f411ca/independent-result-review.md",
+        "negative-controls-20261020/README.md",
+        "negative-controls-20261020/deadline/results.ndjson",
+        "negative-controls-20261020/authorization/results.ndjson",
+        "retry-suppression-final-393f411ca/measurement-e88d94ef5/results.ndjson",
+        "retry-suppression-final-393f411ca/measurement-e88d94ef5/independent-result-review.md"
+      ],
+      "scope": "Engaged original deadline and no-origin authorization controls remain applicable to identical exercised primitive/authorization/test bytes; they are not relabelled as executed on393. Final retry-suppression control is based on393, with unchanged native witness and intended due-retry OPEN failure."
     },
     {
       "id": "independent-scope-evidence-and-static-review",
-      "passed": false
+      "passed": true,
+      "evidence": [
+        "independent-receipt-reconciliation-2026-10-21.md",
+        "../../seed-release-failure-custody/evidence/composed-393f411ca/results.ndjson",
+        "../../seed-release-failure-custody/evidence/composed-393f411ca/independent-result-review.md",
+        "../../participant-release-completion-owner/evidence/independent-root-composition-review.md",
+        "../../participant-release-completion-owner/evidence/root-composition-gates/changed-path-statics.json",
+        "../../participant-release-completion-owner/evidence/root-composition-gates/fast-static.txt"
+      ],
+      "scope": "Independent declared-category review, scoped unchanged witness/fixture strict checks, exact positives/controls and changed-owner composition checks are complete. Whole-corpus and terminal landing/publication are separate gates and remain red/open."
     }
+  ],
+  "measuredCandidate": "393f411ca09449898465cc3cb7320c03fba2aba8",
+  "sourceTree": "ddf32b08e93c0b617f6ec24d0d70596e2888eec5",
+  "limits": [
+    "Passing bounded witness receipt only; no terminal Quest entry, Solver landing, product publication, main merge or release acceptance.",
+    "Canonical1261 changed selection remains RED; separate follow-up completes three missing results as red. Historical failures are obligations.",
+    "No full fresh/public seed startup, all transport, cross-host safety, U1/TX1/FreshMG or performance certification.",
+    "Diagnostic runtime mutations remain outside production composition."
   ]
 }

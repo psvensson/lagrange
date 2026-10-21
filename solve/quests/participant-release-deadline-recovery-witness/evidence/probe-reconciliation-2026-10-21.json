@@ -1,0 +1,23 @@
+{
+  "id": "participant-release-deadline-recovery-witness",
+  "status": "open",
+  "blocked": null,
+  "probe": {
+    "metric": 0,
+    "target": 0,
+    "done": true,
+    "measuring": true,
+    "evidence": "solve/quests/participant-release-deadline-recovery-witness/evidence/receipt.json",
+    "reason": "measured",
+    "outstanding": []
+  },
+  "sealMetric": 5,
+  "delta": -5,
+  "attempts": 1,
+  "attemptsSinceAltitudeCheck": 1,
+  "recent": [
+    "2026-10-20T17:59:04.985Z verification approve: Independent subagent:/root/control_source_review approves bounded retained-native/registered-route witness and interpretation; finalreceipttrue,true,true,false,",
+    "2026-10-21T05:57:55.535Z verification approve: Independent native retry-suppression result APPROVE by control_source_review: exact e88d94ef5bbeaf5c20759fa66518cbd06b1df94c on locked adam-laptop, retries0. Un",
+    "2026-10-21T06:49:11.587Z verification approve: Independent five-predicate reconciliation8353efc1c422f42a02a5f4e7c0210e1fa0f83e7a06283b7447b25d9fac5e9478 supports all existing bounded witness receipts at exac"
+  ]
+}
