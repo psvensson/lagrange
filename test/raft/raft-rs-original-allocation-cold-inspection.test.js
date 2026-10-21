@@ -15,6 +15,8 @@ import {RaftRsReplicaLifecycleOwner} from
   '../../src/raft/raft-rs-replica-lifecycle-owner.js';
 import {RaftRsDurableStore, commitDurably} from
   '../../src/raft/raft-rs-durable-store.js';
+import {RAFT_RS_COMMIT_DURABILITY} from
+  '../../src/raft/raft-rs-durable-store-constants.js';
 import {deriveRaftRsPeerId} from '../../src/raft/raft-rs-peer-identity.js';
 import {acquireDataDirectoryProcessOwner} from
   '../../src/storage/data-directory-process-owner.js';
@@ -48,13 +50,13 @@ function completeStorageFixture(t) {
       const lifecycle = new RaftRsReplicaLifecycleOwner({db,
         groupId: member.groupId, peerId: member.peerId, replicaIdentity: member.replicaId});
       const store = new RaftRsDurableStore(db);
-      commitDurably(db, () => {
+      store.transaction(() => {
         store.putBootstrapAppliedState(member.groupId, {
           voters: member.replicaIds.map(deriveRaftRsPeerId), learners: [],
           votersOutgoing: [], learnersNext: [], autoLeave: false,
         }, {bootstrapIndex: '0', admissionIndex: '0'});
         lifecycle.recordOpeningHistory(member.incarnation);
-      });
+      }, RAFT_RS_COMMIT_DURABILITY.SYNCED);
     } finally {
       db.close();
     }
