@@ -1,0 +1,21 @@
+{
+  "sha": "2016726f66bdb910e8b4de04bdedb89d2689bb0d",
+  "files": [
+    "test/address/address-manager-peer-location-authority.test.js",
+    "test/node/replica-transport-handler-identity.test.js",
+    "test/partition/raft-rs-transport-demux.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/partition/raft-rs-transport-demux.test.js",
+        "test/address/address-manager-peer-location-authority.test.js",
+        "test/node/replica-transport-handler-identity.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ],
+  "on": "adam-laptop",
+  "retryFailedOnce": false
+}

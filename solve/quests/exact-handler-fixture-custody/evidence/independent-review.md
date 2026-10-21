@@ -177,3 +177,124 @@ No blocking code finding was identified in the reviewed three-file delta.
 Current-source measurement, exact source-negative engagement, registry and
 metadata correspondence, applicable owner audits and independent result review
 remain obligations. All receipt values remain untouched by this reviewer.
+
+## Independent measured-result review
+
+Date: 2026-10-21. Reviewer: `subagent:/root/control_source_review`.
+This round reads preserved results only; it runs no tests and edits no source,
+test or receipt. It supplements the code review above without changing its
+scope. The first three receipt rows now have sufficient bounded evidence;
+the fourth remains HOLD.
+
+### Provenance and integrity
+
+All entries in each local packet's sha256.json were recomputed: four entries
+each for fixture-baseline-2016726f and fixture-candidate-a0dc88427, and five
+for fixture-negative-92cb2d72b. All matched. Each of the ten paths in
+candidate-bindings.json was independently read from the candidate Git object;
+its blob identity and SHA256 matched the manifest. This verifies the local
+packet and candidate object correspondence, not later committed-blob or
+remote-publication preservation.
+
+The baseline is 2016726f66bdb910e8b4de04bdedb89d2689bb0d. The positive is
+a0dc88427b61a51d3cea7fc2ff8cdaa7fbdf7ec5. Both have the identical complete src
+tree 00b72e3dfe4f9738fe4163383c141f55a07ef1f0. The three amended fixture hashes
+match this review's earlier table. The other three positive files are the
+unchanged adjacent exact identity/activation controls recorded in the binding
+manifest. The original three failing fixture bodies remain preserved at the
+baseline; their failures were not hidden by weakening the owner.
+
+The diagnostic is 92cb2d72b5dc0c812b30eb4f6ebe084fd5153837. Its src diff from
+the positive is exactly the reviewed insertion of
+`await releaseWasmServiceReplicaConsensus(replica)` and a diagnostic comment
+in retireReplica's catch, before CLEANUP_REQUIRED and the original rethrow.
+The executable identity test is byte-identical. The only difference under
+test/ is generated impact-graph-seal.json; it is not a changed behavioral
+witness. This source-only control remains diagnostic and must never be merged.
+
+### Baseline, positive and negative engagement
+
+All three input.json files select adam-laptop with retryFailedOnce=false.
+Controller logs confirm their exact placement-head values and retry:0;
+every results.ndjson entry has attempt:1 and retriedOnce:false. Canonical
+thermal holds completed before execution. These are same-host comparisons,
+not independent cross-host proof. Automatic placement factors differ (baseline
+and negative 2, positive 1.9); no timing-performance equivalence is claimed.
+The test/source differences introduce no deadline or timeout increase.
+
+Baseline: all three original files fail, with 66 reported assertions. The
+demux and address failures occur at actual partition cleanup with
+refused_transport_without_handler_identity. The identity file reaches its
+partition, MG and WASM children, whose old successful-return expectations
+conflict with the typed refusal. The preserved TAP shows these actual owner
+stacks and codes; they are not import/setup failures. The original failing
+observations remain obligations accounted for by this explicit fixture repair.
+
+Positive: all six selected files pass, 237 reported assertions:
+
+| File under test/ | Reported assertions |
+| --- | ---: |
+| node/message-group-executor-activation-handler-boundary.test.js | 43 |
+| node/replica-transport-handler-identity.test.js | 42 |
+| partition/raft-rs-transport-demux.test.js | 15 |
+| address/address-manager-peer-location-authority.test.js | 26 |
+| transport/exact-handler-identity-api.test.js | 36 |
+| bootstrap/message-group-activation-handler-boundary.test.js | 75 |
+
+Negative: the identity file reports 42 assertions and fails at exactly the two
+intended native custody leaves. The enclosing child/top-level failures are TAP
+propagation, not additional independent defects. The full controller.log shows:
+
+- Lines 64-66: actual original DB open, expected typed shutdown rejection and
+  retained handler all pass before the semantic assertions.
+- Line 67: `refusal retains the exact database object` fails because replica.db
+  was discharged by the deliberately premature release.
+- Line 100: `refusal retains the original open database` fails because the
+  captured original DB is already closed.
+- Lines 127-133: CLEANUP_REQUIRED, refusal reporting, same-owner retry,
+  no address-only removal, completed shutdown, DB discharge and original DB
+  physical closure all pass. The partition/MG children and stale/successor
+  controls pass as well.
+
+Thus the mutant retains the typed vocabulary and handler refusal while breaking
+physical custody, and the amended fixture detects that distinction. Native
+setup, close failure, timeout or abandoned teardown did not produce this red.
+
+The separate controller-setup-error.log is retained and hash-verified. It is a
+local eval SyntaxError before the wrapper could execute (`Unexpected token
+')'`), not a native measurement or retry of a failed test. It supplies no
+semantic evidence. The later complete input/controller/results/exit packet
+is the one classified above.
+
+### Checklist disposition and receipt recommendation
+
+The prior six harness items now have exact baseline, positive and negative
+binding for this component scope. The five concurrency items remain bounded
+to the existing identity/single-flight owners, sequential fixture restoration
+and retained DB; the run is not an exhaustive race or timer-pressure proof.
+Owner-interaction items 1-9 are supported by unchanged production authority,
+the paired native custody/settlement witness, preserved stale/successor
+controls and the engaged source-only negative. Item 10 and the applicable
+gates remain incomplete.
+
+`gates-a0dc88427/fast-static.txt` reports fast-static success for the explicit
+2016726f..HEAD range. `owner-statics.json` still reports three literal findings
+and one raw-empty-state finding across the bounded owner collaborators. The
+separate cleanup-exception-audit-correspondence unit owns their repair and
+classification. Being inherited or partly a classifier false positive does
+not turn this gate green, and this review does not waive it.
+
+Receipt recommendations, bound to the measured candidate above:
+
+1. preserved-original-red: **true**.
+2. reviewed-fixture-contracts-and-custody: **true**.
+3. exact-candidate-positive-and-negative: **true**.
+4. applicable-gates-and-independent-result-review: **false / HOLD**. This
+   independent result review is complete, but canonical bounded-owner findings
+   remain unresolved; later repaired composition and required gates still
+   require their own exact evidence.
+
+Overall status remains fail/open. This approves the measured fixture
+correspondence and its native custody discriminator only. It is not general
+transport conformance, automatic recovery, U1, full-suite, landing, main or
+release certification. No receipt file was changed by this reviewer.

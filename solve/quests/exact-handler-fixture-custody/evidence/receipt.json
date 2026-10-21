@@ -2,9 +2,45 @@
   "schema": "test-receipt/1",
   "status": "fail",
   "receipts": [
-    {"id": "preserved-original-red", "passed": false},
-    {"id": "reviewed-fixture-contracts-and-custody", "passed": false},
-    {"id": "exact-candidate-positive-and-negative", "passed": false},
-    {"id": "applicable-gates-and-independent-result-review", "passed": false}
-  ]
+    {
+      "id": "preserved-original-red",
+      "passed": true,
+      "evidence": [
+        "fixture-baseline-2016726f/controller.log",
+        "fixture-baseline-2016726f/results.ndjson"
+      ],
+      "scope": "All three unchanged original fixtures failed in their existing typed retirement contract at exact201 on the same locked adam-laptop host; 66 reported assertions."
+    },
+    {
+      "id": "reviewed-fixture-contracts-and-custody",
+      "passed": true,
+      "evidence": [
+        "independent-review.md",
+        "candidate-bindings.json"
+      ],
+      "scope": "Independent bounded source review of the exact amended fixture bytes; no implementation acceptance beyond the fixture contract."
+    },
+    {
+      "id": "exact-candidate-positive-and-negative",
+      "passed": true,
+      "evidence": [
+        "fixture-candidate-a0dc88427/results.ndjson",
+        "fixture-negative-92cb2d72b/controller.log",
+        "fixture-negative-92cb2d72b/results.ndjson",
+        "independent-review.md"
+      ],
+      "scope": "Six corrected/adjacent files pass with 237 reported assertions. The unchanged native witness rejects deliberate premature database discharge at both intended custody assertions, after initialization, typed refusal and exact-handler retention pass; same-owner cleanup retry then succeeds. Same locked host and retries disabled; automatic placement factors differ, so no equal timing claim."
+    },
+    {
+      "id": "applicable-gates-and-independent-result-review",
+      "passed": false,
+      "evidence": [
+        "gates-a0dc88427/fast-static.txt",
+        "gates-a0dc88427/owner-statics.json",
+        "independent-review.md"
+      ],
+      "reason": "Fast static and independent bounded result review pass. Four bounded-owner audit findings are owned by separately sealed cleanup-exception-audit-correspondence; its correction and exact composed owner gates remain pending."
+    }
+  ],
+  "measuredCandidate": "a0dc88427b61a51d3cea7fc2ff8cdaa7fbdf7ec5"
 }

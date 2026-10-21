@@ -1,0 +1,419 @@
+{"sha":"2016726f66bdb910e8b4de04bdedb89d2689bb0d","plan":[{"files":["test/partition/raft-rs-transport-demux.test.js","test/address/address-manager-peer-location-authority.test.js","test/node/replica-transport-handler-identity.test.js"],"jobs":4,"resourceClass":"ordinary"}]}
+lab test: adam-laptop: ordinary (3 files) cores=8 mem=15.5GiB speed x1.95
+[adam-laptop] placement-shell=2100388
+[adam-laptop] placement-head=2016726f66bdb910e8b4de04bdedb89d2689bb0d
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2 mode:local retry:0 timeout: lanecap:7
+[adam-laptop] placement-pid=2100815
+[adam-laptop] # test-files planned=3
+[adam-laptop] classified lane ordinary: 3 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 79C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 79C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 40C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] not ok test/partition/raft-rs-transport-demux.test.js (16 assertions, 1926ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 14
+[adam-laptop] # Subtest: PartitionService routes semantic raft-rs transport envelopes to the operation port
+[adam-laptop]     ok 1 - the transport envelope is consumed as consensus traffic
+[adam-laptop]     ok 2 - exactly one semantic step crosses the existing operation port
+[adam-laptop]     ok 3 - the semantic envelope crosses unchanged; no native packet is fabricated
+[adam-laptop] {"level":50,"time":"2026-10-21T04:19:42.326Z","nodeId":"node-rs-transport","pid":2100843,"subsystem":"partition","address":"node-r2/partition/raft-rs-transport-p1-r2","replicaId":"raft-rs-transport-p1-r2","outcome":"refused_transport_without_handler_identity","nodeId":"node-rs-transport","msg":"Replica transport handler left registered: the transport cannot prove handler identity, so retirement was refused"}
+[adam-laptop]     not ok 4 - Replica transport handler left registered: the transport cannot prove handler identity, so retirement was refused
+[adam-laptop]       ---
+[adam-laptop]       stack: >
+[adam-laptop]         requireReplicaHandlerRetirement
+[adam-laptop]         (src/node/replica-transport-handler-identity.js:33:25)
+[adam-laptop]       
+[adam-laptop]         retirePartitionTransportHandler
+[adam-laptop]         (src/partition/partition-service-lifecycle-methods.js:76:3)
+[adam-laptop]       
+[adam-laptop]         async release (src/partition/partition-service-lifecycle-methods.js:206:7)
+[adam-laptop]       
+[adam-laptop]         async Test.<anonymous> (test/partition/raft-rs-transport-demux.test.js:81:7)
+[adam-laptop]       at:
+[adam-laptop]         fileName: src/node/replica-transport-handler-identity.js
+[adam-laptop]         lineNumber: 33
+[adam-laptop]         columnNumber: 25
+[adam-laptop]         functionName: requireReplicaHandlerRetirement
+[adam-laptop]       code: refused_transport_without_handler_identity
+[adam-laptop]       tapCaught: returnedPromiseRejection
+[adam-laptop]       source: >2
+[adam-laptop]           if (outcome !== REPLICA_HANDLER_RETIREMENT_OUTCOME.RETIRED &&
+[adam-laptop]               outcome !== REPLICA_HANDLER_RETIREMENT_OUTCOME.ALREADY_ABSENT) {
+[adam-laptop]             throw Object.assign(new Error(REPLICA_HANDLER_RETIREMENT_LOG_MSG.LEFT_REGISTERED),
+[adam-laptop]         ------------------------^
+[adam-laptop]               {code: outcome});
+[adam-laptop]           }
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     1..4
+[adam-laptop] not ok 1 - PartitionService routes semantic raft-rs transport envelopes to the operation port # time=41.117ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/partition/raft-rs-transport-demux.test.js
+[adam-laptop]     lineNumber: 28
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: >
+[adam-laptop]     });
+[adam-laptop]   
+[adam-laptop]   
+[adam-laptop]     test('PartitionService routes semantic raft-rs transport envelopes to the
+[adam-laptop]     operation port',
+[adam-laptop]   
+[adam-laptop]     ^
+[adam-laptop]       async (t) => {
+[adam-laptop]         const consensusPort = new ControllableConsensusPort();
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] # Subtest: raft-rs runtime emits a semantic envelope instead of a native packet
+[adam-laptop]     ok 1 - a real raft-rs participant emits traffic
+[adam-laptop]     ok 2 - runtime output carries the semantic protocol discriminator
+[adam-laptop]     ok 3 - runtime output carries the owning group id
+[adam-laptop]     ok 4 - sender identity is the core message sender
+[adam-laptop]     ok 5 - recipient identity is the core message recipient
+[adam-laptop]     ok 6 - the runtime never fabricates a native packet type
+[adam-laptop]     1..6
+[adam-laptop] ok 2 - raft-rs runtime emits a semantic envelope instead of a native packet # time=92.019ms
+[adam-laptop] 
+[adam-laptop] # Subtest: MessageRouter direct Raft delivery accepts the semantic raft-rs envelope
+[adam-laptop]     ok 1 - semantic raft-rs traffic uses the existing consensus fast path
+[adam-laptop]     ok 2 - MessageRouter preserves the semantic envelope unchanged
+[adam-laptop]     ok 3 - MessageRouter does not fabricate a native packet type
+[adam-laptop]     1..3
+[adam-laptop] ok 3 - MessageRouter direct Raft delivery accepts the semantic raft-rs envelope # time=3.064ms
+[adam-laptop] 
+[adam-laptop] 1..3
+[adam-laptop] # { total: 13, pass: 12, fail: 1 }
+[adam-laptop] # time=329.06ms
+[adam-laptop] not ok test/node/replica-transport-handler-identity.test.js (22 assertions, 1999ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 14
+[adam-laptop] # Subtest: Removal-8: an old generation shut down before registration never removes the new generation's handler
+[adam-laptop]     ok 1 - G1 registered no handler
+[adam-laptop] {"level":30,"time":"2026-10-21T04:19:42.431Z","nodeId":"178f0868-1d49-464d-9472-a611bb81c955","pid":2100837,"subsystem":"partition","partitionId":"p1","replicaId":"p1-r1","nodeId":"178f0868-1d49-464d-9472-a611bb81c955","msg":"Shutting down partition service"}
+[adam-laptop]     ok 2 - the G2 handler is untouched by the delayed G1 retirement
+[adam-laptop]     ok 3 - an absent handler is a typed already-absent no-op
+[adam-laptop]     ok 4 - should be equal
+[adam-laptop]     1..4
+[adam-laptop] ok 1 - Removal-8: an old generation shut down before registration never removes the new generation's handler # time=85.624ms
+[adam-laptop] 
+[adam-laptop] # Subtest: Removal-8: exact removal removes only the exact handler
+[adam-laptop]     ok 1 - the exact handler is retired
+[adam-laptop]     ok 2 - should be equal
+[adam-laptop]     ok 3 - a delayed retirement of G1 finds its handler gone
+[adam-laptop]     ok 4 - and leaves the G2 handler registered
+[adam-laptop]     1..4
+[adam-laptop] ok 2 - Removal-8: exact removal removes only the exact handler # time=1.693ms
+[adam-laptop] 
+[adam-laptop] # Subtest: Removal-8: a transport without the identity API is refused and nothing is removed
+[adam-laptop]     ok 1 - the activation check cannot pass on presence
+[adam-laptop]     ok 2 - typed refusal
+[adam-laptop]     ok 3 - no removal by address
+[adam-laptop]     ok 4 - the handler is untouched
+[adam-laptop]     1..4
+[adam-laptop] ok 3 - Removal-8: a transport without the identity API is refused and nothing is removed # time=1.654ms
+[adam-laptop] 
+[adam-laptop] # Subtest: Removal-8: every retiring owner surfaces a refused retirement (the handler is left registered) instead of discarding it
+[adam-laptop]     # Subtest: partition replica shutdown
+[adam-laptop]         not ok 1 - Replica transport handler left registered: the transport cannot prove handler identity, so retirement was refused
+[adam-laptop]           ---
+[adam-laptop]           stack: >
+[adam-laptop]             requireReplicaHandlerRetirement
+[adam-laptop]             (src/node/replica-transport-handler-identity.js:33:25)
+[adam-laptop]           
+[adam-laptop]             retirePartitionTransportHandler
+[adam-laptop]             (src/partition/partition-service-lifecycle-methods.js:76:3)
+[adam-laptop]           
+[adam-laptop]             async release (src/partition/partition-service-lifecycle-methods.js:206:7)
+[adam-laptop]           
+[adam-laptop]             async Test.<anonymous>
+[adam-laptop]             (test/node/replica-transport-handler-identity.test.js:159:5)
+[adam-laptop]           at:
+[adam-laptop]             fileName: src/node/replica-transport-handler-identity.js
+[adam-laptop]             lineNumber: 33
+[adam-laptop]             columnNumber: 25
+[adam-laptop]             functionName: requireReplicaHandlerRetirement
+[adam-laptop]           code: refused_transport_without_handler_identity
+[adam-laptop]           tapCaught: returnedPromiseRejection
+[adam-laptop]           source: >2
+[adam-laptop]               if (outcome !== REPLICA_HANDLER_RETIREMENT_OUTCOME.RETIRED &&
+[adam-laptop]                   outcome !== REPLICA_HANDLER_RETIREMENT_OUTCOME.ALREADY_ABSENT) {
+[adam-laptop]                 throw Object.assign(new Error(REPLICA_HANDLER_RETIREMENT_LOG_MSG.LEFT_REGISTERED),
+[adam-laptop]             ------------------------^
+[adam-laptop]                   {code: outcome});
+[adam-laptop]               }
+[adam-laptop]           ...
+[adam-laptop]         
+[adam-laptop]         1..1
+[adam-laptop]     not ok 1 - partition replica shutdown # time=24.32ms
+[adam-laptop]       ---
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/node/replica-transport-handler-identity.test.js
+[adam-laptop]         lineNumber: 151
+[adam-laptop]         columnNumber: 5
+[adam-laptop]         typeName: Test
+[adam-laptop]       source: |2
+[adam-laptop]           const handler = () => ({acknowledged: true});
+[adam-laptop]       
+[adam-laptop]           t.test('partition replica shutdown', async (t) => {
+[adam-laptop]         ----^
+[adam-laptop]             const transport = createPresenceOnlyTransport();
+[adam-laptop]             const service = new PartitionService({partitionId: 'p1', tableId: 't1',
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     # Subtest: message-group replica retirement
+[adam-laptop]         not ok 1 - Replica transport handler left registered: the transport cannot prove handler identity, so retirement was refused
+[adam-laptop]           ---
+[adam-laptop]           stack: >
+[adam-laptop]             requireReplicaHandlerRetirement
+[adam-laptop]             (src/node/replica-transport-handler-identity.js:33:25)
+[adam-laptop]           
+[adam-laptop]             retireMessageGroupTransportHandler
+[adam-laptop]             (src/bootstrap/shared/message-group-transport-handler.js:59:3)
+[adam-laptop]           
+[adam-laptop]             async Test.<anonymous>
+[adam-laptop]             (test/node/replica-transport-handler-identity.test.js:170:13)
+[adam-laptop]           at:
+[adam-laptop]             fileName: src/node/replica-transport-handler-identity.js
+[adam-laptop]             lineNumber: 33
+[adam-laptop]             columnNumber: 25
+[adam-laptop]             functionName: requireReplicaHandlerRetirement
+[adam-laptop]           code: refused_transport_without_handler_identity
+[adam-laptop]           tapCaught: returnedPromiseRejection
+[adam-laptop]           source: >2
+[adam-laptop]               if (outcome !== REPLICA_HANDLER_RETIREMENT_OUTCOME.RETIRED &&
+[adam-laptop]                   outcome !== REPLICA_HANDLER_RETIREMENT_OUTCOME.ALREADY_ABSENT) {
+[adam-laptop]                 throw Object.assign(new Error(REPLICA_HANDLER_RETIREMENT_LOG_MSG.LEFT_REGISTERED),
+[adam-laptop]             ------------------------^
+[adam-laptop]                   {code: outcome});
+[adam-laptop]               }
+[adam-laptop]           ...
+[adam-laptop]         
+[adam-laptop]         1..1
+[adam-laptop]     not ok 2 - message-group replica retirement # time=4.633ms
+[adam-laptop]       ---
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/node/replica-transport-handler-identity.test.js
+[adam-laptop]         lineNumber: 165
+[adam-laptop]         columnNumber: 5
+[adam-laptop]         typeName: Test
+[adam-laptop]       source: |2
+[adam-laptop]           });
+[adam-laptop]       
+[adam-laptop]           t.test('message-group replica retirement', async (t) => {
+[adam-laptop]         ----^
+[adam-laptop]             const transport = createPresenceOnlyTransport();
+[adam-laptop]             const address = `${NODE_ID}/message-group/mg-r1`;
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop] {"level":30,"time":"2026-10-21T04:19:42.539Z","nodeId":"b1dd79e1-4857-4abb-baf5-08a4e16baf6a","pid":2100837,"subsystem":"wasm-service-replica","replicaId":"wsr-1","serviceDefinitionId":"svc","nodeId":"b1dd79e1-4857-4abb-baf5-08a4e16baf6a","msg":"WASM service replica created"}
+[adam-laptop]     # Subtest: WASM service replica shutdown
+[adam-laptop]         not ok 1 - Replica transport handler left registered: the transport cannot prove handler identity, so retirement was refused
+[adam-laptop]           ---
+[adam-laptop]           stack: >
+[adam-laptop]             requireReplicaHandlerRetirement
+[adam-laptop]             (src/node/replica-transport-handler-identity.js:33:25)
+[adam-laptop]           
+[adam-laptop]             retireReplica (src/wasm-service/wasm-service-replica-lifecycle.js:293:5)
+[adam-laptop]           
+[adam-laptop]             async Test.<anonymous>
+[adam-laptop]             (test/node/replica-transport-handler-identity.test.js:188:7)
+[adam-laptop]           at:
+[adam-laptop]             fileName: src/node/replica-transport-handler-identity.js
+[adam-laptop]             lineNumber: 33
+[adam-laptop]             columnNumber: 25
+[adam-laptop]             functionName: requireReplicaHandlerRetirement
+[adam-laptop]           code: refused_transport_without_handler_identity
+[adam-laptop]           tapCaught: returnedPromiseRejection
+[adam-laptop]           source: >2
+[adam-laptop]               if (outcome !== REPLICA_HANDLER_RETIREMENT_OUTCOME.RETIRED &&
+[adam-laptop]                   outcome !== REPLICA_HANDLER_RETIREMENT_OUTCOME.ALREADY_ABSENT) {
+[adam-laptop]                 throw Object.assign(new Error(REPLICA_HANDLER_RETIREMENT_LOG_MSG.LEFT_REGISTERED),
+[adam-laptop]             ------------------------^
+[adam-laptop]                   {code: outcome});
+[adam-laptop]               }
+[adam-laptop]           ...
+[adam-laptop]         
+[adam-laptop]         1..1
+[adam-laptop]     not ok 3 - WASM service replica shutdown # time=39.885ms
+[adam-laptop]       ---
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/node/replica-transport-handler-identity.test.js
+[adam-laptop]         lineNumber: 177
+[adam-laptop]         columnNumber: 5
+[adam-laptop]         typeName: Test
+[adam-laptop]       source: |2
+[adam-laptop]           });
+[adam-laptop]       
+[adam-laptop]           t.test('WASM service replica shutdown', async (t) => {
+[adam-laptop]         ----^
+[adam-laptop]             const transport = createPresenceOnlyTransport();
+[adam-laptop]             const directory = mkdtempSync(join(tmpdir(), 'wasm-refused-retirement-'));
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     1..3
+[adam-laptop] not ok 4 - Removal-8: every retiring owner surfaces a refused retirement (the handler is left registered) instead of discarding it # time=137.361ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/node/replica-transport-handler-identity.test.js
+[adam-laptop]     lineNumber: 146
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: |
+[adam-laptop]     }
+[adam-laptop]   
+[adam-laptop]     test('Removal-8: every retiring owner surfaces a refused retirement (the ' +
+[adam-laptop]     ^
+[adam-laptop]       'handler is left registered) instead of discarding it', async (t) => {
+[adam-laptop]       initializeEnvironment();
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] 1..4
+[adam-laptop] # { total: 15, pass: 12, fail: 3 }
+[adam-laptop] # time=255.981ms
+[adam-laptop] not ok test/address/address-manager-peer-location-authority.test.js (28 assertions, 2177ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 14
+[adam-laptop] # Subtest: a poisoned process registry cannot move a partition peer destination
+[adam-laptop]     ok 1 - the authoritative cache decides, not the registry
+[adam-laptop]     ok 2 - an already-unified address is returned as given
+[adam-laptop]     ok 3 - the operation-port snapshot exposes exactly the one remote peer
+[adam-laptop]     ok 4 - the peer projection carries the authoritative address
+[adam-laptop]     ok 5 - and the operation-port progress probe actually sent there
+[adam-laptop]     ok 6 - resolution neither consulted nor mutated the registry
+[adam-laptop] {"level":50,"time":"2026-10-21T04:19:42.439Z","nodeId":"node-a","pid":2100831,"subsystem":"partition","address":"node-a/partition/services-p1-r1","replicaId":"services-p1-r1","outcome":"refused_transport_without_handler_identity","nodeId":"node-a","msg":"Replica transport handler left registered: the transport cannot prove handler identity, so retirement was refused"}
+[adam-laptop]     not ok 7 - Replica transport handler left registered: the transport cannot prove handler identity, so retirement was refused
+[adam-laptop]       ---
+[adam-laptop]       stack: >
+[adam-laptop]         requireReplicaHandlerRetirement
+[adam-laptop]         (src/node/replica-transport-handler-identity.js:33:25)
+[adam-laptop]       
+[adam-laptop]         retirePartitionTransportHandler
+[adam-laptop]         (src/partition/partition-service-lifecycle-methods.js:76:3)
+[adam-laptop]       
+[adam-laptop]         async release (src/partition/partition-service-lifecycle-methods.js:206:7)
+[adam-laptop]       
+[adam-laptop]         async Test.<anonymous>
+[adam-laptop]         (test/address/address-manager-peer-location-authority.test.js:252:5)
+[adam-laptop]       at:
+[adam-laptop]         fileName: src/node/replica-transport-handler-identity.js
+[adam-laptop]         lineNumber: 33
+[adam-laptop]         columnNumber: 25
+[adam-laptop]         functionName: requireReplicaHandlerRetirement
+[adam-laptop]       code: refused_transport_without_handler_identity
+[adam-laptop]       tapCaught: returnedPromiseRejection
+[adam-laptop]       source: >2
+[adam-laptop]           if (outcome !== REPLICA_HANDLER_RETIREMENT_OUTCOME.RETIRED &&
+[adam-laptop]               outcome !== REPLICA_HANDLER_RETIREMENT_OUTCOME.ALREADY_ABSENT) {
+[adam-laptop]             throw Object.assign(new Error(REPLICA_HANDLER_RETIREMENT_LOG_MSG.LEFT_REGISTERED),
+[adam-laptop]         ------------------------^
+[adam-laptop]               {code: outcome});
+[adam-laptop]           }
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     1..7
+[adam-laptop] not ok 1 - a poisoned process registry cannot move a partition peer destination # time=158.313ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/address/address-manager-peer-location-authority.test.js
+[adam-laptop]     lineNumber: 216
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: |
+[adam-laptop]     }
+[adam-laptop]   
+[adam-laptop]     test('a poisoned process registry cannot move a partition peer destination',
+[adam-laptop]     ^
+[adam-laptop]       async (t) => {
+[adam-laptop]         initializeProcess();
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] # Subtest: with no authoritative location a partition refuses rather than using the registry
+[adam-laptop]     ok 1 - registry membership is never promoted into discovery authority
+[adam-laptop]     1..1
+[adam-laptop] ok 2 - with no authoritative location a partition refuses rather than using the registry # time=48.053ms
+[adam-laptop] 
+[adam-laptop] # Subtest: one node mutating the shared registry cannot move another node destination
+[adam-laptop]     ok 1 - node-a's progress probe sends to its own authoritative peer location
+[adam-laptop]     ok 2 - node-b's progress probe sends to its own authoritative peer location
+[adam-laptop]     ok 3 - both runtimes are still on the same process registry
+[adam-laptop]     ok 4 - node-a still sends where its own authoritative state says
+[adam-laptop]     ok 5 - and node-b is untouched by a mutation made under node-a
+[adam-laptop] {"level":50,"time":"2026-10-21T04:19:42.575Z","nodeId":"node-a","pid":2100831,"subsystem":"partition","address":"node-a/partition/services-p1-r1","replicaId":"services-p1-r1","outcome":"refused_transport_without_handler_identity","nodeId":"node-a","msg":"Replica transport handler left registered: the transport cannot prove handler identity, so retirement was refused"}
+[adam-laptop]     not ok 6 - Replica transport handler left registered: the transport cannot prove handler identity, so retirement was refused
+[adam-laptop]       ---
+[adam-laptop]       stack: >
+[adam-laptop]         requireReplicaHandlerRetirement
+[adam-laptop]         (src/node/replica-transport-handler-identity.js:33:25)
+[adam-laptop]       
+[adam-laptop]         retirePartitionTransportHandler
+[adam-laptop]         (src/partition/partition-service-lifecycle-methods.js:76:3)
+[adam-laptop]       
+[adam-laptop]         async release (src/partition/partition-service-lifecycle-methods.js:206:7)
+[adam-laptop]       
+[adam-laptop]         async Test.<anonymous>
+[adam-laptop]         (test/address/address-manager-peer-location-authority.test.js:327:31)
+[adam-laptop]       at:
+[adam-laptop]         fileName: src/node/replica-transport-handler-identity.js
+[adam-laptop]         lineNumber: 33
+[adam-laptop]         columnNumber: 25
+[adam-laptop]         functionName: requireReplicaHandlerRetirement
+[adam-laptop]       code: refused_transport_without_handler_identity
+[adam-laptop]       tapCaught: returnedPromiseRejection
+[adam-laptop]       source: >2
+[adam-laptop]           if (outcome !== REPLICA_HANDLER_RETIREMENT_OUTCOME.RETIRED &&
+[adam-laptop]               outcome !== REPLICA_HANDLER_RETIREMENT_OUTCOME.ALREADY_ABSENT) {
+[adam-laptop]             throw Object.assign(new Error(REPLICA_HANDLER_RETIREMENT_LOG_MSG.LEFT_REGISTERED),
+[adam-laptop]         ------------------------^
+[adam-laptop]               {code: outcome});
+[adam-laptop]           }
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     1..6
+[adam-laptop] not ok 3 - one node mutating the shared registry cannot move another node destination # time=64.619ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/address/address-manager-peer-location-authority.test.js
+[adam-laptop]     lineNumber: 266
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: >2
+[adam-laptop]       });
+[adam-laptop]   
+[adam-laptop]     test('one node mutating the shared registry cannot move another node
+[adam-laptop]     destination',
+[adam-laptop]   
+[adam-laptop]     ^
+[adam-laptop]       async (t) => {
+[adam-laptop]         initializeProcess();
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] # Subtest: a poisoned process registry cannot move a message-group peer destination
+[adam-laptop]     ok 1 - the authoritative cache decides, not the registry
+[adam-laptop]     ok 2 - an already-unified address is returned as given
+[adam-laptop]     ok 3 - the operation-port snapshot exposes exactly the one remote peer
+[adam-laptop]     ok 4 - the peer projection carries the authoritative address
+[adam-laptop]     ok 5 - and the vote request the port actually sent went there
+[adam-laptop]     ok 6 - resolution neither consulted nor mutated the registry
+[adam-laptop]     1..6
+[adam-laptop] ok 4 - a poisoned process registry cannot move a message-group peer destination # time=58.408ms
+[adam-laptop] 
+[adam-laptop] # Subtest: with no authoritative location a message group refuses rather than using the registry
+[adam-laptop]     ok 1 - registry membership is never promoted into discovery authority
+[adam-laptop]     1..1
+[adam-laptop] ok 5 - with no authoritative location a message group refuses rather than using the registry # time=33.642ms
+[adam-laptop] 
+[adam-laptop] # Subtest: no production code outside AddressManager reads the registry state
+[adam-laptop]     ok 1 - the conflict and enumeration APIs have no production consumer, so no production decision can read what the registry happens to hold
+[adam-laptop]     1..1
+[adam-laptop] ok 6 - no production code outside AddressManager reads the registry state # time=77.565ms
+[adam-laptop] 
+[adam-laptop] 1..6
+[adam-laptop] # { total: 22, pass: 20, fail: 2 }
+[adam-laptop] # time=471.023ms
+[adam-laptop] # test-files total=3 pass=0 fail=3 assertions=66
+lab test: adam-laptop: # test-files total=3 pass=0 fail=3 assertions=66
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=3 pass=0 fail=3 assertions=66
