@@ -23,7 +23,7 @@ import {
 } from '../control-plane/control-plane-system-table-gateway.js';
 import {isCleanupTombstoneRow} from
   '../node/replica-cleanup-tombstone-owner.js';
-import {mintServiceRowCreatedAt} from
+import {isExactServiceRowBirth, mintServiceRowCreatedAt} from
   '../node/service-row-incarnation.js';
 
 
@@ -125,22 +125,8 @@ async function observePartitionRegistration(systemTableWriter, replicaId) {
 }
 
 function rowsMatchPartitionRegistration(observed, expected) {
-  const fields = [
-    COLUMN.SERVICE_ID,
-    COLUMN.SERVICE_TYPE,
-    COLUMN.PARTITION_ID,
-    COLUMN.GROUP_ID,
-    COLUMN.NODE_ID,
-    COLUMN.REPLICA_ID,
-    COLUMN.ADDRESS,
-    COLUMN.STATUS,
-    COLUMN.CREATED_AT,
-  ];
-  // A lost INSERT answer is resolved only by its exact birth, never another
-  // lifetime under the same name. Role and update stamps are not birth identity.
-  return Number.isSafeInteger(observed?.[COLUMN.CREATED_AT]) &&
-    observed?.create_attempt_token === expected.create_attempt_token &&
-    fields.every((field) => observed?.[field] === expected[field]);
+  return isExactServiceRowBirth(observed, expected) &&
+    observed[COLUMN.STATUS] === expected[COLUMN.STATUS];
 }
 
 async function resolvePartitionRegistration(systemTableWriter, row,
