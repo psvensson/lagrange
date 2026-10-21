@@ -257,3 +257,48 @@ independently checked complete census; (9) no subtree/path/baseline escape;
 (10) separately sealed scope and applicable metadata, with candidate result
 and final composed-gate review still pending. No blocking implementation or
 census finding was identified in the frozen bytes above.
+
+## Independent candidate-result review
+
+Date: 2026-10-21. Reviewer: `subagent:/root/control_source_review`.
+The reviewer inspected evidence/candidate-575138446/input.json, controller.txt,
+result.json and ledger.ndjson. The controller placed exact candidate
+575138446abcde520b8474ee24faa938f8ca8fa4 on lenovo-laptop through the classified
+ordinary runner. Input disables retry, placement reports retry:0, and the
+ledger records attempt 1 with retriedOnce false. Result status is 0; one
+selected file passes with 146 runner-reported assertions and no failed files.
+These are the same 47 cases in the unchanged witness; runner assertion counts
+include case results and must not be called 146 leaf assertions.
+
+Each of the three input hashes was independently recomputed from the exact
+candidate Git blob and matches the approved checker/helper/test hashes above.
+Git comparison with old-classifier f0084d02ac421ea85f36be3de28eaf29dc49b019
+confirms the witness file, entire runtime src tree and audit baseline file
+are unchanged. Both compared measurements used lenovo-laptop without retry.
+Automatic placement factor changed from 2 to 2.2; this parser-only comparison
+does not make a timing-performance claim.
+
+The old-source run failed exactly the three intended construction positives
+while retaining read controls. The candidate now passes that same witness,
+including its paired source-injected reads, adversarial uses and delegated
+nonconstructor fallback negative. Together with the independently checked
+complete census and exact source review, this supports the bounded audit fix.
+No physical runtime, SQL truth-source, startup or distributed-safety claim
+is inferred from these parser results.
+
+Receipt recommendation for this exact unit:
+
+1. engaged-classifier-red: **true**.
+2. construction-positive-and-adversarial-mixed-reads: **true**.
+3. reviewed-census-delta-without-baseline-growth: **true**.
+4. independent-review-and-applicable-gates: **false / HOLD**. This independent
+   code/census/result review is complete, but the full decision audit still
+   reports 37 unresolved findings and is not green. No owner waiver or
+   terminal landing decision is supplied here.
+
+Verdict: APPROVE the measured bounded classifier behavior and finding delta.
+Overall Quest status remains fail/open pending its applicable gates. The
+reviewer ran no tests, changed no receipt/source/test, and did not independently
+verify a remote push; this result assessment binds local Git objects and the
+preserved runner packet. Later preservation-only commits must identify the
+measured candidate rather than claim execution at their own SHA.

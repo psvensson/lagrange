@@ -82,3 +82,39 @@ arbitrary JavaScript constructor/setter effects, proxies, dynamically installed
 code, runtime cache/SQL correctness or any rs-raft acceptance. Unsupported
 bindings and field uses remain conservative evidence. Object-key omission is
 limited to direct constructor-option objects, with descendants still scanned.
+
+## Candidate measurement and remaining gate
+
+The independently approved source was committed through normal hooks as
+`575138446abcde520b8474ee24faa938f8ca8fa4` and measured on the same locked
+`lenovo-laptop`, with retries disabled. The canonical runner passed the one
+selected file with 146 assertions: all 47 cases in the frozen witness are
+green. The witness SHA256 remains identical to the refreshed old-classifier
+run. Source/test hashes, exact SHA, classified plan, raw controller output,
+result and copied ledger are preserved in `candidate-575138446/`.
+
+The source checkpoint was pushed to
+`work/decision-audit-dependency-construction-20261021`; its remote head was
+verified equal to the exact measured commit before the later evidence-only
+checkpoint. No source or test bytes changed after this measurement.
+
+The receipt now records engaged red, candidate positive/adversarial behavior
+and independently reviewed census as passed. Its overall status remains
+`fail`, with `independent-review-and-applicable-gates` false: the full
+decision-boundary audit still exits 1 with the 37 existing unresolved
+findings. Independent result review is being appended separately by its
+reviewer. This is not a terminal Quest, clean integrated corpus, main move
+or production acceptance.
+
+Independent candidate-result review subsequently verified the committed Git
+blobs, identical witness and runtime/baseline bytes, same-host retry-free
+measurement and full census correspondence. It approves the measured bounded
+classifier behavior and census; its full record remains in
+`independent-review.md`. The reviewer concurs with the final gate remaining
+false. The canonical Quest probe reports metric 1, target 0, `done=false`;
+its CLI exit status of zero does not mean the Quest is complete.
+
+The documentation-current validator reports zero findings in this unit and
+293 findings across the checkout. The full result and the scoped attribution
+are preserved in `gates-final/`. This is not a clean documentation gate or a
+same-base classification of all 293 findings.
