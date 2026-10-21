@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 116,
     "architecture-governance": 19,
-    "bootstrap-membership": 323,
+    "bootstrap-membership": 324,
     "cdc-metadata": 63,
     "cli-tooling": 96,
     "control-plane": 216,
@@ -25,10 +25,10 @@
     "transport-messaging": 96,
     "wasm-toolchain": 74
   },
-  "censusSize": 2419,
-  "digest": "fnv1a32-7f816f2a",
+  "censusSize": 2420,
+  "digest": "fnv1a32-9044a29a",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-8332a827",
+  "observationDigest": "fnv1a32-b21398be",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1177,6 +1177,7 @@
     "test/node/node-service-runtime-isolation.test.js": "bootstrap-membership",
     "test/node/node-service.test.js": "bootstrap-membership",
     "test/node/participant-release-control-refusal-observation.test.js": "bootstrap-membership",
+    "test/node/participant-release-fresh-create-completion.test.js": "bootstrap-membership",
     "test/node/partition-registration-invariant.property.test.js": "bootstrap-membership",
     "test/node/registered-partition-removal.property.test.js": "bootstrap-membership",
     "test/node/replica-cleanup-token-authority.test.js": "bootstrap-membership",
@@ -8433,6 +8434,13 @@
     "test/node/participant-release-control-refusal-observation.test.js": {
       "files": [
         "src/node/participant-release-diagnostic-observation.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js"
+      ]
+    },
+    "test/node/participant-release-fresh-create-completion.test.js": {
+      "files": [
+        "src/node/participant-release-authorization-owner.js",
+        "src/node/replica-handler-release-recovery.js",
         "src/partition/partition-participant-transaction-cutover-constants.js"
       ]
     },

@@ -12,6 +12,7 @@ import {releaseAnswer} from
   '../../src/partition/partition-participant-release-contract.js';
 import {
   PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
+  PARTICIPANT_CUTOVER_BOUND as BOUND,
   PARTICIPANT_RELEASE_ACTION,
   PARTICIPANT_RELEASE_RESULT_FIELD,
   PARTICIPANT_RELEASE_TRIGGER,
@@ -83,6 +84,8 @@ async function createSeedReleaseHost({timeSource, reply, budgetMs = TEST_BUDGET_
         assert.equal(request.trigger, PARTICIPANT_RELEASE_TRIGGER.FRESH_SEED);
         assert.equal(request.partitionId, PARTITION_ID);
         assert.equal(request.targetBuildDigest, first.targetBuildDigest);
+        assert.equal(request.authorization, first.authorization,
+          're-drive retains the original authorization object');
         assert.equal(request.deadlineAtMs, first.deadlineAtMs,
           'every actual delivery retains the one seed deadline');
         assert.equal(handler.participantReleaseAuthorizationOwner.validates(
@@ -360,4 +363,103 @@ test('seed release workflow types terminal clock faults without changing refusal
   } finally {
     removeHost(invalidBudgetHost);
   }
+});
+
+async function withSeedHost(host, body) {
+  let primary;
+  let failed = false;
+  try {
+    await body();
+  } catch (error) {
+    primary = error;
+    failed = true;
+  }
+  try {
+    removeHost(host);
+  } catch (cleanup) {
+    if (failed) throw new AggregateError([primary, cleanup], 'body and fixture cleanup failed');
+    throw cleanup;
+  }
+  if (failed) throw primary;
+}
+
+test('seed completion preserves wait preparation at the original deadline', async () => {
+  // Reads: seed start, client timeout, delay guard, wait preparation,
+  // loop continuation, final client timeout, terminal diagnostic.
+  const timeSource = scriptedTimeSource([100, 100, 100, 105, 105, 105, 105]);
+  const host = await createSeedReleaseHost({timeSource,
+    reply: (request) => releaseAnswer(OUTCOME.DRAIN_PENDING, request,
+      {retryAfterMs: 1})});
+  await withSeedHost(host, async () => {
+    const failure = await seedReleaseFailureOf(host);
+    assert.deepEqual(host.delays, [0], 'seed retains its zero-wait preparation race');
+    assert.equal(timeSource.reads(), 7, 'clock reads retain original order');
+    assert.equal(host.delivered.length, 1);
+    assert.equal(failure.seedRelease.attemptCount, 2,
+      'the final client call at D refuses before delivery');
+    assert.equal(failure.answer.missingFact, 'release_deadline');
+  });
+});
+
+test('seed completion preserves reply delay validation, zero re-drive and NOT_LEADER cadence',
+  async () => {
+    for (const delay of [undefined, null, -1, 1.5, NaN, Infinity, '1']) {
+      const clock = scriptedTimeSource([100, 100, 101]);
+      const host = await createSeedReleaseHost({timeSource: clock,
+        reply: (request) => releaseAnswer(OUTCOME.DRAIN_PENDING, request,
+          {retryAfterMs: delay})});
+      await withSeedHost(host, async () => {
+        const failure = await seedReleaseFailureOf(host);
+        assert.deepEqual(host.delays, [], `invalid delay ${String(delay)} never waits`);
+        assert.equal(host.delivered.length, 1);
+        assert.equal(failure.answer.outcome, OUTCOME.DRAIN_PENDING);
+        assert.equal(clock.reads(), 3, 'invalid delay short-circuits the guard clock');
+      });
+    }
+    for (const outcome of [OUTCOME.DRAIN_PENDING, OUTCOME.NOT_LEADER]) {
+      const clock = new VirtualTimeSource({startMs: 1000});
+      const host = await createSeedReleaseHost({timeSource: clock,
+        budgetMs: BOUND.PAUSE_RETRY_AFTER_MS + 5,
+        reply: (request, index) => releaseAnswer(index === 0 ? outcome : OUTCOME.CUT_OVER,
+          request, {retryAfterMs: 0})});
+      await withSeedHost(host, async () => {
+        await host.workflow.releaseSeedParticipantCohorts();
+        host.assertReleaseRequests();
+        assert.equal(host.delivered.length, 2);
+        assert.deepEqual(host.delays,
+          [outcome === OUTCOME.NOT_LEADER ? BOUND.PAUSE_RETRY_AFTER_MS : 0]);
+      });
+    }
+  });
+
+test('seed completion propagates the original wait rejection without another request', async () => {
+  const failure = new Error('seed wait owner refused');
+  const host = await createSeedReleaseHost({
+    timeSource: new VirtualTimeSource({startMs: 100}),
+    reply: (request) => releaseAnswer(OUTCOME.DRAIN_PENDING, request, {retryAfterMs: 1}),
+  });
+  host.workflow.sleep = async () => {
+    throw failure;
+  };
+  await withSeedHost(host, async () => {
+    await assert.rejects(host.workflow.releaseSeedParticipantCohorts(),
+      (error) => error === failure);
+    host.assertReleaseRequests();
+    assert.equal(host.delivered.length, 1);
+  });
+});
+
+
+test('seed completion refuses a safe delay that exceeds the original remaining budget', async () => {
+  const clock = scriptedTimeSource([100, 100, 100, 101]);
+  const host = await createSeedReleaseHost({timeSource: clock,
+    reply: (request) => releaseAnswer(OUTCOME.DRAIN_PENDING, request, {retryAfterMs: 6})});
+  await withSeedHost(host, async () => {
+    const failure = await seedReleaseFailureOf(host);
+    assert.equal(failure.answer.outcome, OUTCOME.DRAIN_PENDING);
+    assert.equal(failure.seedRelease.attemptCount, 1);
+    assert.equal(host.delivered.length, 1);
+    assert.deepEqual(host.delays, []);
+    assert.equal(clock.reads(), 4, 'start, client, guard and terminal diagnostic only');
+  });
 });
