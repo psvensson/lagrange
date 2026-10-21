@@ -28,7 +28,7 @@
   "censusSize": 2419,
   "digest": "fnv1a32-7f816f2a",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-8332a827",
+  "observationDigest": "fnv1a32-02daf332",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -8706,6 +8706,7 @@
     "test/node/replica-transport-handler-identity.test.js": {
       "files": [
         "src/bootstrap/shared/message-group-transport-handler.js",
+        "src/wasm-service/wasm-service-constants.js",
         "src/wasm-service/wasm-service-replica.js"
       ]
     },

@@ -25,6 +25,8 @@ import {retireMessageGroupTransportHandler} from
   '../../src/bootstrap/shared/message-group-transport-handler.js';
 import {WasmServiceReplica} from
   '../../src/wasm-service/wasm-service-replica.js';
+import {WASM_SERVICE_REPLICA_STATE} from
+  '../../src/wasm-service/wasm-service-constants.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const NODE_ID = 'node-a';
@@ -56,6 +58,39 @@ function createPresenceOnlyTransport() {
       return handlers.has(address);
     },
   };
+}
+
+// Only installed after the refusal assertions: the same registration Map
+// then supplies genuine identity so the original owner can settle cleanup.
+function enableExactRetirement(transport) {
+  transport.getRegisteredHandler = (address) =>
+    transport.handlers.get(address) ?? null;
+  transport.unregisterExact = (address, handler) => {
+    if (transport.handlers.get(address) !== handler) return false;
+    transport.handlers.delete(address);
+    return true;
+  };
+}
+
+async function withFixtureCleanup(run, cleanup) {
+  let primary;
+  let primaryFailed = false;
+  try {
+    await run();
+  } catch (error) {
+    primary = error;
+    primaryFailed = true;
+  }
+  try {
+    await cleanup();
+  } catch (error) {
+    if (primaryFailed) {
+      throw new AggregateError([primary, error],
+        'Exact-handler witness and fixture cleanup both failed');
+    }
+    throw error;
+  }
+  if (primaryFailed) throw primary;
 }
 
 test('Removal-8: an old generation shut down before registration never ' +
@@ -156,10 +191,20 @@ test('Removal-8: every retiring owner surfaces a refused retirement (the ' +
     service.logger = logger;
     service.transportHandler = handler;
     transport.register(ADDRESS, handler);
-    await service.shutdown();
-    t.equal(transport.handlers.get(ADDRESS), handler,
-      'nothing is removed by address');
-    assertLeftRegisteredReported(t, logger, ADDRESS, REPLICA_ID);
+    await withFixtureCleanup(async () => {
+      await t.rejects(service.shutdown(),
+        {code: REPLICA_HANDLER_RETIREMENT_OUTCOME.REFUSED_NO_IDENTITY},
+        'shutdown refuses to settle while its exact handler remains registered');
+      t.equal(transport.handlers.get(ADDRESS), handler,
+        'nothing is removed by address');
+      assertLeftRegisteredReported(t, logger, ADDRESS, REPLICA_ID);
+    }, async () => {
+      enableExactRetirement(transport);
+      await service.shutdown();
+      t.equal(transport.getRegisteredHandler(ADDRESS), null,
+        'the same partition owner retires its retained handler on retry');
+      t.same(transport.unregistered, [], 'retry never removes by address');
+    });
   });
 
   t.test('message-group replica retirement', async (t) => {
@@ -167,11 +212,24 @@ test('Removal-8: every retiring owner surfaces a refused retirement (the ' +
     const address = `${NODE_ID}/message-group/mg-r1`;
     const logger = createRecordingLogger();
     transport.register(address, handler);
-    t.equal(await retireMessageGroupTransportHandler({
-      messageGroup: {transportHandler: handler, logger},
-      messageRouter: transport, address, replicaId: 'mg-r1'}),
-    REPLICA_HANDLER_RETIREMENT_OUTCOME.REFUSED_NO_IDENTITY);
-    assertLeftRegisteredReported(t, logger, address, 'mg-r1');
+    const retirement = {messageGroup: {transportHandler: handler, logger},
+      messageRouter: transport, address, replicaId: 'mg-r1'};
+    await withFixtureCleanup(async () => {
+      await t.rejects(retireMessageGroupTransportHandler(retirement),
+        {code: REPLICA_HANDLER_RETIREMENT_OUTCOME.REFUSED_NO_IDENTITY},
+        'message-group retirement refuses to release an unprovable handler');
+      t.equal(transport.handlers.get(address), handler,
+        'message-group refusal retains the exact handler');
+      assertLeftRegisteredReported(t, logger, address, 'mg-r1');
+    }, async () => {
+      enableExactRetirement(transport);
+      t.equal(await retireMessageGroupTransportHandler(retirement),
+        REPLICA_HANDLER_RETIREMENT_OUTCOME.RETIRED,
+        'the same message-group retirement settles after identity is available');
+      t.equal(transport.getRegisteredHandler(address), null,
+        'the retained message-group handler is removed');
+      t.same(transport.unregistered, [], 'retry never removes by address');
+    });
   });
 
   t.test('WASM service replica shutdown', async (t) => {
@@ -182,16 +240,39 @@ test('Removal-8: every retiring owner surfaces a refused retirement (the ' +
       serviceDefinitionId: 'svc', dbPath: join(directory, 'wsr-1.db')});
     const logger = createRecordingLogger();
     replica.logger = logger;
-    try {
+    let originalDb = null;
+    await withFixtureCleanup(async () => {
       await replica.initialize();
+      originalDb = replica.db;
       const registered = replica.transportHandler;
-      await replica.shutdown();
+      t.equal(originalDb.open, true, 'the actual original database is open');
+      await t.rejects(replica.shutdown(),
+        {code: REPLICA_HANDLER_RETIREMENT_OUTCOME.REFUSED_NO_IDENTITY},
+        'WASM shutdown retains custody on refused exact-handler retirement');
       t.equal(transport.handlers.get(replica.unifiedAddress), registered,
         'nothing is removed by address');
+      t.equal(replica.db, originalDb, 'refusal retains the exact database object');
+      t.equal(originalDb.open, true, 'refusal retains the original open database');
+      t.equal(replica.lifecycleState, WASM_SERVICE_REPLICA_STATE.CLEANUP_REQUIRED,
+        'refused retirement remains an owned cleanup obligation');
       assertLeftRegisteredReported(t, logger, replica.unifiedAddress,
         'wsr-1');
-    } finally {
+    }, async () => {
+      enableExactRetirement(transport);
+      await replica.shutdown();
+      t.equal(transport.getRegisteredHandler(replica.unifiedAddress), null,
+        'the same WASM owner retires its retained handler on retry');
+      t.same(transport.unregistered, [], 'retry never removes by address');
+      t.equal(replica.lifecycleState, WASM_SERVICE_REPLICA_STATE.STOPPED,
+        'the same replica completes shutdown');
+      t.equal(replica.db, null, 'successful owner cleanup discharges its database');
+      if (originalDb) {
+        t.equal(originalDb.open, false, 'the original database is physically closed');
+      }
+      if (replica.db !== null || originalDb?.open) {
+        throw new Error(`WASM cleanup remains pending; retained directory ${directory}`);
+      }
       rmSync(directory, {recursive: true, force: true});
-    }
+    });
   });
 });
