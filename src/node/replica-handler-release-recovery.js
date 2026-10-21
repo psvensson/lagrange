@@ -207,7 +207,6 @@ function createParticipantReleaseRecovery(handler) {
       targetBuildDigest: build.digest, trigger: TRIGGER.EXISTING_ORIGIN,
       deadlineAtMs: now() + BOUND.DRAIN_DEADLINE_MS});
     report(partitionId, answer);
-    if (answer.outcome !== OUTCOME.CUT_OVER) enqueue(partitionId, BOUND.RECOVERY_RETRY_MS);
   }
 
   function dispatch() {
