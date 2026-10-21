@@ -58,7 +58,6 @@ const SERVICE_ROW_BIRTH_FIELDS = Object.freeze([
  */
 function isExactServiceRowBirth(observed, expected) {
   return Number.isSafeInteger(observed?.[COLUMN.CREATED_AT]) &&
-    observed?.create_attempt_token === expected?.create_attempt_token &&
     SERVICE_ROW_BIRTH_FIELDS.every((field) =>
       observed?.[field] === expected?.[field]);
 }
