@@ -2,6 +2,8 @@
 // before native opening. Its files are not an alternative membership authority.
 import fs from 'node:fs';
 import path from 'node:path';
+import {validateOriginalSeedDeclaration} from
+  '../bootstrap/seed-original-allocation-declaration.js';
 import {RaftRsPeerIdentityRegistry, readRaftRsPeerIdentityReservations} from
   './raft-rs-peer-identity.js';
 import {RaftRsReplicaLifecycleOwner} from './raft-rs-replica-lifecycle-owner.js';
@@ -90,19 +92,23 @@ function inspectColdMember(db, declaration, member) {
 class RaftRsOriginalAllocationPreparation {
   #custody = new RaftRsPreparationCustody();
   #directoryOwner;
-  #dataDir;
+  #declarationContext;
   #started = false;
   #closed = false;
 
-  constructor({directoryOwner, dataDir}) {
+  constructor({directoryOwner, dataDir, nodeId, buildDigest}) {
     this.#directoryOwner = directoryOwner;
-    this.#dataDir = path.resolve(dataDir);
+    // Expected identity comes from the startup owner, never from the
+    // declaration being inspected. The seed catalog alone defines completeness.
+    this.#declarationContext = Object.freeze({dataDir: path.resolve(dataDir),
+      nodeId, buildDigest});
     this.assertCurrent();
   }
 
   assertCurrent() {
     if (this.#closed) throw originalAllocationError(REASON.CLOSED);
-    if (!ownsDataDirectoryProcessOwner(this.#directoryOwner, this.#dataDir)) {
+    if (!ownsDataDirectoryProcessOwner(this.#directoryOwner,
+      this.#declarationContext.dataDir)) {
       throw originalAllocationError(REASON.DIRECTORY);
     }
   }
@@ -144,6 +150,7 @@ class RaftRsOriginalAllocationPreparation {
     this.#begin();
     const opened = new Map();
     try {
+      validateOriginalSeedDeclaration(declaration, this.#declarationContext);
       // Complete virgin inventory precedes the first writable open.
       for (const member of declaration.members) assertVirginMember(member);
       for (const member of declaration.members) {
@@ -166,6 +173,7 @@ class RaftRsOriginalAllocationPreparation {
   inspect(declaration, inspectApplicationHistory) {
     this.#begin();
     try {
+      validateOriginalSeedDeclaration(declaration, this.#declarationContext);
       for (const member of declaration.members) {
         const db = this.#custody.open(member, {readonly: true, fileMustExist: true});
         const record = inspectColdMember(db, declaration, member);

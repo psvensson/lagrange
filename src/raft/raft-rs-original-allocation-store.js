@@ -22,6 +22,9 @@ function originalAllocationRow(db, member) {
       typeof row[COLUMN.MEMBER] !== 'string') {
     throw originalAllocationError(REASON.INCOMPLETE, member.replicaId);
   }
+  if (row[COLUMN.MEMBER] !== JSON.stringify(member)) {
+    throw originalAllocationError(REASON.IDENTITY, member.replicaId);
+  }
   return row;
 }
 
@@ -72,17 +75,29 @@ function prepareOriginalAllocationRow(db, declaration, member) {
   () => originalAllocationRow(db, member), (row) =>
     row[COLUMN.DECLARATION] === declarationText &&
     row[COLUMN.MEMBER] === memberText && row[COLUMN.ISSUE] === STATE.PREPARING &&
-    row[COLUMN.SERVICE_RIGHT] === STATE.UNUSED);
+    row[COLUMN.SERVICE_RIGHT] === STATE.UNUSED &&
+    row[COLUMN.IDENTITY_RIGHT] ===
+      (member.replicaId === declaration.anchorReplicaId ? STATE.UNUSED : null));
 }
 
 function markOriginalAllocationIssued(db, declaration, anchor) {
+  if (anchor.replicaId !== declaration.anchorReplicaId) {
+    throw originalAllocationError(REASON.IDENTITY, anchor.replicaId);
+  }
+  const declarationText = JSON.stringify(declaration);
   commitAndReadback(db, () => db.prepare(`UPDATE ${TABLE}
     SET ${COLUMN.ISSUE} = ? WHERE group_id = ? AND peer_id = ?
       AND replica_identity = ? AND incarnation = ? AND state = 'active'
-      AND ${COLUMN.DECLARATION} = ? AND ${COLUMN.ISSUE} = ?`)
+      AND ${COLUMN.DECLARATION} = ? AND ${COLUMN.MEMBER} = ?
+      AND ${COLUMN.ISSUE} = ? AND ${COLUMN.SERVICE_RIGHT} = ?
+      AND ${COLUMN.IDENTITY_RIGHT} = ? AND native_history_state = ?`)
     .run(STATE.ISSUED, anchor.groupId, anchor.peerId, anchor.replicaId,
-      anchor.incarnation, JSON.stringify(declaration), STATE.PREPARING),
+      anchor.incarnation, declarationText, JSON.stringify(anchor),
+      STATE.PREPARING, STATE.UNUSED, STATE.UNUSED,
+      RAFT_RS_OPENING_HISTORY.NEVER_OPENED),
   () => originalAllocationRow(db, anchor), (row) =>
+    row[COLUMN.DECLARATION] === declarationText &&
+    row.native_history_state === RAFT_RS_OPENING_HISTORY.NEVER_OPENED &&
     row[COLUMN.ISSUE] === STATE.ISSUED &&
     row[COLUMN.IDENTITY_RIGHT] === STATE.UNUSED &&
     row[COLUMN.SERVICE_RIGHT] === STATE.UNUSED);
@@ -92,13 +107,21 @@ function transitionOriginalRight(db, member, column, from, to) {
   if (column !== COLUMN.SERVICE_RIGHT && column !== COLUMN.IDENTITY_RIGHT) {
     throw originalAllocationError(REASON.IDENTITY, member.replicaId);
   }
+  // These are one-shot handoff rights, not arbitrary mutable state. In
+  // particular an unknown submission can never regain INSERT permission.
+  const permitted = (from === STATE.UNUSED && to === STATE.SUBMITTED) ||
+    (from === STATE.SUBMITTED && to === STATE.TRANSFERRED);
+  if (!permitted) throw originalAllocationError(REASON.SPENT, member.replicaId);
   const before = originalAllocationRow(db, member);
   if (before[column] !== from) throw originalAllocationError(REASON.SPENT, member.replicaId);
   commitAndReadback(db, () => db.prepare(`UPDATE ${TABLE} SET ${column} = ?
     WHERE group_id = ? AND peer_id = ? AND replica_identity = ?
-      AND incarnation = ? AND state = 'active' AND ${column} = ?`)
-    .run(to, member.groupId, member.peerId, member.replicaId, member.incarnation, from),
-  () => originalAllocationRow(db, member), (row) => row[column] === to);
+      AND incarnation = ? AND state = 'active' AND ${column} = ?
+      AND ${COLUMN.DECLARATION} = ? AND ${COLUMN.MEMBER} = ?`)
+    .run(to, member.groupId, member.peerId, member.replicaId, member.incarnation,
+      from, before[COLUMN.DECLARATION], before[COLUMN.MEMBER]),
+  () => originalAllocationRow(db, member), (row) =>
+    row[column] === to && row[COLUMN.DECLARATION] === before[COLUMN.DECLARATION]);
 }
 
 export {exactLifecycleRow, originalAllocationRow, prepareOriginalAllocationRow,

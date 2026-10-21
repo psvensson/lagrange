@@ -1,0 +1,101 @@
+{
+  "schema": "isolated-source-probe/1",
+  "baseCommit": "8b3638233da30c6a358e80be4b23021eb00b9e4c",
+  "baseTree": "a2eb6f377b3d15c0f15b591a0204ccdcf92ebcac",
+  "classification": "supplemental isolated storage probe; NOT canonical acceptance",
+  "runtime": {
+    "node": "v22.16.0",
+    "sqlite": "3.49.1",
+    "database": "in-memory node:sqlite via probe-only compatibility adapter"
+  },
+  "substitutions": [
+    "better-sqlite3 replaced only in the external probe by a node:sqlite compatibility surface",
+    "repository tap runner replaced only in the external probe by a node:test bridge",
+    "commitDurably body and its used constants extracted from the pinned production source; full durable-store dependency graph not loaded"
+  ],
+  "unchangedProductModule": "raft-rs-original-allocation-store.js is imported byte-for-byte from each selected baseline/candidate directory; it is not rewritten by the loader",
+  "firstProbe": {
+    "cases": 28,
+    "baselinePassed": 6,
+    "baselineFailed": 22,
+    "candidatePassed": 28,
+    "candidateFailed": 0
+  },
+  "expandedProbe": {
+    "cases": 33,
+    "baselinePassed": 8,
+    "baselineFailed": 25,
+    "candidatePassed": 33,
+    "candidateFailed": 0,
+    "skipped": 0
+  },
+  "negativeControls": {
+    "allow-reverse-rights": {
+      "exit": 1,
+      "tests": 33,
+      "pass": 14,
+      "fail": 19,
+      "skipped": 0,
+      "mutatedSourceSha256": "eb62ec0cbb2712f495d3e51281a06c482a6b41e2e45bf0da5e714f60177a7639"
+    },
+    "ignore-issued-declaration": {
+      "exit": 1,
+      "tests": 33,
+      "pass": 32,
+      "fail": 1,
+      "skipped": 0,
+      "mutatedSourceSha256": "a95de540bd3e8d74a58569d74ad7e76198f1f7548b58cc5907337e0999c62614"
+    },
+    "ignore-exact-birth": {
+      "exit": 1,
+      "tests": 33,
+      "pass": 32,
+      "fail": 1,
+      "skipped": 0,
+      "mutatedSourceSha256": "07cde1e08169752c2eadf2dde567191db603824ba2a2c52d9aa003b234308555"
+    }
+  },
+  "canonicalPreparationTests": "added, syntax-checked, NOT EXECUTED",
+  "canonicalRepositoryTests": "NOT EXECUTED; repository dependency installation and full checkout unavailable in this session",
+  "independentReview": "NOT PERFORMED",
+  "nativeLabMeasurement": "NOT SUBMITTED OR EXECUTED",
+  "hooksAndApplicableRepositoryGates": "NOT EXECUTED; any remote ref is WIP preservation only",
+  "sourceSyntax": "five changed/new JavaScript files pass node --check",
+  "patchApplication": "git apply --check and exact-byte post-apply comparison passed on the verified source subset",
+  "receiptFileUnchangedGitBlob": "a47b98ab36a8eff61a88cea5153466645c0e380c",
+  "receiptsPassed": 0,
+  "receiptsTotal": 8,
+  "sourceFiles": [
+    {
+      "path": "src/bootstrap/seed-original-allocation-declaration.js",
+      "bytes": 5711,
+      "sha256": "ce4f83d3348f39821067e02720ae8a2e1ff5ace5e4b50d90811a15d9b3523e54",
+      "gitBlob": "cfc2f02fdca01dae5027921016c7be67a2b4e9a3"
+    },
+    {
+      "path": "src/raft/raft-rs-original-allocation-preparation.js",
+      "bytes": 9230,
+      "sha256": "cd38e367e8a600524ca0412d864c060ef26c0fd19644d967add4c72b0d029687",
+      "gitBlob": "46154231e3f5bb5fa9270fe6c1cbd854059e0f9c"
+    },
+    {
+      "path": "src/raft/raft-rs-original-allocation-store.js",
+      "bytes": 6243,
+      "sha256": "bbad9ac85668e5f5686e59936f6d3c9b3da9f37c6d67da3a976e12fdd229d710",
+      "gitBlob": "364d262914ef92842866d87c8dfd5a22d191688a"
+    },
+    {
+      "path": "test/raft/raft-rs-original-allocation-preparation.test.js",
+      "bytes": 7104,
+      "sha256": "d2ea466b74e9aee211a1267c2b50e109dc42c47b0cc7a9c94cc9f32b6425e7aa",
+      "gitBlob": "2c5df9c3693db7219b34698e04966c5b4101279d"
+    },
+    {
+      "path": "test/raft/raft-rs-original-allocation-store.test.js",
+      "bytes": 10364,
+      "sha256": "d70f2e93d9a5b8a1de03e655e3592508c0fe4d26f65c9c88adf713853929e700",
+      "gitBlob": "a823c34f6b33f6a6e33d85002f714c43569c23b3"
+    }
+  ],
+  "sourceOnlyPatchSha256": "7457f814e92682de0e0453545082f3337f3a85b1803dc137b5aa94ecfb866353"
+}

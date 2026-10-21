@@ -76,7 +76,10 @@ function createSeedOriginalAllocation({dataDir, nodeId, buildDigest, now}) {
 }
 
 function validateOriginalSeedDeclaration(declaration, {dataDir, nodeId, buildDigest}) {
-  if (declaration?.version !== STATE.VERSION || declaration.nodeId !== nodeId ||
+  if (typeof nodeId !== 'string' || nodeId.length === 0 ||
+      typeof buildDigest !== 'string' || buildDigest.length === 0 ||
+      declaration?.version !== STATE.VERSION || declaration.nodeId !== nodeId ||
+      !Number.isSafeInteger(declaration.declaredAt) || declaration.declaredAt < 0 ||
       declaration.dataDir !== path.resolve(dataDir) ||
       declaration.buildDigest !== buildDigest || declaration.catalogDigest !== catalogDigest() ||
       declaration.anchorReplicaId !== originalSeedAnchor(dataDir).replicaId ||
@@ -105,6 +108,7 @@ function validateMember(member, expected, tokens) {
       typeof member.incarnation !== 'string' || member.incarnation.length === 0 ||
       typeof member.createAttemptToken !== 'string' || member.createAttemptToken.length === 0 ||
       !Number.isSafeInteger(member.createdAt) || member.createdAt < 0 ||
+      member.incarnation === member.createAttemptToken ||
       tokens.has(member.createAttemptToken) || tokens.has(member.incarnation)) {
     throw originalAllocationError(REASON.IDENTITY, expected.replicaId);
   }
