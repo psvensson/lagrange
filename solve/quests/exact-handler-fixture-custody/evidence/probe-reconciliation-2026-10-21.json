@@ -1,0 +1,25 @@
+{
+  "id": "exact-handler-fixture-custody",
+  "status": "open",
+  "blocked": null,
+  "probe": {
+    "metric": 1,
+    "target": 0,
+    "done": false,
+    "measuring": true,
+    "evidence": "solve/quests/exact-handler-fixture-custody/evidence/receipt.json",
+    "reason": "measured",
+    "outstanding": [
+      "applicable-gates-and-independent-result-review"
+    ]
+  },
+  "sealMetric": 4,
+  "delta": -3,
+  "attempts": 1,
+  "attemptsSinceAltitudeCheck": 1,
+  "recent": [
+    "2026-10-21T04:36:23.198Z finding evidence: Locked adam-laptop with retries disabled: original201 fixture selection0/3passes66reported assertions; amended a0dc88427 selection6/6passes237reported assertion",
+    "2026-10-21T04:50:20.577Z verification approve: Independent result review verified packet hashes, exact candidate bindings, old-fixture red, six-file positive and the native negative engagement plus exactly t",
+    "2026-10-21T06:51:15.255Z finding evidence: Reconcile current gate status after exact393 composition: component source, adversarial controls, preserved negative/red baseline, full census and focused owner"
+  ]
+}

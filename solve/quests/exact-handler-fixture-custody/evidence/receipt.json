@@ -37,10 +37,13 @@
       "evidence": [
         "gates-a0dc88427/fast-static.txt",
         "gates-a0dc88427/owner-statics.json",
-        "independent-review.md"
+        "independent-review.md",
+        "../../seed-release-failure-custody/evidence/composed-393f411ca/independent-result-review.md",
+        "../../seed-release-failure-custody/evidence/changed-candidate-393f411ca/independent-result-review.md",
+        "../../participant-release-completion-owner/evidence/independent-root-composition-review.md"
       ],
-      "reason": "Fast static and independent bounded result review pass. Four bounded-owner audit findings are owned by separately sealed cleanup-exception-audit-correspondence; its correction and exact composed owner gates remain pending."
+      "reason": "Prior bounded audit findings are repaired and independently composed. Exact393 focused32-file operation proof passes, including all corrected fixtures; native custody semantic negative remains preserved. Scoped static/impact gates pass. The canonical changed selection remainsRED and complete applicable gates, Solver landing and publication remain unsatisfied."
     }
   ],
-  "measuredCandidate": "a0dc88427b61a51d3cea7fc2ff8cdaa7fbdf7ec5"
+  "measuredCandidate": "393f411ca09449898465cc3cb7320c03fba2aba8"
 }
