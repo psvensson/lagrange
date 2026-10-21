@@ -28,7 +28,7 @@
   "censusSize": 2419,
   "digest": "fnv1a32-7f816f2a",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-8332a827",
+  "observationDigest": "fnv1a32-0e66fc1e",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -13898,6 +13898,7 @@
     "test/scripts/check-guideline-decision-boundaries.test.js": {
       "files": [
         "scripts/check-guideline-decision-boundaries-baseline.json",
+        "src/bootstrap/owners/seed-runtime-bridge-owner.js",
         "src/node/replica-handler-constants.js"
       ],
       "directories": [

@@ -631,6 +631,211 @@ test('an n/a dead claim is checked against every reference in src/',
     await fs.rm(path.dirname(sourceRoot), {recursive: true, force: true});
   });
 
+const CONSTRUCTION_FIXTURE_PATH = '/repo/src/runtime/dependency-assembly.js';
+const RENAMED_CONSTRUCTION_SOURCE = [
+  'export class DependencyAssembly {',
+  '  assemble() {',
+  '    if (this.queryHandle !== null) return this.queryHandle;',
+  '    const supplied = new SQLAccessor({',
+  '      systemCache: this.delegates.getSystemTableCache(),',
+  '      clock: this.delegates.getClock(),',
+  '    });',
+  '    this.queryHandle = supplied;',
+  '    this.delegates.setQueryHandle(supplied);',
+  '    this.consumer.setQueryHandle(supplied);',
+  '    return supplied;',
+  '  }',
+  '}',
+].join('\n');
+
+function mixedFindingsFor(source, filePath = CONSTRUCTION_FIXTURE_PATH,
+  functionName = 'assemble') {
+  return collectDecisionBoundaryViolationsFromSource(source, filePath)
+    .filter((finding) => finding.kind === VIOLATION_KIND.MIXED_CACHE_AND_SQL &&
+      finding.functionName === functionName);
+}
+
+test('mixed-source audit distinguishes the actual seed bridge acquisition from a query',
+  async (t) => {
+    const filePath = 'src/bootstrap/owners/seed-runtime-bridge-owner.js';
+    const source = await fs.readFile(filePath, 'utf8');
+    const publication = '    this.sqlQueryEngine = engine;';
+    t.equal(source.split(publication).length, 2,
+      'the real acquisition has one exact engine publication site');
+    t.match(source, /acquireSqlQueryEngine\(\)\s*\{/u,
+      'the named real owner is present in the parsed source');
+    t.same(mixedFindingsFor(source, filePath, 'acquireSqlQueryEngine'), [],
+      'constructing and publishing the dependency is not a mixed truth read');
+
+    const withReads = source.replace(publication, [
+      publication,
+      '    d.getSystemTableCache().get("key");',
+      '    engine.query("SELECT 1");',
+    ].join('\n'));
+    t.equal(mixedFindingsFor(withReads, filePath, 'acquireSqlQueryEngine').length, 1,
+      'real read operations added to that same source owner remain detected');
+  });
+
+test('mixed-source audit recognizes equivalent renamed construction and publication',
+  async (t) => {
+    t.same(mixedFindingsFor(RENAMED_CONSTRUCTION_SOURCE), [],
+      'owner, method, handle and constructor names do not need an allowlist');
+    const withReads = RENAMED_CONSTRUCTION_SOURCE.replace(
+      '    return supplied;',
+      '    return this.delegates.getSystemTableCache().get("key") ?? ' +
+        'supplied.query("SELECT 1");');
+    t.equal(mixedFindingsFor(withReads).length, 1,
+      'publication does not exempt later use of the engine as an authority');
+  });
+
+test('mixed-source audit does not mistake type names and property labels for reads',
+  async (t) => {
+    t.same(mixedFindingsFor([
+      'export function assemble() {',
+      '  return new SQLQueryEngine({cache: "a label", queryMode: "a label"});',
+      '}',
+    ].join('\n')), []);
+  });
+
+const MIXED_READ_CONSTRUCTION_CASES = Object.freeze([
+  {
+    name: 'actual reads inside constructor arguments',
+    body: 'return new Consumer({row: cache.get("key") ?? db.query("SELECT 1")});',
+  },
+  {
+    name: 'actual reads inside a publication argument',
+    body: 'owner.setSqlQueryEngine(cache.get("key") ?? db.query("SELECT 1"));',
+  },
+  {
+    name: 'reads in a constructor computed key',
+    body: 'return new Consumer({[cache.get("key")]: db.query("SELECT 1")});',
+  },
+  {
+    name: 'reads selecting a constructor',
+    body: 'return new constructors[cache.get("key") ?? db.query("SELECT 1")]();',
+  },
+  {
+    name: 'a query used as the constructor factory',
+    body: 'return new (db.query("SELECT 1"))(cache.get("key"));',
+  },
+  {
+    name: 'optional and computed read calls',
+    body: 'return cache?.["get"]?.("key") ?? db?.["query"]?.("SELECT 1");',
+  },
+  {
+    name: 'reads inside a callback passed to a constructor',
+    body: 'return new Consumer({load: () => cache.get("key") ?? db.query("SELECT 1")});',
+  },
+  {
+    name: 'reads inside a callback passed to a publication call',
+    body: 'owner.setSqlQueryEngine(() => cache.get("key") ?? db.query("SELECT 1"));',
+  },
+  {
+    name: 'computed publication receiver selection',
+    body: [
+      'const engine = new SQLQueryEngine({cache});',
+      'owner[cache.get("key") ?? db.query("SELECT 1")](engine);',
+    ].join('\n'),
+  },
+  {
+    name: 'a query nested in publication of a constructed engine',
+    body: [
+      'const engine = new SQLQueryEngine({cache});',
+      'this.sqlQueryEngine = engine;',
+      'owner.setSqlQueryEngine(engine.query(cache.get("key")));',
+    ].join('\n'),
+  },
+  {
+    name: 'read-through access on the constructed handle',
+    body: [
+      'const sqlEngine = new Engine({cache});',
+      'this.sqlEngine = sqlEngine;',
+      'owner.setSqlEngine(sqlEngine);',
+      'return cache.get("key") ?? sqlEngine.rows.current;',
+    ].join('\n'),
+  },
+  {
+    name: 'reads through local aliases',
+    body: [
+      'const left = cache;',
+      'const right = db;',
+      'return left.get("key") ?? right.get("key");',
+    ].join('\n'),
+  },
+  {
+    name: 'reads through an alias of a constructed handle',
+    body: [
+      'const sqlEngine = new Engine({cache});',
+      'const alias = sqlEngine;',
+      'return cache.get("key") ?? alias.read("key");',
+    ].join('\n'),
+  },
+  {
+    name: 'reads through a destructured method',
+    body: [
+      'const sqlEngine = new Engine({cache});',
+      'const {read: fetch} = sqlEngine;',
+      'return cache.get("key") ?? fetch("key");',
+    ].join('\n'),
+  },
+  {
+    name: 'a shadowed construction binding is not the captured handle',
+    body: [
+      'const sqlEngine = new Engine({cache});',
+      'const read = (sqlEngine) => cache.get("key") ?? sqlEngine.read("key");',
+      'return read(otherOwner);',
+    ].join('\n'),
+  },
+  {
+    name: 'a reassigned binding remains unclassified authority evidence',
+    body: [
+      'let sqlEngine = new Engine({cache});',
+      'sqlEngine = authoritativeRow;',
+      'return cache.get("key") ?? sqlEngine;',
+    ].join('\n'),
+  },
+  {
+    name: 'an overwritten publication field is not a proven dependency',
+    body: [
+      'const engine = new SQLQueryEngine({cache});',
+      'this.sqlQueryEngine = engine;',
+      'this.sqlQueryEngine = authoritativeRow;',
+      'return cache.get("key") ?? this.sqlQueryEngine;',
+    ].join('\n'),
+  },
+  {
+    name: 'raw cache and SQL row values are still conservative evidence',
+    body: 'return cachedRow ?? sqlRow;',
+  },
+]);
+
+for (const fixture of MIXED_READ_CONSTRUCTION_CASES) {
+  test(`mixed-source audit keeps ${fixture.name}`, async (t) => {
+    const source = `export function assemble() {\n${fixture.body}\n}`;
+    t.equal(mixedFindingsFor(source).length, 1,
+      'construction-looking syntax must not erase actual or unclassified read evidence');
+  });
+}
+
+test('mixed-source audit does not treat a getter-bearing publication field as passive',
+  async (t) => {
+    const source = [
+      'export class GetterBackedAssembly {',
+      '  get sqlEngine() { return db.query("SELECT 1"); }',
+      '  set sqlEngine(value) { this.saved = value; }',
+      '  assemble() {',
+      '    if (this.sqlEngine !== null) return this.sqlEngine;',
+      '    const engine = new Engine({cache: cache.get("key")});',
+      '    this.sqlEngine = engine;',
+      '    owner.setSqlEngine(engine);',
+      '    return engine;',
+      '  }',
+      '}',
+    ].join('\n');
+    t.equal(mixedFindingsFor(source).length, 1,
+      'the known accessor prevents treating the identity guard as a plain handle read');
+  });
+
 test('the live removal backstop cannot be declared dead', async (t) => {
   const filePath = 'src/node/replica-handler-constants.js';
   const source = (await fs.readFile(filePath, 'utf8')).replace(
