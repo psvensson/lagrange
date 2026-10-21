@@ -1,0 +1,10 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {"id": "preserved-original-red", "passed": false},
+    {"id": "reviewed-fixture-contracts-and-custody", "passed": false},
+    {"id": "exact-candidate-positive-and-negative", "passed": false},
+    {"id": "applicable-gates-and-independent-result-review", "passed": false}
+  ]
+}
