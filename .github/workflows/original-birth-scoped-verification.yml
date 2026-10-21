@@ -1,0 +1,197 @@
+# Supplemental WIP evidence only. No locked-lab, public handoff, or release credit.
+# Source is pinned independently of the workflow branch. No commits or publication.
+name: original-birth-scoped-verification
+on:
+  push:
+    branches: [verify/original-birth-static-20261021]
+    paths: [.github/workflows/original-birth-scoped-verification.yml]
+permissions:
+  contents: read
+concurrency:
+  group: original-birth-scoped-verification-20261021
+  cancel-in-progress: false
+jobs:
+  source-bound-checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      SOURCE_SHA: dfbb579b4a2606aec0c21be4376833acfb7ec912
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: dfbb579b4a2606aec0c21be4376833acfb7ec912
+          persist-credentials: false
+          fetch-depth: 1
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Pin source and install locked native dependencies
+        id: prepare
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/original-birth-evidence"
+          mkdir -p "$OUT"
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          git rev-parse HEAD > "$OUT/source-sha.txt"
+          git archive --format=tar HEAD | gzip > "$OUT/source.tar.gz"
+          node --version > "$OUT/node-version.txt"
+          npm --version > "$OUT/npm-version.txt"
+          npm ci > "$OUT/install.log" 2>&1
+      - name: Run every selected file once, serially, through the canonical runner
+        if: steps.prepare.outcome == 'success'
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT="$RUNNER_TEMP/original-birth-evidence"
+          mkdir -p "$OUT/positive"
+          for f in \
+            test/message-group/message-group-registration-exact-birth.test.js \
+            test/message-group/message-group-service-row-owner.test.js \
+            test/partition/partition-registration-exact-birth.test.js \
+            test/partition/partition-registration-readback-controls.test.js \
+            test/partition/partition-service-row-owner.test.js \
+            test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js \
+            test/raft/raft-rs-backend/lifecycle-retirement-census.test.js \
+            test/raft/raft-rs-original-allocation-store.test.js \
+            test/raft/raft-rs-original-allocation-preparation.test.js \
+            test/raft/raft-rs-original-allocation-cold-inspection.test.js \
+            test/raft/raft-rs-original-allocation-custody.test.js \
+            test/raft/raft-rs-backend/identity-record-window.test.js \
+            test/raft/raft-rs-backend/durable-rejoin-record-refusal.test.js \
+            test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js \
+            test/raft/raft-rs-backend/durable-commit-sync.test.js; do
+            name="${f##*/}"
+            npm run -s test:file -- "$f" > "$OUT/positive/$name.log" 2>&1
+            status=$?
+            printf '%s\n' "$status" > "$OUT/positive/$name.status"
+            printf '%s status=%s\n' "$f" "$status"
+            tail -n 18 "$OUT/positive/$name.log"
+            sleep 5
+          done
+          git diff --exit-code -- src test > "$OUT/positive-source-unchanged.log" 2>&1
+          printf '%s\n' "$?" > "$OUT/positive-source-unchanged.status"
+      - name: Measure unchanged witnesses against two isolated shared-owner regressions
+        if: steps.prepare.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/original-birth-evidence"
+          for pair in \
+            created-at:f8921107085918bce6ee59ae53bfc38c65e7d057 \
+            token:49d47acd9fa87ec4df52633be76bbd5b7a2c80dc; do
+            name="${pair%%:*}"; sha="${pair#*:}"
+            dir="$RUNNER_TEMP/original-birth-mutant-$name"
+            mkdir -p "$OUT/negative-$name"
+            git fetch --no-tags --depth=1 origin "$sha"
+            git worktree add --detach "$dir" "$sha"
+            test "$(git -C "$dir" rev-parse HEAD)" = "$sha"
+            test "$(git -C "$dir" rev-parse HEAD:package-lock.json)" = "$(git rev-parse HEAD:package-lock.json)"
+            test "$(git diff --name-only "$SOURCE_SHA" "$sha")" = 'src/node/service-row-incarnation.js'
+            git diff "$SOURCE_SHA" "$sha" > "$OUT/negative-$name/source-regression.patch"
+            ln -s "$GITHUB_WORKSPACE/node_modules" "$dir/node_modules"
+            printf '%s\n' "$sha" > "$OUT/negative-$name/source-sha.txt"
+            for f in test/partition/partition-registration-exact-birth.test.js \
+                     test/message-group/message-group-registration-exact-birth.test.js; do
+              file="${f##*/}"
+              set +e
+              (cd "$dir" && npm run -s test:file -- "$f") > "$OUT/negative-$name/$file.log" 2>&1
+              status=$?
+              set -e
+              printf '%s\n' "$status" > "$OUT/negative-$name/$file.status"
+              printf '%s %s status=%s\n' "$name" "$f" "$status"
+              tail -n 25 "$OUT/negative-$name/$file.log"
+              sleep 5
+            done
+          done
+      - name: Measure canonical static checks and retain generated metadata diff
+        if: steps.prepare.outcome == 'success'
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT="$RUNNER_TEMP/original-birth-evidence"
+          mkdir -p "$OUT/static"
+          ./node_modules/.bin/eslint --format json \
+            src/node/service-row-incarnation.js \
+            src/partition/partition-service-row-owner.js \
+            src/message-group/message-group-service-row-owner.js \
+            test/partition/partition-registration-exact-birth.test.js \
+            test/partition/partition-registration-readback-controls.test.js \
+            test/message-group/message-group-registration-exact-birth.test.js \
+            test/raft/raft-rs-backend/lifecycle-retirement-census.js \
+            test/raft/raft-rs-backend/lifecycle-retirement-census.test.js \
+            test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js \
+            > "$OUT/static/scoped-eslint.json" 2> "$OUT/static/scoped-eslint.stderr"
+          printf '%s\n' "$?" > "$OUT/static/scoped-eslint.status"
+          for script in test:deps audit:shards audit:impact-contracts; do
+            name="${script//:/_}"
+            npm run -s "$script" > "$OUT/static/$name.log" 2>&1
+            printf '%s\n' "$?" > "$OUT/static/$name.status"
+            tail -n 25 "$OUT/static/$name.log"
+          done
+          npm run -s test:metadata:refresh > "$OUTOUT/static/metadata-refresh.log" 2>&1
+          printf '%s\n' "$?" > "$OUT/static/metadata-refresh.status"
+          git diff --binary > "$OUT/static/generated-metadata.patch"
+          git status --porcelain > "$OUT/static/final-status.txt"
+          git diff --check > "$OUT/static/diff-check.log" 2>&1
+          printf '%s\n' "$?" > "$OUT/static/diff-check.status"
+      - name: Classify results without treating generic negative failures as proof
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,os,re
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])/'original-birth-evidence'
+          root.mkdir(exist_ok=True)
+          failures=[]
+          positives=list((root/'positive').glob('*.status'))
+          if len(positives)!=15: failures.append('not all 15 positive files returned')
+          for p in positives:
+              if p.read_text().strip()!='0': failures.append('positive:'+p.name)
+          for name,expect in [('created-at',[
+              'uncertain original registration refuses older incarnation',
+              'uncertain original registration refuses newer incarnation',
+              'uncertain MG birth refuses older incarnation',
+              'uncertain MG birth refuses newer incarnation',
+              'thrown MG answer does not adopt a successor birth and retains the cause']),
+              ('token',[
+              'uncertain original registration refuses foreign creation token',
+              'uncertain original registration refuses missing creation token',
+              'uncertain MG birth refuses foreign creation token',
+              'uncertain MG birth refuses missing creation token'])]:
+              d=root/('negative-'+name)
+              statuses=list(d.glob('*.status'))
+              logs='\n'.join(p.read_text() for p in d.glob('*.log'))
+              observed=re.findall(r'^\s*not ok \d+ - (.+)$',logs,re.M)
+              if len(statuses)!=2 or any(p.read_text().strip()=='0' for p in statuses):
+                  failures.append('negative not both RED:'+name)
+              if set(observed)!=set(expect) or logs.count('Missing expected rejection.')<len(expect):
+                  failures.append('negative named failures differ:'+name)
+          for p in (root/'static').glob('*.status'):
+              if p.read_text().strip()!='0': failures.append('static:'+p.name)
+          if not (root/'static/scoped-eslint.status').exists(): failures.append('static not run')
+          source_status=root/'positive-source-unchanged.status'
+          if not source_status.exists() or source_status.read_text().strip()!='0':
+              failures.append('positive source preservation unproved')
+          summary={'source_sha':os.environ['SOURCE_SHA'],'platform':'GitHub-hosted ubuntu-24.04',
+                   'retry':0,'positive_file_results':len(positives),'failures':failures,
+                   'locked_lab_or_public_handoff_credit':False,'independent_review':False}
+          (root/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+          files=sorted(p for p in root.rglob('*') if p.is_file())
+          (root/'SHA256SUMS').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+str(p.relative_to(root))+'\n' for p in files))
+          print(json.dumps(summary,indent=2))
+          raise SystemExit(1 if failures else 0)
+          PY
+      - name: Preserve every outcome and the exact source without publishing
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: original-birth-scoped-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/original-birth-evidence/
+          retention-days: 30
+          if-no-files-found: error
