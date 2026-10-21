@@ -1,0 +1,220 @@
+{
+  "date": "2026-10-21",
+  "productCommit": "393f411ca09449898465cc3cb7320c03fba2aba8",
+  "evidenceHead": "e69db481f37ab5633d64de7b6e7345426d9286b3",
+  "scope": "Additive R1/R2 proposed correction, pending independent review; no source/test/receipt change. Earlier input manifests remain preserved.",
+  "sourceFiles": [
+    {
+      "path": "src/node/replica-state-machine-serialization.js",
+      "gitBlob": "1bf1d4f31066feec0b0779c43cccd6fec4e0e95b",
+      "sha256": "14f94009eef0a0cd8c2528b81f763ec030322d71ea54f46ab407bf405c94612b",
+      "bytes": 9447
+    },
+    {
+      "path": "src/node/replica-state-machine-registered-activation.js",
+      "gitBlob": "9270dbcd0874c6bf58585ec4dc10ca390672a9c7",
+      "sha256": "6b2a152228dc4e75f5e0e23f46b284e6e8f9987fa820bd3a19e05cb04359186b",
+      "bytes": 10231
+    },
+    {
+      "path": "src/node/replica-state-machine.js",
+      "gitBlob": "6540f7e86e6d3ca953a362a8f2c9a8d299bc3fe0",
+      "sha256": "6c94bb88764d1f46b0d7ea0cbb4bc41336440d5642e6d95da548fbe88ffb8b79",
+      "bytes": 26554
+    },
+    {
+      "path": "src/node/replica-transport-handler-identity.js",
+      "gitBlob": "28d363f59fb792974235e00bc6e86a25f0b49e1a",
+      "sha256": "255531265f2d48aebddbf0057fcff64ba5057c3bd438cc74dbef6fc177f8b1f3",
+      "bytes": 5632
+    },
+    {
+      "path": "src/partition/partition-service-row-owner.js",
+      "gitBlob": "e7cb1298699843dee409cac1fb6fae209f9cdda1",
+      "sha256": "5097f714b3498a458f92ff71493a5d819a215dd96aa9a4b0845defaffbc798f6",
+      "bytes": 11486
+    },
+    {
+      "path": "src/partition/partition-service-lifecycle-methods.js",
+      "gitBlob": "72ac27521112687864f86fc3020c3fd66eb6daae",
+      "sha256": "381038cb68e629a74e44f737954865753cbf1c50c8423df85208a929cf801ba0",
+      "bytes": 8434
+    },
+    {
+      "path": "src/raft/raft-rs-replica-lifecycle-owner.js",
+      "gitBlob": "d5d70d0418e616c6b79ae3a0a258f8ecf43be2d6",
+      "sha256": "692ff3dd28f0ae4fe7f70b1128361df494437b3a8939d83bba5471cd5e5bfe01",
+      "bytes": 23906
+    },
+    {
+      "path": "src/raft/raft-rs-operation-port.js",
+      "gitBlob": "6a41b2392cde027363b8c27b4d181fb8b7c46ea3",
+      "sha256": "ab3b0a3c27b1568ab644d458ebcf078f47d8da98255d41317bdc766923ff0597",
+      "bytes": 21095
+    },
+    {
+      "path": "src/raft/replica-leadership-state.js",
+      "gitBlob": "5c3e7e7b5a194f3265b8476fdbc4d9455eae2df7",
+      "sha256": "9062a1a6f280549730b081679afd46368cf2a7453d019c99b6342923f579ddf6",
+      "bytes": 6779
+    },
+    {
+      "path": "src/partition/partition-service-raft-lifecycle-wiring.js",
+      "gitBlob": "c1dab52ebee59a23bc860334764c9ba26f93c8af",
+      "sha256": "81155037f58cb809ff44289b0a052fcc0c36f3100e8f6e8133629abe04a32d87",
+      "bytes": 6282
+    },
+    {
+      "path": "src/partition/partition-service-leader-activation-methods.js",
+      "gitBlob": "08a908b226c1ec8f21824c4fa7b0ed539d926049",
+      "sha256": "a478f7fa2e39ff41e65eb1503aa9ffec62486a20054fdd75208346d3118a13f7",
+      "bytes": 4494
+    },
+    {
+      "path": "src/partition/partition-service-rebalancer-methods.js",
+      "gitBlob": "8358fe6b6e8a1fc294e79d8789517d9f725d1d1e",
+      "sha256": "a90e6c0b54903b138155ad5632648b06b976295fac0b9916d317b36d80b9f84e",
+      "bytes": 9593
+    },
+    {
+      "path": "src/partition/partition-service-metadata-mutation-helpers.js",
+      "gitBlob": "6772514dd9ff66bdbe34d1ab23b57b3bb70fb40b",
+      "sha256": "7890ee59101edf7f8aec6ed573c511ecec78a8802ea98be04e22a67d37d29752",
+      "bytes": 15621
+    },
+    {
+      "path": "src/partition/partition-service-metadata-delivery-methods.js",
+      "gitBlob": "5a2dbf09f79ff5d62b0d888d346126837131690e",
+      "sha256": "cd2d2d8d793ce03fc08fb4fe0f6381f44d087632954d6f4e1d8d34138c1e1e0b",
+      "bytes": 20541
+    },
+    {
+      "path": "src/partition/partition-service-split-mirror-queue-methods.js",
+      "gitBlob": "252b00e77a100320cecab1fed5632b7cf1c52ea5",
+      "sha256": "c601c4a64457d92ff91aaf597d8d89217263bfea1f3f8512af25c82ecfcf1dad",
+      "bytes": 11518
+    },
+    {
+      "path": "src/partition/partition-service-merge-replication-resumption-methods.js",
+      "gitBlob": "71d3a0bdc893c49c080f4f9b070fd445e5a6b4c4",
+      "sha256": "08aa58d4aa2e62df1d3f41d40092992cb7ca49fcafcf5c449a9f32e07b562c4e",
+      "bytes": 4977
+    },
+    {
+      "path": "src/partition/partition-service-source-replication-start-methods.js",
+      "gitBlob": "2bf327097f3bbfa3bdd9f50d343298777780ee5f",
+      "sha256": "eded1de2c4501eb334d3545b8a12c74207696e75241229826e4b03945ce5ce72",
+      "bytes": 17959
+    },
+    {
+      "path": "src/partition/partition-mirror-replay-cursor.js",
+      "gitBlob": "14b9fb863699efd566bc26416c4da2f5abeffc8d",
+      "sha256": "c905ca5887531c8f5cab47644d54b3ba901437d297321284356358f295539840",
+      "bytes": 6203
+    },
+    {
+      "path": "src/partition/partition-participant-transaction-self-check.js",
+      "gitBlob": "3b923929b1dfde1831e4d0a97160acf62c05e3bb",
+      "sha256": "cf5205114613a6e3c7c77a2cd6b75c819810083a0000d1ecf3f3ef2e530012f5",
+      "bytes": 3389
+    },
+    {
+      "path": "src/partition/partition-participant-transaction-bytes.js",
+      "gitBlob": "5aa247c526ee3e4571f0f2370c0696313f5016ab",
+      "sha256": "1aeba1c2cf2323f85bd10b6105338a1a9689c74a112da1f432840e32972b2fc4",
+      "bytes": 14933
+    },
+    {
+      "path": "src/partition/partition-committed-command-admission.js",
+      "gitBlob": "65879f9839df8c3342b37f5d62fc54410093bdfd",
+      "sha256": "999e259fbb5fb3705b1a80b1b2e550bbbec1109f02ed4ff5615b91f5aadb2a44",
+      "bytes": 7992
+    },
+    {
+      "path": "src/partition/partition-service-entry-apply-base.js",
+      "gitBlob": "ee3c3f8a52fd579fc1995811b6d137c82c46d4e9",
+      "sha256": "3878b8011849c336f36e4848c15d58b09bb84b1218a2856b865c46bf73fda7cb",
+      "bytes": 27108
+    },
+    {
+      "path": "src/raft/raft-rs-durable-store.js",
+      "gitBlob": "8095d03fc20c3ff5025606bc8bdac79aa519202c",
+      "sha256": "88af05c5bcdf3d8f1209615a2d3f6c6427ab9ebf8951a1f66835402074c75d5f",
+      "bytes": 28139
+    },
+    {
+      "path": "src/raft/raft-rs-application-transaction-owner.js",
+      "gitBlob": "4481d2f0c9967ed17181620abddf89cb5414dc07",
+      "sha256": "f12ff39650a0c221212168129f24ff070b563bd3c65cb1498572af7e3642f6aa",
+      "bytes": 4249
+    },
+    {
+      "path": "src/raft/raft-rs-proposal-codec.js",
+      "gitBlob": "123f605cca74f8dfc6b6ad62388d55e5b4d52840",
+      "sha256": "66e6e8eec94d23e3d4c38bb485bbca00e9775b9c521f3e1ff7a76b508f3bb13c",
+      "bytes": 2120
+    },
+    {
+      "path": "src/message-group/message-group-service-raft-timing.js",
+      "gitBlob": "c11c58c800c7efa1ba6bfff4adff851c96b9e8c7",
+      "sha256": "96acec705683de1ca44f72770d770581a003f6f9e967e5f33de6b4e2a8a816f0",
+      "bytes": 7764
+    },
+    {
+      "path": "src/message-group/message-group-service-raft-lifecycle.js",
+      "gitBlob": "4792327aa314d119f1efff194e1a1b427f026306",
+      "sha256": "7d943c135978114a779e8bc04a19ce6cdfab5e072c633b21eed6f80f52eff992",
+      "bytes": 15173
+    },
+    {
+      "path": "src/message-group/message-group-service-leadership-state-runtime-methods.js",
+      "gitBlob": "b8307ff95f8e795a9e3b16d974fc05421edb2da7",
+      "sha256": "14db7c0498f525b71278676f059c68e376da7381ac286b905e2f90fe923287d7",
+      "bytes": 5794
+    },
+    {
+      "path": "src/bootstrap/system-table-schemas-constants.js",
+      "gitBlob": "2f0f57b4d8af10a86b3a2badb5b36158bbb94bd7",
+      "sha256": "99d208e3dab975b436ab6d1373a17c39a875358eac1f3ad64faac277f8565017",
+      "bytes": 16178
+    },
+    {
+      "path": "src/bootstrap/system-table-core-schema-definitions.js",
+      "gitBlob": "c1d217b30a5b004041236b3cad37f5fe413eefb4",
+      "sha256": "84baac74313f298a037d31d794a847ce273a16a9cb7a1d6e83436bcee8f1a4c0",
+      "bytes": 15870
+    }
+  ],
+  "evidenceFiles": [
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/pre-source-r1-r2-correction-2026-10-21.md",
+      "sha256": "d6da7d1647d1e726b1128603f058aeb0a8a7dcda3d727d30b3324bc88a8570e2",
+      "bytes": 14718
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/independent-complete-pre-source-review-2026-10-21.md",
+      "sha256": "46b10ad0b5d1c522f693550befe7fb1d2c7803851ca67f3e7f15e7d2d423d9b5",
+      "bytes": 26601
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/native-callback-cut-input-2026-10-21.md",
+      "sha256": "826e1bb1af104ea4ec5e3c07f99b59f232b1054a674e11de68b5c702767873d3",
+      "bytes": 16156
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/pre-source-owner-correspondence-inputs-2026-10-21.json",
+      "sha256": "a71c000294ba7fac6bbfde909d2466c9662480ad6ff4bf8cba5ecfed25722c4c",
+      "bytes": 11755
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/pre-source-addendum-inputs-2026-10-21.json",
+      "sha256": "0359c4de29ff8e02fef44d3cebf0b687b71b2b40970e777ef9882884d5fff35c",
+      "bytes": 6504
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/acquisition-input-path-clarification-2026-10-21.md",
+      "sha256": "df5905f9c26645fcaebd8c91db14cf8ae513d7ac8a83f5e82c1a8425f598dfe5",
+      "bytes": 1512
+    }
+  ]
+}
