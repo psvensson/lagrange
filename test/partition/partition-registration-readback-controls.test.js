@@ -57,7 +57,10 @@ for (const lost of [false, true]) {
 for (const [name, change] of [
   ['another birth', (row) => ({...row, created_at: row.created_at + 1})],
   ['foreign creation token', (row) => ({...row, create_attempt_token: 'foreign'})],
-  ['missing creation token', (row) => { delete row.create_attempt_token; return row; }],
+  ['missing creation token', (row) => {
+    delete row.create_attempt_token;
+    return row;
+  }],
   ['foreign group identity', (row) => ({...row, group_id: 'other-group'})],
   ['changed lifecycle', (row) => ({...row, status: 'active'})],
 ]) {

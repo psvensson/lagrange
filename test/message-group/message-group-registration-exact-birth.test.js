@@ -32,7 +32,8 @@ function fixture({delta = {}, lost = false, observation = 'exact'} = {}) {
       assert.equal(table, 'services');
       assert.equal(sql, 'SELECT * FROM services WHERE service_id = ?');
       assert.deepEqual(params, [request.replicaId]);
-      assert.equal(options.authoritativeReadMode, CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED);
+      assert.equal(options.authoritativeReadMode,
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED);
       assert.equal(options.leaderMode, CONTROL_PLANE_READ_LEADER_MODE.REQUIRED);
       const row = JSON.parse(db.prepare('SELECT row_json FROM answer').get().row_json);
       if (observation === 'unavailable') return {success: false, rows: [row]};

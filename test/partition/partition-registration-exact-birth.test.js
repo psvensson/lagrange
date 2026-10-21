@@ -27,7 +27,8 @@ function fixture({delta = {}, lost = true, observation = 'exact'} = {}) {
       assert.equal(table, 'services');
       assert.equal(sql, 'SELECT * FROM services WHERE service_id = ?');
       assert.deepEqual(params, ['original-p1-r1']);
-      assert.equal(options.authoritativeReadMode, CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED);
+      assert.equal(options.authoritativeReadMode,
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED);
       assert.equal(options.leaderMode, CONTROL_PLANE_READ_LEADER_MODE.REQUIRED);
       const row = JSON.parse(db.prepare('SELECT row_json FROM registration_answer').get().row_json);
       if (observation === 'unavailable') return {success: false, rows: [row]};
@@ -55,7 +56,9 @@ for (const lost of [true, false]) {
       assert.equal(evidence.created_at, 1000);
       assert.equal(evidence.create_attempt_token, 'reserved-original-creation');
       assert.deepEqual(f.counts, {inserts: 1, reads: 1});
-    } finally { f.db.close(); }
+    } finally {
+      f.db.close();
+    }
   });
 }
 
@@ -74,7 +77,9 @@ for (const [name, delta] of [
       await assert.rejects(f.owner.registerReplica(request), (error) =>
         error.code === 'REPLICA_IDENTITY_CONFLICT' && error.cause === f.failure);
       assert.deepEqual(f.counts, {inserts: 1, reads: 1}, 'no second submission');
-    } finally { f.db.close(); }
+    } finally {
+      f.db.close();
+    }
   });
 }
 
@@ -85,6 +90,8 @@ for (const observation of ['unavailable', 'absent', 'duplicate']) {
       await assert.rejects(f.owner.registerReplica(request), (error) =>
         error.code === 'CREATE_OWNER_DEFERRED' && error.cause === f.failure);
       assert.deepEqual(f.counts, {inserts: 1, reads: 1});
-    } finally { f.db.close(); }
+    } finally {
+      f.db.close();
+    }
   });
 }

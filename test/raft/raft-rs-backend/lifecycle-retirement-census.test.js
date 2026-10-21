@@ -6,16 +6,16 @@ import {inspectLifecycleRetirements} from './lifecycle-retirement-census.js';
 
 const file = '/project/src/node/consumer.js';
 const ownerFile = '/project/src/raft/raft-rs-lifecycle-administration.js';
-const prefix = "import {raftRsLifecycleAdministration as admin} from '../raft/raft-rs-lifecycle-administration.js';\n";
+const prefix = 'import {raftRsLifecycleAdministration as admin} from \'../raft/raft-rs-lifecycle-administration.js\';\n';
 const inspect = (body) => inspectLifecycleRetirements(prefix + body, {file, ownerFile});
 
 test('native census distinguishes the WASM creation owner and ignores comments and strings', () => {
-  const result = inspect("lifecycle.retireReplica(origin); // admin.retireReplica(id, reason);\nconst text = 'admin.retireReplica(id)';");
+  const result = inspect('lifecycle.retireReplica(origin); // admin.retireReplica(id, reason);\nconst text = \'admin.retireReplica(id)\';');
   assert.deepEqual(result, {calls: [], violations: []});
 });
 
 test('native census follows renamed imports and literal computed calls', () => {
-  for (const method of ['admin.retireReplica', "admin['retireReplica']"]) {
+  for (const method of ['admin.retireReplica', 'admin[\'retireReplica\']']) {
     const result = inspect(`${method}(id, reason, {groupId, runtime: captured});`);
     assert.equal(result.calls.length, 1);
     assert.deepEqual(result.violations, []);
