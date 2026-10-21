@@ -41,6 +41,7 @@ function inspectLifecycleRetirements(source, {file, ownerFile}) {
   const parents = new WeakMap();
   const violations = [];
   const calls = [];
+  const aliasNodes = new WeakSet();
   const report = (node, reason) => violations.push({file, line: node.loc.start.line, reason});
   const isOwner = (specifier) => typeof specifier === 'string' &&
     resolve(dirname(file), specifier) === resolve(ownerFile);
@@ -58,10 +59,27 @@ function inspectLifecycleRetirements(source, {file, ownerFile}) {
       } else bindings.add(specifier.local.name);
     }
   });
+  // Follow immutable object aliases, including an alias scoped to a helper.
+  // Reassignment and binding shadowing still fail closed in the reference pass.
+  let changed = true;
+  while (changed) {
+    changed = false;
+    walk(ast, null, (node, parent) => {
+      if (node.type !== 'VariableDeclarator' || parent?.kind !== 'const' ||
+          node.id.type !== 'Identifier' || node.init?.type !== 'Identifier' ||
+          !bindings.has(node.init.name)) return;
+      aliasNodes.add(node.id);
+      aliasNodes.add(node.init);
+      if (!bindings.has(node.id.name)) {
+        bindings.add(node.id.name);
+        changed = true;
+      }
+    });
+  }
   walk(ast, null, (node, parent) => {
     if (node.type !== 'Identifier' || !bindings.has(node.name) ||
-        isNonReference(node, parent)) return;
-    // Import renames are supported. Escapes, destructuring, local aliases and
+        aliasNodes.has(node) || isNonReference(node, parent)) return;
+    // Import renames and const object aliases are supported. Escapes and
     // shadowing fail closed rather than silently disappearing from the census.
     const call = parents.get(parent);
     if (parent?.type !== 'MemberExpression' || parent.object !== node ||

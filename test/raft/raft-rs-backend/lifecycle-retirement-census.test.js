@@ -54,3 +54,11 @@ test('native census detects removing the runtime from the actual production call
   assert.equal(negative.calls.length, positive.calls.length);
   assert.ok(negative.violations.some(({reason}) => reason.includes('explicit non-overwritten runtime')));
 });
+
+test('native census follows immutable object aliases used by real lifecycle verdicts', () => {
+  const positive = inspect('const alias = admin; const second = alias; second.retireReplica(id, reason, {runtime}); alias.isRetired(row);');
+  assert.equal(positive.calls.length, 1);
+  assert.deepEqual(positive.violations, []);
+  assert.ok(inspect('const alias = admin; alias.retireReplica(id, reason);').violations.length > 0);
+  assert.ok(inspect('let alias = admin; alias.retireReplica(id, reason, {runtime});').violations.length > 0);
+});
