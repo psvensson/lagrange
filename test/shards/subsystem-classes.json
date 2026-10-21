@@ -3,7 +3,7 @@
   "id": "test-subsystem-classification",
   "counts": {
     "admin-diagnostics": 116,
-    "architecture-governance": 19,
+    "architecture-governance": 21,
     "bootstrap-membership": 325,
     "cdc-metadata": 63,
     "cli-tooling": 96,
@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 150,
     "solver-tooling": 7,
-    "storage-partition": 190,
-    "storage-raft": 134,
+    "storage-partition": 192,
+    "storage-raft": 139,
     "test-infrastructure": 144,
     "transactions": 16,
-    "transport-messaging": 96,
+    "transport-messaging": 97,
     "wasm-toolchain": 74
   },
-  "censusSize": 2422,
-  "digest": "fnv1a32-7fb67396",
+  "censusSize": 2432,
+  "digest": "fnv1a32-906b204b",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-265101c3",
+  "observationDigest": "fnv1a32-7b986615",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -475,6 +475,8 @@
     "test/closure/CL-040.repro.test.js": "architecture-governance",
     "test/closure/CL-041.repro.test.js": "architecture-governance",
     "test/closure/CL-042.repro.test.js": "architecture-governance",
+    "test/closure/original-birth-scope-lint.test.js": "architecture-governance",
+    "test/closure/original-handoff-static.integration.test.js": "architecture-governance",
     "test/compatibility/pgwire-client-compat.test.js": "pgwire-compat",
     "test/config/architecture-ownership-guardrails.test.js": "architecture-governance",
     "test/config/code-path-uniqueness.property.test.js": "architecture-governance",
@@ -1110,6 +1112,7 @@
     "test/message-group/message-group-native-custody-handoff.test.js": "transport-messaging",
     "test/message-group/message-group-proposal-deadline-wait-bound-spent.test.js": "transport-messaging",
     "test/message-group/message-group-rebalancer-leadership-readiness-hysteresis.test.js": "transport-messaging",
+    "test/message-group/message-group-registration-exact-birth.test.js": "transport-messaging",
     "test/message-group/message-group-replica-distribution.property.test.js": "transport-messaging",
     "test/message-group/message-group-service-leader-cdc.test.js": "transport-messaging",
     "test/message-group/message-group-service-lifecycle-and-ledger.test.js": "transport-messaging",
@@ -1311,6 +1314,8 @@
     "test/partition/partition-rebalancer-dependency-wiring-characterization.test.js": "storage-partition",
     "test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js": "storage-partition",
     "test/partition/partition-rebalancer-readiness-edge-gate.test.js": "storage-partition",
+    "test/partition/partition-registration-exact-birth.test.js": "storage-partition",
+    "test/partition/partition-registration-readback-controls.test.js": "storage-partition",
     "test/partition/partition-replication-restart-attempt-handoff.test.js": "storage-partition",
     "test/partition/partition-retiring-row-peer-retirement.test.js": "storage-partition",
     "test/partition/partition-runtime-reconstruction-leadership.test.js": "storage-partition",
@@ -1614,6 +1619,7 @@
     "test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js": "storage-raft",
     "test/raft/raft-rs-backend/joining-genesis-tripwire.test.js": "storage-raft",
     "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/lifecycle-retirement-census.test.js": "storage-raft",
     "test/raft/raft-rs-backend/local-log-guard-correct-followers.test.js": "storage-raft",
     "test/raft/raft-rs-backend/local-log-guard-refusals.test.js": "storage-raft",
     "test/raft/raft-rs-backend/local-log-guard-sender-admissibility.test.js": "storage-raft",
@@ -1669,6 +1675,10 @@
     "test/raft/raft-rs-backend/transfer-leadership-write-path.test.js": "storage-raft",
     "test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js": "storage-raft",
     "test/raft/raft-rs-backend/zero-legacy-consensus-runtime.test.js": "storage-raft",
+    "test/raft/raft-rs-original-allocation-cold-inspection.test.js": "storage-raft",
+    "test/raft/raft-rs-original-allocation-custody.test.js": "storage-raft",
+    "test/raft/raft-rs-original-allocation-preparation.test.js": "storage-raft",
+    "test/raft/raft-rs-original-allocation-store.test.js": "storage-raft",
     "test/raft/replica-voter-readiness.test.js": "storage-raft",
     "test/raft/snapshot-boundary-observability.test.js": "storage-raft",
     "test/raft/snapshot-cadence.test.js": "storage-raft",
@@ -3685,6 +3695,20 @@
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-runtime-owner.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
+      ]
+    },
+    "test/closure/original-birth-scope-lint.test.js": {
+      "files": [
+        "src/message-group/message-group-service-row-owner.js",
+        "src/node/service-row-incarnation.js",
+        "src/partition/partition-service-row-owner.js",
+        "test/closure/original-handoff-static.integration.test.js",
+        "test/message-group/message-group-registration-exact-birth.test.js",
+        "test/partition/partition-registration-exact-birth.test.js",
+        "test/partition/partition-registration-readback-controls.test.js",
+        "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js",
+        "test/raft/raft-rs-backend/lifecycle-retirement-census.js",
+        "test/raft/raft-rs-backend/lifecycle-retirement-census.test.js"
       ]
     },
     "test/compatibility/pgwire-client-compat.test.js": {
@@ -8011,6 +8035,12 @@
         "test/test-helpers/controllable-consensus-port.js"
       ]
     },
+    "test/message-group/message-group-registration-exact-birth.test.js": {
+      "files": [
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/message-group/message-group-service-row-owner.js"
+      ]
+    },
     "test/message-group/message-group-service-leader-cdc.test.js": {
       "files": [
         "src/raft/raft-operation-port-constants.js",
@@ -9396,6 +9426,17 @@
     "test/partition/partition-rebalancer-readiness-edge-gate.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js"
+      ]
+    },
+    "test/partition/partition-registration-exact-birth.test.js": {
+      "files": [
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/partition/partition-service-row-owner.js"
+      ]
+    },
+    "test/partition/partition-registration-readback-controls.test.js": {
+      "files": [
+        "src/partition/partition-service-row-owner.js"
       ]
     },
     "test/partition/partition-replication-restart-attempt-handoff.test.js": {
@@ -11018,6 +11059,12 @@
         "src"
       ]
     },
+    "test/raft/raft-rs-backend/lifecycle-retirement-census.test.js": {
+      "files": [
+        "src/node/replica-handler-remove-execution-methods.js",
+        "src/raft/raft-rs-lifecycle-administration.js"
+      ]
+    },
     "test/raft/raft-rs-backend/local-log-guard-correct-followers.test.js": {
       "files": [
         "src/raft/raft-committed-membership-stamp.js",
@@ -11722,6 +11769,42 @@
         "src/raft",
         "test/distributed/config",
         "test/distributed/harness"
+      ]
+    },
+    "test/raft/raft-rs-original-allocation-cold-inspection.test.js": {
+      "files": [
+        "src/bootstrap/seed-original-allocation-declaration.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-durable-store.js",
+        "src/raft/raft-rs-original-allocation-constants.js",
+        "src/raft/raft-rs-original-allocation-preparation.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/storage/data-directory-process-owner.js"
+      ]
+    },
+    "test/raft/raft-rs-original-allocation-custody.test.js": {
+      "files": [
+        "src/bootstrap/seed-original-allocation-declaration.js",
+        "src/entrypoint-startup-acquisition-ledger.js",
+        "src/raft/raft-rs-original-allocation-constants.js",
+        "src/raft/raft-rs-original-allocation-preparation.js",
+        "src/storage/data-directory-process-owner.js"
+      ]
+    },
+    "test/raft/raft-rs-original-allocation-preparation.test.js": {
+      "files": [
+        "src/bootstrap/seed-original-allocation-declaration.js",
+        "src/raft/raft-rs-opening-history-constants.js",
+        "src/raft/raft-rs-original-allocation-constants.js",
+        "src/raft/raft-rs-original-allocation-preparation.js",
+        "src/storage/data-directory-process-owner.js"
+      ]
+    },
+    "test/raft/raft-rs-original-allocation-store.test.js": {
+      "files": [
+        "src/raft/raft-rs-opening-history-constants.js",
+        "src/raft/raft-rs-original-allocation-constants.js",
+        "src/raft/raft-rs-original-allocation-store.js"
       ]
     },
     "test/raft/snapshot-compaction-catchup-integration.test.js": {
