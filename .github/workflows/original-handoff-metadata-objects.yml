@@ -41,8 +41,10 @@ jobs:
         run: |
           set -uo pipefail
           OUT="$RUNNER_TEMP/census-correction"
+          set +e
           npm run -s test:file -- test/scripts/test-subsystem-repository-index.test.js > "$OUT/predecessor-red.log" 2>&1
           result=$?
+          set -e
           printf '%s\n' "$result" > "$OUT/predecessor-red.status"
           cat "$OUT/predecessor-red.log"
           test "$result" -ne 0
@@ -77,35 +79,32 @@ jobs:
               source=source.replace(before,after)
           replace_once("import path from 'node:path';", "import path from 'node:path';\nimport {gitProcessEnvironment} from './git-process-environment.js';")
           replace_once("const GIT_BINARY = 'git';", "const GIT_BINARY = 'git';\nconst GIT_WORKTREE_ARGUMENTS = Object.freeze(['rev-parse', '--is-inside-work-tree']);\nconst GIT_CENSUS_MAX_BUFFER_BYTES = 8 * 1024 * 1024;\nconst GIT_NOT_REPOSITORY_PREFIX = 'fatal: not a git repository';")
-          before='''  let listed;
-            try {
-              listed = execFileSync(GIT_BINARY, [...GIT_TRACKED_ARGUMENTS],
-                {cwd: root, encoding: UTF8}) +
-                execFileSync(GIT_BINARY, [...GIT_UNTRACKED_ARGUMENTS],
-                  {cwd: root, encoding: UTF8});
-            } catch {
-              return null;
-            }
-          '''
-          # Keep the replacement text independent of YAML block indentation.
-          before='\n'.join(line[10:] if line.startswith('          ') else line for line in before.split('\n'))
-          after='''  const options = {cwd: root, encoding: UTF8,
-            env: {...gitProcessEnvironment(), LC_ALL: 'C'},
-            maxBuffer: GIT_CENSUS_MAX_BUFFER_BYTES};
-          // Only a genuinely non-Git scratch tree may use physical observations.
-          // An unreadable/oversized index must never broaden repository authority.
-          try {
-            execFileSync(GIT_BINARY, [...GIT_WORKTREE_ARGUMENTS], options);
-          } catch (error) {
-            if (error.status === 128 &&
-                String(error.stderr).startsWith(GIT_NOT_REPOSITORY_PREFIX) &&
-                !fs.existsSync(path.join(root, '.git'))) return null;
-            throw error;
-          }
-          const listed = execFileSync(GIT_BINARY, [...GIT_TRACKED_ARGUMENTS], options) +
-            execFileSync(GIT_BINARY, [...GIT_UNTRACKED_ARGUMENTS], options);
-          '''
-          after='\n'.join(line[10:] if line.startswith('          ') else line for line in after.split('\n'))
+          before='\n'.join([
+            '  let listed;',
+            '  try {',
+            '    listed = execFileSync(GIT_BINARY, [...GIT_TRACKED_ARGUMENTS],',
+            '      {cwd: root, encoding: UTF8}) +',
+            '      execFileSync(GIT_BINARY, [...GIT_UNTRACKED_ARGUMENTS],',
+            '        {cwd: root, encoding: UTF8});',
+            '  } catch {',
+            '    return null;',
+            '  }', ''])
+          after='\n'.join([
+            '  const options = {cwd: root, encoding: UTF8,',
+            "    env: {...gitProcessEnvironment(), LC_ALL: 'C'},",
+            '    maxBuffer: GIT_CENSUS_MAX_BUFFER_BYTES};',
+            '  // Only a genuinely non-Git scratch tree may use physical observations.',
+            '  // An unreadable/oversized index must never broaden repository authority.',
+            '  try {',
+            '    execFileSync(GIT_BINARY, [...GIT_WORKTREE_ARGUMENTS], options);',
+            '  } catch (error) {',
+            '    if (error.status === 128 &&',
+            '        String(error.stderr).startsWith(GIT_NOT_REPOSITORY_PREFIX) &&',
+            "        !fs.existsSync(path.join(root, '.git'))) return null;",
+            '    throw error;',
+            '  }',
+            '  const listed = execFileSync(GIT_BINARY, [...GIT_TRACKED_ARGUMENTS], options) +',
+            '    execFileSync(GIT_BINARY, [...GIT_UNTRACKED_ARGUMENTS], options);', ''])
           replace_once(before,after)
           file.write_text(source)
           PY
