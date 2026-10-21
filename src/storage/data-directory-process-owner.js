@@ -5,6 +5,7 @@ import path from 'node:path';
 // acquired handle reachable until explicit release or process death, even when
 // failed startup drops its ledger or an embedded caller drops its runtime.
 const heldDataDirectoryDatabases = new Set();
+const dataDirectoryOwnerHandles = new WeakMap();
 
 const DATA_DIRECTORY_OWNER_DB = '.lagrange-data-directory-owner.sqlite';
 const DATA_DIRECTORY_OWNER_ERROR_CODE = 'DATA_DIRECTORY_ALREADY_OWNED';
@@ -45,7 +46,7 @@ function acquireDataDirectoryProcessOwner(dataDir) {
   }
   heldDataDirectoryDatabases.add(database);
   let released = false;
-  return Object.freeze({
+  const owner = Object.freeze({
     dataDir: canonicalDataDir,
     lockPath,
     release() {
@@ -55,10 +56,21 @@ function acquireDataDirectoryProcessOwner(dataDir) {
       } finally {
         database.close();
         heldDataDirectoryDatabases.delete(database);
+        dataDirectoryOwnerHandles.delete(owner);
         released = true;
       }
     },
   });
+  dataDirectoryOwnerHandles.set(owner, {database, canonicalDataDir});
+  return owner;
+}
+
+// This is a current custody check, not an allocation or membership decision.
+// A copied object/path cannot stand in for the actual unreleased SQLite owner.
+function ownsDataDirectoryProcessOwner(owner, dataDir) {
+  const held = dataDirectoryOwnerHandles.get(owner);
+  return held?.canonicalDataDir === path.resolve(dataDir) &&
+    held.database.open === true && held.database.inTransaction === true;
 }
 
 function bindDataDirectoryProcessOwner(runtime, owner) {
@@ -77,4 +89,5 @@ export {
   DATA_DIRECTORY_OWNER_ERROR_CODE,
   acquireDataDirectoryProcessOwner,
   bindDataDirectoryProcessOwner,
+  ownsDataDirectoryProcessOwner,
 };
