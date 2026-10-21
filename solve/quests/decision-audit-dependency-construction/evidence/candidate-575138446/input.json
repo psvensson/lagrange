@@ -1,0 +1,23 @@
+{
+  "sha": "575138446abcde520b8474ee24faa938f8ca8fa4",
+  "hashes": {
+    "scripts/check-guideline-decision-boundaries.js": "c79c7888cd423d1420e6ffaa8a6957fd321332f467915de95095b79fbb63bc6a",
+    "scripts/checks/decision-boundary-construction.js": "33dfb3a8b035620934981881316f26b93ccdbb3b7a8f062bf7f4621755ead180",
+    "test/scripts/check-guideline-decision-boundaries.test.js": "49895c1c463bc91c52233767b4bcd684941e594a7d4021b39d90de5ed8474f18"
+  },
+  "files": [
+    "test/scripts/check-guideline-decision-boundaries.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/scripts/check-guideline-decision-boundaries.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ],
+  "on": "lenovo-laptop",
+  "retryFailedOnce": false,
+  "startedAt": "2026-10-21T04:54:04.033Z"
+}

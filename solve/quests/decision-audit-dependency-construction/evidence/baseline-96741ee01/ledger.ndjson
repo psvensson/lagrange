@@ -1,0 +1,1 @@
+{"file":"test/scripts/check-guideline-decision-boundaries.test.js","attempt":1,"ok":false,"assertions":144,"durationMs":2108,"retriedOnce":false,"firstFailureLine":"not ok 3 - constructing and publishing the dependency is not a mixed truth read"}

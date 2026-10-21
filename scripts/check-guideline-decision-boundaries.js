@@ -1,6 +1,7 @@
 import {KEYS} from 'eslint-visitor-keys';
 import fs from 'node:fs/promises';
 import {collectCaughtExceptionCollections} from './checks/decision-boundary-exception-collection.js';
+import {passiveConstructionOccurrences} from './checks/decision-boundary-construction.js';
 import {
   FILE_CLASS,
   applyCountBaseline,
@@ -386,7 +387,8 @@ function checkRawNullOrEmptyState(node, functionName, filePath, violations, caug
   }
 }
 
-function checkMixedCacheAndSqlDecision(node, functionName, filePath, fileClass, violations) {
+function checkMixedCacheAndSqlDecision(node, functionName, filePath, fileClass, violations,
+  context) {
   if (fileClass !== FILE_CLASS.RUNTIME) {
     return;
   }
@@ -394,9 +396,10 @@ function checkMixedCacheAndSqlDecision(node, functionName, filePath, fileClass, 
   let hasSqlAccess = false;
   let cacheLine = null;
   let sqlLine = null;
+  const passive = passiveConstructionOccurrences(node, context.parent, context.ancestors);
 
   walkAst(node.body || node, (child) => {
-    if (child.type === 'Identifier') {
+    if (child.type === 'Identifier' && !passive.has(child)) {
       const name = child.name.toLowerCase();
       if (name.includes('cache')) {
         hasCacheAccess = true;
@@ -849,7 +852,8 @@ function collectDecisionBoundaryViolationsFromSource(
     violations.push(...collectFunctionViolations(node, parent, filePath));
 
     const functionName = getFunctionName(node, parent);
-    checkMixedCacheAndSqlDecision(node, functionName, filePath, fileClass, violations);
+    checkMixedCacheAndSqlDecision(node, functionName, filePath, fileClass, violations,
+      {parent, ancestors});
     checkLocalRetryLoop(node, functionName, filePath, violations);
 
     const caughtCollections = collectCaughtExceptionCollections(node, ast);

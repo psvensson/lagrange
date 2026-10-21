@@ -1,0 +1,29 @@
+{
+  "parents": [
+    "11f1481b7b501be02ffe1170067872731fda4c98",
+    "768bf9a09818f606c9e5df4335a405b9c6369d03"
+  ],
+  "sourceTree": "8e5f187207b976cdbf03e328d565d6fa46ed745b",
+  "files": [
+    {
+      "path": "scripts/check-guideline-decision-boundaries.js",
+      "sha256": "cef9ce06ee0fa2adc3be2885dd4261ea65234220e1c622240a5162c90648936a"
+    },
+    {
+      "path": "scripts/checks/decision-boundary-construction.js",
+      "sha256": "33dfb3a8b035620934981881316f26b93ccdbb3b7a8f062bf7f4621755ead180"
+    },
+    {
+      "path": "scripts/checks/decision-boundary-exception-collection.js",
+      "sha256": "2054984db6c8fd64864fa10697b1b2839fc2c5e5902055146fae1c45481bb7d1"
+    },
+    {
+      "path": "scripts/check-guideline-decision-boundaries-baseline.json",
+      "sha256": "f38ebcf505e7c73ac57c59184f2a0a4005d32d9b46614c7ffbf84c5fe786eebf"
+    },
+    {
+      "path": "test/scripts/check-guideline-decision-boundaries.test.js",
+      "sha256": "700a997d93289d9cd55d648eba85bb86af443cbd5f2d8c8fe1f14b9f5f1f53af"
+    }
+  ]
+}
