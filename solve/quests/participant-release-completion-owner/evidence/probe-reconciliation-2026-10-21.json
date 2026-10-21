@@ -1,0 +1,25 @@
+{
+  "id": "participant-release-completion-owner",
+  "status": "open",
+  "blocked": null,
+  "probe": {
+    "metric": 1,
+    "target": 0,
+    "done": false,
+    "measuring": true,
+    "evidence": "solve/quests/participant-release-completion-owner/evidence/receipt.json",
+    "reason": "measured",
+    "outstanding": [
+      "independent-review-and-applicable-gates"
+    ]
+  },
+  "sealMetric": 5,
+  "delta": -4,
+  "attempts": 3,
+  "attemptsSinceAltitudeCheck": 3,
+  "recent": [
+    "2026-10-21T05:33:13.120Z finding evidence: Normal archive preservation commit refused with exit 1 by the existing solve binary guard. Exact material output retained in evidence/binary-guard-refusal.txt. ",
+    "2026-10-21T05:40:13.808Z verification approve: subagent:/root/control_source_review independently approved final root composition for normal checkpoint and32-file operation measurement. Exact checker union a",
+    "2026-10-21T06:50:12.843Z finding evidence: Reconcile derived completion receipt against independent component/result/composition reviews and exact39332-file positive: first4bounded predicates supported. "
+  ]
+}

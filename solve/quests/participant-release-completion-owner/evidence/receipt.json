@@ -2,10 +2,62 @@
   "schema": "test-receipt/1",
   "status": "fail",
   "receipts": [
-    {"id": "current-duplicate-policy-and-reviewed-contract", "passed": false},
-    {"id": "unchanged-clock-and-authority-behavior", "passed": false},
-    {"id": "owned-completion-and-adversarial-audit-controls", "passed": false},
-    {"id": "exact-candidate-owner-composition", "passed": false},
-    {"id": "independent-review-and-applicable-gates", "passed": false}
+    {
+      "id": "current-duplicate-policy-and-reviewed-contract",
+      "passed": true,
+      "scope": "Reviewed original duplicate retry policy and bounded single existing completion operation; seed/fresh policies and primitive/background ownership stay distinct.",
+      "evidence": [
+        "../design.md",
+        "../evidence/behavior-baseline.md",
+        "../evidence/independent-review.md"
+      ]
+    },
+    {
+      "id": "unchanged-clock-and-authority-behavior",
+      "passed": true,
+      "scope": "Original deadlines, caller clock reads, authorization, exact response identity and outcome-getter observations are preserved in frozen baseline and repaired runs, plus final393 composition.",
+      "evidence": [
+        "../evidence/getter-baseline/results.jsonl",
+        "../evidence/repaired-90fb37194/results.jsonl",
+        "../evidence/implementation-result.md"
+      ]
+    },
+    {
+      "id": "owned-completion-and-adversarial-audit-controls",
+      "passed": true,
+      "scope": "Completion body and caller correspondence are checked with adversarial static controls; complete raw identity census removes only approved identities without baseline growth. Static mutation controls are not native fault witnesses.",
+      "evidence": [
+        "../evidence/audit-raw/audit-identity-delta.json",
+        "../evidence/root-composition-2026-10-21/delta.json",
+        "../evidence/independent-root-composition-review.md"
+      ]
+    },
+    {
+      "id": "exact-candidate-owner-composition",
+      "passed": true,
+      "scope": "Exact393 composed32-file operation set passes838 runner counts with all49 source/test/audit bindings independently verified. All31 selected operation files also pass in the broader red selection.",
+      "evidence": [
+        "../../seed-release-failure-custody/evidence/composed-393f411ca/results.ndjson",
+        "../../seed-release-failure-custody/evidence/composed-393f411ca/independent-result-review.md",
+        "../../seed-release-failure-custody/evidence/changed-candidate-393f411ca/operation-witness-correspondence.json"
+      ]
+    },
+    {
+      "id": "independent-review-and-applicable-gates",
+      "passed": false,
+      "evidence": [
+        "independent-root-composition-review.md",
+        "root-composition-gates/fast-static.txt",
+        "root-composition-gates/changed-path-statics.json",
+        "../../seed-release-failure-custody/evidence/changed-candidate-393f411ca/independent-result-review.md"
+      ],
+      "reason": "Bounded source, measured result, full audit census and exact composition review are approved; scoped static/impact gates pass. Canonical1261 changed selection is red, with1159pass/99reportedred/3unreported; separate same393 follow-up measures those3 red. Broader obligations, Solver landing and canonical publication remain unmet."
+    }
+  ],
+  "measuredCandidate": "393f411ca09449898465cc3cb7320c03fba2aba8",
+  "sourceTree": "ddf32b08e93c0b617f6ec24d0d70596e2888eec5",
+  "limits": [
+    "No budget renewal, primitive/control/operator retry change or background recovery ownership transfer.",
+    "This completion consolidation does not grant retained-seed original allocation, whole-U1/TX1/FreshMG acceptance or release approval."
   ]
 }
