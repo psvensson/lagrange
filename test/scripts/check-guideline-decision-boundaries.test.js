@@ -836,6 +836,17 @@ test('mixed-source audit does not treat a getter-bearing publication field as pa
       'the known accessor prevents treating the identity guard as a plain handle read');
   });
 
+test('mixed-source audit retains delegated fallback policy outside construction', async (t) => {
+  const source = [
+    'export function assemble() {',
+    '  const options = {cacheFallbackPredicate: (row) => row.id === "key"};',
+    '  return db.query("SELECT 1", options);',
+    '}',
+  ].join('\n');
+  t.equal(mixedFindingsFor(source).length, 1,
+    'a nonconstructor policy key remains conservative evidence at a delegated read boundary');
+});
+
 test('the live removal backstop cannot be declared dead', async (t) => {
   const filePath = 'src/node/replica-handler-constants.js';
   const source = (await fs.readFile(filePath, 'utf8')).replace(

@@ -133,3 +133,26 @@ mutation support, that added support requires corresponding negative cases
 and independent review. Known unsupported behavior must not silently become
 an accepted construction case. No script implementation has yet been
 approved by this record.
+
+## Follow-up: narrower key role and added delegated-policy control
+
+The author's provisional census identified losses outside construction,
+including `readNodeSnapshot`'s delegated cacheFallbackPredicate labels beside
+actual SQL evidence. Those losses must not be accepted merely because they
+are property keys. Preserve that provisional census and its superseding
+decision as evidence.
+
+Design revision approved: omit a noncomputed, non-shorthand property-key
+occurrence only when its object literal is a DIRECT argument to a
+NewExpression. Do not find permission through an ancestor chain crossing
+callbacks or other expressions. Nonconstructor delegated-policy keys remain
+conservative evidence. This narrows the earlier design and does not waive a
+file, method or finding identity. Full implementation/census review is pending.
+
+Added witness at test lines 839-848 constructs a nonconstructor
+cacheFallbackPredicate options object and passes it to db.query; the actual
+collector must retain one mixed-source finding. The new exact test SHA256 is
+`49895c1c463bc91c52233767b4bcd684941e594a7d4021b39d90de5ed8474f18`.
+The addition changes no prior assertion. APPROVE this revised witness for
+refreshed old-classifier measurement, with the same 6+10 category assessment
+and proof ceilings above. No test execution or source approval by reviewer.
