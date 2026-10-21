@@ -134,7 +134,6 @@ function rowsMatchPartitionRegistration(observed, expected) {
     COLUMN.REPLICA_ID,
     COLUMN.ADDRESS,
     COLUMN.STATUS,
-    COLUMN.CREATED_AT,
   ];
   // A lost INSERT answer is resolved only by its exact birth, never another
   // lifetime under the same name. Role and update stamps are not birth identity.
