@@ -4,7 +4,7 @@ import {commitDurably} from './raft-rs-durable-store.js';
 import {RAFT_RS_OPENING_HISTORY} from './raft-rs-opening-history-constants.js';
 import {ORIGINAL_ALLOCATION as STATE, ORIGINAL_ALLOCATION_REASON as REASON,
   ORIGINAL_ALLOCATION_COLUMN as COLUMN, REPLICA_LIFECYCLE_TABLE as TABLE,
-  originalAllocationError} from './raft-rs-original-allocation-constants.js';
+  ORIGINAL_RIGHT_SUCCESSOR, originalAllocationError} from './raft-rs-original-allocation-constants.js';
 
 function exactLifecycleRow(db, member) {
   const row = db.prepare(`SELECT * FROM ${TABLE}
@@ -22,6 +22,9 @@ function originalAllocationRow(db, member) {
       typeof row[COLUMN.MEMBER] !== 'string') {
     throw originalAllocationError(REASON.INCOMPLETE, member.replicaId);
   }
+  if (row[COLUMN.MEMBER] !== JSON.stringify(member)) {
+    throw originalAllocationError(REASON.IDENTITY, member.replicaId);
+  }
   return row;
 }
 
@@ -35,6 +38,8 @@ function commitAndReadback(db, write, read, expected) {
   // Includes a throw after a successful COMMIT. Unknown observation is never
   // absence and never permission to repeat a native or registration effect.
   try {
+    // A matching uncommitted row cannot resolve a refused durable commit.
+    if (db.inTransaction) throw originalAllocationError(REASON.OBSERVATION);
     if (!expected(read())) throw originalAllocationError(REASON.INCOMPLETE);
   } catch (error) {
     if (commitFailure) {
@@ -72,18 +77,31 @@ function prepareOriginalAllocationRow(db, declaration, member) {
   () => originalAllocationRow(db, member), (row) =>
     row[COLUMN.DECLARATION] === declarationText &&
     row[COLUMN.MEMBER] === memberText && row[COLUMN.ISSUE] === STATE.PREPARING &&
-    row[COLUMN.SERVICE_RIGHT] === STATE.UNUSED);
+    row[COLUMN.SERVICE_RIGHT] === STATE.UNUSED &&
+    row[COLUMN.IDENTITY_RIGHT] ===
+      (member.replicaId === declaration.anchorReplicaId ? STATE.UNUSED : null) &&
+    row.native_history_state === RAFT_RS_OPENING_HISTORY.NEVER_OPENED);
 }
 
 function markOriginalAllocationIssued(db, declaration, anchor) {
+  const declarationText = JSON.stringify(declaration);
+  const memberText = JSON.stringify(anchor);
+  if (anchor.replicaId !== declaration.anchorReplicaId) {
+    throw originalAllocationError(REASON.IDENTITY, anchor.replicaId);
+  }
   commitAndReadback(db, () => db.prepare(`UPDATE ${TABLE}
     SET ${COLUMN.ISSUE} = ? WHERE group_id = ? AND peer_id = ?
       AND replica_identity = ? AND incarnation = ? AND state = 'active'
-      AND ${COLUMN.DECLARATION} = ? AND ${COLUMN.ISSUE} = ?`)
+      AND ${COLUMN.DECLARATION} = ? AND ${COLUMN.MEMBER} = ?
+      AND ${COLUMN.ISSUE} = ? AND native_history_state = ?
+      AND ${COLUMN.IDENTITY_RIGHT} = ? AND ${COLUMN.SERVICE_RIGHT} = ?`)
     .run(STATE.ISSUED, anchor.groupId, anchor.peerId, anchor.replicaId,
-      anchor.incarnation, JSON.stringify(declaration), STATE.PREPARING),
+      anchor.incarnation, declarationText, memberText, STATE.PREPARING,
+      RAFT_RS_OPENING_HISTORY.NEVER_OPENED, STATE.UNUSED, STATE.UNUSED),
   () => originalAllocationRow(db, anchor), (row) =>
+    row[COLUMN.DECLARATION] === declarationText &&
     row[COLUMN.ISSUE] === STATE.ISSUED &&
+    row.native_history_state === RAFT_RS_OPENING_HISTORY.NEVER_OPENED &&
     row[COLUMN.IDENTITY_RIGHT] === STATE.UNUSED &&
     row[COLUMN.SERVICE_RIGHT] === STATE.UNUSED);
 }
@@ -92,13 +110,20 @@ function transitionOriginalRight(db, member, column, from, to) {
   if (column !== COLUMN.SERVICE_RIGHT && column !== COLUMN.IDENTITY_RIGHT) {
     throw originalAllocationError(REASON.IDENTITY, member.replicaId);
   }
+  if (!Object.hasOwn(ORIGINAL_RIGHT_SUCCESSOR, from) ||
+      ORIGINAL_RIGHT_SUCCESSOR[from] !== to) {
+    throw originalAllocationError(REASON.TRANSITION, member.replicaId);
+  }
   const before = originalAllocationRow(db, member);
   if (before[column] !== from) throw originalAllocationError(REASON.SPENT, member.replicaId);
   commitAndReadback(db, () => db.prepare(`UPDATE ${TABLE} SET ${column} = ?
     WHERE group_id = ? AND peer_id = ? AND replica_identity = ?
-      AND incarnation = ? AND state = 'active' AND ${column} = ?`)
-    .run(to, member.groupId, member.peerId, member.replicaId, member.incarnation, from),
-  () => originalAllocationRow(db, member), (row) => row[column] === to);
+      AND incarnation = ? AND state = 'active' AND ${column} = ?
+      AND ${COLUMN.DECLARATION} = ? AND ${COLUMN.MEMBER} = ?`)
+    .run(to, member.groupId, member.peerId, member.replicaId, member.incarnation, from,
+      before[COLUMN.DECLARATION], before[COLUMN.MEMBER]),
+  () => originalAllocationRow(db, member), (row) => row[column] === to &&
+    row[COLUMN.DECLARATION] === before[COLUMN.DECLARATION]);
 }
 
 export {exactLifecycleRow, originalAllocationRow, prepareOriginalAllocationRow,

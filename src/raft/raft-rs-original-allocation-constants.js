@@ -26,6 +26,7 @@ const ORIGINAL_ALLOCATION_REASON = Object.freeze({
   IDENTITY: 'original-allocation-identity-mismatch',
   HISTORY: 'original-allocation-history-unavailable',
   SPENT: 'original-allocation-current-authority-required',
+  TRANSITION: 'original-allocation-right-transition-invalid',
   RESOURCE: 'original-allocation-resource-unreleased',
   CONTRARY: 'original-allocation-contrary-durable-work',
   OBSERVATION: 'original-allocation-observation-unavailable',
@@ -40,6 +41,13 @@ const ORIGINAL_ALLOCATION_COLUMN = Object.freeze({
   IDENTITY_RIGHT: 'original_identity_right',
 });
 
+// Consumption is monotonic. TRANSFERRED has no successor, and a duplicate
+// submission must not authorize a second external INSERT.
+const ORIGINAL_RIGHT_SUCCESSOR = Object.freeze({
+  [ORIGINAL_ALLOCATION.UNUSED]: ORIGINAL_ALLOCATION.SUBMITTED,
+  [ORIGINAL_ALLOCATION.SUBMITTED]: ORIGINAL_ALLOCATION.TRANSFERRED,
+});
+
 const REPLICA_LIFECYCLE_TABLE = '_raft_rs_replica_lifecycle';
 
 function originalAllocationError(reason, detail = null, cause = undefined) {
@@ -51,4 +59,5 @@ function originalAllocationError(reason, detail = null, cause = undefined) {
 }
 
 export {ORIGINAL_ALLOCATION, ORIGINAL_ALLOCATION_REASON,
-  ORIGINAL_ALLOCATION_COLUMN, REPLICA_LIFECYCLE_TABLE, originalAllocationError};
+  ORIGINAL_ALLOCATION_COLUMN, ORIGINAL_RIGHT_SUCCESSOR,
+  REPLICA_LIFECYCLE_TABLE, originalAllocationError};

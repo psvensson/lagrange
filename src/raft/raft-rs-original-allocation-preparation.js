@@ -2,6 +2,8 @@
 // before native opening. Its files are not an alternative membership authority.
 import fs from 'node:fs';
 import path from 'node:path';
+import {validateOriginalSeedDeclaration} from
+  '../bootstrap/seed-original-allocation-declaration.js';
 import {RaftRsPeerIdentityRegistry, readRaftRsPeerIdentityReservations} from
   './raft-rs-peer-identity.js';
 import {RaftRsReplicaLifecycleOwner} from './raft-rs-replica-lifecycle-owner.js';
@@ -91,12 +93,15 @@ class RaftRsOriginalAllocationPreparation {
   #custody = new RaftRsPreparationCustody();
   #directoryOwner;
   #dataDir;
+  #declarationIdentity;
   #started = false;
   #closed = false;
 
-  constructor({directoryOwner, dataDir}) {
+  constructor({directoryOwner, dataDir, nodeId, buildDigest}) {
     this.#directoryOwner = directoryOwner;
     this.#dataDir = path.resolve(dataDir);
+    // Bind expectations from startup, never from the declaration being checked.
+    this.#declarationIdentity = Object.freeze({dataDir: this.#dataDir, nodeId, buildDigest});
     this.assertCurrent();
   }
 
@@ -144,6 +149,10 @@ class RaftRsOriginalAllocationPreparation {
     this.#begin();
     const opened = new Map();
     try {
+      // Ask the catalog owner before inventory, mkdir or any writable open.
+      // Checking only the supplied members cannot prove a complete allocation.
+      validateOriginalSeedDeclaration(declaration, this.#declarationIdentity);
+      this.assertCurrent();
       // Complete virgin inventory precedes the first writable open.
       for (const member of declaration.members) assertVirginMember(member);
       for (const member of declaration.members) {
@@ -166,6 +175,9 @@ class RaftRsOriginalAllocationPreparation {
   inspect(declaration, inspectApplicationHistory) {
     this.#begin();
     try {
+      // Empty/subset cold scans are not successful cohort inspections either.
+      validateOriginalSeedDeclaration(declaration, this.#declarationIdentity);
+      this.assertCurrent();
       for (const member of declaration.members) {
         const db = this.#custody.open(member, {readonly: true, fileMustExist: true});
         const record = inspectColdMember(db, declaration, member);

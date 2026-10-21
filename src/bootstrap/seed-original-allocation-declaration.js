@@ -2,6 +2,7 @@
 // immutable declaration pins births before any of its native replicas open.
 import {createHash, randomUUID} from 'node:crypto';
 import path from 'node:path';
+import {types} from 'node:util';
 import {deepFreeze} from '../raft/raft-operation-port.js';
 import {deriveRaftRsPeerId} from '../raft/raft-rs-peer-identity.js';
 import {genesisStamp} from '../raft/raft-committed-membership-stamp.js';
@@ -75,8 +76,36 @@ function createSeedOriginalAllocation({dataDir, nodeId, buildDigest, now}) {
     anchorReplicaId: originalSeedAnchor(canonicalDataDir).replicaId, members});
 }
 
+// Only owned plain data reaches formatting: getters, proxies and toJSON
+// callbacks would break the synchronous, callback-free preparation contract.
+function assertPlainDeclarationData(value, ancestors = new Set()) {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean' ||
+      (typeof value === 'number' && Number.isFinite(value))) return;
+  if (typeof value !== 'object' || types.isProxy(value) || ancestors.has(value)) {
+    throw originalAllocationError(REASON.IDENTITY);
+  }
+  const array = Array.isArray(value);
+  if (Object.getPrototypeOf(value) !== (array ? Array.prototype : Object.prototype)) {
+    throw originalAllocationError(REASON.IDENTITY);
+  }
+  ancestors.add(value);
+  for (const key of Reflect.ownKeys(value)) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (typeof key !== 'string' || !Object.hasOwn(descriptor, 'value') ||
+        (!descriptor.enumerable && !(array && key === 'length'))) {
+      throw originalAllocationError(REASON.IDENTITY);
+    }
+    assertPlainDeclarationData(descriptor.value, ancestors);
+  }
+  ancestors.delete(value);
+}
+
 function validateOriginalSeedDeclaration(declaration, {dataDir, nodeId, buildDigest}) {
-  if (declaration?.version !== STATE.VERSION || declaration.nodeId !== nodeId ||
+  assertPlainDeclarationData(declaration);
+  if (typeof nodeId !== 'string' || nodeId.length === 0 ||
+      typeof buildDigest !== 'string' || buildDigest.length === 0 ||
+      !Number.isSafeInteger(declaration?.declaredAt) || declaration.declaredAt < 0 ||
+      declaration?.version !== STATE.VERSION || declaration.nodeId !== nodeId ||
       declaration.dataDir !== path.resolve(dataDir) ||
       declaration.buildDigest !== buildDigest || declaration.catalogDigest !== catalogDigest() ||
       declaration.anchorReplicaId !== originalSeedAnchor(dataDir).replicaId ||
@@ -105,6 +134,7 @@ function validateMember(member, expected, tokens) {
       typeof member.incarnation !== 'string' || member.incarnation.length === 0 ||
       typeof member.createAttemptToken !== 'string' || member.createAttemptToken.length === 0 ||
       !Number.isSafeInteger(member.createdAt) || member.createdAt < 0 ||
+      member.createAttemptToken === member.incarnation ||
       tokens.has(member.createAttemptToken) || tokens.has(member.incarnation)) {
     throw originalAllocationError(REASON.IDENTITY, expected.replicaId);
   }
