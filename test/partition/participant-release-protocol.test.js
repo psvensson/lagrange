@@ -5,7 +5,6 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {afterEach, beforeEach, test} from 'node:test';
-import {PartitionService} from '../../src/partition/partition-service.js';
 import {ReplicaHandler} from '../../src/node/replica-handler-class.js';
 import {requestParticipantRelease} from '../../src/node/participant-release-client.js';
 import {runtimeBuildProvenance} from '../../src/diagnostics/runtime-build-provenance.js';
@@ -53,22 +52,15 @@ import {
   pollutePrototypeProperty,
   replacePrototypeProperty,
 } from '../helpers/hostile-intrinsics.js';
-import {withFoundingStamp} from './partition-founding-stamp.js';
 import {waitForCondition} from './partition-service-test-support.js';
+import {CONTROL_PARTITION, NODE, PARTITION, SQL, cache,
+  withParticipantReleaseProtocol as fixture} from
+  '../test-helpers/participant-release-protocol-fixture.js';
 
 beforeEach(resetFixtureSingletons);
 afterEach(clearFixtureSingletons);
-const NODE = 'test-node';
-const CONTROL_NODE = 'control-node';
-const REPLICA = 'release-r1';
-const PARTITION = 'release-partition';
-const TABLE = 'release_table';
-const CONTROL_PARTITION = 'sql_transactions-p1';
-const CONTROL_REPLICA = 'release-sql-transactions-r1';
-const SQL = `INSERT INTO ${TABLE} (id, value) VALUES (?, ?)`;
 const PENDING_DELETE_SQL =
   'DELETE FROM sql_transactions WHERE transaction_id = ?';
-const cache = {getAll: () => [], get: () => null, filter: () => []};
 
 function retainFailure(current, next, message) {
   return current === null ? next : new AggregateError([current, next], message);
@@ -168,95 +160,6 @@ async function joinedHostedPartitionFailure(starterRequest, clockValues = [100, 
   return {starter: answers[0], joiner: answers[1], joinedAttempt};
 }
 
-async function fixture(measure, table = {tableId: TABLE, tableName: TABLE,
-  schema: {columns: [{name: 'id', type: 'TEXT', primaryKey: true},
-    {name: 'value', type: 'TEXT'}]}}, fixtureOptions = {}) {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'tx1-release-protocol-'));
-  const transport = createInProcessMockTransport();
-  const options = {nodeId: NODE, partitionId: PARTITION, replicaId: REPLICA,
-    replicaIds: [REPLICA], ...table, dbPath: path.join(directory, 'partition.db'),
-    systemTableCache: cache, deferElection: true};
-  const create = (overrides) => new PartitionService(withFoundingStamp({...options, ...overrides}));
-  const topologyOwner = fixtureOptions.remoteControl === true ? {
-    resolveCanonicalPartitionLeaderNodeId(partitionId) {
-      return partitionId === CONTROL_PARTITION ? CONTROL_NODE : null;
-    },
-  } : null;
-  const cdcIntegrationService = topologyOwner === null ? {} :
-    {sqlQueryEngine: {queryExecutor: {bootstrapTopologySnapshotOwner: topologyOwner}}};
-  let handler = null;
-  let service = null;
-  let controlService = null;
-  let controlHandler = null;
-  let failure = null;
-  try {
-    handler = new ReplicaHandler({nodeId: NODE, ownerIncarnation: 1,
-      systemTableCache: cache, cdcIntegrationService, createPartitionService: create,
-      messageRouter: transport, dataDir: directory});
-    handler.registerWithRouter(transport);
-    service = create();
-    if (table.tableName !== SQL_TRANSACTIONS_SCHEMA.tableName &&
-        fixtureOptions.includeControl !== false) {
-      const controlNodeId = fixtureOptions.remoteControl === true ?
-        CONTROL_NODE : NODE;
-      controlService = new PartitionService(withFoundingStamp({
-        nodeId: controlNodeId, partitionId: CONTROL_PARTITION,
-        replicaId: CONTROL_REPLICA,
-        replicaIds: [CONTROL_REPLICA], tableId: SQL_TRANSACTIONS_SCHEMA.tableName,
-        tableName: SQL_TRANSACTIONS_SCHEMA.tableName, schema: SQL_TRANSACTIONS_SCHEMA,
-        dbPath: path.join(directory, 'sql-transactions.db'), systemTableCache: cache,
-        deferElection: true,
-      }));
-      await controlService.initialize();
-      if (fixtureOptions.remoteControl === true) {
-        controlHandler = new ReplicaHandler({nodeId: CONTROL_NODE,
-          ownerIncarnation: 2, systemTableCache: cache,
-          cdcIntegrationService: {}, createPartitionService: create,
-          messageRouter: transport, dataDir: directory});
-        controlHandler.registerWithRouter(transport);
-        controlHandler.localServices.set(CONTROL_REPLICA, controlService);
-      } else {
-        handler.localServices.set(CONTROL_REPLICA, controlService);
-      }
-      await controlService.raft.campaign();
-      assert.equal(controlService.raft.readStatus().role, 'leader');
-    }
-    await service.initialize();
-    handler.localServices.set(REPLICA, service);
-    await service.raft.campaign();
-    assert.equal(service.raft.readStatus().role, 'leader');
-    const build = await runtimeBuildProvenance();
-    assert.equal(build.state, 'measured', build.reason);
-    if (controlHandler !== null) {
-      const controlRelease = await controlHandler.participantReleaseRecovery
-        .releaseOperator({partitionId: CONTROL_PARTITION,
-          targetBuildDigest: build.digest,
-          deadlineAtMs: controlHandler.timeSource.now() + 30000});
-      assert.equal(controlRelease.outcome, OUTCOME.CUT_OVER,
-        JSON.stringify(controlRelease));
-    }
-    const release = (targetBuildDigest = build.digest) =>
-      handler.participantReleaseRecovery.releaseOperator({
-        partitionId: options.partitionId, targetBuildDigest,
-        deadlineAtMs: handler.timeSource.now() + 30000,
-      });
-    await measure({handler, service, controlService, transport, release, create,
-      replace: (next) => {
-        service = next;
-        handler.replaceLocalReplicaService(REPLICA, next);
-      }});
-  } catch (error) {
-    failure = error;
-  }
-  failure = await cleanOwnedFixture({directory, failure,
-    label: 'participant release', operations: [
-      ['local release recovery', () => handler?.participantReleaseRecovery.shutdown()],
-      ['control release recovery', () => controlHandler?.participantReleaseRecovery.shutdown()],
-      ['dependent service', () => service?.shutdown()],
-      ['control service', () => controlService?.shutdown()],
-    ]});
-  if (failure !== null) throw failure;
-}
 
 test('real release route pauses initial writes, applies origin, censuses and resumes; ' +
   'registry and consensus triggers recover a recreated service from the same durable origin', () =>
