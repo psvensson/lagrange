@@ -41,7 +41,7 @@ jobs:
           set -euo pipefail
           OUT="$RUNNER_TEMP/original-metadata-objects"
           npm run -s test:metadata:refresh > "$OUT/generate.log" 2>&1
-          sha256sum test/shards/{primary,resource,subsystem}-classes.json > "$OUT/first-sha256.txt"
+          sha256sum test/shards/{primary,resource,subsystem}-classes.json test/shards/impact-graph-seal.json > "$OUT/first-sha256.txt"
           npm run -s test:metadata:refresh > "$OUT/generate-again.log" 2>&1
           sha256sum --check "$OUT/first-sha256.txt"
           npm run -s audit:impact-contracts > "$OUT/impact-contracts.log" 2>&1
@@ -51,6 +51,7 @@ jobs:
           git diff --binary > "$OUT/generated.patch"
           git diff --stat
           cat "$OUT/generate.log" "$OUT/impact-contracts.log" "$OUT/shards.log" "$OUT/dependencies.log"
+          cat "$OUT/generated.patch"
       - name: Preserve only verified generated objects and verify remote bytes
         env:
           GH_TOKEN: ${{ github.token }}
@@ -62,6 +63,7 @@ jobs:
           root = pathlib.Path.cwd()
           out = pathlib.Path(os.environ['RUNNER_TEMP']) / 'original-metadata-objects'
           paths = [f'test/shards/{name}-classes.json' for name in ('primary', 'resource', 'subsystem')]
+          paths.append('test/shards/impact-graph-seal.json')
           changed = subprocess.check_output(['git', 'diff', '--name-only'], text=True).splitlines()
           assert sorted(changed) == sorted(paths), f'unexpected generated paths: {changed}'
           assert subprocess.check_output(['git', 'diff', '--cached', '--name-only']) == b''
