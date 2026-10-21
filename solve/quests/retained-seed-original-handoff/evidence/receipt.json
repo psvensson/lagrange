@@ -1,0 +1,50 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "cold-public-entry-committed-origin-and-original-deadline",
+      "passed": false,
+      "reason": "Unexecuted; design approval is limited to red sealing and public baseline witness preparation."
+    },
+    {
+      "id": "prospective-complete-allocation-before-native-effects",
+      "passed": false,
+      "reason": "Unexecuted; design approval is limited to red sealing and public baseline witness preparation."
+    },
+    {
+      "id": "nonserving-original-recovery-and-pre-origin-release",
+      "passed": false,
+      "reason": "Unexecuted; design approval is limited to red sealing and public baseline witness preparation."
+    },
+    {
+      "id": "exact-services-and-cluster-identity-handoff",
+      "passed": false,
+      "reason": "Unexecuted; design approval is limited to red sealing and public baseline witness preparation."
+    },
+    {
+      "id": "public-admission-and-exact-cleanup-custody",
+      "passed": false,
+      "reason": "Unexecuted; design approval is limited to red sealing and public baseline witness preparation."
+    },
+    {
+      "id": "cold-mid-handoff-and-invalid-evidence-holds",
+      "passed": false,
+      "reason": "Unexecuted; design approval is limited to red sealing and public baseline witness preparation."
+    },
+    {
+      "id": "engaged-semantic-negatives-and-owner-regressions",
+      "passed": false,
+      "reason": "Unexecuted; design approval is limited to red sealing and public baseline witness preparation."
+    },
+    {
+      "id": "independent-correspondence-and-applicable-gates",
+      "passed": false,
+      "reason": "Unexecuted; design approval is limited to red sealing and public baseline witness preparation."
+    }
+  ],
+  "limits": [
+    "No implementation or source acceptance.",
+    "Public serving and cold mid-handoff progress are outside this bounded positive and remain obligations."
+  ]
+}
